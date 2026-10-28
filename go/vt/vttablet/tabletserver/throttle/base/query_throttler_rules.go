@@ -27,9 +27,11 @@ import (
 // BuildStreaming); statements such as BEGIN, USE or LOCK TABLES never reach the query
 // throttler. SAVEPOINT, ROLLBACK TO and RELEASE are left out too: VTGate sends them only
 // inside a transaction, where the query throttler never throttles, so a rule for them could
-// never fire. MIGRATION and SET reach it but are left out on purpose: a MIGRATION rule would
-// also reject ALTER VITESS_MIGRATION ... CANCEL, which an operator may need while the
-// tablet is overloaded, and a SET rule would fail the statements that set up a session.
+// never fire. MIGRATION, SET and UNLOCK TABLES reach it but are left out on purpose: a
+// MIGRATION rule would also reject ALTER VITESS_MIGRATION ... CANCEL, which an operator may
+// need while the tablet is overloaded, a SET rule would fail the statements that set up a
+// session, and an UNLOCK TABLES rule would keep a FLUSH TABLES ... WITH READ LOCK, and with
+// it every write on the server, in place.
 var queryThrottlerStatementTypes = func() map[string]struct{} {
 	names := make(map[string]struct{})
 	for _, s := range []sqlparser.StatementType{
@@ -43,7 +45,6 @@ var queryThrottlerStatementTypes = func() map[string]struct{} {
 		sqlparser.StmtOther,
 		sqlparser.StmtAnalyze,
 		sqlparser.StmtExplain,
-		sqlparser.StmtUnlockTables,
 		sqlparser.StmtFlush,
 		sqlparser.StmtCallProc,
 	} {

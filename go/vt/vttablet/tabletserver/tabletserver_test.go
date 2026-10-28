@@ -3264,11 +3264,14 @@ func enableAlwaysThrottle(t *testing.T, tsv *TabletServer) {
 	}, nil)
 }
 
-// A query throttler rejection makes vtgate roll back the session's whole transaction, so
-// statements inside a transaction are not throttled: not on the execute, stream or streamed DML
-// paths, and not the savepoints that BeginExecute and ReserveBeginExecute replay when a shard
-// joins a transaction late. Statements outside one, including on a reserved connection, still are.
-func TestTabletServerQueryThrottlerSkipsTransactions(t *testing.T) {
+// The query throttler skips statements whose rejection costs more than running them. A
+// rejection makes vtgate roll back the session's whole transaction, so statements inside one
+// are skipped: on the execute, stream and streamed DML paths, and the savepoints that
+// BeginExecute and ReserveBeginExecute replay when a shard joins a transaction late. Outside
+// a transaction, statements that take or release an advisory lock and SELECTs that read no
+// table are skipped too. Everything else is still throttled, including on a reserved
+// connection. Sequence fetches are covered by TestQueryExecutorThrottlerSkipsNextval.
+func TestTabletServerQueryThrottlerSkippedStatements(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
 	t.Cleanup(tsv.StopService)
@@ -3277,6 +3280,8 @@ func TestTabletServerQueryThrottlerSkipsTransactions(t *testing.T) {
 	target := &querypb.Target{Keyspace: "keyspaceName", TabletType: topodatapb.TabletType_PRIMARY}
 	options := &querypb.ExecuteOptions{}
 	noop := func(*sqltypes.Result) error { return nil }
+	// The statements read a table, so the no-table skip doesn't hide the case under test.
+	const selectTable = "select * from test_table"
 	const insert = "insert into test_table(pk) values(1)"
 
 	// Reserve the connection before throttling, since its SET runs outside a transaction.
@@ -3285,11 +3290,11 @@ func TestTabletServerQueryThrottlerSkipsTransactions(t *testing.T) {
 
 	enableAlwaysThrottle(t, tsv)
 
-	txState, _, err := tsv.BeginExecute(ctx, nil, target, []string{"savepoint a"}, "select 42", nil, 0, options)
+	txState, _, err := tsv.BeginExecute(ctx, nil, target, []string{"savepoint a"}, selectTable, nil, 0, options)
 	require.NoError(t, err, "BeginExecute and its replayed savepoint must not be throttled")
-	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, txState.TransactionID, 0, options)
+	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, txState.TransactionID, 0, options)
 	require.NoError(t, err, "a statement inside a transaction must not be throttled")
-	err = tsv.StreamExecute(ctx, nil, target, "select 42", nil, txState.TransactionID, 0, options, noop)
+	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, txState.TransactionID, 0, options, noop)
 	require.NoError(t, err, "a streamed statement inside a transaction must not be throttled")
 	err = tsv.StreamExecute(ctx, nil, target, insert, nil, txState.TransactionID, 0, options, noop)
 	require.NoError(t, err, "a streamed DML inside a transaction must not be throttled")
@@ -3300,13 +3305,24 @@ func TestTabletServerQueryThrottlerSkipsTransactions(t *testing.T) {
 	require.NoError(t, err, "ReserveBeginExecute and its replayed savepoint must not be throttled")
 	require.NotZero(t, reservedTxState.ReservedID)
 
-	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, 0, 0, options)
+	// A lock function that reads a table, and DML that calls one, so that only the lock
+	// function skip applies.
+	_, err = tsv.Execute(ctx, nil, target, "select release_lock('a') from test_table", nil, 0, reservedState.ReservedID, options)
+	require.NoError(t, err, "releasing an advisory lock must not be throttled")
+	_, err = tsv.Execute(ctx, nil, target, "update test_table set name_string = release_lock('a') where pk = 1", nil, 0, 0, options)
+	require.NoError(t, err, "DML that releases an advisory lock must not be throttled")
+	_, err = tsv.Execute(ctx, nil, target, "select @@sql_mode orig, 'STRICT_TRANS_TABLES' new from dual", nil, 0, 0, options)
+	require.NoError(t, err, "a SELECT that reads no table, such as the one vtgate runs to check a SET, must not be throttled")
+
+	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, 0, 0, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit statement must be throttled")
+	_, err = tsv.Execute(ctx, nil, target, "flush logs", nil, 0, 0, options)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement other than SELECT must be throttled even if it reads no table")
 	err = tsv.StreamExecute(ctx, nil, target, insert, nil, 0, 0, options, noop)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit streamed DML must be throttled")
-	_, err = tsv.Execute(ctx, nil, target, "select 42", nil, 0, reservedState.ReservedID, options)
+	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, 0, reservedState.ReservedID, options)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement on a reserved connection without a transaction must be throttled")
-	err = tsv.StreamExecute(ctx, nil, target, "select 42", nil, 0, reservedState.ReservedID, options, noop)
+	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, 0, reservedState.ReservedID, options, noop)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a streamed statement on a reserved connection without a transaction must be throttled")
 	err = tsv.StreamExecute(ctx, nil, target, insert, nil, 0, reservedState.ReservedID, options, noop)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a streamed DML on a reserved connection without a transaction must be throttled")

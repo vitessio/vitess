@@ -210,6 +210,7 @@ func (qt *QueryThrottler) InitDBConfig(keyspace string) {
 
 // Throttle rejects the incoming request if the tablet is under heavy load.
 // Statements inside an open transaction (transactionID != 0) are never throttled.
+// QueryExecutor.throttle skips more statements, based on their plan, before it calls Throttle.
 // The hot path takes no lock: one atomic snapshot load gives a consistent (cfg, strategy).
 func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, transactionID int64, options *querypb.ExecuteOptions) error {
 	// Single atomic load gives a consistent (cfg, strategy) pair for this call.

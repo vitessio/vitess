@@ -81,7 +81,7 @@ The command replaces the keyspace's whole configuration, so {"enabled":false} al
 
 Tablets act on a throttler check they refresh every --query-throttler-cache-update-interval (default 10s). Throttling starts and stops up to that long after a metric crosses its threshold, and a tablet that has just enabled the configuration throttles nothing until its first check completes.
 
-Statements that run inside a transaction are never throttled, and dry_run does not count them: explicit transactions, every statement in a session with autocommit=0, and DML that VTGate runs in a transaction of its own under autocommit, such as an UPDATE or DELETE that spans several shards or a write to a table with an owned lookup vindex.
+Statements whose rejection would cost more than running them are never throttled, and dry_run does not count them: statements inside a transaction (explicit transactions, every statement in a session with autocommit=0, and DML that VTGate runs in a transaction of its own under autocommit, such as an UPDATE or DELETE that spans several shards or a write to a table with an owned lookup vindex), sequence fetches, statements that take or release an advisory lock, and SELECT statements that read no table.
 
 On a primary, "lag" (or "shard/lag") is the highest replication lag among the replicas it probes, which --throttle-tablet-types selects (default: replica), so a single lagging replica throttles every query that a PRIMARY lag rule matches. On a replica, it is that replica's own lag.`,
 		Example: `# Throttle 50% of INSERTs on primaries when replication lag is above 5s, and all of them above 10s.
