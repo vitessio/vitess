@@ -149,8 +149,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		vr.logAttrs(
 			slog.String("start_position", replication.EncodePosition(settings.StartPos)),
 			slog.String("stop_position", replication.EncodePosition(settings.StopPos)),
-			slog.String("filter", fmt.Sprintf("%+v", vr.source.Filter)),
 		)...)
+	log.V(2).Info("Starting VReplication player", vr.logAttrs(slog.String("filter", fmt.Sprintf("%+v", vr.source.Filter)))...)
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}

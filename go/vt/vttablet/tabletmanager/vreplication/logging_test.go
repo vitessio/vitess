@@ -23,7 +23,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log/logtest"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
@@ -113,4 +117,67 @@ func testPlayerApplyErrorLogs(t *testing.T, batching bool) {
 		}
 		assert.NotContains(t, msg, value)
 	}
+}
+
+// TestNewVPlayerLogsFilterOnlyAtV2 checks that the player's filter is only
+// logged at verbosity 2. The filter has a rule per table, and a player starts
+// on every retry and twice per table during the copy phase.
+func TestNewVPlayerLogsFilterOnlyAtV2(t *testing.T) {
+	const value = "zq7filtervalue"
+	vr := &vreplicator{
+		id:           7,
+		WorkflowName: "wf",
+		source: &binlogdatapb.BinlogSource{
+			Filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: fmt.Sprintf("select * from t1 where val = '%s'", value)}},
+			},
+		},
+		workflowConfig: vttablet.DefaultVReplicationConfig,
+	}
+	// A copy state turns off batching, as in the copy phase.
+	copyState := map[string]*sqltypes.Result{"t1": nil}
+
+	t.Run("info", func(t *testing.T) {
+		logs := logtest.Capture(t, slog.LevelInfo)
+		newVPlayer(vr, binlogplayer.VRSettings{}, copyState, replication.Position{}, "")
+
+		record := logs.Record(t, "Starting VReplication player")
+		assert.Equal(t, "wf", record["workflow"])
+		assert.EqualValues(t, 7, record["stream_id"])
+		assert.Contains(t, record, "start_position")
+		assert.Contains(t, record, "stop_position")
+		assert.NotContains(t, logs.String(), value)
+	})
+
+	startRecords := func(logs *logtest.Logs) []map[string]any {
+		var records []map[string]any
+		for _, record := range logs.Records(t) {
+			if record["msg"] == "Starting VReplication player" {
+				records = append(records, record)
+			}
+		}
+		return records
+	}
+
+	t.Run("v1", func(t *testing.T) {
+		// log.V(1) is enabled at slog level -1.
+		logs := logtest.Capture(t, slog.Level(-1))
+		newVPlayer(vr, binlogplayer.VRSettings{}, copyState, replication.Position{}, "")
+
+		require.Len(t, startRecords(logs), 1)
+		assert.NotContains(t, logs.String(), value)
+	})
+
+	t.Run("v2", func(t *testing.T) {
+		logs := logtest.Capture(t, slog.Level(-2))
+		newVPlayer(vr, binlogplayer.VRSettings{}, copyState, replication.Position{}, "")
+
+		records := startRecords(logs)
+		require.Len(t, records, 2)
+		assert.NotContains(t, records[0], "filter")
+		assert.Equal(t, "wf", records[1]["workflow"])
+		assert.EqualValues(t, 7, records[1]["stream_id"])
+		assert.Contains(t, records[1]["filter"], value)
+		assert.NotContains(t, records[1], "start_position")
+	})
 }
