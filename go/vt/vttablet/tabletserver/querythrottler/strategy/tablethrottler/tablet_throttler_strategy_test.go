@@ -689,6 +689,21 @@ func TestTabletThrottlerStrategy_StartAfterStopIsNoOp(t *testing.T) {
 	strategy.Stop()
 }
 
+// Start and Stop may run concurrently, for example when a config update replaces a strategy
+// that is still starting. Run with -race: Stop must not read state that Start is still setting up.
+func TestTabletThrottlerStrategy_ConcurrentStartStop(t *testing.T) {
+	ftcw := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+	for range 100 {
+		strategy := NewTabletThrottlerStrategy(ftcw, createTestTabletConfig())
+		var wg sync.WaitGroup
+		wg.Go(strategy.Start)
+		wg.Go(strategy.Stop)
+		wg.Wait()
+		strategy.Stop()
+		require.False(t, strategy.running.Load())
+	}
+}
+
 // nilResultThrottleClient returns what a real ThrottleCheckOK returns on a canceled ctx:
 // a nil CheckResult with checkOk=false.
 type nilResultThrottleClient struct{}

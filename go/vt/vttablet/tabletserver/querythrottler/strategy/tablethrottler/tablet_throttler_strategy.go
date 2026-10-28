@@ -130,11 +130,10 @@ type TabletThrottlerStrategy struct {
 	cachedState atomic.Pointer[cacheState]
 
 	// Background updater lifecycle management
-	ctx          context.Context
-	cancel       context.CancelFunc
-	updateTicker *time.Ticker
-	done         chan struct{}
-	running      atomic.Bool
+	ctx     context.Context
+	cancel  context.CancelFunc
+	done    chan struct{}
+	running atomic.Bool
 	// stopped is set by Stop. A stopped strategy cannot be restarted, because its ctx is
 	// canceled and its done channel is closed; the query throttler builds a new one instead.
 	stopped atomic.Bool
@@ -182,9 +181,7 @@ func (s *TabletThrottlerStrategy) Start() {
 		return
 	}
 	if s.running.CompareAndSwap(false, true) {
-		updateInterval := resolveCacheUpdateInterval(s.tabletConfig)
-		s.updateTicker = time.NewTicker(updateInterval)
-		go s.runCacheUpdater()
+		go s.runCacheUpdater(resolveCacheUpdateInterval(s.tabletConfig))
 
 		log.Info("TabletThrottlerStrategy: started background throttle cache updater")
 	}
@@ -208,18 +205,17 @@ func (s *TabletThrottlerStrategy) Stop() {
 	s.cancel()
 
 	if s.running.CompareAndSwap(true, false) {
-		if s.updateTicker != nil {
-			s.updateTicker.Stop()
-		}
 		<-s.done // Wait for cache updater to finish
 		log.Info("TabletThrottlerStrategy: stopped background throttle cache updater")
 	}
 }
 
 // runCacheUpdater runs in a background goroutine to periodically refresh cached throttle results.
-func (s *TabletThrottlerStrategy) runCacheUpdater() {
+// The ticker is local to it, so a concurrent Stop has nothing of the updater's to read.
+func (s *TabletThrottlerStrategy) runCacheUpdater(interval time.Duration) {
 	defer close(s.done)
-	defer s.updateTicker.Stop()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 
 	// Prime immediately so the first ticker interval isn't served cold. Done here rather
 	// than in Start to keep Start non-blocking; the hot path fails open until this lands.
@@ -227,7 +223,7 @@ func (s *TabletThrottlerStrategy) runCacheUpdater() {
 
 	for {
 		select {
-		case <-s.updateTicker.C:
+		case <-ticker.C:
 			s.refreshCache()
 		case <-s.ctx.Done():
 			return
