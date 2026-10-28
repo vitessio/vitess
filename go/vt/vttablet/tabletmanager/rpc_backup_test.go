@@ -98,7 +98,7 @@ func TestBackupRestoresTypeWhenChangeToBackupFails(t *testing.T) {
 // TestBackupRestoresPrimarySemiSync checks that a primary whose change to BACKUP
 // fails turns source-side semi-sync back on before it serves again.
 func TestBackupRestoresPrimarySemiSync(t *testing.T) {
-	ctx, tm, fake, qsc, _ := newPrimaryBackupTest(t)
+	ctx, tm, fake, qsc, _ := newBackupTest(t, topodatapb.TabletType_PRIMARY)
 	injectedErr := errors.New("injected replication status failure")
 	fake.ReplicationStatusError = injectedErr
 	servingWhenEnabled := true
@@ -137,7 +137,7 @@ func TestBackupKeepsPrimaryDrainedWhenSemiSyncRestoreFails(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, tm, fake, qsc, _ := newPrimaryBackupTest(t)
+			ctx, tm, fake, qsc, _ := newBackupTest(t, topodatapb.TabletType_PRIMARY)
 			handle := useFakeBackupStorage(t)
 			fake.ReplicationStatusError = tt.statusErr
 			fake.SetSemiSyncEnabledFunc = func(primary, replica bool) error {
@@ -184,9 +184,10 @@ func useFakeBackupStorage(t *testing.T) *mysqlctl.FakeBackupHandle {
 
 const primaryDrainEngine = "fake-primary-drain"
 
-// newPrimaryBackupTest returns a serving primary with semi-sync enabled, in a
-// keyspace whose durability policy requires it, and a draining backup engine.
-func newPrimaryBackupTest(t *testing.T) (context.Context, *TabletManager, *mysqlctl.FakeMysqlDaemon, *tabletservermock.Controller, *memorytopo.Factory) {
+// newBackupTest returns a serving tablet of the given type, PRIMARY or REPLICA,
+// with the semi-sync settings of that type, in a keyspace whose durability
+// policy requires semi-sync, and a draining backup engine.
+func newBackupTest(t *testing.T, tabletType topodatapb.TabletType) (context.Context, *TabletManager, *mysqlctl.FakeMysqlDaemon, *tabletservermock.Controller, *memorytopo.Factory) {
 	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 	t.Cleanup(cancel)
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "cell1")
@@ -198,11 +199,14 @@ func newPrimaryBackupTest(t *testing.T) (context.Context, *TabletManager, *mysql
 	fake.DB().SetNeverFail(true)
 	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilitySemiSync)
 
-	require.NoError(t, tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionNone))
-	ti, err := ts.GetTablet(ctx, tm.Tablet().Alias)
-	require.NoError(t, err)
-	require.NoError(t, checkShardRecord(ctx, t, ts, ti.Alias, ti.PrimaryTermStartTime))
-	require.NoError(t, fake.SetSemiSyncEnabled(ctx, true, true))
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		require.NoError(t, tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionNone))
+		ti, err := ts.GetTablet(ctx, tm.Tablet().Alias)
+		require.NoError(t, err)
+		require.NoError(t, checkShardRecord(ctx, t, ts, ti.Alias, ti.PrimaryTermStartTime))
+	}
+	require.Equal(t, tabletType, tm.Tablet().Type)
+	require.NoError(t, fake.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true))
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
 	require.True(t, qsc.IsServing())
 
@@ -240,7 +244,7 @@ func TestBackupRefusesPrimaryWhoseDurabilityPolicyCannotBeRead(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, tm, fake, qsc, factory := newPrimaryBackupTest(t)
+			ctx, tm, fake, qsc, factory := newBackupTest(t, topodatapb.TabletType_PRIMARY)
 			tc.fail(t, ctx, tm, factory)
 			engine := mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine)
 
@@ -272,20 +276,63 @@ func (e *duringBackupEngine) ExecuteBackup(ctx context.Context, params mysqlctl.
 // semi-sync is restored as the durability policy required when the backup
 // started. VTOrc reconciles a policy that changed during the backup.
 func TestBackupRestoresPrimarySemiSyncFromPolicyAtStart(t *testing.T) {
-	ctx, tm, fake, qsc, _ := newPrimaryBackupTest(t)
-	reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", policy.DurabilityNone)
-	require.NoError(t, fake.SetSemiSyncEnabled(ctx, false, false))
-	useFakeBackupStorage(t)
-	mysqlctl.BackupRestoreEngineMap[primaryDrainEngine] = &duringBackupEngine{
-		FakeBackupEngine: mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine),
-		during: func() {
-			reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", policy.DurabilitySemiSync)
-		},
-	}
+	for _, tc := range []struct {
+		name         string
+		atStart      string
+		duringBackup string
+		wantSemiSync bool
+	}{
+		{name: "semi_sync, then none", atStart: policy.DurabilitySemiSync, duringBackup: policy.DurabilityNone, wantSemiSync: true},
+		{name: "none, then semi_sync", atStart: policy.DurabilityNone, duringBackup: policy.DurabilitySemiSync},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, tm, fake, qsc, _ := newBackupTest(t, topodatapb.TabletType_PRIMARY)
+			reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", tc.atStart)
+			require.NoError(t, fake.SetSemiSyncEnabled(ctx, tc.wantSemiSync, tc.wantSemiSync))
+			useFakeBackupStorage(t)
+			mysqlctl.BackupRestoreEngineMap[primaryDrainEngine] = &duringBackupEngine{
+				FakeBackupEngine: mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine),
+				during: func() {
+					reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", tc.duringBackup)
+				},
+			}
 
-	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
-	require.NoError(t, err)
-	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
-	assert.True(t, qsc.IsServing())
-	assert.False(t, fake.SemiSyncPrimaryEnabled)
+			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+			assert.True(t, qsc.IsServing())
+			assert.Equal(t, tc.wantSemiSync, fake.SemiSyncPrimaryEnabled)
+		})
+	}
+}
+
+// TestBackupLeavesReplicaSourceSemiSyncOff checks that a replica's backup
+// doesn't turn on source-side semi-sync, and doesn't depend on the durability
+// policy being readable when it starts.
+func TestBackupLeavesReplicaSourceSemiSyncOff(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		atStart  string
+		readFail bool
+	}{
+		{name: "semi_sync", atStart: policy.DurabilitySemiSync},
+		{name: "none", atStart: policy.DurabilityNone},
+		{name: "keyspace read fails", atStart: policy.DurabilitySemiSync, readFail: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, tm, fake, qsc, factory := newBackupTest(t, topodatapb.TabletType_REPLICA)
+			reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", tc.atStart)
+			handle := useFakeBackupStorage(t)
+			if tc.readFail {
+				factory.AddOperationError(memorytopo.Get, "keyspaces/ks/Keyspace$", errors.New("injected keyspace read failure"))
+			}
+
+			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(primaryDrainEngine)})
+			require.NoError(t, err)
+			assert.Len(t, handle.EndBackupCalls, 1)
+			assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+			assert.True(t, qsc.IsServing())
+			assert.False(t, fake.SemiSyncPrimaryEnabled)
+		})
+	}
 }

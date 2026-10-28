@@ -3856,20 +3856,46 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 // TestRestartReplicationReceiver checks that only the receiver is restarted,
 // and that a flavor without receiver commands runs nothing.
 func TestRestartReplicationReceiver(t *testing.T) {
-	t.Run("receiver commands", func(t *testing.T) {
-		db := fakesqldb.New(t)
-		t.Cleanup(db.Close)
-		db.OrderMatters()
-		t.Cleanup(db.VerifyAllExecutedOrFail)
-		db.AddExpectedQuery("SELECT 1", nil)
-		db.AddExpectedQuery("STOP REPLICA IO_THREAD", nil)
-		db.AddExpectedQuery("START REPLICA IO_THREAD", nil)
-		cp := *db.ConnParams()
-		mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
-		t.Cleanup(mysqld.Close)
+	injectedErr := errors.New("injected receiver failure")
+	for _, tc := range []struct {
+		name    string
+		queries []fakesqldb.ExpectedExecuteFetch
+		wantErr error
+	}{
+		{name: "receiver commands", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+			{Query: "START REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+		}},
+		// A failed stop must not be followed by a start.
+		{name: "stop fails", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", Error: injectedErr},
+		}, wantErr: injectedErr},
+		{name: "start fails", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+			{Query: "START REPLICA IO_THREAD", Error: injectedErr},
+		}, wantErr: injectedErr},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.OrderMatters()
+			t.Cleanup(db.VerifyAllExecutedOrFail)
+			db.AddExpectedQuery("SELECT 1", nil)
+			for _, q := range tc.queries {
+				db.AddExpectedExecuteFetch(q)
+			}
+			cp := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
 
-		require.NoError(t, mysqld.RestartReplicationReceiver(t.Context(), nil))
-	})
+			err := mysqld.RestartReplicationReceiver(t.Context(), nil)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.wantErr.Error())
+		})
+	}
 	t.Run("unsupported flavor", func(t *testing.T) {
 		db := fakesqldb.New(t)
 		t.Cleanup(db.Close)

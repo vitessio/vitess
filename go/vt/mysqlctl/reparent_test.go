@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -300,6 +301,87 @@ func TestPromoteFailsBeforeResetWhenReceiverStateUnknown(t *testing.T) {
 			pos, err := mysqld.Promote(ctx, nil)
 			require.ErrorContains(t, err, injectedErr.Error())
 			assert.True(t, pos.IsZero())
+		})
+	}
+}
+
+// TestPromoteReturnsWhenCanceled checks that a promotion without a deadline
+// returns once its context is canceled at any step that waits on MySQL, so it
+// releases the tablet's action lock, and that nothing runs after it.
+func TestPromoteReturnsWhenCanceled(t *testing.T) {
+	const executed, received = "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5", "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8"
+	running := replicaStatusResult("Yes", "Yes", executed, received)
+	stopped := replicaStatusResult("No", "Yes", executed, received)
+	for _, tc := range []struct {
+		name    string
+		queries []fakesqldb.ExpectedExecuteFetch
+		blocked string
+	}{
+		{name: "status read", blocked: "SHOW REPLICA STATUS"},
+		{name: "receiver stop", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "SHOW REPLICA STATUS", QueryResult: running},
+		}, blocked: "STOP REPLICA IO_THREAD"},
+		{name: "status read after the receiver stop", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "SHOW REPLICA STATUS", QueryResult: running},
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+		}, blocked: "SHOW REPLICA STATUS"},
+		{name: "applier wait", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "SHOW REPLICA STATUS", QueryResult: running},
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+			{Query: "SHOW REPLICA STATUS", QueryResult: stopped},
+		}, blocked: "SELECT WAIT_FOR_EXECUTED_GTID_SET('" + received + "', 0)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.OrderMatters()
+			t.Cleanup(db.VerifyAllExecutedOrFail)
+			db.AddExpectedQuery("SELECT 1", nil)
+			for _, q := range tc.queries {
+				db.AddExpectedExecuteFetch(q)
+			}
+			// The blocked query returns only once the cancellation kills it, or
+			// at cleanup if it never does.
+			started, killed := make(chan struct{}), make(chan struct{})
+			release := sync.OnceFunc(func() { close(killed) })
+			t.Cleanup(release)
+			db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
+				Query: tc.blocked,
+				Error: errors.New("query killed"),
+				AfterFunc: func() {
+					close(started)
+					<-killed
+				},
+			})
+			// Any STOP REPLICA or RESET after the cancellation is unexpected.
+			db.AddExpectedExecuteFetch(fakesqldb.ExpectedExecuteFetch{
+				Query:       "kill *",
+				QueryResult: &sqltypes.Result{},
+				AfterFunc:   release,
+			})
+			cp := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+
+			errc := make(chan error, 1)
+			go func() {
+				_, err := mysqld.Promote(ctx, nil)
+				errc <- err
+			}()
+			select {
+			case <-started:
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "the promotion never reached "+tc.blocked)
+			}
+			cancel()
+			select {
+			case err := <-errc:
+				require.ErrorContains(t, err, context.Canceled.Error())
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "the promotion kept waiting after its context was canceled")
+			}
 		})
 	}
 }

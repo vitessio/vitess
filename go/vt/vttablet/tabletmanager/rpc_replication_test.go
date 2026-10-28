@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -1668,6 +1669,9 @@ type semiSyncOrderMysqlDaemon struct {
 	// sourceSemiSyncAtSuperReadOnly records source-side semi-sync when
 	// super_read_only is first enabled.
 	sourceSemiSyncAtSuperReadOnly *bool
+	// releasedPosition, if set, becomes the executed position when source-side
+	// semi-sync is disabled, as the commits blocked on ACKs complete.
+	releasedPosition replication.Position
 }
 
 func (d *semiSyncOrderMysqlDaemon) SetSuperReadOnly(ctx context.Context, on bool, opts ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
@@ -1683,38 +1687,68 @@ func (d *semiSyncOrderMysqlDaemon) IsSemiSyncBlocked(context.Context) (bool, err
 }
 
 func (d *semiSyncOrderMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
-	if d.SemiSyncPrimaryEnabled && !primary && !d.disabledSourceSemiSync {
-		d.disabledSourceSemiSync = true
+	disabling := d.SemiSyncPrimaryEnabled && !primary && !d.disabledSourceSemiSync
+	if disabling {
 		d.servingWhenDisabled = d.tm.QueryServiceControl.IsServing()
 	}
-	return d.FakeMysqlDaemon.SetSemiSyncEnabled(ctx, primary, replica)
+	if err := d.FakeMysqlDaemon.SetSemiSyncEnabled(ctx, primary, replica); err != nil {
+		return err
+	}
+	if disabling {
+		d.disabledSourceSemiSync = true
+		if !d.releasedPosition.IsZero() {
+			d.SetPrimaryPositionLocked(d.releasedPosition)
+		}
+	}
+	return nil
+}
+
+// newBlockedPrimaryTest returns a serving PRIMARY whose writes wait for
+// semi-sync ACKs, and a new primary registered in the topo.
+func newBlockedPrimaryTest(t *testing.T) (context.Context, *TabletManager, *semiSyncOrderMysqlDaemon, *topodatapb.Tablet) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+	tm.tmc = newFakeTMClient()
+
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, true))
+	fake := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fake.DB().SetNeverFail(true)
+	require.NoError(t, fake.SetReadOnly(ctx, false))
+	require.NoError(t, fake.SetSemiSyncEnabled(ctx, true, true))
+	// An old primary has no replication configured.
+	fake.ReplicationStatusError = mysql.ErrNotReplica
+	fake.SetPrimaryPositionLocked(replication.MustParsePosition(gtidFlavor, gtidPosition))
+	daemon := &semiSyncOrderMysqlDaemon{FakeMysqlDaemon: fake, tm: tm}
+	tm.MysqlDaemon = daemon
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	newPrimary := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "cell1", Uid: 200},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: "mysql-new-primary",
+		MysqlPort:     3306,
+	}
+	require.NoError(t, ts.CreateTablet(ctx, newPrimary))
+	return ctx, tm, daemon, newPrimary
 }
 
 // TestSetReplicationSourceDemotesPrimaryBeforeSemiSync checks that SetReplicationSource on a
 // PRIMARY tablet whose writes wait for semi-sync ACKs stops serving (killing those sessions)
-// before disabling source-side semi-sync, and leaves super_read_only enabled. An ERS sends this RPC to an
-// old primary that it could not demote; disabling semi-sync first completed the waiting commits
-// and acknowledged them to their clients, although the new primary does not have them.
+// before disabling source-side semi-sync, leaves super_read_only enabled, and reads its
+// position only after the blocked commits complete. An ERS sends this RPC to an old primary
+// that it could not demote, and the new primary doesn't have those commits.
 func TestSetReplicationSourceDemotesPrimaryBeforeSemiSync(t *testing.T) {
-	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-	defer cancel()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	t.Cleanup(tm.Stop)
+	ctx, tm, daemon, newPrimary := newBlockedPrimaryTest(t)
+	const releasedGTID = "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1"
+	daemon.releasedPosition = replication.MustParsePosition(gtidFlavor, gtidPosition+","+releasedGTID)
 
-	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, true))
-	fakeMysqlDaemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
-	fakeMysqlDaemon.DB().SetNeverFail(true)
-	require.NoError(t, fakeMysqlDaemon.SetReadOnly(ctx, false))
-	require.NoError(t, fakeMysqlDaemon.SetSemiSyncEnabled(ctx, true, true))
-	daemon := &semiSyncOrderMysqlDaemon{FakeMysqlDaemon: fakeMysqlDaemon, tm: tm}
-	tm.MysqlDaemon = daemon
-	require.True(t, tm.QueryServiceControl.IsServing())
-
-	// The new primary is not in the topo, so the RPC fails after its semi-sync changes.
-	newPrimary := &topodatapb.TabletAlias{Cell: "cell1", Uid: 200}
-	err := tm.SetReplicationSource(ctx, newPrimary, 0, "", false, true, 0)
-	require.Error(t, err)
+	err := tm.SetReplicationSource(ctx, newPrimary.Alias, 0, "", false, true, 0)
+	require.ErrorContains(t, err, "Errant GTID detected - "+releasedGTID)
 
 	require.True(t, daemon.disabledSourceSemiSync)
 	assert.False(t, daemon.servingWhenDisabled, "source-side semi-sync was disabled while the query service served")
@@ -1722,8 +1756,28 @@ func TestSetReplicationSourceDemotesPrimaryBeforeSemiSync(t *testing.T) {
 	// would otherwise wait on commits blocked on ACKs.
 	require.NotNil(t, daemon.sourceSemiSyncAtSuperReadOnly)
 	assert.False(t, *daemon.sourceSemiSyncAtSuperReadOnly, "super_read_only was enabled before source-side semi-sync was disabled")
-	assert.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
+	assert.True(t, daemon.SuperReadOnly.Load())
 	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+}
+
+// TestSetReplicationSourceKeepsPrimaryWhenDemotionFails checks that a PRIMARY
+// whose demotion fails keeps its type instead of becoming a REPLICA.
+func TestSetReplicationSourceKeepsPrimaryWhenDemotionFails(t *testing.T) {
+	ctx, tm, daemon, newPrimary := newBlockedPrimaryTest(t)
+	injectedErr := errors.New("injected semi-sync failure")
+	daemon.SetSemiSyncEnabledFunc = func(primary, replica bool) error {
+		if !primary {
+			return injectedErr
+		}
+		return nil
+	}
+
+	err := tm.SetReplicationSource(ctx, newPrimary.Alias, 0, "", false, true, 0)
+	require.ErrorContains(t, err, "failed to demote the primary before repointing it: "+injectedErr.Error())
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 }
 
 // TestChangeTypeReportsStatusErrorAfterPublishing checks that non-DRAINED type
@@ -1782,8 +1836,9 @@ func TestSetReplicationSourceDrainedRejectsStaleSemiSync(t *testing.T) {
 	daemon := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	daemon.DB().SetNeverFail(true)
 	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_REPLICA, true))
-	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, false))
-	require.False(t, daemon.SemiSyncReplicaEnabled)
+	// Older tablets published DRAINED before disabling ACKs.
+	require.NoError(t, tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_DRAINED, DBActionNone))
+	require.True(t, daemon.SemiSyncReplicaEnabled)
 
 	err := tm.SetReplicationSource(ctx, &topodatapb.TabletAlias{Cell: "cell1", Uid: 200}, 0, "", false, true, 0)
 	require.Error(t, err, "the parent is absent")
@@ -1799,6 +1854,17 @@ type drainSemiSyncMysqlDaemon struct {
 	acking        bool
 	typeAtRevoke  topodatapb.TabletType
 	typeAtRestart topodatapb.TabletType
+	// ioState and lastIOError, when ioState is set, replace the fake's receiver state.
+	ioState     replication.ReplicationState
+	lastIOError string
+}
+
+func (d *drainSemiSyncMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	status, err := d.FakeMysqlDaemon.ReplicationStatus(ctx)
+	if err == nil && d.ioState != replication.ReplicationStateUnknown {
+		status.IOState, status.LastIOError = d.ioState, d.lastIOError
+	}
+	return status, err
 }
 
 func (d *drainSemiSyncMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
@@ -1880,6 +1946,52 @@ func TestChangeTypeDrainedRevokesSemiSyncBeforePublishing(t *testing.T) {
 				assert.Equal(t, topodatapb.TabletType_REPLICA, daemon.typeAtRestart)
 				assert.False(t, daemon.acking)
 				require.NoError(t, fake.CheckSuperQueryList())
+			}
+		})
+	}
+}
+
+// TestChangeTypeDrainedRestartsReceiverUnlessStopped checks that draining restarts
+// every receiver that isn't stopped, including one reconnecting after an error,
+// which would otherwise stop with error 13117 when it reconnects.
+func TestChangeTypeDrainedRestartsReceiverUnlessStopped(t *testing.T) {
+	tests := []struct {
+		name        string
+		ioState     replication.ReplicationState
+		lastIOError string
+		restart     bool
+	}{
+		{name: "stopped", ioState: replication.ReplicationStateStopped},
+		{name: "running", ioState: replication.ReplicationStateRunning, restart: true},
+		{name: "connecting", ioState: replication.ReplicationStateConnecting, restart: true},
+		{name: "connecting after an error", ioState: replication.ReplicationStateConnecting, lastIOError: "error reconnecting to source", restart: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(cancel)
+			ts := memorytopo.NewServer(ctx, "cell1")
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			t.Cleanup(tm.Stop)
+			fake := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			fake.DB().SetNeverFail(true)
+			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_REPLICA, true))
+			daemon := &drainSemiSyncMysqlDaemon{FakeMysqlDaemon: fake, tm: tm, acking: true, ioState: tt.ioState, lastIOError: tt.lastIOError}
+			tm.MysqlDaemon = daemon
+			fake.Replicating = true
+			if tt.restart {
+				fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA IO_THREAD", "START REPLICA IO_THREAD"}
+			}
+
+			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_DRAINED, true))
+			assert.Equal(t, topodatapb.TabletType_DRAINED, tm.Tablet().Type)
+			assert.False(t, fake.SemiSyncReplicaEnabled)
+			require.NoError(t, fake.CheckSuperQueryList())
+			if tt.restart {
+				assert.Equal(t, topodatapb.TabletType_REPLICA, daemon.typeAtRestart)
+				assert.False(t, daemon.acking)
+			} else {
+				assert.Zero(t, fake.ExpectedExecuteSuperQueryCurrent)
 			}
 		})
 	}

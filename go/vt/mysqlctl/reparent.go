@@ -97,9 +97,18 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 
 // applyReceivedTransactions stops the receiver and waits for received MySQL GTIDs
 // to execute before promotion resets replication. Semi-sync replicas may have
-// acknowledged transactions that are still in the relay log.
+// acknowledged transactions that are still in the relay log. Each step stops
+// when ctx is done, so a canceled promotion releases the tablet's action lock.
 func (mysqld *Mysqld) applyReceivedTransactions(ctx context.Context, conn *dbconnpool.PooledDBConnection) error {
-	status, err := conn.Conn.ShowReplicationStatus()
+	readStatus := func() (status replication.ReplicationStatus, err error) {
+		err = mysqld.executeWithContext(ctx, conn, "SHOW REPLICA STATUS", func() error {
+			var statusErr error
+			status, statusErr = conn.Conn.ShowReplicationStatus()
+			return statusErr
+		})
+		return status, err
+	}
+	status, err := readStatus()
 	if errors.Is(err, mysql.ErrNotReplica) {
 		return nil
 	}
@@ -110,7 +119,7 @@ func (mysqld *Mysqld) applyReceivedTransactions(ctx context.Context, conn *dbcon
 		if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
 			return vterrors.Wrap(err, "cannot promote: failed to stop the replication receiver")
 		}
-		if status, err = conn.Conn.ShowReplicationStatus(); err != nil {
+		if status, err = readStatus(); err != nil {
 			return vterrors.Wrap(err, "cannot promote: failed to read replication status after stopping the receiver")
 		}
 	}
@@ -122,7 +131,10 @@ func (mysqld *Mysqld) applyReceivedTransactions(ctx context.Context, conn *dbcon
 			"cannot promote: the replica received transactions that it has not applied (executed %v, received %v) and its applier is not running",
 			status.Position, status.RelayLogPosition)
 	}
-	if err := conn.Conn.WaitUntilPosition(ctx, status.RelayLogPosition); err != nil {
+	err = mysqld.executeWithContext(ctx, conn, "WAIT_FOR_EXECUTED_GTID_SET", func() error {
+		return conn.Conn.WaitUntilPosition(ctx, status.RelayLogPosition)
+	})
+	if err != nil {
 		return vterrors.Wrapf(err, "cannot promote: waiting for the applier to execute the received transactions %v", status.RelayLogPosition)
 	}
 	return nil
