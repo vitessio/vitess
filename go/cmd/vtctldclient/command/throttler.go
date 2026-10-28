@@ -79,9 +79,13 @@ var (
 
 The command replaces the keyspace's whole configuration, so {"enabled":false} also removes every rule. To change one rule, pass the full configuration with that change. GetKeyspace shows the current configuration, and GetSrvKeyspaces shows each cell's copy.
 
-Tablets act on a throttler check they refresh every --query-throttler-cache-update-interval (default 10s). Throttling starts and stops up to that long after a metric crosses its threshold, and a tablet that has just enabled the configuration throttles nothing until its first check completes.
+Tablets act on a throttler check they refresh every --query-throttler-cache-update-interval (default 10s). Throttling starts and stops up to that long after a metric crosses its threshold, plus the time the throttler takes to collect the metric (under a second, or up to 5s with an interval longer than a minute). A tablet that has just enabled the configuration throttles nothing until its first check completes, and one whose check keeps failing stops throttling once its last result is more than six intervals old.
 
-Statements whose rejection would cost more than running them are never throttled, and dry_run does not count them: statements inside a transaction (explicit transactions, every statement in a session with autocommit=0, and DML that VTGate runs in a transaction of its own under autocommit, such as an UPDATE or DELETE that spans several shards or a write to a table with an owned lookup vindex), sequence fetches, statements that take or release an advisory lock, and SELECT statements that read no table.
+A query's priority (/*vt+ PRIORITY=N */, 0 to 100, default 100) scales a rule's percentage: priority 50 is rejected half as often, and priority 0 is never throttled.
+
+A rule names a metric bare ("lag") or with a scope ("shard/lag", "self/lag"). A metric can appear in any number of rules but must be spelled the same way in all of them. The dedicated throttler keeps the lowest threshold of each metric, which GetThrottlerStatus --throttler-type DEDICATED_QUERY_THROTTLER shows; each rule still applies its own thresholds.
+
+Statements whose rejection would cost more than running them are never throttled, and dry_run does not count them: statements inside a transaction (explicit transactions, statements in a session with autocommit=0 from its first statement that reads or writes a table, and DML that VTGate runs in a transaction of its own under autocommit, such as an UPDATE or DELETE that spans several shards or a write to a table with an owned lookup vindex), sequence fetches, statements that take or release an advisory lock, and SELECT statements that read no table.
 
 On a primary, "lag" (or "shard/lag") is the highest replication lag among the replicas it probes, which --throttle-tablet-types selects (default: replica), so a single lagging replica throttles every query that a PRIMARY lag rule matches. On a replica, it is that replica's own lag.`,
 		Example: `# Throttle 50% of INSERTs on primaries when replication lag is above 5s, and all of them above 10s.

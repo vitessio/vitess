@@ -269,7 +269,8 @@ func (s *TabletThrottlerStrategy) refreshCache() {
 // (checkOk=true) in three cases rather than calling the throttler synchronously, which
 // would spike hot-path latency:
 //
-//   - the strategy is not running, or the cache is not primed yet — a brief window after Start
+//   - the strategy is not running
+//   - the cache is not primed yet — a brief window after Start
 //   - the state has aged past cacheStalenessThreshold. refreshCache keeps the last state when
 //     refreshes fail, so a metrics outage can freeze it at ok=false and throttle forever.
 //
