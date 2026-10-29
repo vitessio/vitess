@@ -19,8 +19,10 @@ package failover
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -131,9 +133,10 @@ func TestERSRestartedReplicaStaysStopped(t *testing.T) {
 }
 
 // TestStoppedReplicaRestartedUnderShardLock restarts the vttablet of a replica whose
-// replication is stopped while another operation holds the shard lock. The replica answers
-// RPCs, leaves replication stopped and stays out of rotation, also after the lock is released,
-// until VTOrc starts replication; then it serves.
+// replication is stopped while another operation holds the shard lock. The replica's wait for
+// the lock times out without leaving a lock request behind. It answers RPCs, leaves
+// replication stopped and stays out of rotation, also after the lock is released, until VTOrc
+// starts replication; then it serves.
 func TestStoppedReplicaRestartedUnderShardLock(t *testing.T) {
 	ci := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	teardownOnCleanup(t, ci)
@@ -146,9 +149,11 @@ func TestStoppedReplicaRestartedUnderShardLock(t *testing.T) {
 	l := holdShardLock(t, ci.TopoProcess.Server, "reparent", 30*time.Second, 10*time.Second)
 	restartVttablet(t, r1, 0)
 	waitForTabletManager(t, ci, r1, time.Now().Add(30*time.Second))
+	require.Equal(t, []string{"reparent"}, shardLockActions(t, ci), "R1's timed-out lock request is still queued")
 	requireOutOfRotation(t, r1, 5*time.Second, "R1 started replication under the shard lock")
 	l.release(t)
 	requireOutOfRotation(t, r1, 5*time.Second, "R1 started replication after the shard lock was released")
+	require.Empty(t, shardLockActions(t, ci), "R1 took the shard lock after its wait timed out")
 
 	requireRepaired(t, ci, r1, p)
 	n := utils.ConfirmReplication(t, p, tablets[1:])
@@ -262,4 +267,81 @@ func TestRestoreDuringERS(t *testing.T) {
 	<-contenderDone
 	require.NoError(t, contenderErr)
 	requireReplicating(t, r1, r3, "R1 does not replicate from the new primary")
+}
+
+// logInitializationTrace logs, for each of tabs, the timestamped lines of its vttablet log
+// that show its replication initialization's lock wait, hold and deferral.
+func logInitializationTrace(t *testing.T, tabs []*cluster.Vttablet) {
+	deferred := false
+	for _, tab := range tabs {
+		b, err := os.ReadFile(tab.VttabletProcess.ErrorLog)
+		if err != nil {
+			t.Logf("%s: cannot read its log: %v", tab.Alias, err)
+			continue
+		}
+		var trace []string
+		for line := range strings.SplitSeq(string(b), "\n") {
+			if strings.Contains(line, "initialize replication") || strings.Contains(line, "deferring replication initialization") ||
+				strings.Contains(line, "Getting a new durability policy") {
+				trace = append(trace, line)
+				deferred = deferred || strings.Contains(line, "timed out acquiring the shard lock")
+			}
+		}
+		t.Logf("==== %s replication initialization (lock wait starts at Locking; acquired by the durability line)\n%s", tab.Alias, strings.Join(trace, "\n"))
+	}
+	if deferred {
+		t.Log("a replica's wait for the shard lock timed out: the known limit of the one-second wait, not a regression by itself")
+	}
+}
+
+// TestSiblingReplicasRestartTogether restarts the vttablets of all replicas at once, with
+// their replication stopped as after a mysqld restart, and no VTOrc. Each replica's
+// initialization waits briefly for the others' instead of deferring, so all replicate from
+// the primary and serve. This depends on the initializations finishing within the one-second
+// wait; a failure logs their waits and deferrals.
+func TestSiblingReplicasRestartTogether(t *testing.T) {
+	ci := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	teardownOnCleanup(t, ci)
+	tablets := ci.Keyspaces[0].Shards[0].Vttablets
+	p, replicas := tablets[0], tablets[1:]
+	// Runs before the cluster's teardown.
+	t.Cleanup(func() {
+		if t.Failed() {
+			logInitializationTrace(t, replicas)
+		}
+	})
+	utils.ConfirmReplication(t, p, replicas)
+	for _, r := range replicas {
+		utils.RunSQL(t.Context(), t, "stop replica", r)
+		require.NoError(t, r.VttabletProcess.TearDownWithTimeout(30*time.Second))
+	}
+	errs := make(chan error, len(replicas))
+	for _, r := range replicas {
+		go func() {
+			r.VttabletProcess.ServingStatus = ""
+			errs <- r.VttabletProcess.Setup()
+		}()
+	}
+	for range replicas {
+		require.NoError(t, <-errs)
+	}
+	for _, r := range replicas {
+		requireReplicating(t, r, p, "%s did not resume replication after the restart", r.Alias)
+	}
+	utils.ConfirmReplication(t, p, replicas)
+}
+
+// TestERSRepointsRestartingReplica restarts R1's vttablet during the held ERS (see
+// TestERSHeldByApplierBarriers) and releases the hold without waiting for R1 to answer RPCs.
+// R1 waits for the shard lock that ERS holds, and ERS needs R1's RPCs to repoint it; R1's
+// wait ends, and ERS repoints R1 to the new primary.
+func TestERSRepointsRestartingReplica(t *testing.T) {
+	holdERS(t, nil, func(t *testing.T, ci *cluster.LocalProcessCluster, r1 *cluster.Vttablet, deadline time.Time) {
+		vp := r1.VttabletProcess
+		require.NoError(t, vp.TearDownWithTimeout(30*time.Second))
+		vp.ServingStatus = ""
+		started := make(chan error, 1)
+		go func() { started <- vp.Setup() }()
+		t.Cleanup(func() { <-started })
+	})
 }
