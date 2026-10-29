@@ -31,6 +31,7 @@
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
+        - [Copied tables whose statistics aren't recalculated automatically are analyzed](#vreplication-analyze-stats-auto-recalc)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -74,6 +75,8 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
+        - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -330,6 +333,18 @@ When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that 
 `RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
 
 See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
+
+#### <a id="vreplication-analyze-stats-auto-recalc"/>Copied tables whose statistics aren't recalculated automatically are analyzed</a>
+
+VReplication creates target tables with the source's table options, including `STATS_AUTO_RECALC=0`. InnoDB saves empty persistent statistics for such a table when it is created and never recalculates them on its own, so after a copy the target, its replicas and their backups kept statistics that describe an empty table. The same happens to an InnoDB table that leaves `STATS_AUTO_RECALC` at its default while `innodb_stats_auto_recalc` is off. Tables of other engines, and InnoDB tables with transient statistics (`STATS_PERSISTENT=0`, or the default while `innodb_stats_persistent` is off), are not affected, as InnoDB recalculates transient statistics whenever it opens a table.
+
+At the end of each copy cycle of a workflow or Online DDL migration, the target now runs `ANALYZE TABLE` on the table the cycle copied, if its persistent statistics aren't recalculated automatically:
+
+- The statement is written to the target's binary log, with its own GTID, and the target's replicas apply it. A replica applying it waits while a backup there holds `LOCK INSTANCE FOR BACKUP`, as it does for DDL.
+- It is best effort: a failure does not fail the copy, and is logged and recorded in the workflow's log, which `vtctldclient Workflow show` displays. On the target, its wait for a metadata lock, such as one held by `LOCK TABLES` or `LOCK INSTANCE FOR BACKUP`, is bounded at 60 seconds; a replica applies it under its own `lock_wait_timeout`. If the workflow, or the tablet's VReplication engine, stops while it runs, it is killed, and the table is analyzed when the copy resumes; an atomic copy, which can't resume, finishes without it and logs a warning in the vttablet log.
+- Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
+
+See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
@@ -848,6 +863,42 @@ The `lz4` compression engine now uses the `pierrec/lz4/v4` library instead of `p
 The upgrade changes how `--compression-level` is interpreted for the lz4 engine. Values `0` and `1`, including the default of `1`, select the fast compressor. Values `2` through `9` now select lz4's named hash-chain levels (`Level2` through `Level9`) instead of using the raw value as the hash-chain search depth, so higher values produce a better ratio at more CPU cost. Values above `9` and negative values, which previously requested an unlimited search, select `Level9`. Other compression engines are not affected.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
+
+#### <a id="vtbackup-errant-gtid-checks"/>`vtbackup` can refuse backups with errant GTIDs</a>
+
+The new `--enable-errant-gtid-checks` flag makes `vtbackup` fail a run, without completing a backup, when a position has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. A replica restored from a backup that has them fails with `Errant GTID detected`, and without the checks every `vtbackup` run restores such a backup and carries the errant GTIDs into the next one. With the flag, `vtbackup` checks three times:
+
+- **The restored backup**, or the data cloned with `--restore-with-clone`, before catching up.
+- **The data to back up**, before the upload. Errant GTIDs here come from a reparent that lost transactions `vtbackup` had already applied, or from `--init-backup-sql-queries` running binlogged statements such as `ANALYZE TABLE`, `OPTIMIZE TABLE` or `FLUSH TABLES`.
+- **The new backup**, just before its `MANIFEST` is written. If an emergency reparent during the upload loses transactions that the backup holds, the backup is aborted instead of left for restores to reject.
+
+The error names where the errant GTIDs came from and how to repair them. Before the upload, and again before writing the `MANIFEST`, `vtbackup` also waits while the primary hasn't committed GTIDs under its own UUID that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
+
+Before turning the flag on:
+- If the shard's newest backup already has errant GTIDs, every run fails. `vtbackup` restores the newest backup, so take a new backup of a healthy replica with `vtctldclient Backup`, and then remove the backups that hold the errant GTIDs.
+- Init SQL that runs binlogged statements fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
+- The checks wait for a missing or unreachable primary, an unreachable topo server, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one. While the checks of the restored data and of the data to back up run, the `Phase` metric reports the `VerifyErrantGTIDs` phase; the check before the `MANIFEST` runs within `TakeNewBackup`.
+- MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
+
+See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
+
+#### <a id="backup-shard-tablet-types"/>`BackupShard` can choose the tablet type to back up from</a>
+
+`BackupShard` picks whichever of the shard's `REPLICA`, `RDONLY` and `SPARE` tablets has the lowest replication lag, ignoring the type. A new `--tablet-types` flag, and the matching `tablet_types` field on `BackupShardRequest`, turn that into an ordered preference: the first listed type with a usable tablet wins, and the lowest lag decides within a type. When the flag is unset, the tablet with the lowest lag among `REPLICA`, `RDONLY` and `SPARE` is used, as before.
+
+Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tablet and falls back to a `REPLICA` if no `RDONLY` tablet can serve one, which keeps backup load off the tablets serving replica reads.
+
+`primary` cannot be listed. `--allow-primary` keeps its meaning: when no tablet of the listed types can take the backup, it is taken on the primary.
+
+| flags | result |
+|---|---|
+| `--tablet-types=rdonly,replica` | an `RDONLY` tablet, falling back to a `REPLICA` when none can serve the backup |
+| `--tablet-types=rdonly` | an `RDONLY` tablet only, with no fallback |
+| `--tablet-types=rdonly --allow-primary` | an `RDONLY` tablet, falling back to the primary when none can serve the backup |
+| `--tablet-types=rdonly,primary` | rejected: `primary` cannot be listed, use `--allow-primary` |
+| unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
+
+`--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

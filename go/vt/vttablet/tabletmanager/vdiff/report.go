@@ -19,6 +19,7 @@ package vdiff
 import (
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -46,6 +47,17 @@ type DiffReport struct {
 	ExtraRowsSourceDiffs []*RowDiff      `json:"ExtraRowsSourceSample,omitempty"`
 	ExtraRowsTargetDiffs []*RowDiff      `json:"ExtraRowsTargetSample,omitempty"`
 	MismatchedRowsDiffs  []*DiffMismatch `json:"MismatchedRowsSample,omitempty"`
+}
+
+// logAttrs returns attrs followed by the report's row counts.
+func (dr *DiffReport) logAttrs(attrs ...slog.Attr) []slog.Attr {
+	return append(attrs,
+		slog.Int64("processed_rows", dr.ProcessedRows),
+		slog.Int64("matching_rows", dr.MatchingRows),
+		slog.Int64("mismatched_rows", dr.MismatchedRows),
+		slog.Int64("extra_rows_source", dr.ExtraRowsSource),
+		slog.Int64("extra_rows_target", dr.ExtraRowsTarget),
+	)
 }
 
 type ProgressReport struct {

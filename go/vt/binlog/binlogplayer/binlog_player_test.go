@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -32,10 +33,13 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/throttler"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -72,6 +76,7 @@ var (
 )
 
 func TestNewBinlogPlayerKeyRange(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
@@ -99,10 +104,18 @@ func TestNewBinlogPlayerKeyRange(t *testing.T) {
 	dbClient.Wait()
 	expectFBCRequest(t, fbc, wantTablet, testPos, nil, &topodatapb.KeyRange{End: []byte{0x80}})
 
-	assert.NoError(t, errfunc())
+	require.NoError(t, errfunc())
+
+	record := logs.Record(t, "BinlogPlayer client for keyrange starting")
+	assert.Equal(t, "wf", record["workflow"])
+	assert.EqualValues(t, 1, record["stream_id"])
+	assert.Equal(t, "-80", record["key_range"])
+	assert.Equal(t, testPos, record["position"])
+	assert.Equal(t, "cell-0000000001", record["tablet"])
 }
 
 func TestNewBinlogPlayerTables(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
@@ -130,18 +143,33 @@ func TestNewBinlogPlayerTables(t *testing.T) {
 	dbClient.Wait()
 	expectFBCRequest(t, fbc, wantTablet, testPos, wantTables, nil)
 
-	assert.NoError(t, errfunc())
+	require.NoError(t, errfunc())
+
+	record := logs.Record(t, "BinlogPlayer client for tables starting")
+	assert.Equal(t, "wf", record["workflow"])
+	assert.EqualValues(t, 1, record["stream_id"])
+	assert.Equal(t, "a, b", record["tables"])
+	assert.Equal(t, testPos, record["position"])
+	assert.Equal(t, "cell-0000000001", record["tablet"])
 }
 
 // TestApplyEventsFail ensures the error is recorded in the vreplication table if there's a failure.
 func TestApplyEventsFail(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
 	dbClient.ExpectRequest("begin", nil, errors.New("err"))
 	dbClient.ExpectRequest("update _vt.vreplication set state='Error', message='error in processing binlog event failed query BEGIN, err: err' where id=1", testDMLResponse, nil)
 
-	_ = newFakeBinlogClient()
+	fbc := newFakeBinlogClient()
+	fbc.txn = &binlogdatapb.BinlogTransaction{
+		Statements: []*binlogdatapb.BinlogTransaction_Statement{
+			{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into t values('row-value-1')")},
+			{Category: binlogdatapb.BinlogTransaction_Statement_BL_INSERT, Sql: []byte("insert into t values('row-value-2')")},
+		},
+		EventToken: &querypb.EventToken{Position: "MariaDB/0-1-1235"},
+	}
 
 	stats := NewStats()
 	defer stats.Stop()
@@ -153,6 +181,94 @@ func TestApplyEventsFail(t *testing.T) {
 	want := "error in processing binlog event failed query BEGIN, err: err"
 	err := errfunc()
 	require.EqualErrorf(t, err, want, "ApplyBinlogEvents err: %v, want %v", err, want)
+
+	record := logs.Record(t, "transaction failed")
+	assert.Equal(t, "wf", record["workflow"])
+	assert.EqualValues(t, 1, record["stream_id"])
+	assert.Equal(t, "failed query BEGIN, err: err", record["error"])
+	var queries []any
+	for _, record := range logs.Records(t) {
+		assert.NotContains(t, record["msg"], "row-value")
+		if record["msg"] == "statement" {
+			assert.EqualValues(t, 1, record["stream_id"])
+			queries = append(queries, record["query"])
+		}
+	}
+	assert.Equal(t, []any{`"insert into t values('row-value-1')"`, `"insert into t values('row-value-2')"`}, queries)
+}
+
+// TestApplyEventsLogsSettingsErrors checks the records logged when the player
+// can't write its state or read its settings, before the workflow name is
+// known.
+func TestApplyEventsLogsSettingsErrors(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	dbClient := NewMockDBClient(t)
+	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", nil, errors.New("running state failed"))
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, nil, errors.New("settings failed"))
+	dbClient.ExpectRequestRE("update _vt.vreplication set state='Error', message='.*settings failed.*' where id=1", nil, errors.New("stop state failed"))
+
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
+	errfunc := applyEvents(blp)
+
+	dbClient.Wait()
+	require.ErrorContains(t, errfunc(), "settings failed")
+
+	for msg, wantErr := range map[string]string{
+		"Error writing Running state":             "running state failed",
+		"Error reading the VReplication settings": "settings failed",
+		"Error writing stop state":                "stop state failed",
+	} {
+		record := logs.Record(t, msg)
+		assert.EqualValues(t, 1, record["stream_id"], msg)
+		assert.NotContains(t, record, "workflow", msg)
+		assert.Contains(t, record["error"], wantErr, msg)
+		assert.NotContains(t, record, "error_code", msg)
+	}
+}
+
+// TestApplyEventsLogsSourceErrors checks the records logged when the player
+// can't dial the source tablet or start the stream.
+func TestApplyEventsLogsSourceErrors(t *testing.T) {
+	for _, tc := range []struct {
+		msg, wantMessage   string
+		dialErr, streamErr error
+	}{{
+		msg:         "error dialing binlog server",
+		wantMessage: "error dialing binlog server: ",
+		dialErr:     vterrors.New(vtrpcpb.Code_UNAVAILABLE, "source failed"),
+	}, {
+		msg:         "error sending streaming query to binlog server",
+		wantMessage: "error sending streaming query to binlog server: ",
+		streamErr:   vterrors.New(vtrpcpb.Code_UNAVAILABLE, "source failed"),
+	}} {
+		t.Run(tc.msg, func(t *testing.T) {
+			logs := logtest.Capture(t, slog.LevelInfo)
+			dbClient := NewMockDBClient(t)
+			dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
+			dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
+			dbClient.ExpectRequestRE("(?s)update _vt.vreplication set state='Error', message='"+tc.wantMessage+".*source failed.*' where id=1", testDMLResponse, nil)
+
+			fbc := newFakeBinlogClient()
+			fbc.dialErr = tc.dialErr
+			fbc.streamErr = tc.streamErr
+
+			stats := NewStats()
+			defer stats.Stop()
+			blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
+			errfunc := applyEvents(blp)
+
+			dbClient.Wait()
+			require.ErrorContains(t, errfunc(), "source failed")
+
+			record := logs.Record(t, tc.msg)
+			assert.Equal(t, "wf", record["workflow"])
+			assert.EqualValues(t, 1, record["stream_id"])
+			assert.Equal(t, "source failed", record["error"])
+			assert.Equal(t, "UNAVAILABLE", record["error_code"])
+		})
+	}
 }
 
 var settingsFields []*querypb.Field = []*querypb.Field{
@@ -169,6 +285,7 @@ var settingsFields []*querypb.Field = []*querypb.Field{
 
 // TestStopPosEqual ensures player stops if stopPos==pos.
 func TestStopPosEqual(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	posEqual := &sqltypes.Result{
@@ -201,11 +318,16 @@ func TestStopPosEqual(t *testing.T) {
 
 	dbClient.Wait()
 
-	assert.NoError(t, errfunc())
+	require.NoError(t, errfunc())
+
+	record := logs.Record(t, "not starting BinlogPlayer, we're already at the desired position")
+	assert.Equal(t, "wf", record["workflow"])
+	assert.Equal(t, "MariaDB/0-1-1083", record["stop_position"])
 }
 
 // TestStopPosLess ensures player stops if stopPos<pos.
 func TestStopPosLess(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	posEqual := &sqltypes.Result{
@@ -238,11 +360,18 @@ func TestStopPosLess(t *testing.T) {
 
 	dbClient.Wait()
 
-	assert.NoError(t, errfunc())
+	require.NoError(t, errfunc())
+
+	record := logs.Record(t, "starting point greater than stopping point")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "wf", record["workflow"])
+	assert.Equal(t, "MariaDB/0-1-1083", record["start_position"])
+	assert.Equal(t, "MariaDB/0-1-1082", record["stop_position"])
 }
 
 // TestStopPosGreater ensures player stops if stopPos>pos.
 func TestStopPosGreater(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	posEqual := &sqltypes.Result{
@@ -279,7 +408,13 @@ func TestStopPosGreater(t *testing.T) {
 
 	dbClient.Wait()
 
-	assert.NoError(t, errfunc())
+	require.NoError(t, errfunc())
+
+	record := logs.Record(t, "Will stop player when reaching the stop position")
+	assert.Equal(t, "MariaDB/0-1-1085", record["stop_position"])
+	record = logs.Record(t, "Reached stopping position, done playing logs")
+	assert.Equal(t, "wf", record["workflow"])
+	assert.EqualValues(t, 1, record["stream_id"])
 }
 
 // TestContextCancel ensures player does not record error or stop if context is canceled.
@@ -329,6 +464,7 @@ func TestContextCancel(t *testing.T) {
 }
 
 func TestRetryOnDeadlock(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
 	dbClient.ExpectRequest(TestGetWorkflowQueryId1, testSettingsResponse, nil)
@@ -349,7 +485,33 @@ func TestRetryOnDeadlock(t *testing.T) {
 
 	dbClient.Wait()
 
-	assert.NoError(t, errfunc())
+	require.NoError(t, errfunc())
+
+	record := logs.Record(t, "Deadlock")
+	assert.Equal(t, "wf", record["workflow"])
+	assert.Contains(t, record["error"], "deadlocked")
+	record = logs.Record(t, "Retrying txn")
+	assert.EqualValues(t, 10*time.Millisecond, record["retry_delay"])
+}
+
+func TestSlowQueryLog(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	saved := SlowQueryThreshold
+	SlowQueryThreshold = -1
+	t.Cleanup(func() { SlowQueryThreshold = saved })
+
+	dbClient := NewMockDBClient(t)
+	dbClient.ExpectRequest("insert into t values('row-value')", testDMLResponse, nil)
+	stats := NewStats()
+	defer stats.Stop()
+	blp := NewBinlogPlayerTables(dbClient, nil, []string{"a"}, 1, stats)
+	_, err := blp.exec("insert into t values('row-value')")
+	require.NoError(t, err)
+
+	record := logs.Record(t, "SLOW QUERY")
+	assert.EqualValues(t, 1, record["stream_id"])
+	assert.Equal(t, "insert into t values('row-value')", record["query"])
+	assert.Greater(t, record["duration"], 0.0)
 }
 
 // applyEvents starts a goroutine to apply events, and returns an error function.
@@ -507,12 +669,18 @@ func TestMessageTruncate(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			logs := logtest.Capture(t, slog.LevelInfo)
 			result := MessageTruncate(tc.input)
 			if tc.expectTruncate {
 				assert.LessOrEqual(t, len(result), 950, "truncated message should be at most 950 bytes")
 				assert.Contains(t, result, TruncationIndicator, "truncated message should contain truncation indicator")
+				record := logs.Record(t, "VReplication message truncated")
+				assert.Equal(t, "WARN", record["level"])
+				assert.EqualValues(t, len(tc.input), record["length"])
+				assert.Equal(t, tc.input, record["message"])
 			} else {
 				assert.Equal(t, tc.input, result, "message should be unchanged")
+				assert.Empty(t, logs.Records(t))
 			}
 		})
 	}
