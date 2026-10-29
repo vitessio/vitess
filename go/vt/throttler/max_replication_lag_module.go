@@ -621,7 +621,8 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *Result, now time.Time,
 	if lagDifference > d {
 		log.Error("Replication lag increase is higher than the elapsed time. This should not happen.",
 			slog.Duration("lag_difference", lagDifference), slog.Duration("elapsed", d),
-			slog.String("lag_record_before", fmt.Sprintf("%+v", lagRecordBefore)), slog.String("lag_record_now", fmt.Sprintf("%+v", lagRecordNow)))
+			slog.String("tablet", topoproto.TabletAliasString(lagRecordNow.Tablet.GetAlias())),
+			slog.Int64("previous_replication_lag_seconds", lagBefore), slog.Int64("replication_lag_seconds", lagNow))
 		d = lagDifference
 	}
 
