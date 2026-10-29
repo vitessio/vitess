@@ -735,6 +735,359 @@ func TestDemotePrimaryWhenSemiSyncBecomesUnblockedBetweenChecks(t *testing.T) {
 	require.True(t, fakeMysqlDaemon.SuperReadOnly.Load())
 }
 
+type fakeMysqlDaemonDemoteRace struct {
+	*mysqlctl.FakeMysqlDaemon
+	mu                   sync.Mutex
+	semiSyncBlocked      bool
+	setSuperReadOnlyHook func(ctx context.Context, on bool) error
+}
+
+func (f *fakeMysqlDaemonDemoteRace) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.semiSyncBlocked, nil
+}
+
+func (f *fakeMysqlDaemonDemoteRace) SetSuperReadOnly(ctx context.Context, on bool, opts ...mysqlctl.SetSuperReadOnlyOption) (mysqlctl.ResetSuperReadOnlyFunc, error) {
+	f.mu.Lock()
+	hook := f.setSuperReadOnlyHook
+	f.mu.Unlock()
+	if hook != nil {
+		if err := hook(ctx, on); err != nil {
+			return nil, err
+		}
+	}
+	return f.FakeMysqlDaemon.SetSuperReadOnly(ctx, on, opts...)
+}
+
+// TestDemotePrimaryBackgroundKeyspaceRebuildRace tests that a background topology
+// refresh (e.g. from rebuildKeyspace) cannot re-enable query service while a primary
+// demotion is in progress or completed.
+func TestDemotePrimaryBackgroundKeyspaceRebuildRace(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	// Make the tablet a primary.
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SemiSyncReplicaEnabled = true
+	fakeDb.SemiSyncPrimaryEnabled = true
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = false
+
+	superReadOnlyBlocked := make(chan struct{})
+	unblockSuperReadOnly := make(chan struct{})
+	fakeDaemon := &fakeMysqlDaemonDemoteRace{
+		FakeMysqlDaemon: fakeDb,
+		semiSyncBlocked: true,
+		setSuperReadOnlyHook: func(ctx context.Context, on bool) error {
+			if on {
+				close(superReadOnlyBlocked)
+				select {
+				case <-unblockSuperReadOnly:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			return nil
+		},
+	}
+	tm.MysqlDaemon = fakeDaemon
+
+	// Tablet starts serving as PRIMARY.
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	// Start DemotePrimary in a background goroutine.
+	var demotePrimaryFinished atomic.Bool
+	go func() {
+		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, true /* force */)
+		assert.NoError(t, err)
+		demotePrimaryFinished.Store(true)
+	}()
+
+	// Wait until SetSuperReadOnly is entered (steps 1 & 2 done: query service and source-side semi-sync disabled).
+	select {
+	case <-superReadOnlyBlocked:
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for SetSuperReadOnly to be called")
+	}
+
+	// Query service must now be disabled and primary marked as demoted.
+	require.False(t, tm.QueryServiceControl.IsServing())
+	require.True(t, tm.tmState.IsPrimaryDemoted())
+	require.False(t, demotePrimaryFinished.Load())
+
+	// Step 4: background keyspace rebuild completes or RefreshFromTopoInfo runs.
+	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks")
+	require.NoError(t, err)
+	err = tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+	require.NoError(t, err)
+
+	// In the buggy code, query service was re-enabled here. Verify it remains DISABLED.
+	assert.False(t, tm.QueryServiceControl.IsServing(), "query service must not be re-enabled while demotion is in progress")
+	assert.True(t, tm.tmState.IsPrimaryDemoted())
+
+	// Step 5: Unblock SetSuperReadOnly so DemotePrimary completes.
+	close(unblockSuperReadOnly)
+	require.Eventually(t, func() bool {
+		return demotePrimaryFinished.Load()
+	}, 30*time.Second, 50*time.Millisecond)
+
+	// After DemotePrimary completes, query service must remain disabled.
+	assert.False(t, tm.QueryServiceControl.IsServing())
+	assert.True(t, tm.tmState.IsPrimaryDemoted())
+
+	// A subsequent background topology refresh must still not re-enable query service.
+	err = tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+	require.NoError(t, err)
+	assert.False(t, tm.QueryServiceControl.IsServing())
+	assert.True(t, tm.tmState.IsPrimaryDemoted())
+
+	// Step 6: Query service should only be restored when demotion is undone or tablet is promoted.
+	err = tm.UndoDemotePrimary(ctx, false)
+	require.NoError(t, err)
+	assert.True(t, tm.QueryServiceControl.IsServing())
+	assert.False(t, tm.tmState.IsPrimaryDemoted())
+
+	// Now a topology refresh keeps query service serving.
+	err = tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+	require.NoError(t, err)
+	assert.True(t, tm.QueryServiceControl.IsServing())
+}
+
+// TestDemotePrimaryPartialFailureRevertClearsDemoted tests that when DemotePrimary
+// fails and reverts partial failure, query service is restored and isPrimaryDemoted is cleared.
+func TestDemotePrimaryPartialFailureRevertClearsDemoted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SemiSyncReplicaEnabled = true
+	fakeDb.SemiSyncPrimaryEnabled = true
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = false
+
+	// Inject error into SetSuperReadOnly.
+	fakeDb.SetSuperReadOnlyError = errors.New("simulated error during set super read only")
+
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+	require.Error(t, err)
+
+	// Since revertPartialFailure was true and tablet was serving, it should revert back to serving.
+	assert.True(t, tm.QueryServiceControl.IsServing())
+	assert.False(t, tm.tmState.IsPrimaryDemoted())
+
+	// Subsequent topology refresh does not disable query service.
+	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks")
+	require.NoError(t, err)
+	err = tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+	require.NoError(t, err)
+	assert.True(t, tm.QueryServiceControl.IsServing())
+}
+
+// TestDemotePrimaryChangeTypeClearsDemoted tests that changing tablet type (e.g. to REPLICA
+// during reparenting) resets isPrimaryDemoted.
+func TestDemotePrimaryChangeTypeClearsDemoted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+
+	_, err = tm.demotePrimary(ctx, false /* revertPartialFailure */, true /* force */)
+	require.NoError(t, err)
+	require.False(t, tm.QueryServiceControl.IsServing())
+	require.True(t, tm.tmState.IsPrimaryDemoted())
+
+	// Reparenting converts demoted PRIMARY to REPLICA.
+	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
+	require.NoError(t, err)
+	assert.False(t, tm.tmState.IsPrimaryDemoted())
+	assert.True(t, tm.QueryServiceControl.IsServing())
+
+	// Promoting to PRIMARY again also starts with clean demoted state.
+	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
+	require.NoError(t, err)
+	assert.False(t, tm.tmState.IsPrimaryDemoted())
+	assert.True(t, tm.QueryServiceControl.IsServing())
+}
+
+// TestDemotePrimaryPromoteReplicaWithoutIntermediateReplicaClearsDemoted tests that
+// promoting a demoted primary directly (e.g. during ERS electing the same primary)
+// resets isPrimaryDemoted without transitioning through REPLICA first.
+func TestDemotePrimaryPromoteReplicaWithoutIntermediateReplicaClearsDemoted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+
+	_, err = tm.demotePrimary(ctx, false /* revertPartialFailure */, true /* force */)
+	require.NoError(t, err)
+	require.False(t, tm.QueryServiceControl.IsServing())
+	require.True(t, tm.tmState.IsPrimaryDemoted())
+
+	// Directly promote replica without an intermediate change to REPLICA.
+	_, err = tm.PromoteReplica(ctx, false)
+	require.NoError(t, err)
+	assert.False(t, tm.tmState.IsPrimaryDemoted(), "isPrimaryDemoted must be cleared on promotion to PRIMARY")
+	assert.True(t, tm.QueryServiceControl.IsServing(), "query service must be serving after promotion")
+}
+
+// TestDemotePrimaryFailedDemotionWithoutRevertKeepsDemoted tests that when DemotePrimary
+// fails with revertPartialFailure=false (such as in endPrimaryTerm), query service is NOT
+// restored and isPrimaryDemoted remains true.
+func TestDemotePrimaryFailedDemotionWithoutRevertKeepsDemoted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SemiSyncReplicaEnabled = true
+	fakeDb.SemiSyncPrimaryEnabled = true
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = false
+
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	fakeDb.SetSuperReadOnlyError = errors.New("simulated error during set super read only")
+	_, err = tm.demotePrimary(ctx, false /* revertPartialFailure */, false /* force */)
+	require.Error(t, err)
+
+	// Since revertPartialFailure was false, query service must NOT be restored and isPrimaryDemoted must remain true.
+	assert.False(t, tm.QueryServiceControl.IsServing(), "query service must not be restored when revertPartialFailure is false")
+	assert.True(t, tm.tmState.IsPrimaryDemoted(), "isPrimaryDemoted must remain true when revertPartialFailure is false")
+}
+
+// TestFailedDemotionOfNonServingPrimary tests that a failed demotion of a primary that was
+// not serving (e.g. disabled by a tablet control) restores the previous isPrimaryDemoted
+// state without restarting query service, allowing query service to resume once the control is lifted.
+func TestFailedDemotionOfNonServingPrimary(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false))
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = false
+
+	disabled := &topodatapb.SrvKeyspace{Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
+		ServedType:          topodatapb.TabletType_PRIMARY,
+		ShardReferences:     []*topodatapb.ShardReference{{Name: "0"}},
+		ShardTabletControls: []*topodatapb.ShardTabletControl{{Name: "0", QueryServiceDisabled: true}},
+	}}}
+	require.NoError(t, tm.tmState.RefreshFromTopoInfo(ctx, nil, disabled))
+	require.False(t, tm.QueryServiceControl.IsServing())
+
+	fakeDb.SetSuperReadOnlyError = errors.New("lock wait timeout")
+	_, err := tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+	require.Error(t, err)
+	fakeDb.SetSuperReadOnlyError = nil
+
+	// wasServing was false, so query service must not be forced on while tablet control is active.
+	assert.False(t, tm.QueryServiceControl.IsServing(), "query service must remain stopped while tablet control is active")
+	assert.False(t, tm.tmState.IsPrimaryDemoted(), "isPrimaryDemoted must revert to previous state (false)")
+
+	enabled := &topodatapb.SrvKeyspace{Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
+		ServedType:      topodatapb.TabletType_PRIMARY,
+		ShardReferences: []*topodatapb.ShardReference{{Name: "0"}},
+	}}}
+	require.NoError(t, tm.tmState.RefreshFromTopoInfo(ctx, nil, enabled))
+	require.True(t, tm.QueryServiceControl.IsServing(), "primary must serve once the tablet control is lifted")
+}
+
+// TestDemotePrimaryFailedRetryPreservesDemoted tests that a failed retry of DemotePrimary on an
+// already-demoted primary restores the previous isPrimaryDemoted state (true), preserving demotion idempotency.
+func TestDemotePrimaryFailedRetryPreservesDemoted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false))
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = false
+
+	// Demote succeeds initially.
+	_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, true /* force */)
+	require.NoError(t, err)
+	require.False(t, tm.QueryServiceControl.IsServing())
+	require.True(t, tm.tmState.IsPrimaryDemoted())
+
+	// Demote retry fails.
+	fakeDb.SetSuperReadOnlyError = errors.New("lock wait timeout")
+	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+	require.Error(t, err)
+
+	// Since it was already demoted, isPrimaryDemoted must remain true.
+	assert.False(t, tm.QueryServiceControl.IsServing())
+	assert.True(t, tm.tmState.IsPrimaryDemoted(), "isPrimaryDemoted must remain true after failed retry on already-demoted primary")
+}
+
+// TestDemotePrimarySetWritableClearsDemoted tests that calling SetReadOnly(false) to make MySQL
+// writable clears isPrimaryDemoted, allowing RefreshState to restore query service.
+func TestDemotePrimarySetWritableClearsDemoted(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false))
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = false
+
+	// Demote primary.
+	_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, true /* force */)
+	require.NoError(t, err)
+	require.False(t, tm.QueryServiceControl.IsServing())
+	require.True(t, tm.tmState.IsPrimaryDemoted())
+
+	// Make MySQL writable via SetReadOnly(false).
+	err = tm.SetReadOnly(ctx, false)
+	require.NoError(t, err)
+	assert.False(t, tm.tmState.IsPrimaryDemoted(), "SetReadOnly(false) must clear isPrimaryDemoted")
+
+	// RefreshState should now restore serving.
+	err = tm.RefreshState(ctx)
+	require.NoError(t, err)
+	assert.True(t, tm.QueryServiceControl.IsServing(), "query service must serve after SetReadOnly(false) and RefreshState")
+}
+
 // TestUndoDemotePrimaryStateChange tests that UndoDemotePrimary
 // if able to change the state of the tablet to Primary if there
 // is a mismatch with the tablet record.
