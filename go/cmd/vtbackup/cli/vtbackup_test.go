@@ -194,11 +194,10 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 	})
 
 	// The primary goes down, so replication breaks and the restart can't read the
-	// primary, first because the read times out and then because it fails at
-	// once, for longer than replication may stay stopped, until an emergency
-	// reparent makes 101 the primary. That wait must not count as replication
-	// staying stopped.
-	t.Run("waits through a primary that can't be read until a reparent replaces it", func(t *testing.T) {
+	// primary, because the read fails at once or doesn't answer, until an
+	// emergency reparent makes 101 the primary. A read that doesn't answer must
+	// not use up the time that replication may stay stopped.
+	t.Run("restarts from the new primary after reads of one that is down", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
 			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
 			goal := testGTIDPosition(t, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-3")
@@ -210,9 +209,8 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-3"), nil
 			})
 			vt.setPrimary(t, 100)
-			vt.tmc.hangFirst = 1
 			broken := replication.ReplicationStatus{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning}
-			reparentedAt := int(timeoutWaitingForReplicationStatus.Seconds()) + 10
+			reparentedAt := 20
 			var statuses []replication.ReplicationStatus
 			for range reparentedAt + 1 {
 				statuses = append(statuses, broken)
@@ -221,6 +219,8 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			mysqld := &catchupReplicationMysqlDaemon{
 				statuses: append(statuses, caughtUp, caughtUp),
 				onStatus: func(call int) {
+					// The second read doesn't answer.
+					vt.tmc.hang = call == 1
 					if call == reparentedAt {
 						vt.setPrimary(t, 101)
 						primaryDown = false
@@ -235,6 +235,58 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			assert.Equal(t, []string{"primary-101.test:3306"}, mysqld.sources)
 		})
 	})
+
+	// Replication stays stopped for as long as the restart can't read and confirm
+	// a primary, and catch-up fails once it has been stopped for longer than it
+	// may stay stopped, as when a restart fails.
+	for _, tc := range []struct {
+		name string
+		// setUp leaves the shard without a primary that can be read and confirmed.
+		setUp func(t *testing.T, vt *verifyPositionTest)
+	}{
+		{
+			name: "a primary that doesn't answer",
+			setUp: func(t *testing.T, vt *verifyPositionTest) {
+				vt.setPrimary(t, 100)
+				vt.tmc.hang = true
+			},
+		},
+		{
+			name: "a shard record that names a tablet that is no longer PRIMARY",
+			setUp: func(t *testing.T, vt *verifyPositionTest) {
+				vt.setPrimary(t, 100)
+				vt.setType(t, 100, topodatapb.TabletType_REPLICA)
+			},
+		},
+		{
+			name:  "a shard with no primary",
+			setUp: func(t *testing.T, vt *verifyPositionTest) {},
+		},
+	} {
+		t.Run("fails after replication stays stopped with "+tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+				vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+					return primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-3"), nil
+				})
+				tc.setUp(t, vt)
+				broken := replication.ReplicationStatus{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning}
+				statuses := make([]replication.ReplicationStatus, 600)
+				for i := range statuses {
+					statuses[i] = broken
+				}
+				mysqld := &catchupReplicationMysqlDaemon{statuses: statuses}
+				start := time.Now()
+
+				_, _, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, testGTIDPosition(t, testPrimaryUUID+":1-3"), true)
+
+				require.ErrorContains(t, err, "timeout waiting for replication status after 60 seconds")
+				assert.Less(t, time.Since(start), 2*timeoutWaitingForReplicationStatus, "catch-up must fail once replication has stayed stopped for as long as it may")
+				assert.Less(t, mysqld.statusCalls, len(statuses), "catch-up must fail before the statuses run out")
+				assert.Zero(t, mysqld.setReplicationSourceCalls)
+			})
+		})
+	}
 
 	t.Run("fails on a primary whose server UUID can't be parsed, with the errant GTID checks", func(t *testing.T) {
 		oldChecks := errantGTIDChecks
@@ -465,9 +517,8 @@ type fakePrimaryStatusTMC struct {
 	calls         int
 	positionCalls int
 	// hang makes PrimaryStatus block until its Context is done, like a primary
-	// that doesn't answer, and hangFirst does so for only the first hangFirst calls.
-	hang      bool
-	hangFirst int
+	// that doesn't answer.
+	hang bool
 }
 
 // PrimaryPosition serves the position from primaryStatus, as the tablet does,
@@ -483,7 +534,7 @@ func (f *fakePrimaryStatusTMC) PrimaryPosition(ctx context.Context, tablet *topo
 
 func (f *fakePrimaryStatusTMC) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
 	f.calls++
-	if f.hang || f.calls <= f.hangFirst {
+	if f.hang {
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}

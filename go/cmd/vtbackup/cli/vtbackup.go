@@ -81,6 +81,10 @@ const (
 	phaseStatusCatchupReplicationStopped = "Stopped"
 
 	timeoutWaitingForReplicationStatus = 60 * time.Second
+	// restartReadTimeout bounds each read of the shard primary when catch-up
+	// restarts replication, so that a primary that doesn't answer can't use up, in
+	// one read, the time that replication may stay stopped.
+	restartReadTimeout = 10 * time.Second
 )
 
 var (
@@ -778,12 +782,10 @@ func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManager
 					return replication.ReplicationStatus{}, replication.Position{}, permanent.error
 				}
 				if err != nil {
-					// The primary can't be read, as while a reparent replaces one that is
-					// down. Wait for one, bounded only by the job's deadline, as the errant
-					// GTID checks do, instead of counting the wait against the time that
-					// replication may stay stopped. The stop position stays in force.
-					log.Warn("Can't read the shard primary to restart replication from; waiting for one", slog.Any("error", err))
-					lastErr.Record(nil)
+					// As when a restart fails, replication stays stopped, and the time
+					// counts against how long it may stay stopped. The stop position
+					// stays in force.
+					log.Warn("Can't read the shard primary to restart replication from", slog.Any("error", err))
 				} else if err := startReplicationAt(ctx, mysqld, target); err != nil {
 					log.Warn("Failed to restart replication", slog.Any("error", err))
 				} else {
@@ -1072,14 +1074,14 @@ func startReplicationAt(ctx context.Context, mysqld mysqlctl.MysqlDaemon, target
 }
 
 // readRestartTarget reads the shard primary that replication restarts from
-// during catch-up on MySQL 8.4 and later, and its committed position. With
-// --enable-errant-gtid-checks,
+// during catch-up on MySQL 8.4 and later, and its committed position, within
+// restartReadTimeout. With --enable-errant-gtid-checks,
 // it returns a permanentError if the primary lacks GTIDs in applied, so that
 // vtbackup fails without changing its source, which can't undo them. The applier
 // can still apply transactions after applied was read; the check of the data to
 // back up catches those.
 func readRestartTarget(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, restorePos, applied replication.Position) (primaryTarget, error) {
-	readCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+	readCtx, cancel := context.WithTimeout(ctx, restartReadTimeout)
 	defer cancel()
 	target, err := readPrimaryTarget(readCtx, tmc, ts)
 	if err != nil {
