@@ -18,7 +18,7 @@ package faketopo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -405,12 +405,12 @@ func (f *FakeConn) Close() {
 func NewFakeTopoServer(ctx context.Context, factory *FakeFactory) *topo.Server {
 	ts, err := topo.NewWithFactory(factory, "" /*serverAddress*/, "" /*root*/)
 	if err != nil {
-		log.Error(fmt.Sprintf("topo.NewWithFactory() failed: %v", err))
+		log.Error("topo.NewWithFactory() failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 	for cell := range factory.cells {
 		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
-			log.Error(fmt.Sprintf("ts.CreateCellInfo(%v) failed: %v", cell, err))
+			log.Error("ts.CreateCellInfo() failed", slog.String("cell", cell), slog.Any("error", err))
 			os.Exit(1)
 		}
 	}

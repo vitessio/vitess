@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"time"
 
@@ -73,7 +74,7 @@ func (s *Server) newUniqueEphemeralKV(ctx context.Context, cli *clientv3.Client,
 			deleteCtx, deleteCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
 			defer deleteCancel()
 			if _, err := cli.Delete(deleteCtx, newKey); err != nil {
-				log.Error(fmt.Sprintf("cli.Delete(%v) failed: %v", newKey, err))
+				log.Error("cli.Delete failed", slog.String("path", newKey), slog.Any("error", err))
 			}
 		}
 		return "", 0, convertError(err, newKey)
@@ -232,7 +233,7 @@ func (s *Server) lock(ctx context.Context, dirPath, contents string, ttl int, wa
 			// Revoke our lease, this will delete the file.
 			revokeCtx, revokeCancel := context.WithTimeout(context.WithoutCancel(ctx), topo.RemoteOperationTimeout)
 			if _, rerr := s.cli.Revoke(revokeCtx, lease.ID); rerr != nil {
-				log.Warn(fmt.Sprintf("Revoke(%d) failed, may have left %v behind: %v", lease.ID, key, rerr))
+				log.Warn("Revoke failed, may have left the key behind", slog.Int64("lease_id", int64(lease.ID)), slog.String("path", key), slog.Any("error", rerr))
 			}
 			revokeCancel()
 			if err == errLockHeld {

@@ -19,6 +19,7 @@ package topo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path"
 
 	"vitess.io/vitess/go/vt/log"
@@ -66,18 +67,18 @@ func (ts *Server) SaveVSchema(ctx context.Context, ksvs *KeyspaceVSchemaInfo) er
 
 	version, err := ts.globalCell.Update(ctx, nodePath, data, ksvs.version)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to update vschema for keyspace %s: %v", ksvs.Name, err))
+		log.Error("failed to update vschema for keyspace", slog.String("keyspace", ksvs.Name), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 	ksvs.version = version
-	log.Info(fmt.Sprintf("successfully updated vschema for keyspace %s: %+v", ksvs.Name, ksvs.Keyspace))
+	log.Info("successfully updated vschema for keyspace", slog.String("keyspace", ksvs.Name), slog.String("vschema", fmt.Sprintf("%+v", ksvs.Keyspace)))
 
 	return nil
 }
 
 // DeleteVSchema delete the keyspace if it exists
 func (ts *Server) DeleteVSchema(ctx context.Context, keyspace string) error {
-	log.Info("deleting vschema for keyspace " + keyspace)
+	log.Info("deleting vschema for keyspace", slog.String("keyspace", keyspace))
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -113,7 +114,7 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*KeyspaceVSc
 func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 	ksvs, err := ts.GetVSchema(ctx, keyspace)
 	if err != nil && !IsErrType(err, NoNode) {
-		log.Info(fmt.Sprintf("error in getting vschema for keyspace %s: %v", keyspace, err))
+		log.Info("error in getting vschema for keyspace", slog.String("keyspace", keyspace), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 	if ksvs == nil || ksvs.Keyspace == nil || IsErrType(err, NoNode) {
 		err = ts.SaveVSchema(ctx, &KeyspaceVSchemaInfo{
@@ -125,7 +126,7 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 			},
 		})
 		if err != nil {
-			log.Error(fmt.Sprintf("could not create blank vschema: %v", err))
+			log.Error("could not create blank vschema", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return err
 		}
 	}

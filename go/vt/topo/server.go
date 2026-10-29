@@ -45,6 +45,7 @@ package topo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"slices"
@@ -210,7 +211,7 @@ func registerTopoFlags(fs *pflag.FlagSet) {
 // Call this in the 'init' function in your topology implementation module.
 func RegisterFactory(name string, factory Factory) {
 	if factories[name] != nil {
-		log.Error(fmt.Sprintf("Duplicate topo.Factory registration for %v", name))
+		log.Error("Duplicate topo.Factory registration", slog.String("topo_implementation", name))
 		os.Exit(1)
 	}
 	factories[name] = factory
@@ -268,7 +269,13 @@ func Open() *Server {
 	}
 	ts, err := OpenServer(topoImplementation, topoGlobalServerAddress, topoGlobalRoot)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to open topo server (%v,%v,%v): %v", topoImplementation, topoGlobalServerAddress, topoGlobalRoot, err))
+		log.Error("Failed to open topo server",
+			slog.String("topo_implementation", topoImplementation),
+			slog.String("topo_global_server_address", topoGlobalServerAddress),
+			slog.String("topo_global_root", topoGlobalRoot),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		os.Exit(1)
 	}
 	return ts

@@ -20,7 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"log/slog"
 	"os"
 	"os/user"
 	"sync"
@@ -164,7 +164,13 @@ func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, opts ...LockO
 	for _, o := range opts {
 		o.apply(&l.Options)
 	}
-	log.Info(fmt.Sprintf("Locking %s %s for action %s with options: %+v", lt.Type(), lt.ResourceName(), l.Action, l.Options))
+	log.Info("Locking for action with options",
+		slog.String("resource_type", lt.Type()),
+		slog.String("resource", lt.ResourceName()),
+		slog.String("action", l.Action),
+		slog.String("topo_lock_type", l.Options.lockType.String()),
+		slog.Duration("lock_ttl", l.Options.ttl),
+	)
 
 	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
 	defer cancel()
@@ -213,10 +219,20 @@ func (l *Lock) unlock(ctx context.Context, lt iTopoLock, lockDescriptor LockDesc
 
 	// first update the actionNode
 	if actionError != nil {
-		log.Info(fmt.Sprintf("Unlocking %v %v for action %v with error %v", lt.Type(), lt.ResourceName(), l.Action, actionError))
+		log.Info("Unlocking for action with error",
+			slog.String("resource_type", lt.Type()),
+			slog.String("resource", lt.ResourceName()),
+			slog.String("action", l.Action),
+			slog.Any("error", actionError),
+			slog.String("error_code", vterrors.Code(actionError).String()),
+		)
 		l.Status = "Error: " + actionError.Error()
 	} else {
-		log.Info(fmt.Sprintf("Unlocking %v %v for successful action %v", lt.Type(), lt.ResourceName(), l.Action))
+		log.Info("Unlocking for successful action",
+			slog.String("resource_type", lt.Type()),
+			slog.String("resource", lt.ResourceName()),
+			slog.String("action", l.Action),
+		)
 		l.Status = "Done"
 	}
 	return lockDescriptor.Unlock(ctx)
@@ -254,7 +270,7 @@ func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string,
 
 		if _, ok := i.info[lt.ResourceName()]; !ok {
 			if *finalErr != nil {
-				log.Error(fmt.Sprintf("trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName()))
+				log.Error("trying to unlock multiple times", slog.String("resource_type", lt.Type()), slog.String("resource", lt.ResourceName()))
 			} else {
 				*finalErr = vterrors.Errorf(vtrpc.Code_INTERNAL, "trying to unlock %v %v multiple times", lt.Type(), lt.ResourceName())
 			}
@@ -266,7 +282,12 @@ func (ts *Server) internalLock(ctx context.Context, lt iTopoLock, action string,
 		if *finalErr != nil {
 			if err != nil {
 				// both error are set, just log the unlock error
-				log.Warn(fmt.Sprintf("unlock %v %v failed: %v", lt.Type(), lt.ResourceName(), err))
+				log.Warn("unlock failed",
+					slog.String("resource_type", lt.Type()),
+					slog.String("resource", lt.ResourceName()),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()),
+				)
 			}
 		} else {
 			*finalErr = err

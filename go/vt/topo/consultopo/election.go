@@ -18,7 +18,7 @@ package consultopo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"path"
 
 	"github.com/hashicorp/consul/api/v2"
@@ -97,7 +97,7 @@ func (mp *consulLeaderParticipation) WaitForLeadership() (context.Context, error
 			lockCancel()
 			// We could have lost the lock. Per consul API, explicitly call Unlock to make sure that session will not be renewed.
 			if err := l.Unlock(); err != nil {
-				log.Error(fmt.Sprintf("Leader election(%v) Unlock failed: %v", mp.name, err))
+				log.Error("Leader election Unlock failed", slog.String("election_name", mp.name), slog.Any("error", err))
 			}
 		case <-mp.stop:
 			// Stop was called. We stop the context first,
@@ -105,7 +105,7 @@ func (mp *consulLeaderParticipation) WaitForLeadership() (context.Context, error
 			// is the primary any more, then we unlock.
 			lockCancel()
 			if err := l.Unlock(); err != nil {
-				log.Error(fmt.Sprintf("Leader election(%v) Unlock failed: %v", mp.name, err))
+				log.Error("Leader election Unlock failed", slog.String("election_name", mp.name), slog.Any("error", err))
 			}
 			close(mp.done)
 		}

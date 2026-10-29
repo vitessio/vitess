@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"sort"
 	"strings"
@@ -130,7 +131,7 @@ func ResolveWildcards(ctx context.Context, zconn *ZkConn, zkPaths []string) ([]s
 			if err != nil {
 				mu.Lock()
 				if firstError != nil {
-					log.Info(fmt.Sprintf("Multiple error: %v", err))
+					log.Info("Multiple error", slog.Any("error", err))
 				} else {
 					firstError = err
 				}
@@ -202,7 +203,7 @@ func resolveRecursive(ctx context.Context, zconn *ZkConn, parts []string, toplev
 						if err != nil {
 							mu.Lock()
 							if firstError != nil {
-								log.Info(fmt.Sprintf("Multiple error: %v", err))
+								log.Info("Multiple error", slog.Any("error", err))
 							} else {
 								firstError = err
 							}

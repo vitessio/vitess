@@ -18,7 +18,7 @@ package topo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"path"
 	"sort"
 	"sync"
@@ -306,7 +306,7 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string, 
 			si, err := ts.GetShard(ctx, keyspace, shard)
 			switch {
 			case IsErrType(err, NoNode):
-				log.Warn(fmt.Sprintf("GetShard(%s, %s) returned ErrNoNode, consider checking the topology.", keyspace, shard))
+				log.Warn("GetShard returned ErrNoNode, consider checking the topology.", slog.String("keyspace", keyspace), slog.String("shard", shard))
 				return nil
 			case err == nil:
 				mu.Lock()

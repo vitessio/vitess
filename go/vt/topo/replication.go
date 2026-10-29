@@ -18,7 +18,7 @@ package topo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"path"
 
 	"google.golang.org/protobuf/proto"
@@ -94,7 +94,7 @@ func UpdateShardReplicationRecord(ctx context.Context, ts *Server, keyspace, sha
 		for _, node := range (*sr).Nodes {
 			if proto.Equal(node.TabletAlias, tabletAlias) {
 				if found {
-					log.Warn(fmt.Sprintf("Found a second ShardReplication_Node for tablet %v, deleting it", tabletAlias))
+					log.Warn("Found a second ShardReplication_Node for tablet, deleting it", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)))
 					modified = true
 					continue
 				}

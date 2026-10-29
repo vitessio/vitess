@@ -18,7 +18,7 @@ package zk2topo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"path"
 	"time"
 
@@ -94,7 +94,7 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string, wait bool)
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), baseTimeout)
 		defer cancel()
 		if err := zs.conn.Delete(cleanupCtx, nodePath, -1); err != nil {
-			log.Warn(fmt.Sprintf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err))
+			log.Warn("Failed to cleanup unsuccessful lock path", slog.String("path", nodePath), slog.Any("error", err))
 		}
 		return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
 	}
@@ -110,20 +110,20 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string, wait bool)
 		}
 
 		// Regardless of the reason, try to cleanup.
-		log.Warn(fmt.Sprintf("Failed to obtain lock: %v", err))
+		log.Warn("Failed to obtain lock", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), baseTimeout)
 		defer cancel()
 
 		if err := zs.conn.Delete(cleanupCtx, nodePath, -1); err != nil {
-			log.Warn(fmt.Sprintf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err))
+			log.Warn("Failed to cleanup unsuccessful lock path", slog.String("path", nodePath), slog.Any("error", err))
 		}
 
 		// Show the other locks in the directory
 		dir := path.Dir(nodePath)
 		children, _, err := zs.conn.Children(cleanupCtx, dir)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to get children of %v: %v", dir, err))
+			log.Warn("Failed to get children", slog.String("path", dir), slog.Any("error", err))
 			return nil, errToReturn
 		}
 
@@ -135,11 +135,11 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string, wait bool)
 		childPath := path.Join(dir, children[0])
 		data, _, err := zs.conn.Get(cleanupCtx, childPath)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to get first locks node %v (may have just ended): %v", childPath, err))
+			log.Warn("Failed to get first locks node (may have just ended)", slog.String("path", childPath), slog.Any("error", err))
 			return nil, errToReturn
 		}
 
-		log.Warn(fmt.Sprintf("------ Most likely blocking lock: %v\n%v", childPath, string(data)))
+		log.Warn("Most likely blocking lock", slog.String("path", childPath), slog.String("lock_contents", string(data)))
 		return nil, errToReturn
 	}
 
