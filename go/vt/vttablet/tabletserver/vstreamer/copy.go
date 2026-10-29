@@ -128,7 +128,7 @@ func (uvs *uvstreamer) sendFieldEvent(ctx context.Context, gtid string, fieldEve
 		FieldEvent: fieldEvent,
 	}}
 	log.V(2).Info("Sending field event",
-		slog.Any("field_event", lazyString(func() string { return fmt.Sprint(fieldEvent) })),
+		slog.Any("field_event", log.LazyString(func() string { return fmt.Sprint(fieldEvent) })),
 		slog.String("gtid", gtid),
 	)
 	uvs.send(evs)
@@ -336,7 +336,7 @@ func (uvs *uvstreamer) copyTable(ctx context.Context, tableName string) error {
 		uvs.inTransaction = false
 
 		uvs.setCopyState(tableName, qrLastPK)
-		log.V(2).Info("NewLastPK", slog.Any("last_pk", lazyString(func() string { return fmt.Sprint(qrLastPK) })))
+		log.V(2).Info("NewLastPK", slog.Any("last_pk", log.LazyString(func() string { return fmt.Sprint(qrLastPK) })))
 		return nil
 	}, uvs.options)
 	if err != nil {

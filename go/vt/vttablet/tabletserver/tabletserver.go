@@ -1317,7 +1317,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 // variables are redacted when SanitizeLogMessages is set. The value is built
 // only if the record is written.
 func (tsv *TabletServer) queryLogAttr(sql string, bindVariables map[string]*querypb.BindVariable) slog.Attr {
-	return slog.Any("query", lazyString(func() string {
+	return slog.Any("query", log.LazyString(func() string {
 		return queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
 	}))
 }

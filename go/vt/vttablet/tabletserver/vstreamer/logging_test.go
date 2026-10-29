@@ -18,7 +18,6 @@ package vstreamer
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -29,44 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/log/logtest"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
-
-// TestLazyString checks that lazyString is built only when a log.V(2) record
-// is written, and that it formats as its value for slog and for fmt.
-func TestLazyString(t *testing.T) {
-	calls := 0
-	value := lazyString(func() string {
-		calls++
-		return "expensive"
-	})
-
-	assert.Equal(t, "expensive", value.LogValue().String())
-	assert.Equal(t, "expensive", value.String())
-	// The glog backend formats attributes with fmt.
-	assert.Equal(t, "value=expensive", fmt.Sprint(slog.Any("value", value)))
-
-	t.Run("V(2) off", func(t *testing.T) {
-		logs := logtest.Capture(t, slog.LevelInfo)
-		calls = 0
-		log.V(2).Info("lazy value", slog.Any("value", value))
-		assert.Zero(t, calls)
-		assert.Empty(t, logs.Records(t))
-	})
-
-	t.Run("V(2) on", func(t *testing.T) {
-		logs := logtest.Capture(t, slog.LevelDebug)
-		calls = 0
-		log.V(2).Info("lazy value", slog.Any("value", value))
-		assert.Equal(t, 1, calls)
-		record := logs.Record(t, "lazy value")
-		assert.Equal(t, "INFO", record["level"])
-		assert.Equal(t, "expensive", record["value"])
-	})
-}
 
 // TestStreamRowsLogsQueries checks that the filter query and the query sent to
 // MySQL are logged as attributes of distinct messages.
