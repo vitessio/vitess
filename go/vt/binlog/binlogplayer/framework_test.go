@@ -18,6 +18,8 @@ package binlogplayer
 
 import (
 	"context"
+	"flag"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -118,8 +120,13 @@ func expectFBCRequest(t *testing.T, fbc *fakeBinlogClient, tablet *topodatapb.Ta
 // globalFBC is set by newFakeBinlogClient, which is then returned by the client factory below.
 var globalFBC *fakeBinlogClient
 
-func init() {
-	RegisterClientFactory("test", func() Client { return globalFBC })
+func TestMain(m *testing.M) {
+	// SetProtocol parses flags with no arguments, so the test flags must be
+	// parsed first or -test.run and -test.v are lost.
+	flag.Parse()
 
+	RegisterClientFactory("test", func() Client { return globalFBC })
 	SetProtocol("binlogplayer_test_framework", "test")
+
+	os.Exit(m.Run())
 }
