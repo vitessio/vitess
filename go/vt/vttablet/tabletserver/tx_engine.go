@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sync"
 	"time"
@@ -168,7 +169,7 @@ func (te *TxEngine) transition(state txEngineState) {
 		return
 	}
 
-	log.Info(fmt.Sprintf("TxEngine transition: %v", state))
+	log.Info("TxEngine transition", slog.String("state", state.String()))
 
 	// When we are transitioning from read write state, we should close all transactions.
 	if te.state == AcceptingReadAndWrite {
@@ -217,7 +218,7 @@ func (te *TxEngine) redoPreparedTransactionsLocked() {
 
 	if err := te.twoPC.Open(te.env.Config().DB); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcOpen", 1)
-		log.Error(fmt.Sprintf("Could not open TwoPC engine: %v", err))
+		log.Error("Could not open TwoPC engine", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 
@@ -232,7 +233,7 @@ func (te *TxEngine) redoPreparedTransactionsLocked() {
 
 	if err := te.prepareFromRedo(); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)
-		log.Error(fmt.Sprintf("Could not prepare transactions: %v", err))
+		log.Error("Could not prepare transactions", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 }
 
@@ -471,7 +472,7 @@ func (te *TxEngine) prepareFromRedo() error {
 	}
 
 	te.txPool.AdjustLastID(maxID)
-	log.Info(fmt.Sprintf("TwoPC: Prepared %d transactions, and registered %d failures.", preparedCounter, failedCounter))
+	log.Info("TwoPC: Prepared transactions, and registered failures.", slog.Int("prepared_count", preparedCounter), slog.Int("failed_count", failedCounter))
 	return vterrors.Aggregate(allErrs)
 }
 
@@ -522,7 +523,7 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, receivedErr error, metricName string) (fail bool) {
 	state := RedoStateFailed
 	if isRetryableError(receivedErr) {
-		log.Info("retryable error for dtid: " + dtid)
+		log.Info("retryable error for dtid", slog.String("dtid", dtid))
 		state = RedoStatePrepared
 	} else {
 		fail = true
@@ -535,18 +536,18 @@ func (te *TxEngine) checkErrorAndMarkFailed(ctx context.Context, dtid string, re
 	// Non-retryable Error: Along with message, update the state as RedoStateFailed.
 	conn, _, _, err := te.txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
 	if err != nil {
-		log.Error(fmt.Sprintf("markFailed: Begin failed for dtid %s: %v", dtid, err))
+		log.Error("markFailed: Begin failed", slog.String("dtid", dtid), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 	defer te.txPool.RollbackAndRelease(ctx, conn)
 
 	if err = te.twoPC.UpdateRedo(ctx, conn, dtid, state, receivedErr.Error()); err != nil {
-		log.Error(fmt.Sprintf("markFailed: UpdateRedo failed for dtid %s: %v", dtid, err))
+		log.Error("markFailed: UpdateRedo failed", slog.String("dtid", dtid), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 
 	if _, err = te.txPool.Commit(ctx, conn); err != nil {
-		log.Error(fmt.Sprintf("markFailed: Commit failed for dtid %s: %v", dtid, err))
+		log.Error("markFailed: Commit failed", slog.String("dtid", dtid), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 	return
 }
@@ -601,7 +602,7 @@ func (te *TxEngine) startTransactionWatcher() {
 		count, err := te.twoPC.CountUnresolvedRedo(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
 			te.env.Stats().InternalErrors.Add("RedoWatcherFail", 1)
-			log.Error(fmt.Sprintf("Error reading prepared transactions: %v", err))
+			log.Error("Error reading prepared transactions", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 		te.env.Stats().Unresolved.Set("ResourceManager", count)
 
@@ -609,7 +610,7 @@ func (te *TxEngine) startTransactionWatcher() {
 		count, err = te.twoPC.CountUnresolvedTransaction(ctx, time.Now().Add(-te.abandonAge))
 		if err != nil {
 			te.env.Stats().InternalErrors.Add("TransactionWatcherFail", 1)
-			log.Error(fmt.Sprintf("Error reading unresolved transactions: %v", err))
+			log.Error("Error reading unresolved transactions", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 		te.env.Stats().Unresolved.Set("MetadataManager", count)

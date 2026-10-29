@@ -18,7 +18,7 @@ package tabletserver
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -89,7 +89,7 @@ func NewStatefulConnPool(env tabletenv.Env) *StatefulConnectionPool {
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
 func (sf *StatefulConnectionPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
-	log.Info(fmt.Sprintf("Starting transaction id: %d", sf.lastID.Load()))
+	log.Info("Starting transaction id", slog.Int64("transaction_id", sf.lastID.Load()))
 	sf.conns.Open(appParams, dbaParams, appDebugParams)
 	foundRowsParam, _ := appParams.MysqlParams()
 	foundRowsParam.EnableClientFoundRows()
@@ -102,11 +102,14 @@ func (sf *StatefulConnectionPool) Open(appParams, dbaParams, appDebugParams dbco
 func (sf *StatefulConnectionPool) Close() {
 	for _, v := range sf.active.GetByFilter("for closing", func(_ any) bool { return true }) {
 		conn := v.(*StatefulConnection)
-		thing := "connection"
 		if conn.IsInTransaction() {
-			thing = "transaction"
+			log.Warn("killing transaction for shutdown",
+				slog.Int64("transaction_id", conn.ConnID),
+				slog.String("transaction", conn.txProps.String(sf.env.Config().SanitizeLogMessages, sf.env.Environment().Parser())),
+			)
+		} else {
+			log.Warn("killing connection for shutdown", slog.Int64("reserved_id", conn.ConnID))
 		}
-		log.Warn(fmt.Sprintf("killing %s for shutdown: %s", thing, conn.String(sf.env.Config().SanitizeLogMessages, sf.env.Environment().Parser())))
 		sf.env.Stats().InternalErrors.Add("StrayTransactions", 1)
 		conn.Close()
 		conn.ReleaseString("pool closed")
@@ -143,7 +146,7 @@ func (sf *StatefulConnectionPool) ShutdownAll() []*StatefulConnection {
 // no dtid collisions with future transactions.
 func (sf *StatefulConnectionPool) AdjustLastID(id int64) {
 	if current := sf.lastID.Load(); current < id {
-		log.Info(fmt.Sprintf("Adjusting transaction id to: %d", id))
+		log.Info("Adjusting transaction id", slog.Int64("transaction_id", id))
 		sf.lastID.Store(id)
 	}
 }

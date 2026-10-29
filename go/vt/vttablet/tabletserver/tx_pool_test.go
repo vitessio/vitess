@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -394,11 +396,26 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	conn, _, _, err := txPool.Begin(t.Context(), &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
+	connID := conn.ConnID
+	// And a reserved connection with no transaction.
+	reserved, err := txPool.scp.NewConn(t.Context(), &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	reserved.Unlock()
+	reservedID := reserved.ConnID
+	logs := logtest.Capture(t, slog.LevelWarn)
 
-	// Close kills stray transaction.
+	// Close kills both.
 	txPool.Close()
-	require.Equal(t, int64(1), txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray)
+	require.Equal(t, int64(2), txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]-startingStray)
 	require.Equal(t, 0, txPool.scp.Capacity())
+	record := logs.Record(t, "killing transaction for shutdown")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, float64(connID), record["transaction_id"])
+	assert.NotEmpty(t, record["transaction"])
+	record = logs.Record(t, "killing connection for shutdown")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, float64(reservedID), record["reserved_id"])
+	assert.NotContains(t, record, "transaction")
 }
 
 func TestTxTimeoutKillsTransactions(t *testing.T) {
@@ -421,15 +438,22 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	ctxWithCallerID := callerid.NewContext(ctx, ef, im)
 
 	// Start transaction.
+	logs := logtest.Capture(t, slog.LevelWarn)
 	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
 	conn.Unlock()
+	connID := conn.ConnID
 
 	// Let it time out and get killed by the tx killer.
 	time.Sleep(1200 * time.Millisecond)
 
 	// Verify that the tx killer ran.
 	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingKills)
+	record := logs.Record(t, "killing transaction (exceeded timeout)")
+	assert.Equal(t, "WARN", record["level"])
+	assert.EqualValues(t, time.Second, record["timeout"])
+	assert.Equal(t, float64(connID), record["transaction_id"])
+	assert.Contains(t, record["transaction"], "principle")
 
 	// Regression test for #6727: make sure the tx limiter is decremented when the tx killer closes
 	// a transaction.

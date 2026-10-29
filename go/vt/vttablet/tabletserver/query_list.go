@@ -18,7 +18,7 @@ package tabletserver
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -146,7 +146,7 @@ func (ql *QueryList) Terminate(connID int64) bool {
 	for _, qd := range qds {
 		err := qd.conn.Kill("QueryList.Terminate()", time.Since(qd.start))
 		if err != nil {
-			log.Warn(fmt.Sprintf("Error terminating query on connection id: %d, error: %v", qd.conn.ID(), err))
+			log.Warn("Error terminating query on connection", slog.Int64("connection_id", qd.conn.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 	return true
@@ -160,7 +160,7 @@ func (ql *QueryList) TerminateAll() {
 		for _, qd := range qds {
 			err := qd.conn.Kill("QueryList.TerminateAll()", time.Since(qd.start))
 			if err != nil {
-				log.Warn(fmt.Sprintf("Error terminating query on connection id: %d, error: %v", qd.conn.ID(), err))
+				log.Warn("Error terminating query on connection", slog.Int64("connection_id", qd.conn.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}
 	}
