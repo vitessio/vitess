@@ -18,6 +18,7 @@ package cluster
 
 import (
 	"fmt"
+	"log/slog"
 	"maps"
 	"regexp"
 	"strings"
@@ -255,7 +256,7 @@ func parseOne(cfg *Config, name string, val string) error {
 			match := discoveryFlagRegexp.FindStringSubmatch(name)
 			if match == nil {
 				// not a discovery flag
-				log.Warn(fmt.Sprintf("Attempted to parse %q as a discovery flag, ignoring ...", name))
+				log.Warn("Attempted to parse flag as a discovery flag, ignoring ...", slog.String("flag", name))
 				return nil
 			}
 
