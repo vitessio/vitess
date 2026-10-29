@@ -183,6 +183,11 @@ func TestExecuteOptionalContext(t *testing.T) {
 		})
 	}
 
+	t.Run("hook killed by a signal", func(t *testing.T) {
+		installHook(t, "signaled_hook", "kill -TERM $$\n")
+		require.ErrorContains(t, NewSimpleHook("signaled_hook").ExecuteOptionalContext(t.Context()), "failed(-6)")
+	})
+
 	t.Run("missing hook", func(t *testing.T) {
 		require.NoError(t, NewSimpleHook("missing_hook").ExecuteOptionalContext(t.Context()))
 	})
