@@ -20,14 +20,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
+	"sync"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+)
+
+type (
+	// vschemaPersister writes keyspace vschemas to disk. All writes go through
+	// it so that the final flush at shutdown cannot be undone by an older
+	// update that the watcher goroutine had not processed yet.
+	vschemaPersister struct {
+		dir string
+
+		mu sync.Mutex
+		// sealed is set once flush has read the authoritative topo state.
+		// Watcher updates arriving after that point are dropped, because they
+		// can only be equal to or older than what flush read.
+		sealed bool
+	}
 )
 
 func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *topo.Server) {
@@ -46,8 +65,24 @@ func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *
 		os.Exit(1)
 	}
 
+	persister := &vschemaPersister{dir: vschemaPersistenceDir}
+
+	// Persisting a vschema change is asynchronous: an `alter vschema` statement
+	// returns as soon as the change is in the topo, and the watcher below only
+	// writes it to disk once the topo notifies it. Without a flush at shutdown,
+	// a change made shortly before the process exits is lost, and the next
+	// startup silently comes back with a stale vschema.
+	//
+	// OnClose runs after the OnTermSync hooks that stop the gRPC and MySQL
+	// servers (servenv proceeds even if those time out, but then the change was
+	// racing process exit anyway), and both ctx and ts stay valid until after
+	// all hooks have fired.
+	servenv.OnClose(func() {
+		persister.flush(ctx, ts, tpb.Cells[0])
+	})
+
 	// Now watch for changes in the SrvVSchema object and persist them to disk.
-	go watchSrvVSchema(ctx, ts, tpb.Cells[0])
+	go watchSrvVSchema(ctx, persister, ts, tpb.Cells[0])
 }
 
 func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
@@ -81,8 +116,8 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 	}
 }
 
-func watchSrvVSchema(ctx context.Context, ts *topo.Server, cell string) {
-	data, ch, err := ts.WatchSrvVSchema(ctx, tpb.Cells[0])
+func watchSrvVSchema(ctx context.Context, persister *vschemaPersister, ts *topo.Server, cell string) {
+	data, ch, err := ts.WatchSrvVSchema(ctx, cell)
 	if err != nil {
 		log.Error(fmt.Sprintf("WatchSrvVSchema failed: %v", err))
 		os.Exit(1)
@@ -92,31 +127,140 @@ func watchSrvVSchema(ctx context.Context, ts *topo.Server, cell string) {
 		log.Error(fmt.Sprintf("WatchSrvVSchema could not retrieve initial vschema: %v", data.Err))
 		os.Exit(1)
 	}
-	persistNewSrvVSchema(data.Value)
+	persister.persistNewSrvVSchema(data.Value)
 
 	for update := range ch {
 		if update.Err != nil {
 			log.Error(fmt.Sprintf("WatchSrvVSchema returned an error: %v", update.Err))
 		} else {
-			persistNewSrvVSchema(update.Value)
+			persister.persistNewSrvVSchema(update.Value)
 		}
 	}
 }
 
-func persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
+// flush writes the vschema currently in the topo to disk and seals the
+// persister, so that a watcher update the goroutine had not consumed yet cannot
+// replace it with an older vschema afterwards.
+//
+// Reading the topo state is what seals, not writing it out: keyspaces are
+// written a file at a time, and an update the watcher is still holding is older
+// than this snapshot whether or not those writes succeed. Letting one through
+// could only replace a keyspace this flush did write with older content, while a
+// keyspace this flush could not write keeps whatever is already on disk.
+//
+// A failed topo read seals nothing, since without an authoritative snapshot
+// there is nothing to order the watcher's updates against.
+func (p *vschemaPersister) flush(ctx context.Context, ts *topo.Server, cell string) {
+	// Bound the topo read so a hung read cannot eat the whole OnClose budget
+	// (--onclose-timeout, 10s by default) and exit without flushing anything.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	srvVSchema, err := ts.GetSrvVSchema(ctx, cell)
+	if err != nil {
+		log.Error("Unable to read SrvVSchema to persist it on shutdown",
+			slog.String("cell", cell),
+			slog.Any("error", err),
+		)
+		return
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sealed {
+		return
+	}
+	p.sealed = true
+	p.persistNewSrvVSchemaLocked(srvVSchema)
+}
+
+func (p *vschemaPersister) persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.sealed {
+		return
+	}
+	p.persistNewSrvVSchemaLocked(srvVSchema)
+}
+
+func (p *vschemaPersister) persistNewSrvVSchemaLocked(srvVSchema *vschemapb.SrvVSchema) {
 	for ksName, ks := range srvVSchema.Keyspaces {
-		jsonBytes, err := json.MarshalIndent(ks, "", "  ")
-		if err != nil {
-			log.Error(fmt.Sprintf("Error marshaling keyspace: %v", err))
+		if err := persistKeyspace(p.dir, ksName, ks); err != nil {
+			log.Error("Unable to persist keyspace",
+				slog.String("keyspace", ksName),
+				slog.Any("error", err),
+			)
 			continue
 		}
-
-		err = os.WriteFile(path.Join(vschemaPersistenceDir, ksName+".json"), jsonBytes, 0o644)
-		if err != nil {
-			log.Error(fmt.Sprintf("Error writing keyspace file: %v", err))
-		}
-		log.Info(fmt.Sprintf("Persisted keyspace %v to %v", ksName, vschemaPersistenceDir))
+		log.Info(fmt.Sprintf("Persisted keyspace %v to %v", ksName, p.dir))
 	}
+}
+
+// persistKeyspace writes a keyspace's vschema to <dir>/<ksName>.json atomically.
+// Why: the previous implementation used os.WriteFile, which truncates the
+// destination before writing. A process kill between the truncate and the write
+// leaves an empty file on disk, and the next vtcombo startup then fails to
+// parse the file with "unexpected end of JSON input". Writing to a sibling
+// temp file and renaming over the destination keeps the existing file intact
+// until the new contents are fully on disk.
+//
+// The temp name is deterministic rather than random: every caller is
+// serialized by vschemaPersister.mu, so there is nothing to collide with, and
+// a leftover from a kill between create and rename is simply replaced by the
+// next write instead of accumulating.
+//
+// There is no fsync: the failure this guards against is process death, and
+// rename(2) alone guarantees the destination is either the old file or the
+// complete new one. Machine-crash durability would also need the parent
+// directory synced, and vtcombo's persistence dir doesn't warrant that.
+func persistKeyspace(dir, ksName string, ks *vschemapb.Keyspace) error {
+	jsonBytes, err := json.MarshalIndent(ks, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling keyspace: %w", err)
+	}
+
+	finalPath := path.Join(dir, ksName+".json")
+	tmpName := path.Join(dir, "."+ksName+".json.tmp")
+
+	// Remove a leftover temp file from a previous kill before creating, so the
+	// create below always applies its mode: O_CREATE leaves the mode of an
+	// existing file alone, and a leftover may carry a mode chmodded over for a
+	// destination that no longer exists.
+	if err := os.Remove(tmpName); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("removing stale temp file %s: %w", tmpName, err)
+	}
+
+	// 0o644 with the umask applied matches what the os.WriteFile call this
+	// replaced gave new files (os.CreateTemp would instead hardcode 0o600).
+	tmp, err := os.OpenFile(tmpName, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return fmt.Errorf("creating temp file %s: %w", tmpName, err)
+	}
+	// Best-effort cleanup if we don't reach the rename. Harmless after a
+	// successful rename (the temp name no longer exists).
+	defer os.Remove(tmpName)
+
+	// Renaming over the destination replaces its inode, and with it its
+	// permissions, so carry over the mode of the file being replaced. Operators
+	// who tightened a persisted file keep their mode, matching os.WriteFile,
+	// which leaves the mode of an existing file alone.
+	if info, err := os.Stat(finalPath); err == nil {
+		if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+			tmp.Close()
+			return fmt.Errorf("chmod temp file %s: %w", tmpName, err)
+		}
+	}
+	if _, err := tmp.Write(jsonBytes); err != nil {
+		tmp.Close()
+		return fmt.Errorf("writing temp file %s: %w", tmpName, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("closing temp file %s: %w", tmpName, err)
+	}
+	if err := os.Rename(tmpName, finalPath); err != nil {
+		return fmt.Errorf("renaming %s to %s: %w", tmpName, finalPath, err)
+	}
+	return nil
 }
 
 func createDirectoryIfNotExists(dir string) error {
