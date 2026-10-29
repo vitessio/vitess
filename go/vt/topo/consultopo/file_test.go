@@ -28,9 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// TestGetEndsWithContext verifies that Get returns when its ctx is done, even if the Consul server never
-// answers, so that callers can bound a read that hangs.
-func TestGetEndsWithContext(t *testing.T) {
+// TestKVCallsEndWithContext verifies that each Consul KV call returns when its ctx is done, even if the
+// Consul server never answers, so that callers can bound a call that hangs.
+func TestKVCallsEndWithContext(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	// Accept connections and never answer on them.
@@ -60,15 +60,65 @@ func TestGetEndsWithContext(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(s.Close)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	t.Cleanup(cancel)
-	done := make(chan error, 1)
-	go func() {
-		_, _, err := s.Get(ctx, "file")
-		done <- err
-	}()
-	require.Eventually(t, func() bool { return len(done) > 0 }, 30*time.Second, 10*time.Millisecond,
-		"Get did not return after its ctx was done")
-	err = <-done
-	require.True(t, topo.IsErrType(err, topo.Timeout), "expected a topo.Timeout error, got %v", err)
+	tests := []struct {
+		name string
+		call func(ctx context.Context) error
+	}{{
+		name: "Create",
+		call: func(ctx context.Context) error {
+			_, err := s.Create(ctx, "file", []byte("contents"))
+			return err
+		},
+	}, {
+		name: "Update",
+		call: func(ctx context.Context) error {
+			_, err := s.Update(ctx, "file", []byte("contents"), nil)
+			return err
+		},
+	}, {
+		name: "Get",
+		call: func(ctx context.Context) error {
+			_, _, err := s.Get(ctx, "file")
+			return err
+		},
+	}, {
+		name: "List",
+		call: func(ctx context.Context) error {
+			_, err := s.List(ctx, "file")
+			return err
+		},
+	}, {
+		name: "Delete",
+		call: func(ctx context.Context) error {
+			return s.Delete(ctx, "file", nil)
+		},
+	}, {
+		name: "ListDir",
+		call: func(ctx context.Context) error {
+			_, err := s.ListDir(ctx, "dir", false)
+			return err
+		},
+	}, {
+		name: "GetCurrentLeaderID",
+		call: func(ctx context.Context) error {
+			mp, err := s.NewLeaderParticipation("election", "id")
+			require.NoError(t, err)
+			_, err = mp.GetCurrentLeaderID(ctx)
+			return err
+		},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+			t.Cleanup(cancel)
+			done := make(chan error, 1)
+			go func() {
+				done <- tt.call(ctx)
+			}()
+			require.Eventually(t, func() bool { return len(done) > 0 }, 30*time.Second, 10*time.Millisecond,
+				"%s did not return after its ctx was done", tt.name)
+			err := <-done
+			require.True(t, topo.IsErrType(err, topo.Timeout), "expected a topo.Timeout error, got %v", err)
+		})
+	}
 }
