@@ -1232,3 +1232,43 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 		})
 	}
 }
+
+func TestEnsureRestoredGTIDsMatchManifest(t *testing.T) {
+	manifestPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000001:1-10")
+	require.NoError(t, err)
+	localPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000001:1-10,00000000-0000-0000-0000-000000000002:1")
+	require.NoError(t, err)
+	emptyPos, err := replication.DecodePosition("MySQL56/")
+	require.NoError(t, err)
+	require.NotNil(t, emptyPos.GTIDSet)
+	localOnlyPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000002:1")
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name     string
+		manifest replication.Position
+		executed replication.Position
+		wantSet  bool
+	}{
+		{name: "matching", manifest: manifestPos, executed: manifestPos},
+		{name: "local GTID after restore", manifest: manifestPos, executed: localPos, wantSet: true},
+		{name: "empty manifest GTID set", manifest: emptyPos, executed: localOnlyPos, wantSet: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			sqldb := fakesqldb.New(t)
+			t.Cleanup(sqldb.Close)
+			mysqld := NewFakeMysqlDaemon(sqldb)
+			t.Cleanup(mysqld.Close)
+			mysqld.GTIDPurged = tc.manifest
+			mysqld.SetPrimaryPositionLocked(tc.executed)
+			mysqld.SetReplicationPositionPos = tc.manifest
+			if tc.wantSet {
+				mysqld.ExpectedExecuteSuperQueryList = []string{"FAKE RESET BINARY LOGS AND GTIDS", "FAKE SET GLOBAL gtid_purged"}
+			}
+
+			params := &RestoreParams{Mysqld: mysqld, Logger: logutil.NewMemoryLogger()}
+			require.NoError(t, ensureRestoredGTIDsMatchManifest(t.Context(), &BackupManifest{Position: tc.manifest}, params))
+			require.NoError(t, mysqld.CheckSuperQueryList())
+		})
+	}
+}
