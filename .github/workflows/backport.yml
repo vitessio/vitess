@@ -25,7 +25,8 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: (github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess') && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1

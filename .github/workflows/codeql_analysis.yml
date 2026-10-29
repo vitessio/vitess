@@ -14,7 +14,10 @@ permissions: read-all
 jobs:
   analyze:
     name: Analyze
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     permissions:
       actions: read
       contents: read

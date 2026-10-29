@@ -78,7 +78,7 @@ jobs:
 
   build_and_push_lite:
     name: Build and push lite
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -238,7 +238,7 @@ jobs:
 
   slack_notification:
     name: Slack Notification if failed
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
     needs:

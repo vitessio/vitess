@@ -18,7 +18,7 @@ permissions:
 jobs:
   generate-matrix:
     name: Generate matrix
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     outputs:
       dockerfiles: ${{ steps.generate-matrix.outputs.dockerfiles }}
     steps:
@@ -35,7 +35,10 @@ jobs:
 
   build:
     name: Build ${{ matrix.dockerfile }}
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     needs: generate-matrix
 
     strategy:
