@@ -18,6 +18,7 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -37,7 +38,11 @@ func PanicRecoveryHandler(next http.Handler) http.Handler {
 		name := mux.CurrentRoute(r).GetName()
 		defer func() {
 			if err := recover(); err != nil {
-				log.Error(fmt.Sprintf("uncaught panic in %s: %s", name, err))
+				if name != "" {
+					log.Error("uncaught panic", slog.String("route", name), slog.Any("panic", err))
+				} else {
+					log.Error("uncaught panic", slog.Any("panic", err))
+				}
 				http.Error(w, fmt.Sprintf("%v", err), http.StatusInternalServerError)
 			}
 		}()
