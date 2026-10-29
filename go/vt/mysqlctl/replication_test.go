@@ -3852,3 +3852,61 @@ func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
 		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not restore a lock_wait_timeout that was never set")
 	})
 }
+
+// TestRestartReplicationReceiver checks that only the receiver is restarted,
+// and that a flavor without receiver commands runs nothing.
+func TestRestartReplicationReceiver(t *testing.T) {
+	injectedErr := errors.New("injected receiver failure")
+	for _, tc := range []struct {
+		name    string
+		queries []fakesqldb.ExpectedExecuteFetch
+		wantErr error
+	}{
+		{name: "receiver commands", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+			{Query: "START REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+		}},
+		// A failed stop must not be followed by a start.
+		{name: "stop fails", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", Error: injectedErr},
+		}, wantErr: injectedErr},
+		{name: "start fails", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+			{Query: "START REPLICA IO_THREAD", Error: injectedErr},
+		}, wantErr: injectedErr},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.OrderMatters()
+			t.Cleanup(db.VerifyAllExecutedOrFail)
+			db.AddExpectedQuery("SELECT 1", nil)
+			for _, q := range tc.queries {
+				db.AddExpectedExecuteFetch(q)
+			}
+			cp := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
+
+			err := mysqld.RestartReplicationReceiver(t.Context(), nil)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.wantErr.Error())
+		})
+	}
+	t.Run("unsupported flavor", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+		db.OrderMatters()
+		t.Cleanup(db.VerifyAllExecutedOrFail)
+		db.AddExpectedQuery("SELECT 1", nil)
+		cp := *db.ConnParams()
+		cp.Flavor = replication.FilePosFlavorID
+		mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+		t.Cleanup(mysqld.Close)
+
+		require.ErrorIs(t, mysqld.RestartReplicationReceiver(t.Context(), nil), ErrReceiverRestartUnsupported)
+	})
+}
