@@ -519,6 +519,45 @@ func TestVReplicationWorkflowActionErrorLog(t *testing.T) {
 	assert.Equal(t, "SwitchTraffic", record["action"])
 	assert.Equal(t, "testwf", record["workflow"])
 	assert.Equal(t, err.Error(), record["error"])
+
+	record = logs.Record(t, "Checking whether the workflow can switch")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "testwf", record["workflow"])
+	assert.Equal(t, "forward", record["direction"])
+	assert.Equal(t, false, record["writes_switched"])
+}
+
+// TestNewVReplicationWorkflowNoStateLog checks that the state of a workflow
+// that doesn't exist yet is left off both of its lines rather than logged as
+// <nil>.
+func TestNewVReplicationWorkflowNoStateLog(t *testing.T) {
+	ctx := t.Context()
+	env := newTestVTCtlEnv(ctx)
+	t.Cleanup(env.close)
+	target := env.addTablet(200, "targetks", "0", &topodatapb.KeyRange{}, topodatapb.TabletType_PRIMARY)
+	env.tmc.setVRResults(
+		target.tablet,
+		"select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='testwf' and db_name='vt_targetks'",
+		&sqltypes.Result{},
+	)
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	wf, err := env.wr.NewVReplicationWorkflow(ctx, wrangler.MoveTablesWorkflow, &wrangler.VReplicationWorkflowParams{TargetKeyspace: "targetks", Workflow: "testwf"})
+	require.NoError(t, err)
+	assertNoState := func() {
+		t.Helper()
+		record := logs.Record(t, "Workflow state")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, "testwf", record["workflow"])
+		assert.NotContains(t, record, "workflow_state")
+		assert.NotContains(t, logs.String(), "<nil>")
+	}
+	assertNoState()
+
+	// Create reads the cached state, which logs it again.
+	logs.Reset()
+	wf.CachedState()
+	assertNoState()
 }
 
 // TestWorkflowShardSubsetLog checks that the shards given to Workflow are
