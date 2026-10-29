@@ -8,10 +8,6 @@
       "Original": "select get_lock('xyz', 10) from dual",
       "Instructions": {
         "OperatorType": "Lock",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
         "TargetDestination": "KeyspaceID(00)",
         "FieldQuery": "select get_lock('xyz', 10) from dual where 1 != 1",
         "lock_func": [
@@ -29,10 +25,6 @@
       "Original": "select is_free_lock('xyz') from dual",
       "Instructions": {
         "OperatorType": "Lock",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
         "TargetDestination": "KeyspaceID(00)",
         "FieldQuery": "select is_free_lock('xyz') from dual where 1 != 1",
         "lock_func": [
@@ -50,10 +42,6 @@
       "Original": "select get_lock(?, ?)",
       "Instructions": {
         "OperatorType": "Lock",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
         "TargetDestination": "KeyspaceID(00)",
         "FieldQuery": "select get_lock(:v1, :v2) from dual where 1 != 1",
         "lock_func": [
@@ -107,10 +95,6 @@
       "Original": "select get_lock('xyz', 10), is_free_lock('abc') from dual",
       "Instructions": {
         "OperatorType": "Lock",
-        "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-        },
         "TargetDestination": "KeyspaceID(00)",
         "FieldQuery": "select get_lock('xyz', 10), is_free_lock('abc') from dual where 1 != 1",
         "lock_func": [

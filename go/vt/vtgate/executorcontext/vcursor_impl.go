@@ -697,6 +697,12 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
+// AdvisoryLockKeyspace implements the engine.VCursor interface. It returns the
+// first serving keyspace by name, and is called each time a lock function runs.
+func (vc *VCursorImpl) AdvisoryLockKeyspace() (*vindexes.Keyspace, error) {
+	return vc.FirstSortedKeyspace()
+}
+
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *VCursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()
@@ -970,6 +976,13 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 
 // ExecuteLock is for executing advisory lock statements.
 func (vc *VCursorImpl) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+	// A Lock primitive can bypass topology resolution when this session already
+	// has a reserved lock connection. Attach the gateway needed to reach it.
+	if rs.Gateway == nil {
+		withGateway := *rs
+		withGateway.Gateway = vc.resolver.GetGateway()
+		rs = &withGateway
+	}
 	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
 	return vc.executor.ExecuteLock(ctx, rs, query, vc.SafeSession, lockFuncType)
 }
@@ -1439,6 +1452,11 @@ func (vc *VCursorImpl) GetWarnings() []*querypb.QueryWarning {
 // AnyAdvisoryLockTaken implements the SessionActions interface
 func (vc *VCursorImpl) AnyAdvisoryLockTaken() bool {
 	return vc.SafeSession.HasAdvisoryLock()
+}
+
+// AdvisoryLockSessionTarget implements the SessionActions interface.
+func (vc *VCursorImpl) AdvisoryLockSessionTarget() *querypb.Target {
+	return vc.SafeSession.AdvisoryLockSessionTarget()
 }
 
 // AddAdvisoryLock implements the SessionActions interface

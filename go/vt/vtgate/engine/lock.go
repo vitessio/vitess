@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 var _ Primitive = (*Lock)(nil)
@@ -40,9 +39,6 @@ var _ Primitive = (*Lock)(nil)
 type Lock struct {
 	noInputs
 	noTxNeeded
-
-	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
 
 	// TargetDestination specifies an explicit target destination to send the query to.
 	TargetDestination key.ShardDestination
@@ -63,12 +59,18 @@ func (l *Lock) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[str
 }
 
 func (l *Lock) execLock(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.ShardDestination{l.TargetDestination})
-	if err != nil {
-		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
+	var rss []*srvtopo.ResolvedShard
+	if target := vcursor.Session().AdvisoryLockSessionTarget(); target != nil {
+		// Advisory locks live on a reserved MySQL connection. Once it exists,
+		// execute every lock function on that exact target instead of resolving
+		// the keyspace baked into a separately cached plan.
+		rss = []*srvtopo.ResolvedShard{{Target: target}}
+	} else {
+		var err error
+		rss, err = l.resolveLockShard(ctx, vcursor)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
@@ -136,6 +138,24 @@ func (lf *LockFunc) execLock(ctx context.Context, vcursor VCursor, bindVars map[
 	return qr, nil
 }
 
+// resolveLockShard resolves the shard for lock functions in the current lock
+// keyspace. The keyspace is chosen when the lock function runs, not when it is
+// planned, so a cached plan never pins lock functions to a stale keyspace.
+func (l *Lock) resolveLockShard(ctx context.Context, vcursor VCursor) ([]*srvtopo.ResolvedShard, error) {
+	ks, err := vcursor.AdvisoryLockKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	rss, _, err := vcursor.ResolveDestinations(ctx, ks.Name, nil, []key.ShardDestination{l.TargetDestination})
+	if err != nil {
+		return nil, err
+	}
+	if len(rss) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
+	}
+	return rss, nil
+}
+
 // TryStreamExecute is part of the Primitive interface
 func (l *Lock) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	qr, err := l.TryExecute(ctx, vcursor, bindVars, wantfields)
@@ -147,12 +167,9 @@ func (l *Lock) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars m
 
 // GetFields is part of the Primitive interface
 func (l *Lock) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	rss, _, err := vcursor.ResolveDestinations(ctx, l.Keyspace.Name, nil, []key.ShardDestination{l.TargetDestination})
+	rss, err := l.resolveLockShard(ctx, vcursor)
 	if err != nil {
 		return nil, err
-	}
-	if len(rss) != 1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "lock query can be routed to single shard only: %v", rss)
 	}
 	boundQuery := []*querypb.BoundQuery{{
 		Sql:           l.FieldQuery,
@@ -179,7 +196,6 @@ func (l *Lock) description() PrimitiveDescription {
 	other["lock_func"] = lf
 	return PrimitiveDescription{
 		OperatorType:      "Lock",
-		Keyspace:          l.Keyspace,
 		TargetDestination: l.TargetDestination,
 		Other:             other,
 	}

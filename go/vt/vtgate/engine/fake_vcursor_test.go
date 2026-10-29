@@ -118,6 +118,10 @@ func (t *noopVCursor) AnyAdvisoryLockTaken() bool {
 	panic("implement me")
 }
 
+func (t *noopVCursor) AdvisoryLockSessionTarget() *querypb.Target {
+	return nil
+}
+
 func (t *noopVCursor) AddAdvisoryLock(name string) {
 	// TODO implement me
 	panic("implement me")
@@ -312,6 +316,10 @@ func (t *noopVCursor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard
 	panic("implement me")
 }
 
+func (t *noopVCursor) AdvisoryLockKeyspace() (*vindexes.Keyspace, error) {
+	return &vindexes.Keyspace{Name: "ks"}, nil
+}
+
 func (t *noopVCursor) NeedsReservedConn() {
 }
 
@@ -500,6 +508,8 @@ type loggingVCursor struct {
 
 	shardSession []*srvtopo.ResolvedShard
 
+	advisoryLockTarget *querypb.Target
+
 	parser *sqlparser.Parser
 
 	onMirrorClonesFn        func(context.Context) VCursor
@@ -611,6 +621,15 @@ func (f *loggingVCursor) ExecuteVSchema(context.Context, string, *sqlparser.Alte
 
 func (f *loggingVCursor) Session() SessionActions {
 	return f
+}
+
+func (f *loggingVCursor) AdvisoryLockSessionTarget() *querypb.Target {
+	return f.advisoryLockTarget
+}
+
+func (f *loggingVCursor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+	f.log = append(f.log, fmt.Sprintf("ExecuteLock %s.%s: %s", rs.Target.Keyspace, rs.Target.Shard, query.Sql))
+	return f.nextResult()
 }
 
 func (f *loggingVCursor) SetTarget(target string) error {

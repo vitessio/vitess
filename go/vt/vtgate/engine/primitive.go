@@ -95,6 +95,9 @@ type (
 		SQLMode() string
 
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
+		// AdvisoryLockKeyspace returns the keyspace for advisory lock functions.
+		// It is called each time a lock function runs.
+		AdvisoryLockKeyspace() (*vindexes.Keyspace, error)
 
 		InTransactionAndIsDML() bool
 
@@ -252,6 +255,9 @@ type (
 
 		// AnyAdvisoryLockTaken returns true of any advisory lock is taken
 		AnyAdvisoryLockTaken() bool
+		// AdvisoryLockSessionTarget returns the target of the reserved connection
+		// holding advisory locks, or nil when the session has no lock connection.
+		AdvisoryLockSessionTarget() *querypb.Target
 		// AddAdvisoryLock adds advisory lock to the session
 		AddAdvisoryLock(name string)
 		// RemoveAdvisoryLock removes advisory lock from the session
