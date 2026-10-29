@@ -884,9 +884,9 @@ See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https
 
 #### <a id="vtbackup-stop-at-committed-position"/>`vtbackup` stops catching up at the primary's committed position</a>
 
-`vtbackup` doesn't send semi-sync acknowledgements, so it could apply a transaction that the primary hadn't committed yet. If an emergency reparent then lost that transaction, the backup held an errant GTID, and every replica restored from it failed with `Errant GTID detected`.
+On MySQL 8.4 and later, and on MySQL 8.0 with `replica_parallel_workers` set to 0 or 1, `vtbackup` no longer applies binlogged transactions that are still waiting for their semi-sync acknowledgement. An emergency reparent during or after the run can lose such transactions, and a backup that held them would then have errant GTIDs: every replica restored from it, or from a later backup built on it, would fail with `Errant GTID detected`.
 
-On MySQL 8.4 and later, and on MySQL 8.0 with `replica_parallel_workers` set to 0 or 1, `vtbackup` now stops catching up at the primary's committed position. MySQL 8.0 runs a parallel applier on a single thread until it reaches a stop position, so with more workers (the default is 4 from 8.0.27), `vtbackup` catches up as before, as it does on other versions and MariaDB.
+It stops catch-up at the primary's committed position, which, with semi-sync's default `AFTER_SYNC` wait point, doesn't include them yet. MySQL 8.0 runs a parallel applier on a single thread until it reaches a stop position, so with more workers (the default is 4 from 8.0.27), `vtbackup` catches up as before, as it does on other versions and MariaDB.
 
 When `vtbackup` stops at the committed position:
 - At startup, it waits while it can't read the shard primary or that tablet's record doesn't say `PRIMARY`, but a shard with no primary still fails the run at once. As with the existing wait for an unreachable primary, only the job's deadline, if it has one, bounds this wait.
