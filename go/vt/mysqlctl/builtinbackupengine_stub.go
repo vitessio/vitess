@@ -17,8 +17,26 @@ li*/
 
 package mysqlctl
 
-import "os"
+import (
+	"os"
+
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
 
 func openForSequential(name string) (*os.File, error) {
 	return os.Open(name)
+}
+
+func openForDirectWrite(name string) (*os.File, error) {
+	return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "O_DIRECT is not supported on this platform")
+}
+
+func fallocateFile(f *os.File, size int64) error {
+	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "fallocate is not supported on this platform")
+}
+
+func disableDirectIO(f *os.File) error {
+	return nil
 }

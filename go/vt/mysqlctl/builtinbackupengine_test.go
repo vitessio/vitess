@@ -606,6 +606,23 @@ func TestExecuteBackupRejectsOversizedChunkSize(t *testing.T) {
 	require.ErrorContains(t, err, "exceeds maximum allowed value")
 }
 
+func TestExecuteBackupRejectsUnalignedChunkSize(t *testing.T) {
+	oldThreshold := backupFileChunkThreshold
+	oldSize := backupFileChunkSize
+	t.Cleanup(func() {
+		backupFileChunkThreshold = oldThreshold
+		backupFileChunkSize = oldSize
+	})
+
+	// Above the minimum chunk size, but not a multiple of the O_DIRECT alignment.
+	backupFileChunkThreshold = 2_000_000_000
+	backupFileChunkSize = 1_000_000_000
+
+	be := &BuiltinBackupEngine{}
+	_, err := be.ExecuteBackup(t.Context(), BackupParams{Logger: logutil.NewMemoryLogger()}, nil)
+	require.ErrorContains(t, err, "must be a multiple of 4096")
+}
+
 func TestShouldDrainForBackupBuiltIn(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 
@@ -1191,4 +1208,16 @@ func TestHasErrorCode(t *testing.T) {
 			assert.Equal(t, tc.expected, hasErrorCode(tc.err, tc.code))
 		})
 	}
+}
+
+func TestRestoreWriteModeDefaultsToBuffered(t *testing.T) {
+	assert.Equal(t, restoreWriteModeBuffered, builtinBackupRestoreWriteMode.String())
+}
+
+// setRestoreWriteMode sets --builtinbackup-restore-write-mode for the duration of the test.
+func setRestoreWriteMode(t *testing.T, mode string) {
+	t.Helper()
+	old := builtinBackupRestoreWriteMode.String()
+	t.Cleanup(func() { require.NoError(t, builtinBackupRestoreWriteMode.Set(old)) })
+	require.NoError(t, builtinBackupRestoreWriteMode.Set(mode))
 }

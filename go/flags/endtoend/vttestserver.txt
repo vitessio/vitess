@@ -17,6 +17,7 @@ Flags:
       --builtinbackup-incremental-restore-path string                    the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.
       --builtinbackup-mysqld-timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. Raised to the mysqld shutdown timeout of the backup request plus a grace period when that is larger. (default 10m0s)
       --builtinbackup-progress duration                                  how often to send progress updates when backing up large files. (default 5s)
+      --builtinbackup-restore-write-mode string                          How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it (Linux only), falling back to buffered writes for chunks where O_DIRECT can't be used. (default "buffered")
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
       --cells strings                                                    Comma separated list of cells (default [test])
       --charset string                                                   MySQL charset (default "utf8mb4")
