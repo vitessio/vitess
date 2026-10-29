@@ -16,6 +16,22 @@ The controls pass on main and show that the fixture behaves as scenarios rely on
   there, so the hold has a budget well within the lease TTL. An attempt that exceeds it, or
   whose lease is about to expire at the release, fails as an invalid control.
 
+The regressions protect replication initialization under a held shard lock (#21549). A
+replica that starts or finishes a restore while another operation holds the lock answers
+RPCs, leaves replication unchanged and stays out of rotation until replication runs from the
+shard primary:
+
+- `TestERSRestartedReplicaStaysStopped`: a replica's vttablet restarts during the held ERS;
+  its receiver stays stopped until ERS repoints it.
+- `TestStoppedReplicaRestartedUnderShardLock`: a replica with stopped replication restarts
+  under a test-owned lock; replication stays stopped after the release, until VTOrc starts it.
+- `TestRestoreUnderShardLock`: `RestoreFromBackup` through vtctld under a test-owned lock;
+  vtctld's follow-up, which sets the replica's source, waits for the lock, then starts
+  replication from the primary.
+- `TestRestoreDuringERS`: `RestoreFromBackup` through vtctld during the held ERS; the
+  follow-up does not repoint the replica while ERS holds the lock, and after ERS it reads the
+  new primary, once the new primary has published itself in the shard record.
+
 Run the package through the CI entry point, keeping the data of every run:
 
 ```
