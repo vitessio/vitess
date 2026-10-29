@@ -11,7 +11,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'endtoend')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 jobs:
   # Path filtering runs here, on a GitHub-hosted runner, so that the job below
   # claims a VM runner (in vitess-security) only when something relevant

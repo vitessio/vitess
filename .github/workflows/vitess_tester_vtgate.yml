@@ -11,7 +11,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Vitess Tester (vtgate)')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"

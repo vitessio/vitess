@@ -11,7 +11,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'docker_ci')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   BOOTSTRAP_VERSION: "ci"
