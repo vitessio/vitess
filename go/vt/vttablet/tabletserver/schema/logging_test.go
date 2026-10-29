@@ -18,6 +18,7 @@ package schema
 
 import (
 	"log/slog"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,4 +64,27 @@ func TestResetSequencesLog(t *testing.T) {
 		"next_value": float64(5),
 		"last_value": float64(10),
 	}, record)
+}
+
+// TestResetSequencesLogLocksSequence checks that logging the sequence values
+// does not race with concurrent ID allocation, which holds the sequence lock.
+func TestResetSequencesLogLocksSequence(t *testing.T) {
+	se := NewEngineForTests()
+	table := NewTable("seq", Sequence)
+	table.SequenceInfo = &SequenceInfo{}
+	se.SetTableForTests(table)
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range 1000 {
+			table.SequenceInfo.Lock()
+			table.SequenceInfo.NextVal = int64(i)
+			table.SequenceInfo.LastVal = int64(i)
+			table.SequenceInfo.Unlock()
+		}
+	})
+	for range 100 {
+		require.NoError(t, se.ResetSequences([]string{"seq"}))
+	}
+	wg.Wait()
 }

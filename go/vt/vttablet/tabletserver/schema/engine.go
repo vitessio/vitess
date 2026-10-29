@@ -1233,10 +1233,13 @@ func (se *Engine) ResetSequences(tables []string) error {
 	for _, tableName := range tables {
 		if table, ok := se.tables[tableName]; ok {
 			if table.SequenceInfo != nil {
+				table.SequenceInfo.Lock()
+				nextVal, lastVal := table.SequenceInfo.NextVal, table.SequenceInfo.LastVal
+				table.SequenceInfo.Unlock()
 				log.Info("Resetting sequence info for table",
 					slog.String("table", tableName),
-					slog.Int64("next_value", table.SequenceInfo.NextVal),
-					slog.Int64("last_value", table.SequenceInfo.LastVal),
+					slog.Int64("next_value", nextVal),
+					slog.Int64("last_value", lastVal),
 				)
 				table.SequenceInfo.Reset()
 			}
