@@ -1300,6 +1300,18 @@ func (mysqld *Mysqld) SemiSyncEnabled(ctx context.Context) (primary, replica boo
 	return primary, replica
 }
 
+// ReadSemiSyncEnabled is SemiSyncEnabled, but returns an error when the
+// variables cannot be read. Without a semi-sync plugin, both are false.
+func (mysqld *Mysqld) ReadSemiSyncEnabled(ctx context.Context) (source, replica bool, err error) {
+	vars, err := mysqld.fetchVariables(ctx, "rpl_semi_sync_%_enabled")
+	if err != nil {
+		return false, false, err
+	}
+	source = vars["rpl_semi_sync_source_enabled"] == "ON" || vars["rpl_semi_sync_master_enabled"] == "ON"
+	replica = vars["rpl_semi_sync_replica_enabled"] == "ON" || vars["rpl_semi_sync_slave_enabled"] == "ON"
+	return source, replica, nil
+}
+
 // SemiSyncStatus returns the current status of semi-sync for primary and replica.
 func (mysqld *Mysqld) SemiSyncStatus(ctx context.Context) (primary, replica bool) {
 	vars, err := mysqld.fetchStatuses(ctx, "Rpl_semi_sync_%_status")

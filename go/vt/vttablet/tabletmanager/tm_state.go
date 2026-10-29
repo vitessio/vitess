@@ -82,6 +82,13 @@ type tmState struct {
 	deniedTables    map[topodatapb.TabletType][]string
 	tablet          *topodatapb.Tablet
 	isPublishing    bool
+	// pendingReplicationInit identifies the deferred replication
+	// initialization that has not completed, or is zero if there is none.
+	pendingReplicationInit uint64
+	lastReplicationInit    uint64
+	// replicationInitError is why the pending deferred replication
+	// initialization has not completed yet.
+	replicationInitError string
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -285,6 +292,91 @@ func (ts *tmState) ChangeTabletTags(ctx context.Context, tabletTags map[string]s
 	setTabletTagsStats(ts.tablet)
 }
 
+// deferReplicationInit records a new deferred replication initialization,
+// deferred because of cause, and returns its ID. It supersedes any earlier one.
+// Non-primary tablet types do not serve queries until it ends.
+func (ts *tmState) deferReplicationInit(ctx context.Context, cause error) uint64 {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.lastReplicationInit++
+	ts.setPendingReplicationInitLocked(ctx, ts.lastReplicationInit, cause)
+	return ts.lastReplicationInit
+}
+
+// setReplicationInitError records why the deferred replication initialization
+// id has not completed, if it is still pending, in the reason for not serving.
+func (ts *tmState) setReplicationInitError(ctx context.Context, id uint64, err error) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.pendingReplicationInit == id {
+		ts.setPendingReplicationInitLocked(ctx, id, err)
+	}
+}
+
+// isPendingReplicationInit reports whether id is the pending deferred
+// replication initialization.
+func (ts *tmState) isPendingReplicationInit(id uint64) bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.pendingReplicationInit == id
+}
+
+// endReplicationInit ends the deferred replication initialization id, and
+// reports whether it did. It does not end it once a later deferral superseded
+// it, or while a restore or a backup runs, whose outcome decides replication.
+// If primary is set, it ends it only if the tablet is the primary, checked
+// together with the deferral so that a demotion in between is not missed.
+func (ts *tmState) endReplicationInit(ctx context.Context, id uint64, primary bool) bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.pendingReplicationInit != id {
+		return false
+	}
+	switch ts.tablet.Type {
+	case topodatapb.TabletType_RESTORE, topodatapb.TabletType_BACKUP:
+		return false
+	}
+	if primary && ts.tablet.Type != topodatapb.TabletType_PRIMARY {
+		return false
+	}
+	ts.setPendingReplicationInitLocked(ctx, 0, nil)
+	return true
+}
+
+// replicationInitPending reports whether a deferred replication
+// initialization is pending.
+func (ts *tmState) replicationInitPending() bool {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.pendingReplicationInit != 0
+}
+
+// cancelReplicationInit ends any pending deferred replication initialization.
+func (ts *tmState) cancelReplicationInit(ctx context.Context) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.pendingReplicationInit != 0 {
+		ts.setPendingReplicationInitLocked(ctx, 0, nil)
+	}
+}
+
+// setPendingReplicationInitLocked updates query service only when the reason
+// for not serving changes. A primary is not gated, so its query service, which
+// promotion and demotion manage, is left alone.
+func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint64, err error) {
+	reason := ts.canServe(ts.tablet.Type)
+	ts.pendingReplicationInit = id
+	ts.replicationInitError = ""
+	if id != 0 && err != nil {
+		ts.replicationInitError = err.Error()
+	}
+	if ts.isOpen && reason != ts.canServe(ts.tablet.Type) {
+		if err := ts.updateLocked(ctx); err != nil {
+			log.Error(fmt.Sprintf("Cannot update query service after replication initialization state change: %v", err))
+		}
+	}
+}
+
 func (ts *tmState) SetMysqlPort(mport int32) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
@@ -385,6 +477,12 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if !topo.IsRunningQueryService(tabletType) {
 		return fmt.Sprintf("not a serving tablet type(%v)", tabletType)
+	}
+	if ts.pendingReplicationInit != 0 && tabletType != topodatapb.TabletType_PRIMARY {
+		if ts.replicationInitError != "" {
+			return "replication is not initialized: " + ts.replicationInitError
+		}
+		return "replication is not initialized"
 	}
 	if ts.tabletControls[tabletType] {
 		return "TabletControl.DisableQueryService set"
