@@ -551,7 +551,7 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		cmd := exec.Command(name, args...)
 		cmd.Dir = vtMysqlRoot
 		cmd.Env = env
-		log.Info("Starting mysqld", slog.String("start_id", ts), slog.String("exec_cmd", fmt.Sprintf("%#v", cmd)))
+		log.Info("Starting mysqld", slog.String("start_id", ts), slog.String("exec_cmd", cmd.String()))
 		stderr, err := cmd.StderrPipe()
 		if err != nil {
 			return err
@@ -2049,7 +2049,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		mysqlbinlogCmd.Dir = dir
 		mysqlbinlogCmd.Env = mysqlbinlogEnviron(env)
 		mysqlbinlogCmd.Stderr = mysqlbinlogErrFile
-		log.Info("ApplyBinlogFile: running mysqlbinlog command", slog.String("exec_cmd", fmt.Sprintf("%#v", mysqlbinlogCmd)), slog.String("stderr_file", mysqlbinlogErrFile.Name()))
+		log.Info("ApplyBinlogFile: running mysqlbinlog command", slog.String("exec_cmd", mysqlbinlogCmd.String()), slog.String("stderr_file", mysqlbinlogErrFile.Name()))
 		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 		if err != nil {
 			return err
@@ -2106,7 +2106,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 		mysqlCmd.Stdin = pipe // piped from mysqlbinlog
 
 		mysqlCmd.Stderr = mysqlErrFile
-		log.Info("ApplyBinlogFile: running mysql command", slog.String("exec_cmd", fmt.Sprintf("%#v", mysqlCmd)), slog.String("stderr_file", mysqlErrFile.Name()))
+		log.Info("ApplyBinlogFile: running mysql command", slog.String("exec_cmd", mysqlCmd.String()), slog.String("stderr_file", mysqlErrFile.Name()))
 	}
 	// Run both processes, piped:
 	if err := mysqlbinlogCmd.Start(); err != nil {
@@ -2182,7 +2182,7 @@ func (mysqld *Mysqld) scanBinlogTimestamp(
 	mysqlbinlogCmd := exec.Command(mysqlbinlogName, args...)
 	mysqlbinlogCmd.Dir = mysqlbinlogDir
 	mysqlbinlogCmd.Env = mysqlbinlogEnv
-	log.Info("ApplyBinlogFile: running mysqlbinlog command", slog.String("exec_cmd", fmt.Sprintf("%#v", mysqlbinlogCmd)))
+	log.Info("ApplyBinlogFile: running mysqlbinlog command", slog.String("exec_cmd", mysqlbinlogCmd.String()))
 	pipe, err := mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 	if err != nil {
 		return firstMatchedTime, lastMatchedTime, err

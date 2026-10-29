@@ -492,7 +492,8 @@ func TestGetMycnfTemplateUnsupportedVersionLogsVersion(t *testing.T) {
 }
 
 // TestStartNoWaitLogsOutput checks that the output of mysqld_safe is logged
-// under stderr and stdout, and that a clean exit logs no error.
+// under stderr and stdout, that a clean exit logs no error, and that the
+// command is logged without its environment.
 func TestStartNoWaitLogsOutput(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
@@ -501,6 +502,7 @@ func TestStartNoWaitLogsOutput(t *testing.T) {
 	t.Setenv("VTROOT", root)
 	t.Setenv("VT_MYSQL_ROOT", root)
 	t.Setenv("VT_MYSQL_BASEDIR", root)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "env-secret-sentinel")
 
 	logs := logtest.Capture(t, slog.LevelInfo)
 	require.NoError(t, (&Mysqld{}).startNoWait(&Mycnf{Path: path.Join(root, "my.cnf")}))
@@ -511,8 +513,9 @@ func TestStartNoWaitLogsOutput(t *testing.T) {
 	assert.Equal(t, "err-line", logs.Wait(t, "mysqld stderr")["stderr"])
 	assert.NotContains(t, logs.Wait(t, "mysqld exited"), "error")
 	starting := logs.Record(t, "Starting mysqld")
-	assert.Contains(t, starting["exec_cmd"], "exec.Cmd")
+	assert.Equal(t, path.Join(root, "bin", "mysqld_safe")+" --defaults-file="+path.Join(root, "my.cnf")+" --basedir="+root, starting["exec_cmd"])
 	assert.NotContains(t, starting, "command")
+	assert.NotContains(t, logs.String(), "env-secret-sentinel")
 }
 
 func TestBuildLdPathsTZ(t *testing.T) {
