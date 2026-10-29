@@ -28,34 +28,6 @@ jobs:
     outputs:
       end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
-<<<<<<< HEAD
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-
-      - name: Skip CI
-        run: |
-          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-            echo "skipping CI due to the 'Skip CI' label"
-            exit 1
-          fi
-
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-      - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
-        with:
-          egress-policy: audit
-
-      - name: Skip CI
-        run: |
-          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-            echo "skipping CI due to the 'Skip CI' label"
-            exit 1
-          fi
-
-=======
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -125,7 +97,7 @@ jobs:
         run: exit 1
 
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
 
@@ -143,15 +115,7 @@ jobs:
           persist-credentials: "false"
 
       - name: Build bootstrap images
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true'
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-        if: steps.changes.outputs.end_to_end == 'true'
-        timeout-minutes: 20
-=======
         if: needs.changes.outputs.end_to_end == 'true'
-        timeout-minutes: 20
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
         uses: $/.github/actions/build-bootstrap
         with:
           bootstrap-version: ${{ env.BOOTSTRAP_VERSION }}
@@ -163,26 +127,10 @@ jobs:
         uses: $/.github/actions/setup-go
 
       - name: Tune the OS
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true'
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-        if: steps.changes.outputs.end_to_end == 'true'
-        timeout-minutes: 5
-=======
         if: needs.changes.outputs.end_to_end == 'true'
-        timeout-minutes: 5
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
         uses: $/.github/actions/tune-os
 
       - name: Run docker tests - ${{ matrix.shard }}
-<<<<<<< HEAD
-        if: steps.changes.outputs.end_to_end == 'true'
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-        if: steps.changes.outputs.end_to_end == 'true'
-        timeout-minutes: 30
-=======
         if: needs.changes.outputs.end_to_end == 'true'
-        timeout-minutes: 30
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
         run: |
           go run test.go -docker=true -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} --follow -shard ${{ matrix.shard }}
