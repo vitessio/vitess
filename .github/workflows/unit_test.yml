@@ -22,11 +22,11 @@ env:
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
-  # Path filtering runs once here, on a GitHub-hosted runner, so that the
-  # matrix jobs below (on large runners) are not started at all when nothing
-  # relevant changed.
+  # Path filtering runs once here, on a small runner (a CNCF container in
+  # vitess-security), so that the matrix jobs below (on large runners) are not
+  # started at all when nothing relevant changed.
   changes:
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       unit_tests: ${{ steps.changes.outputs.unit_tests }}
@@ -125,10 +125,22 @@ jobs:
 
     name: "Unit Test (${{ matrix.race && (matrix.evalengine == '1' && 'Evalengine_' || '') || (matrix.evalengine == '1' && 'evalengine_' || '') }}${{ matrix.race && 'Race' || matrix.platform }})"
     # When nothing relevant changed the legs still run (so their required
+<<<<<<< HEAD
     # status checks are reported), but on a GitHub-hosted runner with every
     # step below skipped. The 'Skip CI' label also gets the small runner, since
     # the legs then only fail at that step.
     runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && matrix.race && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
+||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
+    # status checks are reported), but on a GitHub-hosted runner with every
+    # step below skipped. The 'Skip CI' label also gets the small runner, since
+    # the legs then only fail at that step.
+    runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository_owner == 'vitessio' && (matrix.arch == 'arm64' && 'cncf-ubuntu-24.04-16-64-arm' || 'cncf-ubuntu-24.04-16-64-x86') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04')) || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
+=======
+    # status checks are reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the legs then only fail at that step.
+    runs-on: ${{ needs.changes.outputs.unit_tests == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository_owner == 'vitessio' && (matrix.arch == 'arm64' && 'cncf-ubuntu-24.04-16-64-arm' || 'cncf-ubuntu-24.04-16-64-x86') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04')) || github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
+>>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
