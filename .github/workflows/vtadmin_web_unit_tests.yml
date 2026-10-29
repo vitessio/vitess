@@ -21,8 +21,9 @@ permissions: read-all
 
 jobs:
   unit-tests:
-    # vitess-security is private, so its GitHub-hosted runners are smaller; it
-    # uses a CNCF VM the size of the public ubuntu-24.04 runner instead.
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
     runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     steps:
       - name: Skip CI

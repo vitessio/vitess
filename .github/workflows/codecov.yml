@@ -14,13 +14,14 @@ permissions:
   contents: read
 
 jobs:
-  # Path filtering and changed-package detection run here, on a GitHub-hosted
-  # runner, so that the coverage job below (on a large runner) is not started
-  # at all when there is nothing to measure. Code Coverage is not a required
-  # check, so skipping it at the job level reports nothing misleading.
+  # Path filtering and changed-package detection run here, on a small runner (a
+  # CNCF container in vitess-security), so that the coverage job below (on a
+  # large runner) is not started at all when there is nothing to measure. Code
+  # Coverage is not a required check, so skipping it at the job level reports
+  # nothing misleading.
   changes:
     if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 10
     outputs:
       can_upload: ${{ steps.upload.outputs.can_upload }}

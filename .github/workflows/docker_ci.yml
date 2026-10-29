@@ -19,11 +19,11 @@ env:
   BOOTSTRAP_FLAVOR: "mysql84"
 
 jobs:
-  # Path filtering runs here, on a GitHub-hosted runner, so that the job below
-  # claims a VM runner (in vitess-security) only when something relevant
-  # changed.
+  # Path filtering runs here, on a small runner (a CNCF container in
+  # vitess-security), so that the job below claims a VM there only when
+  # something relevant changed.
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       end_to_end: ${{ steps.changes.outputs.end_to_end }}
@@ -78,12 +78,13 @@ jobs:
     needs: changes
     if: ${{ !cancelled() }}
     # When nothing relevant changed the job still runs (so its required status
-    # check is reported), but on a GitHub-hosted runner with every step below
-    # skipped. The 'Skip CI' label also gets the small runner, since the job
-    # then only fails at that step.
-    # vitess-security is private, so its GitHub-hosted runners are smaller; it
-    # uses a CNCF VM the size of the public ubuntu-24.04 runner instead.
-    runs-on: ${{ needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    # check is reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the job then only fails at that step.
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && (needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && 'cncf-ubuntu-24.04-4-16-x86' || 'cncf-c-ubuntu-2-8-x86') || 'ubuntu-24.04' }}
 
     strategy:
       fail-fast: false
