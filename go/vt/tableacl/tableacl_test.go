@@ -19,13 +19,16 @@ package tableacl
 import (
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 
@@ -46,6 +49,30 @@ func (factory *fakeACLFactory) New(entries []string) (acl.ACL, error) {
 func TestInitWithInvalidFilePath(t *testing.T) {
 	tacl := tableACL{factory: &simpleacl.Factory{}}
 	require.Error(t, tacl.init("/invalid_file_path", func() {}), "init should fail for an invalid config file path")
+}
+
+// TestInitWithUnparsableConfig checks that the protobuf and json parse errors
+// are logged as two records, each with its own error.
+func TestInitWithUnparsableConfig(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "tableacl")
+	require.NoError(t, err)
+	_, err = f.WriteString("not a config")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	tacl := tableACL{factory: &simpleacl.Factory{}}
+	require.Error(t, tacl.init(f.Name(), func() {}))
+
+	record := logs.Record(t, "unable to parse tableACL config file as a protobuf file")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, f.Name(), record["path"])
+	assert.Equal(t, "proto: illegal wireType 6", record["error"])
+
+	record = logs.Record(t, "unable to parse tableACL config file as a json file")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, f.Name(), record["path"])
+	assert.Contains(t, record["error"], "invalid value not")
 }
 
 var aclJSON = `{
