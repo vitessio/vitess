@@ -2564,6 +2564,19 @@ func TestValidate(t *testing.T) {
 			alter:     "alter table t add column i int",
 			expectErr: &ApplyDuplicateColumnError{Table: "t", Column: "id"},
 		},
+
+		{
+			name:      "multiple auto_increment columns",
+			from:      "create table t (id int auto_increment, i2 int auto_increment, primary key (id), key (i2))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &MultipleAutoIncrementColumnsError{Table: "t", Count: 2},
+		},
+		{
+			name:      "multiple auto_increment columns via serial",
+			from:      "create table t (id serial, id2 serial)",
+			alter:     "alter table t engine=innodb",
+			expectErr: &MultipleAutoIncrementColumnsError{Table: "t", Count: 2},
+		},
 		{
 			name:  "matching utf8mb3 column and charset",
 			from:  "create table t (id int primary key, t text charset utf8mb3 collate utf8mb3_bin)",
