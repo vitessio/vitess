@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"os"
 	"path"
@@ -33,6 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 var validSQL = []struct {
@@ -4291,6 +4293,18 @@ var validSQL = []struct {
 	input:  "with x as (select 1) (with y as (select 2) values row(1))",
 	output: "with y as (select 2 from dual) values row(1)",
 }}
+
+func TestPartialDDLLogsQueryAndError(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	stmt, err := NewTestParser().Parse("create database d encryption N")
+	require.NoError(t, err)
+	require.False(t, stmt.(DBDDLStatement).IsFullyParsed())
+
+	record := logs.Record(t, "ignoring error parsing DDL")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "create database d encryption N", record["query"])
+	assert.Contains(t, record["error"], "syntax error at position")
+}
 
 func TestValid(t *testing.T) {
 	parser := NewTestParser()

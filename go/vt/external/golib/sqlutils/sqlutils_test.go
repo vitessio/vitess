@@ -18,11 +18,14 @@ package sqlutils
 
 import (
 	"database/sql"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestRowMap(t *testing.T) {
@@ -229,6 +232,20 @@ func TestExecNoPrepare(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExecNoPrepareLogsError(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, err = ExecNoPrepare(db, "insert into no_such_table values (1)")
+	require.Error(t, err)
+
+	record := logs.Record(t, "ExecNoPrepare failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, err.Error(), record["error"])
 }
 
 func TestArgs(t *testing.T) {
