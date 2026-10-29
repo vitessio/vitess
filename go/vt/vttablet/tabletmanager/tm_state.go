@@ -76,12 +76,13 @@ type tmState struct {
 	isOpen          bool
 	isOpening       bool
 	isResharding    bool
-	isInSrvKeyspace bool
-	isShardServing  map[topodatapb.TabletType]bool
-	tabletControls  map[topodatapb.TabletType]bool
-	deniedTables    map[topodatapb.TabletType][]string
-	tablet          *topodatapb.Tablet
-	isPublishing    bool
+	isInSrvKeyspace  bool
+	isShardServing   map[topodatapb.TabletType]bool
+	tabletControls   map[topodatapb.TabletType]bool
+	deniedTables     map[topodatapb.TabletType][]string
+	tablet           *topodatapb.Tablet
+	isPublishing     bool
+	isPrimaryDemoted bool
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -258,9 +259,11 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 
 		ts.tablet.Type = tabletType
 		ts.tablet.PrimaryTermStartTime = primaryTermStartTime
+		ts.isPrimaryDemoted = false
 	} else {
 		ts.tablet.Type = tabletType
 		ts.tablet.PrimaryTermStartTime = nil
+		ts.isPrimaryDemoted = false
 	}
 
 	s := topoproto.TabletTypeLString(tabletType)
@@ -391,6 +394,9 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
 		return "primary tablet with filtered replication on"
+	}
+	if tabletType == topodatapb.TabletType_PRIMARY && ts.isPrimaryDemoted {
+		return "primary demotion in progress"
 	}
 	return ""
 }
@@ -549,4 +555,22 @@ func (ts *tmState) KeyRange() *topodatapb.KeyRange {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
 	return ts.displayState.tablet.KeyRange
+}
+
+func (ts *tmState) SetPrimaryDemoted(demoted bool) {
+	if ts == nil {
+		return
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.isPrimaryDemoted = demoted
+}
+
+func (ts *tmState) IsPrimaryDemoted() bool {
+	if ts == nil {
+		return false
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.isPrimaryDemoted
 }

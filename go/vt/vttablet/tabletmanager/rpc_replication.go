@@ -650,6 +650,19 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		slog.Bool("was_read_only", wasReadOnly),
 	)
 
+	if wasPrimary {
+		tm.tmState.SetPrimaryDemoted(true)
+		defer func() {
+			if finalErr != nil && revertPartialFailure && wasServing {
+				log.Info("reverting query service to serving")
+				tm.tmState.SetPrimaryDemoted(false)
+				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
+					log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
+				}
+			}
+		}()
+	}
+
 	// If we are a primary tablet and not yet read-only, stop accepting new
 	// queries and wait for in-flight queries to complete. If we are not primary,
 	// or if we are already read-only, there's no need to stop the queryservice
@@ -665,14 +678,6 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
-		defer func() {
-			if finalErr != nil && revertPartialFailure && wasServing {
-				log.Info("reverting query service to serving")
-				if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
-					log.Warn(fmt.Sprintf("SetServingType(serving=true) failed during revert: %v", err))
-				}
-			}
-		}()
 	}
 
 	log.Info("checking semi-sync status")
@@ -852,6 +857,7 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 
 	// Update serving graph
 	log.Info("UndoDemotePrimary re-enabling query service")
+	tm.tmState.SetPrimaryDemoted(false)
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 		return vterrors.Wrap(err, "SetServingType(serving=true) failed")
 	}
