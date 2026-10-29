@@ -43,6 +43,7 @@ func TestAnalyzer(t *testing.T) {
 		"lookalikes",
 		"nottracked",
 		"generated",
+		"slogdirect",
 		"vitess.io/vitess/go/vt/log",
 		"vitess.io/vitess/go/vt/logutil",
 	)

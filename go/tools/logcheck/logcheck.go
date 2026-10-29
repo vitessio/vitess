@@ -47,6 +47,7 @@ import (
 const (
 	logPkgPath     = "vitess.io/vitess/go/vt/log"
 	logutilPkgPath = "vitess.io/vitess/go/vt/logutil"
+	slogPkgPath    = "log/slog"
 )
 
 const doc = `check that structured log messages are constants
@@ -68,6 +69,11 @@ logging functions.
 
   - logutil.ThrottledLogger's Infof, Warningf and Errorf must not be called
     or referenced, because they format values into the message.
+
+  - log/slog's logging functions (Debug, Info, Warn, Error, Log, LogAttrs and
+    their Context forms) and the *slog.Logger methods of the same names must
+    not be called or referenced. Log through go/vt/log, whose messages are
+    checked.
 
 Test files and generated files are not checked. That includes files that use
 cgo, since go vet is given the code cmd/cgo generates from them.`
@@ -105,10 +111,19 @@ func skipFile(pass *analysis.Pass, f *ast.File) bool {
 }
 
 // checkIdent is called for every identifier, so the common path is one
-// Uses lookup and a package path comparison.
+// Uses lookup and package path comparisons.
 func checkIdent(pass *analysis.Pass, c inspector.Cursor, id *ast.Ident) {
 	obj := pass.TypesInfo.Uses[id]
-	if obj == nil || obj.Pkg() == nil || !trackedPath(obj.Pkg().Path()) {
+	if obj == nil || obj.Pkg() == nil {
+		return
+	}
+	switch path := obj.Pkg().Path(); {
+	case path == slogPkgPath:
+		if isSlogLogging(obj) {
+			pass.ReportRangef(useNode(c), "log through go/vt/log, not log/slog directly, so the message is checked")
+		}
+		return
+	case !trackedPath(path):
 		return
 	}
 
@@ -202,6 +217,31 @@ func isThrottledPrintf(obj types.Object) bool {
 	}
 	named, ok := types.Unalias(t).(*types.Named)
 	return ok && named.Obj().Name() == "ThrottledLogger"
+}
+
+// isSlogLogging reports whether obj is one of log/slog's logging functions
+// (Debug, Info, Warn, Error, Log, LogAttrs and their Context forms) or the
+// *slog.Logger method of the same name.
+func isSlogLogging(obj types.Object) bool {
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return false
+	}
+	switch strings.TrimSuffix(fn.Name(), "Context") {
+	case "Debug", "Info", "Warn", "Error", "Log", "LogAttrs":
+	default:
+		return false
+	}
+	recv := fn.Signature().Recv()
+	if recv == nil {
+		return true
+	}
+	ptr, ok := recv.Type().(*types.Pointer)
+	if !ok {
+		return false
+	}
+	named, ok := types.Unalias(ptr.Elem()).(*types.Named)
+	return ok && named.Obj().Name() == "Logger"
 }
 
 // messageParam returns the index of the message parameter if obj is a
