@@ -31,6 +31,7 @@ limitations under the License.
 //   - error
 //   - query, filter and expression
 //   - last_pk, row, values, event, transaction, message and panic
+//   - stack, task_result and shard_gtid
 package logcheck
 
 import (
