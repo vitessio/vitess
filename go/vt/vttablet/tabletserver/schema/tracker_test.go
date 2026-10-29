@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -30,9 +31,12 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 )
@@ -323,6 +327,54 @@ func TestTrackerRetriesFromStartupGTIDWhenFirstStreamFailsBeforeGTID(t *testing.
 	require.Equal(t, startupGTID, startPositions[1])
 }
 
+// TestTrackerStreamEndedLogsErrorOnlyWhenSet checks that a stream that ends
+// cleanly is logged without an error.
+func TestTrackerStreamEndedLogsErrorOnlyWhenSet(t *testing.T) {
+	se, db, cancel := getTestSchemaEngine(t, 0)
+	defer cancel()
+
+	db.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_version.*", &sqltypes.Result{})
+	db.AddQueryPattern("insert into _vt.schema_version.*1-3.*", &sqltypes.Result{})
+	db.AddQuery("select pos from _vt.schema_version order by id desc limit 1", &sqltypes.Result{Rows: [][]sqltypes.Value{}})
+	db.AddQuery("SELECT @@GLOBAL.gtid_executed", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"",
+		"varchar"),
+		"7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-3",
+	))
+
+	vs := &fakeVstreamer{
+		done: make(chan struct{}),
+		streamCalls: []fakeVstreamCall{
+			{err: vterrors.New(vtrpcpb.Code_UNAVAILABLE, "stream failed")},
+			{endCleanly: true},
+			{},
+		},
+	}
+
+	cfg := se.env.Config()
+	cfg.TrackSchemaVersions = true
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TrackerStreamEndedTest")
+	tracker := NewTracker(env, vs, se)
+	tracker.wait = func(ctx context.Context, d time.Duration) bool { return waitWithContext(ctx, 0) }
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	tracker.Open()
+	<-vs.done
+	tracker.Close()
+
+	var ended []map[string]any
+	for _, record := range logs.Records(t) {
+		if record["msg"] == "Schema Version Tracker's vstream ended, retrying in 5 seconds..." {
+			ended = append(ended, record)
+		}
+	}
+	require.Len(t, ended, 2)
+	assert.Equal(t, "stream failed", ended[0]["error"])
+	assert.Equal(t, "UNAVAILABLE", ended[0]["error_code"])
+	assert.NotContains(t, ended[1], "error")
+	assert.NotContains(t, ended[1], "error_code")
+}
+
 func TestTrackerRetriesFromLastSavedGTIDAfterSuccessfulFirstDDL(t *testing.T) {
 	se, db, cancel := getTestSchemaEngine(t, 0)
 	defer cancel()
@@ -582,6 +634,9 @@ type fakeVstreamCall struct {
 	events         [][]*binlogdatapb.VEvent
 	err            error
 	errAfterEvents error
+	// endCleanly makes the call return nil after its events instead of
+	// waiting for the context.
+	endCleanly bool
 }
 
 func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
@@ -626,6 +681,9 @@ func (f *fakeVstreamer) Stream(ctx context.Context, startPos string, tablePKs []
 			})
 		}
 		return call.errAfterEvents
+	}
+	if call.endCleanly {
+		return nil
 	}
 	f.doneOnce.Do(func() {
 		close(f.done)

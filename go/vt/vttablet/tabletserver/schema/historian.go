@@ -18,7 +18,7 @@ package schema
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -99,7 +100,7 @@ func (h *historian) Open() error {
 
 	ctx := tabletenv.LocalContext()
 	if err := h.loadFromDBBestEffort(ctx); err != nil {
-		log.Error(fmt.Sprintf("Historian failed to open: %v", err))
+		log.Error("Historian failed to open", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 
@@ -156,7 +157,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		return nil, nil
 	}
 
-	log.Debug(fmt.Sprintf("GetTableForPos called for %s with pos %s", tableName, gtid))
+	log.Debug("GetTableForPos called", slog.String("table", tableName.String()), slog.String("position", gtid))
 	if gtid == "" {
 		return nil, nil
 	}
@@ -169,7 +170,11 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 		t = h.getTableFromHistoryForPos(tableName, pos)
 	}
 	if t != nil {
-		log.Debug(fmt.Sprintf("Returning table %s from history for pos %s, schema %s", tableName, gtid, t))
+		log.Debug("Returning table from history",
+			slog.String("table", tableName.String()),
+			slog.String("position", gtid),
+			slog.String("schema", t.String()),
+		)
 	}
 	return t, nil
 }
@@ -206,7 +211,11 @@ func (h *historian) loadFromDB(ctx context.Context, failOnReadError bool) error 
 		if failOnReadError {
 			return err
 		}
-		log.Info(fmt.Sprintf("Error reading %s.schema_version table: %v, will operate with the latest available schema", sidecar.GetIdentifier(), err))
+		log.Info("Error reading schema_version table, will operate with the latest available schema",
+			slog.String("db_name", sidecar.GetIdentifier()),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		return nil
 	}
 	for _, row := range tableData.Rows {
@@ -257,7 +266,13 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
-	log.V(vl).Info(fmt.Sprintf("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n", id, replication.EncodePosition(pos), ddl, len(sch.Tables), timeUpdated))
+	log.V(vl).Info("Read tracked schema from db",
+		slog.Int64("schema_version_id", id),
+		slog.String("position", replication.EncodePosition(pos)),
+		slog.String("query", ddl),
+		slog.Int("table_count", len(sch.Tables)),
+		slog.Time("time_updated", time.Unix(timeUpdated, 0)),
+	)
 
 	tables := map[string]*binlogdatapb.MinimalTable{}
 	for _, t := range sch.Tables {
@@ -311,11 +326,19 @@ func (h *historian) getTableFromHistoryForPos(tableName sqlparser.IdentifierCS, 
 		return pos.Equal(h.schemas[i].pos) || !pos.AtLeast(h.schemas[i].pos)
 	})
 	if idx == len(h.schemas) {
-		log.Debug(fmt.Sprintf("Requested schema for %s with pos %s is newer than cached high-water mark %s; using latest cached schema", tableName, pos, h.schemas[len(h.schemas)-1].pos))
+		log.Debug("Requested schema is newer than cached high-water mark; using latest cached schema",
+			slog.String("table", tableName.String()),
+			slog.String("position", replication.EncodePosition(pos)),
+			slog.String("latest_cached_position", replication.EncodePosition(h.schemas[len(h.schemas)-1].pos)),
+		)
 		return h.schemas[len(h.schemas)-1].schema[tableName.String()]
 	}
 	if idx == 0 && !pos.Equal(h.schemas[idx].pos) {
-		log.Info(fmt.Sprintf("Schema not found in cache for %s with pos %s because it is older than the oldest cached schema %s", tableName, pos, h.schemas[idx].pos))
+		log.Info("Schema not found in cache because the position is older than the oldest cached schema",
+			slog.String("table", tableName.String()),
+			slog.String("position", replication.EncodePosition(pos)),
+			slog.String("oldest_cached_position", replication.EncodePosition(h.schemas[idx].pos)),
+		)
 		return nil
 	}
 	if pos.Equal(h.schemas[idx].pos) { // exact match to a cache entry
