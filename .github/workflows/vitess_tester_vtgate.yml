@@ -11,7 +11,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Vitess Tester (vtgate)')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
@@ -19,23 +20,15 @@ env:
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
-  build:
-    name: Run endtoend tests on Vitess Tester (vtgate)
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
-
+  # Path filtering runs here, on a small runner (a CNCF container in
+  # vitess-security), so that the job below claims a VM there only when
+  # something relevant changed.
+  changes:
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
-      with:
-        egress-policy: audit
-
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -81,28 +74,65 @@ jobs:
             - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
 
+  build:
+    name: Run endtoend tests on Vitess Tester (vtgate)
+    needs: changes
+    if: ${{ !cancelled() }}
+    # When nothing relevant changed the job still runs (so its required status
+    # check is reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the job then only fails at that step.
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && (needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && 'cncf-ubuntu-24.04-4-16-x86' || 'cncf-c-ubuntu-2-8-x86') || 'ubuntu-24.04' }}
+
+    steps:
+    - name: Fail if the gate job failed
+      # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Check out code
+      if: needs.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       uses: $/.github/actions/setup-go
 
     - name: Set up python
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
 
     - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 8
       uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         sudo apt-get -qq update
@@ -119,7 +149,7 @@ jobs:
         go install github.com/vitessio/vt/go/vt@e43009309f599378504905d4b804460f47822ac5
 
     - name: Setup launchable dependencies
-      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && needs.changes.outputs.end_to_end == 'true' && github.base_ref == 'main'
       run: |
         # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
         pip3 install --user launchable~=1.0 > /dev/null
@@ -131,7 +161,7 @@ jobs:
         launchable record build --name "$GITHUB_RUN_ID" --no-commit-collection --source .
 
     - name: Run cluster endtoend test
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
@@ -158,19 +188,19 @@ jobs:
         done
 
     - name: Record test results in launchable if PR is not a draft
-      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && steps.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && !cancelled()
+      if: github.event_name == 'pull_request' && github.event.pull_request.draft == 'false' && needs.changes.outputs.end_to_end == 'true' && github.base_ref == 'main' && !cancelled()
       run: |
         # send recorded tests to launchable
         launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
     - name: Print test output
-      if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
+      if: needs.changes.outputs.end_to_end == 'true' && !cancelled()
       run: |
         # print test output
         cat report*.xml
 
     - name: Test Summary
-      if: steps.changes.outputs.end_to_end == 'true' && !cancelled()
+      if: needs.changes.outputs.end_to_end == 'true' && !cancelled()
       uses: test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5 # v2.6
       with:
         paths: "report*.xml"

@@ -14,13 +14,14 @@ permissions:
   contents: read
 
 jobs:
-  # Path filtering and changed-package detection run here, on a GitHub-hosted
-  # runner, so that the coverage job below (on a large runner) is not started
-  # at all when there is nothing to measure. Code Coverage is not a required
-  # check, so skipping it at the job level reports nothing misleading.
+  # Path filtering and changed-package detection run here, on a small runner (a
+  # CNCF container in vitess-security), so that the coverage job below (on a
+  # large runner) is not started at all when there is nothing to measure. Code
+  # Coverage is not a required check, so skipping it at the job level reports
+  # nothing misleading.
   changes:
     if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 10
     outputs:
       can_upload: ${{ steps.upload.outputs.can_upload }}
@@ -28,7 +29,8 @@ jobs:
       packages: ${{ steps.packages.outputs.packages }}
     steps:
     # Codecov accepts uploads without a token only from public repositories, so a private repository without the
-    # CODECOV_TOKEN secret, such as vitess-security, skips the coverage job instead of failing its upload.
+    # CODECOV_TOKEN secret, such as vitess-security, skips the coverage job instead of failing its upload. It also
+    # skips the checkout and path filter below, so the steps that detect changed packages are skipped too.
     - name: Check whether the coverage report can be uploaded
       id: upload
       env:
@@ -36,6 +38,7 @@ jobs:
       run: echo "can_upload=$CAN_UPLOAD" >> "$GITHUB_OUTPUT"
 
     - name: Check out code
+      if: steps.upload.outputs.can_upload == 'true'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         # Full history is needed to diff the pull request's base and head.
@@ -57,11 +60,11 @@ jobs:
       # With token: '', paths-filter diffs against `base` on pull_request
       # events too (see its README); action.yml's input description is stale.
       id: merge-base
-      if: github.event_name == 'pull_request'
+      if: steps.upload.outputs.can_upload == 'true' && github.event_name == 'pull_request'
       run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
 
     - name: Check for changes in files relevant to code coverage
-      if: steps.mode.outputs.is_full_run != 'true'
+      if: steps.upload.outputs.can_upload == 'true' && steps.mode.outputs.is_full_run != 'true'
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
@@ -133,7 +136,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.can_upload == 'true' && (needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != '')
     name: Code Coverage
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-8-32-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-8-32-x86' || 'ubuntu-24.04' }}
 
     steps:
     - name: Harden the runner (Audit all outbound calls)

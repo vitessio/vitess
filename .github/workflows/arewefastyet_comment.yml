@@ -14,7 +14,8 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event.label.name == 'Benchmark me'
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: (github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess') && github.event.label.name == 'Benchmark me'
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
