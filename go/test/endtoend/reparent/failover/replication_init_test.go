@@ -209,16 +209,18 @@ func TestRestoreDuringERS(t *testing.T) {
 		r1, r3                *cluster.Vttablet
 		contenderCtx, release = context.WithCancel(t.Context())
 	)
-	t.Cleanup(func() {
-		release()
-		<-contenderDone
-	})
+	t.Cleanup(release)
 	holdERS(t, func(t *testing.T, ci *cluster.LocalProcessCluster) {
 		out, err := vtctldclient(t.Context(), ci, "Backup", ci.Keyspaces[0].Shards[0].Vttablets[3].Alias)
 		require.NoError(t, err, out)
 	}, func(t *testing.T, ci *cluster.LocalProcessCluster, tab *cluster.Vttablet, deadline time.Time) {
 		r1, r3 = tab, ci.Keyspaces[0].Shards[0].Vttablets[2]
 		ts := ci.TopoProcess.Server
+		// Registered after holdERS's cleanups, so it runs before them.
+		t.Cleanup(func() {
+			release()
+			<-contenderDone
+		})
 		go func() {
 			defer close(contenderDone)
 			ctx, cancel := context.WithTimeout(contenderCtx, 2*time.Minute)
