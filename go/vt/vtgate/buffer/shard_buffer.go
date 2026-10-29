@@ -19,6 +19,7 @@ package buffer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
@@ -193,14 +194,19 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 		lastBufferingStopped := now.Sub(sb.lastEnd)
 		if !sb.lastEnd.IsZero() && lastBufferingStopped < minTimeBetweenFailovers {
 			sb.mu.Unlock()
-			msg := "NOT starting buffering"
-			if sb.mode == bufferModeDryRun {
-				msg = "Dry-run: Would NOT have started buffering"
+			attrs := []slog.Attr{
+				slog.String("keyspace", keyspace),
+				slog.String("shard", shard),
+				slog.Duration("time_since_last_failover", lastBufferingStopped),
+				slog.Duration("buffer_min_time_between_failovers", minTimeBetweenFailovers),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
 			}
-
-			sb.logTooRecent.Infof("%v for shard: %s because the last failover which triggered buffering is too recent (%v < %v)."+
-				" (A failover was detected by this seen error: %v.)",
-				msg, topoproto.KeyspaceShardString(keyspace, shard), lastBufferingStopped, minTimeBetweenFailovers, err)
+			if sb.mode == bufferModeDryRun {
+				sb.logTooRecent.Info("Dry-run: Would NOT have started buffering because the last failover which triggered buffering is too recent (a failover was detected by the seen error)", attrs...)
+			} else {
+				sb.logTooRecent.Info("NOT starting buffering because the last failover which triggered buffering is too recent (a failover was detected by the seen error)", attrs...)
+			}
 
 			statsKeyWithReason := append(sb.statsKey, string(skippedLastFailoverTooRecent))
 			requestsSkipped.Add(statsKeyWithReason, 1)
@@ -215,14 +221,19 @@ func (sb *shardBuffer) waitForFailoverEnd(ctx context.Context, keyspace, shard s
 		lastReparentAgo := now.Sub(sb.lastReparent)
 		if !sb.lastReparent.IsZero() && lastReparentAgo < minTimeBetweenFailovers {
 			sb.mu.Unlock()
-			msg := "NOT starting buffering"
-			if sb.mode == bufferModeDryRun {
-				msg = "Dry-run: Would NOT have started buffering"
+			attrs := []slog.Attr{
+				slog.String("keyspace", keyspace),
+				slog.String("shard", shard),
+				slog.Duration("time_since_last_reparent", lastReparentAgo),
+				slog.Duration("buffer_min_time_between_failovers", minTimeBetweenFailovers),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
 			}
-
-			sb.logTooRecent.Infof("%v for shard: %s because the last reparent is too recent (%v < %v)."+
-				" (A failover was detected by this seen error: %v.)",
-				msg, topoproto.KeyspaceShardString(keyspace, shard), lastReparentAgo, minTimeBetweenFailovers, err)
+			if sb.mode == bufferModeDryRun {
+				sb.logTooRecent.Info("Dry-run: Would NOT have started buffering because the last reparent is too recent (a failover was detected by the seen error)", attrs...)
+			} else {
+				sb.logTooRecent.Info("NOT starting buffering because the last reparent is too recent (a failover was detected by the seen error)", attrs...)
+			}
 
 			statsKeyWithReason := append(sb.statsKey, string(skippedLastReparentTooRecent))
 			requestsSkipped.Add(statsKeyWithReason, 1)
@@ -313,17 +324,20 @@ func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.
 
 	sb.timeoutThread = newTimeoutThread(sb, sb.buf.config.MaxFailoverDuration)
 	sb.timeoutThread.start()
-	msg := "Starting buffering"
-	if sb.mode == bufferModeDryRun {
-		msg = "Dry-run: Would have started buffering"
-	}
 	starts.Add(sb.statsKey, 1)
-	log.Info(fmt.Sprintf("%v for shard: %s (window: %v, size: %v, max failover duration: %v) (A failover was detected by this seen error: %v.)", msg,
-		topoproto.KeyspaceShardString(sb.keyspace, sb.shard),
-		sb.buf.config.Window,
-		sb.buf.config.Size,
-		sb.buf.config.MaxFailoverDuration,
-		errorsanitizer.NormalizeError(err.Error())))
+	attrs := []slog.Attr{
+		slog.String("keyspace", sb.keyspace),
+		slog.String("shard", sb.shard),
+		slog.Duration("buffer_window", sb.buf.config.Window),
+		slog.Int("buffer_size", sb.buf.config.Size),
+		slog.Duration("buffer_max_failover_duration", sb.buf.config.MaxFailoverDuration),
+		slog.String("error", errorsanitizer.NormalizeError(err.Error())),
+	}
+	if sb.mode == bufferModeDryRun {
+		log.Info("Dry-run: Would have started buffering (a failover was detected by the seen error)", attrs...)
+	} else {
+		log.Info("Starting buffering (a failover was detected by the seen error)", attrs...)
+	}
 	return true
 }
 
@@ -334,7 +348,12 @@ func (sb *shardBuffer) startBufferingLocked(ctx context.Context, kev *discovery.
 // that "sb.mu" must be locked before calling the method.
 func (sb *shardBuffer) logErrorIfStateNotLocked(state bufferState) {
 	if current := bufferState(sb.state.Load()); current != state {
-		log.Error(fmt.Sprintf("BUG: Buffer state should be '%v' and not '%v'. shard=%s/%s Stacktrace:\n%s", state, current, sb.keyspace, sb.shard, debug.Stack()))
+		log.Error("BUG: Buffer state is not the expected state",
+			slog.String("expected_state", state.String()),
+			slog.String("state", current.String()),
+			slog.String("keyspace", sb.keyspace),
+			slog.String("shard", sb.shard),
+			slog.String("stack", string(debug.Stack())))
 	}
 }
 
@@ -518,7 +537,11 @@ func (sb *shardBuffer) recordKeyspaceEvent(alias *topodatapb.TabletAlias, stillS
 	sb.mu.Lock()
 	defer sb.mu.Unlock()
 
-	log.V(2).Info(fmt.Sprintf("disruption in shard %s/%s resolved (serving: %v), movetable state %#v", sb.keyspace, sb.shard, stillServing, keyspaceEvent.MoveTablesState))
+	log.V(2).Info("disruption in shard resolved",
+		slog.String("keyspace", sb.keyspace),
+		slog.String("shard", sb.shard),
+		slog.Bool("serving", stillServing),
+		slog.String("move_tables_state", fmt.Sprintf("%#v", keyspaceEvent.MoveTablesState)))
 
 	if !topoproto.TabletAliasEqual(alias, sb.currentPrimary) {
 		if sb.currentPrimary != nil {
@@ -585,11 +608,18 @@ func (sb *shardBuffer) stopBufferingLocked(reason stopReason, details string) {
 	// will not work on obsolete data.
 	sb.queue = nil
 
-	msg := "Stopping buffering"
-	if sb.mode == bufferModeDryRun {
-		msg = "Dry-run: Would have stopped buffering"
+	attrs := []slog.Attr{
+		slog.String("keyspace", sb.keyspace),
+		slog.String("shard", sb.shard),
+		slog.Duration("duration", d),
+		slog.String("reason", details),
+		slog.Int("request_count", len(q)),
 	}
-	log.Info(fmt.Sprintf("%v for shard: %s after: %.1f seconds due to: %v. Draining %d buffered requests now.", msg, topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d.Seconds(), details, len(q)))
+	if sb.mode == bufferModeDryRun {
+		log.Info("Dry-run: Would have stopped buffering. Draining buffered requests now.", attrs...)
+	} else {
+		log.Info("Stopping buffering. Draining buffered requests now.", attrs...)
+	}
 
 	var clientEntryError error
 	if reason == stopShardMissing {
@@ -648,7 +678,11 @@ func (sb *shardBuffer) drain(q []*entry, err error) {
 	wg.Wait()
 
 	d := sb.timeNow().Sub(start)
-	log.Info(fmt.Sprintf("Draining finished for shard: %s Took: %v for: %d requests.", topoproto.KeyspaceShardString(sb.keyspace, sb.shard), d, len(q)))
+	log.Info("Draining finished",
+		slog.String("keyspace", sb.keyspace),
+		slog.String("shard", sb.shard),
+		slog.Duration("duration", d),
+		slog.Int("request_count", len(q)))
 	requestsDrained.Add(sb.statsKey, int64(len(q)))
 
 	// Draining is done. Change state from "draining" to "idle".

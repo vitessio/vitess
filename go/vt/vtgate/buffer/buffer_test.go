@@ -19,6 +19,7 @@ package buffer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -828,6 +830,132 @@ func TestParallelRangeIndex(t *testing.T) {
 			}
 			wg.Wait()
 			assert.ElementsMatch(t, got, tc.calls, "must call passed function with matching indexes")
+		})
+	}
+}
+
+func TestBufferingLogs(t *testing.T) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		resetVariables()
+		logs := logtest.Capture(t, slog.LevelInfo)
+		now := time.Now()
+		cfg := NewDefaultConfig()
+		cfg.Enabled = true
+		cfg.now = func() time.Time { return now }
+		b := New(cfg)
+		fail(b, oldPrimary, keyspace, shard, now)
+
+		// NormalizeError drops everything from ", Sql:" on.
+		sqlErr := vterrors.New(vtrpcpb.Code_CLUSTER_EVENT, failoverErr.Error()+", Sql: \"select 'buffer-sentinel'\"")
+		// issueRequest buffers failoverErr whatever error it is given.
+		stopped := make(chan error)
+		go func() {
+			retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, sqlErr)
+			if err != nil {
+				stopped <- err
+			}
+			if retryDone != nil {
+				retryDone()
+			}
+			close(stopped)
+		}()
+		require.NoError(t, waitForRequestsInFlight(b, 1))
+		record := logs.Record(t, "Starting buffering (a failover was detected by the seen error)")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, keyspace, record["keyspace"])
+		assert.Equal(t, shard, record["shard"])
+		assert.EqualValues(t, cfg.Size, record["buffer_size"])
+		assert.EqualValues(t, cfg.Window, record["buffer_window"])
+		assert.Equal(t, failoverErr.Error(), record["error"])
+
+		now = now.Add(1 * time.Second)
+		fail(b, newPrimary, keyspace, shard, now)
+		require.NoError(t, <-stopped)
+		require.NoError(t, waitForState(b, stateIdle))
+		record = logs.Record(t, "Stopping buffering. Draining buffered requests now.")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, stopFailoverEndDetectedMessage, record["reason"])
+		assert.EqualValues(t, 1, record["request_count"])
+		record = logs.Record(t, "Draining finished")
+		assert.Equal(t, "INFO", record["level"])
+		assert.EqualValues(t, 1, record["request_count"])
+
+		_, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, sqlErr)
+		require.NoError(t, err)
+		record = logs.Record(t, "NOT starting buffering because the last failover which triggered buffering is too recent (a failover was detected by the seen error)")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, "FailoverTooRecent-"+topoproto.KeyspaceShardString(keyspace, shard), record["logger"])
+		assert.Equal(t, shard, record["shard"])
+		assert.EqualValues(t, cfg.MinTimeBetweenFailovers, record["buffer_min_time_between_failovers"])
+		assert.Equal(t, "CLUSTER_EVENT", record["error_code"])
+
+		for _, record := range logs.Records(t) {
+			assert.NotContains(t, record["msg"], "sentinel")
+		}
+	})
+}
+
+func TestBufferingLogsDryRun(t *testing.T) {
+	testAllImplementations(t, func(t *testing.T, fail failover) {
+		resetVariables()
+		logs := logtest.Capture(t, slog.LevelInfo)
+		now := time.Now()
+		cfg := NewDefaultConfig()
+		cfg.DryRun = true
+		cfg.now = func() time.Time { return now }
+		b := New(cfg)
+		fail(b, oldPrimary, keyspace, shard, now)
+
+		_, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+		require.NoError(t, err)
+		require.NoError(t, waitForState(b, stateBuffering))
+		record := logs.Record(t, "Dry-run: Would have started buffering (a failover was detected by the seen error)")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, shard, record["shard"])
+
+		now = now.Add(1 * time.Second)
+		fail(b, newPrimary, keyspace, shard, now)
+		require.NoError(t, waitForState(b, stateIdle))
+		record = logs.Record(t, "Dry-run: Would have stopped buffering. Draining buffered requests now.")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, shard, record["shard"])
+
+		_, err = b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+		require.NoError(t, err)
+		record = logs.Record(t, "Dry-run: Would NOT have started buffering because the last failover which triggered buffering is too recent (a failover was detected by the seen error)")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, shard, record["shard"])
+	})
+}
+
+func TestBufferingLogsLastReparentTooRecent(t *testing.T) {
+	for _, dryRun := range []bool{false, true} {
+		t.Run(fmt.Sprintf("dryRun=%v", dryRun), func(t *testing.T) {
+			testAllImplementations(t, func(t *testing.T, fail failover) {
+				resetVariables()
+				logs := logtest.Capture(t, slog.LevelInfo)
+				now := time.Now()
+				cfg := NewDefaultConfig()
+				cfg.Enabled = !dryRun
+				cfg.DryRun = dryRun
+				cfg.now = func() time.Time { return now }
+				b := New(cfg)
+				fail(b, oldPrimary, keyspace, shard, now)
+				now = now.Add(1 * time.Second)
+				fail(b, newPrimary, keyspace, shard, now)
+
+				_, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, failoverErr)
+				require.NoError(t, err)
+				msg := "NOT starting buffering because the last reparent is too recent (a failover was detected by the seen error)"
+				if dryRun {
+					msg = "Dry-run: Would NOT have started buffering because the last reparent is too recent (a failover was detected by the seen error)"
+				}
+				record := logs.Record(t, msg)
+				assert.Equal(t, "INFO", record["level"])
+				assert.Equal(t, "FailoverTooRecent-"+topoproto.KeyspaceShardString(keyspace, shard), record["logger"])
+				assert.Contains(t, record, "time_since_last_reparent")
+				assert.Equal(t, failoverErr.Error(), record["error"])
+			})
 		})
 	}
 }
