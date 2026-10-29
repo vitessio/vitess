@@ -207,7 +207,12 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 	}
 
 	if cmd.ProcessState != nil {
-		result.ExitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
+		status := cmd.ProcessState.Sys().(syscall.WaitStatus)
+		result.ExitStatus = status.ExitStatus()
+		if status.Signaled() {
+			// The exit status of a signaled hook is -1, which is HOOK_DOES_NOT_EXIST.
+			result.ExitStatus = HOOK_GENERIC_ERROR
+		}
 	} else {
 		result.ExitStatus = HOOK_CANNOT_GET_EXIT_STATUS
 	}
