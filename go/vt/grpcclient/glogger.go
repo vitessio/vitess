@@ -18,6 +18,7 @@ package grpcclient
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"google.golang.org/grpc/grpclog"
@@ -40,41 +41,41 @@ func (g *glogger) Infoln(args ...any)               {}
 func (g *glogger) Infof(format string, args ...any) {}
 
 func (g *glogger) Warning(args ...any) {
-	log.WarnDepth(2, fmt.Sprint(args...))
+	log.WarnDepth(2, "gRPC warning", slog.String("grpc_message", fmt.Sprint(args...)))
 }
 
 func (g *glogger) Warningln(args ...any) {
-	log.WarnDepth(2, fmt.Sprint(args...))
+	log.WarnDepth(2, "gRPC warning", slog.String("grpc_message", fmt.Sprint(args...)))
 }
 
 func (g *glogger) Warningf(format string, args ...any) {
-	log.WarnDepth(2, fmt.Sprintf(format, args...))
+	log.WarnDepth(2, "gRPC warning", slog.String("grpc_message", fmt.Sprintf(format, args...)))
 }
 
 func (g *glogger) Error(args ...any) {
-	log.ErrorDepth(2, fmt.Sprint(args...))
+	log.ErrorDepth(2, "gRPC error", slog.String("grpc_message", fmt.Sprint(args...)))
 }
 
 func (g *glogger) Errorln(args ...any) {
-	log.ErrorDepth(2, fmt.Sprint(args...))
+	log.ErrorDepth(2, "gRPC error", slog.String("grpc_message", fmt.Sprint(args...)))
 }
 
 func (g *glogger) Errorf(format string, args ...any) {
-	log.ErrorDepth(2, fmt.Sprintf(format, args...))
+	log.ErrorDepth(2, "gRPC error", slog.String("grpc_message", fmt.Sprintf(format, args...)))
 }
 
 func (g *glogger) Fatal(args ...any) {
-	log.ErrorDepth(2, fmt.Sprint(args...))
+	log.ErrorDepth(2, "gRPC fatal error", slog.String("grpc_message", fmt.Sprint(args...)))
 	os.Exit(1)
 }
 
 func (g *glogger) Fatalln(args ...any) {
-	log.ErrorDepth(2, fmt.Sprint(args...))
+	log.ErrorDepth(2, "gRPC fatal error", slog.String("grpc_message", fmt.Sprint(args...)))
 	os.Exit(1)
 }
 
 func (g *glogger) Fatalf(format string, args ...any) {
-	log.ErrorDepth(2, fmt.Sprintf(format, args...))
+	log.ErrorDepth(2, "gRPC fatal error", slog.String("grpc_message", fmt.Sprintf(format, args...)))
 	os.Exit(1)
 }
 
