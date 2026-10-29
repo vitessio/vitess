@@ -21,22 +21,18 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestLogErrorsWhenClosing(t *testing.T) {
-	original := log.Error
-	t.Cleanup(func() { log.Error = original })
-
-	var logMessage string
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logMessage = msg
-	}
+	logs := logtest.Capture(t, slog.LevelInfo)
 	logFunc := LogErrorsWhenClosing(&fakeCloser{})
 	logFunc()
-	require.Contains(t, logMessage, "test error")
+	record := logs.Record(t, "Failed to close tracer")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "test error", record["error"])
 }
 
 type fakeCloser struct{}
