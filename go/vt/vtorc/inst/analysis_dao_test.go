@@ -17,6 +17,7 @@ limitations under the License.
 package inst
 
 import (
+	"log/slog"
 	"testing"
 	"time"
 
@@ -25,7 +26,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -1943,4 +1947,126 @@ func TestDeclaresAfter(t *testing.T) {
 			assert.Equal(t, tt.expected, declaresAfter(tt.shardWideProblem, tt.code))
 		})
 	}
+}
+
+// TestGetDetectionAnalysisLogs checks the line logged for a tablet whose last
+// check is not valid: each value the old message listed is its own attribute.
+func TestGetDetectionAnalysisLogs(t *testing.T) {
+	// GetDetectionAnalysis reads the primary health state from the backend
+	// in the background, so create the backend first.
+	db.ClearVTOrcDatabase()
+	resetPrimaryHealthState()
+	oldDB := db.Db
+	t.Cleanup(func() {
+		db.Db = oldDB
+	})
+
+	// The keyspace keeps the line's throttling key apart from other tests',
+	// and the UID apart from this test's earlier runs.
+	alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 100 + newRunUIDOffset()}
+	info := &test.InfoForRecoveryAnalysis{
+		TabletInfo: &topodatapb.Tablet{
+			Alias:         alias,
+			Hostname:      "localhost",
+			Keyspace:      "logks",
+			Shard:         "0",
+			Type:          topodatapb.TabletType_REPLICA,
+			MysqlHostname: "localhost",
+			MysqlPort:     6709,
+		},
+		DurabilityPolicy:              policy.DurabilityNone,
+		LastCheckValid:                0,
+		CountReplicas:                 2,
+		CountValidReplicas:            3,
+		CountValidReplicatingReplicas: 4,
+		CountLaggingReplicas:          5,
+		CountDelayedReplicas:          6,
+	}
+	info.SetValuesFromTabletInfo()
+	db.Db = test.NewTestDB([][]sqlutils.RowMap{{info.ConvertToRowMap()}})
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, err := GetDetectionAnalysis("", "", &DetectionAnalysisHints{})
+	require.NoError(t, err)
+
+	record := logs.Record(t, "analysis: tablet's last check is not valid")
+	delete(record, "time")
+	assert.Equal(t, map[string]any{
+		"level":                            "INFO",
+		"msg":                              "analysis: tablet's last check is not valid",
+		"tablet":                           topoproto.TabletAliasString(alias),
+		"keyspace":                         "logks",
+		"shard":                            "0",
+		"is_primary":                       false,
+		"primary_health_unhealthy":         false,
+		"last_check_valid":                 false,
+		"last_check_partial_success":       false,
+		"count_replicas":                   float64(2),
+		"count_valid_replicas":             float64(3),
+		"count_valid_replicating_replicas": float64(4),
+		"count_lagging_replicas":           float64(5),
+		"count_delayed_replicas":           float64(6),
+	}, record)
+}
+
+// TestGetDetectionAnalysisLogsUnreadableTablet runs the analysis query on the
+// backend over a primary whose tablet record can't be parsed, and its
+// replica. Each record that can't be parsed is logged as is, with the alias
+// of the tablet the row is for.
+func TestGetDetectionAnalysisLogsUnreadableTablet(t *testing.T) {
+	db.ClearVTOrcDatabase()
+	t.Cleanup(db.ClearVTOrcDatabase)
+	resetPrimaryHealthState()
+
+	keyspaceInfo := &topo.KeyspaceInfo{Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}}
+	keyspaceInfo.SetKeyspaceName("ks")
+	require.NoError(t, SaveKeyspace(keyspaceInfo))
+	require.NoError(t, SaveShard(topo.NewShardInfo("ks", "0", &topodatapb.Shard{}, nil)))
+	primary := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		MysqlHostname: "primary-host",
+		MysqlPort:     3306,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_PRIMARY,
+	}
+	replica := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+		MysqlHostname: "replica-host",
+		MysqlPort:     3306,
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+	}
+	require.NoError(t, SaveTablet(primary))
+	require.NoError(t, SaveTablet(replica))
+	// The replica's instance replicates from the primary, which makes the
+	// primary's record the replica row's primary_tablet_info.
+	require.NoError(t, WriteInstance(&Instance{
+		InstanceAlias: replica.Alias,
+		Hostname:      "replica-host",
+		Port:          3306,
+		SourceHost:    "primary-host",
+		SourcePort:    3306,
+	}, true, nil))
+	_, err := db.ExecVTOrc(`UPDATE vitess_tablet SET info = 'alias:{' WHERE alias = 'zone1-0000000100'`)
+	require.NoError(t, err)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, err = GetDetectionAnalysis("ks", "0", &DetectionAnalysisHints{})
+	require.NoError(t, err)
+
+	record := logs.Record(t, "could not read tablet")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "zone1-0000000100", record["tablet"])
+	assert.Equal(t, "ks", record["keyspace"])
+	assert.Equal(t, "0", record["shard"])
+	assert.Equal(t, "alias:{", record["tablet_info"])
+	assert.NotEmpty(t, record["error"])
+
+	record = logs.Record(t, "could not read primary tablet")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "zone1-0000000101", record["tablet"])
+	assert.Equal(t, "alias:{", record["primary_tablet_info"])
+	assert.NotEmpty(t, record["error"])
 }
