@@ -846,7 +846,7 @@ Two new flags control chunking behavior:
 
 A third flag controls how chunks are written to disk during restores:
 
-- `--builtinbackup-restore-write-mode` (default `buffered`): `buffered` writes chunks through the page cache. `direct` writes them with `O_DIRECT` (Linux only), bypassing the page cache, and preallocates chunked files so that chunks of the same file are written in parallel. Chunks that can't be written with `O_DIRECT`, for example on a filesystem that doesn't support it, fall back to buffered writes.
+- `--builtinbackup-restore-write-mode` (default `buffered`): `buffered` writes chunks through the page cache. `direct` writes them with `O_DIRECT` (Linux only), bypassing the page cache, and preallocates chunked files so that chunks of the same file are written in parallel. Chunks that can't be written with `O_DIRECT`, for example on a filesystem that doesn't support it, fall back to buffered writes. Direct mode only applies to files that were chunked when the backup was taken, i.e. backups taken with `--builtinbackup-file-chunk-threshold` greater than `0`, and only to their files above that threshold. All other files are still written buffered.
 
 **Compatibility note:** Backups created with chunking enabled are **not restorable by older Vitess versions** that do not understand the `Chunks` field in the backup MANIFEST. Non-chunked backups (the default) remain fully compatible with older versions.
 
