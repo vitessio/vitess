@@ -78,7 +78,7 @@ var clientFactories = make(map[string]ClientFactory)
 // RegisterClientFactory adds a new factory. Call during init().
 func RegisterClientFactory(name string, factory ClientFactory) {
 	if _, ok := clientFactories[name]; ok {
-		log.Error("ClientFactory already exists", slog.String("name", name))
+		log.Error("ClientFactory already exists", slog.String("protocol", name))
 		os.Exit(1)
 	}
 	clientFactories[name] = factory

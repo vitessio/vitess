@@ -859,7 +859,7 @@ func SetProtocol(name string, protocol string) (reset func()) {
 	}
 
 	if err := pflag.Set(binlogPlayerProtocolFlagName, protocol); err != nil {
-		log.Error("failed to set flag", slog.String("flag", binlogPlayerProtocolFlagName), slog.String("value", protocol), slog.Any("error", err))
+		log.Error("failed to set flag", slog.String("flag", binlogPlayerProtocolFlagName), slog.String("protocol", protocol), slog.Any("error", err))
 		reset = func() {}
 	}
 
