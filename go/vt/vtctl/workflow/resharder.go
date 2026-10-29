@@ -88,7 +88,11 @@ func (s *Server) buildResharder(ctx context.Context, req *vtctldata.ReshardCreat
 		tabletTypes:     tabletTypes,
 		workflowOptions: req.GetWorkflowOptions(),
 	}
+	// Skip repeated shards: each repeat would add another set of streams.
 	for _, shard := range sources {
+		if _, ok := rs.sourcePrimaries[shard]; ok {
+			continue
+		}
 		si, err := s.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
@@ -104,6 +108,9 @@ func (s *Server) buildResharder(ctx context.Context, req *vtctldata.ReshardCreat
 		rs.sourcePrimaries[si.ShardName()] = primary
 	}
 	for _, shard := range targets {
+		if _, ok := rs.targetPrimaries[shard]; ok {
+			continue
+		}
 		si, err := s.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
