@@ -20,11 +20,11 @@ env:
 
 jobs:
 
-  # Path filtering runs once here, on a GitHub-hosted runner, so that the
-  # job below (on a large runner) is not started at all when nothing relevant
-  # changed.
+  # Path filtering runs once here, on a small runner (a CNCF container in
+  # vitess-security), so that the job below (on a large runner) is not started
+  # at all when nothing relevant changed.
   changes:
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       examples: ${{ steps.changes.outputs.examples }}
@@ -80,17 +80,17 @@ jobs:
     if: ${{ !cancelled() }}
     name: Region Sharding example using ${{ matrix.topo }} on Ubuntu
     # When nothing relevant changed the legs still run (so their required
-    # status checks are reported), but on a GitHub-hosted runner with every
-    # step below skipped. The 'Skip CI' label also gets the small runner, since
-    # the legs then only fail at that step.
-    runs-on: ${{ needs.changes.outputs.examples == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || 'ubuntu-24.04') || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
+    # status checks are reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the legs then only fail at that step.
+    runs-on: ${{ needs.changes.outputs.examples == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || 'ubuntu-24.04') || github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     strategy:
       matrix:
         topo: [etcd]
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
       with:
         egress-policy: audit
 

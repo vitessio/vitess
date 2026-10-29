@@ -125,7 +125,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 
 	targetKeyspace := td.wd.ct.vde.thisTablet.Keyspace
 	lockName := fmt.Sprintf("%s/%s", targetKeyspace, td.wd.ct.workflow)
-	log.Info(fmt.Sprintf("Locking workflow %s for VDiff %s", lockName, td.wd.ct.uuid))
+	log.Info("Locking workflow for VDiff", td.wd.ct.logAttrs(slog.String("lock_name", lockName))...)
 	// We attempt to get the lock until we can, using an exponential backoff.
 	var (
 		vctx          context.Context
@@ -140,7 +140,13 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		if lockErr == nil {
 			break
 		}
-		log.Warn(fmt.Sprintf("Locking workflow %s for VDiff %s initialization (stream ID: %d) failed, will wait %v before retrying: %v", lockName, td.wd.ct.uuid, td.wd.ct.id, retryDelay, lockErr))
+		log.Warn("Locking workflow for VDiff initialization failed, will wait before retrying", td.wd.ct.logAttrs(
+			slog.String("lock_name", lockName),
+			slog.Int64("vdiff_id", td.wd.ct.id),
+			slog.Duration("retry_delay", retryDelay),
+			slog.Any("error", lockErr),
+			slog.String("error_code", vterrors.Code(lockErr).String()),
+		)...)
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "engine is shutting down")
@@ -163,7 +169,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unlocking workflow %s for vdiff %s failed: %v", lockName, td.wd.ct.uuid, err))
+			log.Error("Unlocking workflow for vdiff failed", td.wd.ct.logAttrs(slog.String("lock_name", lockName), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 		}
 	}()
 
@@ -173,11 +179,11 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		// We use a new context as we want to reset the state even
 		// when the parent context has timed out or been canceled.
-		log.Info(fmt.Sprintf("Restarting the %q VReplication workflow for vdiff %s on target tablets in keyspace %q", td.wd.ct.workflow, td.wd.ct.uuid, targetKeyspace))
+		log.Info("Restarting the VReplication workflow for vdiff on target tablets", td.wd.ct.logAttrs(slog.String("keyspace", targetKeyspace))...)
 		restartCtx, restartCancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout)
 		defer restartCancel()
 		if err := td.restartTargetVReplicationStreams(restartCtx); err != nil {
-			log.Error(fmt.Sprintf("error restarting target streams for vdiff %s: %v", td.wd.ct.uuid, err))
+			log.Error("error restarting target streams for vdiff", td.wd.ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 		}
 	}()
 
@@ -203,7 +209,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 }
 
 func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
-	log.Info("stopTargetVReplicationStreams for vdiff " + td.wd.ct.uuid)
+	log.Info("stopTargetVReplicationStreams for vdiff", td.wd.ct.logAttrs()...)
 	ct := td.wd.ct
 	query := "update _vt.vreplication set state = 'Stopped', message='for vdiff' " + ct.workflowFilter
 	if _, err := ct.vde.vre.Exec(query); err != nil {
@@ -357,7 +363,7 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 			return err
 		}
 		if err := ct.vde.vre.WaitForPos(waitCtx, source.vrID, source.snapshotPosition); err != nil {
-			log.Error(fmt.Sprintf("WaitForPosition for vdiff %s error: %d: %s", td.wd.ct.uuid, source.vrID, err))
+			log.Error("WaitForPosition for vdiff error", td.wd.ct.logAttrs(slog.Int("stream_id", int(source.vrID)), slog.Any("error", err))...)
 			return vterrors.Wrapf(err, "WaitForPosition for stream id %d", source.vrID)
 		}
 		return nil
@@ -375,7 +381,11 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, td.lastTargetPK, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
-		log.Error(fmt.Sprintf("VDiff %s streaming error on target tablet %s: %v", td.wd.ct.uuid, topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias), ct.targetShardStreamer.err))
+		log.Error("VDiff streaming error on target tablet", td.wd.ct.logAttrs(
+			slog.String("tablet", topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias)),
+			slog.Any("error", ct.targetShardStreamer.err),
+			slog.String("error_code", vterrors.Code(ct.targetShardStreamer.err).String()),
+		)...)
 		return ct.targetShardStreamer.err
 	}
 	ct.targetShardStreamer.snapshotPosition = gtid
@@ -391,7 +401,11 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 
 		gtid, ok := <-gtidch
 		if !ok {
-			log.Error(fmt.Sprintf("VDiff %s streaming error on source tablet %s: %v", td.wd.ct.uuid, topoproto.TabletAliasString(source.tablet.Alias), source.err))
+			log.Error("VDiff streaming error on source tablet", td.wd.ct.logAttrs(
+				slog.String("tablet", topoproto.TabletAliasString(source.tablet.Alias)),
+				slog.Any("error", source.err),
+				slog.String("error_code", vterrors.Code(source.err).String()),
+			)...)
 			return source.err
 		}
 		source.snapshotPosition = gtid
@@ -407,7 +421,7 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 	ct := td.wd.ct
 	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
 		encodeString(ct.vde.dbName), encodeString(ct.workflow))
-	log.Info(fmt.Sprintf("Restarting the %q VReplication workflow for vdiff %s using %q", ct.workflow, td.wd.ct.uuid, query))
+	log.Info("Restarting the VReplication workflow for vdiff", td.wd.ct.logAttrs(slog.String("query", query))...)
 	var err error
 	// Let's retry a few times if we get a retryable error.
 	for i := 1; i <= 3; i++ {
@@ -415,19 +429,23 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 		if err == nil || !sqlerror.IsEphemeralError(err) {
 			break
 		}
-		log.Warn(fmt.Sprintf("Encountered the following error while restarting the %q VReplication workflow, will retry (attempt #%d): %v", ct.workflow, i, err))
+		log.Warn("Encountered an error while restarting the VReplication workflow, will retry", td.wd.ct.logAttrs(slog.Int("attempt", i), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 	}
 	return err
 }
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
 	tabletAliasString := topoproto.TabletAliasString(participant.tablet.Alias)
-	log.Info(fmt.Sprintf("streamOneShard Start for vdiff %s on %s using query: %s", td.wd.ct.uuid, tabletAliasString, query))
+	log.Info("streamOneShard Start for vdiff", td.wd.ct.logAttrs(slog.String("tablet", tabletAliasString), slog.String("query", query))...)
 	td.wgShardStreamers.Add(1)
 	resultch := participant.result
 
 	defer func() {
-		log.Info(fmt.Sprintf("streamOneShard for vdiff %s End on %s (err: %v)", td.wd.ct.uuid, tabletAliasString, participant.err))
+		attrs := td.wd.ct.logAttrs(slog.String("tablet", tabletAliasString))
+		if participant.err != nil {
+			attrs = append(attrs, slog.Any("error", participant.err), slog.String("error_code", vterrors.Code(participant.err).String()))
+		}
+		log.Info("streamOneShard for vdiff End", attrs...)
 
 		close(resultch)
 		close(gtidch)
@@ -583,7 +601,7 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	// Save our progress when we finish the run.
 	defer func() {
 		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
-			log.Error(fmt.Sprintf("Failed to update vdiff %s progress on %s table: %v", td.wd.ct.uuid, td.table.Name, err))
+			log.Error("Failed to update vdiff progress on table", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", err))...)
 		}
 		globalStats.RowsDiffedCount.Add(dr.ProcessedRows)
 	}()
@@ -615,7 +633,8 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
-			log.Info(fmt.Sprintf("Flagging mismatch in vdiff %s for %s: %+v", td.wd.ct.uuid, td.table.Name, dr))
+			attrs := td.wd.ct.logAttrs(slog.String("table", td.table.Name))
+			log.Info("Flagging mismatch in vdiff", dr.logAttrs(attrs...)...)
 			if err := setTableMismatch(dbClient, td.wd.ct.id, td.table.Name, true); err != nil {
 				return nil, err
 			}
@@ -623,20 +642,20 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 
 		rowsToCompare--
 		if rowsToCompare < 0 {
-			log.Info(fmt.Sprintf("Stopping vdiff %s, specified row limit of %d reached", td.wd.ct.uuid, rowsToCompare))
+			log.Info("Stopping vdiff, specified row limit reached", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Int64("row_limit", coreOpts.GetMaxRows()))...)
 			return dr, nil
 		}
 		if advanceSource {
 			sourceRow, err = sourceExecutor.next()
 			if err != nil {
-				log.Error(fmt.Sprint(err))
+				log.Error("Error reading the next row for vdiff", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 				return nil, err
 			}
 		}
 		if advanceTarget {
 			targetRow, err = targetExecutor.next()
 			if err != nil {
-				log.Error(fmt.Sprint(err))
+				log.Error("Error reading the next row for vdiff", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 				return nil, err
 			}
 		}
@@ -1006,7 +1025,7 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 	if td.wd.ct.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
-	log.Info(fmt.Sprintf("Source time zone specified for vdiff %s: %s", td.wd.ct.uuid, td.wd.ct.sourceTimeZone))
+	log.Info("Source time zone specified for vdiff", td.wd.ct.logAttrs(slog.String("source_time_zone", td.wd.ct.sourceTimeZone))...)
 	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
@@ -1023,7 +1042,7 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 						sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
 						sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
 					)
-					log.Info(fmt.Sprintf("Converting datetime column %s using convert_tz() for vdiff %s", colName, td.wd.ct.uuid))
+					log.Info("Converting datetime column using convert_tz() for vdiff", td.wd.ct.logAttrs(slog.String("column", colName))...)
 					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
 					converted = true
 					modified = true
@@ -1035,7 +1054,7 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 		}
 	}
 	if modified { // at least one datetime was found
-		log.Info("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz() for vdiff " + td.wd.ct.uuid)
+		log.Info("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz() for vdiff", td.wd.ct.logAttrs()...)
 		return newSelectExprs
 	}
 	return targetSelectExprs
@@ -1096,7 +1115,8 @@ func (td *tableDiffer) getSourcePKCols() error {
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. Any rows that exist on the target will be
 		// reported as extra rows.
-		log.Warn(fmt.Sprintf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra", sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow))
+		log.Warn("The table was not found on the source tablet during VDiff; any rows on the target will be reported as extra",
+			td.wd.ct.logAttrs(slog.String("table", sourceTableName), slog.String("tablet", topoproto.TabletAliasString(sourceTablet.Alias)))...)
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
@@ -1122,12 +1142,12 @@ func (td *tableDiffer) getSourcePKCols() error {
 				sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
 		}
 		if len(pkeCols) > 0 {
-			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, sourceTableName, td.wd.ct.uuid))
+			log.Info("Using primary key equivalent columns for table in vdiff", td.wd.ct.logAttrs(slog.String("table", sourceTableName), slog.String("columns", fmt.Sprint(pkeCols)))...)
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
 			sourceKeyUnique = false
-			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", sourceTableName, td.wd.ct.uuid))
+			log.Info("Using all columns as a substitute primary key for table in vdiff", td.wd.ct.logAttrs(slog.String("table", sourceTableName))...)
 			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, sourceTable.Columns...)
 		}
 	}
@@ -1154,8 +1174,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 		// row diffed, so no resumable checkpoint is possible and any resume
 		// restarts the whole table.
 		log.Info("restarting table instead of resuming; its target primary key extends the source key, which is unique only within each of its source shards",
-			slog.String("table", td.table.Name),
-			slog.String("vdiff", td.wd.ct.uuid))
+			td.wd.ct.logAttrs(slog.String("table", td.table.Name))...)
 		td.tablePlan.sourceCheckpointUnavailable = true
 		td.lastSourcePK = nil
 		td.lastTargetPK = nil
@@ -1183,8 +1202,7 @@ func (td *tableDiffer) getSourcePKCols() error {
 		(!slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) ||
 			!td.loadedSourceCheckpointMatches(indices)) {
 		log.Info("restarting table instead of resuming; its persisted source checkpoint does not match how this code projects the source primary key and cannot be safely reused",
-			slog.String("table", td.table.Name),
-			slog.String("vdiff", td.wd.ct.uuid))
+			td.wd.ct.logAttrs(slog.String("table", td.table.Name))...)
 		td.tablePlan.sourceCheckpointUnavailable = true
 		td.tablePlan.sourcePkCols = nil
 		td.lastSourcePK = nil

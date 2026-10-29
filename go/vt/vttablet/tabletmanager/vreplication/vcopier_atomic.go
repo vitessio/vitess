@@ -70,13 +70,19 @@ func newCopyAllState(vc *vcopier) (*copyAllState, error) {
 func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings) error {
 	var err error
 
-	log.Info("Starting copyAll for " + settings.WorkflowName)
-	defer log.Info("Returning from copyAll for " + settings.WorkflowName)
+	log.Info("Starting copyAll", vc.vr.logAttrs()...)
+	defer log.Info("Returning from copyAll", vc.vr.logAttrs()...)
 	defer vc.vr.dbClient.Rollback()
 
 	state, err := newCopyAllState(vc)
 	if err != nil {
 		return err
+	}
+	logDeletingCopyState := func() {
+		log.Info("Deleting copy state and post copy actions for table",
+			vc.vr.logAttrs(
+				slog.String("table", state.currentTableName),
+			)...)
 	}
 
 	// Save the controller-level context before applying the copy phase
@@ -121,7 +127,14 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	serr := vc.vr.sourceVStreamer.VStreamTables(ctx, func(resp *binlogdatapb.VStreamTablesResponse) error {
 		defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
 		defer vc.vr.stats.CopyLoopCount.Add(1)
-		log.Info(fmt.Sprintf("VStreamTablesResponse: received table %s, #fields %d, #rows %d, gtid %s, lastpk %+v", resp.TableName, len(resp.Fields), len(resp.Rows), resp.Gtid, resp.Lastpk))
+		log.Info("VStreamTablesResponse: received table",
+			vc.vr.logAttrs(
+				slog.String("table", resp.TableName),
+				slog.Int("field_count", len(resp.Fields)),
+				slog.Int("row_count", len(resp.Rows)),
+				slog.String("gtid", resp.Gtid),
+				slog.String("last_pk", fmt.Sprint(resp.Lastpk)),
+			)...)
 		tableName := resp.TableName
 		gtid = resp.Gtid
 		updateRowsCopied := func() error {
@@ -148,13 +161,16 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			}
 			copyWorkQueue = vc.newCopyWorkQueue(parallelism, copyWorkerFactory)
 			if state.currentTableName != "" {
-				log.Info(fmt.Sprintf("copy of table %s is done at lastpk %+v", state.currentTableName, lastpkbv))
-				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName, false,
-					"Deleting copy state and post copy actions for table "+state.currentTableName); err != nil {
+				log.Info("copy of table is done",
+					vc.vr.logAttrs(
+						slog.String("table", state.currentTableName),
+						slog.String("last_pk", fmt.Sprint(lastpkbv)),
+					)...)
+				if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName, false, logDeletingCopyState); err != nil {
 					return err
 				}
 			} else {
-				log.Info("starting copy phase with table " + tableName)
+				log.Info("starting copy phase with table", vc.vr.logAttrs(slog.String("table", tableName))...)
 			}
 
 			state.currentTableName = tableName
@@ -212,7 +228,11 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 				Value: lastpkbuf,
 			},
 		}
-		log.Info(fmt.Sprintf("copying table %s with lastpk %v", tableName, lastpkbv))
+		log.Info("copying table",
+			vc.vr.logAttrs(
+				slog.String("table", tableName),
+				slog.String("last_pk", fmt.Sprint(lastpkbv)),
+			)...)
 		// Prepare a vcopierCopyTask for the current batch of work.
 		currCh := make(chan *vcopierCopyTaskResult, 1)
 
@@ -259,7 +279,7 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 		})
 
 		if err := copyWorkQueue.enqueue(ctx, currT); err != nil {
-			log.Warn(fmt.Sprintf("failed to enqueue task in workflow %s: %s", vc.vr.WorkflowName, err.Error()))
+			log.Warn("failed to enqueue task in workflow", vc.vr.logAttrs(slog.Any("error", err))...)
 			return err
 		}
 
@@ -282,7 +302,11 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 			}
 			switch result.state {
 			case vcopierCopyTaskCancel:
-				log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+				log.Warn("task was canceled in workflow",
+					vc.vr.logAttrs(
+						slog.Any("error", result.err),
+						slog.String("error_code", vterrors.Code(result.err).String()),
+					)...)
 				return io.EOF
 			case vcopierCopyTaskFail:
 				// Defer the report to drainAndAggregateErrors so concurrent
@@ -306,7 +330,11 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 
 	// Drain late-arriving task results and aggregate.
 	if terr := drainAndAggregateErrors(resultCh, serr, preTerrs); terr != nil {
-		log.Warn(fmt.Sprintf("task errors in workflow %s: %v", vc.vr.WorkflowName, terr))
+		log.Warn("task errors in workflow",
+			vc.vr.logAttrs(
+				slog.Any("error", terr),
+				slog.String("error_code", vterrors.Code(terr).String()),
+			)...)
 		return terr
 	}
 
@@ -314,17 +342,16 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 	// elapsed copy phase duration. CopyAll is not resilient to these events.
 	select {
 	case <-ctx.Done():
-		log.Info(fmt.Sprintf("Copy of %v stopped", state.currentTableName))
+		log.Info("Copy of the table stopped", vc.vr.logAttrs(slog.String("table", state.currentTableName))...)
 		return errors.New("CopyAll was interrupted due to context expiration")
 	default:
-		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName, false,
-			"Deleting copy state and post copy actions for table "+state.currentTableName); err != nil {
+		if err := vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, state.currentTableName, false, logDeletingCopyState); err != nil {
 			return err
 		}
 		if err := vc.updatePos(ctx, gtid); err != nil {
 			return err
 		}
-		log.Info("Completed copy of all tables")
+		log.Info("Completed copy of all tables", vc.vr.logAttrs()...)
 	}
 	return nil
 }
@@ -332,14 +359,15 @@ func (vc *vcopier) copyAll(ctx context.Context, settings binlogplayer.VRSettings
 // runPostCopyActionsAndDeleteCopyState runs post copy actions, analyzes the
 // table if InnoDB doesn't recalculate its statistics automatically, and deletes
 // the copy state entry for a table, signifying that the copy phase is complete
-// for that table. doneMsg is logged before the copy state is deleted.
+// for that table. logDone is called before the copy state is deleted, and not
+// at all when a resumable copy keeps the copy state.
 //
 // If the controller stopped before the table could be analyzed, a copy that can
 // resume keeps the table's copy state: the resumed copy then copies any rows the
 // source added past lastpk since, and analyzes the table. An atomic copy can't
 // resume, as any error fails the workflow, so it finishes the table without the
 // ANALYZE TABLE, as every row has been copied.
-func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Context, tableName string, resumable bool, doneMsg string) error {
+func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Context, tableName string, resumable bool, logDone func()) error {
 	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
 		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
 	}
@@ -347,17 +375,17 @@ func (vc *vcopier) runPostCopyActionsAndDeleteCopyState(ctx, stopCtx context.Con
 	if vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName) {
 		if resumable {
 			log.Info("Copy of the table finished, but the controller stopped before analyzing it",
-				slog.String("table", tableName),
-				slog.String("workflow", vc.vr.WorkflowName),
-			)
+				vc.vr.logAttrs(
+					slog.String("table", tableName),
+				)...)
 			return nil
 		}
 		log.Warn("The atomic copy finished the table without analyzing it, as the controller stopped; run ANALYZE TABLE on it to refresh its statistics",
-			slog.String("table", tableName),
-			slog.String("workflow", vc.vr.WorkflowName),
-		)
+			vc.vr.logAttrs(
+				slog.String("table", tableName),
+			)...)
 	}
-	log.Info(doneMsg)
+	logDone()
 	delQueryBuf := sqlparser.NewTrackedBuffer(nil)
 	delQueryBuf.Myprintf(
 		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
