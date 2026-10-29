@@ -304,11 +304,6 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
 		}
 	})
-<<<<<<< HEAD
-	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
-||||||| parent of 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
-	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
-=======
 	t.Run("Test --shards flag in workflow update", func(t *testing.T) {
 		// --on-ddl STOP matches the value used at Create, so this is a
 		// no-op config change. Details must still list only the selected shards.
@@ -328,8 +323,7 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for update --shards %s", tc.expected, cnt, tc.shards)
 		}
 	})
-	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
->>>>>>> 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
+	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	for _, tab := range targetTabs {
 		catchup(t, tab, defaultWorkflowName, "MoveTables")
@@ -665,11 +659,6 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
 		}
 	})
-<<<<<<< HEAD
-	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
-||||||| parent of 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
-	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
-=======
 	t.Run("Test --shards flag in workflow update", func(t *testing.T) {
 		// --on-ddl STOP matches the value used at Create, so this is a
 		// no-op config change. Details must still list only the selected shards.
@@ -689,8 +678,7 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for update --shards %s", tc.expected, cnt, tc.shards)
 		}
 	})
-	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
->>>>>>> 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
+	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	t.Run("Test --shards flag in Reshard start/stop", func(t *testing.T) {
 		// This subtest expects workflow to be running at the start and restarts it at the end.
