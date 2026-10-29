@@ -248,6 +248,20 @@ func TestExecNoPrepareLogsError(t *testing.T) {
 	assert.Equal(t, err.Error(), record["error"])
 }
 
+func TestQueryRowsMapLogsError(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	err = QueryRowsMap(db, "select * from no_such_table", func(RowMap) error { return nil })
+	require.Error(t, err)
+
+	record := logs.Record(t, "QueryRowsMap failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, err.Error(), record["error"])
+}
+
 func TestArgs(t *testing.T) {
 	args := []any{1, "abc", true}
 	expected := []any{1, "abc", true}

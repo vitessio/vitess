@@ -47,8 +47,15 @@ func (factory *fakeACLFactory) New(entries []string) (acl.ACL, error) {
 }
 
 func TestInitWithInvalidFilePath(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	tacl := tableACL{factory: &simpleacl.Factory{}}
-	require.Error(t, tacl.init("/invalid_file_path", func() {}), "init should fail for an invalid config file path")
+	err := tacl.init("/invalid_file_path", func() {})
+	require.Error(t, err, "init should fail for an invalid config file path")
+
+	record := logs.Record(t, "unable to read tableACL config file")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "/invalid_file_path", record["path"])
+	assert.Equal(t, err.Error(), record["error"])
 }
 
 // TestInitWithUnparsableConfig checks that the protobuf and json parse errors

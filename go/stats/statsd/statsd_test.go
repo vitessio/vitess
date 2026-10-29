@@ -443,6 +443,32 @@ func TestStatsdUnknownMetricLogs(t *testing.T) {
 	assert.Equal(t, "*expvar.Int", record["type"])
 }
 
+func TestStatsdAddFailureLogsType(t *testing.T) {
+	multiLabels := stats.NewCountersWithMultiLabels("log_type_counters_with_multi_labels", "help", []string{"label"})
+	multiLabels.Add([]string{"foo"}, 1)
+	tests := []struct {
+		msg   string
+		key   string
+		value expvar.Var
+	}{
+		{"Failed to add CounterDurationFunc", "log_type_counter_duration_func", stats.NewCounterDurationFunc("log_type_counter_duration_func", "help", func() time.Duration { return time.Second })},
+		{"Failed to add GaugeDurationFunc", "log_type_gauge_duration_func", stats.NewGaugeDurationFunc("log_type_gauge_duration_func", "help", func() time.Duration { return time.Second })},
+		{"Failed to add CountersWithMultiLabels", "log_type_counters_with_multi_labels", multiLabels},
+	}
+	for _, tt := range tests {
+		t.Run(tt.msg, func(t *testing.T) {
+			logs := logtest.Capture(t, slog.LevelInfo)
+			var sb StatsBackend
+			sb.addExpVar(expvar.KeyValue{Key: tt.key, Value: tt.value})
+			record := logs.Record(t, tt.msg)
+			assert.Equal(t, "ERROR", record["level"])
+			assert.Equal(t, tt.key, record["stats_name"])
+			assert.Equal(t, tt.value.String(), record["stats_value"])
+			assert.Equal(t, statsd.ErrNoClient.Error(), record["error"])
+		})
+	}
+}
+
 func TestStatsdExportFailureLogs(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 	var sb StatsBackend
