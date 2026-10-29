@@ -3391,6 +3391,11 @@ func TestWorkflowUpdate(t *testing.T) {
 			shards:       []string{"-80", "80-"},
 			expectedUIDs: []uint32{200, 210},
 		},
+		{
+			name:         "repeated shard",
+			shards:       []string{"-80", "-80"},
+			expectedUIDs: []uint32{200},
+		},
 	}
 
 	for _, tc := range testcases {
