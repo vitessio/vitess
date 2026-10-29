@@ -303,7 +303,7 @@ func (t *ThrottlerImpl) updateMaxRate() {
 
 	if maxRate != ZeroRateNoProgess && maxRate < int64(threadsRunning) {
 		log.Warn("Set maxRate is less than the number of threads. To prevent threads from starving, maxRate was increased to the number of threads.",
-			slog.Int("thread_count", threadsRunning), slog.Int64("max_rate", maxRate))
+			slog.Int("thread_count", threadsRunning), slog.Int64("configured_max_rate", maxRate))
 		maxRate = int64(threadsRunning)
 	}
 	maxRatePerThread := maxRate / int64(threadsRunning)

@@ -366,7 +366,7 @@ func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
 	record := logs.Record(t, "Set maxRate is less than the number of threads. To prevent threads from starving, maxRate was increased to the number of threads.")
 	assert.Equal(t, "WARN", record["level"])
 	assert.EqualValues(t, 2, record["thread_count"])
-	assert.EqualValues(t, 1, record["max_rate"])
+	assert.EqualValues(t, 1, record["configured_max_rate"])
 
 	// 2 QPS instead of configured 1 QPS allowed since there are 2 threads which
 	// must not starve.
