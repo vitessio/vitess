@@ -2887,11 +2887,6 @@ func TestWorkflowUpdate(t *testing.T) {
 				return
 			}
 
-<<<<<<< HEAD
-			assert.NoError(t, err)
-||||||| parent of 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
-			require.NoError(t, err)
-=======
 			require.NoError(t, err)
 			if len(tc.expectedUIDs) > 0 {
 				gotUIDs := make([]uint32, 0, len(res.Details))
@@ -2903,7 +2898,6 @@ func TestWorkflowUpdate(t *testing.T) {
 				slices.Sort(wantUIDs)
 				require.Equal(t, wantUIDs, gotUIDs)
 			}
->>>>>>> 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
 			for tabletID, changed := range tc.expectedResponse {
 				i := slices.IndexFunc(res.Details, func(det *vtctldatapb.WorkflowUpdateResponse_TabletInfo) bool {
 					return det.Tablet.Uid == tabletID
