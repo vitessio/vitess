@@ -1036,6 +1036,52 @@ func TestTabletServerTxSerializerKeyRewritesDoubleSlashComments(t *testing.T) {
 	}, 30*time.Second, 10*time.Millisecond, "the hot row key should plan the rewritten statement")
 }
 
+// TestTabletServerTxSerializerKeyLogsSanitizedQuery checks that the hot row
+// key's error lines log the query as convertAndLogError does, with the bind
+// variables redacted when SanitizeLogMessages is set.
+func TestTabletServerTxSerializerKeyLogsSanitizedQuery(t *testing.T) {
+	bindVars := map[string]*querypb.BindVariable{"other": sqltypes.StringBindVariable("zq7bindvalue")}
+	tests := []struct {
+		msg string
+		sql string
+	}{
+		{msg: "failed to get plan for query", sql: "update test_table set"},
+		{msg: "failed to substitute bind vars in where clause", sql: "update test_table set name_string = 'x' where pk = :pk"},
+	}
+	for _, sanitize := range []bool{true, false} {
+		t.Run(fmt.Sprintf("sanitize=%v", sanitize), func(t *testing.T) {
+			ctx := t.Context()
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.SanitizeLogMessages = sanitize
+			db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
+			t.Cleanup(tsv.StopService)
+			t.Cleanup(db.Close)
+			saved := logComputeRowSerializerKey
+			t.Cleanup(func() { logComputeRowSerializerKey = saved })
+			logStats := tabletenv.NewLogStats(ctx, "TestTxSerializerKey", streamlog.NewQueryLogConfigForTest())
+
+			for _, tt := range tests {
+				t.Run(tt.msg, func(t *testing.T) {
+					logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", time.Minute)
+					logs := logtest.Capture(t, slog.LevelInfo)
+					key, _ := tsv.computeTxSerializerKey(ctx, logStats, tt.sql, bindVars)
+					assert.Empty(t, key)
+
+					record := logs.Record(t, tt.msg)
+					assert.Equal(t, "ERROR", record["level"])
+					assert.NotContains(t, record, "bind_variables")
+					if sanitize {
+						assert.Equal(t, fmt.Sprintf("Sql: %q, BindVars: {[REDACTED]}", tt.sql), record["query"])
+						assert.NotContains(t, logs.String(), "zq7bindvalue")
+					} else {
+						assert.Equal(t, fmt.Sprintf("Sql: %q, BindVars: {other: \"type:VARCHAR value:\\\"zq7bindvalue\\\"\"}", tt.sql), record["query"])
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestTabletServerStreamExecuteComments(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")

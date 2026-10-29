@@ -1280,7 +1280,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	sql, _ = tsv.env.Parser().SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
-		logComputeRowSerializerKey.Error("failed to get plan for query", slog.String("query", sql), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+		logComputeRowSerializerKey.Error("failed to get plan for query", tsv.queryLogAttr(sql, bindVariables), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return "", ""
 	}
 
@@ -1303,8 +1303,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 		logComputeRowSerializerKey.Error("failed to substitute bind vars in where clause",
 			slog.Any("error", err),
 			slog.String("error_code", vterrors.Code(err).String()),
-			slog.String("query", sql),
-			slog.Any("bind_variables", lazyString(func() string { return fmt.Sprint(bindVariables) })),
+			tsv.queryLogAttr(sql, bindVariables),
 		)
 		return "", ""
 	}
@@ -1312,6 +1311,15 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	// Example: table1 where id = 1 and sub_id = 2
 	key := fmt.Sprintf("%s%s", tableName, where)
 	return key, tableName.String()
+}
+
+// queryLogAttr returns the query attribute as convertAndLogError logs it: bind
+// variables are redacted when SanitizeLogMessages is set. The value is built
+// only if the record is written.
+func (tsv *TabletServer) queryLogAttr(sql string, bindVariables map[string]*querypb.BindVariable) slog.Attr {
+	return slog.Any("query", lazyString(func() string {
+		return queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
+	}))
 }
 
 // MessageStream streams messages from the requested table.
