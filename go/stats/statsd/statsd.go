@@ -133,74 +133,74 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 	switch v := kv.Value.(type) {
 	case *stats.Counter:
 		if err := sb.statsdClient.Count(k, v.Get(), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add Counter", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add Counter", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.Gauge:
 		if err := sb.statsdClient.Gauge(k, float64(v.Get()), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add Gauge", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add Gauge", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.GaugeFloat64:
 		if err := sb.statsdClient.Gauge(k, v.Get(), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add GaugeFloat64", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add GaugeFloat64", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.GaugeFunc:
 		if err := sb.statsdClient.Gauge(k, float64(v.F()), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add GaugeFunc", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add GaugeFunc", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.CounterFunc:
 		if err := sb.statsdClient.Gauge(k, float64(v.F()), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add CounterFunc", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add CounterFunc", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.CounterDuration:
 		if err := sb.statsdClient.TimeInMilliseconds(k, float64(v.Get().Milliseconds()), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add CounterDuration", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add CounterDuration", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.CounterDurationFunc:
 		if err := sb.statsdClient.TimeInMilliseconds(k, float64(v.F().Milliseconds()), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add CounterDurationFunc", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add CounterDurationFunc", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.GaugeDuration:
 		if err := sb.statsdClient.TimeInMilliseconds(k, float64(v.Get().Milliseconds()), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add GaugeDuration", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add GaugeDuration", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.GaugeDurationFunc:
 		if err := sb.statsdClient.TimeInMilliseconds(k, float64(v.F().Milliseconds()), nil, sb.sampleRate); err != nil {
-			log.Error("Failed to add GaugeDurationFunc", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+			log.Error("Failed to add GaugeDurationFunc", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 		}
 	case *stats.CountersWithSingleLabel:
 		for labelVal, val := range v.Counts() {
 			if err := sb.statsdClient.Count(k, val, makeLabel(v.Label(), labelVal), sb.sampleRate); err != nil {
-				log.Error("Failed to add CountersWithSingleLabel", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+				log.Error("Failed to add CountersWithSingleLabel", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 			}
 		}
 	case *stats.CountersWithMultiLabels:
 		for labelVals, val := range v.Counts() {
 			if err := sb.statsdClient.Count(k, val, makeLabels(v.Labels(), labelVals), sb.sampleRate); err != nil {
-				log.Error("Failed to add CountersWithMultiLabels", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+				log.Error("Failed to add CountersWithMultiLabels", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 			}
 		}
 	case *stats.CountersFuncWithMultiLabels:
 		for labelVals, val := range v.Counts() {
 			if err := sb.statsdClient.Count(k, val, makeLabels(v.Labels(), labelVals), sb.sampleRate); err != nil {
-				log.Error("Failed to add CountersFuncWithMultiLabels", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+				log.Error("Failed to add CountersFuncWithMultiLabels", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 			}
 		}
 	case *stats.GaugesWithMultiLabels:
 		for labelVals, val := range v.Counts() {
 			if err := sb.statsdClient.Gauge(k, float64(val), makeLabels(v.Labels(), labelVals), sb.sampleRate); err != nil {
-				log.Error("Failed to add GaugesWithMultiLabels", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+				log.Error("Failed to add GaugesWithMultiLabels", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 			}
 		}
 	case *stats.GaugesFuncWithMultiLabels:
 		for labelVals, val := range v.Counts() {
 			if err := sb.statsdClient.Gauge(k, float64(val), makeLabels(v.Labels(), labelVals), sb.sampleRate); err != nil {
-				log.Error("Failed to add GaugesFuncWithMultiLabels", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+				log.Error("Failed to add GaugesFuncWithMultiLabels", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 			}
 		}
 	case *stats.GaugesWithSingleLabel:
 		for labelVal, val := range v.Counts() {
 			if err := sb.statsdClient.Gauge(k, float64(val), makeLabel(v.Label(), labelVal), sb.sampleRate); err != nil {
-				log.Error("Failed to add GaugesWithSingleLabel", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+				log.Error("Failed to add GaugesWithSingleLabel", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 			}
 		}
 	case *stats.Timings, *stats.MultiTimings, *stats.Histogram:
@@ -218,7 +218,7 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 				if ok {
 					memstatsKey := "memstats." + k
 					if err := sb.statsdClient.Gauge(memstatsKey, memstatsVal, []string{}, sb.sampleRate); err != nil {
-						log.Error("Failed to export", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+						log.Error("Failed to export", slog.String("stats_name", memstatsKey), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 					}
 				}
 			}
@@ -228,7 +228,7 @@ func (sb StatsBackend) addExpVar(kv expvar.KeyValue) {
 			buildGitRecOnce.Do(func() {
 				checksum := crc32.ChecksumIEEE([]byte(v.Get()))
 				if err := sb.statsdClient.Gauge(k, float64(checksum), []string{}, sb.sampleRate); err != nil {
-					log.Error("Failed to export", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)))
+					log.Error("Failed to export", slog.String("stats_name", k), slog.String("stats_value", fmt.Sprint(v)), slog.Any("error", err))
 				}
 			})
 		}

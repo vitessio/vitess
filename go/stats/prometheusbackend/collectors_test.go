@@ -53,4 +53,5 @@ func TestCollector(t *testing.T) {
 	record := logs.Record(t, "Error adding metric")
 	assert.Equal(t, "ERROR", record["level"])
 	assert.Equal(t, collector.desc.String(), record["metric_desc"])
+	assert.Contains(t, record["error"], "inconsistent label cardinality")
 }

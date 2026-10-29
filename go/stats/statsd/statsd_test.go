@@ -442,3 +442,14 @@ func TestStatsdUnknownMetricLogs(t *testing.T) {
 	assert.Equal(t, "unknown_name", record["stats_name"])
 	assert.Equal(t, "*expvar.Int", record["type"])
 }
+
+func TestStatsdExportFailureLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	var sb StatsBackend
+	memstats := expvar.Func(func() any { return map[string]any{"Alloc": 1} })
+	sb.addExpVar(expvar.KeyValue{Key: "memstats", Value: memstats})
+	record := logs.Record(t, "Failed to export")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "memstats.Alloc", record["stats_name"])
+	assert.Equal(t, statsd.ErrNoClient.Error(), record["error"])
+}
