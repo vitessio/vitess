@@ -3831,8 +3831,10 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 				return err
 			}
 
-			err = reparentutil.SetReplicationSource(ctx, s.ts, s.tmc, ti.Tablet)
-			return err
+			if err = reparentutil.SetReplicationSource(ctx, s.ts, s.tmc, ti.Tablet); err != nil {
+				return vterrors.Wrapf(err, "the restore of %v completed, but setting its replication source failed", topoproto.TabletAliasString(req.TabletAlias))
+			}
+			return nil
 		default:
 			return err
 		}
