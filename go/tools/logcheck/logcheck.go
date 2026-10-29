@@ -17,6 +17,20 @@ limitations under the License.
 // Package logcheck defines an analyzer that enforces Vitess's structured
 // logging convention: log messages are constants, and values go in slog
 // attributes.
+//
+// Messages built with fmt.Sprintf can carry row values, last primary keys,
+// binlog events and query text, and redacting the rendered string is
+// brittle. In the packages this analyzer checks, that data is only in
+// attributes, so a log pipeline can keep msg and drop the attributes it
+// doesn't want. To keep database data out of logs, keep only keys that carry
+// no data, such as msg, level, time, table, column, workflow, stream_id,
+// keyspace, shard, tablet and error_code.
+//
+// Keys that can hold data include:
+//
+//   - error
+//   - query, filter and expression
+//   - last_pk, row, values, event, transaction, message and panic
 package logcheck
 
 import (
