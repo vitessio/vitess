@@ -1,0 +1,64 @@
+# Fails when .github/workflows/actions.lock is out of sync with the workflows,
+# or when a locked pin no longer verifies upstream. Run `gh actions-lock
+# --no-narrow` locally to fix it.
+name: verify_actions_lock
+on:
+  push:
+    branches:
+      - "main"
+      - "release-[0-9]+.[0-9]"
+  pull_request:
+    branches: '**'
+
+permissions: read-all
+
+jobs:
+  verify:
+    name: Verify actions.lock
+    # vitess-security is private, so its GitHub-hosted runners are billed. It
+    # uses a small CNCF container instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    steps:
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      with:
+        egress-policy: audit
+
+    - name: Check out code
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        # The merge commit and its first parent, for the path filter.
+        fetch-depth: 2
+        persist-credentials: 'false'
+
+    - name: Find the base of the pull request's merge commit
+      # github.event.pull_request.base.sha is not updated when the base branch
+      # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
+      id: merge-base
+      if: github.event_name == 'pull_request'
+      run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
+    - name: Check for changes in relevant files
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+      id: changes
+      with:
+        token: ''
+        base: ${{ steps.merge-base.outputs.sha }}
+        filters: |
+          github:
+            - '.github/**'
+
+    - name: Install gh-actions-lock
+      if: steps.changes.outputs.github == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh extension install github/gh-actions-lock --pin v0.4.0
+
+    - name: Verify actions.lock
+      if: steps.changes.outputs.github == 'true'
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: gh actions-lock --verify
