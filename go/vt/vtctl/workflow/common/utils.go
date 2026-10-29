@@ -19,12 +19,14 @@ package common
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// GetShards returns a subset of shards in a keyspace. If no subset is provided, all shards are returned.
+// GetShards returns a subset of shards in a keyspace, without repeats. If no
+// subset is provided, all shards are returned.
 func GetShards(ctx context.Context, ts *topo.Server, keyspace string, shardSubset []string) ([]string, error) {
 	var err error
 	allShards, err := ts.GetShardNames(ctx, keyspace)
@@ -42,14 +44,34 @@ func GetShards(ctx context.Context, ts *topo.Server, keyspace string, shardSubse
 	for _, shard := range allShards {
 		existingShards[shard] = true
 	}
-	// Validate that the provided shards are part of the keyspace.
+	// Validate that the provided shards are part of the keyspace, and drop
+	// repeated ones so that callers act on each shard once.
+	shards := make([]string, 0, len(shardSubset))
+	selected := make(map[string]bool, len(shardSubset))
 	for _, shard := range shardSubset {
 		_, found := existingShards[shard]
 		if !found {
 			return nil, fmt.Errorf("shard %s not found in keyspace %s", shard, keyspace)
 		}
+		if selected[shard] {
+			continue
+		}
+		selected[shard] = true
+		shards = append(shards, shard)
 	}
+<<<<<<< HEAD
 	log.Infof("Selecting subset of shards in keyspace %s: %d from %d :: %+v",
 		keyspace, len(shardSubset), len(allShards), shardSubset)
 	return shardSubset, nil
+||||||| parent of 16bcb94325 (vtctld: act once on each shard when a request repeats one (#21814))
+	log.Info(fmt.Sprintf("Selecting subset of shards in keyspace %s: %d from %d :: %+v", keyspace, len(shardSubset), len(allShards), shardSubset))
+	return shardSubset, nil
+=======
+	log.Info("Selecting subset of shards in keyspace",
+		slog.String("keyspace", keyspace),
+		slog.Int("selected", len(shards)),
+		slog.Int("total", len(allShards)),
+		slog.Any("shards", shards))
+	return shards, nil
+>>>>>>> 16bcb94325 (vtctld: act once on each shard when a request repeats one (#21814))
 }
