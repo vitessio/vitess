@@ -720,7 +720,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 // replication again, and the goal it caught up to. With stopAtTarget, when
 // replication stops and is restarted, the goal becomes the committed position of
 // the primary it restarts from, and replication stops there. Otherwise
-// replication restarts as it did before MySQL 8.4.
+// replication restarts as it always did.
 func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManagerClient, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos, primaryPos replication.Position, stopAtTarget bool) (replication.ReplicationStatus, replication.Position, error) {
 	// Wait for replication to catch up.
 	phase.Set(phaseNameCatchupReplication, int64(1))
@@ -857,7 +857,7 @@ func resetReplication(ctx context.Context, pos replication.Position, keepBinlogs
 // position to catch up to. With stopAtCommitted, it reads the primary's
 // committed position first and stops replication there. Otherwise it starts
 // replication without a stop position and then reads the primary's position, as
-// vtbackup always did before MySQL 8.4.
+// vtbackup always did.
 func startCatchUp(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, mysqld mysqlctl.MysqlDaemon, stopAtCommitted bool) (replication.Position, error) {
 	if stopAtCommitted {
 		target, err := readInitialTarget(ctx, tmc, ts)
@@ -1028,9 +1028,11 @@ func readPrimaryTarget(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 
 // stopsAtCommittedPosition reports whether catch-up stops at the primary's
 // committed position, which it does when this run's mysqld is MySQL 8.4 or
-// later. Earlier versions apply with a single thread until they reach a stop
-// position, which can make catch-up much slower, so they replicate without one,
-// as before. MariaDB positions aren't MySQL56 GTID sets and never get one.
+// later, or MySQL 8.0 with at most one applier worker. Earlier versions drop a
+// parallel applier to a single thread until it reaches a stop position (MySQL
+// note 1753), which can make catch-up much slower, so with more workers, and on
+// other versions, catch-up replicates without one, as before. MariaDB positions
+// aren't MySQL56 GTID sets and never get one.
 func stopsAtCommittedPosition(ctx context.Context, mysqld mysqlctl.MysqlDaemon) bool {
 	version, err := mysqld.GetVersionString(ctx)
 	if err != nil {
@@ -1045,7 +1047,39 @@ func stopsAtCommittedPosition(ctx context.Context, mysqld mysqlctl.MysqlDaemon) 
 	if flavor == mysqlctl.FlavorMariaDB {
 		return false
 	}
-	return ver.Major > 8 || (ver.Major == 8 && ver.Minor >= 4)
+	if ver.Major > 8 || (ver.Major == 8 && ver.Minor >= 4) {
+		return true
+	}
+	if ver.Major != 8 || ver.Minor != 0 {
+		return false
+	}
+	workers, err := applierWorkers(ctx, mysqld, ver)
+	if err != nil {
+		log.Warn("Can't read the number of applier workers, so catch-up has no stop position", slog.Any("error", err))
+		return false
+	}
+	return workers <= 1
+}
+
+// applierWorkers reads the number of applier workers of a MySQL 8.0 mysqld.
+func applierWorkers(ctx context.Context, mysqld mysqlctl.MysqlDaemon, ver mysqlctl.ServerVersion) (int64, error) {
+	// MySQL 8.0.26 renamed slave_parallel_workers.
+	variable := "replica_parallel_workers"
+	if ver.Patch < 26 {
+		variable = "slave_parallel_workers"
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT @@global."+variable)
+	if err != nil {
+		return 0, vterrors.Wrapf(err, "can't read %s", variable)
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result reading %s: %v", variable, qr.Rows)
+	}
+	workers, err := qr.Rows[0][0].ToCastInt64()
+	if err != nil {
+		return 0, vterrors.Wrapf(err, "can't parse %s", variable)
+	}
+	return workers, nil
 }
 
 // startReplicationAt points replication at target's primary and starts it. With
@@ -1073,9 +1107,9 @@ func startReplicationAt(ctx context.Context, mysqld mysqlctl.MysqlDaemon, target
 	return nil
 }
 
-// readRestartTarget reads the shard primary that replication restarts from
-// during catch-up on MySQL 8.4 and later, and its committed position, within
-// restartReadTimeout. With --enable-errant-gtid-checks,
+// readRestartTarget reads, within restartReadTimeout, the shard primary that
+// replication restarts from during a catch-up that stops at the committed
+// position, and the primary's committed position. With --enable-errant-gtid-checks,
 // it returns a permanentError if the primary lacks GTIDs in applied, so that
 // vtbackup fails without changing its source, which can't undo them. The applier
 // can still apply transactions after applied was read; the check of the data to

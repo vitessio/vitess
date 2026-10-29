@@ -144,16 +144,21 @@ func testBinloggedInitSQL(t *testing.T) {
 }
 
 // testWriteWaitingForAck checks, with the errant GTID checks off, that vtbackup
-// on MySQL 8.4 and later stops catching up at the primary's committed position.
-// A write that waits for a semi-sync acknowledgement is already in the
-// primary's binlog, so vtbackup receives it, but it must stay out of the
-// backup: an emergency reparent can lose it, and every tablet restored from the
-// backup would then fail with an errant GTID.
+// stops catching up at the primary's committed position on MySQL 8.4 and
+// later, and on MySQL 8.0 with at most one applier worker. A write that waits
+// for a semi-sync acknowledgement is already in the primary's binlog, so
+// vtbackup receives it, but it must stay out of the backup: an emergency
+// reparent can lose it, and every tablet restored from the backup would then
+// fail with an errant GTID.
 func testWriteWaitingForAck(t *testing.T) {
-	// vtbackup runs the same MySQL binaries as the tablets.
+	// vtbackup runs the same MySQL binaries, with the same configuration, as the
+	// tablets.
 	version := execOnTablet(t, primary, "select @@global.version").Rows[0][0].ToString()
 	if atLeast, err := capabilities.ServerVersionAtLeast(version, 8, 4); err != nil || !atLeast {
-		t.Skipf("vtbackup stops at the committed position on MySQL 8.4 and later, not on %s", version)
+		workers := execOnTablet(t, primary, "select @@global.slave_parallel_workers").Rows[0][0].ToString()
+		if !strings.HasPrefix(version, "8.0.") || (workers != "0" && workers != "1") {
+			t.Skipf("vtbackup stops at the committed position on MySQL 8.4 and later, and on MySQL 8.0 with at most one applier worker, not on %s with %s applier workers", version, workers)
+		}
 	}
 	const msg = "waiting-for-ack"
 	backups := listBackups(t)

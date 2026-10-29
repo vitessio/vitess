@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -115,7 +116,7 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 				return &replicationdatapb.PrimaryStatus{Position: replication.EncodePosition(primaryPos)}, nil
 			}}
 
-			// Before MySQL 8.4, replication restarts as it always did.
+			// Without a stop position, replication restarts as it always did.
 			status, goal, err := catchUpReplicationForBackup(ctx, tmc, ts, mysqld, restorePos, primaryPos, false)
 
 			require.NoError(t, err)
@@ -333,11 +334,10 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 		})
 	})
 
-	// Before MySQL 8.4, a restart repoints as it always did, even with the errant
-	// GTID checks: a check that read the primary could wait on a primary that is
-	// down for as long as replication may stay stopped. The check of the data to
-	// back up catches errant GTIDs instead.
-	t.Run("before MySQL 8.4, restarts as before without reading the primary, with the errant GTID checks", func(t *testing.T) {
+	// Without a stop position, a restart repoints as it always did, without reading
+	// the primary, even with the errant GTID checks. The check of the data to back
+	// up catches errant GTIDs instead.
+	t.Run("without a stop position, restarts as before without reading the primary, with the errant GTID checks", func(t *testing.T) {
 		oldChecks := errantGTIDChecks
 		t.Cleanup(func() { errantGTIDChecks = oldChecks })
 		errantGTIDChecks = true
@@ -361,7 +361,7 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			assert.True(t, gotGoal.Equal(goal), "goal %v", gotGoal)
 			assert.Equal(t, []string{"primary-101.test:3306"}, mysqld.sources)
 			assert.Equal(t, []bool{true}, mysqld.startReplicationAfter)
-			assert.Zero(t, vt.tmc.calls, "a restart before MySQL 8.4 must not read the primary")
+			assert.Zero(t, vt.tmc.calls, "a restart without a stop position must not read the primary")
 		})
 	})
 
@@ -673,7 +673,7 @@ func TestStartCatchUp(t *testing.T) {
 	})
 	vt.setPrimary(t, 100)
 
-	t.Run("MySQL 8.4 and later stop at the confirmed primary's committed position", func(t *testing.T) {
+	t.Run("with a stop position, stops at the confirmed primary's committed position", func(t *testing.T) {
 		mysqld := &catchupReplicationMysqlDaemon{}
 		goal, err := startCatchUp(t.Context(), vt.tmc, vt.ts, mysqld, true)
 		require.NoError(t, err)
@@ -683,7 +683,7 @@ func TestStartCatchUp(t *testing.T) {
 		assert.True(t, mysqld.startUntil[0].Equal(committed))
 	})
 
-	t.Run("earlier versions start replication and then read the primary's position, as before", func(t *testing.T) {
+	t.Run("without one, starts replication and then reads the primary's position, as before", func(t *testing.T) {
 		mysqld := &catchupReplicationMysqlDaemon{}
 		statusCalls := vt.tmc.calls
 		goal, err := startCatchUp(t.Context(), vt.tmc, vt.ts, mysqld, false)
@@ -746,20 +746,42 @@ func TestStartReplicationAt(t *testing.T) {
 }
 
 func TestStopsAtCommittedPosition(t *testing.T) {
-	for version, want := range map[string]bool{
-		"Ver 8.4.9 MySQL Community Server - GPL": true,
-		"Ver 9.1.0 MySQL Community Server - GPL": true,
-		"Ver 8.3.0 MySQL Community Server - GPL": false,
-		"Ver 8.0.46 Homebrew":                    false,
-		"Ver 5.7.44 MySQL Community Server":      false,
-		"Ver 10.11.6-MariaDB-log mariadb.org":    false,
-		"an unparseable version":                 false,
+	// workers answers reads of the given variables with value.
+	workers := func(value string, variables ...string) map[string]*sqltypes.Result {
+		queries := make(map[string]*sqltypes.Result)
+		for _, variable := range variables {
+			queries["SELECT @@global."+variable] = sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global."+variable, "int64"), value)
+		}
+		return queries
+	}
+	for _, tc := range []struct {
+		name    string
+		version string
+		// queries answers FetchSuperQuery. Any other query fails.
+		queries map[string]*sqltypes.Result
+		want    bool
+	}{
+		{"MySQL 8.4", "Ver 8.4.9 MySQL Community Server - GPL", nil, true},
+		{"MySQL 9", "Ver 9.1.0 MySQL Community Server - GPL", nil, true},
+		{"MySQL 8.3, with no worker", "Ver 8.3.0 MySQL Community Server - GPL", workers("0", "replica_parallel_workers", "slave_parallel_workers"), false},
+		{"MySQL 8.0, with no worker", "Ver 8.0.46 Homebrew", workers("0", "replica_parallel_workers"), true},
+		{"MySQL 8.0, with one worker", "Ver 8.0.46 Homebrew", workers("1", "replica_parallel_workers"), true},
+		{"MySQL 8.0, with two workers", "Ver 8.0.46 Homebrew", workers("2", "replica_parallel_workers"), false},
+		{"MySQL 8.0, with four workers", "Ver 8.0.46 Homebrew", workers("4", "replica_parallel_workers"), false},
+		{"MySQL 8.0.26, with no worker", "Ver 8.0.26 MySQL Community Server - GPL", workers("0", "replica_parallel_workers"), true},
+		{"MySQL 8.0 before 8.0.26, with no worker", "Ver 8.0.25 MySQL Community Server - GPL", workers("0", "slave_parallel_workers"), true},
+		{"MySQL 8.0, when the workers can't be read", "Ver 8.0.46 Homebrew", nil, false},
+		{"MySQL 8.0, when reading the workers returns no row", "Ver 8.0.46 Homebrew", map[string]*sqltypes.Result{"SELECT @@global.replica_parallel_workers": {}}, false},
+		{"MySQL 5.7, with no worker", "Ver 5.7.44 MySQL Community Server", workers("0", "replica_parallel_workers", "slave_parallel_workers"), false},
+		{"MariaDB", "Ver 10.11.6-MariaDB-log mariadb.org", nil, false},
+		{"an unparseable version", "an unparseable version", nil, false},
 	} {
-		t.Run(version, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
 			t.Cleanup(mysqld.Close)
-			mysqld.Version = version
-			assert.Equal(t, want, stopsAtCommittedPosition(t.Context(), mysqld))
+			mysqld.Version = tc.version
+			mysqld.FetchSuperQueryMap = tc.queries
+			assert.Equal(t, tc.want, stopsAtCommittedPosition(t.Context(), mysqld))
 		})
 	}
 }
