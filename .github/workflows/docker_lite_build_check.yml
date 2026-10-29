@@ -62,9 +62,41 @@ jobs:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 2
           persist-credentials: 'false'
 
+      - name: Find the base of the pull request's merge commit
+        id: merge-base
+        if: github.event_name == 'pull_request'
+        run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: changes
+        with:
+          token: ''
+          base: ${{ steps.merge-base.outputs.sha }}
+          filters: |
+            docker_lite:
+              - 'go/**/!(*_test).go'
+              - 'go/**/*.s'
+              - 'go/vt/sidecardb/**/*.sql'
+              - 'go/mysql/collations/colldata/**'
+              - 'go/mysql/icuregex/internal/icudata/**'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'tools/**'
+              - 'config/**'
+              - 'web/vtadmin/**'
+              - 'docker/lite/**'
+              - 'docker/utils/**'
+              - '.dockerignore'
+              - '.github/workflows/docker_lite_build_check.yml'
+
       - name: Build lite image
+        if: steps.changes.outputs.docker_lite == 'true'
         timeout-minutes: 15
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
