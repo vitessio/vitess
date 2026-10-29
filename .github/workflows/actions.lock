@@ -4,46 +4,46 @@
 version: 'v0.0.3'
 workflows:
     '.github/workflows/arewefastyet_comment.yml':
-        - 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/assign_milestone.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/auto_approve_pr.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/backport.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/check_label.yml':
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/check_make_vtadmin_authz_testgen.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/check_make_vtadmin_web_proto.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
-        - 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020'
+        - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/ci-rerun.yml':
         - 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/close_stale_pull_requests.yml':
         - 'actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/cluster_endtoend.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
         - 'test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5'
     '.github/workflows/cluster_endtoend_disk_health_monitor.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
@@ -51,7 +51,7 @@ workflows:
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
         - 'test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5'
     '.github/workflows/code_freeze.yml': []
     '.github/workflows/codecov.yml':
@@ -61,24 +61,24 @@ workflows:
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/codeql_analysis.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'gamesight/slack-workflow-status@2e709ce51fd47f02b7221db8547e6e6f49f81f1d'
-        - 'github/codeql-action@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'github/codeql-action@24c54180a607b1449ed407dd24f251e4e9147c8d'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/create_release.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/docker_build_images.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc'
         - 'docker/login-action@dbcb813823bdd20940b903addbd779551569679f'
         - 'gamesight/slack-workflow-status@2e709ce51fd47f02b7221db8547e6e6f49f81f1d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/docker_ci.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -86,34 +86,34 @@ workflows:
         - 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc'
         - 'docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/docker_lite_build_check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/e2e_race.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/endtoend.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/error_code_docs.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1'
+        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/go_cache_warm.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/local_example.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -121,12 +121,12 @@ workflows:
         - 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc'
         - 'docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/pr_opened_tasks.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1'
+        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
         - 'actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/region_example.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
@@ -134,177 +134,181 @@ workflows:
         - 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc'
         - 'docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/scorecards.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'
-        - 'github/codeql-action@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2'
-        - 'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+        - 'github/codeql-action@24c54180a607b1449ed407dd24f251e4e9147c8d'
+        - 'ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/static_checks_etc.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
-        - 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020'
+        - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
         - 'fossa-contrib/fossa-action@d28f0c947e7406706981a62a91ecc009bcc39fd7'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
         - 'zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482'
+    '.github/workflows/sync_to_vitess_security.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1'
+        - 'step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1'
     '.github/workflows/unit_test.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
         - 'test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5'
     '.github/workflows/update_golang_dependencies.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1'
+        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/update_golang_version.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1'
+        - 'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_backups_e2e.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_backups_e2e_next_release.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_backups_manual.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_backups_manual_next_release.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_onlineddl_flow.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_query_serving_queries.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_query_serving_queries_2.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_query_serving_queries_2_next_release.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_query_serving_queries_next_release.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_query_serving_schema.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_query_serving_schema_next_release.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_reparent_new_vtctl.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_reparent_new_vttablet.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_reparent_old_vtctl.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/upgrade_downgrade_test_reparent_old_vttablet.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/verify_actions_lock.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/vitess_tester_vtgate.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
         - 'test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5'
     '.github/workflows/vtadmin_web_build.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/vtadmin_web_lint.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/vtadmin_web_unit_tests.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
-        - 'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020'
+        - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
     '.github/workflows/vtop_example.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
-        - 'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
 dependencies:
     'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9':
         ref: 'v6.1.0'
@@ -316,6 +320,11 @@ dependencies:
         commit: 'sha1-3d3c42e5aac5ba805825da76410c181273ba90b1'
         owner_id: 44036562
         repo_id: 197814629
+    'actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510':
+        ref: 'v3.3.0'
+        commit: 'sha1-64ab729a6294000f5aa4a4bc0b73d1f32bc45510'
+        owner_id: 44036562
+        repo_id: 642580244
     'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1':
         ref: 'v3.2.0'
         commit: 'sha1-bcd2ba49218906704ab6c1aa796996da409d3eb1'
@@ -341,9 +350,9 @@ dependencies:
         commit: 'sha1-b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
         owner_id: 44036562
         repo_id: 192624594
-    'actions/setup-node@820762786026740c76f36085b0efc47a31fe5020':
-        ref: 'v7.0.0'
-        commit: 'sha1-820762786026740c76f36085b0efc47a31fe5020'
+    'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1':
+        ref: 'v7.1.0'
+        commit: 'sha1-949feb2413d6458794dcd2491c4babbbce0c15c1'
         owner_id: 44036562
         repo_id: 189476904
     'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97':
@@ -356,9 +365,9 @@ dependencies:
         commit: 'sha1-4391f3da665fdf50b6810c1a66712fb9ba21aa93'
         owner_id: 44036562
         repo_id: 200437066
-    'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a':
-        ref: 'v7.0.1'
-        commit: 'sha1-043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'
+    'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9':
+        ref: 'v7.0.2'
+        commit: 'sha1-cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         owner_id: 44036562
         repo_id: 192625955
     'codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5':
@@ -398,9 +407,9 @@ dependencies:
         commit: 'sha1-2e709ce51fd47f02b7221db8547e6e6f49f81f1d'
         owner_id: 1693238
         repo_id: 265306997
-    'github/codeql-action@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2':
-        ref: 'v4.38.2'
-        commit: 'sha1-2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2'
+    'github/codeql-action@24c54180a607b1449ed407dd24f251e4e9147c8d':
+        ref: 'v4.38.3'
+        commit: 'sha1-24c54180a607b1449ed407dd24f251e4e9147c8d'
         owner_id: 9919
         repo_id: 259445878
     'github/codeql-action@cdf488f595d80d6e07e03d4674febd5ab45fa938':
@@ -408,9 +417,9 @@ dependencies:
         commit: 'sha1-cdf488f595d80d6e07e03d4674febd5ab45fa938'
         owner_id: 9919
         repo_id: 259445878
-    'ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc':
-        ref: 'v2.4.4'
-        commit: 'sha1-2d1146689b8cda280b9bc96326124645441f03bc'
+    'ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e':
+        ref: 'v2.5.0'
+        commit: 'sha1-fa7117db83c52d787ae5a89f350999701505d78e'
         owner_id: 67707773
         repo_id: 421101922
     'peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1':
@@ -418,9 +427,14 @@ dependencies:
         commit: 'sha1-5f6978faf089d4d20b00c7766989d076bb2fc7f1'
         owner_id: 18365890
         repo_id: 197176365
-    'step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed':
-        ref: 'v2.22.0'
-        commit: 'sha1-351661ca32ac09a36dc5ee2d536e3128f2a3c8ed'
+    'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25':
+        ref: 'v2.22.1'
+        commit: 'sha1-ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
+        owner_id: 88700172
+        repo_id: 422287306
+    'step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1':
+        ref: 'v2.21.1'
+        commit: 'sha1-e14015d583714f6e62063499dc959a02595150a1'
         owner_id: 88700172
         repo_id: 422287306
     'test-summary/action@37b508cfee6d4d080eedd00b5bb240a6a784a6a5':
