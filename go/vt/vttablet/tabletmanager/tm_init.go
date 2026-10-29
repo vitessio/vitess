@@ -240,8 +240,8 @@ type TabletManager struct {
 }
 
 // shardLockUnavailableError reports that replication initialization left
-// replication unchanged because another operation held the shard lock, or
-// because acquiring it timed out. Other lock failures are not wrapped in it.
+// replication unchanged because acquiring the shard lock timed out. Other lock
+// failures are not wrapped in it.
 type shardLockUnavailableError struct{ cause error }
 
 func (e *shardLockUnavailableError) Error() string { return e.cause.Error() }
@@ -1158,22 +1158,21 @@ const replicationInitializationPrimaryStatusTimeout = 2 * time.Second
 // cleanup after a timed-out acquisition.
 const replicationInitializationLockAcquireTimeout = time.Second
 
-// lockReplicationInitialization does not wait for a held shard lock. The lock
-// holder may need RPCs to this tablet, which a starting tablet does not serve
-// yet and a restoring tablet blocks with its action lock.
+// lockReplicationInitialization waits at most
+// replicationInitializationLockAcquireTimeout for the shard lock: long enough
+// for other tablets' replication initializations, which hold it briefly, but
+// not for a reparent. The lock holder may need RPCs to this tablet, which a
+// starting tablet does not serve yet and a restoring tablet blocks with its
+// action lock, so the wait delays the holder.
 func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (context.Context, func(*error), error) {
 	tablet := tm.Tablet()
-	// NonBlocking still waits if another operation takes the lock between the
-	// check and the acquisition, or if the backend's TryLock blocks.
 	lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication",
-		topo.WithType(topo.NonBlocking), topo.WithAcquireTimeout(replicationInitializationLockAcquireTimeout))
+		topo.WithAcquireTimeout(replicationInitializationLockAcquireTimeout))
 	if err != nil {
 		msg := fmt.Sprintf("cannot initialize replication for %s/%s; replication has not been changed", tablet.Keyspace, tablet.Shard)
 		switch {
 		case ctx.Err() != nil:
 			return nil, nil, vterrors.Wrap(ctx.Err(), msg)
-		case topo.IsErrType(err, topo.NodeExists):
-			err = vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "another operation holds the shard lock: %v", err)
 		case topo.IsErrType(err, topo.Timeout):
 			err = vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out acquiring the shard lock: %v", err)
 		default:

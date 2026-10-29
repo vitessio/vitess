@@ -187,7 +187,7 @@ func TestInitializeReplicationDoesNotReviveReceiverDuringReparent(t *testing.T) 
 	tm, md, ts, _ := newReplicationInitializationTM(t)
 	release := holdInitializationShardLock(t, ts)
 
-	// memorytopo's TryLock waits for a held lock, so acquisition times out.
+	// Acquisition waits for the held lock and times out.
 	_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
 	require.ErrorContains(t, err, "cannot initialize replication for ks/0")
 	_, unavailable := errors.AsType[*shardLockUnavailableError](err)
@@ -279,23 +279,14 @@ func TestInitializeReplicationEmptyPrimaryHostnamePreservesSemiSync(t *testing.T
 	assert.Zero(t, md.ExpectedExecuteSuperQueryCurrent)
 }
 
-func TestReplicationInitializationMapsBackendContentionError(t *testing.T) {
-	tm, md, _, factory := newReplicationInitializationTM(t)
-	factory.AddOperationError(memorytopo.TryLock, ".*", topo.NewError(topo.NodeExists, "shard"))
-	_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
-	require.Error(t, err)
-	assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(err))
-	assert.Zero(t, md.ExpectedExecuteSuperQueryCurrent)
-}
-
 func TestInitializeReplicationRereadsPrimaryAfterAcquiringLock(t *testing.T) {
 	tm, md, ts, factory := newReplicationInitializationTM(t)
 	release := holdInitializationShardLock(t, ts)
-	before := factory.GetCallStats().Counts()["TryLock"]
+	before := factory.GetCallStats().Counts()["Lock"]
 	done := make(chan error, 1)
 	go func() { _, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA); done <- err }()
-	// Publish the new primary and release the lock while TryLock waits for it.
-	require.Eventually(t, func() bool { return factory.GetCallStats().Counts()["TryLock"] > before }, 30*time.Second, time.Millisecond)
+	// Publish the new primary and release the lock while acquisition waits for it.
+	require.Eventually(t, func() bool { return factory.GetCallStats().Counts()["Lock"] > before }, 30*time.Second, time.Millisecond)
 	primary := newTestTablet(t, 3, "ks", "0", nil)
 	primary.Type = topodatapb.TabletType_PRIMARY
 	primary.MysqlHostname, primary.MysqlPort = "new-primary", 3306
@@ -337,16 +328,15 @@ func TestInitializationPrimaryStatusHasShortDeadline(t *testing.T) {
 func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 	for _, tc := range []struct {
 		name string
-		// tryLockErr is returned by TryLock. Without it, memorytopo's TryLock
-		// blocks on the held lock, like a lock taken between check and acquire.
-		tryLockErr error
-		// cancelWhileLocking cancels the restore's context while TryLock waits.
+		// lockErr is returned by the acquisition. Without it, the acquisition
+		// waits for the held lock and times out.
+		lockErr error
+		// cancelWhileLocking cancels the restore's context while acquisition waits.
 		cancelWhileLocking bool
 		deferred           bool
 	}{
-		{name: "lock held", tryLockErr: topo.NewError(topo.NodeExists, "shard"), deferred: true},
 		{name: "acquisition timeout", deferred: true},
-		{name: "backend error", tryLockErr: errors.New("topology authorization denied")},
+		{name: "backend error", lockErr: errors.New("topology authorization denied")},
 		{name: "parent context canceled", cancelWhileLocking: true},
 	} {
 		for actionName, action := range map[string]replicationAction{"start": replicationActionStart, "initialize": replicationActionInitialize} {
@@ -355,8 +345,8 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 				holdInitializationShardLock(t, ts)
 				// Stop the watcher before the lock is released.
 				t.Cleanup(tm.tmState.cancel)
-				if tc.tryLockErr != nil {
-					factory.AddOperationError(memorytopo.TryLock, ".*", tc.tryLockErr)
+				if tc.lockErr != nil {
+					factory.AddOperationError(memorytopo.Lock, ".*", tc.lockErr)
 				}
 				require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
 				md.ExpectedExecuteSuperQueryList = nil
@@ -372,9 +362,9 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 					var cancel context.CancelFunc
 					ctx, cancel = context.WithCancel(ctx)
 					t.Cleanup(cancel)
-					before := factory.GetCallStats().Counts()["TryLock"]
+					before := factory.GetCallStats().Counts()["Lock"]
 					go func() {
-						assert.Eventually(t, func() bool { return factory.GetCallStats().Counts()["TryLock"] > before }, 30*time.Second, time.Millisecond)
+						assert.Eventually(t, func() bool { return factory.GetCallStats().Counts()["Lock"] > before }, 30*time.Second, time.Millisecond)
 						cancel()
 					}()
 				}
@@ -384,7 +374,7 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 				rsm.state = restoreStarted
 				rsm.nextTabletType = topodatapb.TabletType_REPLICA
 				// Restore holds the tablet action lock, which the shard lock holder
-				// may need, so it must not wait long for the shard lock.
+				// may need, so it waits for the shard lock only briefly.
 				start := time.Now()
 				err := rsm.finish(ctx, replCmd)
 				assert.Less(t, time.Since(start), replicationInitializationLockAcquireTimeout+5*time.Second)
@@ -408,45 +398,34 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 	}
 }
 
-func TestStartDoesNotWaitForHeldShardLock(t *testing.T) {
-	for _, tc := range []struct {
-		name       string
-		tryLockErr error
-	}{
-		{name: "lock held", tryLockErr: topo.NewError(topo.NodeExists, "shard")},
-		{name: "acquisition timeout"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ts, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
-			t.Cleanup(ts.Close)
-			_, err := ts.GetOrCreateShard(t.Context(), "ks", "0")
-			require.NoError(t, err)
-			primary := newTestTablet(t, 2, "ks", "0", nil)
-			primary.Type = topodatapb.TabletType_PRIMARY
-			primary.MysqlHostname, primary.MysqlPort = "old-primary", 3306
-			require.NoError(t, ts.CreateTablet(t.Context(), primary))
-			_, err = ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error { si.PrimaryAlias = primary.Alias; return nil })
-			require.NoError(t, err)
-			holdInitializationShardLock(t, ts)
-			if tc.tryLockErr != nil {
-				factory.AddOperationError(memorytopo.TryLock, ".*", tc.tryLockErr)
-			}
+// TestStartWaitsBrieflyForHeldShardLock checks that Start waits for a held shard
+// lock only for the acquisition budget, then defers.
+func TestStartWaitsBrieflyForHeldShardLock(t *testing.T) {
+	ts := memorytopo.NewServer(t.Context(), "cell1")
+	t.Cleanup(ts.Close)
+	_, err := ts.GetOrCreateShard(t.Context(), "ks", "0")
+	require.NoError(t, err)
+	primary := newTestTablet(t, 2, "ks", "0", nil)
+	primary.Type = topodatapb.TabletType_PRIMARY
+	primary.MysqlHostname, primary.MysqlPort = "old-primary", 3306
+	require.NoError(t, ts.CreateTablet(t.Context(), primary))
+	_, err = ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error { si.PrimaryAlias = primary.Alias; return nil })
+	require.NoError(t, err)
+	holdInitializationShardLock(t, ts)
 
-			// The shard lock holder may need RPCs to this tablet, which it does
-			// not serve until Start returns.
-			start := time.Now()
-			tm := newTestTM(t, ts, 1, "ks", "0", nil)
-			t.Cleanup(tm.Stop)
-			assert.Less(t, time.Since(start), replicationInitializationLockAcquireTimeout+5*time.Second)
+	// The shard lock holder may need RPCs to this tablet, which it does
+	// not serve until Start returns.
+	start := time.Now()
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	t.Cleanup(tm.Stop)
+	assert.Less(t, time.Since(start), replicationInitializationLockAcquireTimeout+5*time.Second)
 
-			md := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
-			assert.False(t, tm.QueryServiceControl.(*tabletservermock.Controller).IsServing())
-			assert.False(t, md.Replicating)
-			assert.False(t, md.SemiSyncReplicaEnabled)
-			assert.Empty(t, md.CurrentSourceHost)
-			assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
-		})
-	}
+	md := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	assert.False(t, tm.QueryServiceControl.(*tabletservermock.Controller).IsServing())
+	assert.False(t, md.Replicating)
+	assert.False(t, md.SemiSyncReplicaEnabled)
+	assert.Empty(t, md.CurrentSourceHost)
+	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 }
 
 func TestPendingReplicationOnlyWithholdsNonPrimaryService(t *testing.T) {
@@ -470,15 +449,14 @@ func newPendingReplicationTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlD
 }
 
 func TestPendingReplicationReasonShowsLatestError(t *testing.T) {
-	tm, md, ts, factory := newReplicationInitializationTM(t)
+	tm, md, ts, _ := newReplicationInitializationTM(t)
 	holdInitializationShardLock(t, ts)
-	factory.AddOperationError(memorytopo.TryLock, ".*", topo.NewError(topo.NodeExists, "shard"))
 	md.ExpectedExecuteSuperQueryList = nil
 	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
 	// Stop the watcher, so that only this test changes the reason.
 	tm.tmState.cancel()
-	assert.Contains(t, tm.tmState.canServe(topodatapb.TabletType_REPLICA), "replication is not initialized: cannot initialize replication for ks/0; replication has not been changed: another operation holds the shard lock")
+	assert.Contains(t, tm.tmState.canServe(topodatapb.TabletType_REPLICA), "replication is not initialized: cannot initialize replication for ks/0; replication has not been changed: timed out acquiring the shard lock")
 
 	id := tm.tmState.pendingReplicationInit
 	tm.tmState.setReplicationInitError(t.Context(), id, errors.New("Errant GTID detected"))
