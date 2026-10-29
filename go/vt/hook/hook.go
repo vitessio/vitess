@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -120,7 +121,11 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	}
 
 	// Configure the command.
-	log.Info(fmt.Sprintf("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " ")))
+	args := hook.Parameters
+	if args == nil {
+		args = []string{}
+	}
+	log.Info("hook: executing hook", slog.String("path", vthook), slog.Any("args", args))
 	cmd := exec.CommandContext(ctx, vthook, hook.Parameters...)
 	if len(hook.ExtraEnv) > 0 {
 		cmd.Env = os.Environ()
@@ -157,7 +162,14 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	result.Stderr = stderr.String()
 
 	defer func() {
-		log.Info(fmt.Sprintf("hook: result is %v", result.String()))
+		attrs := []slog.Attr{slog.Int("exit_status", result.ExitStatus)}
+		if result.Stdout != "" {
+			attrs = append(attrs, slog.String("stdout", result.Stdout))
+		}
+		if result.Stderr != "" {
+			attrs = append(attrs, slog.String("stderr", result.Stderr))
+		}
+		log.Info("hook: result", attrs...)
 	}()
 
 	if err == nil {
@@ -202,9 +214,9 @@ func (hook *Hook) ExecuteOptional() error {
 	hr := hook.Execute()
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
-		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))
+		log.Info("hook doesn't exist", slog.String("hook", hook.Name))
 	case HOOK_VTROOT_ERROR:
-		log.Info(fmt.Sprintf("VTROOT not set, so %v hook doesn't exist", hook.Name))
+		log.Info("VTROOT not set, so hook doesn't exist", slog.String("hook", hook.Name))
 	case HOOK_SUCCESS:
 		// nothing to do here
 	default:
