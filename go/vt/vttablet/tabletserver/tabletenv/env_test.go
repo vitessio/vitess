@@ -38,5 +38,5 @@ func TestLogErrorPanic(t *testing.T) {
 	record := logs.Record(t, "Uncaught panic")
 	assert.Equal(t, "ERROR", record["level"])
 	assert.Equal(t, "boom", record["panic"])
-	assert.Contains(t, record["stack"], "TestLogErrorPanic")
+	assert.Contains(t, record["stack"], "env_test.go")
 }

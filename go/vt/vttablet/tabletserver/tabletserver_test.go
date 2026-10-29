@@ -1917,7 +1917,7 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 		record := logs.Record(t, "Uncaught panic")
 		assert.Equal(t, "Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]", record["query"])
 		assert.Equal(t, "panic from TestHandlePanicAndSendLogStatsMessageTruncation", record["panic"])
-		assert.Contains(t, record["stack"], "TestHandlePanicAndSendLogStatsMessageTruncation")
+		assert.Contains(t, record["stack"], "tabletserver_test.go")
 	}()
 
 	defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
