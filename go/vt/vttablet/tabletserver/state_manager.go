@@ -766,7 +766,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 	} else {
 		if lag > time.Duration(sm.unhealthyThreshold.Load()) {
 			if sm.replHealthy {
-				log.Info("Going unhealthy due to high replication lag", slog.Int64("replication_lag_seconds", int64(lag.Seconds())))
+				log.Info("Going unhealthy due to high replication lag", slog.Duration("replication_lag", lag))
 			}
 			sm.replHealthy = false
 		} else {
