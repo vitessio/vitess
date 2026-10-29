@@ -23,29 +23,6 @@ jobs:
     outputs:
       end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
-<<<<<<< HEAD
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
-      with:
-        egress-policy: audit
-
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
-=======
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -103,11 +80,6 @@ jobs:
       if: needs.changes.result != 'success'
       run: exit 1
 
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
-      with:
-        egress-policy: audit
-
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
@@ -126,41 +98,17 @@ jobs:
       uses: $/.github/actions/setup-go
 
     - name: Tune the OS
-<<<<<<< HEAD
-      if: steps.changes.outputs.end_to_end == 'true'
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
-=======
       if: needs.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
       uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
-<<<<<<< HEAD
-      if: steps.changes.outputs.end_to_end == 'true'
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 8
-=======
       if: needs.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 8
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
       uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.0
 
     - name: Get dependencies
-<<<<<<< HEAD
-      if: steps.changes.outputs.end_to_end == 'true'
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
-=======
       if: needs.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
       run: |
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
@@ -168,28 +116,12 @@ jobs:
         sudo service etcd stop
 
     - name: Run make minimaltools
-<<<<<<< HEAD
-      if: steps.changes.outputs.end_to_end == 'true'
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
-=======
       if: needs.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
       run: |
         make minimaltools
 
     - name: Build
-<<<<<<< HEAD
-      if: steps.changes.outputs.end_to_end == 'true'
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-      if: steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
-=======
       if: needs.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
       run: |
         NOVTADMINBUILD=1 make build
 

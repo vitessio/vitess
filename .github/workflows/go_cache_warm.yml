@@ -37,16 +37,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-<<<<<<< HEAD
         set: [root, goimports, golangci-lint, gotestsum]
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-        set: [root, addlicense, gofumpt, goimports, golangci-lint, gotestsum, goyacc]
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
-=======
-        set: [root, addlicense, gofumpt, goimports, golangci-lint, gotestsum, goyacc]
     runs-on: ubuntu-24.04
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
     timeout-minutes: 15
 
     steps:
@@ -182,16 +174,8 @@ jobs:
           - entry: tools
             base: build,unit
             arch: x64
-<<<<<<< HEAD
-            runner: cncf-ubuntu-24.04-4-16-x86
-            go-tools: goimports,golangci-lint,gotestsum
-||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
-            runner: cncf-ubuntu-24.04-4-16-x86
-            go-tools: addlicense,gofumpt,goimports,golangci-lint,gotestsum,goyacc
-=======
             runner: ubuntu-24.04
-            go-tools: addlicense,gofumpt,goimports,golangci-lint,gotestsum,goyacc
->>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
+            go-tools: goimports,golangci-lint,gotestsum
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
 
