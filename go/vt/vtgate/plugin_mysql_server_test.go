@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"os"
 	"path"
@@ -47,6 +48,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -416,6 +418,20 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 		synctest.Wait()
 
 		require.NotEqual(t, serverConfig, srv.tcpListener.TLSConfig.Load(), "init tls config should have been recreated after SIGHUP")
+
+		// The CRL is read again on every reload, so an empty one makes the
+		// reload fail and keeps the config loaded before it.
+		logs := logtest.Capture(t, slog.LevelInfo)
+		require.NoError(t, os.WriteFile(path.Join(root, "ca-crl.pem"), nil, 0o600))
+		serverConfig = srv.tcpListener.TLSConfig.Load()
+		srv.sigChan <- syscall.SIGHUP
+		synctest.Wait()
+
+		require.Equal(t, serverConfig, srv.tcpListener.TLSConfig.Load())
+		record := logs.Record(t, "vttls.ServerConfig failed")
+		assert.Equal(t, "ERROR", record["level"])
+		assert.Contains(t, record["error"], "no CRL found in file")
+		assert.Equal(t, "INVALID_ARGUMENT", record["error_code"])
 	})
 }
 

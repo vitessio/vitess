@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
@@ -332,7 +333,7 @@ func Init(
 ) *VTGate {
 	ts, err := serv.GetTopoServer()
 	if err != nil {
-		log.Error(fmt.Sprintf("Unable to get Topo server: %v", err))
+		log.Error("Unable to get Topo server", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -345,13 +346,13 @@ func Init(
 	} else {
 		keyspaces, err = ts.GetSrvKeyspaceNames(ctx, cell)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unable to get all keyspaces: %v", err))
+			log.Error("Unable to get all keyspaces", slog.String("cell", cell), slog.Any("error", err))
 			os.Exit(1)
 		}
 	}
 	// executor sets a watch on SrvVSchema, so let's rebuild these before creating it
 	if err := rebuildTopoGraphs(ctx, ts, cell, keyspaces); err != nil {
-		log.Error(fmt.Sprintf("rebuildTopoGraphs failed: %v", err))
+		log.Error("rebuildTopoGraphs failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 	// Build objects from low to high level.
@@ -361,7 +362,7 @@ func Init(
 	gw := NewTabletGateway(ctx, hc, serv, cell)
 	gw.RegisterStats()
 	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
-		log.Error(fmt.Sprintf("tabletGateway.WaitForTablets failed: %v", err))
+		log.Error("tabletGateway.WaitForTablets failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		os.Exit(1)
 	}
 
@@ -370,17 +371,17 @@ func Init(
 	// If we want to filter keyspaces replace the srvtopo.Server with a
 	// filtering server
 	if discovery.FilteringKeyspaces() {
-		log.Info(fmt.Sprintf("Keyspace filtering enabled, selecting %v", discovery.KeyspacesToWatch))
+		log.Info("Keyspace filtering enabled", slog.Any("keyspaces", discovery.KeyspacesToWatch))
 		var err error
 		serv, err = srvtopo.NewKeyspaceFilteringServer(serv, discovery.KeyspacesToWatch)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unable to construct SrvTopo server: %v", err.Error()))
+			log.Error("Unable to construct SrvTopo server", slog.Any("error", err))
 			os.Exit(1)
 		}
 	}
 
 	if _, err := schema.ParseDDLStrategy(defaultDDLStrategy); err != nil {
-		log.Error(fmt.Sprintf("Invalid value for -ddl-strategy: %v", err.Error()))
+		log.Error("Invalid value for --ddl-strategy", slog.Any("error", err))
 		os.Exit(1)
 	}
 	tc := NewTxConn(gw, dynamicConfig)
@@ -429,7 +430,7 @@ func Init(
 	executor := NewExecutor(ctx, env, serv, cell, resolver, eConfig, warnShardedOnly, plans, si, pv, dynamicConfig)
 
 	if err := executor.defaultQueryLogger(); err != nil {
-		log.Error(fmt.Sprintf("error initializing query logger: %v", err))
+		log.Error("error initializing query logger", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -482,7 +483,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 		switch {
 		case err == nil:
 		case topo.IsErrType(err, topo.NoNode):
-			log.Info(fmt.Sprintf("Rebuilding Serving Keyspace %v", ks))
+			log.Info("Rebuilding Serving Keyspace", slog.String("keyspace", ks))
 			if err := topotools.RebuildKeyspace(ctx, logutil.NewConsoleLogger(), topoServer, ks, []string{cell}, false); err != nil {
 				return vterrors.Wrap(err, "vtgate Init: failed to RebuildKeyspace")
 			}
@@ -519,7 +520,7 @@ func rebuildTopoGraphs(ctx context.Context, topoServer *topo.Server, cell string
 func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Unable to get all keyspaces: %v", err))
+		log.Warn("Unable to get all keyspaces", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 	if len(keyspaces) == 0 {
@@ -533,7 +534,7 @@ func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, s
 func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
 	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, key.DestinationAllShards{})
 	if err != nil {
-		log.Warn(fmt.Sprintf("Unable to resolve destination: %v", err))
+		log.Warn("Unable to resolve destination", slog.String("keyspace", keyspace), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 
@@ -541,7 +542,7 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 	for {
 		select {
 		case <-timeout:
-			log.Warn("Unable to get initial schema reload for keyspace: " + keyspace)
+			log.Warn("Unable to get initial schema reload for keyspace", slog.String("keyspace", keyspace))
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {
@@ -1002,9 +1003,15 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]any
 	// Most errors are not logged by vtgate because they're either too spammy or logged elsewhere.
 	switch ec {
 	case vtrpcpb.Code_UNKNOWN, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_DATA_LOSS:
-		logger.Errorf("%v, request: %+v", err, request)
+		logger.Error("Request failed",
+			slog.Any("error", err),
+			slog.String("error_code", ec.String()),
+			slog.Any("request", log.LazyString(func() string { return fmt.Sprintf("%+v", request) })))
 	case vtrpcpb.Code_UNAVAILABLE:
-		logger.Infof("%v, request: %+v", err, request)
+		logger.Info("Request failed",
+			slog.Any("error", err),
+			slog.String("error_code", ec.String()),
+			slog.Any("request", log.LazyString(func() string { return fmt.Sprintf("%+v", request) })))
 	case vtrpcpb.Code_UNIMPLEMENTED:
 		sql, exists := request["Sql"]
 		if !exists {
@@ -1015,7 +1022,7 @@ func recordAndAnnotateError(err error, statsKey []string, request map[string]any
 			return err
 		}
 		// log only if sql query present and able to successfully redact the PII.
-		logger.Infof("unsupported query: %q", piiSafeSQL)
+		logger.Info("unsupported query", slog.String("query", piiSafeSQL))
 	}
 	return err
 }
@@ -1030,7 +1037,7 @@ func formatError(err error) error {
 // HandlePanic recovers from panics, and logs / increment counters
 func (vtg *VTGate) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error("Uncaught panic", slog.Any("panic", x), slog.String("stack", string(tb.Stack(4))))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
 	}

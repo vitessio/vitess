@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -39,8 +40,10 @@ import (
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
@@ -3845,4 +3848,54 @@ func TestExecutorShowShards(t *testing.T) {
 			assert.Truef(t, tt.want.Equal(got), "Results got - %v", got)
 		})
 	}
+}
+
+// TestExecutorShowIgnoredWhereClause checks that the ignored where clause is
+// logged as SQL under filter, not in the message.
+func TestExecutorShowIgnoredWhereClause(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	executor, _, _, _, ctx := createExecutorEnv(t)
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+
+	for _, tc := range []struct {
+		query, msg, filter string
+	}{{
+		query:  "show vitess_shards where keyspace = 'where-sentinel'",
+		msg:    "SHOW VITESS_SHARDS where clause. Ignoring this (for now).",
+		filter: "keyspace = 'where-sentinel'",
+	}, {
+		query:  "show vitess_tablets where hostname = 'where-sentinel'",
+		msg:    "SHOW VITESS_TABLETS where clause. Ignoring this (for now).",
+		filter: "hostname = 'where-sentinel'",
+	}} {
+		_, err := executorExecSession(ctx, executor, session, tc.query, nil)
+		require.NoError(t, err, tc.query)
+		record := logs.Record(t, tc.msg)
+		assert.Equal(t, "INFO", record["level"])
+		assert.Equal(t, tc.filter, record["filter"])
+	}
+
+	for _, record := range logs.Records(t) {
+		assert.NotContains(t, record["msg"], "sentinel")
+	}
+	assert.NotContains(t, logs.String(), "0x")
+}
+
+func TestExecutorShowReplicationStatusNoResult(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	executor, _, replica := createExecutorEnvWithPrimaryReplicaConn(t, t.Context(), 0)
+	replica.SetResults([]*sqltypes.Result{nil})
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+
+	_, err := executorExecSession(t.Context(), executor, session, "show vitess_replication_status", nil)
+	require.NoError(t, err)
+
+	// The tablet returned no result and no error, so there's no error to log.
+	record := logs.Record(t, "Could not get replication status")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, topoproto.TabletAliasString(replica.Tablet().Alias), record["tablet"])
+	assert.NotEmpty(t, record["tablet_host_port"])
+	assert.NotContains(t, record, "error")
+	assert.NotContains(t, record, "error_code")
+	assert.NotContains(t, logs.String(), "<nil>")
 }

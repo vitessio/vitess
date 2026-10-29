@@ -19,6 +19,9 @@ package vtgate
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +37,9 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -977,4 +983,46 @@ func TestBinlogDumpGTID(t *testing.T) {
 		}, noopSend)
 		require.NoError(t, err)
 	})
+}
+
+func TestRecordAndAnnotateErrorLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	parser := sqlparser.NewTestParser()
+	request := map[string]any{"Sql": "select 'request-sentinel'"}
+
+	err := recordAndAnnotateError(vterrors.New(vtrpcpb.Code_INTERNAL, "internal error"), []string{"Execute", "ks", "primary"}, request, logutil.NewThrottledLogger("Execute", time.Minute), parser)
+	require.EqualError(t, err, "internal error")
+	record := logs.Record(t, "Request failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "Execute", record["logger"])
+	assert.Equal(t, "internal error", record["error"])
+	assert.Equal(t, "INTERNAL", record["error_code"])
+	assert.Equal(t, "map[Sql:select 'request-sentinel']", record["request"])
+
+	logs.Reset()
+	err = recordAndAnnotateError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, "unavailable"), []string{"StreamExecute", "ks", "primary"}, request, logutil.NewThrottledLogger("StreamExecute", time.Minute), parser)
+	require.EqualError(t, err, "unavailable")
+	record = logs.Record(t, "Request failed")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "StreamExecute", record["logger"])
+	assert.Equal(t, "UNAVAILABLE", record["error_code"])
+
+	for _, record := range logs.Records(t) {
+		assert.NotContains(t, record["msg"], "sentinel")
+	}
+}
+
+func TestHTTPErrorfDoesNotLogTheRequest(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	r := httptest.NewRequest(http.MethodGet, "/api/keyspaces/?token=query-sentinel", nil)
+	r.Header.Set("Authorization", "Basic header-sentinel")
+
+	httpErrorf(httptest.NewRecorder(), r, "cannot marshal data: %v", errors.New("boom"))
+
+	record := logs.Record(t, "HTTP error")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "/api/keyspaces/", record["url"])
+	assert.Equal(t, "cannot marshal data: boom", record["error"])
+	// The old line printed the whole request with %#v, headers included.
+	assert.NotContains(t, logs.String(), "sentinel")
 }

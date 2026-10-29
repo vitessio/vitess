@@ -19,8 +19,8 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,11 +28,11 @@ import (
 
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 
-	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -1292,8 +1292,7 @@ func TestTxConnResolveInvalidDTID(t *testing.T) {
 
 	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
-	tl := syslogger.NewTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sbc0.UnresolvedTransactionsResult = []*querypb.TransactionMetadata{{
 		Dtid:  "abcd",
@@ -1306,7 +1305,7 @@ func TestTxConnResolveInvalidDTID(t *testing.T) {
 	}}
 	err := sc.txConn.ResolveTransactions(ctx, getMMTarget())
 	require.ErrorContains(t, err, "failed to resolve 1 out of 1 transactions")
-	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"), "invalid parts in dtid: abcd")
+	assertResolveFailureLogged(t, logs, "abcd", "invalid parts in dtid: abcd")
 }
 
 func TestTxConnResolveInternalError(t *testing.T) {
@@ -1314,8 +1313,7 @@ func TestTxConnResolveInternalError(t *testing.T) {
 
 	sc, sbc0, _, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
-	tl := syslogger.NewTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sbc0.UnresolvedTransactionsResult = []*querypb.TransactionMetadata{{
 		Dtid:  "TestTxConn:0:1234",
@@ -1328,7 +1326,7 @@ func TestTxConnResolveInternalError(t *testing.T) {
 	}}
 	err := sc.txConn.ResolveTransactions(ctx, getMMTarget())
 	require.ErrorContains(t, err, "failed to resolve 1 out of 1 transactions")
-	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"), "invalid state: UNKNOWN")
+	assertResolveFailureLogged(t, logs, "TestTxConn:0:1234", "invalid state: UNKNOWN")
 }
 
 func TestTxConnResolveSetRollbackFail(t *testing.T) {
@@ -1336,8 +1334,7 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
-	tl := syslogger.NewTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sbc0.UnresolvedTransactionsResult = []*querypb.TransactionMetadata{{
 		Dtid:  "TestTxConn:0:1234",
@@ -1351,7 +1348,7 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 	sbc0.MustFailSetRollback = 1
 	err := sc.txConn.ResolveTransactions(ctx, getMMTarget())
 	require.ErrorContains(t, err, "failed to resolve 1 out of 1 transactions")
-	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"), "error: err")
+	assertResolveFailureLogged(t, logs, "TestTxConn:0:1234", "error: err")
 	assert.EqualValues(t, 1, sbc0.UnresolvedTransactionsCount.Load(), "sbc0.UnresolvedTransactionsCount")
 	assert.EqualValues(t, 1, sbc0.UnresolvedTransactionsCount.Load(), "sbc0.UnresolvedTransactionsCount")
 	assert.EqualValues(t, 1, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
@@ -1365,8 +1362,7 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
-	tl := syslogger.NewTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sbc0.UnresolvedTransactionsResult = []*querypb.TransactionMetadata{{
 		Dtid:  "TestTxConn:0:1234",
@@ -1380,7 +1376,7 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 	sbc1.MustFailRollbackPrepared = 1
 	err := sc.txConn.ResolveTransactions(ctx, getMMTarget())
 	require.ErrorContains(t, err, "failed to resolve 1 out of 1 transactions")
-	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"), "error: err")
+	assertResolveFailureLogged(t, logs, "TestTxConn:0:1234", "error: err")
 	assert.EqualValues(t, 1, sbc0.UnresolvedTransactionsCount.Load(), "sbc0.UnresolvedTransactionsCount")
 	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
 	assert.EqualValues(t, 1, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
@@ -1393,8 +1389,7 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
-	tl := syslogger.NewTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sbc0.UnresolvedTransactionsResult = []*querypb.TransactionMetadata{{
 		Dtid:  "TestTxConn:0:1234",
@@ -1408,7 +1403,7 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 	sbc1.MustFailCommitPrepared = 1
 	err := sc.txConn.ResolveTransactions(ctx, getMMTarget())
 	require.ErrorContains(t, err, "failed to resolve 1 out of 1 transactions")
-	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"), "error: err")
+	assertResolveFailureLogged(t, logs, "TestTxConn:0:1234", "error: err")
 	assert.EqualValues(t, 1, sbc0.UnresolvedTransactionsCount.Load(), "sbc0.UnresolvedTransactionsCount")
 	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
 	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
@@ -1420,8 +1415,7 @@ func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 
 	sc, sbc0, sbc1, _, _, _ := newTestTxConnEnv(t, ctx, "TestTxConn")
 
-	tl := syslogger.NewTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sbc0.UnresolvedTransactionsResult = []*querypb.TransactionMetadata{{
 		Dtid:  "TestTxConn:0:1234",
@@ -1435,7 +1429,7 @@ func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 	sbc0.MustFailConcludeTransaction = 1
 	err := sc.txConn.ResolveTransactions(ctx, getMMTarget())
 	require.ErrorContains(t, err, "failed to resolve 1 out of 1 transactions")
-	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"), "error: err")
+	assertResolveFailureLogged(t, logs, "TestTxConn:0:1234", "error: err")
 	assert.EqualValues(t, 1, sbc0.UnresolvedTransactionsCount.Load(), "sbc0.UnresolvedTransactionsCount")
 	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
 	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
@@ -1658,4 +1652,14 @@ func newTestTxConnEnvNShards(t *testing.T, ctx context.Context, name string, n i
 	require.NoError(t, err)
 
 	return sc, sbcl, rssl, rssa
+}
+
+// assertResolveFailureLogged checks the record logged for a transaction that
+// failed to resolve.
+func assertResolveFailureLogged(t *testing.T, logs *logtest.Logs, dtid, wantErr string) {
+	t.Helper()
+	record := logs.Record(t, "Failed to resolve transaction")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, dtid, record["dtid"])
+	assert.Contains(t, record["error"], wantErr)
 }
