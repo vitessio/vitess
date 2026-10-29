@@ -18,6 +18,7 @@ package vtexplain
 
 import (
 	"encoding/json"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -27,11 +28,13 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -282,4 +285,72 @@ func TestNewTabletDoesNotMirrorMysqlWaitTimeout(t *testing.T) {
 		assert.Failf(t, "unexpected wait_timeout read", "the fake tablet received %q after a schema broadcast", query)
 	case <-time.After(300 * time.Millisecond):
 	}
+}
+
+// TestParseSchemaLogs checks that skipped and unparsable statements are logged
+// under query, not in the message.
+func TestParseSchemaLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	testSchema := `
+select 'skipped-literal' from dual;
+alter table t1 add column c int;
+selec 'unparsable-literal' from dual;
+`
+	_, err := parseSchema(testSchema, &Options{StrictDDL: false}, sqlparser.NewTestParser())
+	require.NoError(t, err)
+
+	record := logs.Record(t, "ignoring non-DDL statement")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "select 'skipped-literal' from dual", record["query"])
+
+	record = logs.Record(t, "ignoring table statement")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "alter", record["ddl_action"])
+
+	record = logs.Record(t, "ERROR: failed to parse sql")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "selec 'unparsable-literal' from dual", record["query"])
+	assert.Contains(t, record["error"], "syntax error")
+	assert.Equal(t, "INVALID_ARGUMENT", record["error_code"])
+}
+
+// TestInferColTypeLogsInvalidColumn checks that an unknown column is logged
+// with its table, or the tables searched, and the column type map, all as
+// attributes.
+func TestInferColTypeLogsInvalidColumn(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	tableColumnMap := map[sqlparser.IdentifierCS]map[string]querypb.Type{
+		sqlparser.NewIdentifierCS("t2"): {"b": querypb.Type_VARCHAR},
+		sqlparser.NewIdentifierCS("t1"): {"a": querypb.Type_INT32},
+	}
+
+	inferColTypeFromExpr(sqlparser.NewColName("x"), tableColumnMap, nil, nil)
+	record := logs.Record(t, "vtexplain: invalid column")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "x", record["column"])
+	assert.Equal(t, []any{"t1", "t2"}, record["tables"])
+	assert.Equal(t, "map[t1:map[a:INT32] t2:map[b:VARCHAR]]", record["table_columns"])
+	assert.NotContains(t, record, "table")
+
+	logs.Reset()
+	inferColTypeFromExpr(sqlparser.NewColNameWithQualifier("y", sqlparser.NewTableName("t3")), tableColumnMap, nil, nil)
+	record = logs.Record(t, "vtexplain: invalid column")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "t3", record["table"])
+	assert.Equal(t, "y", record["column"])
+	assert.Equal(t, "map[t1:map[a:INT32] t2:map[b:VARCHAR]]", record["table_columns"])
+	assert.NotContains(t, record, "tables")
+}
+
+// TestInferColTypeLogsUnsupportedExpression checks that an expression vtexplain
+// can't type is logged under expression, with its Go type, not in the message.
+func TestInferColTypeLogsUnsupportedExpression(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	expr := &sqlparser.BinaryExpr{Operator: sqlparser.PlusOp, Left: sqlparser.NewIntLiteral("1"), Right: sqlparser.NewStrLiteral("val")}
+
+	inferColTypeFromExpr(expr, nil, nil, nil)
+	record := logs.Record(t, "vtexplain: unsupported select expression type")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "*sqlparser.BinaryExpr", record["type"])
+	assert.Equal(t, "1 + 'val'", record["expression"])
 }

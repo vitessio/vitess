@@ -17,6 +17,8 @@ limitations under the License.
 package vtcombo
 
 import (
+	"log/slog"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -24,11 +26,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/wrangler"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 func TestInitRoutingRules(t *testing.T) {
@@ -401,4 +408,23 @@ func TestInternalTabletManagerClient_TabletNotFoundErrors(t *testing.T) {
 			assert.Contains(t, err.Error(), "cannot find tablet")
 		})
 	}
+}
+
+// TestCreateKsLogsMissingVSchema checks that a missing vschema file is logged
+// with its path and keyspace as attributes.
+func TestCreateKsLogsMissingVSchema(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	env := vtenv.NewTestEnv()
+	wr := wrangler.NewTestWrangler(logutil.NewMemoryLogger(), ts, nil)
+	schemaDir := t.TempDir()
+
+	_, err := CreateKs(ctx, env, ts, &vttestpb.VTTestTopology{Cells: []string{"cell1"}}, nil, nil, schemaDir, &vttestpb.Keyspace{Name: "ks"}, false, 1, wr, nil)
+	require.NoError(t, err)
+
+	record := logs.Record(t, "File doesn't exist, skipping vschema for keyspace")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, filepath.Join(schemaDir, "ks", "vschema.json"), record["path"])
+	assert.Equal(t, "ks", record["keyspace"])
 }
