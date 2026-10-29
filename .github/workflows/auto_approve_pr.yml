@@ -9,7 +9,9 @@ permissions:
 jobs:
   auto_approve:
     name: Auto Approve Pull Request
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     permissions:
