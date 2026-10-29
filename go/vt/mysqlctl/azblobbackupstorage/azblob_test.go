@@ -18,11 +18,14 @@ package azblobbackupstorage
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 // TestMergeCancelCancelsOnOther guards the fix that makes an Azure upload honor
@@ -75,4 +78,22 @@ func TestMergeCancelCleanupCancels(t *testing.T) {
 	cleanup()
 
 	assert.ErrorIs(t, ctx.Err(), context.Canceled)
+}
+
+// TestListBackupsLogsContainerName checks that the log carries the configured
+// container name, not the formatted viperutil value.
+func TestListBackupsLogsContainerName(t *testing.T) {
+	containerName.Set("vt-backups")
+	t.Cleanup(func() { containerName.Set("") })
+	t.Setenv("VT_AZBLOB_ACCOUNT_KEY", "")
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	bs := &AZBlobBackupStorage{}
+	_, err := bs.ListBackups(t.Context(), "ks/0")
+	require.Error(t, err)
+
+	record := logs.Record(t, "ListBackups: [azblob]")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "vt-backups", record["container"])
+	assert.Equal(t, "ks/0/", record["search_prefix"])
 }
