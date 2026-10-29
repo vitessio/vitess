@@ -70,6 +70,7 @@ workflows:
     '.github/workflows/docker_lite_build_check.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc'
+        - 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d'
         - 'step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1'
     '.github/workflows/e2e_race.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
