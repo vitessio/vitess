@@ -1028,11 +1028,11 @@ func readPrimaryTarget(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 
 // stopsAtCommittedPosition reports whether catch-up stops at the primary's
 // committed position, which it does when this run's mysqld is MySQL 8.4 or
-// later, or MySQL 8.0 with at most one applier worker. Earlier versions drop a
+// later, or MySQL 8.0 with at most one applier worker. MySQL 8.0 drops a
 // parallel applier to a single thread until it reaches a stop position (MySQL
-// note 1753), which can make catch-up much slower, so with more workers, and on
-// other versions, catch-up replicates without one, as before. MariaDB positions
-// aren't MySQL56 GTID sets and never get one.
+// note 1753), which can make catch-up much slower, so with more workers
+// catch-up replicates without one, as before. Other versions keep the old
+// behavior too, and MariaDB positions aren't MySQL56 GTID sets.
 func stopsAtCommittedPosition(ctx context.Context, mysqld mysqlctl.MysqlDaemon) bool {
 	version, err := mysqld.GetVersionString(ctx)
 	if err != nil {
