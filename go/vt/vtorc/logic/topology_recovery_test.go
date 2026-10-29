@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -43,6 +44,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -715,6 +717,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				analyzedAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
 			}
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
 				AnalyzedInstanceAlias: analyzedAlias,
 				Analysis:              analysis,
@@ -727,6 +730,10 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
+				// The analysis names no primary, so the line leaves it out.
+				record := logs.Record(t, "recheckPrimaryHealth: Primary recovery is required")
+				assert.Equal(t, "INFO", record["level"])
+				assert.NotContains(t, record, "primary_tablet")
 				return
 			}
 
@@ -1095,7 +1102,38 @@ func TestRecoverIncapacitatedPrimary(t *testing.T) {
 				}
 			}
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			attempted, topologyRecovery, err := recoverIncapacitatedPrimary(t.Context(), &analysis, logger)
+			if !tt.pingOK {
+				record := logs.Record(t, "test: tabletmanager ping probe failed")
+				assert.Equal(t, "INFO", record["level"])
+				assert.Equal(t, "zon1-0000000100", record["tablet"])
+				assert.Equal(t, "ping failed", record["error"])
+				assert.Equal(t, "UNKNOWN", record["error_code"])
+			}
+			if tt.prsFails {
+				record := logs.Record(t, "test: PlannedReparentShard failed")
+				assert.Equal(t, "WARN", record["level"])
+				assert.Equal(t, keyspace, record["keyspace"])
+				assert.Equal(t, shard, record["shard"])
+				assert.Equal(t, assert.AnError.Error(), record["error"])
+				assert.Equal(t, "UNKNOWN", record["error_code"])
+				// ERS logs lines at INFO and WARNING; each is logged at its level.
+				levels := map[string]int{}
+				for _, record := range logs.Records(t) {
+					if record["reparent"] == "ERS" {
+						levels[record["level"].(string)]++
+						if strings.HasPrefix(record["msg"].(string), "test: could not determine MySQL version") {
+							assert.Equal(t, "WARN", record["level"])
+						}
+						if record["msg"] == "test: will initiate emergency reparent shard" {
+							assert.Equal(t, "INFO", record["level"])
+						}
+					}
+				}
+				assert.NotZero(t, levels["INFO"])
+				assert.NotZero(t, levels["WARN"])
+			}
 			if restoreStderr != nil {
 				log.Flush()
 				require.Eventually(t, func() bool {
@@ -2159,6 +2197,24 @@ func TestCheckIfAlreadyFixedReturnsCellFromRefreshedEntry(t *testing.T) {
 // executeCheckAndRecoverFunction path to ensure the returned refreshed entry is actually
 // used to suppress recovery.
 func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
+	record := checkPostLockCellGate(t, &topodatapb.TabletAlias{Cell: "zone2", Uid: 200})
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "zone1-0000000100", record["tablet"])
+	assert.Equal(t, "zone2", record["cell"])
+}
+
+// TestCellsNoRecoveryGateFiresAfterPostLockUnknownCell is the same, but the
+// shard records a primary term and no primary alias, so the refreshed cell is
+// unknown. The line that reports the skip leaves the cell out.
+func TestCellsNoRecoveryGateFiresAfterPostLockUnknownCell(t *testing.T) {
+	record := checkPostLockCellGate(t, nil)
+	assert.Equal(t, "zone1-0000000100", record["tablet"])
+	assert.NotContains(t, record, "cell")
+}
+
+// checkPostLockCellGate runs the scenario above with the shard's primary set to
+// primaryAlias, and returns the line that reports the skip.
+func checkPostLockCellGate(t *testing.T, primaryAlias *topodatapb.TabletAlias) map[string]any {
 	db.ClearVTOrcDatabase()
 	defer db.ClearVTOrcDatabase()
 
@@ -2175,7 +2231,7 @@ func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
 	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}
+		si.PrimaryAlias = primaryAlias
 		si.PrimaryTermStartTime = &vttimepb.Time{Seconds: 1672212205}
 		return nil
 	})
@@ -2242,11 +2298,12 @@ func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
 	counterKey := strings.Join([]string{recoveryName, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, RecoverySkipCellNoRecovery.String()}, ".")
 	skipsBefore := recoveriesSkippedCounter.Counts()[counterKey]
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	require.NoError(t, executeCheckAndRecoverFunction(analysis))
 
 	skipsAfter := recoveriesSkippedCounter.Counts()[counterKey]
 	require.Equal(t, skipsBefore+1, skipsAfter,
-		"CellNoRecovery skip counter must increment: post-lock refresh showed AnalyzedCell shifted from zone1 (allowed) to zone2 (denied)")
+		"CellNoRecovery skip counter must increment: post-lock refresh showed AnalyzedCell shifted from zone1 (allowed) to a denied or unknown cell")
 
 	var recoveryRows int
 	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM topology_recovery").Scan(&recoveryRows))
@@ -2255,6 +2312,7 @@ func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
 	var detectionRows int
 	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&detectionRows))
 	require.Equal(t, 1, detectionRows, "detection must be recorded even when recovery is suppressed by the post-lock cell gate")
+	return logs.Record(t, "Recovery for PrimaryTabletDeleted on ks/0: CheckAndRecover: NOT Recovering host (refreshed AnalyzedCell is denied or unknown; --cells-no-recovery fail-closed after lock)")
 }
 
 // TestResolveRecoveryIncidentBoundary covers the two-act incident boundary scenario:

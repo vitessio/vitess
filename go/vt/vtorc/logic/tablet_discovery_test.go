@@ -19,6 +19,7 @@ package logic
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -32,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
@@ -955,4 +957,68 @@ func TestValidateCellsNoRecovery(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRefreshTabletsUsingLogsFailedCells checks that the cells whose tablets
+// couldn't be read are logged as a list.
+func TestRefreshTabletsUsingLogsFailedCells(t *testing.T) {
+	t.Cleanup(db.ClearVTOrcDatabase)
+	tabletProto, err := (&topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Keyspace: "ks", Shard: "0"}).MarshalVT()
+	require.NoError(t, err)
+	factory := faketopo.NewFakeTopoFactory()
+	goodCell := faketopo.NewFakeConnection()
+	goodCell.AddListResult("tablets", []topo.KVInfo{{Key: []byte("zone1-0000000100"), Value: tabletProto}})
+	factory.SetCell("zone1", goodCell)
+	for _, cell := range []string{"zone2", "zone3"} {
+		badCell := faketopo.NewFakeConnection()
+		badCell.AddListError(true)
+		factory.SetCell(cell, badCell)
+	}
+	oldTs := ts
+	t.Cleanup(func() { ts = oldTs })
+	ts = faketopo.NewFakeTopoServer(t.Context(), factory)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, refreshTabletsUsing(t.Context(), func(*topodatapb.TabletAlias) {}, false))
+
+	record := logs.Record(t, "Got partial topo result")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.ElementsMatch(t, []any{"zone2", "zone3"}, record["failed_cells"])
+}
+
+// TestRefreshTabletsLogsDiscoveredTablet checks that a discovered tablet is
+// logged field by field (see TestTabletLogAttrs), not printed in the message.
+func TestRefreshTabletsLogsDiscoveredTablet(t *testing.T) {
+	t.Cleanup(db.ClearVTOrcDatabase)
+	tablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Hostname:      "tablet-host",
+		PortMap:       map[string]int32{"vt": 15100, "grpc": 16100},
+		Tags:          map[string]string{"team": "a"},
+		Keyspace:      "ks",
+		Shard:         "0",
+		Type:          topodatapb.TabletType_REPLICA,
+		MysqlHostname: "mysql-host",
+		MysqlPort:     17100,
+	}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	refreshTablets([]*topo.TabletInfo{{Tablet: tablet}}, "SELECT alias FROM vitess_tablet WHERE keyspace = ? AND shard = ?",
+		sqlutils.Args("ks", "0"), func(*topodatapb.TabletAlias) {}, false, nil)
+
+	record := logs.Record(t, "Discovered tablet")
+	delete(record, "time")
+	assert.Equal(t, map[string]any{
+		"level":          "INFO",
+		"msg":            "Discovered tablet",
+		"tablet":         "zone1-0000000100",
+		"hostname":       "tablet-host",
+		"port_map":       map[string]any{"grpc": float64(16100), "vt": float64(15100)},
+		"tablet_tags":    map[string]any{"team": "a"},
+		"keyspace":       "ks",
+		"shard":          "0",
+		"tablet_type":    "REPLICA",
+		"mysql_hostname": "mysql-host",
+		"mysql_port":     float64(17100),
+	}, record)
 }

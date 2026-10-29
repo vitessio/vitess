@@ -787,7 +787,7 @@ func recoveryDuration(t *testing.T, vtorcProcess *cluster.VTOrcProcess, analysis
 	t.Cleanup(func() { f.Close() })
 
 	recoveryPrefix := fmt.Sprintf("Recovery for %s on %s/%s", analysisCode, keyspace, shard)
-	startMarker := "proceeding with recovery on"
+	startMarker := "executeCheckAndRecoverFunction: proceeding with recovery"
 	endMarker := "Recovery succeeded"
 
 	var startTime, endTime time.Time
