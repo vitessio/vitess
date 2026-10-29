@@ -14,9 +14,9 @@ permissions: read-all
 jobs:
   analysis:
     name: Scorecard analysis
-    # vitess-security is private, so its GitHub-hosted runners are smaller; it
-    # uses a CNCF VM the size of the public ubuntu-24.04 runner instead.
-    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       # Needed to upload the results to code-scanning dashboard.
