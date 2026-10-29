@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"maps"
 	"math/rand/v2"
 	"os/exec"
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
@@ -569,4 +571,22 @@ func startConsul(t *testing.T) (*exec.Cmd, string) {
 	}
 
 	return cmd, serverAddr
+}
+
+// TestRunClusterLogsConfig checks that the cluster config is an attribute of a
+// constant message. The external topo implementation doesn't exist, so the
+// cluster fails to start right after the config is logged, before MySQL.
+func TestRunClusterLogsConfig(t *testing.T) {
+	conf := config
+	t.Cleanup(func() { resetConfig(conf) })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	cluster, err := startCluster("--external-topo-implementation=no_such_topo", "--external-topo-global-server-address=localhost:0", "--external-topo-global-root=/vitess/global")
+	require.Error(t, err)
+	require.NotNil(t, cluster.Env)
+	require.NoError(t, cluster.Env.TearDown())
+
+	record := logs.Record(t, "config")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Contains(t, record["config"], `ExternalTopoImplementation:"no_such_topo"`)
 }
