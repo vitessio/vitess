@@ -17,7 +17,7 @@ limitations under the License.
 package legacy
 
 import (
-	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -73,7 +73,7 @@ func (pr *poolRefresh) startRefreshTicker() {
 			case <-pr.refreshTicker.C:
 				val, err := pr.refreshCheck()
 				if err != nil {
-					log.Info(fmt.Sprint(err))
+					log.Info("pool refresh check failed", slog.Any("error", err))
 				}
 				if val {
 					go pr.pool.reopen()

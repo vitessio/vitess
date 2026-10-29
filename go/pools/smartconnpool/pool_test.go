@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"runtime"
 	"slices"
@@ -30,6 +31,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 var (
@@ -759,6 +762,36 @@ func TestCloseWithContextAfterSetCapacityZeroClosesPool(t *testing.T) {
 
 	require.NoError(t, p.CloseWithContext(ctx))
 	require.False(t, p.IsOpen())
+}
+
+func TestReopenAndCloseTimeoutsAreLogged(t *testing.T) {
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	})
+	p.Name = "test_pool"
+	p.Open(newConnector(&state), nil)
+
+	conn, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	p.reopen()
+	p.Close()
+	conn.Recycle()
+
+	for _, msg := range []string{"failed to reopen pool", "failed to close pool"} {
+		record := logs.Record(t, msg)
+		assert.Equal(t, "ERROR", record["level"])
+		assert.Equal(t, "test_pool", record["pool"])
+		assert.Contains(t, record["error"], "timed out while waiting for connections to be returned to the pool")
+		assert.Equal(t, "ABORTED", record["error_code"])
+	}
 }
 
 // TestCloseWithContextDrainsAfterTimedOutSetCapacityZero guards against an

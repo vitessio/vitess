@@ -19,7 +19,7 @@ package smartconnpool
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"sync"
 	"sync/atomic"
@@ -295,7 +295,7 @@ func (pool *ConnPool[C]) open() {
 		pool.runWorker(closeChan, refreshInterval, func(_ time.Time) bool {
 			refresh, err := pool.config.refresh()
 			if err != nil {
-				log.Error(fmt.Sprint(err))
+				log.Error("pool refresh check failed", slog.Any("error", err))
 			}
 			if refresh {
 				pool.reopen()
@@ -327,7 +327,7 @@ func (pool *ConnPool[C]) Close() {
 	defer cancel()
 
 	if err := pool.CloseWithContext(ctx); err != nil {
-		log.Error(fmt.Sprintf("failed to close pool %q: %v", pool.Name, err))
+		log.Error("failed to close pool", slog.String("pool", pool.Name), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 }
 
@@ -384,7 +384,7 @@ func (pool *ConnPool[C]) reopen() {
 	// all the existing connections, as they're now connected to a stale MySQL
 	// instance.
 	if err := pool.setCapacity(ctx, 0); err != nil {
-		log.Error(fmt.Sprintf("failed to reopen pool %q: %v", pool.Name, err))
+		log.Error("failed to reopen pool", slog.String("pool", pool.Name), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 
 	// the second call to setCapacity cannot fail because it's only increasing the number
