@@ -16,10 +16,7 @@ jobs:
       matrix:
         branch: [ main, release-24.0, release-23.0 ]
     name: Update Golang Version
-    # vitess-security is private, so its GitHub-hosted runners are billed and
-    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
-    # instead.
-    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Harden the runner (Audit all outbound calls)

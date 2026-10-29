@@ -38,10 +38,7 @@ jobs:
       fail-fast: false
       matrix:
         set: [root, addlicense, gofumpt, goimports, golangci-lint, gotestsum, goyacc]
-    # vitess-security is private, so its GitHub-hosted runners are billed and
-    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
-    # instead.
-    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -177,10 +174,7 @@ jobs:
           - entry: tools
             base: build,unit
             arch: x64
-            # vitess-security is private, so its GitHub-hosted runners are
-            # billed and smaller; it uses a CNCF VM the size of the public
-            # ubuntu-24.04 runner instead.
-            runner: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+            runner: ubuntu-24.04
             go-tools: addlicense,gofumpt,goimports,golangci-lint,gotestsum,goyacc
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
