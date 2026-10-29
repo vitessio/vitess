@@ -462,21 +462,22 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				// This helps to ensure that the table does not grow too large and the
 				// number of rows does not have a big impact on the queries used for
 				// the workflow.
+				// The goroutine can outlive this callback, and loadSettings
+				// writes the workflow name, so take the attributes here.
+				gcLogAttrs := vc.vr.logAttrs()
 				go func() {
 					gcQuery := fmt.Sprintf("delete from _vt.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from _vt.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
 						vc.vr.id, encodeString(tableName), vc.vr.id, encodeString(tableName))
 					dbClient := vc.vr.vre.getDBClient(false)
 					if err := dbClient.Connect(); err != nil {
 						log.Error("Error while garbage collecting older copy_state rows, could not connect to database",
-							vc.vr.logAttrs(
-								slog.Any("error", err),
-							)...)
+							append(gcLogAttrs, slog.Any("error", err))...)
 						return
 					}
 					defer dbClient.Close()
 					if _, err := dbClient.ExecuteFetch(gcQuery, -1); err != nil {
 						log.Error("Error while garbage collecting older copy_state rows",
-							vc.vr.logAttrs(
+							append(gcLogAttrs,
 								slog.String("query", gcQuery),
 								slog.Any("error", err),
 							)...)
