@@ -8,13 +8,20 @@ on:
   pull_request:
     branches: '**'
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
-  build:
-    name: Check Make VTAdmin Web Proto
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+  # Path filtering runs here, on a small runner (a CNCF container in
+  # vitess-security), so that the job below claims a VM there only when
+  # something relevant changed.
+  changes:
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    outputs:
+      proto_changes: ${{ steps.changes.outputs.proto_changes }}
     steps:
+<<<<<<< HEAD
     - name: Skip CI
       run: |
         if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
@@ -22,6 +29,21 @@ jobs:
           exit 1
         fi
 
+||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+=======
+>>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -29,9 +51,17 @@ jobs:
         fetch-depth: 2
         persist-credentials: 'false'
 
+<<<<<<< HEAD
     - name: Tune the OS
       uses: $/.github/actions/tune-os
 
+||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
+    - name: Tune the OS
+      timeout-minutes: 5
+      uses: $/.github/actions/tune-os
+
+=======
+>>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
     - name: Find the base of the pull request's merge commit
       # github.event.pull_request.base.sha is not updated when the base branch
       # moves, so paths-filter would also count the base branch's newer commits.
@@ -60,12 +90,53 @@ jobs:
             - 'web/vtadmin/src/proto/**'
             - '.github/workflows/check_make_vtadmin_web_proto.yml'
 
+  build:
+    name: Check Make VTAdmin Web Proto
+    needs: changes
+    if: ${{ !cancelled() }}
+    # When nothing relevant changed the job still runs (so its required status
+    # check is reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the job then only fails at that step.
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && (needs.changes.outputs.proto_changes == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && 'cncf-ubuntu-24.04-4-16-x86' || 'cncf-c-ubuntu-2-8-x86') || 'ubuntu-24.04' }}
+    steps:
+    - name: Fail if the gate job failed
+      # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Check out code
+      if: needs.changes.outputs.proto_changes == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
+    - name: Tune the OS
+      if: needs.changes.outputs.proto_changes == 'true'
+      timeout-minutes: 5
+      uses: $/.github/actions/tune-os
+
     - name: Set up Go
       uses: $/.github/actions/setup-go
-      if: steps.changes.outputs.proto_changes == 'true'
+      if: needs.changes.outputs.proto_changes == 'true'
 
     - name: Setup Node
-      if: steps.changes.outputs.proto_changes == 'true'
+      if: needs.changes.outputs.proto_changes == 'true'
       # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
       uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
       with:
@@ -73,11 +144,11 @@ jobs:
         node-version: '22.13.1'
 
     - name: Install npm dependencies
-      if: steps.changes.outputs.proto_changes == 'true'
+      if: needs.changes.outputs.proto_changes == 'true'
       run: npm ci
       working-directory: ./web/vtadmin
 
     - name: check_make_vtadmin_web_proto
-      if: steps.changes.outputs.proto_changes == 'true'
+      if: needs.changes.outputs.proto_changes == 'true'
       run: |
         tools/check_make_vtadmin_web_proto.sh

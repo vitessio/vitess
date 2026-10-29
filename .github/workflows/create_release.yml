@@ -14,7 +14,21 @@ permissions:
 jobs:
   build:
     name: Create Release
+<<<<<<< HEAD
     runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+||||||| parent of c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+=======
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-24.04
+>>>>>>> c42aa6d4f4 (CI: take lightweight jobs off CNCF VMs, and vitess-security off GitHub-hosted runners (#21788))
     steps:
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
