@@ -18,7 +18,7 @@ package cache
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -71,7 +71,7 @@ func ShouldRefreshFromIncomingContext(ctx context.Context) bool {
 
 	shouldRefresh, err := strconv.ParseBool(vals[0])
 	if err != nil {
-		log.Warn(fmt.Sprintf("failed to parse %s metadata key as bool: %s", cacheRefreshGRPCMetadataKey, err))
+		log.Warn("failed to parse metadata key as bool", slog.String("metadata_key", cacheRefreshGRPCMetadataKey), slog.Any("error", err))
 		return false
 	}
 
@@ -92,7 +92,7 @@ func ShouldRefreshFromRequest(r *http.Request) bool {
 
 	shouldRefresh, err := strconv.ParseBool(h)
 	if err != nil {
-		log.Warn(fmt.Sprintf("failed to parse %s header as bool: %s", cacheRefreshHeader, err))
+		log.Warn("failed to parse header as bool", slog.String("header", cacheRefreshHeader), slog.Any("error", err))
 		return false
 	}
 
