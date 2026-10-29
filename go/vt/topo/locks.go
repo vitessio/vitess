@@ -172,7 +172,14 @@ func (l *Lock) lock(ctx context.Context, ts *Server, lt iTopoLock, opts ...LockO
 		slog.Duration("lock_ttl", l.Options.ttl),
 	)
 
-	ctx, cancel := context.WithTimeout(ctx, LockTimeout)
+	timeout := LockTimeout
+	if l.Options.acquireTimeout != 0 {
+		if l.Options.acquireTimeout < 0 {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "lock acquisition timeout must not be negative")
+		}
+		timeout = l.Options.acquireTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	span, ctx := trace.NewSpan(ctx, "TopoServer.Lock")
 	span.Annotate("action", l.Action)
@@ -319,8 +326,9 @@ func checkLocked(ctx context.Context, lt iTopoLock) error {
 // lockOptions configure a Lock call. lockOptions are set by the LockOption
 // values passed to the lock functions.
 type lockOptions struct {
-	lockType LockType
-	ttl      time.Duration
+	lockType       LockType
+	ttl            time.Duration
+	acquireTimeout time.Duration
 }
 
 // LockOption configures how we perform the locking operation.
@@ -362,5 +370,14 @@ func WithTTL(ttl time.Duration) LockOption {
 func WithType(lt LockType) LockOption {
 	return newFuncLockOption(func(o *lockOptions) {
 		o.lockType = lt
+	})
+}
+
+// WithAcquireTimeout bounds the time spent acquiring a lock. It does not limit
+// the lifetime of the acquired lock or of the context returned by LockShard or
+// LockKeyspace. Zero uses LockTimeout; negative values are invalid.
+func WithAcquireTimeout(timeout time.Duration) LockOption {
+	return newFuncLockOption(func(o *lockOptions) {
+		o.acquireTimeout = timeout
 	})
 }
