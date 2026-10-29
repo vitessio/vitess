@@ -89,7 +89,7 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	options := &api.QueryOptions{}
 	pair, _, err := s.kv.Get(nodePath, options.WithContext(ctx))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, convertError(err, nodePath)
 	}
 	if pair == nil {
 		return nil, nil, topo.NewError(topo.NoNode, nodePath)

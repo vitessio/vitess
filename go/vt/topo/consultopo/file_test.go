@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/topo"
 )
 
 // TestGetEndsWithContext verifies that Get returns when its ctx is done, even if the Consul server never
@@ -59,7 +61,7 @@ func TestGetEndsWithContext(t *testing.T) {
 	t.Cleanup(s.Close)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	defer cancel()
+	t.Cleanup(cancel)
 	done := make(chan error, 1)
 	go func() {
 		_, _, err := s.Get(ctx, "file")
@@ -67,5 +69,6 @@ func TestGetEndsWithContext(t *testing.T) {
 	}()
 	require.Eventually(t, func() bool { return len(done) > 0 }, 30*time.Second, 10*time.Millisecond,
 		"Get did not return after its ctx was done")
-	require.ErrorIs(t, <-done, context.DeadlineExceeded)
+	err = <-done
+	require.True(t, topo.IsErrType(err, topo.Timeout), "expected a topo.Timeout error, got %v", err)
 }
