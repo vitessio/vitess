@@ -17,9 +17,14 @@ limitations under the License.
 package prometheusbackend
 
 import (
+	"log/slog"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func getStats() map[string]int64 {
@@ -35,4 +40,17 @@ func getStats() map[string]int64 {
 func TestCollector(t *testing.T) {
 	c := stats.NewCountersFuncWithMultiLabels("Name", "description", []string{"Table", "Plan"}, getStats)
 	c.Counts()
+
+	collector := &metricsFuncWithMultiLabelsCollector{
+		cfml: c,
+		desc: prometheus.NewDesc("name", "description", labelsToSnake(c.Labels()), nil),
+		vt:   prometheus.CounterValue,
+	}
+	logs := logtest.Capture(t, slog.LevelInfo)
+	ch := make(chan prometheus.Metric, len(getStats()))
+	collector.Collect(ch)
+	assert.Len(t, ch, 2)
+	record := logs.Record(t, "Error adding metric")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, collector.desc.String(), record["metric_desc"])
 }

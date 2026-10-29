@@ -18,6 +18,7 @@ package statsd
 
 import (
 	"expvar"
+	"log/slog"
 	"net"
 	"sort"
 	"strings"
@@ -29,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func getBackend(t *testing.T) (StatsBackend, *net.UDPConn) {
@@ -429,4 +431,14 @@ func TestMakeCommonTags(t *testing.T) {
 	expected2 := []string{"a:b", "c:d"}
 	res2 := makeCommonTags(map[string]string{"a": "b", "c": "d"})
 	assert.ElementsMatch(t, expected2, res2)
+}
+
+func TestStatsdUnknownMetricLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	var sb StatsBackend
+	sb.addExpVar(expvar.KeyValue{Key: "unknown_name", Value: new(expvar.Int)})
+	record := logs.Record(t, "Silently ignore metrics")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "unknown_name", record["stats_name"])
+	assert.Equal(t, "*expvar.Int", record["type"])
 }
