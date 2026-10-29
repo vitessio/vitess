@@ -17,11 +17,71 @@ limitations under the License.
 package main
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"log/slog"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log"
 )
+
+// TestExitLogs runs vtadmin in a child process, as it exits the process.
+func TestExitLogs(t *testing.T) {
+	const rbacPath = "testdata/no-such-rbac-config.yaml"
+	mode := os.Getenv("VTADMIN_EXIT_LOGS")
+	if mode != "" {
+		log.SwapLogger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+	}
+	switch mode {
+	case "rbac":
+		enableDynamicClusters = true
+		enableRBAC = true
+		rbacConfigPath = rbacPath
+		rootCmd.SetContext(context.Background())
+		run(rootCmd, nil)
+		return
+	case "flag":
+		rootCmd.SetArgs([]string{"--no-such-flag"})
+		main()
+		return
+	}
+
+	runExit := func(t *testing.T, mode string, msg string) map[string]any {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestExitLogs$")
+		cmd.Env = append(os.Environ(), "VTADMIN_EXIT_LOGS="+mode)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		var exitErr *exec.ExitError
+		require.ErrorAs(t, err, &exitErr, "stderr:\n%s", stderr.String())
+		assert.Equal(t, 1, exitErr.ExitCode())
+
+		for line := range strings.SplitSeq(stderr.String(), "\n") {
+			var record map[string]any
+			if json.Unmarshal([]byte(line), &record) == nil && record["msg"] == msg {
+				return record
+			}
+		}
+		require.FailNow(t, "record not logged", "%s\nstderr:\n%s", msg, stderr.String())
+		return nil
+	}
+
+	record := runExit(t, "rbac", "failed to load RBAC config")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, rbacPath, record["path"])
+	assert.Contains(t, record["error"], rbacPath)
+
+	record = runExit(t, "flag", "command failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "unknown flag: --no-such-flag", record["error"])
+}
 
 func TestMainFlagRegistration(t *testing.T) {
 	registerFlags()
