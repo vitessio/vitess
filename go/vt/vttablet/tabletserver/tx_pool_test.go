@@ -454,6 +454,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	assert.EqualValues(t, time.Second, record["timeout"])
 	assert.Equal(t, float64(connID), record["transaction_id"])
 	assert.Contains(t, record["transaction"], "principle")
+	assert.NotContains(t, record, "reserved_id")
 
 	// Regression test for #6727: make sure the tx limiter is decremented when the tx killer closes
 	// a transaction.
@@ -619,6 +620,37 @@ func TestTxTimeoutReservedConn(t *testing.T) {
 	time.Sleep(1000 * time.Millisecond)
 	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills)
 	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingTxKills)
+}
+
+// TestTxTimeoutKillsReservedConnLogsReservedID checks that the killer logs a
+// reserved connection with no transaction under reserved_id, as the pool's
+// shutdown does.
+func TestTxTimeoutKillsReservedConnLogsReservedID(t *testing.T) {
+	ctx := t.Context()
+
+	env := newEnv("TabletServerTest")
+	env.Config().TxPool.Size = 1
+	env.Config().Oltp.TxTimeout = time.Second
+	_, txPool, _, closer := setupWithEnv(t, env)
+	defer closer()
+	startingRcKills := txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]
+
+	logs := logtest.Capture(t, slog.LevelWarn)
+	conn, err := txPool.scp.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
+	require.NoError(t, err)
+	reservedID := conn.ReservedID()
+	require.NoError(t, conn.Taint(ctx, nil))
+	conn.Unlock()
+
+	assert.Eventually(t, func() bool {
+		return txPool.env.Stats().KillCounters.Counts()["ReservedConnection"]-startingRcKills == 1
+	}, 30*time.Second, 100*time.Millisecond, "the killer should reclaim the reserved connection")
+	record := logs.Record(t, "killing transaction (exceeded timeout)")
+	assert.Equal(t, "WARN", record["level"])
+	assert.EqualValues(t, time.Second, record["timeout"])
+	assert.Equal(t, float64(reservedID), record["reserved_id"])
+	assert.NotContains(t, record, "transaction_id")
+	assert.NotContains(t, record, "transaction")
 }
 
 func TestTxTimeoutReusedReservedConn(t *testing.T) {

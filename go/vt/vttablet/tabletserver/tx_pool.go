@@ -180,11 +180,18 @@ func (tp *TxPool) transactionKiller() {
 		// connection's state (txComplete clears the transaction properties,
 		// which feed the timer selection).
 		elapsedTimeout := conn.effectiveTimeout()
-		log.Warn("killing transaction (exceeded timeout)",
-			slog.Duration("timeout", elapsedTimeout),
-			slog.Int64("transaction_id", conn.ConnID),
-			slog.String("transaction", conn.txProps.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())),
-		)
+		if conn.IsInTransaction() {
+			log.Warn("killing transaction (exceeded timeout)",
+				slog.Duration("timeout", elapsedTimeout),
+				slog.Int64("transaction_id", conn.ConnID),
+				slog.String("transaction", conn.txProps.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())),
+			)
+		} else {
+			log.Warn("killing transaction (exceeded timeout)",
+				slog.Duration("timeout", elapsedTimeout),
+				slog.Int64("reserved_id", conn.ConnID),
+			)
+		}
 		if conn.usesTempTableIdleTimeout() {
 			tp.tempTableIdleKills.Add(1)
 		}
