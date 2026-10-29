@@ -850,6 +850,11 @@ func (tm *TabletManager) UndoDemotePrimary(ctx context.Context, semiSync bool) e
 		return err
 	}
 
+	// A replica whose replication initialization is deferred does not serve
+	// until it completes.
+	if tablet.Type != topodatapb.TabletType_PRIMARY && tm.tmState.replicationInitPending() {
+		return nil
+	}
 	// Update serving graph
 	log.Info("UndoDemotePrimary re-enabling query service")
 	if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {

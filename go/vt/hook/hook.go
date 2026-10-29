@@ -18,7 +18,6 @@ package hook
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -46,6 +45,10 @@ type HookResult struct {
 	Stdout     string
 	Stderr     string
 }
+
+// hookWaitDelay bounds how long ExecuteOptionalContext waits for a hook's
+// output after the hook exits or is killed.
+const hookWaitDelay = time.Second
 
 // The hook will return a value between 0 and 255. 0 if it succeeds.
 // So we have these additional values here for more information.
@@ -133,7 +136,15 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 }
 
 // ExecuteContext tries to execute the Hook with the given context and returns a HookResult.
-func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
+func (hook *Hook) ExecuteContext(ctx context.Context) *HookResult {
+	return hook.execute(ctx, 0)
+}
+
+// execute runs the hook. A child the hook started can keep its output open
+// after the hook exits or is killed. A zero waitDelay waits for that output to
+// close; otherwise execute stops waiting after waitDelay, and closes the
+// output, so a child that writes to it later fails or is killed by SIGPIPE.
+func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result *HookResult) {
 	result = &HookResult{}
 
 	// Find the hook.
@@ -148,6 +159,7 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	var stdout, stderr strings.Builder
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	cmd.WaitDelay = waitDelay
 
 	start := time.Now()
 	err = cmd.Run()
@@ -165,8 +177,21 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 		return result
 	}
 
-	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		// When (exec.Cmd).Run hits a context cancelled, the process is killed via SIGTERM.
+	// A hook that exited on its own keeps its exit status, even if its
+	// context ended while a child held its output open.
+	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+		result.ExitStatus = cmd.ProcessState.ExitCode()
+		if result.ExitStatus == HOOK_SUCCESS {
+			// Only the wait for the output failed.
+			result.Stderr += "WARNING: the output may be incomplete: " + err.Error() + "\n"
+		} else {
+			result.Stderr += "ERROR: " + err.Error() + "\n"
+		}
+		return result
+	}
+
+	if ctx.Err() != nil {
+		// When (exec.Cmd).Run hits a context that expired or was canceled, the process is killed.
 		// This means:
 		// 	1. cmd.ProcessState.Exited() is false.
 		//	2. cmd.ProcessState.ExitCode() is -1.
@@ -182,7 +207,12 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	}
 
 	if cmd.ProcessState != nil {
-		result.ExitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
+		status := cmd.ProcessState.Sys().(syscall.WaitStatus)
+		result.ExitStatus = status.ExitStatus()
+		if status.Signaled() {
+			// The exit status of a signaled hook is -1, which is HOOK_DOES_NOT_EXIST.
+			result.ExitStatus = HOOK_GENERIC_ERROR
+		}
 	} else {
 		result.ExitStatus = HOOK_CANNOT_GET_EXIT_STATUS
 	}
@@ -199,7 +229,18 @@ func (hook *Hook) Execute() (result *HookResult) {
 // ExecuteOptional executes an optional hook, logs if it doesn't
 // exist, and returns a printable error.
 func (hook *Hook) ExecuteOptional() error {
-	hr := hook.Execute()
+	return hook.optionalError(hook.Execute())
+}
+
+// ExecuteOptionalContext is ExecuteOptional, but the hook is killed when ctx
+// ends, and it waits at most hookWaitDelay for the hook's output once the hook
+// exits or is killed. A child the hook started that writes to its output after
+// that fails or is killed by SIGPIPE.
+func (hook *Hook) ExecuteOptionalContext(ctx context.Context) error {
+	return hook.optionalError(hook.execute(ctx, hookWaitDelay))
+}
+
+func (hook *Hook) optionalError(hr *HookResult) error {
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
 		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))

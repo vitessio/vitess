@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"os"
 	"slices"
@@ -35,9 +36,12 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -2739,4 +2743,172 @@ func TestFilterToMostAdvancedCombined(t *testing.T) {
 			}
 		})
 	}
+}
+
+// blockingSourceTMC records the parent of each SetReplicationSource call and blocks
+// it until release is closed.
+type blockingSourceTMC struct {
+	tmclient.TabletManagerClient
+
+	parents chan *topodatapb.TabletAlias
+	release chan struct{}
+}
+
+func (fake *blockingSourceTMC) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
+	fake.parents <- parent
+	<-fake.release
+	return nil
+}
+
+// newSetReplicationSourceTopo returns a topology whose shard record names
+// zone1-0000000100 as primary, with zone1-0000000101 also of type PRIMARY, and
+// the replica zone1-0000000102.
+func newSetReplicationSourceTopo(t *testing.T) (*topo.Server, *topodatapb.Tablet) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_PRIMARY, Keyspace: "ks", Shard: "-",
+	}, &testutil.AddTabletOptions{AlsoSetShardPrimary: true})
+	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Type: topodatapb.TabletType_PRIMARY, Keyspace: "ks", Shard: "-",
+	}, nil)
+	replica := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Type: topodatapb.TabletType_REPLICA, Keyspace: "ks", Shard: "-"}
+	testutil.AddTablet(ctx, t, ts, replica, nil)
+	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilitySemiSync)
+	return ts, replica
+}
+
+// TestSetReplicationSourceHoldsShardLock checks that SetReplicationSource reads the
+// shard primary only once it holds the shard lock, and holds it through the RPC.
+func TestSetReplicationSourceHoldsShardLock(t *testing.T) {
+	ts, replica := newSetReplicationSourceTopo(t)
+	tmc := &blockingSourceTMC{parents: make(chan *topodatapb.TabletAlias, 1), release: make(chan struct{})}
+
+	// A reparent holds the lock and publishes the new primary before releasing it.
+	lockCtx, unlock, err := ts.LockShard(t.Context(), "ks", "-", "reparent")
+	require.NoError(t, err)
+	returned := make(chan error, 1)
+	go func() { returned <- SetReplicationSource(t.Context(), ts, tmc, replica) }()
+	assert.Never(t, func() bool { return len(tmc.parents) > 0 }, time.Second, 10*time.Millisecond, "the RPC was sent while the reparent held the lock")
+	_, err = ts.UpdateShardFields(lockCtx, "ks", "-", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
+		return nil
+	})
+	require.NoError(t, err)
+	unlock(&err)
+	require.NoError(t, err)
+
+	select {
+	case parent := <-tmc.parents:
+		assert.Equal(t, "zone1-0000000101", topoproto.TabletAliasString(parent))
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the RPC was not sent after the lock was released")
+	}
+	// The lock is held while the RPC runs.
+	_, _, err = ts.LockShard(t.Context(), "ks", "-", "contender", topo.WithAcquireTimeout(time.Second))
+	require.Error(t, err)
+	close(tmc.release)
+	select {
+	case err := <-returned:
+		require.NoError(t, err)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "SetReplicationSource did not return")
+	}
+	_, unlock, err = ts.LockShard(t.Context(), "ks", "-", "contender", topo.WithAcquireTimeout(30*time.Second))
+	require.NoError(t, err)
+	unlock(&err)
+}
+
+// TestSetReplicationSourceLockCanceled checks that SetReplicationSource sends no RPC
+// if its context ends while it waits for the shard lock.
+func TestSetReplicationSourceLockCanceled(t *testing.T) {
+	ts, replica := newSetReplicationSourceTopo(t)
+	tmc := &blockingSourceTMC{parents: make(chan *topodatapb.TabletAlias, 1), release: make(chan struct{})}
+	close(tmc.release)
+	_, unlock, err := ts.LockShard(t.Context(), "ks", "-", "reparent")
+	require.NoError(t, err)
+	t.Cleanup(func() { unlock(&err) })
+
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	require.Error(t, SetReplicationSource(ctx, ts, tmc, replica))
+	assert.Empty(t, tmc.parents)
+}
+
+// stalledSourceTMC blocks each SetReplicationSource call until its context ends.
+type stalledSourceTMC struct {
+	tmclient.TabletManagerClient
+}
+
+func (stalledSourceTMC) SetReplicationSource(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync bool, heartbeatInterval float64) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// TestSetReplicationSourceBoundsLockHold checks that a stalled RPC holds the shard lock
+// for at most topo.RemoteOperationTimeout, or less if the caller's deadline is shorter.
+func TestSetReplicationSourceBoundsLockHold(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		remoteTimeout time.Duration
+		callerTimeout time.Duration
+	}{
+		{name: "remote operation timeout", remoteTimeout: time.Second, callerTimeout: time.Hour},
+		{name: "shorter caller deadline", remoteTimeout: time.Hour, callerTimeout: time.Second},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			saved := topo.RemoteOperationTimeout
+			topo.RemoteOperationTimeout = tc.remoteTimeout
+			t.Cleanup(func() { topo.RemoteOperationTimeout = saved })
+			ts, replica := newSetReplicationSourceTopo(t)
+
+			ctx, cancel := context.WithTimeout(t.Context(), tc.callerTimeout)
+			defer cancel()
+			start := time.Now()
+			err := SetReplicationSource(ctx, ts, stalledSourceTMC{}, replica)
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+			assert.Less(t, time.Since(start), 30*time.Second)
+
+			topo.RemoteOperationTimeout = saved
+			_, unlock, err := ts.LockShard(t.Context(), "ks", "-", "contender", topo.WithAcquireTimeout(time.Second))
+			require.NoError(t, err, "the shard lock was not released")
+			unlock(&err)
+		})
+	}
+}
+
+// TestSetReplicationSourceLookupErrors checks that SetReplicationSource returns without an
+// error or an RPC only when the shard has no primary, and reports failures to read it.
+func TestSetReplicationSourceLookupErrors(t *testing.T) {
+	replica := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Keyspace: "ks", Shard: "-", Type: topodatapb.TabletType_REPLICA}
+	// A nil client fails the test if an RPC is sent.
+	var tmc tmclient.TabletManagerClient
+
+	t.Run("no primary", func(t *testing.T) {
+		ts := memorytopo.NewServer(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+		_, err := ts.GetOrCreateShard(t.Context(), "ks", "-")
+		require.NoError(t, err)
+		require.NoError(t, SetReplicationSource(t.Context(), ts, tmc, replica))
+	})
+	for _, lookupErr := range []error{context.DeadlineExceeded, errors.New("topology unavailable")} {
+		t.Run(lookupErr.Error(), func(t *testing.T) {
+			ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+			t.Cleanup(ts.Close)
+			_, err := ts.GetOrCreateShard(t.Context(), "ks", "-")
+			require.NoError(t, err)
+			factory.AddOperationError(memorytopo.Get, "keyspaces/ks/shards/-/Shard", lookupErr)
+			require.ErrorIs(t, SetReplicationSource(t.Context(), ts, tmc, replica), lookupErr)
+		})
+	}
+	t.Run("primary of another type", func(t *testing.T) {
+		ts, _ := newSetReplicationSourceTopo(t)
+		_, err := ts.UpdateTabletFields(t.Context(), &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, func(tablet *topodatapb.Tablet) error {
+			tablet.Type = topodatapb.TabletType_REPLICA
+			return nil
+		})
+		require.NoError(t, err)
+		require.ErrorContains(t, SetReplicationSource(t.Context(), ts, tmc, replica), "inconsistent state")
+	})
 }

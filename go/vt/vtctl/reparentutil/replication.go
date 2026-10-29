@@ -324,13 +324,30 @@ func ReplicaWasRunning(stopStatus *replicationdatapb.StopReplicationStatus) (boo
 // tabletmanager RPC.
 //
 // It does not start the replication forcefully.
-// If we are unable to find the shard primary of the tablet from the topo server
-// we exit out without any error.
-func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet) error {
+// If the shard has no primary, it returns without any error.
+//
+// It holds the shard lock from reading the shard primary through the RPC, so a
+// reparent holding the lock is not overridden with the primary it replaces. The
+// work under the lock is bounded by topo.RemoteOperationTimeout.
+func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, tablet *topodatapb.Tablet) (err error) {
+	ctx, unlock, err := ts.LockShard(ctx, tablet.Keyspace, tablet.Shard, "SetReplicationSource")
+	if err != nil {
+		return err
+	}
+	defer unlock(&err)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+
+	si, err := ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return err
+	}
+	if si.PrimaryAlias == nil {
+		return nil
+	}
 	shardPrimary, err := topotools.GetShardPrimaryForTablet(ctx, ts, tablet)
 	if err != nil {
-		// If we didn't find the shard primary, we return without any error
-		return nil
+		return err
 	}
 
 	durabilityName, err := ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
