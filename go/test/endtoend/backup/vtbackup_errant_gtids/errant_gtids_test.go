@@ -144,14 +144,14 @@ func testBinloggedInitSQL(t *testing.T) {
 // ERS elects a primary that lacks it. vtbackup must not complete a backup with
 // the write.
 //
-// Tablet action locks order the steps. replica1's lock is held while ERS stops
-// replication, so the replicas answer while the primary's forced demotion is
-// still running, held up by closing the semi-sync monitor, which waits for the
-// monitor's blocked writes until the pool's close timeout (10s, longer than the
-// first sleep): ERS cancels the demotion and leaves the primary's position out. ERS then repoints the primary, which disables its primary-side
-// semi-sync and commits the write. A second sleep on replica1, queued behind ERS's RPC,
-// outlasts the promotion's timeout (topo.RemoteOperationTimeout, 15s), so the
-// promotion fails and the shard record keeps naming the repointed old primary.
+// Tablet action locks order the steps. The primary's lock is held until after
+// replica1's, so ERS's request to the primary is still waiting when the replicas
+// answer: ERS cancels it, so the primary is not demoted and its position is left
+// out. ERS then repoints the primary once its lock is free, which disables its
+// primary-side semi-sync and commits the write. A second sleep on replica1, queued
+// behind ERS's RPC, outlasts the promotion's timeout (topo.RemoteOperationTimeout,
+// 15s), so the promotion fails and the shard record keeps naming the repointed old
+// primary.
 func testERSWithReachablePrimary(t *testing.T) {
 	const msg = "released-by-repoint"
 	backups := listBackups(t)
@@ -170,16 +170,15 @@ func testERSWithReachablePrimary(t *testing.T) {
 	writeInBackground(t, primary, msg)
 	run.waitForRow(t, msg)
 	run.waitForLog(t, "has not committed")
-	// The forced demotion closes the semi-sync monitor before it disables
-	// semi-sync, and the close waits for the monitor's blocked writes.
-	require.Eventually(t, func() bool {
-		blocked, ok := primary.VttabletProcess.GetVars()["SemiSyncMonitorWritesBlocked"].(float64)
-		return ok && blocked > 0
-	}, time.Minute, 500*time.Millisecond, "the primary's semi-sync monitor never blocked on a write")
 
+	// The primary's sleep starts once replica1's holds its lock, and is longer,
+	// so it ends after replica1's. It ends long before the promotion's timeout.
 	firstSleep := sleepTablet(replica1, 8*time.Second)
 	require.Eventually(t, func() bool { return actionLockHeld(replica1) }, 30*time.Second, 100*time.Millisecond,
 		"%s never held its action lock", replica1.Alias)
+	primarySleep := sleepTablet(primary, 12*time.Second)
+	require.Eventually(t, func() bool { return actionLockHeld(primary) }, 30*time.Second, 100*time.Millisecond,
+		"%s never held its action lock", primary.Alias)
 	stopRPCs := countInFile(replica1.VttabletProcess.ErrorLog, "StopReplicationAndGetStatus")
 	ers := make(chan error, 1)
 	go func() {
@@ -227,7 +226,7 @@ func testERSWithReachablePrimary(t *testing.T) {
 	}, 3*time.Minute, 250*time.Millisecond, "vtbackup neither finished nor waited for the repointed primary")
 
 	// Elect replica1, which lacks the write, once its action lock is free.
-	for _, sleep := range []<-chan error{firstSleep, secondSleep} {
+	for _, sleep := range []<-chan error{primarySleep, firstSleep, secondSleep} {
 		select {
 		case <-sleep:
 		case <-time.After(2 * time.Minute):
