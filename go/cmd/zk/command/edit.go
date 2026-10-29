@@ -19,6 +19,7 @@ package command
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -50,7 +51,7 @@ func commandEdit(cmd *cobra.Command, args []string) error {
 	data, stat, err := fs.Conn.Get(cmd.Context(), zkPath)
 	if err != nil {
 		if !editArgs.Force || err != zk.ErrNoNode {
-			log.Warn(fmt.Sprintf("edit: cannot access %v: %v", zkPath, err))
+			log.Warn("edit: cannot access", slog.String("path", zkPath), slog.Any("error", err))
 		}
 		return fmt.Errorf("edit: cannot access %v: %v", zkPath, err)
 	}

@@ -18,6 +18,7 @@ package command
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/spf13/cobra"
 	"github.com/z-division/go-zookeeper/zk"
@@ -52,13 +53,13 @@ func commandWatch(cmd *cobra.Command, args []string) error {
 		case <-cmd.Context().Done():
 			return nil
 		case event := <-eventChan:
-			log.Info(fmt.Sprintf("watch: event %v: %v", event.Path, event))
+			log.Info("watch: event", slog.String("path", event.Path), slog.String("zk_event", fmt.Sprint(event)))
 			if event.Type == zk.EventNodeDataChanged {
 				data, stat, watch, err := fs.Conn.GetW(cmd.Context(), event.Path)
 				if err != nil {
 					return fmt.Errorf("ERROR: failed to watch %v", err)
 				}
-				log.Info(fmt.Sprintf("watch: %v %v\n", event.Path, stat))
+				log.Info("watch: data changed", slog.String("path", event.Path), slog.String("zk_stat", fmt.Sprint(stat)))
 				println(data)
 				go func() {
 					eventChan <- <-watch
@@ -66,7 +67,7 @@ func commandWatch(cmd *cobra.Command, args []string) error {
 			} else if event.State == zk.StateDisconnected {
 				return nil
 			} else if event.Type == zk.EventNodeDeleted {
-				log.Info(fmt.Sprintf("watch: %v deleted\n", event.Path))
+				log.Info("watch: deleted", slog.String("path", event.Path))
 			} else {
 				// Most likely a session event - try t
 				_, _, watch, err := fs.Conn.GetW(cmd.Context(), event.Path)
