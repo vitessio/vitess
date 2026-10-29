@@ -18,6 +18,7 @@ package reparentutil
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"os"
 	"slices"
@@ -2875,4 +2876,39 @@ func TestSetReplicationSourceBoundsLockHold(t *testing.T) {
 			unlock(&err)
 		})
 	}
+}
+
+// TestSetReplicationSourceLookupErrors checks that SetReplicationSource returns without an
+// error or an RPC only when the shard has no primary, and reports failures to read it.
+func TestSetReplicationSourceLookupErrors(t *testing.T) {
+	replica := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Keyspace: "ks", Shard: "-", Type: topodatapb.TabletType_REPLICA}
+	// A nil client fails the test if an RPC is sent.
+	var tmc tmclient.TabletManagerClient
+
+	t.Run("no primary", func(t *testing.T) {
+		ts := memorytopo.NewServer(t.Context(), "zone1")
+		t.Cleanup(ts.Close)
+		_, err := ts.GetOrCreateShard(t.Context(), "ks", "-")
+		require.NoError(t, err)
+		require.NoError(t, SetReplicationSource(t.Context(), ts, tmc, replica))
+	})
+	for _, lookupErr := range []error{context.DeadlineExceeded, errors.New("topology unavailable")} {
+		t.Run(lookupErr.Error(), func(t *testing.T) {
+			ts, factory := memorytopo.NewServerAndFactory(t.Context(), "zone1")
+			t.Cleanup(ts.Close)
+			_, err := ts.GetOrCreateShard(t.Context(), "ks", "-")
+			require.NoError(t, err)
+			factory.AddOperationError(memorytopo.Get, "keyspaces/ks/shards/-/Shard", lookupErr)
+			require.ErrorIs(t, SetReplicationSource(t.Context(), ts, tmc, replica), lookupErr)
+		})
+	}
+	t.Run("primary of another type", func(t *testing.T) {
+		ts, _ := newSetReplicationSourceTopo(t)
+		_, err := ts.UpdateTabletFields(t.Context(), &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, func(tablet *topodatapb.Tablet) error {
+			tablet.Type = topodatapb.TabletType_REPLICA
+			return nil
+		})
+		require.NoError(t, err)
+		require.ErrorContains(t, SetReplicationSource(t.Context(), ts, tmc, replica), "inconsistent state")
+	})
 }
