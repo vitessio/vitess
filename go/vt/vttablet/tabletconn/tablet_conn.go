@@ -82,7 +82,7 @@ func RegisterDialer(name string, dialer TabletDialer) {
 	mu.Lock()
 	defer mu.Unlock()
 	if _, ok := dialers[name]; ok {
-		log.Error("Dialer already exists", slog.String("name", name))
+		log.Error("Dialer already exists", slog.String("protocol", name))
 		os.Exit(1)
 	}
 	dialers[name] = dialer

@@ -1088,6 +1088,6 @@ func SetProtocol(name string, protocol string) {
 	servenv.ParseFlagsForTests(name)
 
 	if err := pflag.Set(tabletProtocolFlagName, protocol); err != nil {
-		log.Error("failed to set flag", slog.String("flag", tabletProtocolFlagName), slog.String("value", protocol), slog.Any("error", err))
+		log.Error("failed to set flag", slog.String("flag", tabletProtocolFlagName), slog.String("protocol", protocol), slog.Any("error", err))
 	}
 }

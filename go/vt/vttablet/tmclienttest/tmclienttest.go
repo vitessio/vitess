@@ -59,7 +59,7 @@ func SetProtocol(name string, protocol string) (reset func()) {
 	}
 
 	if err := pflag.Set(tmclientProtocolFlagName, protocol); err != nil {
-		log.Error("failed to set flag", slog.String("flag", tmclientProtocolFlagName), slog.String("value", protocol), slog.Any("error", err))
+		log.Error("failed to set flag", slog.String("flag", tmclientProtocolFlagName), slog.String("protocol", protocol), slog.Any("error", err))
 		reset = func() {}
 	}
 
