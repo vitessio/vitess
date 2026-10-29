@@ -18,7 +18,7 @@ package topotools
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -56,7 +56,10 @@ func GetMirrorRules(ctx context.Context, ts *topo.Server) (map[string]map[string
 // SaveMirrorRules converts a mapping of fromTable=>[]toTables into a
 // vschemapb.MirrorRules protobuf message and saves it in the topology.
 func SaveMirrorRules(ctx context.Context, ts *topo.Server, rules map[string]map[string]float32) error {
-	log.V(2).Info(fmt.Sprintf("Saving mirror rules %v\n", rules))
+	if rules == nil {
+		rules = map[string]map[string]float32{} // log {} rather than null
+	}
+	log.V(2).Info("Saving mirror rules", slog.Any("mirror_rules", rules))
 
 	rrs := &vschemapb.MirrorRules{Rules: make([]*vschemapb.MirrorRule, 0)}
 	for fromTable, mrs := range rules {

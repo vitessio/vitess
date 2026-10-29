@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -113,7 +114,7 @@ func NewKeyspaceEventWatcher(ctx context.Context, topoServer srvtopo.Server, hc 
 		subs:             make(map[chan *KeyspaceEvent]struct{}),
 	}
 	kew.run(ctx)
-	log.Info(fmt.Sprintf("started watching keyspace events in %q", localCell))
+	log.Info("started watching keyspace events", slog.String("cell", localCell))
 	return kew
 }
 
@@ -268,7 +269,10 @@ func (kew *KeyspaceEventWatcher) run(ctx context.Context) {
 		// Seed the keyspace statuses once at startup
 		keyspaces, err := kew.ts.GetSrvKeyspaceNames(ctx, kew.localCell, true)
 		if err != nil {
-			log.Error(fmt.Sprintf("CEM: initialize failed for cell %q: %v", kew.localCell, err))
+			log.Error("CEM: initialize failed for cell",
+				slog.String("cell", kew.localCell),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 		for _, ks := range keyspaces {
@@ -342,7 +346,7 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 	// watcher. this means the ongoing availability event has been resolved, so we can broadcast
 	// a resolution event to all listeners
 	kss.consistent = true
-	log.Info(fmt.Sprintf("keyspace %s is now consistent", kss.keyspace))
+	log.Info("keyspace is now consistent", slog.String("keyspace", kss.keyspace))
 
 	kss.moveTablesState = nil
 
@@ -353,8 +357,10 @@ func (kss *keyspaceState) ensureConsistentLocked() {
 			Serving: sstate.serving,
 		})
 
-		log.V(2).Info(fmt.Sprintf("keyspace event resolved: %s is now consistent (serving: %t)", topoproto.KeyspaceShardString(sstate.target.Keyspace, sstate.target.Shard),
-			sstate.serving))
+		log.V(2).Info("keyspace event resolved: shard is now consistent",
+			slog.String("keyspace", sstate.target.Keyspace),
+			slog.String("shard", sstate.target.Shard),
+			slog.Bool("serving", sstate.serving))
 
 		if !sstate.serving {
 			delete(kss.shards, shard)
@@ -689,7 +695,7 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 		mtState.Typ = MoveTablesRegular
 		mtState.State = MoveTablesSwitched
 		log.Info("getMoveTablesStatus: MoveTables writes switched by a keyspace routing rule",
-			slog.String("keyspace", kss.keyspace), slog.String("routedTo", to), slog.String("state", mtState.String()))
+			slog.String("keyspace", kss.keyspace), slog.String("routed_to", to), slog.String("state", mtState.String()))
 		return mtState, nil
 	}
 
@@ -721,7 +727,8 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 				break
 			}
 		}
-		log.Info(fmt.Sprintf("getMoveTablesStatus: keyspace %s declaring partial move tables %s", kss.keyspace, mtState.String()))
+		log.Info("getMoveTablesStatus: declaring partial move tables",
+			slog.String("keyspace", kss.keyspace), slog.String("state", mtState.String()))
 		return mtState, nil
 	}
 
@@ -735,10 +742,12 @@ func (kss *keyspaceState) getMoveTablesStatus(vs *vschemapb.SrvVSchema) (*MoveTa
 		// If a rule exists for the table and points to the target keyspace, writes have been switched.
 		if ok && len(r) > 0 && r[0] != fmt.Sprintf("%s.%s", kss.keyspace, oneDeniedTable) {
 			mtState.State = MoveTablesSwitched
-			log.Info(fmt.Sprintf("onSrvKeyspace::  keyspace %s writes have been switched for table %s, rule %v", kss.keyspace, oneDeniedTable, r[0]))
+			log.Info("getMoveTablesStatus: writes have been switched for table",
+				slog.String("keyspace", kss.keyspace), slog.String("table", oneDeniedTable), slog.String("routed_to", r[0]))
 		}
 	}
-	log.Info(fmt.Sprintf("getMoveTablesStatus: keyspace %s declaring regular move tables %s", kss.keyspace, mtState.String()))
+	log.Info("getMoveTablesStatus: declaring regular move tables",
+		slog.String("keyspace", kss.keyspace), slog.String("state", mtState.String()))
 
 	return mtState, nil
 }
@@ -756,7 +765,7 @@ func (kss *keyspaceState) onSrvKeyspace(newKeyspace *topodatapb.SrvKeyspace, new
 	// to keep watching for events in this keyspace.
 	if topo.IsErrType(newError, topo.NoNode) {
 		kss.deleted = true
-		log.Info(fmt.Sprintf("keyspace %q deleted", kss.keyspace))
+		log.Info("keyspace deleted", slog.String("keyspace", kss.keyspace))
 		return false
 	}
 
@@ -765,7 +774,10 @@ func (kss *keyspaceState) onSrvKeyspace(newKeyspace *topodatapb.SrvKeyspace, new
 	// topology events.
 	if newError != nil {
 		kss.lastError = newError
-		log.Error(fmt.Sprintf("error while watching keyspace %q: %v", kss.keyspace, newError))
+		log.Error("error while watching keyspace",
+			slog.String("keyspace", kss.keyspace),
+			slog.Any("error", newError),
+			slog.String("error_code", vterrors.Code(newError).String()))
 		return true
 	}
 
@@ -833,7 +845,10 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 	// silently clobber the previously-tracked state on a transient topo blip.
 	newState, kerr := kss.getMoveTablesStatus(vs)
 	if kerr != nil {
-		log.Error(fmt.Sprintf("onSrvVSchema: keyspace %s failed to get move tables status: %v", kss.keyspace, kerr))
+		log.Error("onSrvVSchema: failed to get move tables status",
+			slog.String("keyspace", kss.keyspace),
+			slog.Any("error", kerr),
+			slog.String("error_code", vterrors.Code(kerr).String()))
 		return true
 	}
 	kss.moveTablesState = newState
@@ -851,7 +866,7 @@ func (kss *keyspaceState) onSrvVSchema(vs *vschemapb.SrvVSchema, err error) bool
 // in this keyspace, and starts up a SrvKeyspace watcher on our topology server which will update
 // our keyspaceState with any topology changes in real time.
 func newKeyspaceState(ctx context.Context, kew *KeyspaceEventWatcher, cell, keyspace string) *keyspaceState {
-	log.Info(fmt.Sprintf("created dedicated watcher for keyspace %s/%s", cell, keyspace))
+	log.Info("created dedicated watcher for keyspace", slog.String("cell", cell), slog.String("keyspace", keyspace))
 	kss := &keyspaceState{
 		kew:      kew,
 		keyspace: keyspace,
@@ -1032,7 +1047,7 @@ func (kew *KeyspaceEventWatcher) WaitForConsistentKeyspaces(ctx context.Context,
 		case <-ctx.Done():
 			for _, ks := range keyspaces {
 				if ks != "" {
-					log.Info(fmt.Sprintf("keyspace %v didn't become consistent", ks))
+					log.Info("keyspace didn't become consistent", slog.String("keyspace", ks))
 				}
 			}
 			return ctx.Err()

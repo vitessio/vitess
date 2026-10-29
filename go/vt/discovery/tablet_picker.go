@@ -18,8 +18,8 @@ package discovery
 
 import (
 	"context"
-	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"sort"
 	"strings"
@@ -357,7 +357,13 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 		if len(candidates) == 0 {
 			// If no viable candidates were found, sleep and try again.
 			tp.incNoTabletFoundStat()
-			log.Info(fmt.Sprintf("No healthy serving tablet found for streaming, shard %s.%s, cells %v, tabletTypes %v, maxReplicationLag: %v, sleeping for %.3f seconds.", tp.keyspace, tp.shard, tp.cells, tp.tabletTypes, tp.options.ExcludeTabletsWithMaxReplicationLag, float64(GetTabletPickerRetryDelay().Milliseconds())/1000.0))
+			log.Info("No healthy serving tablet found for streaming, sleeping",
+				slog.String("keyspace", tp.keyspace),
+				slog.String("shard", tp.shard),
+				slog.Any("cells", tp.cells),
+				slog.Any("tablet_types", topoproto.MakeStringTypeUnsortedList(tp.tabletTypes)),
+				slog.Int64("max_replication_lag_seconds", int64(tp.options.ExcludeTabletsWithMaxReplicationLag.Seconds())),
+				slog.Duration("retry_delay", GetTabletPickerRetryDelay()))
 			timer := time.NewTimer(GetTabletPickerRetryDelay())
 			select {
 			case <-ctx.Done():
@@ -367,7 +373,9 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			}
 			continue
 		}
-		log.Info("Tablet picker found a healthy tablet for streaming: " + candidates[0].Tablet.String())
+		log.Info("Tablet picker found a healthy tablet for streaming",
+			slog.String("tablet", topoproto.TabletAliasString(candidates[0].Alias)),
+			slog.String("tablet_record", candidates[0].Tablet.String()))
 		return candidates[0].Tablet, nil
 	}
 }
@@ -384,7 +392,11 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 		defer cancel()
 		si, err := tp.ts.GetShard(shortCtx, tp.keyspace, tp.shard)
 		if err != nil {
-			log.Error(fmt.Sprintf("Error getting shard %s/%s: %v", tp.keyspace, tp.shard, err))
+			log.Error("Error getting shard",
+				slog.String("keyspace", tp.keyspace),
+				slog.String("shard", tp.shard),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return nil
 		}
 
@@ -413,7 +425,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 				if err == nil {
 					actualCells = append(actualCells, alias.Cells...)
 				} else {
-					log.Info(fmt.Sprintf("Unable to resolve cell %s, ignoring", cell))
+					log.Info("Unable to resolve cell, ignoring", slog.String("cell", cell))
 				}
 			} else {
 				// Valid cell, add it to our list.
@@ -448,7 +460,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 	defer cancel()
 	tabletMap, err := tp.ts.GetTabletMap(shortCtx, aliases, nil)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Error fetching tablets from topo: %v", err))
+		log.Warn("Error fetching tablets from topo", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		// If we get a partial result we can still use it, otherwise return.
 		if len(tabletMap) == 0 {
 			return nil
@@ -461,7 +473,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 		if !ok {
 			// Either tablet disappeared on us, or we got a partial result
 			// (GetTabletMap ignores topo.ErrNoNode); just log a warning.
-			log.Warn(fmt.Sprintf("Tablet picker failed to load tablet %v", tabletAlias))
+			log.Warn("Tablet picker failed to load tablet", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)))
 		} else if topoproto.IsTypeInList(tabletInfo.Type, tp.tabletTypes) {
 			// Try to connect to the tablet and confirm that it's usable.
 			if conn, err := tabletconn.GetDialer()(ctx, tabletInfo.Tablet, grpcclient.FailFast(true)); err == nil {

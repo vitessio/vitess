@@ -38,6 +38,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"log/slog"
 	"net/http"
 	"os"
 	"runtime/pprof"
@@ -160,7 +161,7 @@ func ParseTabletURLTemplateFromFlag() {
 	tabletURLTemplate = template.New("")
 	_, err := tabletURLTemplate.ParseFromTrustedTemplate(uncheckedconversions.TrustedTemplateFromStringKnownToSatisfyTypeContract(TabletURLTemplateString))
 	if err != nil {
-		log.Error(fmt.Sprintf("error parsing template: %v", err))
+		log.Error("error parsing template", slog.Any("error", err))
 		os.Exit(1)
 	}
 }

@@ -18,6 +18,7 @@ package srvtopo
 
 import (
 	"errors"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -176,6 +178,7 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 	assert.NotNil(t, vschema, "Should return cached VSchema")
 
 	// Now test with a topo error
+	logs := logtest.Capture(t, slog.LevelInfo)
 	factory.SetError(topo.NewError(topo.Timeout, "topo timeout error"))
 	time.Sleep(srvTopoCacheTTL + 10*time.Millisecond) // Let TTL expire again
 
@@ -184,6 +187,11 @@ func TestVSchemaWatcherCacheExpiryBehavior(t *testing.T) {
 	require.Error(t, err, "Should return error for topo errors after TTL expiry")
 	assert.True(t, topo.IsErrType(err, topo.Timeout), "Should return the topo error")
 	assert.Nil(t, vschema, "Should not return vschema when error occurs")
+
+	record := logs.Wait(t, "ResilientWatch clearing cached entry")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "test_cell", record["cell"])
+	assert.NotContains(t, record, "key")
 }
 
 // TestWatcherShouldOnlyNotifyOnActualChanges tests that watchers are called when VSchema content changes.

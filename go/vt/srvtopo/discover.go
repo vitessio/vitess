@@ -18,7 +18,7 @@ package srvtopo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -57,7 +57,7 @@ func FindAllTargetsAndKeyspaces(ctx context.Context, ts Server, cell string, key
 				if topo.IsErrType(err, topo.NoNode) {
 					// Possibly a race condition, or leftover
 					// crud in the topology service. Just log it.
-					log.Warn(fmt.Sprintf("GetSrvKeyspace(%v, %v) returned ErrNoNode, skipping that SrvKeyspace", cell, keyspace))
+					log.Warn("GetSrvKeyspace returned ErrNoNode, skipping that SrvKeyspace", slog.String("cell", cell), slog.String("keyspace", keyspace))
 				} else {
 					// More serious error, abort.
 					errRecorder.RecordError(err)
