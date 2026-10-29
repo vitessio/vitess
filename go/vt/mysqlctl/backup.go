@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -234,14 +235,14 @@ func ParseBackupName(dir string, name string) (backupTime *time.Time, alias *top
 
 	btime, err := time.Parse(BackupTimestampFormat, timestamp)
 	if err != nil {
-		log.Error(fmt.Sprintf("error parsing backup time for %s/%s: %s", dir, name, err))
+		log.Error("error parsing backup time", slog.String("dir", dir), slog.String("backup_name", name), slog.Any("error", err))
 	} else {
 		backupTime = &btime
 	}
 
 	alias, err = topoproto.ParseTabletAlias(aliasStr)
 	if err != nil {
-		log.Error(fmt.Sprintf("error parsing tablet alias for %s/%s: %s", dir, name, err))
+		log.Error("error parsing tablet alias", slog.String("dir", dir), slog.String("backup_name", name), slog.Any("error", err))
 		alias = nil
 	}
 
@@ -264,7 +265,7 @@ func checkNoDB(ctx context.Context, mysqld MysqlDaemon, dbName string) (bool, er
 	for _, row := range qr.Rows {
 		if row[0].ToString() == dbName {
 			// found active db
-			log.Warn(fmt.Sprintf("checkNoDB failed, found active db %v", dbName))
+			log.Warn("checkNoDB failed, found active db", slog.String("db_name", dbName))
 			return false, nil
 		}
 	}
@@ -294,7 +295,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 			// These paths are actually filename prefixes, not directories.
 			// An extension of the form ".###" is appended by mysqld.
 			path += ".*"
-			log.Info(fmt.Sprintf("Restore: removing files in %v (%v)", name, path))
+			log.Info("Restore: removing files", slog.String("mycnf_field", name), slog.String("path", path))
 			matches, err := filepath.Glob(path)
 			if err != nil {
 				return vterrors.Wrapf(err, "can't expand path glob %q", path)
@@ -309,10 +310,10 @@ func removeExistingFiles(cnf *Mycnf) error {
 
 		// Regular directory: delete recursively.
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			log.Info(fmt.Sprintf("Restore: skipping removal of nonexistent %v (%v)", name, path))
+			log.Info("Restore: skipping removal of nonexistent path", slog.String("mycnf_field", name), slog.String("path", path))
 			continue
 		}
-		log.Info(fmt.Sprintf("Restore: removing files in %v (%v)", name, path))
+		log.Info("Restore: removing files", slog.String("mycnf_field", name), slog.String("path", path))
 		if err := os.RemoveAll(path); err != nil {
 			return vterrors.Wrapf(err, "can't remove existing files in %v (%v)", name, path)
 		}

@@ -17,7 +17,6 @@ limitations under the License.
 package mysqlctl
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -36,7 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 // TestExecuteSuperQueryListMulti checks that an entry of the list may hold
@@ -142,10 +141,7 @@ func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 	testMysqld := NewMysqld(dbc)
 	defer testMysqld.Close()
 
-	// Capture the structured log output.
-	var logBuf bytes.Buffer
-	oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
-	defer log.SwapLogger(oldLogger)
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	query := `START xxx USER = 'vt_repl', PASSWORD = 'secret'`
 	db.AddQuery("SELECT 1", &sqltypes.Result{})
@@ -169,10 +165,49 @@ func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 	// the kill callback fires, so reaching here proves the kill path ran.
 	require.NoError(t, err)
 
-	logs := logBuf.String()
-	assert.Contains(t, logs, "killing connID")
-	assert.Contains(t, logs, `PASSWORD = '****'`)
-	assert.NotContains(t, logs, "secret")
+	redacted := `START xxx USER = 'vt_repl', PASSWORD = '****'`
+	assert.Equal(t, redacted, logs.Record(t, "exec")["query"])
+	killed := logs.Record(t, "Mysqld.executeWithContext(): killing connection due to timeout of query")
+	assert.Equal(t, redacted, killed["query"])
+	assert.Contains(t, killed, "connection_id")
+	assert.NotContains(t, logs.String(), "secret")
+}
+
+// TestExecuteFetchDirectContextTimeoutRedactsQuery verifies that the kill
+// path of executeFetchDirectContext redacts the password in the logged query.
+func TestExecuteFetchDirectContextTimeoutRedactsQuery(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	defer testMysqld.Close()
+
+	query := `START xxx USER = 'vt_repl', PASSWORD = 'secret'`
+	db.AddQuery(query, &sqltypes.Result{})
+	unblock := make(chan struct{})
+	db.SetBeforeFunc(query, func() {
+		<-unblock
+	})
+	db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(string) {
+		close(unblock)
+	})
+
+	conn, err := testMysqld.GetDbaConnection(t.Context())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	_, _ = testMysqld.executeFetchDirectContext(ctx, conn, query)
+
+	killed := logs.Record(t, "Mysqld.executeFetchDirectContext(): killing connection due to timeout of query")
+	assert.Equal(t, `START xxx USER = 'vt_repl', PASSWORD = '****'`, killed["query"])
+	assert.Contains(t, killed, "connection_id")
+	assert.NotContains(t, logs.String(), "secret")
 }
 
 // TestExecuteSuperQueryListTaintedDiscardsConnection verifies that operator-supplied SQL

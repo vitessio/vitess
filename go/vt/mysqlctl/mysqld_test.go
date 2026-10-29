@@ -18,9 +18,11 @@ package mysqlctl
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"testing"
@@ -34,6 +36,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	_ "vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlclient"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 )
@@ -257,8 +260,12 @@ func TestCleanupLockfile(t *testing.T) {
 		os.Remove("mysql.sock.lock")
 	})
 	ts := "prefix"
+	logs := logtest.Capture(t, slog.LevelInfo)
 	// All good if no lockfile exists
 	require.NoError(t, cleanupLockfile("mysql.sock", ts))
+	record := logs.Record(t, "no stale lock file")
+	assert.Equal(t, "prefix", record["start_id"])
+	assert.Equal(t, "mysql.sock.lock", record["lock_file"])
 
 	// If lockfile exists, but the process is not found, we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte("123456789"), 0o600)
@@ -472,6 +479,40 @@ func TestGetMycnfTemplateMySQL9(t *testing.T) {
 	// Should use MySQL 9.0 config for MySQL 9.x
 	assert.Contains(t, template, "# This file is auto-included when MySQL 9.0 or later is detected.")
 	assert.NotContains(t, template, "mysql_native_password = ON")
+}
+
+func TestGetMycnfTemplateUnsupportedVersionLogsVersion(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	testMysqld := &Mysqld{capabilities: newCapabilitySet(FlavorMySQL, ServerVersion{Major: 7, Minor: 1, Patch: 2})}
+	testMysqld.getMycnfTemplate()
+
+	record := logs.Record(t, "this version of Vitess does not include built-in support for this MySQL version")
+	assert.Equal(t, "mysql", record["flavor"])
+	assert.Equal(t, "7.1.2", record["mysql_version"])
+}
+
+// TestStartNoWaitLogsOutput checks that the output of mysqld_safe is logged
+// under stderr and stdout, and that a clean exit logs no error.
+func TestStartNoWaitLogsOutput(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
+	script := "#!/bin/sh\necho out-line\necho err-line >&2\n"
+	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqld_safe"), []byte(script), 0o755))
+	t.Setenv("VTROOT", root)
+	t.Setenv("VT_MYSQL_ROOT", root)
+	t.Setenv("VT_MYSQL_BASEDIR", root)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, (&Mysqld{}).startNoWait(&Mycnf{Path: path.Join(root, "my.cnf")}))
+
+	stdout := logs.Wait(t, "mysqld stdout")
+	assert.Equal(t, "out-line", stdout["stdout"])
+	assert.Contains(t, stdout, "start_id")
+	assert.Equal(t, "err-line", logs.Wait(t, "mysqld stderr")["stderr"])
+	assert.NotContains(t, logs.Wait(t, "mysqld exited"), "error")
+	starting := logs.Record(t, "Starting mysqld")
+	assert.Contains(t, starting["exec_cmd"], "exec.Cmd")
+	assert.NotContains(t, starting, "command")
 }
 
 func TestBuildLdPathsTZ(t *testing.T) {

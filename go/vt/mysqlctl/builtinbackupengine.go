@@ -26,6 +26,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"path"
@@ -501,7 +502,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	if resp.FirstTimestampBinlog == "" || resp.LastTimestampBinlog == "" {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_ABORTED, "empty binlog name in response. Request=%v, Response=%v", req, resp)
 	}
-	log.Info(fmt.Sprintf("ReadBinlogFilesTimestampsResponse: %+v", resp))
+	log.Info("ReadBinlogFilesTimestampsResponse", slog.String("response", resp.String()))
 	incrDetails := &IncrementalBackupDetails{
 		FirstTimestamp:       FormatRFC3339(protoutil.TimeFromProto(resp.FirstTimestamp).UTC()),
 		FirstTimestampBinlog: filepath.Base(resp.FirstTimestampBinlog),
@@ -565,7 +566,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "can't get super_read_only status")
 	}
-	log.Info(fmt.Sprintf("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly))
+	log.Info("Flag values during full backup", slog.Bool("read_only", readOnly), slog.Bool("super_read_only", superReadOnly))
 
 	// get the replication position
 	if sourceIsPrimary {

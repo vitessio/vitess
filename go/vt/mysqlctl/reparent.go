@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -77,7 +78,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	for {
 		qr, err := mysqld.FetchSuperQuery(ctx, queryReparentJournal(timeCreatedNS))
 		if err != nil {
-			log.Info(fmt.Sprintf("Error querying reparent journal: %v", err))
+			log.Info("Error querying reparent journal", slog.Any("error", err))
 		}
 		if err == nil && len(qr.Rows) == 1 {
 			// we have the row, we're done

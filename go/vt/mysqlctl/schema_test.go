@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"fmt"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -105,6 +107,22 @@ func mockExec(query string, maxRows int, wantFields bool) (*sqltypes.Result, err
 	}
 
 	return nil, fmt.Errorf("query %s not found in mock setup", query)
+}
+
+// TestGetColumnsListEmptyLogsFields checks that a table with no columns is
+// logged with its database, table and query as attributes.
+func TestGetColumnsListEmptyLogsFields(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelError)
+	exec := func(string, int, bool) (*sqltypes.Result, error) { return &sqltypes.Result{}, nil }
+
+	_, err := GetColumnsList("test", "t1", exec)
+	require.ErrorAs(t, err, new(*EmptyColumnsErr))
+
+	record := logs.Record(t, "unable to get columns for table")
+	assert.Equal(t, "test", record["db_name"])
+	assert.Equal(t, "t1", record["table"])
+	assert.Equal(t, fmt.Sprintf(GetColumnNamesQuery, "'test'", "'t1'"), record["query"])
+	assert.NotContains(t, record, "error")
 }
 
 func TestColumnList(t *testing.T) {
