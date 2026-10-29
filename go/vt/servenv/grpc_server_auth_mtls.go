@@ -18,7 +18,7 @@ package servenv
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -73,7 +73,7 @@ func mtlsAuthPluginInitializer() (Authenticator, error) {
 	mtlsAuthPlugin := &MtlsAuthPlugin{
 		clientCertSubstrings: strings.Split(clientCertSubstrings, ":"),
 	}
-	log.Info(fmt.Sprintf("mtls auth plugin have initialized successfully with allowed client cert name substrings of %v", clientCertSubstrings))
+	log.Info("mtls auth plugin have initialized successfully with allowed client cert name substrings", slog.Any("client_cert_substrings", mtlsAuthPlugin.clientCertSubstrings))
 	return mtlsAuthPlugin, nil
 }
 

@@ -17,11 +17,14 @@ limitations under the License.
 package servenv
 
 import (
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestVersionString(t *testing.T) {
@@ -52,6 +55,48 @@ func TestVersionString(t *testing.T) {
 	assert.Equal(t, "Version: v1.2.3-SNAPSHOT (GHA build 422) (Git revision d54b87ca0be09b678bb4490060e8f23f890ddb92 branch 'gitBranch') built on time is now by user@host using 1.20.2 amiga/amd64", v.String())
 
 	assert.Equal(t, "8.4.6-Vitess", v.MySQLVersion())
+}
+
+func TestVersionLogInfo(t *testing.T) {
+	v := &versionInfo{
+		buildHost:       "host",
+		buildUser:       "user",
+		buildTimePretty: "time is now",
+		buildGitRev:     "d54b87ca0be09b678bb4490060e8f23f890ddb92",
+		buildGitBranch:  "gitBranch",
+		buildNumber:     422,
+		buildSystem:     "GHA",
+		goVersion:       "1.20.2",
+		goOS:            "amiga",
+		goArch:          "amd64",
+		version:         "v1.2.3-SNAPSHOT",
+	}
+	logs := logtest.Capture(t, slog.LevelInfo)
+	v.logInfo()
+	record := logs.Record(t, "Version")
+	delete(record, "time")
+	assert.Equal(t, map[string]any{
+		"level":            "INFO",
+		"msg":              "Version",
+		"version":          "v1.2.3-SNAPSHOT",
+		"build_system":     "GHA",
+		"build_number":     float64(422),
+		"build_git_rev":    "d54b87ca0be09b678bb4490060e8f23f890ddb92",
+		"build_git_branch": "gitBranch",
+		"build_time":       "time is now",
+		"build_user":       "user",
+		"build_host":       "host",
+		"go_version":       "1.20.2",
+		"goos":             "amiga",
+		"goarch":           "amd64",
+	}, record)
+
+	logs.Reset()
+	v.buildNumber = 0
+	v.logInfo()
+	record = logs.Record(t, "Version")
+	assert.NotContains(t, record, "build_number")
+	assert.NotContains(t, record, "build_system")
 }
 
 func TestResolveGitRev(t *testing.T) {

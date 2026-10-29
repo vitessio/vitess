@@ -17,7 +17,7 @@ limitations under the License.
 package servenv
 
 import (
-	"fmt"
+	"log/slog"
 
 	"github.com/spf13/pflag"
 
@@ -66,9 +66,9 @@ func updateServiceMap() {
 // (and also logs how to enable / disable it)
 func checkServiceMap(protocol, name string) bool {
 	if serviceMap[protocol+"-"+name] {
-		log.Info(fmt.Sprintf("Registering %v for %v, disable it with -%v-%v service-map parameter", name, protocol, protocol, name))
+		log.Info("Registering service for protocol, disable it with the service_map_entry service-map parameter", slog.String("service", name), slog.String("protocol", protocol), slog.String("service_map_entry", protocol+"-"+name))
 		return true
 	}
-	log.Info(fmt.Sprintf("Not registering %v for %v, enable it with %v-%v service-map parameter", name, protocol, protocol, name))
+	log.Info("Not registering service for protocol, enable it with the service_map_entry service-map parameter", slog.String("service", name), slog.String("protocol", protocol), slog.String("service_map_entry", protocol+"-"+name))
 	return false
 }
