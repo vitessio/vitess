@@ -304,6 +304,25 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
 		}
 	})
+	t.Run("Test --shards flag in workflow update", func(t *testing.T) {
+		// --on-ddl STOP matches the value used at Create, so this is a
+		// no-op config change. Details must still list only the selected shards.
+		type tCase struct {
+			shards   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-80", 1},
+			{"80-", 1},
+			{"-80,80-", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update", "--workflow", defaultWorkflowName, "--on-ddl", "STOP", "--shards", tc.shards)
+			require.NoError(t, err, "failed to update workflow on shards %s: %v", tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for update --shards %s", tc.expected, cnt, tc.shards)
+		}
+	})
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
 
 	for _, tab := range targetTabs {
@@ -638,6 +657,25 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 			require.NoError(t, err, "failed to %s workflow: %v", tc.action, err)
 			cnt := gjson.Get(output, "details.#").Int()
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
+		}
+	})
+	t.Run("Test --shards flag in workflow update", func(t *testing.T) {
+		// --on-ddl STOP matches the value used at Create, so this is a
+		// no-op config change. Details must still list only the selected shards.
+		type tCase struct {
+			shards   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-40", 1},
+			{"40-80", 1},
+			{"-40,40-80", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, "update", "--workflow", defaultWorkflowName, "--on-ddl", "STOP", "--shards", tc.shards)
+			require.NoError(t, err, "failed to update workflow on shards %s: %v", tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for update --shards %s", tc.expected, cnt, tc.shards)
 		}
 	})
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
