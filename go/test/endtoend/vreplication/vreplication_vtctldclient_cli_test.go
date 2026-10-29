@@ -281,7 +281,76 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 	(*mt).Stop() // Test stopping workflow.
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Stopped.String())
 	(*mt).Start()
+<<<<<<< HEAD
 	waitForWorkflowState(t, vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String())
+||||||| parent of 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+	t.Run("Test --shards flag in MoveTables start/stop", func(t *testing.T) {
+		// This subtest expects workflow to be running at the start and restarts it at the end.
+		type tCase struct {
+			shards   string
+			action   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-80", "stop", 1},
+			{"80-", "stop", 1},
+			{"-80,80-", "start", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--target-keyspace", targetKeyspace, "--workflow", defaultWorkflowName, tc.action, "--shards", tc.shards)
+			require.NoError(t, err, "failed to %s workflow on shards %s: %v", tc.action, tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
+		}
+	})
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+=======
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+	t.Run("Test --shards flag in MoveTables start/stop", func(t *testing.T) {
+		// This subtest expects workflow to be running at the start and restarts it at the end.
+		type tCase struct {
+			shards   string
+			action   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-80", "stop", 1},
+			{"80-", "stop", 1},
+			{"-80,80-", "start", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("MoveTables", "--target-keyspace", targetKeyspace, "--workflow", defaultWorkflowName, tc.action, "--shards", tc.shards)
+			require.NoError(t, err, "failed to %s workflow on shards %s: %v", tc.action, tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
+		}
+	})
+	t.Run("Test --shards flag in workflow update", func(t *testing.T) {
+		// --on-ddl STOP matches the value used at Create, so this is a
+		// no-op config change. Details must still list only the selected shards.
+		type tCase struct {
+			shards   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-80", 1},
+			{"80-", 1},
+			{"-80,80-", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update", "--workflow", defaultWorkflowName, "--on-ddl", "STOP", "--shards", tc.shards)
+			require.NoError(t, err, "failed to update workflow on shards %s: %v", tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for update --shards %s", tc.expected, cnt, tc.shards)
+		}
+	})
+	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+>>>>>>> 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
 	for _, tab := range targetTabs {
 		catchup(t, tab, defaultWorkflowName, "MoveTables")
 	}
@@ -613,7 +682,74 @@ func splitShard(t *testing.T, keyspace, defaultWorkflowName, sourceShards, targe
 			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
 		}
 	})
+<<<<<<< HEAD
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String())
+||||||| parent of 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+	t.Run("Test --shards flag in Reshard start/stop", func(t *testing.T) {
+		// This subtest expects workflow to be running at the start and restarts it at the end.
+		type tCase struct {
+			shards   string
+			action   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-40", "stop", 1},
+			{"40-80", "stop", 1},
+			{"-40,40-80", "start", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("Reshard", "--target-keyspace", keyspace, "--workflow", defaultWorkflowName, tc.action, "--shards", tc.shards)
+			require.NoError(t, err, "failed to %s Reshard workflow on shards %s: %v", tc.action, tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
+		}
+	})
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
+=======
+	t.Run("Test --shards flag in workflow update", func(t *testing.T) {
+		// --on-ddl STOP matches the value used at Create, so this is a
+		// no-op config change. Details must still list only the selected shards.
+		type tCase struct {
+			shards   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-40", 1},
+			{"40-80", 1},
+			{"-40,40-80", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", keyspace, "update", "--workflow", defaultWorkflowName, "--on-ddl", "STOP", "--shards", tc.shards)
+			require.NoError(t, err, "failed to update workflow on shards %s: %v", tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for update --shards %s", tc.expected, cnt, tc.shards)
+		}
+	})
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+	t.Run("Test --shards flag in Reshard start/stop", func(t *testing.T) {
+		// This subtest expects workflow to be running at the start and restarts it at the end.
+		type tCase struct {
+			shards   string
+			action   string
+			expected int
+		}
+		testCases := []tCase{
+			{"-40", "stop", 1},
+			{"40-80", "stop", 1},
+			{"-40,40-80", "start", 2},
+		}
+		for _, tc := range testCases {
+			output, err := vc.VtctldClient.ExecuteCommandWithOutput("Reshard", "--target-keyspace", keyspace, "--workflow", defaultWorkflowName, tc.action, "--shards", tc.shards)
+			require.NoError(t, err, "failed to %s Reshard workflow on shards %s: %v", tc.action, tc.shards, err)
+			cnt := gjson.Get(output, "details.#").Int()
+			require.EqualValuesf(t, tc.expected, cnt, "expected %d shards, got %d for action %s, shards %s", tc.expected, cnt, tc.action, tc.shards)
+		}
+	})
+	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, defaultWorkflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
+>>>>>>> 7a131adc74 (fix: honor --shards on vtctldclient Workflow update (#21771))
 
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, defaultWorkflowName, "Reshard")
