@@ -111,7 +111,7 @@ func TestTxLimiter_LimitsOnlyOffendingUser(t *testing.T) {
 	var rejectedUsers []any
 	for _, record := range logs.Records(t) {
 		if record["msg"] == "TxLimiter: Over limit, rejecting transaction request for user" {
-			rejectedUsers = append(rejectedUsers, record["user"])
+			rejectedUsers = append(rejectedUsers, record["user_key"])
 		}
 	}
 	assert.Equal(t, []any{key1, key2}, rejectedUsers)
@@ -149,5 +149,5 @@ func TestTxLimiterDryRun(t *testing.T) {
 	assert.Equalf(t, int64(1), limiter.rejectionsDryRun.Counts()[key], "RejectionsDryRun count for %s", key)
 
 	record := logs.Record(t, "TxLimiter: DRY RUN: user over limit")
-	assert.Equal(t, key, record["user"])
+	assert.Equal(t, key, record["user_key"])
 }
