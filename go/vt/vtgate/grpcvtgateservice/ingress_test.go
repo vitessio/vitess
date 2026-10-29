@@ -50,6 +50,7 @@ type mockVTGateService struct {
 	prepareIngressBytes       []uint64
 	streamExecuteIngressBytes []uint64
 	streamMultiIngressBytes   []uint64
+	vstreamError              error
 }
 
 func (m *mockVTGateService) Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, prepared bool) (*vtgatepb.Session, *sqltypes.Result, error) {
@@ -111,7 +112,7 @@ func (m *mockVTGateService) CloseSession(ctx context.Context, session *vtgatepb.
 }
 
 func (m *mockVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, flags *vtgatepb.VStreamFlags, send func([]*binlogdatapb.VEvent) error) error {
-	return nil
+	return m.vstreamError
 }
 
 func (m *mockVTGateService) BinlogDumpGTID(ctx context.Context, req *vtgatepb.BinlogDumpGTIDRequest, send func(*vtgatepb.BinlogDumpResponse) error) error {

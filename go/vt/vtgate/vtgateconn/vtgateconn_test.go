@@ -18,17 +18,27 @@ package vtgateconn
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestRegisterDialer(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dialerFunc := func(context.Context, string) (Impl, error) {
 		return nil, nil
 	}
+	t.Cleanup(func() { DeregisterDialer("test1") })
 	RegisterDialer("test1", dialerFunc)
 	RegisterDialer("test1", dialerFunc)
+
+	record := logs.Record(t, "Dialer already exists, overwriting it")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "test1", record["protocol"])
 }
 
 func TestGetDialerWithProtocol(t *testing.T) {
