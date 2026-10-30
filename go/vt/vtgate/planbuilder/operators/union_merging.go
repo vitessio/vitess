@@ -110,6 +110,9 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
+	lhsInput, rhsInput := operatorsToRoutes(lhs, rhs)
+	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput)
+
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
@@ -122,23 +125,37 @@ func mergeUnionInputs(
 	// incorrectly discard the other side's rows.
 	if a == none || b == none {
 		if op, exprs, merged := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b); merged {
+			markSpecialUnionInput(op, containsSpecialInput)
 			return op, exprs
 		}
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
 
+	// A reference/dual input can be merged into a single-shard route, but a
+	// UNION ALL route containing one must not be widened to multiple shards.
+	if !distinct && containsSpecialInput &&
+		((a == sharded && !isSingleShardRouting(routingA)) || (b == sharded && !isSingleShardRouting(routingB))) {
+		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+		return nil, nil
+	}
+
 	switch {
-	// if either side is a dual query, we can always merge them together
-	// an unsharded/reference route can be merged with anything going to that keyspace
+	// Preserve the single-shard optimization. The provenance check above
+	// prevents a later UNION ALL arm from widening this route to scatter.
 	case b == dual || (b == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		markSpecialUnionInput(op, containsSpecialInput)
+		return op, exprs
 	case a == dual || (a == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		markSpecialUnionInput(op, containsSpecialInput)
+		return op, exprs
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
 		if res != nil {
+			markSpecialUnionInput(res, containsSpecialInput)
 			return res, exprs
 		}
 	}
@@ -147,6 +164,106 @@ func mergeUnionInputs(
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 
 	return nil, nil
+}
+
+func isSingleShardRouting(routing Routing) bool {
+	switch routing.OpCode() {
+	case engine.Unsharded, engine.DBA, engine.Next, engine.EqualUnique, engine.Reference:
+		return true
+	}
+	return false
+}
+
+func containsSpecialInputAfterJoin(joinType sqlparser.JoinType, lhs, rhs *Route, routing Routing) bool {
+	lhsSpecial := routeContainsSpecialUnionInput(lhs)
+	rhsSpecial := routeContainsSpecialUnionInput(rhs)
+	if !lhsSpecial && !rhsSpecial {
+		return false
+	}
+	if _, sharded := routing.(*ShardedRouting); !sharded {
+		return true
+	}
+
+	lhsSharded := isOrdinaryShardedRoute(lhs)
+	rhsSharded := isOrdinaryShardedRoute(rhs)
+	if joinType.IsInner() && (lhsSharded || rhsSharded) {
+		// An inner join with a sharded input emits rows partitioned by that
+		// input, so any reference/dual rows have been consumed by the join.
+		return false
+	}
+	if !joinType.IsInner() && lhsSharded {
+		// A left outer join preserves its left input. A special input on the
+		// right is consumed by the ordinary sharded left input, but one on the
+		// left can still produce a null-extended row on every shard.
+		return lhsSpecial
+	}
+	return true
+}
+
+func isOrdinaryShardedRoute(route *Route) bool {
+	if route == nil || routeContainsSpecialUnionInput(route) {
+		return false
+	}
+	_, ok := route.Routing.(*ShardedRouting)
+	return ok && !hasGlobalAggregate(route.Source)
+}
+
+func hasGlobalAggregate(op Operator) bool {
+	if op == nil {
+		return false
+	}
+	if agg, ok := op.(*Aggregator); ok && len(agg.Grouping) == 0 && len(agg.Aggregations) > 0 {
+		return true
+	}
+	if horizon, ok := op.(*Horizon); ok && hasGlobalAggregateQuery(horizon.Query) {
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), hasGlobalAggregate)
+}
+
+func hasGlobalAggregateQuery(query sqlparser.SQLNode) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		selectStmt, ok := node.(*sqlparser.Select)
+		if !ok || selectStmt.GroupBy != nil {
+			return true, nil
+		}
+		_ = sqlparser.Walk(func(expr sqlparser.SQLNode) (bool, error) {
+			if _, ok := expr.(sqlparser.AggrFunc); ok {
+				found = true
+				return false, nil
+			}
+			return !found, nil
+		}, selectStmt)
+		return !found, nil
+	}, query)
+	return found
+}
+
+func routeContainsSpecialUnionInput(route *Route) bool {
+	if route == nil {
+		return false
+	}
+	if route.ContainsSpecialUnionInput {
+		return true
+	}
+	switch route.Routing.(type) {
+	case *AnyShardRouting, *DualRouting:
+		return true
+	}
+	return false
+}
+
+func withSpecialUnionInput(route *Route) *Route {
+	routeCopy := *route
+	routeCopy.ContainsSpecialUnionInput = true
+	return &routeCopy
+}
+
+func markSpecialUnionInput(op Operator, contains bool) {
+	if route, ok := op.(*Route); ok && contains {
+		route.ContainsSpecialUnionInput = true
+	}
 }
 
 // tryMergeNoneUnion merges a union pairing in which at least one side has a
