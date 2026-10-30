@@ -36,10 +36,12 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// downFactory wraps a memorytopo factory so that connecting a cell to a root under /down fails, and so that
-// closedProbePath on a cell connection reports whether the connection was closed.
+// downFactory wraps a memorytopo factory so that connecting a cell to a root under /down fails, so that
+// closedProbePath on a cell connection reports whether the connection was closed, and so that closing a cell
+// connection twice fails the test, as it panics on etcd2topo.
 type downFactory struct {
 	*memorytopo.Factory
+	t *testing.T
 }
 
 const closedProbePath = "__closed_probe__"
@@ -52,16 +54,20 @@ func (f *downFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 	if err != nil || cell == topo.GlobalCell {
 		return conn, err
 	}
-	return &closeTrackingConn{Conn: conn}, nil
+	return &closeTrackingConn{Conn: conn, t: f.t}, nil
 }
 
 type closeTrackingConn struct {
 	topo.Conn
+	t      *testing.T
 	closed atomic.Bool
 }
 
 func (c *closeTrackingConn) Close() {
-	c.closed.Store(true)
+	if c.closed.Swap(true) {
+		c.t.Errorf("cell connection closed twice")
+		return
+	}
 	c.Conn.Close()
 }
 
@@ -80,12 +86,13 @@ func repointCell(t *testing.T, ts *topo.Server, cell, root string) {
 }
 
 // TestConnForCellPointedBackAfterFailedReplacement verifies that when a cell is re-pointed at a topo server
-// that can't be reached and then pointed back, ConnForCell connects again rather than returning the
-// connection it closed when it found the cell re-pointed.
+// that can't be reached, ConnForCell doesn't close the connection it closed when it found the cell re-pointed
+// again on a later call, and that once the cell is pointed back, ConnForCell connects again rather than
+// returning that closed connection.
 func TestConnForCellPointedBackAfterFailedReplacement(t *testing.T) {
 	ctx := t.Context()
 	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	ts, err := topo.NewWithFactory(&downFactory{Factory: memFactory}, "", "")
+	ts, err := topo.NewWithFactory(&downFactory{Factory: memFactory, t: t}, "", "")
 	require.NoError(t, err)
 	t.Cleanup(ts.Close)
 	ci, err := ts.GetCellInfo(ctx, "zone1", true /*strongRead*/)
@@ -95,6 +102,8 @@ func TestConnForCellPointedBackAfterFailedReplacement(t *testing.T) {
 	require.NoError(t, err)
 
 	repointCell(t, ts, "zone1", "/down")
+	_, err = ts.ConnForCell(ctx, "zone1")
+	require.Error(t, err)
 	_, err = ts.ConnForCell(ctx, "zone1")
 	require.Error(t, err)
 
@@ -159,7 +168,7 @@ func TestConnForCellConcurrentWithReadOnly(t *testing.T) {
 
 // TestConnForCellNewConnKeepsReadOnly verifies that once the Server is read-only, a connection ConnForCell
 // creates afterwards is read-only too, both for a cell re-pointed by another process and for a cell this
-// Server connects to for the first time.
+// Server connects to for the first time, and that SetReadOnly(false) makes those connections writable again.
 func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
 	ctx := t.Context()
 	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2")
@@ -189,5 +198,15 @@ func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
 		got, err := ts.ConnForCell(ctx, "zone2")
 		require.NoError(t, err)
 		assertReadOnly(t, got)
+	})
+
+	t.Run("SetReadOnly(false)", func(t *testing.T) {
+		require.NoError(t, ts.SetReadOnly(false))
+		for _, cell := range []string{"zone1", "zone2"} {
+			got, err := ts.ConnForCell(ctx, cell)
+			require.NoError(t, err)
+			_, err = got.Create(ctx, "read_only_probe", nil)
+			assert.NoError(t, err, "a write through the %s connection was rejected", cell)
+		}
 	})
 }

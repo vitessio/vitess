@@ -422,7 +422,7 @@ func (ts *Server) SetReadOnly(readOnly bool) error {
 		if !ok {
 			return fmt.Errorf("invalid local cell connection type, expected StatsConn but found: %T", cc.conn)
 		}
-		localCellConn.SetReadOnly(true)
+		localCellConn.SetReadOnly(readOnly)
 	}
 
 	return nil

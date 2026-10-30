@@ -59,6 +59,8 @@ func TestKVCallsEndWithContext(t *testing.T) {
 	s, err := NewServer("cell", listener.Addr().String(), "root")
 	require.NoError(t, err)
 	t.Cleanup(s.Close)
+	mp, err := s.NewLeaderParticipation("election", "id")
+	require.NoError(t, err)
 
 	tests := []struct {
 		name string
@@ -101,9 +103,7 @@ func TestKVCallsEndWithContext(t *testing.T) {
 	}, {
 		name: "GetCurrentLeaderID",
 		call: func(ctx context.Context) error {
-			mp, err := s.NewLeaderParticipation("election", "id")
-			require.NoError(t, err)
-			_, err = mp.GetCurrentLeaderID(ctx)
+			_, err := mp.GetCurrentLeaderID(ctx)
 			return err
 		},
 	}}
