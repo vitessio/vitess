@@ -1428,13 +1428,11 @@ func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *
 }
 
 // retryOnError keeps calling the given function until it succeeds, returns a
-// permanentError, or the given Context is done. It waits an exponentially
-// increasing amount of time between retries to avoid hot-looping. It returns an
+// permanentError, or the given Context is done. To avoid hot-looping, it waits
+// between retries, doubling the wait up to operationTimeout. It returns an
 // error only for a permanentError, which it unwraps, and a done Context.
 func retryOnError(ctx context.Context, fn func() error) error {
-	waitTime := 1 * time.Second
-
-	for {
+	for waitTime := time.Second; ; waitTime = min(2*waitTime, operationTimeout) {
 		err := fn()
 		if err == nil {
 			return nil
@@ -1449,7 +1447,6 @@ func retryOnError(ctx context.Context, fn func() error) error {
 			log.Error(fmt.Sprintf("Not retrying after error: %v", ctx.Err()))
 			return ctx.Err()
 		case <-time.After(waitTime):
-			waitTime *= 2
 		}
 	}
 }

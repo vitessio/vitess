@@ -700,18 +700,23 @@ func TestStartCatchUp(t *testing.T) {
 
 func TestRetryOnError(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		calls := 0
+		var calledAt []time.Time
 		err := retryOnError(boundedContext(t), func() error {
-			calls++
-			if calls < 3 {
+			calledAt = append(calledAt, time.Now())
+			if len(calledAt) < 10 {
 				return errors.New("the primary is unreachable")
 			}
 			return nil
 		})
 		require.NoError(t, err)
-		assert.Equal(t, 3, calls, "an error is retried")
+		assert.Len(t, calledAt, 10, "an error is retried")
+		for i := 1; i < len(calledAt); i++ {
+			assert.LessOrEqual(t, calledAt[i].Sub(calledAt[i-1]), operationTimeout, "the wait between retries is capped")
+		}
+		assert.Equal(t, operationTimeout, calledAt[9].Sub(calledAt[8]))
 
-		calls = 0
+		calls := 0
+
 		noPrimary := vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard has no primary")
 		err = retryOnError(boundedContext(t), func() error {
 			calls++
