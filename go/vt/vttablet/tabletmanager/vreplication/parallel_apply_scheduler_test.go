@@ -908,6 +908,9 @@ func TestApplySchedulerWaitForTurn(t *testing.T) {
 	turn := make(chan error, 1)
 	go func() { turn <- s.waitForTurn(ctx, 3) }()
 	require.NoError(t, s.markCommitted(txns[0]))
+	// Only the order right after the last committed one is next.
+	require.True(t, s.isNext(2))
+	require.False(t, s.isNext(3))
 	assert.Never(t, func() bool { return len(turn) > 0 }, 200*time.Millisecond, 10*time.Millisecond)
 	require.NoError(t, s.markCommitted(txns[1]))
 	select {

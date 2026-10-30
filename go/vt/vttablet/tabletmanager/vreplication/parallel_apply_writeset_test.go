@@ -984,6 +984,17 @@ func TestWritesetKeysForFKRef(t *testing.T) {
 	expected := testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42")))
 	_, ok := keySet[expected]
 	require.True(t, ok)
+
+	// An update of the FK column must emit keys for both the old and the new
+	// referenced value.
+	keySet = map[uint64]struct{}{}
+	beforeVals := sqltypes.MakeRowTrusted(childPlan.Fields, row)
+	afterVals = sqltypes.MakeRowTrusted(childPlan.Fields, &querypb.Row{Values: []byte("543"), Lengths: []int64{1, 2}})
+	require.NoError(t, writesetKeysForFKRef(ref, childPlan.Fields, fieldIdx, beforeVals, afterVals, keySet))
+	assert.Equal(t, map[uint64]struct{}{
+		testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("42"))): {},
+		testWritesetHash("parent", sqltypes.MakeTrusted(querypb.Type_INT64, []byte("43"))): {},
+	}, keySet)
 }
 
 func TestBuildTxnWritesetWithFKRefs(t *testing.T) {
@@ -1056,6 +1067,71 @@ func TestBuildTxnWritesetWithFKRefs(t *testing.T) {
 		}
 	}
 	require.True(t, conflict, "parent and child writesets should conflict on parent hash")
+}
+
+// TestBuildTxnWritesetWithFKRefsToNonPKParentColumn pins that a parent row
+// emits FK keys for the columns the child references, not just for its own
+// PK, so that a child referencing a UNIQUE non-PK parent column conflicts
+// with an update of that column.
+func TestBuildTxnWritesetWithFKRefsToNonPKParentColumn(t *testing.T) {
+	// Parent table: parent(id PK, code UNIQUE); child(id PK, parent_code FK -> parent.code)
+	parentPlan := &TablePlan{
+		TargetName: "parent",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "code", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	childPlan := &TablePlan{
+		TargetName: "child",
+		Fields: []*querypb.Field{
+			{Name: "id", Type: querypb.Type_INT64},
+			{Name: "parent_code", Type: querypb.Type_INT64},
+		},
+		PKIndices: []bool{true, false},
+	}
+	fkRefs := map[string][]fkConstraintRef{
+		"child": {
+			{ParentTable: "parent", ChildColumnNames: []string{"parent_code"}, ReferencedColumnNames: []string{"code"}},
+		},
+	}
+	parentRefs := buildParentFKRefs(fkRefs)
+	tablePlans := map[string]*TablePlan{"parent": parentPlan, "child": childPlan}
+
+	// Parent update: id=1, code 10 -> 11.
+	parentEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "parent", RowChanges: []*binlogdatapb.RowChange{{
+			Before: &querypb.Row{Values: []byte("110"), Lengths: []int64{1, 2}},
+			After:  &querypb.Row{Values: []byte("111"), Lengths: []int64{1, 2}},
+		}}},
+	}
+	// Child insert: id=5, parent_code=11.
+	childEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{TableName: "child", RowChanges: []*binlogdatapb.RowChange{{
+			After: &querypb.Row{Values: []byte("511"), Lengths: []int64{1, 2}},
+		}}},
+	}
+
+	int64Val := func(v string) sqltypes.Value { return sqltypes.MakeTrusted(querypb.Type_INT64, []byte(v)) }
+	parentKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{parentEvent})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []uint64{
+		testWritesetHash("parent", int64Val("1")),
+		testWritesetHash("parent", int64Val("10")),
+		testWritesetHash("parent", int64Val("11")),
+	}, parentKeys)
+
+	childKeys, err := buildTxnWriteset(tablePlans, fkRefs, parentRefs, []*binlogdatapb.VEvent{childEvent})
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []uint64{
+		testWritesetHash("child", int64Val("5")),
+		testWritesetHash("parent", int64Val("11")),
+	}, childKeys)
+
+	assert.Contains(t, parentKeys, testWritesetHash("parent", int64Val("11")), "parent update and child insert must share a key")
 }
 
 func TestBuildTxnWritesetWithCompositeParentFKRefsUsesIdentityColumnOrder(t *testing.T) {
@@ -2197,3 +2273,33 @@ func TestBuildTxnWritesetFKStreamedMetadataMismatchSerializes(t *testing.T) {
 func (s *stubDBClient) SetMultiStatements(on bool) error { return nil }
 
 func (m *maxRowsAssertingDBClient) SetMultiStatements(on bool) error { return nil }
+
+func TestTxnTouchesExtraUniqueSecondary(t *testing.T) {
+	plans := map[string]*TablePlan{
+		"extra": {HasExtraUniqueSecondary: true},
+		"plain": {},
+		"nilp":  nil,
+	}
+	rowEvent := func(table string) *binlogdatapb.VEvent {
+		return &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: table}}
+	}
+
+	tests := []struct {
+		name   string
+		events []*binlogdatapb.VEvent
+		want   bool
+	}{
+		{"no events", nil, false},
+		{"plain table", []*binlogdatapb.VEvent{rowEvent("plain")}, false},
+		{"missing plan", []*binlogdatapb.VEvent{rowEvent("unknown"), rowEvent("nilp")}, false},
+		{"extra table", []*binlogdatapb.VEvent{rowEvent("extra")}, true},
+		{"extra table after plain", []*binlogdatapb.VEvent{rowEvent("plain"), rowEvent("extra")}, true},
+		{"non-row event on extra table", []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_FIELD}}, false},
+		{"row event without row data", []*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_ROW}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, txnTouchesExtraUniqueSecondary(tt.events, plans))
+		})
+	}
+}

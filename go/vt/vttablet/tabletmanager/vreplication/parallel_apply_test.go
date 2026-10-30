@@ -1041,7 +1041,16 @@ func TestApplyEventsParallelReturnsWorkerErrorEvenIfCancellationLooksLikeEOF(t *
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}))
 
-	err := vp.applyEventsParallel(ctx, relay)
+	// A worker error that is swallowed instead of returned leaves the
+	// applier waiting for more events, so bound the wait to fail fast.
+	errCh := make(chan error, 1)
+	go func() { errCh <- vp.applyEventsParallel(ctx, relay) }()
+	var err error
+	select {
+	case err = <-errCh:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "applyEventsParallel did not return the worker error")
+	}
 	require.ErrorContains(t, err, workerApplyErr.Error())
 	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
 	require.True(t, isUnrecoverableError(err))
@@ -1985,32 +1994,90 @@ func TestScheduleItems_BEGINIsIgnored(t *testing.T) {
 }
 
 func TestScheduleItems_DDLIsForceGlobal(t *testing.T) {
-	vp, _ := testVPlayer(t)
-	ctx := testCtx(t)
-	scheduler := newApplyScheduler(ctx)
-	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
-	vp.vr.source.OnDdl = binlogdatapb.OnDDLAction_EXEC
-	vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
-
-	gtidEvent := &binlogdatapb.VEvent{
-		Type: binlogdatapb.VEventType_GTID,
-		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5",
-	}
-	ddlEvent := &binlogdatapb.VEvent{
-		Type:      binlogdatapb.VEventType_DDL,
-		Timestamp: 200,
+	gtidEvent := func(seq int) *binlogdatapb.VEvent {
+		return &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_GTID,
+			Gtid: fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", seq),
+		}
 	}
 
-	items := [][]*binlogdatapb.VEvent{{gtidEvent, ddlEvent}}
-	err := vp.scheduleItems(ctx, scheduler, state, items)
-	require.NoError(t, err)
+	// A DDL that is not executed on the target (IGNORE) only advances the
+	// position, so it may skip the wait for inflight row transactions. A DDL that
+	// is executed (EXEC, EXEC_IGNORE) changes the schema, so it must wait for
+	// every earlier transaction to drain.
+	tests := []struct {
+		onDdl          binlogdatapb.OnDDLAction
+		wantNoConflict bool
+	}{
+		{binlogdatapb.OnDDLAction_EXEC, false},
+		{binlogdatapb.OnDDLAction_EXEC_IGNORE, false},
+		{binlogdatapb.OnDDLAction_IGNORE, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.onDdl.String(), func(t *testing.T) {
+			vp, _ := testVPlayer(t)
+			ctx := testCtx(t)
+			scheduler := newApplyScheduler(ctx)
+			state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+			vp.vr.source.OnDdl = tt.onDdl
+			vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
 
-	got, err := scheduler.nextReady(ctx)
-	require.NoError(t, err)
-	assert.True(t, got.forceGlobal)
-	assert.True(t, got.payload.commitOnly)
-	assert.Len(t, got.payload.events, 1)
-	assert.Equal(t, binlogdatapb.VEventType_DDL, got.payload.events[0].Type)
+			ddlEvent := &binlogdatapb.VEvent{
+				Type:      binlogdatapb.VEventType_DDL,
+				Timestamp: 200,
+			}
+
+			items := [][]*binlogdatapb.VEvent{{gtidEvent(5), ddlEvent}}
+			err := vp.scheduleItems(ctx, scheduler, state, items)
+			require.NoError(t, err)
+
+			got, err := scheduler.nextReady(ctx)
+			require.NoError(t, err)
+			assert.True(t, got.forceGlobal)
+			assert.Equal(t, tt.wantNoConflict, got.noConflict)
+			assert.True(t, got.payload.commitOnly)
+			assert.Len(t, got.payload.events, 1)
+			assert.Equal(t, binlogdatapb.VEventType_DDL, got.payload.events[0].Type)
+		})
+	}
+
+	// An executed DDL may change the schema or FK topology, so every later
+	// transaction in the same relay fetch must serialize, even one on a table
+	// the DDL does not touch (which the post-DDL stale plan barrier would not
+	// catch).
+	for _, onDdl := range []binlogdatapb.OnDDLAction{binlogdatapb.OnDDLAction_EXEC, binlogdatapb.OnDDLAction_EXEC_IGNORE} {
+		t.Run("SerializesLaterTxnInSameFetch/"+onDdl.String(), func(t *testing.T) {
+			vp, _ := testVPlayer(t)
+			ctx := testCtx(t)
+			scheduler := newApplyScheduler(ctx)
+			state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+			vp.vr.source.OnDdl = onDdl
+			vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
+			vp.tablePlans["t2"] = &TablePlan{TargetName: "t2", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
+			vp.tablePlansVersion.Store(1)
+
+			require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+				gtidEvent(5),
+				{Type: binlogdatapb.VEventType_DDL, Statement: "create table t3(id bigint primary key)", Timestamp: 200},
+				gtidEvent(6),
+				{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+					TableName:  "t2",
+					RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+				}, Timestamp: 300},
+				{Type: binlogdatapb.VEventType_COMMIT},
+			}}))
+
+			ddlTxn, err := scheduler.nextReady(ctx)
+			require.NoError(t, err)
+			require.Equal(t, binlogdatapb.VEventType_DDL, ddlTxn.payload.events[0].Type)
+			require.NoError(t, scheduler.markCommitted(ddlTxn))
+
+			rowTxn, err := scheduler.nextReady(ctx)
+			require.NoError(t, err)
+			require.Equal(t, binlogdatapb.VEventType_ROW, rowTxn.payload.events[0].Type)
+			assert.True(t, rowTxn.forceGlobal)
+		})
+	}
 }
 
 func TestScheduleItems_PostDDLComplexDDLDoesNotClearOnUnrelatedPlanRefresh(t *testing.T) {
@@ -3215,6 +3282,7 @@ func TestScheduleItems_OTHERIsForceGlobal(t *testing.T) {
 	got, err := scheduler.nextReady(ctx)
 	require.NoError(t, err)
 	assert.True(t, got.forceGlobal)
+	assert.True(t, got.noConflict)
 	assert.True(t, got.payload.commitOnly)
 }
 
@@ -3482,6 +3550,49 @@ func TestScheduleItems_UnsupportedWritesetMappingForcesGlobal(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, got.forceGlobal)
 	require.NoError(t, scheduler.markCommitted(got))
+}
+
+// TestScheduleItems_ExtraUniqueSecondaryForceGlobal pins that a txn touching a
+// table with a unique secondary index the writeset cannot hash serializes,
+// while a txn touching only tables without one stays parallel.
+func TestScheduleItems_ExtraUniqueSecondaryForceGlobal(t *testing.T) {
+	vp, _ := testVPlayer(t)
+	ctx := testCtx(t)
+	scheduler := newApplyScheduler(ctx)
+	state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
+
+	for _, table := range []string{"extra_unique", "plain"} {
+		vp.tablePlans[table] = &TablePlan{
+			TargetName:              table,
+			Fields:                  []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+			PKIndices:               []bool{true},
+			HasExtraUniqueSecondary: table == "extra_unique",
+		}
+	}
+	vp.tablePlansVersion.Store(1)
+
+	// Schedule the transactions in separate calls: consecutive commits within
+	// one relay fetch merge into a single batched transaction.
+	for i, table := range []string{"extra_unique", "plain"} {
+		require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
+			{Type: binlogdatapb.VEventType_GTID, Gtid: fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", 5+i)},
+			{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+				TableName:  table,
+				RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+			}, Timestamp: 100},
+			{Type: binlogdatapb.VEventType_COMMIT},
+		}}))
+	}
+
+	got, err := scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.True(t, got.forceGlobal, "txn touching a table with an extra unique secondary index must serialize")
+	require.NoError(t, scheduler.markCommitted(got))
+
+	got, err = scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.False(t, got.forceGlobal, "txn touching only tables without one must stay parallel")
+	assert.NotEmpty(t, got.writeset)
 }
 
 func TestApplyEvent_FIELDEmitsWritesetKeyForUniqueSecondaryIndex(t *testing.T) {
@@ -6954,7 +7065,21 @@ func TestCommitLoop_WorkerTxnCommitProtocol(t *testing.T) {
 	commitCh <- txn
 	close(commitCh)
 
+	oldSavedAt := time.Now().Add(-2 * idleTimeout)
+	vp.serialMu.Lock()
+	vp.timeLastSaved = oldSavedAt
+	vp.numAccumulatedHeartbeats = 3
+	vp.serialMu.Unlock()
+
 	require.NoError(t, vp.commitLoop(ctx, scheduler, commitCh))
+
+	// The commit counts as a position save: the stream's last position is
+	// published, and the heartbeat count and idle timer are reset.
+	assert.Equal(t, pos, vp.vr.stats.LastPosition())
+	vp.serialMu.Lock()
+	assert.Zero(t, vp.numAccumulatedHeartbeats)
+	assert.True(t, vp.timeLastSaved.After(oldSavedAt))
+	vp.serialMu.Unlock()
 
 	require.NotEmpty(t, recording.queries)
 	assert.Contains(t, recording.queries[0], "update _vt.vreplication set pos=")
@@ -7054,6 +7179,46 @@ func TestCommitLoop_WorkerStopPosSetsStateAndStops(t *testing.T) {
 	default:
 		t.Fatal("commitLoop must signal the worker's done channel after committing")
 	}
+
+	// A batching worker leaves payload.query and payload.commit nil and is
+	// committed through its batch; it must be marked Stopped too.
+	t.Run("batching worker", func(t *testing.T) {
+		scheduler := newApplyScheduler(ctx)
+		recording := &recordingDBClient{}
+		workerClient := newVDBClient(recording, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+		workerClient.maxBatchSize = 1024
+		require.NoError(t, workerClient.Begin())
+
+		doneCh := make(chan struct{}, 1)
+		commitCh := make(chan *applyTxn, 1)
+		commitCh <- &applyTxn{
+			order:   1,
+			payload: &applyTxnPayload{pos: pos, timestamp: 100, client: workerClient, lastEventTimestamp: 100},
+			done:    doneCh,
+		}
+		close(commitCh)
+
+		err := vp.commitLoop(ctx, scheduler, commitCh)
+		require.ErrorIs(t, err, io.EOF, "reaching the stop position must stop the stream")
+
+		assert.False(t, workerClient.InTransaction, "the worker's transaction must be committed")
+		var sawPosUpdate, sawStateUpdate bool
+		for _, q := range recording.queries {
+			if strings.Contains(q, "update _vt.vreplication set pos=") {
+				sawPosUpdate = true
+			}
+			if strings.Contains(q, "update _vt.vreplication set state=") {
+				sawStateUpdate = true
+			}
+		}
+		assert.True(t, sawPosUpdate, "position update must run on the worker's connection")
+		assert.True(t, sawStateUpdate, "the Stopped state update must run on the worker's connection so it commits atomically with the position")
+		select {
+		case <-doneCh:
+		default:
+			t.Fatal("commitLoop must signal the worker's done channel after committing")
+		}
+	})
 }
 
 // TestSetState_BatchedTransactionExecutesImmediatelyWithoutReplay pins the
