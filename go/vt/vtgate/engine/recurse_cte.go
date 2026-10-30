@@ -18,10 +18,15 @@ package engine
 
 import (
 	"context"
+	"math"
+	"strconv"
+	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -38,9 +43,70 @@ type RecurseCTE struct {
 
 var _ Primitive = (*RecurseCTE)(nil)
 
-// maxRecurseDepth caps the number of recursion iterations before we abort.
-// TODO: This should be controlled with the cte_max_recursion_depth system variable.
-const maxRecurseDepth = 1000
+// defaultMaxRecurseDepth is the number of recursion iterations after which we
+// abort when the session has not set cte_max_recursion_depth. It matches the
+// MySQL default for that system variable.
+const defaultMaxRecurseDepth = 1000
+
+// maxRecurseDepth returns the recursion-depth limit for this session: the value
+// of the cte_max_recursion_depth session system variable when it has been set,
+// and the MySQL default otherwise.
+func maxRecurseDepth(vcursor VCursor) uint64 {
+	limit := uint64(defaultMaxRecurseDepth)
+	session := vcursor.Session()
+	if !session.HasSystemVariables() {
+		return limit
+	}
+	session.GetSystemVariables(func(k string, v string) {
+		if k != sysvars.CTEMaxRecursionDepth {
+			return
+		}
+		if parsed, ok := parseRecurseDepth(v); ok {
+			limit = parsed
+		}
+	})
+	return limit
+}
+
+// maxRecurseDepthLimit is the largest value MySQL accepts for
+// cte_max_recursion_depth. Larger values are clamped to it.
+const maxRecurseDepthLimit = math.MaxUint32
+
+// parseRecurseDepth parses the stored value of cte_max_recursion_depth. The
+// session stores system variable values as they were assigned, in their
+// SQL-encoded form, so a string literal is still wrapped in quotes here and an
+// out-of-range number has not been clamped yet. Like MySQL, values above
+// 4294967295 become 4294967295 and negative values become 0.
+func parseRecurseDepth(v string) (uint64, bool) {
+	v = strings.Trim(strings.TrimSpace(v), "'\"")
+	if depth, err := strconv.ParseUint(v, 10, 64); err == nil {
+		return min(depth, maxRecurseDepthLimit), true
+	}
+	if depth, err := strconv.ParseInt(v, 10, 64); err == nil && depth < 0 {
+		return 0, true
+	}
+	return 0, false
+}
+
+// termReturnsNoRows reports whether the recursive term was planned as a route
+// that never returns rows, like a recursive query block with WHERE false.
+// MySQL does not execute such a block, so it never counts an iteration.
+func termReturnsNoRows(term Primitive) bool {
+	route, ok := term.(*Route)
+	return ok && route.RoutingParameters != nil && route.Opcode == None
+}
+
+// exceedsMaxMemoryRows returns an error when the rows that the recursion keeps
+// in memory are over the max-memory-rows limit. Counting levels instead of Term
+// calls means a recursion whose frontier grows with every level is not stopped
+// by the depth limit until it has kept far more rows than any single Term
+// result, so the rows it keeps are checked on their own.
+func exceedsMaxMemoryRows(vcursor VCursor, numRows int) error {
+	if vcursor.ExceedsMaxMemoryRows(numRows) {
+		return vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+	}
+	return nil
+}
 
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields)
@@ -48,11 +114,22 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		return nil, err
 	}
 
+	if termReturnsNoRows(r.Term) {
+		return res, nil
+	}
+
 	// recurseRows contains the rows used in the next recursion
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
-	loops := 0
+	maxDepth := maxRecurseDepth(vcursor)
+	var iterations uint64
 	for len(recurseRows) > 0 {
+		// Like MySQL, one iteration is one recursion level: the whole frontier
+		// produced by the previous level, however many rows it holds.
+		iterations++
+		if iterations > maxDepth {
+			return nil, vterrors.VT09030(iterations)
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
@@ -64,16 +141,15 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			loops++
-			if loops > maxRecurseDepth {
-				return nil, vterrors.VT09030("")
-			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
 				return nil, err
 			}
 			recurseRows = append(recurseRows, rresult.Rows...)
 			res.Rows = append(res.Rows, rresult.Rows...)
+			if err := exceedsMaxMemoryRows(vcursor, len(res.Rows)); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return res, nil
@@ -100,18 +176,32 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		mu.Lock()
 		defer mu.Unlock()
 		recurseRows = append(recurseRows, result.Rows...)
+		if err := exceedsMaxMemoryRows(vcursor, len(recurseRows)); err != nil {
+			return err
+		}
 		return callback(result)
 	})
 	if err != nil {
 		return err
+	}
+	if termReturnsNoRows(r.Term) {
+		return nil
 	}
 
 	// Expand each recursion level iteratively, mirroring the buffered path. Only
 	// one Term stream is active at a time: recursing inside the Term callback
 	// would nest a live stream per level and exhaust the connection pool.
 	joinVars := make(map[string]*querypb.BindVariable)
-	loops := 0
+	maxDepth := maxRecurseDepth(vcursor)
+	var iterations uint64
 	for len(recurseRows) > 0 {
+		// Like MySQL, one iteration is one recursion level: the whole frontier
+		// produced by the previous level, however many rows it holds. Streamed
+		// rows cannot be unsent, so the guard fires before the level starts.
+		iterations++
+		if iterations > maxDepth {
+			return vterrors.VT09030(iterations)
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
@@ -123,14 +213,13 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			loops++
-			if loops > maxRecurseDepth {
-				return vterrors.VT09030("")
-			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
 				mu.Lock()
 				defer mu.Unlock()
 				recurseRows = append(recurseRows, result.Rows...)
+				if err := exceedsMaxMemoryRows(vcursor, len(recurseRows)); err != nil {
+					return err
+				}
 				return callback(result)
 			})
 			if err != nil {
