@@ -4702,10 +4702,10 @@ func TestWorkerLoop_FIELDRefreshClearsPublishedDroppedTablesAfterCommit(t *testi
 	}
 	payload.commit = func() error { return nil }
 	payload.client = vp.dbClient
+	// The commitLoop returns txn to the pool once it commits it.
 	txn := acquireApplyTxn()
 	txn.order = 1
 	txn.payload = payload
-	defer releaseApplyTxn(txn)
 
 	commitCh := make(chan *applyTxn, 1)
 	commitCh <- txn
