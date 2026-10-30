@@ -129,7 +129,7 @@ func getPlanType(p Primitive) PlanType {
 	switch prim := p.(type) {
 	case *SessionPrimitive, *SingleRow, *UpdateTarget, *VindexFunc, *PrepareStmt, *DeallocateStmt:
 		return PlanLocal
-	case *Lock, *ReplaceVariables, *RevertMigration, *Rows:
+	case *Lock, *RevertMigration, *Rows:
 		return PlanPassthrough
 	case *Send:
 		return getPlanTypeFromTarget(prim)
@@ -179,6 +179,8 @@ func getPlanType(p Primitive) PlanType {
 	case *VExplain:
 		return getPlanType(prim.Input)
 	case *RenameFields:
+		return getPlanType(prim.Input)
+	case *ReplaceVariables:
 		return getPlanType(prim.Input)
 	default:
 		return PlanComplex
@@ -272,10 +274,10 @@ func (pk PlanKey) Hash() theine.HashKey256 {
 	return planKey
 }
 
-func NewPlan(query string, stmt sqlparser.Statement, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
+func NewPlan(query string, queryType sqlparser.StatementType, primitive Primitive, bindVarNeeds *sqlparser.BindVarNeeds, tablesUsed []string) *Plan {
 	return &Plan{
 		Type:         getPlanType(primitive),
-		QueryType:    sqlparser.ASTToStatementType(stmt),
+		QueryType:    queryType,
 		Original:     query,
 		Instructions: primitive,
 		BindVarNeeds: bindVarNeeds,

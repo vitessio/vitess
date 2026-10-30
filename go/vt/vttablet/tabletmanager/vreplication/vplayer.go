@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -76,6 +77,10 @@ type vplayer struct {
 	// If the VPlayer is in batch mode, we accumulate each transaction's statements
 	// that are then sent as a single multi-statement protocol request to the database.
 	batchMode bool
+	// maxBatchSize is the size a transaction's batch may reach before it is sent,
+	// and is zero when this player does not batch. It is handed to the client by
+	// setConnectionBatchMode, once the connection is known to accept a batch.
+	maxBatchSize int64
 
 	pos replication.Position
 	// unsavedEvent is set any time we skip an event without
@@ -140,8 +145,12 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		settings.StopPos = pausePos
 		saveStop = false
 	}
-	log.Info(fmt.Sprintf("Starting VReplication player id: %v, name: %v, startPos: %v, stop: %v", vr.id, vr.WorkflowName, settings.StartPos, settings.StopPos))
-	log.V(2).Info(fmt.Sprintf("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %+v", vr.id, settings.StartPos, settings.StopPos, vr.source.Filter))
+	log.Info("Starting VReplication player",
+		vr.logAttrs(
+			slog.String("start_position", replication.EncodePosition(settings.StartPos)),
+			slog.String("stop_position", replication.EncodePosition(settings.StopPos)),
+		)...)
+	log.V(2).Info("Starting VReplication player", vr.logAttrs(slog.String("filter", fmt.Sprintf("%+v", vr.source.Filter)))...)
 	queryFunc := func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		return vr.dbClient.ExecuteWithRetry(ctx, sql)
 	}
@@ -151,8 +160,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	// We only do batching in the running/replicating phase.
 	batchMode := len(copyState) == 0 && vr.workflowConfig.ExperimentalFlags&vttablet.VReplicationExperimentalFlagVPlayerBatching != 0
 
+	var maxBatchSize int64
 	if batchMode {
-		maxAllowedPacket := vr.maxQuerySize(vr.dbClient)
+		maxBatchSize = vr.maxQuerySize(vr.dbClient)
 		queryFunc = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 			if !vr.dbClient.InTransaction { // Should be sent down the wire immediately
 				return vr.dbClient.Execute(sql)
@@ -162,7 +172,6 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		commitFunc = func() error {
 			return vr.dbClient.CommitTrxQueryBatch() // Commit the current trx batch
 		}
-		vr.dbClient.maxBatchSize = maxAllowedPacket
 	}
 
 	return &vplayer{
@@ -179,17 +188,99 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 		query:            queryFunc,
 		commit:           commitFunc,
 		batchMode:        batchMode,
+		maxBatchSize:     maxBatchSize,
+	}
+}
+
+// setConnectionBatchMode lets the connection send several statements in a
+// single query while, and only while, this player batches transactions, and
+// hands the client the batch size to match.
+//
+// The connection is shared by the copy and the replicate phase, which do not
+// batch alike, and a re-created connection comes back through here when the
+// controller restarts the workflow, so the state is set for every run rather
+// than once per connection.
+//
+// The client is only allowed to build a batch after the connection has accepted
+// one, so that the two can never disagree: an error here leaves the client
+// unable to batch rather than batching onto a connection that would reject it.
+// A player that batches gives the capability back with clearConnectionBatchMode
+// once it is done with it, and a player that does not batch takes it away here,
+// so a connection only carries it while a batch can actually be sent.
+func (vp *vplayer) setConnectionBatchMode() error {
+	// Take the ability to build a batch away for the duration of the exchange,
+	// so that a failure can never leave the client batching onto a connection
+	// whose state we did not get to set.
+	vp.vr.dbClient.maxBatchSize = 0
+
+	if err := vp.vr.dbClient.SetMultiStatements(vp.batchMode); err != nil {
+		if sqlerror.IsConnErr(err) || vp.vr.dbClient.IsClosed() {
+			// Losing the connection says nothing about whether it could have
+			// batched. The client already dropped it, so the workflow gets a new
+			// one on the next run: keep the error as it came so that it is
+			// retried rather than ending the workflow. The connection is also
+			// dropped when the server's answer leaves its state unknown, which
+			// is not reported as a connection error, so ask the client too.
+			return vterrors.Wrapf(err, "failed to configure multi statement support for the vplayer")
+		}
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to configure multi statement support for the vplayer (%v); clear the vplayer batching bit (%d) of --vreplication-experimental-flags to replay without batching",
+			err, vttablet.VReplicationExperimentalFlagVPlayerBatching)
+	}
+
+	vp.vr.dbClient.maxBatchSize = vp.maxBatchSize
+	return nil
+}
+
+// clearConnectionBatchMode takes the ability to send several statements in a
+// single query away again, once this player is done with it, so that a
+// connection outlives the capability by as little as possible.
+//
+// The client loses the ability to build a batch before the connection loses the
+// ability to run one, so that the two can never disagree. A failure is logged
+// rather than returned: the player is on its way out and has an error of its own
+// to report, and the next one sets the state it needs from scratch.
+func (vp *vplayer) clearConnectionBatchMode() {
+	vp.vr.dbClient.maxBatchSize = 0
+
+	// A connection that is already gone took the capability with it, and closing
+	// it leaves the capability it negotiated on record, so asking would write to
+	// a dead connection for nothing. This is the ordinary outcome whenever the
+	// query that ended the run is what killed the connection.
+	if vp.vr.dbClient.IsClosed() {
+		return
+	}
+
+	if err := vp.vr.dbClient.SetMultiStatements(false); err != nil {
+		log.Warn("failed to disable multi statement support",
+			vp.vr.logAttrs(
+				slog.Any("error", err),
+			)...)
 	}
 }
 
 // play is the entry point for playing binlogs.
 func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
-		log.Info(fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
+		log.Info("Stop position already reached",
+			vp.vr.logAttrs(
+				slog.String("start_position", replication.EncodePosition(vp.startPos)),
+				slog.String("stop_position", replication.EncodePosition(vp.stopPos)),
+			)...)
 		if vp.saveStop {
 			return vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
 		return nil
+	}
+
+	// A player that has nothing left to replay sends no batch, so the connection
+	// is only configured once there is something to replay.
+	if err := vp.setConnectionBatchMode(); err != nil {
+		return err
+	}
+	if vp.batchMode {
+		// A player that does not batch has already turned the capability off
+		// above, so only the one that turned it on has something to give back.
+		defer vp.clearConnectionBatchMode()
 	}
 
 	plan, err := vp.vr.buildReplicatorPlan(vp.vr.source, vp.vr.colInfoMap, vp.copyState, vp.vr.stats, vp.vr.vre.env.CollationEnv(), vp.vr.vre.env.Parser())
@@ -237,13 +328,13 @@ func (vp *vplayer) updateFKCheck(ctx context.Context, flags2 uint32) error {
 		dbForeignKeyChecksEnabled == vp.foreignKeyChecksEnabled /* no change in the state, no need to update */ {
 		return nil
 	}
-	log.Info("Setting this session's foreign_key_checks to " + strconv.FormatBool(dbForeignKeyChecksEnabled))
+	log.Info("Setting this session's foreign_key_checks", vp.vr.logAttrs(slog.Bool("foreign_key_checks", dbForeignKeyChecksEnabled))...)
 	if _, err := vp.query(ctx, "set @@session.foreign_key_checks="+strconv.FormatBool(dbForeignKeyChecksEnabled)); err != nil {
 		return fmt.Errorf("failed to set session foreign_key_checks: %w", err)
 	}
 	vp.foreignKeyChecksEnabled = dbForeignKeyChecksEnabled
 	if !vp.foreignKeyChecksStateInitialized {
-		log.Info("First foreign_key_checks update to: " + strconv.FormatBool(dbForeignKeyChecksEnabled))
+		log.Info("First foreign_key_checks update", vp.vr.logAttrs(slog.Bool("foreign_key_checks", dbForeignKeyChecksEnabled))...)
 		vp.foreignKeyChecksStateInitialized = true
 	}
 	return nil
@@ -280,7 +371,11 @@ func runWithRecover(workflow, where string, fn func() error) (err error) {
 // one. This allows for the apply thread to catch up more quickly if
 // a backlog builds up.
 func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
-	log.Info(fmt.Sprintf("Starting VReplication player id: %v, name: %v, startPos: %v, stop: %v", vp.vr.id, vp.vr.WorkflowName, vp.startPos, vp.stopPos))
+	log.Info("Starting VReplication player",
+		vp.vr.logAttrs(
+			slog.String("start_position", replication.EncodePosition(vp.startPos)),
+			slog.String("stop_position", replication.EncodePosition(vp.stopPos)),
+		)...)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -459,7 +554,7 @@ func (vp *vplayer) updatePos(ctx context.Context, ts int64) (posReached bool, er
 	vp.vr.stats.SetLastPosition(vp.pos)
 	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
 	if posReached {
-		log.Info(fmt.Sprintf("Stopped at position: %v", vp.stopPos))
+		log.Info("Stopped at position", vp.vr.logAttrs(slog.String("stop_position", replication.EncodePosition(vp.stopPos)))...)
 		if vp.saveStop {
 			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return false, err
@@ -625,14 +720,16 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 						case event.GetRowEvent() != nil:
 							table = event.GetRowEvent().TableName
 						}
+						attrs := vp.vr.logAttrs()
 						if table != "" {
 							tableLogMsg = " for table " + table
+							attrs = append(attrs, slog.String("table", table))
 						}
-						pos := getNextPosition(items, i, j+1)
-						if pos != "" {
-							gtidLogMsg = " while processing position " + pos
+						if pos, ok := getNextPosition(items, i, j+1); ok && pos.String() != "" {
+							gtidLogMsg = " while processing position " + pos.String()
+							attrs = append(attrs, slog.String("processing_position", replication.EncodePosition(pos)))
 						}
-						log.Error(fmt.Sprintf("Error applying event%s%s: %s", tableLogMsg, gtidLogMsg, err.Error()))
+						log.Error("Error applying event", append(attrs, slog.Any("error", err))...)
 						err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
 					}
 					return err
@@ -691,23 +788,23 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 // stream due to filtering. For GTIDs that we filter out we still replicate the
 // GTID event itself, just without any internal events and a COMMIT event (see
 // the unsavedEvent handling).
-func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) string {
+func getNextPosition(items [][]*binlogdatapb.VEvent, i, j int) (replication.Position, bool) {
 	for i < len(items) {
 		for j < len(items[i]) {
 			switch items[i][j].Type {
 			case binlogdatapb.VEventType_GTID:
 				pos, err := binlogplayer.DecodePosition(items[i][j].Gtid)
 				if err != nil {
-					return ""
+					return replication.Position{}, false
 				}
-				return pos.String()
+				return pos, true
 			}
 			j++
 		}
 		j = 0
 		i++
 	}
-	return ""
+	return replication.Position{}, false
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
@@ -780,13 +877,13 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
-			log.Info("Error applying row event: " + err.Error())
+			log.Info("Error applying row event", vp.vr.logAttrs(slog.Any("error", err))...)
 			return err
 		}
 	case binlogdatapb.VEventType_OTHER:
 		if vp.vr.dbClient.InTransaction {
 			// Unreachable
-			log.Error(fmt.Sprintf("internal error: vplayer is in a transaction on event: %v", event))
+			log.Error("internal error: vplayer is in a transaction on event", vp.vr.logAttrs(slog.String("event", fmt.Sprint(event)))...)
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
 		// Just update the position.
@@ -800,7 +897,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 	case binlogdatapb.VEventType_DDL:
 		if vp.vr.dbClient.InTransaction {
 			// Unreachable
-			log.Error(fmt.Sprintf("internal error: vplayer is in a transaction on event: %v", event))
+			log.Error("internal error: vplayer is in a transaction on event", vp.vr.logAttrs(slog.String("event", fmt.Sprint(event)))...)
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
 		vp.vr.stats.DDLEventActions.Add(vp.vr.source.OnDdl.String(), 1) // Record the DDL handling
@@ -845,7 +942,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
 			if _, err := vp.query(ctx, event.Statement); err != nil {
-				log.Info(fmt.Sprintf("Ignoring error: %v for DDL: %s", err, event.Statement))
+				log.Info("Ignoring error for DDL", vp.vr.logAttrs(slog.Any("error", err), slog.String("query", event.Statement))...)
 			}
 			posReached, err := vp.updatePos(ctx, event.Timestamp)
 			if err != nil {
@@ -860,7 +957,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 	case binlogdatapb.VEventType_JOURNAL:
 		if vp.vr.dbClient.InTransaction {
 			// Unreachable
-			log.Error(fmt.Sprintf("internal error: vplayer is in a transaction on event: %v", event))
+			log.Error("internal error: vplayer is in a transaction on event", vp.vr.logAttrs(slog.String("event", fmt.Sprint(event)))...)
 			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
 		// Ensure that we don't have a partial set of table matches in the journal.
@@ -885,10 +982,10 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			// with it the filter's validity -- does not change.
 			if binlogdatapb.VReplicationWorkflowType(vp.vr.WorkflowType) == binlogdatapb.VReplicationWorkflowType_CreateLookupIndex {
 				log.Info("Ignoring TABLES journal for lookup vindex workflow",
-					slog.String("workflow", vp.vr.WorkflowName),
-					slog.Int64("journal_id", event.Journal.Id),
-					slog.Any("journal_tables", event.Journal.Tables),
-				)
+					vp.vr.logAttrs(
+						slog.Int64("journal_id", event.Journal.Id),
+						slog.Any("journal_tables", event.Journal.Tables),
+					)...)
 				return nil
 			}
 			// Validate that all or none of the tables are in the journal.
@@ -918,7 +1015,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			// All were found. We must register journal.
 		}
-		log.Info(fmt.Sprintf("Binlog event registering journal event %+v", event.Journal))
+		log.Info("Binlog event registering journal event", vp.vr.logAttrs(slog.String("journal", fmt.Sprintf("%+v", event.Journal)))...)
 		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
 			if err := vp.vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, err.Error()); err != nil {
 				return err

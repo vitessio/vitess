@@ -99,6 +99,10 @@ var emergencyReparentShardOptions = struct {
 	IgnoreReplicaAliasStrList []string
 	PreventCrossCellPromotion bool
 	WaitForAllTablets         bool
+
+	// RequiredPosition is the GTID set that the new primary must have. At least
+	// one candidate must have received it.
+	RequiredPosition string
 }{}
 
 func validateEmergencyReparentShardOptions(_ *cobra.Command, _ []string) error {
@@ -150,6 +154,7 @@ func commandEmergencyReparentShard(cmd *cobra.Command, args []string) error {
 		Shard:                     shard,
 		NewPrimary:                newPrimaryAlias,
 		AllowSplitBrainPromotion:  emergencyReparentShardOptions.AllowSplitBrainPromotion,
+		RequiredPosition:          emergencyReparentShardOptions.RequiredPosition,
 		ExpectedPrimary:           expectedPrimaryAlias,
 		IgnoreReplicas:            ignoreReplicaAliases,
 		WaitReplicasTimeout:       protoutil.DurationToProto(emergencyReparentShardOptions.WaitReplicasTimeout),
@@ -322,6 +327,7 @@ func init() {
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.PreventCrossCellPromotion, "prevent-cross-cell-promotion", false, "Only promotes a new primary from the same cell as the previous primary.")
 	EmergencyReparentShard.Flags().BoolVar(&emergencyReparentShardOptions.WaitForAllTablets, "wait-for-all-tablets", false, "Should ERS wait for all the tablets to respond. Useful when all the tablets are reachable.")
 	EmergencyReparentShard.Flags().StringSliceVarP(&emergencyReparentShardOptions.IgnoreReplicaAliasStrList, "ignore-replicas", "i", nil, "Comma-separated, repeated list of replica tablet aliases to ignore during the emergency reparent.")
+	EmergencyReparentShard.Flags().StringVar(&emergencyReparentShardOptions.RequiredPosition, "required-position", "", "Minimum MySQL GTID set, for example <uuid>:1-100, that the new primary must have. Fails if no candidate has received it, either applied or still in the relay log. MySQL GTID shards only. On any other shard, ERS demotes a reachable primary and then fails. An older vtctld ignores this flag.")
 	Root.AddCommand(EmergencyReparentShard)
 
 	InitShardPrimary.Flags().DurationVar(&initShardPrimaryOptions.WaitReplicasTimeout, "wait-replicas-timeout", 30*time.Second, "Time to wait for replicas to catch up in reparenting.")

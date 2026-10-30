@@ -29,6 +29,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
@@ -155,7 +156,12 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	// Bound the comparison by the number of saved samples, which can be lower
 	// than the extra-row counts, rather than by the counts themselves.
 	maxRows := min(len(dr.ExtraRowsSourceDiffs), int(maxExtraRowsToCompare))
-	log.Info(fmt.Sprintf("Reconciling extra rows for table %s in vdiff %s, extra source rows %d, extra target rows %d, max rows %d", dr.TableName, wd.ct.uuid, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
+	log.Info("Reconciling extra rows for table in vdiff", wd.ct.logAttrs(
+		slog.String("table", dr.TableName),
+		slog.Int64("extra_rows_source", dr.ExtraRowsSource),
+		slog.Int64("extra_rows_target", dr.ExtraRowsTarget),
+		slog.Int("max_rows", maxRows),
+	)...)
 
 	// Samples persisted by an older binary and reloaded on resume lack the
 	// LosslessValues marker but may still be provably complete:
@@ -211,7 +217,7 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 	}
 
 	if matchedDiffs == 0 {
-		log.Info(fmt.Sprintf("No matching extra rows found for table %s in vdiff %s, checked %d rows", dr.TableName, wd.ct.uuid, maxRows))
+		log.Info("No matching extra rows found for table in vdiff", wd.ct.logAttrs(slog.String("table", dr.TableName), slog.Int("max_rows", maxRows))...)
 	} else {
 		// Now remove the matching extra rows
 		newExtraRowsSourceDiffs := make([]*RowDiff, 0, int64(len(dr.ExtraRowsSourceDiffs))-matchedDiffs)
@@ -244,10 +250,26 @@ func (wd *workflowDiffer) doReconcileExtraRows(dr *DiffReport, maxExtraRowsToCom
 		// We do not update `ProcessedRows` here, because any extra target or source rows are already included in it.
 		// We do not update `MismatchedRows`, because extra target or source rows are not counted as mismatches.
 
-		log.Info(fmt.Sprintf("Reconciled extra rows for table %s in vdiff %s, matching rows %d, extra source rows %d, extra target rows %d. Max compared rows %d", dr.TableName, wd.ct.uuid, matchedDiffs, dr.ExtraRowsSource, dr.ExtraRowsTarget, maxRows))
+		log.Info("Reconciled extra rows for table in vdiff", wd.ct.logAttrs(
+			slog.String("table", dr.TableName),
+			slog.Int64("matched_extra_rows", matchedDiffs),
+			slog.Int64("extra_rows_source", dr.ExtraRowsSource),
+			slog.Int64("extra_rows_target", dr.ExtraRowsTarget),
+			slog.Int("max_rows", maxRows),
+		)...)
 	}
 
 	return nil
+}
+
+// maxDiffDurationUnresumableError builds the error diffTable returns when an
+// un-checkpointable table exceeds --max-diff-duration. It is a MySQL
+// ERNotSupportedYet error so it survives persist+rebuild as non-ephemeral and the
+// engine does not auto-retry it forever.
+func maxDiffDurationUnresumableError(tableName string) error {
+	return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError,
+		fmt.Sprintf("table %s exceeded the configured --max-diff-duration and cannot be resumed because no resumable source checkpoint can be built for it (its filter does not project the full source primary key, or its target primary key extends a source key that is unique only within each source shard); increase or unset --max-diff-duration so it can complete within a single window",
+			tableName))
 }
 
 func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer) error {
@@ -284,7 +306,7 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		maxDiffRuntime = time.Duration(wd.ct.options.CoreOptions.MaxDiffSeconds) * time.Second
 	}
 
-	log.Info(fmt.Sprintf("Starting differ on table %s for vdiff %s", td.table.Name, wd.ct.uuid))
+	log.Info("Starting differ on table for vdiff", wd.ct.logAttrs(slog.String("table", td.table.Name))...)
 	if err := td.updateTableState(ctx, dbClient, StartedState); err != nil {
 		return err
 	}
@@ -314,33 +336,46 @@ func (wd *workflowDiffer) diffTable(ctx context.Context, dbClient binlogplayer.D
 		if err := td.initialize(ctx); err != nil { // Setup the consistent snapshots
 			return err
 		}
-		log.Info(fmt.Sprintf("Table initialization done on table %s for vdiff %s", td.table.Name, wd.ct.uuid))
+		log.Info("Table initialization done on table for vdiff", wd.ct.logAttrs(slog.String("table", td.table.Name))...)
 		diffTimer = time.NewTimer(maxDiffRuntime)
 		diffReport, diffErr = td.diff(ctx, wd.opts.CoreOptions, wd.opts.ReportOptions, diffTimer.C)
 		if diffErr == nil { // We finished the diff successfully
 			break
 		}
-		log.Error(fmt.Sprintf("Encountered an error diffing table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, diffErr))
+		log.Error("Encountered an error diffing table for vdiff", wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", diffErr), slog.String("error_code", vterrors.Code(diffErr).String()))...)
 		if !errors.Is(diffErr, ErrMaxDiffDurationExceeded) { // We only want to retry if we hit the max-diff-duration
 			return diffErr
 		}
+		if td.tablePlan.sourceCheckpointUnavailable {
+			// This table cannot be checkpointed (see getSourcePKCols), so it
+			// cannot be resumed and every retry would restart from the beginning
+			// and hit the same timeout. We do not override the operator's
+			// --max-diff-duration bound (long-lived snapshots have real
+			// operational cost), so we stop here. The failure is wrapped as a
+			// MySQL ERNotSupportedYet so that its "(errno 1235)" suffix survives
+			// being persisted as a string and rebuilt by retryVDiffs: that makes
+			// IsEphemeralError classify it as non-ephemeral, so the engine does
+			// not auto-retry it forever.
+			return maxDiffDurationUnresumableError(td.table.Name)
+		}
 	}
-	log.Info(fmt.Sprintf("Table diff done on table %s for vdiff %s with report: %+v", td.table.Name, wd.ct.uuid, diffReport))
+	attrs := wd.ct.logAttrs(slog.String("table", td.table.Name))
+	log.Info("Table diff done on table for vdiff", diffReport.logAttrs(attrs...)...)
 
 	if diffReport.ExtraRowsSource > 0 || diffReport.ExtraRowsTarget > 0 {
 		if err := wd.reconcileExtraRows(diffReport, wd.opts.CoreOptions.MaxExtraRowsToCompare, wd.opts.ReportOptions.MaxSampleRows); err != nil {
-			log.Error(fmt.Sprintf("Encountered an error reconciling extra rows found for table %s for vdiff %s: %v", td.table.Name, wd.ct.uuid, err))
+			log.Error("Encountered an error reconciling extra rows found for table for vdiff", wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 			return vterrors.Wrap(err, "failed to reconcile extra rows")
 		}
 	}
 
 	if diffReport.MismatchedRows > 0 || diffReport.ExtraRowsTarget > 0 || diffReport.ExtraRowsSource > 0 {
-		if err := updateTableMismatch(dbClient, wd.ct.id, td.table.Name); err != nil {
+		if err := setTableMismatch(dbClient, wd.ct.id, td.table.Name, true); err != nil {
 			return err
 		}
 	}
 
-	log.Info(fmt.Sprintf("Completed reconciliation on table %s for vdiff %s with updated report: %+v", td.table.Name, wd.ct.uuid, diffReport))
+	log.Info("Completed reconciliation on table for vdiff", diffReport.logAttrs(attrs...)...)
 	if err := td.updateTableStateAndReport(ctx, dbClient, CompletedState, diffReport); err != nil {
 		return err
 	}
@@ -404,14 +439,14 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 				td.table.Name, wd.ct.vde.thisTablet.Alias)
 		}
 
-		log.Info(fmt.Sprintf("Starting diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid))
+		log.Info("Starting diff of table for vdiff", wd.ct.logAttrs(slog.String("table", td.table.Name))...)
 		if err := wd.diffTable(ctx, dbClient, td); err != nil {
 			return wd.markTableErrored(ctx, dbClient, td, err)
 		}
 		if err := td.updateTableState(ctx, dbClient, CompletedState); err != nil {
 			return err
 		}
-		log.Info(fmt.Sprintf("Completed diff of table %s for vdiff %s", td.table.Name, wd.ct.uuid))
+		log.Info("Completed diff of table for vdiff", wd.ct.logAttrs(slog.String("table", td.table.Name))...)
 	}
 	if err := wd.markIfCompleted(ctx, dbClient); err != nil {
 		return err
@@ -423,9 +458,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) (err error) {
 func (wd *workflowDiffer) markTableErrored(ctx context.Context, dbClient binlogplayer.DBClient, td *tableDiffer, diffErr error) error {
 	if stateErr := td.updateTableState(ctx, dbClient, ErrorState); stateErr != nil {
 		log.Error("failed to mark table as errored",
-			slog.String("table", td.table.Name),
-			slog.String("vdiff", wd.ct.uuid),
-			slog.Any("error", stateErr))
+			wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", stateErr))...)
 	}
 	insertVDiffLog(ctx, dbClient, wd.ct.id, fmt.Sprintf("Table %s Error: %s", td.table.Name, diffErr))
 	return diffErr
@@ -555,11 +588,11 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 				wd.ct.vde.dbName,
 				tableName,
 			)
-			log.Info(fmt.Sprintf("Updating the table stats for %s.%s using: %q", wd.ct.vde.dbName, tableName, stmt.Query))
+			log.Info("Updating the table stats", wd.ct.logAttrs(slog.String("db_name", wd.ct.vde.dbName), slog.String("table", tableName), slog.String("query", stmt.Query))...)
 			if _, err := dbClient.ExecuteFetch(stmt.Query, -1); err != nil {
 				return err
 			}
-			log.Info(fmt.Sprintf("Finished updating the table stats for %s.%s", wd.ct.vde.dbName, tableName))
+			log.Info("Finished updating the table stats", wd.ct.logAttrs(slog.String("db_name", wd.ct.vde.dbName), slog.String("table", tableName))...)
 		}
 		tableIn.WriteString(encodeString(tableName))
 		if n++; n < len(wd.tableDiffers) {

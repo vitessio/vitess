@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"syscall"
 	"testing"
 	"time"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -231,6 +233,46 @@ func TestUseTCP(t *testing.T) {
 	assert.Equal(t, want, dbConfigs.dbaParams)
 }
 
+// TestMultiStatementsAreNotNegotiated makes sure that none of the connections a
+// tablet hands out can execute several statements in a single query. The few
+// senders that send batches ask for the capability on the connection they own,
+// for as long as they own it.
+func TestMultiStatementsAreNotNegotiated(t *testing.T) {
+	dbConfigs := DBConfigs{
+		Host:    "a",
+		Port:    1,
+		Socket:  "b",
+		Charset: "utf8mb4",
+		App:     UserConfig{User: "app"},
+		Dba:     UserConfig{User: "dba"},
+	}
+	dbConfigs.InitWithSocket("default", collations.MySQL8())
+
+	// Walk the connectors off the type rather than off a list kept by hand, so
+	// that a connector added later cannot be quietly left out.
+	configs := reflect.ValueOf(&dbConfigs)
+	connectorType := reflect.TypeFor[Connector]()
+	found := 0
+	for i := range configs.NumMethod() {
+		// A connector getter takes nothing but its receiver and returns a
+		// Connector.
+		method := configs.Type().Method(i)
+		if method.Type.NumIn() != 1 || method.Type.NumOut() != 1 || method.Type.Out(0) != connectorType {
+			continue
+		}
+		found++
+		t.Run(method.Name, func(t *testing.T) {
+			connector := configs.Method(i).Call(nil)[0].Interface().(Connector)
+			params, err := connector.MysqlParams()
+			require.NoError(t, err)
+			require.False(t, params.EnableMultiStatements, "the connection from %s must not negotiate multi statements", method.Name)
+		})
+	}
+	// Without this the sweep above silently stops testing anything if the
+	// connectors ever stop looking like connectors.
+	require.Equal(t, 11, found, "expected to find every connector on DBConfigs")
+}
+
 func TestAccessors(t *testing.T) {
 	dbc := &DBConfigs{
 		appParams:      mysql.ConnParams{},
@@ -362,7 +404,44 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(conn.Close)
 
-	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+	// A connection that asked for no character set restores the server's
+	// default, which the fake server announces as utf8mb4.
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+
+	// a connection that negotiated a character set restores it in the same statement
+	params := db.ConnParams()
+	params.Charset = collations.CollationUtf8mb4ID
+	charsetConnector := New(params)
+	conn, err = charsetConnector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 2, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+
+	// MySQL 5.7 and MariaDB do not have utf8mb4_0900_ai_ci, so the server refuses
+	// the collation, and the character set is restored alone.
+	db.AddRejectedQuery(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci"),
+		sqlerror.NewSQLError(sqlerror.ERUnknownCollation, sqlerror.SSUnknownSQLState, "Unknown collation: 'utf8mb4_0900_ai_ci'"))
+	conn, err = charsetConnector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 3, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "")))
+
+	// A safe collation that Vitess does not implement has no name to restore, so
+	// its character set is restored alone: here tis620_thai_ci.
+	params.Charset = 18 // tis620_thai_ci
+	tis620Connector := New(params)
+	conn, err = tis620Connector.Connect(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("tis620", "")))
+
+	// A character set that Vitess cannot parse safely is refused rather than set
+	// up, here cp932, whose second byte can be a backslash.
+	params.Charset = 95 // cp932_japanese_ci
+	unsafeConnector := New(params)
+	_, err = unsafeConnector.Connect(t.Context())
+	require.ErrorContains(t, err, "unsupported connection character set (collation 95)")
 }
 
 // stallingHandler completes the handshake but never answers a query until released,

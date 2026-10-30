@@ -7,35 +7,44 @@ on:
     tags: '**'
   pull_request:
     branches: '**'
-permissions: read-all
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'e2e_race')
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 jobs:
-
-  build:
-    name: End-to-End Test (Race)
-    runs-on: ubuntu-24.04
+  # Path filtering runs here, on a small runner (a CNCF container in
+  # vitess-security), so that the job below claims a VM there only when
+  # something relevant changed.
+  changes:
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-      with:
-        egress-policy: audit
-
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
+        # The merge commit and its first parent, for the path filter.
+        fetch-depth: 2
         persist-credentials: 'false'
+
+    - name: Find the base of the pull request's merge commit
+      # github.event.pull_request.base.sha is not updated when the base branch
+      # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
+      id: merge-base
+      if: github.event_name == 'pull_request'
+      run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
 
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
+        base: ${{ steps.merge-base.outputs.sha }}
         filters: |
           end_to_end:
             - 'go/**/!(*_test).go'
@@ -58,25 +67,67 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/e2e_race.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/tune-os/**'
+            - '.github/actions/setup-go/action.yml'
+
+  build:
+    name: End-to-End Test (Race)
+    needs: changes
+    if: ${{ !cancelled() }}
+    # When nothing relevant changed the job still runs (so its required status
+    # check is reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the job then only fails at that step.
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && (needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && 'cncf-ubuntu-24.04-4-16-x86' || 'cncf-c-ubuntu-2-8-x86') || 'ubuntu-24.04' }}
+    steps:
+    - name: Fail if the gate job failed
+      # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Check out code
+      if: needs.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
 
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       uses: $/.github/actions/setup-go
+      with:
+        build-cache: build,race
+        # Runs go test directly, without gotestsum.
+        go-tools: none
 
     - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 8
       uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.4
 
     - name: Get dependencies
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         sudo apt-get update
@@ -86,16 +137,14 @@ jobs:
         
         sudo service etcd stop
 
-        go mod download
-
     - name: Run make minimaltools
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         make minimaltools
 
     - name: e2e_race
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         NOVTADMINBUILD=1 make e2e_test_race

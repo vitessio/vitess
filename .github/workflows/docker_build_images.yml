@@ -17,7 +17,7 @@ permissions:
 jobs:
   build_and_push_vttestserver:
     name: Build and push vttestserver
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    runs-on: cncf-ubuntu-24.04-16-64-x86
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
@@ -49,7 +49,7 @@ jobs:
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/') == false
         timeout-minutes: 15
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -71,7 +71,7 @@ jobs:
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
         timeout-minutes: 15
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -111,7 +111,7 @@ jobs:
       - name: Build and push on main
         if: startsWith(github.ref, 'refs/tags/') == false
         timeout-minutes: 15
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -137,7 +137,7 @@ jobs:
       - name: Build and push on tags
         if: startsWith(github.ref, 'refs/tags/')
         timeout-minutes: 15
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
@@ -146,7 +146,7 @@ jobs:
 
   build_and_push_components:
     name: Build and push
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    runs-on: cncf-ubuntu-24.04-16-64-x86
     if: github.repository == 'vitessio/vitess' && needs.build_and_push_lite.result == 'success'
     needs:
       - build_and_push_lite
@@ -176,7 +176,7 @@ jobs:
       - name: Build and push on main latest tag
         if: startsWith(github.ref, 'refs/tags/') == false && matrix.debian == 'bookworm'
         timeout-minutes: 15
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -188,7 +188,7 @@ jobs:
       - name: Build and push on main debian specific tag
         if: startsWith(github.ref, 'refs/tags/') == false
         timeout-minutes: 15
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -221,7 +221,7 @@ jobs:
       - name: Build and push on tags using Debian extension
         if: startsWith(github.ref, 'refs/tags/')
         timeout-minutes: 15
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true
@@ -235,7 +235,7 @@ jobs:
       - name: Build and push on tags without Debian extension
         if: startsWith(github.ref, 'refs/tags/') && matrix.debian == 'bookworm'
         timeout-minutes: 15
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.DOCKER_CTX }}
           push: true

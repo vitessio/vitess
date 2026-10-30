@@ -522,7 +522,7 @@ type mockDonorHandler struct {
 func (h *mockDonorHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	// Respond to donor validation queries
 	switch {
-	case strings.EqualFold(query, sqlmode.NeutralizeSessionQuery):
+	case sqlmode.IsSessionSetupQuery(query):
 		// every connection Vitess creates starts by neutralizing its sql_mode
 		return callback(&sqltypes.Result{})
 	case strings.Contains(query, "SELECT @@version"):

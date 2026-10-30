@@ -21,7 +21,9 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlmode"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
@@ -30,6 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -99,6 +103,9 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
 			}
 		case sqlparser.VitessMetadataScope:
+			if err := rejectQualifiedIdentifier(expr); err != nil {
+				return nil, err
+			}
 			value, err := getValueFor(expr)
 			if err != nil {
 				return nil, err
@@ -128,6 +135,11 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 
 func buildSetOpReadOnly(setting) planFunc {
 	return func(expr *sqlparser.SetExpr, schema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
+		// MySQL rejects a qualified value as the wrong argument type before it reports a
+		// read-only variable
+		if err := rejectQualifiedIdentifier(expr); err != nil {
+			return nil, err
+		}
 		return nil, vterrors.VT03010(expr.Var.Name)
 	}
 }
@@ -158,6 +170,12 @@ func buildSetOpCheckAndIgnore(s setting) planFunc {
 }
 
 func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, boolean bool) (engine.SetOp, error) {
+	// The check query prints the name as is. Global variables are not planned from the
+	// sysvars table, so for them nothing else has checked it.
+	name := expr.Var.Name.Lowered()
+	if !isSysVarName(name) {
+		return nil, vterrors.VT05006(sqlparser.String(expr))
+	}
 	keyspace, dest, err := resolveDestination(schema)
 	if err != nil {
 		return nil, err
@@ -168,7 +186,7 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 	}
 
 	return &engine.SysVarCheckAndIgnore{
-		Name:              expr.Var.Name.Lowered(),
+		Name:              name,
 		Keyspace:          keyspace,
 		TargetDestination: dest,
 		Expr:              value,
@@ -182,6 +200,17 @@ func planSysVarCheckIgnore(expr *sqlparser.SetExpr, schema plancontext.VSchema, 
 // execution time, once their value is known.
 func validateSQLModePlan(inner planFunc) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		if colName, ok := expr.Expr.(*sqlparser.ColName); ok {
+			// MySQL accepts an unquoted mode name as the equivalent string: a constant,
+			// judged here like its quoted spelling. A qualified name is never a mode name.
+			if err := rejectQualifiedIdentifier(expr); err != nil {
+				return nil, err
+			}
+			if _, err := sqlmode.Validate(sqltypes.NewVarChar(colName.Name.String())); err != nil {
+				return nil, err
+			}
+			return inner(expr, vschema, ec)
+		}
 		evalExpr, err := evalengine.Translate(expr.Expr, &evalengine.Config{
 			Collation:   vschema.ConnCollation(),
 			Environment: vschema.Environment(),
@@ -194,6 +223,45 @@ func validateSQLModePlan(inner planFunc) planFunc {
 					}
 				}
 			}
+		}
+		return inner(expr, vschema, ec)
+	}
+}
+
+// validateConnectionCharsetPlan wraps the planFunc of a connection character set
+// variable with a plan-time check of a constant value: a character set or collation
+// that Vitess cannot parse and escape safely is refused (see
+// collations.IsConnectionCharsetName), as VTTablet refuses it, rather than answered
+// with OK. NULL, which only turns result conversion off, and non-constant values,
+// whose character set cannot be judged here, are left to the wrapped planFunc.
+func validateConnectionCharsetPlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		var safe bool
+		switch value := expr.Expr.(type) {
+		case *sqlparser.Literal:
+			switch value.Type {
+			case sqlparser.StrVal:
+				safe = collations.IsConnectionCharsetName(value.Val)
+			case sqlparser.IntVal:
+				// MySQL also accepts a collation ID, and refuses 0 and an ID it
+				// does not define.
+				id, err := strconv.ParseUint(value.Val, 10, 16)
+				if err == nil && id != 0 {
+					_, safe = vschema.Environment().CollationEnv().ConnectionCharset(collations.ID(id))
+				}
+			default:
+				return inner(expr, vschema, ec)
+			}
+		case *sqlparser.ColName:
+			if !value.Qualifier.IsEmpty() {
+				return inner(expr, vschema, ec)
+			}
+			safe = collations.IsConnectionCharsetName(value.Name.String())
+		default:
+			return inner(expr, vschema, ec)
+		}
+		if !safe {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set %s for %s: use utf8mb4", sqlparser.String(expr.Expr), expr.Var.Name.Lowered())
 		}
 		return inner(expr, vschema, ec)
 	}
@@ -249,6 +317,9 @@ func buildSetOpVitessAware(s setting) planFunc {
 			}
 			runtimeExpr = s.defaultValue
 		} else {
+			if err := rejectQualifiedIdentifier(astExpr); err != nil {
+				return nil, err
+			}
 			runtimeExpr, err = ec.convert(astExpr.Expr, s.boolean, s.identifierAsString)
 			if err != nil {
 				return nil, err
@@ -275,6 +346,32 @@ func resolveDestination(vschema plancontext.VSchema) (*vindexes.Keyspace, key.Sh
 	return keyspace, dest, nil
 }
 
+// isSysVarName reports whether name can be the name of a MySQL system variable: one
+// identifier, or two joined by a dot, as in the component variable validate_password.length
+// or the key cache variable hot$cache.key_buffer_size. Each identifier is letters, digits,
+// underscores and dollar signs. A back-tick quoted name can hold any other character, which
+// MySQL rejects as an unknown system variable. The caller passes the lowercased name.
+func isSysVarName(name string) bool {
+	prefix, suffix, dotted := strings.Cut(name, ".")
+	if dotted && !isSysVarIdent(suffix) {
+		return false
+	}
+	return isSysVarIdent(prefix)
+}
+
+func isSysVarIdent(ident string) bool {
+	if ident == "" {
+		return false
+	}
+	for i := 0; i < len(ident); i++ {
+		c := ident[i]
+		if !(c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '_' || c == '$') {
+			return false
+		}
+	}
+	return true
+}
+
 func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 	switch node := expr.Expr.(type) {
 	case *sqlparser.Literal:
@@ -287,6 +384,9 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 			}
 		}
 	case *sqlparser.ColName:
+		if err := rejectQualifiedIdentifier(expr); err != nil {
+			return "", err
+		}
 		// this is a little of a hack. it's used when the setting is not a normal expression, but rather
 		// an enumeration, such as utf8mb3, utf8mb4, etc
 		switch node.Name.Lowered() {
@@ -295,13 +395,26 @@ func extractValue(expr *sqlparser.SetExpr, boolean bool) (string, error) {
 		case "off":
 			return "0", nil
 		}
-		return fmt.Sprintf("'%s'", sqlparser.String(expr.Expr)), nil
+		// the identifier's own text, not its formatted form: formatting backticks a
+		// name that is a keyword in the Vitess grammar, and MySQL would take the
+		// backticks as part of the string value.
+		return sqlparser.String(sqlparser.NewStrLiteral(node.Name.String())), nil
 
 	case *sqlparser.Default:
 		return "", vterrors.VT12001(defaultNotSupportedErrFmt, expr.Var.Name)
 	}
 
 	return sqlparser.String(expr.Expr), nil
+}
+
+// rejectQualifiedIdentifier rejects a qualified identifier such as `a.b` as the value of a
+// system variable. MySQL accepts only a bare identifier there, which it treats as the string
+// of its name, and rejects a qualified one with error 1232.
+func rejectQualifiedIdentifier(expr *sqlparser.SetExpr) error {
+	if col, ok := expr.Expr.(*sqlparser.ColName); ok && !col.Qualifier.IsEmpty() {
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "Incorrect argument type to variable '%s'", expr.Var.Name.Lowered())
+	}
+	return nil
 }
 
 func getValueFor(expr *sqlparser.SetExpr) (any, error) {

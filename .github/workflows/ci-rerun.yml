@@ -28,13 +28,16 @@ permissions: read-all
 jobs:
   rerun-failed:
     name: Rerun Failed CI Jobs
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       actions: write
       pull-requests: read
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
@@ -94,6 +97,13 @@ jobs:
               const sha = pr.head.sha;
               const title = pr.title.length > 60 ? pr.title.slice(0, 60) + '...' : pr.title;
               core.info(`Processing PR #${pr.number}: ${title} (${sha.slice(0, 8)})`);
+
+              // 'Skip CI' makes the workflows fail on purpose; rerunning them
+              // only burns runners until the attempt cap.
+              if (pr.labels.some(label => label.name === 'Skip CI')) {
+                core.info(`  Skipping PR #${pr.number} — has the 'Skip CI' label`);
+                continue;
+              }
 
               // Get workflow runs for this PR's HEAD SHA.
               const { data: runsData } = await github.rest.actions.listWorkflowRunsForRepo({

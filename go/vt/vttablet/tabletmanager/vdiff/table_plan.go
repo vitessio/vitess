@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -58,6 +59,18 @@ type tablePlan struct {
 	// properly store the lastpk for the source when the source
 	// and target have different PK columns.
 	sourcePkCols []int
+
+	// sourceCheckpointUnavailable is set when a source PK column cannot be
+	// represented in the source query's SELECT list (a subset-projection or
+	// cross-table filter that omits part of the source PK, e.g. source PK
+	// (cid, typ) with "select cid, name from customer"), or when the target PK
+	// extends a source key that is unique only within each of several source
+	// shards. We then cannot build a resumable source checkpoint, so no lastpk
+	// is persisted for the table and any resume (auto-retry, max-diff-duration
+	// restart, or manual resume) restarts the whole table from the beginning for
+	// both the source and target streams. See getSourcePKCols and
+	// updateTableProgress.
+	sourceCheckpointUnavailable bool
 
 	// selectPks is the list of pk columns as they appear in the select clause for the diff.
 	selectPks      []int
@@ -200,8 +213,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	tp.sourceQuery = sqlparser.String(sourceSelect)
 	tp.targetQuery = sqlparser.String(targetSelect)
-	log.Info(fmt.Sprintf("VDiff query on source: %v", tp.sourceQuery))
-	log.Info(fmt.Sprintf("VDiff query on target: %v", tp.targetQuery))
+	log.Info("VDiff query on source", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.String("query", tp.sourceQuery))...)
+	log.Info("VDiff query on target", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.String("query", tp.targetQuery))...)
 
 	tp.aggregates = aggregates
 	td.tablePlan = tp
@@ -225,7 +238,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			case *sqlparser.FuncExpr: // eg. weight_string()
 				// no-op
 			default:
-				log.Warn(fmt.Sprintf("Not considering column %v for PK, type %v not handled", selExpr, ct))
+				log.Warn("Not considering column for PK, type not handled", slog.String("table", tp.table.Name), slog.String("expression", sqlparser.String(selExpr)), slog.String("type", fmt.Sprintf("%T", ct)))
 			}
 			if strings.EqualFold(pk, colname) {
 				tp.compareCols[i].isPK = true

@@ -20,10 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -36,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
@@ -157,6 +161,19 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
+	// A failed setup returns no cluster for the caller to tear down, so stop
+	// the processes it started here.
+	var mysqlCtlProcessList []*exec.Cmd
+	setupDone := false
+	t.Cleanup(func() {
+		if setupDone {
+			return
+		}
+		clusterInstance.Teardown()
+		stopMySQLInits(mysqlCtlProcessList)
+		// Teardown has already run; this removes the data directory on CI.
+		TeardownCluster(clusterInstance)
+	})
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -201,11 +218,13 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	require.NoError(t, err, "Cannot launch cluster")
 
 	// Start MySql
-	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
-			proc, err := tablet.MysqlctlProcess.StartProcess()
+			// Group only this start; later restarts use the tablet's own MysqlctlProcess.
+			mysqlctl := tablet.MysqlctlProcess
+			mysqlctl.ProcessGroup = true
+			proc, err := mysqlctl.StartProcess()
 			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 		}
@@ -223,7 +242,27 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	require.NoError(t, err, out)
 
 	setupShard(ctx, t, clusterInstance, shardName, tablets)
+	setupDone = true
 	return clusterInstance
+}
+
+// stopMySQLInits kills the process groups of the mysqlctl inits in procs and
+// reaps any init not yet waited on. procs must have been started with
+// MysqlctlProcess.ProcessGroup set. Call it after Teardown: if a mysqld is
+// killed first, Teardown's graceful shutdown of it cannot complete and blocks
+// until its 30s timeout expires.
+func stopMySQLInits(procs []*exec.Cmd) {
+	for _, proc := range procs {
+		// Teardown finds mysqld by its pid file, which a running or failed init may
+		// not have written. The init's group holds the mysqld_safe and mysqld it
+		// started, and outlives it.
+		_ = syscall.Kill(-proc.Process.Pid, syscall.SIGKILL)
+		if proc.ProcessState == nil {
+			// The group kill misses an init started without ProcessGroup; kill it so that Wait returns.
+			_ = proc.Process.Kill()
+			_ = proc.Wait()
+		}
+	}
 }
 
 func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
@@ -577,6 +616,37 @@ func StopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 	}
 }
 
+// KillTablet stops the tablet's vttablet gracefully, then kills its mysqld
+// when cluster.KillDiscardedMySQL allows it, and shuts mysqld down
+// gracefully otherwise. Use it only for a tablet whose mysqld is never
+// started or read again: a kill models a dead primary at least as well as a
+// clean shutdown, which takes many seconds for a semi-sync primary.
+func KillTablet(t *testing.T, tab *cluster.Vttablet) {
+	err := tab.VttabletProcess.TearDownWithTimeout(30 * time.Second)
+	require.NoError(t, err)
+	if !cluster.KillDiscardedMySQL() {
+		require.NoError(t, tab.MysqlctlProcess.Stop())
+		return
+	}
+	require.NoError(t, tab.MysqlctlProcess.Kill())
+	// Kill only sends the signal, so wait until mysqld refuses connections.
+	addr := net.JoinHostPort(Hostname, strconv.Itoa(tab.MySQLPort))
+	require.Eventually(t, func() bool {
+		conn, err := net.DialTimeout("tcp", addr, time.Second)
+		if err != nil {
+			return true
+		}
+		conn.Close()
+		return false
+	}, 30*time.Second, 10*time.Millisecond, "mysqld of %s still accepts connections", tab.Alias)
+	// The teardown kills mysqld by the pid in this file, which may belong to
+	// another process by then.
+	err = os.Remove(path.Join(tab.MysqlctlProcess.BasePath(), "mysql.pid"))
+	if !errors.Is(err, os.ErrNotExist) {
+		require.NoError(t, err)
+	}
+}
+
 // RestartTablet restarts the tablet
 func RestartTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	tab.MysqlctlProcess.InitMysql = false
@@ -631,6 +701,20 @@ func GetNewPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *
 	return newPrimary
 }
 
+// GetShardPrimary returns the tablet that the shard record names as primary.
+func GetShardPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *cluster.Vttablet {
+	shard, err := clusterInstance.VtctldClientProcess.GetShard(KeyspaceName, ShardName)
+	require.NoError(t, err)
+	alias := topoproto.TabletAliasString(shard.GetShard().GetPrimaryAlias())
+	for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		if tablet.Alias == alias {
+			return tablet
+		}
+	}
+	require.FailNow(t, "the shard primary is not a tablet of the cluster", "primary alias: %q", alias)
+	return nil
+}
+
 // GetShardReplicationPositions gets the shards replication positions.
 // This should not generally be called directly, instead use the WaitForReplicationToCatchup method.
 func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, doPrint bool) []string {
@@ -652,19 +736,19 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 }
 
 func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, tabletCnt int, doPrint bool) {
-	tkr := time.NewTicker(500 * time.Millisecond)
+	timeout := time.After(replicationWaitTimeout)
+	tkr := time.NewTicker(100 * time.Millisecond)
 	defer tkr.Stop()
 	for {
+		strArray := GetShardReplicationPositions(t, clusterInstance, keyspaceName, shardName, true)
+		if len(strArray) == tabletCnt && strings.Contains(strArray[0], "primary") { // primary first
+			return
+		}
 		select {
 		case <-tkr.C:
-			strArray := GetShardReplicationPositions(t, clusterInstance, KeyspaceName, shardName, true)
-			if len(strArray) == tabletCnt && strings.Contains(strArray[0], "primary") { // primary first
-				return
-			}
-		case <-time.After(replicationWaitTimeout):
+		case <-timeout:
 			require.FailNow(t, fmt.Sprintf("replication did not start everywhere in %s/%s within the timeout of %v",
 				keyspaceName, shardName, replicationWaitTimeout))
-			return
 		}
 	}
 }

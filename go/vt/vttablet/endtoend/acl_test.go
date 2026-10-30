@@ -108,16 +108,68 @@ func TestTableACL(t *testing.T) {
 		// Denied before it reaches MySQL, so the file need not exist.
 		query: "load data infile '/nonexistent' into table vitess_test",
 		err:   undeterminedErr,
+	}, {
+		// Reads embedded in statements that are not SELECTs are checked on the
+		// tables they read: the caller has ADMIN on vitess_acl_admin and no
+		// grant on vitess_acl_no_access. Each denied statement is stopped
+		// before MySQL, so vitess_acl_admin is never recreated.
+		query: "create table vitess_acl_admin as select key1 from vitess_acl_no_access",
+		err:   aclErr,
+	}, {
+		query: "create table vitess_acl_admin as select key1 from vitess_acl_read_only",
+		err:   "already exists",
+	}, {
+		// A CREATE TABLE the parser only partially parses is forwarded as raw
+		// text, so its source is unknown and it is denied outright.
+		query: "create table vitess_acl_admin (select key1 from vitess_acl_no_access)",
+		err:   undeterminedErr,
+	}, {
+		query: "explain analyze select key1 from vitess_acl_no_access",
+		err:   aclErr,
+	}, {
+		query: "explain analyze select key1 from vitess_acl_read_only",
+	}, {
+		// A plain EXPLAIN reads too: MySQL evaluates parts of the statement
+		// while it optimizes and the plan shows the outcome.
+		query: "explain select key1 from vitess_acl_no_access",
+		err:   aclErr,
+	}, {
+		query: "explain format = tree select key1 from vitess_acl_read_only",
+	}, {
+		query: "show tables where Tables_in_vttest in (select 'x' from vitess_acl_no_access)",
+		err:   aclErr,
+	}, {
+		query: "show tables where Tables_in_vttest in (select 'x' from vitess_acl_read_only)",
 	}}
 
 	for _, tcase := range execCases {
 		_, err := client.Execute(tcase.query, nil)
 		if tcase.err == "" {
-			require.NoError(t, err)
+			require.NoError(t, err, tcase.query)
 			continue
 		}
-		require.ErrorContains(t, err, tcase.err)
+		require.ErrorContains(t, err, tcase.err, tcase.query)
 	}
+
+	// A SET statement runs on a reserved connection and is checked on the
+	// tables its subqueries read. ReserveExecute hands back the reservation
+	// with the error, as it does for any failed statement.
+	_, err := client.ReserveExecute("set @v = (select key1 from vitess_acl_no_access limit 1)", nil, nil)
+	require.ErrorContains(t, err, aclErr)
+	require.NoError(t, client.Release())
+	_, err = client.ReserveExecute("set @v = (select key1 from vitess_acl_read_only limit 1)", nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, client.Release())
+
+	// A connection setting is applied with no table ACL check, so one that
+	// carries a subquery is refused whatever it reads: on the settings-pool
+	// path a plain query takes, and on the reservation a lock function forces.
+	subquerySetting := "set @@sql_select_limit = (select count(*) from vitess_acl_read_only)"
+	settingErr := "connection setting must not contain a subquery: " + subquerySetting
+	_, err = client.ReserveExecute("select 1", []string{subquerySetting}, nil)
+	require.ErrorContains(t, err, settingErr)
+	_, err = client.ReserveExecute("select get_lock('acl', 0)", []string{subquerySetting}, nil)
+	require.ErrorContains(t, err, settingErr)
 
 	streamCases := []struct {
 		query string

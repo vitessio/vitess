@@ -22,7 +22,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 func TestValidateSchemaShard(t *testing.T) {
@@ -78,6 +81,64 @@ func TestValidateSchemaShard(t *testing.T) {
 	require.NoError(t, err)
 	shouldErr = tme.wr.ValidateVSchema(ctx, "ks", []string{"80-"}, nil /*excludeTables*/, true /*includeVoews*/)
 	require.Contains(t, shouldErr.Error(), "ks/80- has tables that are not in the vschema:")
+}
+
+func TestValidateSchemaShardSemanticallyEquivalent(t *testing.T) {
+	ctx := t.Context()
+	tme := newTestShardMigrater(ctx, t, []string{"-80"}, []string{"80-"})
+
+	replica := newFakeTablet(
+		t,
+		tme.wr,
+		"cell1",
+		90,
+		topodatapb.TabletType_REPLICA,
+		tme.tmeDB,
+		TabletKeyspaceShard(t, "ks", "-80"),
+	)
+	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(
+		replica.FakeMysqlDaemon.SetReplicationSourceInputs,
+		topoproto.MysqlAddr(tme.sourcePrimaries[0].Tablet),
+	)
+	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP REPLICA",
+		"FAKE SET SOURCE",
+		"START REPLICA",
+	}
+	replica.StartActionLoop(t, tme.wr)
+	defer replica.StopActionLoop(t)
+
+	tme.sourcePrimaries[0].FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name: "t",
+			Schema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+				"  `note` varchar(20) COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+			Type: tmutils.TableBaseTable,
+		}},
+	}
+
+	replica.FakeMysqlDaemon.Schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name: "t",
+			Schema: "CREATE TABLE `t` (\n" +
+				"  `id` varchar(10) COLLATE utf8mb4_general_ci NOT NULL,\n" +
+				"  `note` varchar(20) CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci DEFAULT NULL\n" +
+				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci",
+			Type: tmutils.TableBaseTable,
+		}},
+	}
+
+	err := tme.wr.ValidateSchemaShard(
+		ctx,
+		"ks",
+		"-80",
+		nil,   // excludeTables
+		true,  // includeViews
+		false, // includeVSchema
+	)
+	require.NoError(t, err)
 }
 
 func TestValidateSchemaKeyspace(t *testing.T) {

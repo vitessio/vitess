@@ -75,5 +75,6 @@ func TestNewDBConnectionNeutralizesSQLMode(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(conn.Close)
 
-	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.NeutralizeSessionQuery))
+	// the fake server announces utf8mb4 as its default character set
+	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "utf8mb4_0900_ai_ci")))
 }

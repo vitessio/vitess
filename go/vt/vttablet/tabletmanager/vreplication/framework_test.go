@@ -558,6 +558,11 @@ func (dbc *realDBClient) Rollback() error {
 	return err
 }
 
+// SetMultiStatements is part of the DBClient interface
+func (dbc *realDBClient) SetMultiStatements(on bool) error {
+	return dbc.conn.SetMultiStatements(on)
+}
+
 func (dbc *realDBClient) Close() {
 	dbc.conn.Close()
 }

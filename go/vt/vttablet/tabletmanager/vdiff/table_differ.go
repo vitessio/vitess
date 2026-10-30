@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -124,7 +125,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 
 	targetKeyspace := td.wd.ct.vde.thisTablet.Keyspace
 	lockName := fmt.Sprintf("%s/%s", targetKeyspace, td.wd.ct.workflow)
-	log.Info(fmt.Sprintf("Locking workflow %s for VDiff %s", lockName, td.wd.ct.uuid))
+	log.Info("Locking workflow for VDiff", td.wd.ct.logAttrs(slog.String("lock_name", lockName))...)
 	// We attempt to get the lock until we can, using an exponential backoff.
 	var (
 		vctx          context.Context
@@ -139,7 +140,13 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 		if lockErr == nil {
 			break
 		}
-		log.Warn(fmt.Sprintf("Locking workflow %s for VDiff %s initialization (stream ID: %d) failed, will wait %v before retrying: %v", lockName, td.wd.ct.uuid, td.wd.ct.id, retryDelay, lockErr))
+		log.Warn("Locking workflow for VDiff initialization failed, will wait before retrying", td.wd.ct.logAttrs(
+			slog.String("lock_name", lockName),
+			slog.Int64("vdiff_id", td.wd.ct.id),
+			slog.Duration("retry_delay", retryDelay),
+			slog.Any("error", lockErr),
+			slog.String("error_code", vterrors.Code(lockErr).String()),
+		)...)
 		select {
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "engine is shutting down")
@@ -162,7 +169,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unlocking workflow %s for vdiff %s failed: %v", lockName, td.wd.ct.uuid, err))
+			log.Error("Unlocking workflow for vdiff failed", td.wd.ct.logAttrs(slog.String("lock_name", lockName), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 		}
 	}()
 
@@ -172,11 +179,11 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 	defer func() {
 		// We use a new context as we want to reset the state even
 		// when the parent context has timed out or been canceled.
-		log.Info(fmt.Sprintf("Restarting the %q VReplication workflow for vdiff %s on target tablets in keyspace %q", td.wd.ct.workflow, td.wd.ct.uuid, targetKeyspace))
+		log.Info("Restarting the VReplication workflow for vdiff on target tablets", td.wd.ct.logAttrs(slog.String("keyspace", targetKeyspace))...)
 		restartCtx, restartCancel := context.WithTimeout(context.Background(), BackgroundOperationTimeout)
 		defer restartCancel()
 		if err := td.restartTargetVReplicationStreams(restartCtx); err != nil {
-			log.Error(fmt.Sprintf("error restarting target streams for vdiff %s: %v", td.wd.ct.uuid, err))
+			log.Error("error restarting target streams for vdiff", td.wd.ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 		}
 	}()
 
@@ -202,7 +209,7 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 }
 
 func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
-	log.Info("stopTargetVReplicationStreams for vdiff " + td.wd.ct.uuid)
+	log.Info("stopTargetVReplicationStreams for vdiff", td.wd.ct.logAttrs()...)
 	ct := td.wd.ct
 	query := "update _vt.vreplication set state = 'Stopped', message='for vdiff' " + ct.workflowFilter
 	if _, err := ct.vde.vre.Exec(query); err != nil {
@@ -356,7 +363,7 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 			return err
 		}
 		if err := ct.vde.vre.WaitForPos(waitCtx, source.vrID, source.snapshotPosition); err != nil {
-			log.Error(fmt.Sprintf("WaitForPosition for vdiff %s error: %d: %s", td.wd.ct.uuid, source.vrID, err))
+			log.Error("WaitForPosition for vdiff error", td.wd.ct.logAttrs(slog.Int("stream_id", int(source.vrID)), slog.Any("error", err))...)
 			return vterrors.Wrapf(err, "WaitForPosition for stream id %d", source.vrID)
 		}
 		return nil
@@ -374,7 +381,11 @@ func (td *tableDiffer) startTargetDataStream(ctx context.Context) error {
 	go td.streamOneShard(ctx, ct.targetShardStreamer, td.tablePlan.targetQuery, td.lastTargetPK, gtidch)
 	gtid, ok := <-gtidch
 	if !ok {
-		log.Error(fmt.Sprintf("VDiff %s streaming error on target tablet %s: %v", td.wd.ct.uuid, topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias), ct.targetShardStreamer.err))
+		log.Error("VDiff streaming error on target tablet", td.wd.ct.logAttrs(
+			slog.String("tablet", topoproto.TabletAliasString(ct.targetShardStreamer.tablet.Alias)),
+			slog.Any("error", ct.targetShardStreamer.err),
+			slog.String("error_code", vterrors.Code(ct.targetShardStreamer.err).String()),
+		)...)
 		return ct.targetShardStreamer.err
 	}
 	ct.targetShardStreamer.snapshotPosition = gtid
@@ -390,7 +401,11 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 
 		gtid, ok := <-gtidch
 		if !ok {
-			log.Error(fmt.Sprintf("VDiff %s streaming error on source tablet %s: %v", td.wd.ct.uuid, topoproto.TabletAliasString(source.tablet.Alias), source.err))
+			log.Error("VDiff streaming error on source tablet", td.wd.ct.logAttrs(
+				slog.String("tablet", topoproto.TabletAliasString(source.tablet.Alias)),
+				slog.Any("error", source.err),
+				slog.String("error_code", vterrors.Code(source.err).String()),
+			)...)
 			return source.err
 		}
 		source.snapshotPosition = gtid
@@ -406,7 +421,7 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 	ct := td.wd.ct
 	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
 		encodeString(ct.vde.dbName), encodeString(ct.workflow))
-	log.Info(fmt.Sprintf("Restarting the %q VReplication workflow for vdiff %s using %q", ct.workflow, td.wd.ct.uuid, query))
+	log.Info("Restarting the VReplication workflow for vdiff", td.wd.ct.logAttrs(slog.String("query", query))...)
 	var err error
 	// Let's retry a few times if we get a retryable error.
 	for i := 1; i <= 3; i++ {
@@ -414,19 +429,23 @@ func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) err
 		if err == nil || !sqlerror.IsEphemeralError(err) {
 			break
 		}
-		log.Warn(fmt.Sprintf("Encountered the following error while restarting the %q VReplication workflow, will retry (attempt #%d): %v", ct.workflow, i, err))
+		log.Warn("Encountered an error while restarting the VReplication workflow, will retry", td.wd.ct.logAttrs(slog.Int("attempt", i), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 	}
 	return err
 }
 
 func (td *tableDiffer) streamOneShard(ctx context.Context, participant *shardStreamer, query string, lastPK *querypb.QueryResult, gtidch chan string) {
 	tabletAliasString := topoproto.TabletAliasString(participant.tablet.Alias)
-	log.Info(fmt.Sprintf("streamOneShard Start for vdiff %s on %s using query: %s", td.wd.ct.uuid, tabletAliasString, query))
+	log.Info("streamOneShard Start for vdiff", td.wd.ct.logAttrs(slog.String("tablet", tabletAliasString), slog.String("query", query))...)
 	td.wgShardStreamers.Add(1)
 	resultch := participant.result
 
 	defer func() {
-		log.Info(fmt.Sprintf("streamOneShard for vdiff %s End on %s (err: %v)", td.wd.ct.uuid, tabletAliasString, participant.err))
+		attrs := td.wd.ct.logAttrs(slog.String("tablet", tabletAliasString))
+		if participant.err != nil {
+			attrs = append(attrs, slog.Any("error", participant.err), slog.String("error_code", vterrors.Code(participant.err).String()))
+		}
+		log.Info("streamOneShard for vdiff End", attrs...)
 
 		close(resultch)
 		close(gtidch)
@@ -550,7 +569,18 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	curState := cs.Named().Row()
 	mismatch := curState.AsBool("mismatch", false)
 	dr := &DiffReport{}
-	if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
+	if td.tablePlan.sourceCheckpointUnavailable {
+		// This table has no resumable checkpoint and restarts from the beginning
+		// on every run (see getSourcePKCols). Carrying over the persisted partial
+		// report or mismatch flag would double-count rows and duplicate mismatch
+		// samples across restarts, so we start fresh instead. Also clear the
+		// persisted mismatch bit so a mismatch recorded by a discarded partial
+		// attempt does not stick after a clean full-table pass.
+		mismatch = false
+		if err = setTableMismatch(dbClient, td.wd.ct.id, td.table.Name, false); err != nil {
+			return nil, err
+		}
+	} else if rpt := curState.AsBytes("report", []byte("{}")); json.Valid(rpt) {
 		if err = json.Unmarshal(rpt, dr); err != nil {
 			return nil, err
 		}
@@ -571,7 +601,7 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 	// Save our progress when we finish the run.
 	defer func() {
 		if err := td.updateTableProgress(dbClient, dr, lastProcessedRow); err != nil {
-			log.Error(fmt.Sprintf("Failed to update vdiff %s progress on %s table: %v", td.wd.ct.uuid, td.table.Name, err))
+			log.Error("Failed to update vdiff progress on table", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", err))...)
 		}
 		globalStats.RowsDiffedCount.Add(dr.ProcessedRows)
 	}()
@@ -603,28 +633,29 @@ func (td *tableDiffer) diff(ctx context.Context, coreOpts *tabletmanagerdatapb.V
 
 		if !mismatch && dr.MismatchedRows > 0 {
 			mismatch = true
-			log.Info(fmt.Sprintf("Flagging mismatch in vdiff %s for %s: %+v", td.wd.ct.uuid, td.table.Name, dr))
-			if err := updateTableMismatch(dbClient, td.wd.ct.id, td.table.Name); err != nil {
+			attrs := td.wd.ct.logAttrs(slog.String("table", td.table.Name))
+			log.Info("Flagging mismatch in vdiff", dr.logAttrs(attrs...)...)
+			if err := setTableMismatch(dbClient, td.wd.ct.id, td.table.Name, true); err != nil {
 				return nil, err
 			}
 		}
 
 		rowsToCompare--
 		if rowsToCompare < 0 {
-			log.Info(fmt.Sprintf("Stopping vdiff %s, specified row limit of %d reached", td.wd.ct.uuid, rowsToCompare))
+			log.Info("Stopping vdiff, specified row limit reached", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Int64("row_limit", coreOpts.GetMaxRows()))...)
 			return dr, nil
 		}
 		if advanceSource {
 			sourceRow, err = sourceExecutor.next()
 			if err != nil {
-				log.Error(fmt.Sprint(err))
+				log.Error("Error reading the next row for vdiff", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 				return nil, err
 			}
 		}
 		if advanceTarget {
 			targetRow, err = targetExecutor.next()
 			if err != nil {
-				log.Error(fmt.Sprint(err))
+				log.Error("Error reading the next row for vdiff", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 				return nil, err
 			}
 		}
@@ -798,7 +829,27 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		return err
 	}
 
-	if lastRow == nil {
+	switch {
+	case td.tablePlan.sourceCheckpointUnavailable:
+		// The source PK cannot be represented as a resumable checkpoint (see
+		// getSourcePKCols). Persist progress but explicitly clear lastpk (to NULL,
+		// which also discards any stale value written before this fix) and leave
+		// the in-memory retry PKs unset. Any resume then restarts the whole table
+		// from the beginning for both streams, which avoids the false
+		// ExtraRowsSource that a source-only restart against a resumed target
+		// would produce.
+		query, err = sqlparser.ParseAndBind(sqlUpdateTableProgress,
+			sqltypes.Int64BindVariable(dr.ProcessedRows),
+			sqltypes.NullBindVariable,
+			sqltypes.StringBindVariable(string(rpt)),
+			sqltypes.Int64BindVariable(td.wd.ct.id),
+			sqltypes.StringBindVariable(td.table.Name),
+		)
+		if err != nil {
+			return err
+		}
+	case lastRow == nil:
+		// No rows were processed, so there is nothing to checkpoint.
 		query, err = sqlparser.ParseAndBind(sqlUpdateTableNoProgress,
 			sqltypes.Int64BindVariable(dr.ProcessedRows),
 			sqltypes.StringBindVariable(string(rpt)),
@@ -808,7 +859,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 		if err != nil {
 			return err
 		}
-	} else {
+	default:
 		lastPK := td.lastPKFromRow(lastRow)
 		if td.wd.opts.CoreOptions.MaxDiffSeconds > 0 {
 			// Update the in-memory lastPK as well so that we can restart the table
@@ -890,8 +941,13 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	return nil
 }
 
-func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
+// setTableMismatch sets (mismatch=true) or clears (mismatch=false) the persisted
+// mismatch bit for a table. It is cleared when a table with no resumable
+// checkpoint restarts from the beginning, so a mismatch recorded by a discarded
+// partial attempt does not stick after a clean full-table pass.
+func setTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string, mismatch bool) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateTableMismatch,
+		sqltypes.BoolBindVariable(mismatch),
 		sqltypes.Int64BindVariable(vdiffID),
 		sqltypes.StringBindVariable(table),
 	)
@@ -905,12 +961,15 @@ func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table st
 }
 
 func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.VDiffTableLastPK {
-	buildQR := func(pkCols []int) *querypb.QueryResult {
-		pkColCnt := len(pkCols)
-		pkFields := make([]*querypb.Field, pkColCnt)
-		pkVals := make([]sqltypes.Value, pkColCnt)
+	// Resolve target PK fields by column name (not by DDL ordinal) so reordered
+	// projections pair each value with its own column's field.
+	targetFieldByName := make(map[string]*querypb.Field, len(td.tablePlan.table.Fields))
+	for _, f := range td.tablePlan.table.Fields {
+		targetFieldByName[strings.ToLower(f.Name)] = f
+	}
+	buildQR := func(pkCols []int, pkFields []*querypb.Field) *querypb.QueryResult {
+		pkVals := make([]sqltypes.Value, len(pkCols))
 		for i, colIndex := range pkCols {
-			pkFields[i] = td.tablePlan.table.Fields[colIndex]
 			pkVals[i] = row[colIndex]
 		}
 		return &querypb.QueryResult{
@@ -918,16 +977,44 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) *tabletmanagerdatapb.
 			Rows:   []*querypb.Row{sqltypes.RowToProto3(pkVals)},
 		}
 	}
-	lastPK := &tabletmanagerdatapb.VDiffTableLastPK{
-		Target: buildQR(td.tablePlan.pkCols),
+	targetFields := make([]*querypb.Field, len(td.tablePlan.pkCols))
+	for i, colIndex := range td.tablePlan.pkCols {
+		targetFields[i] = targetFieldByName[strings.ToLower(td.tablePlan.compareCols[colIndex].colName)]
 	}
-	// If the source and target PKs are different, we need to save the source PK
-	// as well. Otherwise the source will be nil which means that the target value
-	// should also be used for the source.
-	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) {
-		lastPK.Source = buildQR(td.tablePlan.sourcePkCols)
+
+	// The row is the source stream's row, so take source field types from the values
+	// themselves; a type-changing rename then quotes the source key with the source type.
+	sourceFields := make([]*querypb.Field, len(td.tablePlan.sourcePkCols))
+	for i, colIndex := range td.tablePlan.sourcePkCols {
+		sourceFields[i] = &querypb.Field{
+			Name: td.tablePlan.compareCols[colIndex].colName,
+			Type: row[colIndex].Type(),
+		}
+	}
+
+	lastPK := &tabletmanagerdatapb.VDiffTableLastPK{
+		Target: buildQR(td.tablePlan.pkCols, targetFields),
+	}
+	// A separate source lastpk is only needed when the source key differs from the
+	// target by column position or by field type; otherwise the target value is reused.
+	if !slices.Equal(td.tablePlan.pkCols, td.tablePlan.sourcePkCols) || !fieldTypesEqual(targetFields, sourceFields) {
+		lastPK.Source = buildQR(td.tablePlan.sourcePkCols, sourceFields)
 	}
 	return lastPK
+}
+
+// fieldTypesEqual reports whether two field slices have the same length and
+// element-wise column types.
+func fieldTypesEqual(a, b []*querypb.Field) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].GetType() != b[i].GetType() {
+			return false
+		}
+	}
+	return true
 }
 
 // If SourceTimeZone is defined in the BinlogSource (_vt.vreplication.source), the
@@ -938,7 +1025,7 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 	if td.wd.ct.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
-	log.Info(fmt.Sprintf("Source time zone specified for vdiff %s: %s", td.wd.ct.uuid, td.wd.ct.sourceTimeZone))
+	log.Info("Source time zone specified for vdiff", td.wd.ct.logAttrs(slog.String("source_time_zone", td.wd.ct.sourceTimeZone))...)
 	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
@@ -955,7 +1042,7 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 						sqlparser.NewStrLiteral(td.wd.ct.targetTimeZone),
 						sqlparser.NewStrLiteral(td.wd.ct.sourceTimeZone),
 					)
-					log.Info(fmt.Sprintf("Converting datetime column %s using convert_tz() for vdiff %s", colName, td.wd.ct.uuid))
+					log.Info("Converting datetime column using convert_tz() for vdiff", td.wd.ct.logAttrs(slog.String("column", colName))...)
 					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
 					converted = true
 					modified = true
@@ -967,7 +1054,7 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 		}
 	}
 	if modified { // at least one datetime was found
-		log.Info("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz() for vdiff " + td.wd.ct.uuid)
+		log.Info("Found datetime columns when SourceTimeZone was set, resetting target SelectExprs after convert_tz() for vdiff", td.wd.ct.logAttrs()...)
 		return newSelectExprs
 	}
 	return targetSelectExprs
@@ -979,6 +1066,22 @@ func (td *tableDiffer) adjustForSourceTimeZone(targetSelectExprs []sqlparser.Sel
 func (td *tableDiffer) getSourcePKCols() error {
 	ctx, cancel := context.WithTimeout(td.wd.ct.vde.ctx, topo.RemoteOperationTimeout*3)
 	defer cancel()
+
+	// Parse the source query to resolve the physical source table (which can differ
+	// from td.table.Name for cross-table filters) and to map PK columns by SELECT
+	// order rather than column ordinal.
+	statement, err := td.wd.ct.vde.parser.Parse(td.tablePlan.sourceQuery)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to parse source query for table %s", td.table.Name)
+	}
+	sourceSelect, ok := statement.(*sqlparser.Select)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected statement type for source query of table %s", td.table.Name)
+	}
+	sourceTableName, err := sourceTableNameFromSelect(sourceSelect)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to determine source table for target table %s", td.table.Name)
+	}
 
 	// We use the first sourceShard as all of them should have the same schema.
 	if len(td.wd.ct.sources) == 0 {
@@ -1003,19 +1106,23 @@ func (td *tableDiffer) getSourcePKCols() error {
 			td.wd.ct.sourceKeyspace, sourceShardName)
 	}
 	sourceSchema, err := td.wd.ct.tmc.GetSchema(ctx, sourceTablet.Tablet, &tabletmanagerdatapb.GetSchemaRequest{
-		Tables: []string{td.table.Name},
+		Tables: []string{sourceTableName},
 	})
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to get the schema for table %s from source tablet %s",
-			td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
+			sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
 	}
 	if len(sourceSchema.TableDefinitions) == 0 {
 		// The table no longer exists on the source. Any rows that exist on the target will be
 		// reported as extra rows.
-		log.Warn(fmt.Sprintf("The %s table was not found on source tablet %s during VDiff for the %s workflow; any rows on the target will be reported as extra", td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias), td.wd.ct.workflow))
+		log.Warn("The table was not found on the source tablet during VDiff; any rows on the target will be reported as extra",
+			td.wd.ct.logAttrs(slog.String("table", sourceTableName), slog.String("tablet", topoproto.TabletAliasString(sourceTablet.Alias)))...)
 		return nil
 	}
 	sourceTable := sourceSchema.TableDefinitions[0]
+	// A physical PK or a primary key equivalent is unique, while the all-columns
+	// substitute used when a table has neither need not be.
+	sourceKeyUnique := true
 	if len(sourceTable.PrimaryKeyColumns) == 0 {
 		// We use the columns from a PKE if there is one.
 		executeFetch := func(query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
@@ -1025,37 +1132,350 @@ func (td *tableDiffer) getSourcePKCols() error {
 			})
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "failed to query the %s source tablet in order to get a primary key equivalent for the %s table",
-					topoproto.TabletAliasString(sourceTablet.Alias), td.table.Name)
+					topoproto.TabletAliasString(sourceTablet.Alias), sourceTableName)
 			}
 			return sqltypes.Proto3ToResult(res), nil
 		}
-		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), td.table.Name)
+		pkeCols, _, err := mysqlctl.GetPrimaryKeyEquivalentColumns(ctx, executeFetch, sourceTablet.DbName(), sourceTableName)
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to get a primary key equivalent for the %s table from source tablet %s",
-				td.table.Name, topoproto.TabletAliasString(sourceTablet.Alias))
+				sourceTableName, topoproto.TabletAliasString(sourceTablet.Alias))
 		}
 		if len(pkeCols) > 0 {
-			log.Info(fmt.Sprintf("Using primary key equivalent columns %+v for table %s in vdiff %s", pkeCols, td.table.Name, td.wd.ct.uuid))
+			log.Info("Using primary key equivalent columns for table in vdiff", td.wd.ct.logAttrs(slog.String("table", sourceTableName), slog.String("columns", fmt.Sprint(pkeCols)))...)
 			sourceTable.PrimaryKeyColumns = pkeCols
 		} else {
 			// We use every column together as a substitute PK.
-			log.Info(fmt.Sprintf("Using all columns as a substitute primary key for table %s in vdiff %s", td.table.Name, td.wd.ct.uuid))
-			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, td.table.Columns...)
+			sourceKeyUnique = false
+			log.Info("Using all columns as a substitute primary key for table in vdiff", td.wd.ct.logAttrs(slog.String("table", sourceTableName))...)
+			sourceTable.PrimaryKeyColumns = append(sourceTable.PrimaryKeyColumns, sourceTable.Columns...)
 		}
 	}
 
-	sourcePKColumns := make(map[string]struct{}, len(sourceTable.PrimaryKeyColumns))
-	td.tablePlan.sourcePkCols = make([]int, 0, len(sourceTable.PrimaryKeyColumns))
-	for _, pkc := range sourceTable.PrimaryKeyColumns {
-		sourcePKColumns[pkc] = struct{}{}
+	indices, allProjected, err := sourcePKSelectIndices(sourceSelect, sourceTable.PrimaryKeyColumns)
+	if err != nil {
+		return vterrors.Wrapf(err, "table %s", sourceTableName)
 	}
-	for i, pkc := range td.table.Columns {
-		if _, ok := sourcePKColumns[pkc]; ok {
-			td.tablePlan.sourcePkCols = append(td.tablePlan.sourcePkCols, i)
-		}
+	// Reject any plan whose comparison key the source stream, which is always
+	// ordered by the physical source PK, is not also ordered by.
+	sourceColTypes := make(map[string]querypb.Type, len(sourceTable.Fields))
+	for _, f := range sourceTable.Fields {
+		sourceColTypes[strings.ToLower(f.Name)] = f.Type
+	}
+	extended, err := sourceOrderCoversComparisonKey(sourceSelect, td.tablePlan.comparePKs, sourceTable.PrimaryKeyColumns, sourceKeyUnique, sourceColTypes)
+	if err != nil {
+		return err
+	}
+	if extended && len(td.wd.ct.sources) > 1 {
+		// The source key is unique only within each source shard, and a target PK
+		// that extends it can hold rows from several shards that share it. A
+		// source checkpoint on that key, which every source shard resumes after,
+		// would then skip the rows of other shards that share it with the last
+		// row diffed, so no resumable checkpoint is possible and any resume
+		// restarts the whole table.
+		log.Info("restarting table instead of resuming; its target primary key extends the source key, which is unique only within each of its source shards",
+			td.wd.ct.logAttrs(slog.String("table", td.table.Name))...)
+		td.tablePlan.sourceCheckpointUnavailable = true
+		td.lastSourcePK = nil
+		td.lastTargetPK = nil
+		return nil
+	}
+	if !allProjected {
+		// The full source PK is not projected, so no resumable source checkpoint is
+		// possible; any resume restarts the whole table. Clear any stale checkpoint.
+		td.tablePlan.sourceCheckpointUnavailable = true
+		td.lastSourcePK = nil
+		td.lastTargetPK = nil
+		return nil
+	}
+	td.tablePlan.sourcePkCols = indices
+
+	// Discard a loaded source checkpoint that a pre-fix binary may have written with
+	// its columns in a different order: either the corrected mapping differs from
+	// the pre-fix one, or the checkpoint's stored field names do not line up, in
+	// order, with the source PK as this code projects it. (The two checks are
+	// complementary: the mappings can coincide yet still pair fields with the wrong
+	// values.) A residual case remains indistinguishable and is documented as a
+	// restart-on-resume limitation. This is always correct but means such layouts
+	// restart on every resume rather than resuming.
+	if td.lastSourcePK != nil &&
+		(!slices.Equal(indices, legacySourcePkColOrder(td.table.Columns, sourceTable.PrimaryKeyColumns)) ||
+			!td.loadedSourceCheckpointMatches(indices)) {
+		log.Info("restarting table instead of resuming; its persisted source checkpoint does not match how this code projects the source primary key and cannot be safely reused",
+			td.wd.ct.logAttrs(slog.String("table", td.table.Name))...)
+		td.tablePlan.sourceCheckpointUnavailable = true
+		td.tablePlan.sourcePkCols = nil
+		td.lastSourcePK = nil
+		td.lastTargetPK = nil
 	}
 
 	return nil
+}
+
+// loadedSourceCheckpointMatches reports whether the loaded source checkpoint's
+// field names line up, in order, with the source PK columns as this (fixed) code
+// projects them. A pre-fix binary could attach the fields in a different order for
+// a reordered/renamed-PK layout, so a mismatch means the checkpoint cannot be
+// reused (it predates the fix, or the schema changed under it).
+func (td *tableDiffer) loadedSourceCheckpointMatches(indices []int) bool {
+	src := td.lastSourcePK
+	if src == nil || len(src.Fields) != len(indices) {
+		return false
+	}
+	for i, colIndex := range indices {
+		if colIndex < 0 || colIndex >= len(td.tablePlan.compareCols) {
+			return false
+		}
+		if !strings.EqualFold(src.Fields[i].Name, td.tablePlan.compareCols[colIndex].colName) {
+			return false
+		}
+	}
+	return true
+}
+
+// legacySourcePkColOrder reproduces the pre-fix source-PK index mapping: the
+// positions of the source PK columns within the target table's columns, in column
+// order. Used only to detect whether a persisted checkpoint predates the ordering
+// fix and so cannot be safely reused.
+func legacySourcePkColOrder(targetColumns, sourcePKColumns []string) []int {
+	pkSet := make(map[string]struct{}, len(sourcePKColumns))
+	for _, pk := range sourcePKColumns {
+		pkSet[strings.ToLower(pk)] = struct{}{}
+	}
+	order := make([]int, 0, len(sourcePKColumns))
+	for i, col := range targetColumns {
+		if _, ok := pkSet[strings.ToLower(col)]; ok {
+			order = append(order, i)
+		}
+	}
+	return order
+}
+
+// sourceOrderCoversComparisonKey returns an error unless the source stream, which
+// is ordered by the physical source PK, is also ordered by the columns the VDiff
+// merge sorter compares on (comparePKs, in comparison order). Each comparePK
+// indexes the SELECT list (shared with the source query), so its underlying
+// source column must equal the source PK column at the same rank. Physical PK
+// columns that the filter's WHERE pins to a single value are constant across the
+// stream and so do not affect its order; they are dropped before the comparison
+// (e.g. a multi-tenant "where tenant_id = 1" filter makes comparing on id valid
+// even though the source PK is (tenant_id, id)).
+//
+// The comparison key may be an order-preserving prefix of the source PK. When
+// the source key is unique (a physical PK or a primary key equivalent, not the
+// all-columns substitute), it may also be the whole source key followed by more
+// columns, physical or computed, as for a target partitioned by a column outside
+// the source PK: a stream ordered by a unique key has no ties on it, so it is
+// also ordered by any key that starts with it. extended reports this second
+// case.
+func sourceOrderCoversComparisonKey(sourceSelect *sqlparser.Select, comparePKs []compareColInfo, sourcePKColumns []string, sourceKeyUnique bool, sourceColTypes map[string]querypb.Type) (extended bool, err error) {
+	pinned := equalityPinnedColumns(sourceSelect.Where, sourceColTypes)
+	effectivePK := make([]string, 0, len(sourcePKColumns))
+	for _, col := range sourcePKColumns {
+		if _, ok := pinned[strings.ToLower(col)]; !ok {
+			effectivePK = append(effectivePK, col)
+		}
+	}
+
+	// unsupportedFilter wraps the rejection as MySQL ERNotSupportedYet so the
+	// "(errno 1235)" suffix survives being persisted as a string and rebuilt by
+	// retryVDiffs, making IsEphemeralError classify it as non-ephemeral (no infinite
+	// auto-retry).
+	unsupportedFilter := func(format string, args ...any) error {
+		return sqlerror.NewSQLError(sqlerror.ERNotSupportedYet, sqlerror.SSClientError, fmt.Sprintf(format, args...))
+	}
+
+	// Build the comparison key's source columns in comparison order, dropping the
+	// pinned ones: a constant comparison component does not affect the merge order,
+	// so it must be dropped from both sides before the prefix check.
+	effectiveCompare := make([]string, 0, len(comparePKs))
+	for _, cpk := range comparePKs {
+		if cpk.colIndex < 0 || cpk.colIndex >= len(sourceSelect.SelectExprs.Exprs) {
+			return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"comparison key index %d out of range for vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
+		}
+		aliasedExpr, ok := sourceSelect.SelectExprs.Exprs[cpk.colIndex].(*sqlparser.AliasedExpr)
+		if !ok {
+			return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"unexpected non-aliased expression at position %d in vdiff source query: %s", cpk.colIndex, sqlparser.String(sourceSelect))
+		}
+		// A constant projected into the comparison key (e.g. "select 1 as
+		// tenant_id, ...") is invariant across the source stream, so like a
+		// WHERE-pinned column it does not affect its order; drop it.
+		if _, isLiteral := aliasedExpr.Expr.(*sqlparser.Literal); isLiteral {
+			continue
+		}
+		colName, ok := underlyingSourceColumn(aliasedExpr.Expr)
+		if !ok {
+			// Past the whole source key, a computed column (e.g. a target
+			// partitioned on date_format(created_at, '%Y%m')) extends it like
+			// any other: the source key already orders the stream, so the
+			// extra column never decides it. Within the source key's ranks
+			// it would have to match a physical source key column.
+			if len(effectiveCompare) < len(effectivePK) {
+				return false, unsupportedFilter("vdiff does not support this filter: the comparison key includes a non-physical column, so the source stream is not sorted by the compared columns: %s",
+					sqlparser.String(sourceSelect))
+			}
+			effectiveCompare = append(effectiveCompare, sqlparser.String(aliasedExpr.Expr))
+			continue
+		}
+		if _, isPinned := pinned[strings.ToLower(colName)]; isPinned {
+			continue
+		}
+		effectiveCompare = append(effectiveCompare, colName)
+	}
+
+	extended = len(effectiveCompare) > len(effectivePK)
+	// The all-columns substitute key already holds every source column, so a
+	// comparison key only extends it with a computed column or a source column
+	// projected twice.
+	if extended && !sourceKeyUnique {
+		return false, unsupportedFilter("vdiff does not support this filter: the comparison key has more columns (%d) than the unconstrained source key (%d), which is not unique as the source table has no primary key or primary key equivalent: %s",
+			len(effectiveCompare), len(effectivePK), sqlparser.String(sourceSelect))
+	}
+	for i, col := range effectiveCompare[:min(len(effectiveCompare), len(effectivePK))] {
+		if !strings.EqualFold(col, effectivePK[i]) {
+			return false, unsupportedFilter("vdiff does not support this filter: the comparison key is neither an order-preserving prefix of the physical source primary key %v nor that key followed by more columns, so the source stream is not sorted by the compared columns: %s",
+				sourcePKColumns, sqlparser.String(sourceSelect))
+		}
+	}
+	return extended, nil
+}
+
+// equalityPinnedColumns returns the set of columns the WHERE clause constrains to
+// a value that is constant under the source stream's ordering via a top-level
+// "col = literal" conjunct (lowercased). It is intentionally conservative: only a
+// same-domain equality (integer/exact-decimal column vs integer/exact-decimal
+// literal, or text/binary column vs string literal) is treated as pinned; ranges,
+// IN, OR, in_keyrange, non-literal comparisons, and coercions (which can match
+// order-distinct rows) are ignored.
+func equalityPinnedColumns(where *sqlparser.Where, colTypes map[string]querypb.Type) map[string]struct{} {
+	pinned := make(map[string]struct{})
+	if where == nil {
+		return pinned
+	}
+	// Pin "col = literal" only when the equality is evaluated in the column's own
+	// ordering domain, so every matched row is equal under the order the source
+	// stream uses and the column is therefore constant across it:
+	//   - an integer or exact-decimal column against an integer or exact-decimal
+	//     literal (matches at most one value); float literals use approximate
+	//     semantics (adjacent values near 2^53 both match) and are excluded.
+	//   - a text or binary column against a string literal (text: matched values are
+	//     collation-equal, so they sort together; binary: exact bytewise, one value).
+	// Coercions (text vs numeric, exact-numeric vs float) can match order-distinct
+	// rows, so the column would not be constant and must not be dropped.
+	pinnable := func(name string, lit *sqlparser.Literal) bool {
+		t, ok := colTypes[strings.ToLower(name)]
+		if !ok {
+			return false
+		}
+		switch {
+		case sqltypes.IsIntegral(t) || sqltypes.IsDecimal(t):
+			// Exact numeric domain: an integer or exact-decimal literal matches at
+			// most one value. Approximate float literals (and FLOAT/DOUBLE columns,
+			// which are not IsIntegral/IsDecimal) are excluded.
+			return lit.Type == sqlparser.IntVal || lit.Type == sqlparser.DecimalVal
+		case sqltypes.IsTextOrBinary(t):
+			// Text: matched values are collation-equal, so they sort together.
+			// Binary: the equality is exact bytewise, matching one value.
+			return lit.Type == sqlparser.StrVal
+		default:
+			return false
+		}
+	}
+	for _, expr := range sqlparser.SplitAndExpression(nil, where.Expr) {
+		cmp, ok := expr.(*sqlparser.ComparisonExpr)
+		if !ok || cmp.Operator != sqlparser.EqualOp {
+			continue
+		}
+		if col, ok := cmp.Left.(*sqlparser.ColName); ok {
+			if lit, ok := cmp.Right.(*sqlparser.Literal); ok && pinnable(col.Name.String(), lit) {
+				pinned[col.Name.Lowered()] = struct{}{}
+			}
+		}
+		if col, ok := cmp.Right.(*sqlparser.ColName); ok {
+			if lit, ok := cmp.Left.(*sqlparser.Literal); ok && pinnable(col.Name.String(), lit) {
+				pinned[col.Name.Lowered()] = struct{}{}
+			}
+		}
+	}
+	return pinned
+}
+
+// sourceTableNameFromSelect returns the physical source table referenced by the
+// VReplication filter's SELECT. This can differ from the VDiff target table name
+// for cross-table MoveTables filters (e.g. "select ... from t2" for target t1),
+// and must be used for all source schema/PK lookups.
+func sourceTableNameFromSelect(sourceSelect *sqlparser.Select) (string, error) {
+	if len(sourceSelect.From) != 1 {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, expected a single table in the FROM clause: %s", sqlparser.String(sourceSelect))
+	}
+	aliased, ok := sourceSelect.From[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, expected a simple table reference: %s", sqlparser.String(sourceSelect))
+	}
+	tableName := sqlparser.GetTableName(aliased.Expr)
+	if tableName.IsEmpty() {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported source query, could not resolve the source table: %s", sqlparser.String(sourceSelect))
+	}
+	return tableName.String(), nil
+}
+
+// sourcePKSelectIndices maps each source PK column to its SELECT-list position, in
+// PK definition order. allProjected is false (no error) when a PK column is not
+// projected as a physical column, in which case a resumable source checkpoint
+// cannot be built; merge-ordering correctness is enforced by the caller via
+// sourceOrderCoversComparisonKey.
+func sourcePKSelectIndices(sourceSelect *sqlparser.Select, pkColumns []string) (indices []int, allProjected bool, err error) {
+	indices = make([]int, 0, len(pkColumns))
+	for _, pkc := range pkColumns {
+		physicalIdx := -1
+		for i, selExpr := range sourceSelect.SelectExprs.Exprs {
+			// Invariant: buildTablePlan expands "*" into explicit columns before
+			// this runs, so the SELECT list must contain only AliasedExprs. A
+			// StarExpr here means a caller passed an unexpanded query; fail loud
+			// rather than silently treating PK columns as not projected.
+			if _, isStar := selExpr.(*sqlparser.StarExpr); isStar {
+				return nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected '*' in vdiff source query SELECT list; expected columns to be expanded by buildTablePlan: %s", sqlparser.String(sourceSelect))
+			}
+			aliasedExpr, ok := selExpr.(*sqlparser.AliasedExpr)
+			if !ok {
+				continue
+			}
+			// A physical match wins over an alias that shadows the PK name
+			// (e.g. "select b as a, a as b" resolves PK a to the real a).
+			if colName, ok := underlyingSourceColumn(aliasedExpr.Expr); ok && strings.EqualFold(pkc, colName) {
+				physicalIdx = i
+				break
+			}
+		}
+		if physicalIdx < 0 {
+			// Not projected as a physical column: no resumable source checkpoint.
+			return nil, false, nil
+		}
+		indices = append(indices, physicalIdx)
+	}
+	return indices, true, nil
+}
+
+// underlyingSourceColumn returns the name of the physical source column that a
+// SELECT expression reads from, and whether the expression resolves to one. It
+// handles plain column references and CONVERT(col USING charset) renames (used
+// for charset conversions where the AS is the renamed target column). Computed
+// expressions, functions, and literals do not resolve to a physical column and
+// return ok == false.
+func underlyingSourceColumn(expr sqlparser.Expr) (string, bool) {
+	switch e := expr.(type) {
+	case *sqlparser.ColName:
+		return e.Name.String(), true
+	case *sqlparser.ConvertUsingExpr:
+		// Only a direct column rename like "convert(c1 using utf8mb4) as c2" is a
+		// physical column; a computation wrapped in CONVERT is not.
+		if inner, ok := e.Expr.(*sqlparser.ColName); ok {
+			return inner.Name.String(), true
+		}
+	}
+	return "", false
 }
 
 func getColumnNameForSelectExpr(selectExpression sqlparser.SelectExpr) (string, error) {

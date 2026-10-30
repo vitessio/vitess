@@ -45,12 +45,34 @@ func (s *recordingEmergencyReparentServer) EmergencyReparentShard(_ context.Cont
 func resetEmergencyReparentShardFlags(t *testing.T) {
 	t.Helper()
 
-	for _, name := range []string{"allow-split-brain-promotion", "new-primary"} {
+	for _, name := range []string{"allow-split-brain-promotion", "new-primary", "required-position"} {
 		flag := command.EmergencyReparentShard.Flags().Lookup(name)
 		require.NotNil(t, flag)
 		require.NoError(t, flag.Value.Set(flag.DefValue))
 		flag.Changed = false
 	}
+}
+
+// TestERSRequiredPositionFlag checks that --required-position reaches the request unchanged.
+func TestERSRequiredPositionFlag(t *testing.T) {
+	originalProtocol := command.VtctldClientProtocol
+	resetEmergencyReparentShardFlags(t)
+	command.VtctldClientProtocol = "local"
+	t.Cleanup(func() {
+		command.Root.SetArgs(nil)
+		command.VtctldClientProtocol = originalProtocol
+		resetEmergencyReparentShardFlags(t)
+	})
+
+	server := &recordingEmergencyReparentServer{}
+	localvtctldclient.SetServer(server)
+
+	const position = "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-100"
+	command.Root.SetArgs([]string{"EmergencyReparentShard", "--required-position", position, "commerce/0"})
+
+	require.NoError(t, command.Root.Execute())
+	require.Len(t, server.requests, 1)
+	assert.Equal(t, position, server.requests[0].GetRequiredPosition())
 }
 
 func TestERSSplitBrainPromotionFlags(t *testing.T) {
