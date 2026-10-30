@@ -254,6 +254,7 @@ func TestNewApplyWorker(t *testing.T) {
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -410,6 +411,7 @@ func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {
 			workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 			workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+			workerDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 			workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -455,6 +457,7 @@ func TestCreateWorkerConn_UsesRunningFKSessionSettings(t *testing.T) {
 	workerDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	workerDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 	workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -701,8 +704,9 @@ func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
 	require.Contains(t, recording.queries, "set session transaction isolation level read committed",
 		"worker connections must run at READ COMMITTED to avoid gap-lock deadlocks through the commit order")
 	// A commit-order deadlock (see applyScheduler.abortGen) ends with a lock
-	// wait timeout, so it must be short.
+	// wait timeout, so it must be short, for row locks and metadata locks.
 	require.Contains(t, recording.queries, "set @@session.innodb_lock_wait_timeout = 1")
+	require.Contains(t, recording.queries, "set @@session.lock_wait_timeout = 1")
 }
 
 func (r *recordingDBClient) SetMultiStatements(on bool) error { return nil }

@@ -100,6 +100,15 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 		dbClient.Close()
 		return nil, err
 	}
+	// A transaction waiting for its turn to commit also holds a SHARED_WRITE
+	// metadata lock on each table it wrote. A DDL or LOCK TABLES on one of
+	// them waits for an exclusive lock behind it, and an earlier transaction
+	// writing that table waits behind the DDL: the same cycle, through
+	// metadata locks, which lock_wait_timeout bounds.
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("set @@session.lock_wait_timeout = %d", workerLockWaitTimeout), 1); err != nil {
+		dbClient.Close()
+		return nil, err
+	}
 	vdbc := newVDBClient(dbClient, vr.stats, vr.workflowConfig.RelayLogMaxItems)
 	if _, err := vr.setSQLMode(ctx, vdbc); err != nil {
 		dbClient.Close()

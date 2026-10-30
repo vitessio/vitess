@@ -633,6 +633,7 @@ func TestApplyEventsParallelReturnsScheduleError(t *testing.T) {
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -684,6 +685,7 @@ func TestApplyEventsParallelCommitsScheduledPrefixBeforeScheduleError(t *testing
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -740,6 +742,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopPosEvenIfLaterScheduleFa
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -803,6 +806,7 @@ func TestApplyEventsParallelReturnsNilAfterEmptyTxnStopPosEvenIfLaterScheduleFai
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -867,6 +871,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledStopDDLEvenIfLaterScheduleFa
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -931,6 +936,7 @@ func TestApplyEventsParallelReturnsNilAfterScheduledRelevantJournalEvenIfLaterSc
 	mockDB.AddInvariant("set @@session.time_zone", &sqltypes.Result{})
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -7981,23 +7987,56 @@ func newCommitOrderDeadlockVPlayer(t *testing.T, ctx context.Context, tableName 
 }
 
 // TestCommitOrderDeadlockAbortsLaterTransaction reproduces, on a real InnoDB,
-// the commit-order deadlock that a unique secondary index can cause, and pins
-// that the parallel applier resolves it as MySQL's replica does: by rolling
-// back the later transaction and applying it again once the earlier one has
-// committed.
+// the commit-order deadlocks that a unique secondary index and a DDL can
+// cause, and pins that the parallel applier resolves them as MySQL's replica
+// does: by rolling back the later transaction and applying it again once the
+// earlier one has committed. Transaction 2 has applied and waits in the
+// commitLoop for transaction 1 to commit, but transaction 1 inserts (4, 12)
+// and waits on a lock transaction 2 holds: a cycle MySQL cannot see. Their
+// writesets are disjoint, so nothing keeps them from running concurrently.
 //
-// Transaction 2 deletes the row with uk=10 and inserts another with uk=10 (as
-// the applier does for a primary key change). Finding the delete-marked uk=10
-// entry, InnoDB takes next-key locks on the unique index, even under READ
-// COMMITTED, that block inserting uk=12. Transaction 2 has applied and waits
-// in the commitLoop for transaction 1 to commit, but transaction 1 inserts
-// uk=12 and waits on that lock: a cycle InnoDB cannot see. Their writesets
-// are disjoint, so nothing keeps them from running concurrently.
+// With a unique secondary index, transaction 2 deletes the row with uk=10 and
+// inserts another with uk=10 (as the applier does for a primary key change).
+// Finding the delete-marked uk=10 entry, InnoDB takes next-key locks on the
+// unique index, even under READ COMMITTED, that block inserting uk=12.
+//
+// With a DDL, transaction 2 inserts a row, so it holds a SHARED_WRITE
+// metadata lock on the table until it commits. An ALTER TABLE from outside
+// the stream waits behind it for an exclusive metadata lock, and transaction
+// 1 waits behind the ALTER.
 func TestCommitOrderDeadlockAbortsLaterTransaction(t *testing.T) {
+	testCases := []struct {
+		name      string
+		tableName string
+		// later are transaction 2's statements, with %s for the table.
+		later []string
+		// ddl, if set, runs from another connection, with %s for the table,
+		// once transaction 2 has applied.
+		ddl  string
+		want string
+	}{{
+		name:      "unique key gap lock",
+		tableName: "parallel_apply_commit_order_deadlock",
+		later:     []string{"delete from %s where id = 1", "insert into %s values (2, 10)"},
+		want:      "[[INT32(2) INT32(10)] [INT32(3) INT32(15)] [INT32(4) INT32(12)]]",
+	}, {
+		name:      "metadata lock",
+		tableName: "parallel_apply_commit_order_deadlock_mdl",
+		later:     []string{"insert into %s values (5, 50)"},
+		ddl:       "alter table %s comment = 'commit order deadlock'",
+		want:      "[[INT32(1) INT32(10)] [INT32(3) INT32(15)] [INT32(4) INT32(12)] [INT32(5) INT32(50)]]",
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			testCommitOrderDeadlockAbortsLaterTransaction(t, tc.tableName, tc.later, tc.ddl, tc.want)
+		})
+	}
+}
+
+func testCommitOrderDeadlockAbortsLaterTransaction(t *testing.T, tableName string, laterStatements []string, ddl, want string) {
 	ctx, cancel := context.WithCancel(testCtx(t))
 	defer cancel()
 
-	tableName := "parallel_apply_commit_order_deadlock"
 	vp, qualifiedTableName := newCommitOrderDeadlockVPlayer(t, ctx, tableName)
 	var err error
 
@@ -8010,10 +8049,29 @@ func TestCommitOrderDeadlockAbortsLaterTransaction(t *testing.T) {
 	require.NoError(t, err)
 	laterClient := newVDBClient(laterDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
 	require.NoError(t, laterClient.Begin())
-	_, err = laterClient.ExecuteFetch("delete from "+qualifiedTableName+" where id = 1", 1)
-	require.NoError(t, err)
-	_, err = laterClient.ExecuteFetch("insert into "+qualifiedTableName+" values (2, 10)", 1)
-	require.NoError(t, err)
+	for _, statement := range laterStatements {
+		_, err = laterClient.ExecuteFetch(fmt.Sprintf(statement, qualifiedTableName), 1)
+		require.NoError(t, err)
+	}
+
+	var ddlErr chan error
+	if ddl != "" {
+		ddlDB := &realDBClient{nolog: true}
+		require.NoError(t, ddlDB.Connect())
+		t.Cleanup(ddlDB.Close)
+		qr, err := ddlDB.ExecuteFetch("select connection_id()", 1)
+		require.NoError(t, err)
+		ddlConnID := qr.Rows[0][0].ToString()
+		ddlErr = make(chan error, 1)
+		go func() {
+			_, err := ddlDB.ExecuteFetch(fmt.Sprintf(ddl, qualifiedTableName), 1)
+			ddlErr <- err
+		}()
+		require.Eventually(t, func() bool {
+			qr, err := env.Mysqld.FetchSuperQuery(ctx, "select state from information_schema.processlist where id = "+ddlConnID)
+			return err == nil && len(qr.Rows) == 1 && qr.Rows[0][0].ToString() == "Waiting for table metadata lock"
+		}, 30*time.Second, 10*time.Millisecond, "the DDL must wait on transaction 2's metadata lock")
+	}
 
 	pos1, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
 	require.NoError(t, err)
@@ -8081,11 +8139,15 @@ func TestCommitOrderDeadlockAbortsLaterTransaction(t *testing.T) {
 		require.FailNow(t, "the commitLoop must not fail", "%v", err)
 	default:
 	}
+	if ddlErr != nil {
+		require.Eventually(t, func() bool { return len(ddlErr) == 1 }, 30*time.Second, 10*time.Millisecond, "the DDL must finish")
+		require.NoError(t, <-ddlErr)
+	}
 	cancel()
 
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select id, uk from "+qualifiedTableName+" order by id")
 	require.NoError(t, err)
-	require.Equal(t, "[[INT32(2) INT32(10)] [INT32(3) INT32(15)] [INT32(4) INT32(12)]]", fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
 	require.Positive(t, vp.vr.stats.ErrorCounts.Counts()["CommitOrderDeadlock"])
 }
 

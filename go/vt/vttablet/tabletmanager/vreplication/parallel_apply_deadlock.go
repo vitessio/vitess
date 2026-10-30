@@ -25,11 +25,13 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// workerLockWaitTimeout is the innodb_lock_wait_timeout of the parallel
-// applier's worker connections, in seconds. A worker waiting on a lock held
-// by a later-ordered transaction, which waits for this one to commit, is in a
-// cycle InnoDB cannot see (see applyScheduler.abortGen); the timeout is how
-// such a wait ends, so it is kept short.
+// workerLockWaitTimeout is the innodb_lock_wait_timeout and the
+// lock_wait_timeout of the parallel applier's worker connections, in seconds.
+// A worker waiting on a row lock or a metadata lock held by a later-ordered
+// transaction (directly, or through a DDL queued behind it), which waits for
+// this one to commit, is in a cycle neither InnoDB nor the metadata lock
+// deadlock detector can see (see applyScheduler.abortGen); the timeouts are
+// how such a wait ends, so they are kept short.
 const workerLockWaitTimeout = 1
 
 // isLockWaitError reports whether err is a lock wait timeout or a deadlock,
