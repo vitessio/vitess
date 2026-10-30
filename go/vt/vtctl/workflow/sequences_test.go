@@ -85,6 +85,16 @@ func TestInitializeTargetSequences(t *testing.T) {
 	require.NoError(t, err)
 	sw := &switcher{ts: ts, s: env.ws}
 
+	// Both backing tables were missing from the vschema when it was checked,
+	// but my-seq2 has been added since, with an escaped name.
+	mySeq2Definition := func() *vschema.Table {
+		return &vschema.Table{Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}}
+	}
+	err = env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     sourceKeyspaceName,
+		Keyspace: &vschema.Keyspace{Tables: map[string]*vschema.Table{"`my-seq2`": mySeq2Definition()}},
+	})
+	require.NoError(t, err)
 	sequencesByBackingTable := map[string]*sequenceMetadata{
 		"my-seq1": {
 			backingTableName:     "my-seq1",
@@ -98,6 +108,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 					Sequence: sourceKeyspace.KeyspaceName + ".my-seq1",
 				},
 			},
+			registerInVSchema: true,
 		},
 		"my-seq2": {
 			backingTableName:     "my-seq2",
@@ -111,6 +122,7 @@ func TestInitializeTargetSequences(t *testing.T) {
 					Sequence: sourceKeyspace.KeyspaceName + ".my-seq2",
 				},
 			},
+			registerInVSchema: true,
 		},
 	}
 
@@ -212,88 +224,17 @@ func TestInitializeTargetSequences(t *testing.T) {
 			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
 			require.NoError(t, err)
 
+			// Only the missing backing table is added to the vschema.
+			kvs, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
+			require.NoError(t, err)
+			assert.Equal(t, map[string]*vschema.Table{
+				"my-seq1":   {Type: "sequence"},
+				"`my-seq2`": mySeq2Definition(),
+			}, kvs.Tables)
+
 			// Expect the requests to be cleared.
 			assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
 			assert.Emptyf(t, env.tmc.getMaxValueForSequencesRequests, "expected no remaining GetMaxValueForSequences requests")
-		})
-	}
-}
-
-// TestQualifiedSequenceRegistration covers the missing backing VSchema entry
-// left by MoveTables REPLACE's qualified sequence references.
-func TestQualifiedSequenceRegistration(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		backing     *vschema.Keyspace
-		unqualified bool
-		wantError   string
-	}{
-		{name: "missing entry", backing: &vschema.Keyspace{}},
-		{name: "existing sequence", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
-			"t1_seq": {Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}},
-		}}},
-		{name: "escaped existing sequence", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
-			"`t1_seq`": {Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}},
-		}}},
-		{name: "conflicting table", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
-			"t1_seq": {},
-		}}, wantError: "not a sequence"},
-		{name: "sharded backing keyspace", backing: &vschema.Keyspace{Sharded: true}, wantError: "must be unsharded"},
-		{name: "mixed references", backing: &vschema.Keyspace{}, unqualified: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			ctx := t.Context()
-			env := newTestEnv(t, ctx, "cell", &testKeyspace{KeyspaceName: "source", ShardNames: []string{"0"}},
-				&testKeyspace{KeyspaceName: "target", ShardNames: []string{"-80", "80-"}})
-			t.Cleanup(env.close)
-			// The explicit destination differs from GlobalKeyspace. A same-named
-			// sequence there must not redirect the qualified reference.
-			env.addTablet(t, ctx, 300, "global-ks", "0", topodatapb.TabletType_PRIMARY, true)
-			require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "global-ks", Keyspace: tc.backing}))
-			sourceVSchema := &vschema.Keyspace{Tables: map[string]*vschema.Table{
-				"t1_seq": {Type: "sequence"},
-				"t2_seq": {Type: "sequence"},
-			}}
-			require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "source", Keyspace: sourceVSchema}))
-			targetVSchema := &vschema.Keyspace{Sharded: true, Tables: map[string]*vschema.Table{
-				"t1": {AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "`global-ks`.`t1_seq`"}},
-			}}
-			if tc.unqualified {
-				targetVSchema.Tables["t2"] = &vschema.Table{AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "t2_seq"}}
-			}
-			require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "target", Keyspace: targetVSchema}))
-			require.NoError(t, env.ts.RebuildSrvVSchema(ctx, nil))
-			ts := &trafficSwitcher{
-				ws: env.ws, sourceKeyspace: "source", targetKeyspace: "target", tables: []string{"t1", "t2"},
-				options: &vtctldatapb.WorkflowOptions{GlobalKeyspace: "source"},
-				targets: map[string]*MigrationTarget{"-80": {primary: &topo.TabletInfo{Tablet: env.tablets["target"][200]}}},
-			}
-			before := tc.backing.CloneVT()
-			for range 2 { // Retrying must preserve definitions and destinations.
-				metadata, err := ts.getTargetSequenceMetadata(ctx)
-				if tc.wantError != "" {
-					require.ErrorContains(t, err, tc.wantError)
-					assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-					got, getErr := env.ts.GetVSchema(ctx, "global-ks")
-					require.NoError(t, getErr)
-					assert.Equal(t, before, got.Keyspace)
-					return
-				}
-				require.NoError(t, err)
-				require.Contains(t, metadata, "t1_seq")
-				assert.Equal(t, "global-ks", metadata["t1_seq"].backingTableKeyspace)
-				if tc.unqualified {
-					require.Contains(t, metadata, "t2_seq")
-					assert.Equal(t, "source", metadata["t2_seq"].backingTableKeyspace)
-				}
-				got, err := env.ts.GetVSchema(ctx, "global-ks")
-				require.NoError(t, err)
-				if len(before.Tables) > 0 {
-					assert.Equal(t, before, got.Keyspace)
-				} else {
-					assert.Equal(t, map[string]*vschema.Table{"t1_seq": {Type: "sequence"}}, got.Tables)
-				}
-			}
 		})
 	}
 }
@@ -322,6 +263,10 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	}
 	env := newTestEnv(t, ctx, cell, sourceKeyspace, targetKeyspace)
 	defer env.close()
+	// An unsharded keyspace, other than the source, that qualified sequence
+	// references can name.
+	globalKeyspace := "global-ks"
+	env.addTablet(t, ctx, 300, globalKeyspace, "0", topodatapb.TabletType_PRIMARY, true)
 
 	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
 		unescapedTable: {
@@ -338,10 +283,12 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 		name                                   string
 		sourceVSchema                          *vschema.Keyspace
 		targetVSchema                          *vschema.Keyspace
+		globalVSchema                          *vschema.Keyspace
 		options                                *vtctldatapb.WorkflowOptions
 		want                                   map[string]*sequenceMetadata
 		expectSourceApplySchemaRequestResponse *applySchemaRequestResponse
 		err                                    string
+		errCode                                vtrpcpb.Code
 	}
 	tests := []testCase{
 		{
@@ -396,6 +343,229 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name:          "qualified sequence missing from vschema",
+			sourceVSchema: &vschema.Keyspace{},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+					registerInVSchema: true,
+				},
+			},
+		},
+		{
+			// The qualified reference names global-ks, so the same-named
+			// sequence in the source keyspace, which the search for the
+			// unqualified, missing one sees, must not replace it.
+			name: "qualified and unqualified sequences",
+			sourceVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence"},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
+			},
+			expectSourceApplySchemaRequestResponse: &applySchemaRequestResponse{
+				change: &tmutils.SchemaChange{
+					SQL:                     sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlescape.EscapeID("my-seq2")).Query,
+					Force:                   false,
+					AllowReplication:        true,
+					SQLMode:                 vreplication.SQLMode,
+					DisableForeignKeyChecks: true,
+				},
+				res: &tabletmanagerdatapb.SchemaChangeResult{},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+					table2: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+					registerInVSchema: true,
+				},
+				"my-seq2": {
+					backingTableName:     "my-seq2",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       table2,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+				},
+			},
+		},
+		{
+			// The search finds my-seq1 under its escaped name, so only the
+			// missing my-seq2 is created.
+			name: "escaped and missing unqualified sequences",
+			sourceVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {Type: "sequence"},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
+			},
+			expectSourceApplySchemaRequestResponse: &applySchemaRequestResponse{
+				change: &tmutils.SchemaChange{
+					SQL:                     sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlescape.EscapeID("my-seq2")).Query,
+					Force:                   false,
+					AllowReplication:        true,
+					SQLMode:                 vreplication.SQLMode,
+					DisableForeignKeyChecks: true,
+				},
+				res: &tabletmanagerdatapb.SchemaChangeResult{},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+					table2: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+				},
+				"my-seq2": {
+					backingTableName:     "my-seq2",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       table2,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "qualified sequence in a keyspace that doesn't exist",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "`nonexistent-ks`.`my-seq1`",
+						},
+					},
+				},
+			},
+			err: "failed to get vschema for sequence keyspace nonexistent-ks: node doesn't exist: keyspaces/nonexistent-ks/VSchema",
+		},
+		{
+			name: "qualified sequence that is not a sequence",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			err:     "table global-ks.my-seq1 is not a sequence in vschema; correct the backing table definition or the target auto_increment sequence reference",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			name: "qualified sequence in a sharded keyspace",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", targetKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+			err:     "sequence keyspace targetks must be unsharded; update the target auto_increment sequence reference to an unsharded keyspace",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
 			name: "auto_increment replaced with sequence",
@@ -768,8 +938,27 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				Keyspace: tc.targetVSchema,
 			})
 			require.NoError(t, err)
+			globalVSchema := tc.globalVSchema
+			if globalVSchema == nil {
+				globalVSchema = &vschema.Keyspace{}
+			}
+			err = env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+				Name:     globalKeyspace,
+				Keyspace: globalVSchema,
+			})
+			require.NoError(t, err)
 			err = env.ts.RebuildSrvVSchema(ctx, nil)
 			require.NoError(t, err)
+			vschemas := func() map[string]*vschema.Keyspace {
+				vschemas := make(map[string]*vschema.Keyspace)
+				for _, keyspace := range []string{sourceKeyspace.KeyspaceName, targetKeyspace.KeyspaceName, globalKeyspace} {
+					kvs, err := env.ts.GetVSchema(ctx, keyspace)
+					require.NoError(t, err)
+					vschemas[keyspace] = kvs.Keyspace
+				}
+				return vschemas
+			}
+			vschemasBefore := vschemas()
 			sources := make(map[string]*MigrationSource, len(sourceKeyspace.ShardNames))
 			targets := make(map[string]*MigrationTarget, len(targetKeyspace.ShardNames))
 			for i, shard := range sourceKeyspace.ShardNames {
@@ -805,10 +994,18 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			got, err := ts.getTargetSequenceMetadata(ctx)
 			if tc.err != "" {
 				require.EqualError(t, err, tc.err)
+				if tc.errCode != vtrpcpb.Code_OK {
+					assert.Equal(t, tc.errCode, vterrors.Code(err))
+				}
 			} else {
 				require.NoError(t, err)
 			}
 			require.Equal(t, tc.want, got)
+			if tc.expectSourceApplySchemaRequestResponse == nil {
+				// Only creating a missing backing table changes a vschema, as
+				// this also runs on dry runs.
+				assert.Equal(t, vschemasBefore, vschemas())
+			}
 		})
 	}
 }
@@ -875,12 +1072,15 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 	sm3.backingTableName = "seq3"
 	sm3.usingTableName = "t3"
 	sm3.usingTableDefinition.AutoIncrement.Sequence = "seq3"
+	sm3.registerInVSchema = true
 
 	tables := map[string]*sequenceMetadata{
 		"t1": &sm1,
 		"t2": &sm2,
 		"t3": &sm3,
 	}
+	vschemaBefore, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
+	require.NoError(t, err)
 
 	for range tables {
 		env.tmc.expectVRQuery(200, "/select max.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("maxval", "int64"), "10"))
@@ -890,11 +1090,15 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 
 	err = dr.initializeTargetSequences(ctx, tables)
 	require.NoError(t, err)
-	require.Len(t, drLog.logs, 4)
-	require.Contains(t, drLog.logs[0], "The following sequence backing tables used by tables being moved will be initialized:")
+	require.Len(t, drLog.logs, 5)
+	require.Contains(t, drLog.logs[0], "Sequence backing tables [sourceks.seq3] will be added to the vschema of their keyspace")
+	require.Contains(t, drLog.logs[1], "The following sequence backing tables used by tables being moved will be initialized:")
 	for i, sm := range []sequenceMetadata{sm1, sm2, sm3} {
-		require.Contains(t, drLog.logs[i+1], fmt.Sprintf("Backing table: %s, current value 0, new value 1", sm.usingTableName))
+		require.Contains(t, drLog.logs[i+2], fmt.Sprintf("Backing table: %s, current value 0, new value 1", sm.usingTableName))
 	}
+	vschemaAfter, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
+	require.NoError(t, err)
+	assert.Equal(t, vschemaBefore.Keyspace, vschemaAfter.Keyspace)
 }
 
 // TestDryRunInitializeTargetSequencesDbNameOverride validates that the dry run

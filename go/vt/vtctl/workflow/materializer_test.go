@@ -966,6 +966,10 @@ func TestShardedAutoIncHandling(t *testing.T) {
 					require.NoError(t, err)
 					require.Contains(t, metadata, "t-1_seq")
 					assert.Equal(t, tc.globalKeyspace, metadata["t-1_seq"].backingTableKeyspace)
+					assert.True(t, metadata["t-1_seq"].registerInVSchema)
+					// Initializing the sequences calls registerSequencesInVSchema,
+					// which adds it to the global keyspace's vschema.
+					require.NoError(t, ts.registerSequencesInVSchema(ctx, metadata))
 					globalVSchema, err = env.ws.ts.GetVSchema(ctx, tc.globalKeyspace)
 					require.NoError(t, err)
 					assert.Equal(t, map[string]*vschemapb.Table{"t-1_seq": {Type: "sequence"}}, globalVSchema.Tables)

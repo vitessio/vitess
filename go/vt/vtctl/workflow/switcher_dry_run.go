@@ -522,6 +522,16 @@ func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequenc
 	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
 	slices.Sort(sortedBackingTableNames)
 
+	var registrations []string
+	for _, backingTable := range sortedBackingTableNames {
+		if sm := sequencesByBackingTable[backingTable]; sm.registerInVSchema {
+			registrations = append(registrations, sm.backingTableKeyspace+"."+sm.backingTableName)
+		}
+	}
+	if len(registrations) > 0 {
+		dr.drLog.Logf("Sequence backing tables [%s] will be added to the vschema of their keyspace", strings.Join(registrations, ","))
+	}
+
 	maxValues, err := dr.ts.getMaxSequenceValues(ctx, sequencesByBackingTable)
 	if err != nil {
 		dr.drLog.Logf("Error getting max sequence values: %v", err)
