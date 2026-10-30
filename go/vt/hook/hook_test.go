@@ -63,6 +63,45 @@ func TestExecuteContext(t *testing.T) {
 	assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
 }
 
+func TestExecuteOptionalContext(t *testing.T) {
+	vtroot, err := vtenv.VtRoot()
+	require.NoError(t, err)
+	sleep, err := exec.LookPath("sleep")
+	require.NoError(t, err)
+	sleepHookPath := path.Join(vtroot, "vthook", "sleep")
+	if _, err := os.Lstat(sleepHookPath); err == nil {
+		require.NoError(t, os.Remove(sleepHookPath))
+	}
+	require.NoError(t, os.Symlink(sleep, sleepHookPath))
+	t.Cleanup(func() { require.NoError(t, os.Remove(sleepHookPath)) })
+
+	// A hook that runs past the context's deadline is killed.
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	require.Error(t, NewHook("sleep", []string{"30"}).ExecuteOptionalContext(ctx))
+	assert.Less(t, time.Since(start), 20*time.Second)
+
+	// A canceled hook fails too; it is not treated as missing.
+	ctx, cancel = context.WithCancel(t.Context())
+	time.AfterFunc(10*time.Millisecond, cancel)
+	require.Error(t, NewHook("sleep", []string{"30"}).ExecuteOptionalContext(ctx))
+
+	// A child that keeps the hook's output open does not hold the caller
+	// past the deadline.
+	backgroundHookPath := path.Join(vtroot, "vthook", "background_child")
+	require.NoError(t, os.WriteFile(backgroundHookPath, []byte("#!/bin/sh\nsleep 30 &\nwait\n"), 0o755))
+	t.Cleanup(func() { require.NoError(t, os.Remove(backgroundHookPath)) })
+	ctx, cancel = context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	start = time.Now()
+	require.Error(t, NewSimpleHook("background_child").ExecuteOptionalContext(ctx))
+	assert.Less(t, time.Since(start), 20*time.Second)
+
+	// A missing hook is still not an error.
+	require.NoError(t, NewSimpleHook("missing_hook").ExecuteOptionalContext(t.Context()))
+}
+
 func TestExecuteOptional(t *testing.T) {
 	vtroot, err := vtenv.VtRoot()
 	require.NoError(t, err)
