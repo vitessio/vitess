@@ -32,8 +32,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
@@ -213,6 +215,100 @@ func TestInitializeTargetSequences(t *testing.T) {
 			// Expect the requests to be cleared.
 			assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
 			assert.Emptyf(t, env.tmc.getMaxValueForSequencesRequests, "expected no remaining GetMaxValueForSequences requests")
+		})
+	}
+}
+
+// TestQualifiedSequenceRegistration covers the missing backing VSchema entry
+// left by MoveTables REPLACE's qualified sequence references.
+func TestQualifiedSequenceRegistration(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		backing      *vschema.Keyspace
+		unqualified  bool
+		staleServing bool
+		wantError    string
+	}{
+		{name: "missing entry", backing: &vschema.Keyspace{}},
+		{name: "existing sequence", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
+			"t1_seq": {Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}},
+		}}},
+		{name: "escaped existing sequence", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
+			"`t1_seq`": {Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}},
+		}}},
+		{name: "retry publication", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
+			"t1_seq": {Type: "sequence"},
+		}}, staleServing: true},
+		{name: "conflicting table", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
+			"t1_seq": {},
+		}}, wantError: "not a sequence"},
+		{name: "sharded backing keyspace", backing: &vschema.Keyspace{Sharded: true}, wantError: "must be unsharded"},
+		{name: "mixed references", backing: &vschema.Keyspace{}, unqualified: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			env := newTestEnv(t, ctx, "cell", &testKeyspace{KeyspaceName: "source", ShardNames: []string{"0"}},
+				&testKeyspace{KeyspaceName: "target", ShardNames: []string{"-80", "80-"}})
+			t.Cleanup(env.close)
+			// The explicit destination differs from GlobalKeyspace. A same-named
+			// sequence there must not redirect the qualified reference.
+			env.addTablet(t, ctx, 300, "global-ks", "0", topodatapb.TabletType_PRIMARY, true)
+			require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "global-ks", Keyspace: tc.backing}))
+			sourceVSchema := &vschema.Keyspace{Tables: map[string]*vschema.Table{
+				"t1_seq": {Type: "sequence"},
+				"t2_seq": {Type: "sequence"},
+			}}
+			require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "source", Keyspace: sourceVSchema}))
+			targetVSchema := &vschema.Keyspace{Sharded: true, Tables: map[string]*vschema.Table{
+				"t1": {AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "`global-ks`.`t1_seq`"}},
+			}}
+			if tc.unqualified {
+				targetVSchema.Tables["t2"] = &vschema.Table{AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "t2_seq"}}
+			}
+			require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "target", Keyspace: targetVSchema}))
+			require.NoError(t, env.ts.RebuildSrvVSchema(ctx, nil))
+			if tc.staleServing {
+				// Simulate a previous attempt saving the global VSchema but
+				// failing to publish it to this cell.
+				serving, err := env.ts.GetSrvVSchema(ctx, "cell")
+				require.NoError(t, err)
+				serving.Keyspaces["global-ks"] = &vschema.Keyspace{}
+				require.NoError(t, env.ts.UpdateSrvVSchema(ctx, "cell", serving))
+			}
+			ts := &trafficSwitcher{
+				ws: env.ws, sourceKeyspace: "source", targetKeyspace: "target", tables: []string{"t1", "t2"},
+				options: &vtctldatapb.WorkflowOptions{GlobalKeyspace: "source"},
+				targets: map[string]*MigrationTarget{"-80": {primary: &topo.TabletInfo{Tablet: env.tablets["target"][200]}}},
+			}
+			before := tc.backing.CloneVT()
+			for range 2 { // Retrying must preserve definitions and destinations.
+				metadata, err := ts.getTargetSequenceMetadata(ctx)
+				if tc.wantError != "" {
+					require.ErrorContains(t, err, tc.wantError)
+					assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+					got, getErr := env.ts.GetVSchema(ctx, "global-ks")
+					require.NoError(t, getErr)
+					assert.Equal(t, before, got.Keyspace)
+					return
+				}
+				require.NoError(t, err)
+				require.Contains(t, metadata, "t1_seq")
+				assert.Equal(t, "global-ks", metadata["t1_seq"].backingTableKeyspace)
+				if tc.unqualified {
+					require.Contains(t, metadata, "t2_seq")
+					assert.Equal(t, "source", metadata["t2_seq"].backingTableKeyspace)
+				}
+				got, err := env.ts.GetVSchema(ctx, "global-ks")
+				require.NoError(t, err)
+				if len(before.Tables) > 0 {
+					assert.Equal(t, before, got.Keyspace)
+				} else {
+					assert.Equal(t, map[string]*vschema.Table{"t1_seq": {Type: "sequence"}}, got.Tables)
+				}
+				serving, err := env.ts.GetSrvVSchema(ctx, "cell")
+				require.NoError(t, err)
+				assert.Equal(t, got.Keyspace, serving.Keyspaces["global-ks"])
+			}
 		})
 	}
 }
