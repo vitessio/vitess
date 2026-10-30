@@ -680,13 +680,7 @@ func getOptionSetString(config map[string]string) string {
 		clause = "json_remove(options, " + configOptionPath(deletedKeys[0])
 		var clauseSb681 strings.Builder
 		for _, k := range deletedKeys[1:] {
-<<<<<<< HEAD
-			clauseSb681.WriteString(fmt.Sprintf(", '$.config.\"%s\"'", k))
-||||||| parent of 6c6c0036ab (VReplication: encode config override keys and values in workflow updates (#21829))
-			fmt.Fprintf(&clauseSb681, ", '$.config.\"%s\"'", k)
-=======
 			fmt.Fprintf(&clauseSb681, ", %s", configOptionPath(k))
->>>>>>> 6c6c0036ab (VReplication: encode config override keys and values in workflow updates (#21829))
 		}
 		clause += clauseSb681.String()
 		clause += ")"
@@ -698,13 +692,7 @@ func getOptionSetString(config map[string]string) string {
 			if i > 0 {
 				clauseSb688.WriteString(", ")
 			}
-<<<<<<< HEAD
-			clauseSb688.WriteString(fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k])))
-||||||| parent of 6c6c0036ab (VReplication: encode config override keys and values in workflow updates (#21829))
-			fmt.Fprintf(&clauseSb688, "'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
-=======
 			fmt.Fprintf(&clauseSb688, "%s, %s", configOptionPath(k), sqltypes.EncodeStringSQL(strings.TrimSpace(config[k])))
->>>>>>> 6c6c0036ab (VReplication: encode config override keys and values in workflow updates (#21829))
 		}
 		clause += clauseSb688.String()
 		clause += ")"
