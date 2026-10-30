@@ -132,6 +132,12 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 			if _, err := conn.ExecuteFetch(rowsql.String(), -1, false); err != nil {
 				t.Fatalf("failed to insert data into temporary table: %v (sql=%s)", err, rowsql.String())
 			}
+
+			// Evaluate the row as MySQL returns it, as vtgate would, rather than
+			// as written, which can be an expression. Its first column is autopk.
+			stored, err := conn.ExecuteFetch(`SELECT * FROM vteval_test`, 1, false)
+			require.NoError(t, err)
+			env.Row = stored.Rows[0][1:]
 		}
 
 		remoteQuery = remoteQuery + " FROM vteval_test"
