@@ -245,7 +245,7 @@ func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqlty
 // last BEGIN, in one batch when batching, leaving the transaction open. The
 // parallel applier uses it to apply a transaction again after rolling it
 // back to resolve a commit-order deadlock.
-func (vc *vdbClient) replayTrx() error {
+func (vc *vdbClient) replayTrx() (err error) {
 	begin := -1
 	for i, query := range slices.Backward(vc.queries) {
 		if query == "begin" {
@@ -257,6 +257,15 @@ func (vc *vdbClient) replayTrx() error {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "no transaction to replay")
 	}
 	statements := append([]string(nil), vc.queries[begin+1:]...)
+	// Executing the statements records them again, so a failure leaves only
+	// the ones before it recorded. Record all of them again, or the next
+	// replay would apply part of the transaction and commit it with the
+	// whole transaction's position.
+	defer func() {
+		if err != nil {
+			vc.queries = append([]string{"begin"}, statements...)
+		}
+	}()
 	vc.queries = nil
 	vc.queriesPos = 0
 	vc.batchSize = 0

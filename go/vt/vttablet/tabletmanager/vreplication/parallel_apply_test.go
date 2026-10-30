@@ -8204,10 +8204,20 @@ func TestCommitOrderDeadlockAbortsTransactionHeldByWorker(t *testing.T) {
 // gap locks transaction 1 needs, and was handed to the commitLoop, where it
 // still sits in commitCh. The commitLoop is not reading commitCh while it
 // replays, so its own abort has to reach the transactions waiting there.
+// Transaction 1 has a second statement after the one that waits, which the
+// replay that follows must still apply, batching or not.
 func TestCommitOrderDeadlockReapplyAbortsTxnInCommitCh(t *testing.T) {
+	for _, batched := range []bool{false, true} {
+		t.Run(fmt.Sprintf("batched=%v", batched), func(t *testing.T) {
+			testCommitOrderDeadlockReapplyAbortsTxnInCommitCh(t, batched)
+		})
+	}
+}
+
+func testCommitOrderDeadlockReapplyAbortsTxnInCommitCh(t *testing.T, batched bool) {
 	ctx, cancel := context.WithCancel(testCtx(t))
 	defer cancel()
-	tableName := "parallel_apply_commit_order_deadlock_reapply"
+	tableName := fmt.Sprintf("parallel_apply_commit_order_deadlock_reapply_%v", batched)
 	vp, qualifiedTableName := newCommitOrderDeadlockVPlayer(t, ctx, tableName)
 
 	// Transaction 1: applied, then rolled back by an earlier abort.
@@ -8217,7 +8227,16 @@ func TestCommitOrderDeadlockReapplyAbortsTxnInCommitCh(t *testing.T) {
 	require.NoError(t, firstClient.Begin())
 	_, err = firstClient.ExecuteFetch("insert into "+qualifiedTableName+" values (4, 12)", 1)
 	require.NoError(t, err)
+	_, err = firstClient.ExecuteFetch("insert into "+qualifiedTableName+" values (6, 60)", 1)
+	require.NoError(t, err)
 	require.NoError(t, firstClient.Rollback())
+	if batched {
+		// Small enough that the replay sends the first statement on its own
+		// before it buffers the second, as it does for a transaction larger
+		// than the connection's batch limit.
+		require.NoError(t, firstClient.SetMultiStatements(true))
+		firstClient.maxBatchSize = beginStmtLen + int64(len("insert into "+qualifiedTableName+" values (4, 12)")) + 2
+	}
 
 	// Transaction 2: applied after that abort, holding the gap locks.
 	secondClient, err := createWorkerConn(ctx, vp.vr)
@@ -8271,7 +8290,8 @@ func TestCommitOrderDeadlockReapplyAbortsTxnInCommitCh(t *testing.T) {
 
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select id, uk from "+qualifiedTableName+" order by id")
 	require.NoError(t, err)
-	require.Equal(t, "[[INT32(2) INT32(10)] [INT32(3) INT32(15)] [INT32(4) INT32(12)]]", fmt.Sprintf("%v", qr.Rows))
+	require.Equal(t, "[[INT32(2) INT32(10)] [INT32(3) INT32(15)] [INT32(4) INT32(12)] [INT32(6) INT32(60)]]", fmt.Sprintf("%v", qr.Rows))
+	require.Positive(t, vp.vr.stats.ErrorCounts.Counts()["CommitOrderDeadlock"], "the replay must have waited on transaction 2's locks")
 }
 
 // TestCommitOrderDeadlockStress runs transactions that change primary keys
