@@ -601,10 +601,14 @@ func publishExecutedDDLBarrier(t *testing.T, vp *vplayer, statement string) {
 	vp.serialMu.Lock()
 	defer vp.serialMu.Unlock()
 	vp.tablePlansMu.RLock()
+	ddlStalePlans, conservative := extractDDLAffectedTables(statement, vp.vr.vre.env.Parser(), vp.tablePlans, vp.postDDLDroppedTables)
+	for name := range resolvedPostDDLStalePlans(vp.tablePlans, vp.postDDLDroppedTables, vp.postDDLStalePlans) {
+		if _, ok := ddlStalePlans[name]; ok {
+			delete(vp.postDDLStalePlans, name)
+		}
+	}
 	renameTargets := extractDDLRenameTargets(statement, vp.vr.vre.env.Parser())
 	retargetPostDDLStalePlans(vp.postDDLStalePlans, renameTargets, vp.tablePlans)
-	ddlStalePlans, conservative := extractDDLAffectedTables(statement, vp.vr.vre.env.Parser(), vp.tablePlans, vp.postDDLDroppedTables)
-	ddlStalePlans = unresolvedPostDDLStalePlans(vp.tablePlans, vp.postDDLDroppedTables, ddlStalePlans)
 	vp.tablePlansMu.RUnlock()
 	vp.postDDLStalePlans = mergePostDDLStalePlans(vp.postDDLStalePlans, ddlStalePlans)
 	vp.postDDLConservative = vp.postDDLConservative || conservative
@@ -7390,7 +7394,9 @@ func TestCommitLoop_EXECIGNOREIdempotentAddUniqueIndexInvalidatesUniqueSecondary
 // scheduleItems and the real commitLoop. When a DDL changes a table in place,
 // the commit rebuilds the table's plan, so the barrier clears though the table
 // gets no further FIELD or row event. The DDLs whose plans need the source's
-// FIELD event keep the barrier.
+// FIELD event keep the barrier, including a later DDL on a table whose earlier
+// barrier has resolved but is still recorded. Either way, the table's next
+// FIELD event leaves its plan with the target's unique-key analysis.
 func TestCommitLoop_PostDDLRebuildsInPlaceTablePlans(t *testing.T) {
 	tableName := "parallel_apply_post_ddl_rebuild"
 	otherTableName := "parallel_apply_post_ddl_rebuild_other"
@@ -7399,33 +7405,87 @@ func TestCommitLoop_PostDDLRebuildsInPlaceTablePlans(t *testing.T) {
 	addUniqueKey := "alter table " + tableName + " add unique key uk_email(email)"
 	unparsedDDL := "this is not valid ddl"
 
+	// A step is one fetch: its DDLs, which the commitLoop commits, or, when
+	// field is set, that table's FIELD event with its fields unchanged.
+	type step struct {
+		ddls  []string
+		field string
+	}
+	ddls := func(statements ...string) step { return step{ddls: statements} }
+	field := func(table string) step { return step{field: table} }
+
 	testCases := []struct {
-		name string
-		ddls []string
+		name  string
+		steps []step
 		// noMysqld makes the target schema unreadable when the DDLs commit.
 		noMysqld bool
-		// rebuilt is whether the commit rebuilds the plan of tableName and
-		// clears the barrier.
+		// rebuilt is whether the last DDL's commit rebuilds the plan of
+		// tableName and clears the barrier.
 		rebuilt bool
+		// dropped is whether tableName ends dropped, so that its barrier
+		// clears with no rebuild or FIELD event.
+		dropped bool
 	}{{
 		name:    "alter in place",
-		ddls:    []string{addUniqueKey},
+		steps:   []step{ddls(addUniqueKey)},
 		rebuilt: true,
 	}, {
 		// The plan for the table's name must now come from the other table's
 		// source fields.
-		name: "rename onto the table's name",
-		ddls: []string{"rename table " + tableName + " to " + oldTableName + ", " + otherTableName + " to " + tableName},
+		name:  "rename onto the table's name",
+		steps: []step{ddls("rename table " + tableName + " to " + oldTableName + ", " + otherTableName + " to " + tableName)},
 	}, {
-		name: "unparsed DDL",
-		ddls: []string{unparsedDDL},
+		name:  "unparsed DDL",
+		steps: []step{ddls(unparsedDDL)},
 	}, {
-		name: "table recreated after a drop",
-		ddls: []string{"drop table " + tableName, createTable},
+		name:  "table recreated after a drop",
+		steps: []step{ddls("drop table " + tableName), ddls(createTable)},
 	}, {
 		name:     "unreadable target schema",
-		ddls:     []string{addUniqueKey},
+		steps:    []step{ddls(addUniqueKey)},
 		noMysqld: true,
+	}, {
+		// The drop's barrier has resolved when the create commits.
+		name:  "table dropped and recreated in one fetch",
+		steps: []step{ddls("drop table "+tableName, strings.Replace(createTable, "key idx_email", "unique key uk_email", 1))},
+	}, {
+		// The rename's barrier keeps the alter's resolved barrier recorded.
+		name: "second DDL on the table while a rename's barrier is pending",
+		steps: []step{
+			ddls("rename table " + otherTableName + " to " + oldTableName),
+			ddls("alter table " + tableName + " add index idx_id_email(id, email)"),
+			field(tableName),
+			ddls(addUniqueKey),
+		},
+		noMysqld: true,
+	}, {
+		// The unparsed DDL's barrier keeps the table's resolved barrier
+		// recorded, and then clears with the other table's FIELD event.
+		name:  "second DDL on the table while an unparsed DDL's barrier is pending",
+		steps: []step{ddls(unparsedDDL), field(tableName), ddls(addUniqueKey), field(otherTableName)},
+	}, {
+		// The unparsed DDL's barrier keeps the table's resolved barrier
+		// recorded, and the renames must not retarget it.
+		name: "table renamed, altered and renamed back while an unparsed DDL's barrier is pending",
+		steps: []step{
+			ddls(unparsedDDL),
+			field(tableName),
+			ddls("rename table " + tableName + " to " + oldTableName),
+			ddls("alter table " + oldTableName + " add unique key uk_email(email)"),
+			ddls("rename table " + oldTableName + " to " + tableName),
+		},
+	}, {
+		name:    "table dropped, recreated and dropped in one fetch",
+		steps:   []step{ddls("drop table "+tableName, createTable, "drop table "+tableName)},
+		dropped: true,
+	}, {
+		name:    "table dropped and recreated in one fetch, then dropped",
+		steps:   []step{ddls("drop table "+tableName, createTable), ddls("drop table " + tableName)},
+		dropped: true,
+	}, {
+		name:    "table dropped, recreated and dropped in separate fetches",
+		steps:   []step{ddls("drop table " + tableName), ddls(createTable), ddls("drop table " + tableName)},
+		dropped: true,
 	}}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -7450,7 +7510,8 @@ func TestCommitLoop_PostDDLRebuildsInPlaceTablePlans(t *testing.T) {
 
 			vp.vr.dbClient = newVDBClient(realDB, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
 			vp.dbClient = vp.vr.dbClient
-			vp.vr.mysqld = &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+			mysqld := &infoSchemaMysqld{MysqlDaemon: env.Mysqld}
+			vp.vr.mysqld = mysqld
 			vp.vr.vre = &Engine{env: vtenv.NewTestEnv()}
 			vp.vr.source.Filter = &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: tableName}, {Match: otherTableName}}}
 
@@ -7466,21 +7527,26 @@ func TestCommitLoop_PostDDLRebuildsInPlaceTablePlans(t *testing.T) {
 				vp.vr.vre.env.Parser(),
 			)
 			require.NoError(t, err)
-			for _, fieldEvent := range []*binlogdatapb.FieldEvent{{
-				TableName: tableName,
-				Fields: []*querypb.Field{
-					{Name: "id", Type: querypb.Type_INT32},
-					targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
+			fieldEvents := map[string]*binlogdatapb.FieldEvent{
+				tableName: {
+					TableName: tableName,
+					Fields: []*querypb.Field{
+						{Name: "id", Type: querypb.Type_INT32},
+						targetCharsetField(t, vp, tableName, "email", querypb.Type_VARCHAR),
+					},
 				},
-			}, {
-				TableName: otherTableName,
-				Fields:    []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
-			}} {
-				require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: fieldEvent}, false))
+				otherTableName: {
+					TableName: otherTableName,
+					Fields:    []*querypb.Field{{Name: "id", Type: querypb.Type_INT32}},
+				},
+			}
+			applyField := func(table string) {
+				require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_FIELD, FieldEvent: fieldEvents[table]}, false))
 				require.NoError(t, vp.dbClient.Rollback())
 			}
-			stalePlan := vp.tablePlans[tableName]
-			require.Nil(t, stalePlan.UniqueKeyColumns)
+			applyField(tableName)
+			applyField(otherTableName)
+			require.Nil(t, vp.tablePlans[tableName].UniqueKeyColumns)
 
 			vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 				if sql == unparsedDDL {
@@ -7490,64 +7556,111 @@ func TestCommitLoop_PostDDLRebuildsInPlaceTablePlans(t *testing.T) {
 				}
 				return vp.vr.dbClient.Execute(sql)
 			}
-			if tc.noMysqld {
-				vp.vr.mysqld = nil
-			}
 
 			scheduler := newApplyScheduler(ctx)
 			state := &parallelScheduleState{lastFlushTime: time.Now(), lastHeartbeatRefresh: time.Now()}
-			commitCh := make(chan *applyTxn, len(tc.ddls))
+			commitCh := make(chan *applyTxn, 1)
 			commitDone := make(chan error, 1)
 			go func() {
 				commitDone <- vp.commitLoop(ctx, scheduler, commitCh)
 			}()
-			for i, ddl := range tc.ddls {
-				require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
-					{Type: binlogdatapb.VEventType_GTID, Gtid: fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", 5+i)},
-					{Type: binlogdatapb.VEventType_DDL, Statement: ddl, Timestamp: 100},
-				}}))
-				ddlTxn, err := scheduler.nextReady(ctx)
-				require.NoError(t, err)
-				commitCh <- ddlTxn
+			sequence := 5
+			nextGTID := func() string {
+				sequence++
+				return fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", sequence)
+			}
+			// planBeforeLastDDL is the table's plan that the last DDL found.
+			var planBeforeLastDDL *TablePlan
+			for _, next := range tc.steps {
+				if next.field != "" {
+					applyField(next.field)
+					continue
+				}
+				planBeforeLastDDL = vp.tablePlans[tableName]
+				var items []*binlogdatapb.VEvent
+				for _, ddl := range next.ddls {
+					items = append(items,
+						&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: nextGTID()},
+						&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_DDL, Statement: ddl, Timestamp: 100})
+				}
+				require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{items}))
+				if tc.noMysqld {
+					vp.vr.mysqld = nil
+				}
+				for range next.ddls {
+					ddlTxn, err := scheduler.nextReady(ctx)
+					require.NoError(t, err)
+					// The commitLoop releases the txn once it commits it.
+					order := ddlTxn.order
+					commitCh <- ddlTxn
+					require.NoError(t, scheduler.waitForTurn(ctx, order+1))
+				}
 				// The scheduleLoop drains after a fetch with a DDL.
 				require.NoError(t, scheduler.waitForIdle(ctx))
+				vp.vr.mysqld = mysqld
 			}
 			close(commitCh)
 			require.NoError(t, <-commitDone)
 
 			// The next fetches have a row event for the table, without a FIELD
-			// event, and then one for the other table.
-			scheduleRow := func(sequence int, table string, values string, lengths ...int64) *applyTxn {
+			// event, and then one for the other table. scheduleRow returns
+			// whether the row's transaction is forced global, and commits it
+			// and anything scheduled before it.
+			scheduleRow := func(table string, values string, lengths ...int64) bool {
 				require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
-					{Type: binlogdatapb.VEventType_GTID, Gtid: fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", sequence)},
+					{Type: binlogdatapb.VEventType_GTID, Gtid: nextGTID()},
 					{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
 						TableName:  table,
 						RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte(values), Lengths: lengths}}},
 					}, Timestamp: 200},
 					{Type: binlogdatapb.VEventType_COMMIT},
 				}}))
-				txn, err := scheduler.nextReady(ctx)
-				require.NoError(t, err)
-				require.NoError(t, scheduler.markCommitted(txn))
-				return txn
+				for {
+					txn, err := scheduler.nextReady(ctx)
+					require.NoError(t, err)
+					events := txn.payload.events
+					isRow := len(events) == 1 && events[0].RowEvent != nil && events[0].RowEvent.TableName == table
+					forceGlobal := txn.forceGlobal
+					require.NoError(t, scheduler.markCommitted(txn))
+					if isRow {
+						return forceGlobal
+					}
+				}
 			}
-			tableTxn := scheduleRow(10, tableName, "1a", 1, 1)
-			if !tc.rebuilt {
-				assert.Contains(t, state.postDDLStalePlans, tableName)
-				assert.True(t, tableTxn.forceGlobal)
-				assert.Same(t, stalePlan, vp.tablePlans[tableName])
+			if tc.dropped {
+				// The table can get no FIELD event, and no barrier is left.
+				scheduleRow(otherTableName, "2", 1)
+				assert.False(t, state.ddlSeen)
+				assert.Nil(t, state.postDDLStalePlans)
 				return
 			}
-			otherTxn := scheduleRow(11, otherTableName, "2", 1)
-			// No barrier is left, so the scheduleLoop no longer drains after
-			// every fetch, and neither row transaction is forced global.
-			assert.False(t, state.ddlSeen)
-			assert.Nil(t, state.postDDLStalePlans)
-			assert.False(t, tableTxn.forceGlobal)
-			assert.False(t, otherTxn.forceGlobal)
-			assert.NotSame(t, stalePlan, vp.tablePlans[tableName])
-			assert.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
-			assert.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
+			tableForceGlobal := scheduleRow(tableName, "1a", 1, 1)
+			if tc.rebuilt {
+				otherForceGlobal := scheduleRow(otherTableName, "2", 1)
+				// No barrier is left, so the scheduleLoop no longer drains
+				// after every fetch, and neither row transaction is forced
+				// global.
+				assert.False(t, state.ddlSeen)
+				assert.Nil(t, state.postDDLStalePlans)
+				assert.False(t, tableForceGlobal)
+				assert.False(t, otherForceGlobal)
+				assert.NotSame(t, planBeforeLastDDL, vp.tablePlans[tableName])
+				assert.False(t, vp.tablePlans[tableName].HasExtraUniqueSecondary)
+				assert.Equal(t, [][]string{{"email"}}, vp.tablePlans[tableName].UniqueKeyColumns)
+			} else {
+				assert.Contains(t, state.postDDLStalePlans, tableName)
+				assert.True(t, tableForceGlobal)
+				assert.Same(t, planBeforeLastDDL, vp.tablePlans[tableName])
+			}
+
+			// The table's next FIELD event, with its fields unchanged, leaves
+			// the plan with the target's unique-key analysis.
+			applyField(tableName)
+			plan := vp.tablePlans[tableName]
+			uniqueKeys, mustSerialize, err := vp.vr.writesetUniqueKeys(ctx, tableName, plan)
+			require.NoError(t, err)
+			assert.Equal(t, uniqueKeys, plan.UniqueKeyColumns)
+			assert.Equal(t, mustSerialize, plan.HasExtraUniqueSecondary)
 		})
 	}
 }

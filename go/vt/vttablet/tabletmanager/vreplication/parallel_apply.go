@@ -2731,10 +2731,21 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 		if event.Type == binlogdatapb.VEventType_DDL && (ddlExecuted || publishExecIgnoreDDLBarrier) {
 			vp.tablePlansMu.RLock()
+			ddlStalePlans, conservative := extractDDLAffectedTables(event.Statement, vp.vr.vre.env.Parser(), vp.tablePlans, vp.postDDLDroppedTables)
+			// An entry stays recorded after it resolves, until every entry has.
+			// Drop the resolved one for a table this DDL affects again, before
+			// a rename can retarget it, or the merge keeps its stale plan and
+			// this DDL's entry resolves at once. This DDL's own entries merge
+			// even when resolved, which only a DROP of a name already dropped
+			// is, so that an entry recorded for the name since then, such as a
+			// recreate's, can clear through the drop.
+			for name := range resolvedPostDDLStalePlans(vp.tablePlans, vp.postDDLDroppedTables, vp.postDDLStalePlans) {
+				if _, ok := ddlStalePlans[name]; ok {
+					delete(vp.postDDLStalePlans, name)
+				}
+			}
 			renameTargets := extractDDLRenameTargets(event.Statement, vp.vr.vre.env.Parser())
 			retargetPostDDLStalePlans(vp.postDDLStalePlans, renameTargets, vp.tablePlans)
-			ddlStalePlans, conservative := extractDDLAffectedTables(event.Statement, vp.vr.vre.env.Parser(), vp.tablePlans, vp.postDDLDroppedTables)
-			ddlStalePlans = unresolvedPostDDLStalePlans(vp.tablePlans, vp.postDDLDroppedTables, ddlStalePlans)
 			vp.tablePlansMu.RUnlock()
 			vp.postDDLStalePlans = mergePostDDLStalePlans(vp.postDDLStalePlans, ddlStalePlans)
 			vp.postDDLConservative = vp.postDDLConservative || conservative
