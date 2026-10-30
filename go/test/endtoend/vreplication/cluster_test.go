@@ -569,6 +569,18 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 	shardNames := strings.Split(names, ",")
 	log.Info(fmt.Sprintf("Addshards got %d shards with %+v", len(shardNames), shardNames))
 	isSharded := len(shardNames) > 1
+	// Create a new keyspace's shards and serving graph before starting any
+	// tablet. Otherwise the first vttablet registers itself while it is still
+	// building the SrvKeyspace in the background, and a vtgate that finds the
+	// tablet first caches the missing SrvKeyspace for --srv-topo-cache-refresh.
+	newKeyspace := len(keyspace.Shards) == 0
+	if newKeyspace {
+		for _, shardName := range shardNames {
+			err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName)
+			require.NoErrorf(t, err, "CreateShard command failed with %+v\n", err)
+		}
+		require.NoError(t, vc.VtctldClient.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name))
+	}
 	primaryTabletUID := 0
 	for ind, shardName := range shardNames {
 		tabletID := tabletIDBase + ind*100
@@ -578,8 +590,10 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 			log.Info(fmt.Sprintf("Shard %s already exists, not adding", shardName))
 		} else {
 			log.Info("Adding Shard " + shardName)
-			err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName)
-			require.NoErrorf(t, err, "CreateShard command failed with %+v\n", err)
+			if !newKeyspace {
+				err := vc.VtctldClient.ExecuteCommand("CreateShard", keyspace.Name+"/"+shardName)
+				require.NoErrorf(t, err, "CreateShard command failed with %+v\n", err)
+			}
 			keyspace.Shards[shardName] = shard
 		}
 		for i, cell := range cells {
@@ -790,7 +804,13 @@ func (vc *VitessCluster) teardown() {
 	}
 
 	for _, keyspace := range keyspaces {
-		_ = vc.TearDownKeyspace(keyspace)
+		if cluster.IsCoverage() {
+			// Coverage runs need a graceful exit so that the instrumented
+			// binaries write their coverage profiles.
+			_ = vc.TearDownKeyspace(keyspace)
+		} else {
+			_ = vc.killKeyspaceProcesses(keyspace)
+		}
 	}
 	if err := vc.Vtctld.TearDown(); err != nil {
 		log.Info("Error stopping Vtctld:  " + err.Error())
@@ -811,6 +831,34 @@ func (vc *VitessCluster) teardown() {
 			log.Info("Error stopping VTOrc: " + err.Error())
 		}
 	}
+}
+
+// killKeyspaceProcesses kills the keyspace's vttablet and mysqld processes
+// without a graceful shutdown. This is only safe during the final cluster
+// teardown, where the data directory is deleted right afterwards: nothing
+// needs to be flushed, and killing skips both the semi-sync ack wait that
+// stalls a graceful primary mysqld shutdown and the vttablet termination
+// timeout once its mysqld is gone. Mid-test decommissioning of a keyspace
+// must keep using TearDownKeyspace.
+func (vc *VitessCluster) killKeyspaceProcesses(ks *Keyspace) error {
+	eg := errgroup.Group{}
+	for _, shard := range ks.Shards {
+		for _, tablet := range shard.Tablets {
+			eg.Go(func() error {
+				// The returned error is the process exit status: after a kill
+				// that is always non-nil ("signal: killed"), so it is not
+				// logged here.
+				_ = tablet.Vttablet.Kill()
+				if tablet.DbServer != nil && tablet.DbServer.TabletUID > 0 {
+					if err := tablet.DbServer.Kill(); err != nil {
+						log.Info(fmt.Sprintf("Error killing mysql process associated with vttablet %s: %v", tablet.Name, err))
+					}
+				}
+				return nil
+			})
+		}
+	}
+	return eg.Wait()
 }
 
 func (vc *VitessCluster) TearDownKeyspace(ks *Keyspace) error {
@@ -861,8 +909,7 @@ func (vc *VitessCluster) TearDown() {
 	case <-time.After(1 * time.Minute):
 		log.Info("TearDown() timed out")
 	}
-	// some processes seem to hang around for a bit
-	time.Sleep(5 * time.Second)
+	// Straggling processes are covered by CleanupDataroot's retry loop.
 	vc.CleanupDataroot(vc.t, false)
 }
 

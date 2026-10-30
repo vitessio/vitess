@@ -37,8 +37,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -637,14 +636,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log message.
-	ole := log.Error
-	logger := logutil.NewMemoryLogger()
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logger.Errorf("%s", msg)
-	}
-	defer func() {
-		log.Error = ole
-	}()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -688,8 +680,11 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	execStatements(t, input)
 	expectDBClientQueries(t, output)
 
-	logs := logger.String()
-	require.Regexp(t, expectedMsg, logs)
+	record := logs.Wait(t, "Error applying event")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.NotContains(t, record, "table")
+	assert.Contains(t, record["processing_position"], gtid)
+	assert.Contains(t, record["error"], "filter rules are not supported for SBR")
 }
 
 func TestPlayerStatementMode(t *testing.T) {
@@ -1827,6 +1822,98 @@ func TestPlayerPartialImages(t *testing.T) {
 				expectDBClientQueries(t, want)
 				expectData(t, "dst", tc.data)
 			}
+		})
+	}
+}
+
+// TestPlayerPartialImagesWithTargetOnlyExpressions confirms that partial row
+// images are applied correctly when the target table has more columns than the
+// source table, sourced from expressions that use no streamed column, e.g. a
+// Materialize filter that adds constants. The vstreamer's AfterDataColumns
+// bitmap describes the streamed columns, and the vplayer maps it onto its
+// target column expressions when generating the partial queries. With the
+// legacy source-ordered bitmap the generator ran out of columns and failed with
+// "unable to create partial update query". The source JSON column is not part
+// of the filter, but a partial JSON update to it still marks the row event as
+// partial.
+func TestPlayerPartialImagesWithTargetOnlyExpressions(t *testing.T) {
+	if !runPartialJSONTest {
+		t.Skip("Skipping test as binlog_row_value_options=PARTIAL_JSON is not enabled")
+	}
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src (id int, val varbinary(128), jd json, primary key(id))",
+		fmt.Sprintf("create table %s.dst (id int, val varbinary(128), c int, d int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select id, val, 1 as c, 1 as d from src",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	testCases := []struct {
+		input  string
+		output []string
+		data   [][]string
+	}{
+		{
+			input: `insert into src (id, val, jd) values (1, 'aaa', '{"key1": "val1"}')`,
+			output: []string{
+				"insert into dst(id,val,c,d) values (1,_binary'aaa',1,1)",
+			},
+			data: [][]string{
+				{"1", "aaa", "1", "1"},
+			},
+		},
+		{
+			// The partially updated JSON column is not streamed, but the row event is
+			// still a partial one; the constant target columns must still be set.
+			input: `update src set jd=JSON_SET(jd, '$.color', 'red') where id = 1`,
+			output: []string{
+				"update dst set val=_binary'aaa', c=1, d=1 where id=1",
+			},
+			data: [][]string{
+				{"1", "aaa", "1", "1"},
+			},
+		},
+		{
+			input: `update src set val = 'bbb' where id = 1`,
+			output: []string{
+				"update dst set val=_binary'bbb', c=1, d=1 where id=1",
+			},
+			data: [][]string{
+				{"1", "bbb", "1", "1"},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			execStatements(t, []string{tc.input})
+			want := qh.Expect(
+				"begin",
+				tc.output...,
+			).Then(qh.Immediately(
+				"/update _vt.vreplication set pos=",
+				"commit",
+			))
+			expectDBClientQueries(t, want)
+			expectData(t, "dst", tc.data)
 		})
 	}
 }
@@ -3523,6 +3610,191 @@ func TestPlayerNoBlob(t *testing.T) {
 	require.Equal(t, int64(4), stats.PartialQueryCount.Counts()["update"])
 }
 
+// TestPlayerNoBlobProjectedFilter confirms that partial row images from
+// binlog_row_image=NOBLOB are applied correctly when the filter reorders the
+// columns, renames one through a convert(... using ...) expression and adds a
+// constant. The vplayer maps the vstreamer's projected AfterDataColumns bitmap
+// onto its target column expressions. With the legacy bitmap, which is in the
+// source table's (id, blb, val) order and has fewer bits than the target has
+// columns, the partial update could not be generated at all ("unable to create
+// partial update query"); the projected bitmap also keeps the omitted blob from
+// being mistaken for a present column when the layouts differ.
+func TestPlayerNoBlobProjectedFilter(t *testing.T) {
+	if !runNoBlobTest {
+		t.Skip()
+	}
+	oldVreplicationExperimentalFlags := vttablet.DefaultVReplicationConfig.ExperimentalFlags
+	vttablet.DefaultVReplicationConfig.ExperimentalFlags = vttablet.VReplicationExperimentalFlagAllowNoBlobBinlogRowImage
+	defer func() {
+		vttablet.DefaultVReplicationConfig.ExperimentalFlags = oldVreplicationExperimentalFlags
+	}()
+
+	defer deleteTablet(addTablet(100))
+	execStatements(t, []string{
+		"create table src(id int, blb blob, val varbinary(4), extra varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst(blb blob, id int, val2 varchar(4), c int, primary key(id))", vrepldb),
+		// src2/dst2: the only non-key target column is the blob, so an update to a
+		// source column outside the filter leaves nothing to apply on the target.
+		"create table src2(id int, blb blob, val varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst2(blb blob, id int, primary key(id))", vrepldb),
+		// src3/dst3: a target expression combining a non-blob and a blob column.
+		"create table src3(id int, blb blob, val varbinary(4), extra varbinary(4), primary key(id))",
+		fmt.Sprintf("create table %s.dst3(id int, c varbinary(16), primary key(id))", vrepldb),
+		// src4/dst4: Matt's two-BLOB repro. Under NOBLOB the before image omits
+		// both blobs; UPDATE SET b1=NULL, val=2 then has after-image b1 present
+		// as NULL and b2 absent. The workflow must fail closed rather than
+		// leave a stale concat(b1,b2).
+		"create table src4(id int, b1 blob, b2 blob, val int, primary key(id))",
+		fmt.Sprintf("create table %s.dst4(id int, c varbinary(16), val int, primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+		"drop table src2",
+		fmt.Sprintf("drop table %s.dst2", vrepldb),
+		"drop table src3",
+		fmt.Sprintf("drop table %s.dst3", vrepldb),
+		"drop table src4",
+		fmt.Sprintf("drop table %s.dst4", vrepldb),
+	})
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select blb, id, convert(val using utf8mb4) as val2, 1 as c from src",
+		}, {
+			Match:  "dst2",
+			Filter: "select blb, id from src2",
+		}, {
+			Match:  "dst3",
+			Filter: "select id, concat(val, blb) as c from src3",
+		}, {
+			Match:  "dst4",
+			Filter: "select id, concat(b1, b2) as c, val from src4",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, vrId := startVReplication(t, bls, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output string // empty means the row event must not produce any query
+		table  string
+		data   [][]string
+		error  string // if set, the workflow must fail closed with this message
+	}{{
+		// Inserts always carry a full image.
+		input:  "insert into src values (1, 'blob1', 'aaa', 'xxx')",
+		output: "insert into dst(blb,id,val2,c) values (_binary'blob1',1,convert(_binary'aaa' using utf8mb4),1)",
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "aaa", "1"}},
+	}, {
+		// The blob did not change, so it is absent from the row image and must be
+		// left alone on the target while the renamed column is updated.
+		input:  "update src set val = 'bbb' where id = 1",
+		output: "update dst set val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "bbb", "1"}},
+	}, {
+		// NOBLOB only omits unchanged BLOB/TEXT columns: a change to a column
+		// outside the filter still ships val, so val2 is (re)written.
+		input:  "update src set extra = 'yyy' where id = 1",
+		output: "update dst set val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		table:  "dst",
+		data:   [][]string{{"blob1", "1", "bbb", "1"}},
+	}, {
+		// The blob changed, so the image is full again.
+		input:  "update src set blb = 'blob2' where id = 1",
+		output: "update dst set blb=_binary'blob2', val2=convert(_binary'bbb' using utf8mb4), c=1 where id=1",
+		table:  "dst",
+		data:   [][]string{{"blob2", "1", "bbb", "1"}},
+	}, {
+		input:  "insert into src2 values (1, 'blob1', 'aaa')",
+		output: "insert into dst2(blb,id) values (_binary'blob1',1)",
+		table:  "dst2",
+		data:   [][]string{{"blob1", "1"}},
+	}, {
+		// Only a column outside the filter changed and the blob is omitted: the
+		// image has no writable target column, so nothing is applied (and no
+		// invalid empty UPDATE is generated).
+		input: "update src2 set val = 'bbb' where id = 1",
+		table: "dst2",
+		data:  [][]string{{"blob1", "1"}},
+	}, {
+		input:  "update src2 set blb = 'blob2' where id = 1",
+		output: "update dst2 set blb=_binary'blob2' where id=1",
+		table:  "dst2",
+		data:   [][]string{{"blob2", "1"}},
+	}, {
+		input:  "insert into src3 values (1, 'blob1', 'aaa', 'xxx')",
+		output: "insert into dst3(id,c) values (1,concat(_binary'aaa', _binary'blob1'))",
+		table:  "dst3",
+		data:   [][]string{{"1", "aaablob1"}},
+	}, {
+		// c uses val (present, unchanged) and blb (omitted): its value did not
+		// change, so it is left alone rather than recomputed with a NULL blob.
+		input: "update src3 set extra = 'yyy' where id = 1",
+		table: "dst3",
+		data:  [][]string{{"1", "aaablob1"}},
+	}, {
+		// The blob changed, so the image is full and c is recomputed.
+		input:  "update src3 set blb = 'blob2' where id = 1",
+		output: "update dst3 set c=concat(_binary'aaa', _binary'blob2') where id=1",
+		table:  "dst3",
+		data:   [][]string{{"1", "aaablob2"}},
+	}, {
+		input:  "insert into src4 values (1, 'a', 'b', 1)",
+		output: "insert into dst4(id,c,val) values (1,concat(_binary'a', _binary'b'),1)",
+		table:  "dst4",
+		data:   [][]string{{"1", "ab", "1"}},
+	}, {
+		// Under NOBLOB the before image omits both blobs. After UPDATE
+		// SET b1=NULL, val=2, b1 is present as NULL and b2 is absent, so
+		// concat(b1,b2) cannot be computed. Fail closed rather than
+		// silently keep c='ab' while applying val=2.
+		input: "update src4 set b1=NULL, val=2 where id=1",
+		table: "dst4",
+		data:  [][]string{{"1", "ab", "1"}},
+		error: "binary log event missing a needed value for dst4.c due to not using binlog-row-image=FULL",
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			execStatements(t, []string{tcase.input})
+			if tcase.error != "" {
+				// expectNontxQueries skips begin/rollback/pos updates so a
+				// leftover position write from the previous case cannot race
+				// the error assertions. The workflow must record the message
+				// and go to Error rather than apply a stale concat.
+				expectNontxQueries(t, qh.Expect(
+					fmt.Sprintf("/update _vt.vreplication set message=.*%s.*", tcase.error),
+					"/update _vt.vreplication set state='Error'",
+				), recvTimeout)
+				expectData(t, tcase.table, tcase.data)
+				return
+			}
+			if tcase.output != "" {
+				expectNontxQueries(t, qh.Expect(tcase.output), recvTimeout)
+			}
+			expectData(t, tcase.table, tcase.data)
+		})
+	}
+	// Two partial updates reached dst, both with the same projected bitmap (one
+	// cached query). The dst2 and dst3 no-ops must not have generated or cached
+	// a partial query; had they produced an invalid empty UPDATE or an error,
+	// the stream would have stopped before the following cases could be applied.
+	// The dst4 two-BLOB rejection fails before generating a partial query.
+	stats := globalStats.controllers[int32(vrId)].blpStats
+	require.Equal(t, int64(2), stats.PartialQueryCount.Counts()["update"])
+	require.Equal(t, int64(1), stats.PartialQueryCacheSize.Counts()["update"])
+}
+
 func TestPlayerBatchMode(t *testing.T) {
 	// To test trx batch splitting at 1024-64 bytes.
 	maxAllowedPacket := 1024
@@ -4104,11 +4376,7 @@ func TestPlayerStalls(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log messages.
-	ole := log.Error
-	logger := logutil.NewMemoryLogger()
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logger.Errorf("%s", msg)
-	}
+	logs := logtest.Capture(t, slog.LevelError)
 
 	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
 	oldProgressDeadline := vplayerProgressDeadline
@@ -4116,7 +4384,6 @@ func TestPlayerStalls(t *testing.T) {
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	oldIdleTimeout := idleTimeout
 	defer func() {
-		log.Error = ole
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
@@ -4215,8 +4482,7 @@ func TestPlayerStalls(t *testing.T) {
 				// The log message is written asynchronously after the stalled
 				// workflow transitions to the error state, so poll for it.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					log.Flush()
-					assert.Contains(c, logger.String(), relayLogIOStalledMsg)
+					assert.Contains(c, logs.String(), relayLogIOStalledMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
@@ -4255,8 +4521,7 @@ func TestPlayerStalls(t *testing.T) {
 				// locks held by the preFunc connection, rather than sleeping a
 				// fixed multiple of the heartbeat interval.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					log.Flush()
-					assert.Contains(c, logger.String(), failedToRecordHeartbeatMsg)
+					assert.Contains(c, logs.String(), failedToRecordHeartbeatMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				// The vplayer also records the failure in the vreplication
 				// record's message column, but that update is blocked by the
@@ -4293,7 +4558,7 @@ func TestPlayerStalls(t *testing.T) {
 			if tc.postFunc != nil {
 				tc.postFunc()
 			}
-			logger.Clear()
+			logs.Reset()
 		})
 	}
 }
@@ -4374,17 +4639,12 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// Capture the error log so we can assert the stall message is absent.
-	ole := log.Error
-	logger := logutil.NewMemoryLogger()
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logger.Errorf("%s", msg)
-	}
+	logs := logtest.Capture(t, slog.LevelError)
 
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldThrottlerClient := playerEngine.throttlerClient
 	defer func() {
-		log.Error = ole
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
 		playerEngine.throttlerClient = oldThrottlerClient
@@ -4460,8 +4720,7 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 	// denial handoff to the relay log, the stall fires within
 	// vplayerProgressDeadline and errors the stream.
 	time.Sleep(3 * vplayerProgressDeadline)
-	log.Flush()
-	require.NotContains(t, logger.String(), relayLogIOStalledMsg,
+	require.NotContains(t, logs.String(), relayLogIOStalledMsg,
 		"the stall detector fired while the vplayer was throttled")
 
 	dbc := playerEngine.dbClientFactoryFiltered()
@@ -4481,6 +4740,5 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 		require.Len(c, res.Rows, 1)
 		assert.Equal(c, "3", res.Rows[0][0].ToString())
 	}, 30*time.Second, 100*time.Millisecond, "the queued rows were not applied after the throttler allowed again")
-	log.Flush()
-	require.NotContains(t, logger.String(), relayLogIOStalledMsg)
+	require.NotContains(t, logs.String(), relayLogIOStalledMsg)
 }

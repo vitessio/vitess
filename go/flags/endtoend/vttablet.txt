@@ -170,7 +170,7 @@ Flags:
       --gcs-backup-storage-root string                                   Root prefix for all backup-related object names.
       --grpc-auth-mode string                                            Which auth plugin implementation to use (eg: static)
       --grpc-auth-mtls-allowed-substrings string                         List of substrings of at least one of the client certificate names (separated by colon).
-      --grpc-auth-static-client-creds string                             When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc-auth-static-client-creds string                             When using --grpc-auth-mode=static in the server, this file provides the credentials to use to authenticate with server.
       --grpc-auth-static-password-file string                            JSON File to read the users/passwords from.
       --grpc-bind-address string                                         Bind address for gRPC calls. If empty, listen on all addresses.
       --grpc-ca string                                                   server CA to use for gRPC connections, requires TLS, and enforces client certificate check
@@ -416,7 +416,7 @@ Flags:
       --transaction-limit-by-principal                                   Include CallerID.principal when considering who the user is for the purpose of transaction limit. (default true)
       --transaction-limit-by-subcomponent                                Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.
       --transaction-limit-by-username                                    Include VTGateCallerID.username when considering who the user is for the purpose of transaction limit. (default true)
-      --transaction-limit-per-user float                                 Maximum number of transactions a single user is allowed to use at any time, represented as fraction of -transaction_cap. (default 0.4)
+      --transaction-limit-per-user float                                 Maximum number of transactions a single user is allowed to use at any time, represented as fraction of --queryserver-config-transaction-cap. (default 0.4)
       --transaction-log-stream-handler string                            URL handler for streaming transactions log (default "/debug/txlog")
       --twopc-abandon-age time.Duration                                  Any unresolved transaction older than this time will be sent to the coordinator to be resolved. NOTE: Providing time as seconds (float64) is deprecated. Use time.Duration format (e.g., '1s', '2m', '1h'). (default 15m0s)
       --tx-throttler-config string                                       The configuration of the transaction throttler as a text-formatted throttlerdata.Configuration protocol buffer message. (default "target_replication_lag_sec:2 max_replication_lag_sec:10 initial_rate:100 max_increase:1 emergency_decrease:0.5 min_duration_between_increases_sec:40 max_duration_between_increases_sec:62 min_duration_between_decreases_sec:20 spread_backlog_across_sec:20 age_bad_rate_after_sec:180 bad_rate_increase:0.1 max_rate_approach_threshold:0.9")

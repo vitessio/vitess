@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"strings"
@@ -36,6 +37,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log/logtest"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
@@ -746,13 +748,16 @@ func TestPlayerCopyTables(t *testing.T) {
 
 func testPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100))
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	execStatements(t, []string{
 		"create table ast1(id int, primary key(id))",
 		"create table src1(id int, val varchar(128), d decimal(8,0), j json, primary key(id))",
 		"insert into src1 values(2, 'bbb', 1, '{\"foo\": \"bar\"}'), (1, 'aaa', 0, JSON_ARRAY(123456789012345678901234567890, \"abcd\")), (3, 'ccc', 2, 'null'), (4, 'ddd', 3, '{\"name\": \"matt\", \"size\": null}'), (5, 'eee', 4, null)",
 		fmt.Sprintf("create table %s.ast1(id int, primary key(id))", vrepldb),
-		fmt.Sprintf("create table %s.dst1(id int, val varchar(128), val2 varchar(128), d decimal(8,0), j json, primary key(id))", vrepldb),
+		// InnoDB never recalculates the statistics of a table created with
+		// stats_auto_recalc=0, so the copy has to analyze it.
+		fmt.Sprintf("create table %s.dst1(id int, val varchar(128), val2 varchar(128), d decimal(8,0), j json, primary key(id)) stats_auto_recalc=0", vrepldb),
 		"create table yes(id int, val varchar(128), primary key(id))",
 		fmt.Sprintf("create table %s.yes(id int, val varchar(128), primary key(id))", vrepldb),
 		"create table no(id int, val varchar(128), primary key(id))",
@@ -818,9 +823,14 @@ func testPlayerCopyTables(t *testing.T) {
 		"insert into dst1(id,val,val2,d,j) values (1,'aaa','aaa',0,JSON_ARRAY(123456789012345678901234567890, _utf8mb4'abcd')), (2,'bbb','bbb',1,JSON_OBJECT(_utf8mb4'foo', _utf8mb4'bar')), (3,'ccc','ccc',2,CAST(_utf8mb4'null' as JSON)), (4,'ddd','ddd',3,JSON_OBJECT(_utf8mb4'name', _utf8mb4'matt', _utf8mb4'size', null)), (5,'eee','eee',4,null)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(_binary'fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"5"}'.*`,
 		"commit",
-		// copy of dst1 is done: delete from copy_state.
+		// copy of dst1 is done: analyze it, as it has stats_auto_recalc=0, and delete from copy_state.
+		// ast1 and yes don't have it, so they aren't analyzed.
+		fmt.Sprintf("analyze table `%s`.`dst1`", vrepldb),
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
-		// The next FF executes and updates the position before copying.
+		// The next FF executes and updates the position before copying. Source and target share
+		// one MySQL here, so the FF first streams the binlogged ANALYZE TABLE, an OTHER event,
+		// which updates the position outside of a transaction.
+		"/update _vt.vreplication set pos=",
 		"begin",
 		"/update _vt.vreplication set pos=",
 		"commit",
@@ -838,7 +848,33 @@ func testPlayerCopyTables(t *testing.T) {
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 5)
+
+	var copying []any
+	finished := make(map[any]map[string]any)
+	for _, record := range logs.Records(t) {
+		switch record["msg"] {
+		case "Copying table":
+			assert.Equal(t, "test", record["workflow"])
+			assert.EqualValues(t, qr.InsertID, record["stream_id"])
+			copying = append(copying, record["table"])
+		case "Copy of the table finished":
+			finished[record["table"]] = record
+		}
+	}
+	assert.Equal(t, []any{"ast1", "dst1", "yes"}, copying)
+	require.Contains(t, finished, "dst1")
+	assert.Equal(t, "test", finished["dst1"]["workflow"])
+	assert.EqualValues(t, qr.InsertID, finished["dst1"]["stream_id"])
+	assert.Contains(t, finished["dst1"]["last_pk"], `values:\"5\"`)
+
 	ctx, cancel := context.WithCancel(t.Context())
+
+	// The analyzed dst1 has statistics for its five rows, instead of the empty ones InnoDB saved at create time.
+	statsQuery := fmt.Sprintf("select n_rows from mysql.innodb_table_stats where database_name = '%s' and table_name = 'dst1'", vrepldb)
+	statsQR, err := env.Mysqld.FetchSuperQuery(ctx, statsQuery)
+	require.NoError(t, err)
+	require.Len(t, statsQR.Rows, 1)
+	assert.Equal(t, "5", statsQR.Rows[0][0].ToString())
 
 	type logTestCase struct {
 		name string
@@ -892,7 +928,8 @@ func testPlayerCopyBigTable(t *testing.T) {
 	execStatements(t, []string{
 		"create table src(id int, val varchar(128), primary key(id))",
 		"insert into src values(1, 'aaa'), (2, 'bbb')",
-		fmt.Sprintf("create table %s.dst(id int, val varchar(128), primary key(id))", vrepldb),
+		// With stats_auto_recalc=0, every copy cycle ends by analyzing the table.
+		fmt.Sprintf("create table %s.dst(id int, val varchar(128), primary key(id)) stats_auto_recalc=0", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table src",
@@ -957,6 +994,8 @@ func testPlayerCopyBigTable(t *testing.T) {
 		"/update _vt.vreplication set state='Copying'",
 		"insert into dst(id,val) values (1,'aaa')",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \(_binary'fields:{name:"id" type:INT32 charset:63 flags:53251} rows:{lengths:1 values:"1"}'.*`,
+		// The copy phase duration ends the first cycle, which analyzes what it copied.
+		fmt.Sprintf("analyze table `%s`.`dst`", vrepldb),
 		// The next catchup executes the new row insert, but will be a no-op.
 		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
 		// fastForward has nothing to add. Just saves position.
@@ -976,7 +1015,8 @@ func testPlayerCopyBigTable(t *testing.T) {
 		upd1.Then(upd3.Eventually())
 		return upd3
 	}).Then(qh.Eventually(
-		// Wrap-up.
+		// Wrap-up: the last cycle analyzes the table too.
+		fmt.Sprintf("analyze table `%s`.`dst`", vrepldb),
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.

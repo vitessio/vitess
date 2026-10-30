@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -1577,6 +1578,12 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		query:  fmt.Sprintf("update _vt.vreplication set message = 'FROZEN' where db_name='vt_%s' and workflow='%s'", sourceKeyspaceName, ReverseWorkflowName(workflowName)),
 		result: &querypb.QueryResult{},
 	}
+	// Canceling a forward switch restarts the workflow and deletes the
+	// reverse one.
+	restartWFQR := &queryResult{
+		query:  fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name='vt_%s' and workflow='%s'", targetKeyspaceName, workflowName),
+		result: &querypb.QueryResult{},
+	}
 
 	hasDeniedTableEntry := func(si *topo.ShardInfo) bool {
 		if si == nil || len(si.TabletControls) == 0 {
@@ -1594,8 +1601,13 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		req                            *vtctldatapb.WorkflowSwitchTrafficRequest
 		multiTenant                    bool
 		preFunc                        func(env *testEnv)
-		want                           *vtctldatapb.WorkflowSwitchTrafficResponse
-		wantErr                        bool
+		// expectQueries, when set, replaces the default expected queries.
+		expectQueries func(env *testEnv, source, target *testKeyspace)
+		want          *vtctldatapb.WorkflowSwitchTrafficResponse
+		wantErr       bool
+		// wantCanceled means that the failed switch must have been canceled,
+		// leaving writes on the source.
+		wantCanceled bool
 	}{
 		{
 			name: "basic forward",
@@ -1754,6 +1766,39 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				CurrentState: "All Reads Switched. Writes Switched",
 			},
 		},
+		{
+			name: "forward with an error reading the source positions",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:    targetKeyspaceName,
+				Workflow:    workflowName,
+				Direction:   int32(DirectionForward),
+				TabletTypes: allTabletTypes,
+			},
+			preFunc: func(env *testEnv) {
+				env.tmc.setPrimaryPositionError(env.tablets[sourceKeyspaceName][startingSourceTabletUID], errors.New("position read failed"))
+			},
+			expectQueries: func(env *testEnv, source, target *testKeyspace) {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, copyTableQR)
+				for i := 0; i < len(target.ShardNames); i++ { // Per stream
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalQR)
+				}
+				for i := 0; i < len(target.ShardNames); i++ { // Per stream
+					env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, lockTableQR)
+				}
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, restartWFQR)
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, deleteReverseWFQR)
+			},
+			wantErr:      true,
+			wantCanceled: true,
+		},
 	}
 
 	for _, tc := range testcases {
@@ -1765,7 +1810,9 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			defer env.close()
 			env.tmc.schema = schema
 
-			if tc.req.Direction == int32(DirectionForward) {
+			if tc.expectQueries != nil {
+				tc.expectQueries(env, tc.sourceKeyspace, tc.targetKeyspace)
+			} else if tc.req.Direction == int32(DirectionForward) {
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, copyTableQR)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, cutoverQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
@@ -1850,6 +1897,22 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			if tc.wantErr {
 				require.Error(t, err)
+				if tc.wantCanceled {
+					require.ErrorContains(t, err, "failed to gather replication positions")
+					require.NotContains(t, err.Error(), "cancel migration failed")
+					// Writes are back on the source, and every expected
+					// query, including the cancel's, was run.
+					for _, keyspace := range []*testKeyspace{tc.sourceKeyspace, tc.targetKeyspace} {
+						for _, shardName := range keyspace.ShardNames {
+							si, err := env.ts.GetShard(ctx, keyspace.KeyspaceName, shardName)
+							require.NoError(t, err)
+							require.Equal(t, keyspace == tc.targetKeyspace, hasDeniedTableEntry(si), "denied tables in %s/%s", keyspace.KeyspaceName, shardName)
+						}
+					}
+					for tabletID, queries := range env.tmc.vrQueries {
+						require.Empty(t, queries, "queries not run on tablet %d", tabletID)
+					}
+				}
 				return
 			}
 			require.NoError(t, err)
@@ -1931,6 +1994,52 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCanSwitchRefreshesShardsConcurrently confirms that the tablet refresh done before
+// switching traffic refreshes the shards concurrently, so it does not fail when refreshing
+// the shards one at a time would take longer than shardTabletRefreshTimeout.
+func TestCanSwitchRefreshesShardsConcurrently(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 2*shardTabletRefreshTimeout)
+	defer cancel()
+
+	workflowName := "wf1"
+	tableName := "t1"
+	targetShards, err := key.GenerateShardRanges(16, 0)
+	require.NoError(t, err)
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   targetShards,
+	}
+
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
+				{
+					Name:   tableName,
+					Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+				},
+			},
+		},
+	}
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspace.KeyspaceName, &queryResult{
+		query:  "/select vrepl_id, table_name, lastpk from _vt.copy_state.*",
+		result: &querypb.QueryResult{},
+	})
+	// Refreshing the target shards one at a time takes 1.6 times the timeout.
+	env.tmc.refreshStateDelay = shardTabletRefreshTimeout / 10
+
+	ts, err := env.ws.buildTrafficSwitcher(ctx, targetKeyspace.KeyspaceName, workflowName)
+	require.NoError(t, err)
+	reason, err := env.ws.canSwitch(ctx, ts, 30, nil)
+	require.NoError(t, err)
+	require.Empty(t, reason)
 }
 
 func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
@@ -3213,11 +3322,13 @@ func TestWorkflowUpdate(t *testing.T) {
 
 	testcases := []struct {
 		name     string
+		shards   []string
 		response map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse
 		err      map[uint32]error
 
 		// Match the tablet `changed` field from response.
 		expectedResponse    map[uint32]bool
+		expectedUIDs        []uint32
 		expectedErrContains string
 	}{
 		{
@@ -3265,10 +3376,31 @@ func TestWorkflowUpdate(t *testing.T) {
 			},
 			expectedErrContains: "test error from 200",
 		},
+		{
+			name:         "single shard -80",
+			shards:       []string{"-80"},
+			expectedUIDs: []uint32{200},
+		},
+		{
+			name:         "single shard 80-",
+			shards:       []string{"80-"},
+			expectedUIDs: []uint32{210},
+		},
+		{
+			name:         "both shards",
+			shards:       []string{"-80", "80-"},
+			expectedUIDs: []uint32{200, 210},
+		},
+		{
+			name:         "repeated shard",
+			shards:       []string{"-80", "-80"},
+			expectedUIDs: []uint32{200},
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			req.TabletRequest.Shards = tc.shards
 			// Add responses
 			for tabletID, resp := range tc.response {
 				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(tabletID, &updateVReplicationWorkflowRequestResponse{
@@ -3291,6 +3423,16 @@ func TestWorkflowUpdate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			if len(tc.expectedUIDs) > 0 {
+				gotUIDs := make([]uint32, 0, len(res.Details))
+				for _, det := range res.Details {
+					gotUIDs = append(gotUIDs, det.Tablet.Uid)
+				}
+				slices.Sort(gotUIDs)
+				wantUIDs := append([]uint32(nil), tc.expectedUIDs...)
+				slices.Sort(wantUIDs)
+				require.Equal(t, wantUIDs, gotUIDs)
+			}
 			for tabletID, changed := range tc.expectedResponse {
 				i := slices.IndexFunc(res.Details, func(det *vtctldatapb.WorkflowUpdateResponse_TabletInfo) bool {
 					return det.Tablet.Uid == tabletID

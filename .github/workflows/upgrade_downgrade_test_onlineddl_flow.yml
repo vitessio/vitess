@@ -20,11 +20,11 @@ permissions:
 
 jobs:
 
-  # Path filtering and release-branch discovery run once here, on a
-  # GitHub-hosted runner, so that the test job below (on a large runner) is not
-  # started at all when nothing relevant changed.
+  # Path filtering and release-branch discovery run once here, on a small
+  # runner (a CNCF container in vitess-security), so that the test job below
+  # (on a large runner) is not started at all when nothing relevant changed.
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       end_to_end: ${{ steps.changes.outputs.end_to_end }}
@@ -58,11 +58,21 @@ jobs:
         echo $next_release_ref
         echo "next_release_ref=${next_release_ref}" >> $GITHUB_OUTPUT
 
+    - name: Find the base of the pull request's merge commit
+      # github.event.pull_request.base.sha is not updated when the base branch
+      # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
+      id: merge-base
+      if: github.event_name == 'pull_request'
+      run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
     - name: Check for changes in relevant files
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
+        base: ${{ steps.merge-base.outputs.sha }}
         filters: |
           end_to_end:
             - 'test/config.json'
@@ -83,6 +93,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_onlineddl_flow.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
 
   upgrade_downgrade_test:
@@ -96,11 +107,11 @@ jobs:
     name: Run Upgrade Downgrade Test - Online DDL flow
     # The large runner is only claimed when the tests will actually run; a
     # failed or cancelled gate and the 'Skip CI' label only report a failure.
-    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
       with:
         egress-policy: audit
 
@@ -231,6 +242,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX=""
@@ -242,6 +255,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-last"
@@ -253,6 +268,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX="-next"
@@ -264,6 +281,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         export PRIMARY_TABLET_BINARY_SUFFIX=""

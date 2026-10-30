@@ -21,6 +21,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/big"
 	"os"
@@ -30,6 +31,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd"
@@ -55,6 +57,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 )
 
 const (
@@ -66,10 +69,14 @@ const (
 	// forever for things that should be quick.
 	operationTimeout = 1 * time.Minute
 
-	phaseNameCatchupReplication          = "CatchupReplication"
-	phaseNameInitialBackup               = "InitialBackup"
-	phaseNameRestoreLastBackup           = "RestoreLastBackup"
-	phaseNameTakeNewBackup               = "TakeNewBackup"
+	phaseNameCatchupReplication = "CatchupReplication"
+	phaseNameInitialBackup      = "InitialBackup"
+	phaseNameRestoreLastBackup  = "RestoreLastBackup"
+	phaseNameTakeNewBackup      = "TakeNewBackup"
+	// phaseNameVerifyErrantGTIDs is active while the errant GTID checks of the
+	// restored and to-be-backed-up data run. It isn't in phaseNames, so it only
+	// appears with --enable-errant-gtid-checks.
+	phaseNameVerifyErrantGTIDs           = "VerifyErrantGTIDs"
 	phaseStatusCatchupReplicationStalled = "Stalled"
 	phaseStatusCatchupReplicationStopped = "Stopped"
 
@@ -84,10 +91,12 @@ var (
 	allowFirstBackup    bool
 	restartBeforeBackup bool
 	upgradeSafe         bool
+	includeBinlogs      bool
 	initSQLQueries      []string
 	initSQLTabletTypes  []topodatapb.TabletType
 	initSQLTimeout      time.Duration
 	initSQLFailOnError  bool
+	errantGTIDChecks    bool
 
 	// vttablet-like flags
 	initDbNameOverride string
@@ -213,15 +222,17 @@ func init() {
 
 	utils.SetFlagDurationVar(Main.Flags(), &minBackupInterval, "min-backup-interval", minBackupInterval, "Only take a new backup if it's been at least this long since the most recent backup.")
 	utils.SetFlagDurationVar(Main.Flags(), &minRetentionTime, "min-retention-time", minRetentionTime, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
-	utils.SetFlagIntVar(Main.Flags(), &minRetentionCount, "min-retention-count", minRetentionCount, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made")
+	utils.SetFlagIntVar(Main.Flags(), &minRetentionCount, "min-retention-count", minRetentionCount, "Always keep at least this many of the most recent backups in this backup storage location, even if some are older than --min-retention-time. This must be at least 1 since a backup must always exist to allow new backups to be made")
 	utils.SetFlagBoolVar(Main.Flags(), &initialBackup, "initial-backup", initialBackup, "Instead of restoring from backup, initialize an empty database with the provided init-db-sql-file and upload a backup of that for the shard, if the shard has no backups yet. This can be used to seed a brand new shard with an initial, empty backup. If any backups already exist for the shard, this will be considered a successful no-op. This can only be done before the shard exists in topology (i.e. before any tablets are deployed).")
 	utils.SetFlagBoolVar(Main.Flags(), &allowFirstBackup, "allow-first-backup", allowFirstBackup, "Allow this job to take the first backup of an existing shard.")
 	utils.SetFlagBoolVar(Main.Flags(), &restartBeforeBackup, "restart-before-backup", restartBeforeBackup, "Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.")
 	Main.Flags().BoolVar(&upgradeSafe, "upgrade-safe", upgradeSafe, "Whether to use innodb_fast_shutdown=0 for the backup so it is safe to use for MySQL upgrades.")
+	Main.Flags().BoolVar(&includeBinlogs, "include-binlogs", includeBinlogs, "Include the source's binary logs in a full builtin backup. Restores use them automatically.")
 	Main.Flags().StringSliceVar(&initSQLQueries, "init-backup-sql-queries", nil, "Queries to execute after catch-up replication, before initializing the backup")
 	Main.Flags().Var((*topoproto.TabletTypeListFlag)(&initSQLTabletTypes), "init-backup-tablet-types", "Tablet types used for the backup where the init SQL queries (--init-backup-sql-queries) will be executed after catch-up replication, before initializing the backup")
 	Main.Flags().DurationVar(&initSQLTimeout, "init-backup-sql-timeout", initSQLTimeout, "At what point should we time out the init SQL query (--init-backup-sql-queries) work and either fail the backup job (--init-backup-sql-fail-on-error) or continue on with the backup")
 	Main.Flags().BoolVar(&initSQLFailOnError, "init-backup-sql-fail-on-error", false, "Whether or not to fail the backup if the init SQL queries (--init-backup-sql-queries) fail, which includes if they fail to complete before the specified timeout (--init-backup-sql-timeout)")
+	Main.Flags().BoolVar(&errantGTIDChecks, "enable-errant-gtid-checks", errantGTIDChecks, "Fail the run when the restored backup or the backup this run takes has errant GTIDs.")
 
 	// vttablet-like flags
 	utils.SetFlagStringVar(Main.Flags(), &initDbNameOverride, "init-db-name-override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet")
@@ -289,9 +300,7 @@ func run(cc *cobra.Command, args []string) error {
 	defer topoServer.Close()
 
 	// Initialize stats.
-	for _, phaseName := range phaseNames {
-		phase.Set(phaseName, int64(0))
-	}
+	initPhases()
 	for phaseName, statuses := range phaseStatuses {
 		for _, status := range statuses {
 			phaseStatus.Set([]string{phaseName, status}, 0)
@@ -423,6 +432,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		TabletType:           topodatapb.TabletType_BACKUP,
 		Stats:                backupstats.BackupStats(),
 		UpgradeSafe:          upgradeSafe,
+		IncludeBinlogs:       includeBinlogs,
 		MysqlShutdownTimeout: mysqlShutdownTimeout,
 		InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
 			Queries:     initSQLQueries,
@@ -431,6 +441,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			FailOnError: initSQLFailOnError,
 		},
 	}
+	if err := validateBinlogFlags(backupParams, restoreWithClone); err != nil {
+		return err
+	}
+
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
 		// Take a backup of this empty DB without restoring anything.
@@ -481,12 +495,12 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		restoreCtx = ctx
 	}
 
-	restorePos, err := restoreForBackup(restoreCtx, mysqlTermHandler, topoServer, mysqld, mycnf, dbName, extraEnv)
+	restorePos, restoredFrom, keepBinlogs, err := restoreForBackup(restoreCtx, mysqlTermHandler, topoServer, mysqld, mycnf, dbName, extraEnv)
 	if err != nil {
 		return err
 	}
 
-	if err := runBackup(shutdownCtx, topoServer, mysqld, mycnf, restorePos, &backupParams); err != nil {
+	if err := runBackup(shutdownCtx, topoServer, mysqld, mycnf, restorePos, restoredFrom, keepBinlogs, &backupParams); err != nil {
 		return err
 	}
 
@@ -494,9 +508,23 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	return nil
 }
 
+// validateBinlogFlags fails before the restore, rather than after catching up, when
+// the binlogs cannot be backed up. CLONE does not copy binlogs, so the history would
+// silently restart.
+func validateBinlogFlags(params mysqlctl.BackupParams, restoreWithClone bool) error {
+	if !params.IncludeBinlogs {
+		return nil
+	}
+	if restoreWithClone {
+		return vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "--include-binlogs cannot be used with --restore-with-clone: CLONE does not copy binary logs")
+	}
+	return mysqlctl.ValidateIncludeBinlogs(params)
+}
+
 // restoreForBackup runs the restore step and returns the position the rest of
-// the backup job should use.
-func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, mycnf *mysqlctl.Mycnf, dbName string, extraEnv map[string]string) (replication.Position, error) {
+// the backup job should use, what that position came from for messages, and
+// whether the restore installed the backup's binlogs.
+func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, mycnf *mysqlctl.Mycnf, dbName string, extraEnv map[string]string) (replication.Position, string, bool, error) {
 	if restoreWithClone {
 		var restorePos replication.Position
 
@@ -511,10 +539,10 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 			return err
 		})
 		if err != nil {
-			return replication.Position{}, vterrors.Wrap(err, "restore with clone failed")
+			return replication.Position{}, "", false, vterrors.Wrap(err, "restore with clone failed")
 		}
 
-		return restorePos, nil
+		return restorePos, "data cloned from the donor", false, nil
 	}
 
 	phase.Set(phaseNameRestoreLastBackup, int64(1))
@@ -545,23 +573,29 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 		// If err is nil, we expect backupManifest to be non-nil.
 		log.Info(fmt.Sprintf("Successfully restored from backup at replication position %v", backupManifest.Position))
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-		return backupManifest.Position, nil
+		restoredFrom := "the restored backup"
+		if backupManifest.BackupName != "" {
+			// Quoted, since the name comes from the MANIFEST and ends up in
+			// errors and logs.
+			restoredFrom = fmt.Sprintf("restored backup %q", backupManifest.BackupName)
+		}
+		return backupManifest.Position, restoredFrom, backupManifest.IncludesBinlogs, nil
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard.
 		if !allowFirstBackup {
-			return replication.Position{}, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --initial_backup flag was not enabled")
+			return replication.Position{}, "", false, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "no backup found; not starting up empty since --allow-first-backup flag was not enabled")
 		}
 
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
-		return replication.Position{}, nil
+		return replication.Position{}, "", false, nil
 	default:
-		return replication.Position{}, vterrors.Wrap(err, "can't restore from backup")
+		return replication.Position{}, "", false, vterrors.Wrap(err, "can't restore from backup")
 	}
 }
 
 // runBackup starts replication from the restore position, catches up to the
 // current primary position, and takes a new backup.
-func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, restorePos replication.Position, backupParams *mysqlctl.BackupParams) error {
+func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.Mysqld, mycnf *mysqlctl.Mycnf, restorePos replication.Position, restoredFrom string, keepBinlogs bool, backupParams *mysqlctl.BackupParams) error {
 	// As of MySQL 8.0.21, you can disable redo logging using the ALTER INSTANCE
 	// DISABLE INNODB REDO_LOG statement. This functionality is intended for
 	// loading data into a new MySQL instance. Disabling redo logging speeds up
@@ -576,7 +610,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	}
 
 	// We have restored a backup. Now start replication.
-	if err := resetReplication(ctx, restorePos, mysqld); err != nil {
+	if err := resetReplication(ctx, restorePos, keepBinlogs, mysqld); err != nil {
 		return fmt.Errorf("error resetting replication: %v", err)
 	}
 	if err := startReplication(ctx, mysqld, topoServer); err != nil {
@@ -614,6 +648,17 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	}
 
 	log.Info("takeBackup: primary position is: " + primaryPos.String())
+
+	// Fail before catching up if the restored base has GTIDs that tablets would
+	// reject. A shard with no primary has already failed in startReplication.
+	if errantGTIDChecks {
+		if err := inVerifyErrantGTIDsPhase(func() error {
+			_, err := verifyPosition(ctx, tmc, topoServer, restorePos, positionCheck{what: restoredFrom, restorePos: restorePos})
+			return err
+		}); err != nil {
+			return err
+		}
+	}
 
 	status, err := catchUpReplicationForBackup(ctx, topoServer, mysqld, restorePos, primaryPos)
 	if err != nil {
@@ -659,6 +704,16 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 		}
 
 		deprecatedDurationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
+	}
+
+	// Check the position to back up before the upload starts, and set the check
+	// that runs just before the backup's MANIFEST is written.
+	if errantGTIDChecks {
+		if err := inVerifyErrantGTIDsPhase(func() error {
+			return verifyNewBackup(ctx, tmc, topoServer, mysqld, restorePos, backupParams)
+		}); err != nil {
+			return err
+		}
 	}
 
 	// Now we can take a new backup.
@@ -774,12 +829,18 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 	return status, nil
 }
 
-func resetReplication(ctx context.Context, pos replication.Position, mysqld mysqlctl.MysqlDaemon) error {
+func resetReplication(ctx context.Context, pos replication.Position, keepBinlogs bool, mysqld mysqlctl.MysqlDaemon) error {
 	if err := mysqld.StopReplication(ctx, nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
 	}
 	if err := mysqld.ResetReplicationParameters(ctx); err != nil {
 		return vterrors.Wrap(err, "failed to reset replication")
+	}
+
+	if keepBinlogs {
+		// The restored binlogs already put gtid_executed at pos; setting the position
+		// or resetting replication would delete them.
+		return nil
 	}
 
 	// Check if we have a position to resume from, if not reset to the beginning of time
@@ -843,6 +904,287 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 		return replication.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
+}
+
+// positionCheck describes one check that a position has no GTIDs the shard primary lacks.
+type positionCheck struct {
+	// what names the checked position in messages.
+	what string
+	// restorePos is the restored backup's position. GTIDs in it came from that backup.
+	restorePos replication.Position
+	// localUUID is this run's mysqld server UUID. GTIDs under it were written by init SQL.
+	localUUID string
+	// requireCommitted also waits for the primary to commit the GTIDs under its own
+	// UUID, such as transactions waiting for a semi-sync acknowledgement.
+	requireCommitted bool
+}
+
+// primaryTerm is a shard primary and the start of its term, as the shard record names them.
+type primaryTerm struct {
+	alias     *topodatapb.TabletAlias
+	termStart *vttimepb.Time
+}
+
+// equal reports whether p and other are the same primary in the same term.
+func (p primaryTerm) equal(other primaryTerm) bool {
+	return p.alias != nil && proto.Equal(p.alias, other.alias) && proto.Equal(p.termStart, other.termStart)
+}
+
+// verifyPosition checks that pos has no GTIDs that the shard primary lacks. It
+// retries while the primary is missing, unreachable or hasn't committed GTIDs
+// under its own UUID yet (when check.requireCommitted), and fails at once on
+// errant GTIDs. The wait between attempts doubles up to operationTimeout, and an
+// attempt against a primary that doesn't answer can take operationTimeout too,
+// so a long wait still notices a commit or a reparent within about two minutes.
+// It returns the primary it verified pos against, which is zero if pos is.
+func verifyPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, pos replication.Position, check positionCheck) (primaryTerm, error) {
+	if pos.IsZero() {
+		return primaryTerm{}, nil
+	}
+	// Errant GTID detection supports only MySQL56 GTID sets, as on tablets, so
+	// don't wait for a primary that would not be checked against.
+	if _, ok := pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
+		log.Info("Not verifying a position that isn't a MySQL56 GTID set",
+			slog.String("check", check.what),
+		)
+		return primaryTerm{}, nil
+	}
+	// stopped reports that a done Context ended the check, and what it was
+	// waiting for.
+	stopped := func(lastErr error) error {
+		return vterrors.Wrapf(ctx.Err(), "stopped verifying %s against the shard primary (last error: %s)", check.what, lastErr)
+	}
+	for waitTime := time.Second; ; waitTime = min(2*waitTime, operationTimeout) {
+		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+		term, err := checkPositionOnce(opCtx, tmc, ts, pos, check)
+		cancel()
+		if err == nil {
+			log.Info("Verified a position against the shard primary",
+				slog.String("check", check.what),
+				slog.String("primary", topoproto.TabletAliasString(term.alias)),
+			)
+			return term, nil
+		}
+		if permanent, ok := errors.AsType[permanentError](err); ok {
+			return primaryTerm{}, permanent.error
+		}
+		if ctx.Err() != nil {
+			return primaryTerm{}, stopped(err)
+		}
+		log.Warn("Waiting to retry verifying a position against the shard primary",
+			slog.String("check", check.what),
+			slog.Duration("wait", waitTime),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
+
+		select {
+		case <-ctx.Done():
+			return primaryTerm{}, stopped(err)
+		case <-time.After(waitTime):
+		}
+	}
+}
+
+// initPhases sets every phase this run can report to 0, so that each series
+// exists from the start of the run. The VerifyErrantGTIDs phase is only
+// reported with --enable-errant-gtid-checks.
+func initPhases() {
+	for _, phaseName := range phaseNames {
+		phase.Set(phaseName, int64(0))
+	}
+	if errantGTIDChecks {
+		phase.Set(phaseNameVerifyErrantGTIDs, int64(0))
+	}
+}
+
+// inVerifyErrantGTIDsPhase runs fn, a check of the restored or to-be-backed-up
+// data, with the VerifyErrantGTIDs phase active, so that a check that waits
+// shows up in the phase metrics. Check 3 runs within the TakeNewBackup phase.
+func inVerifyErrantGTIDsPhase(fn func() error) error {
+	phase.Set(phaseNameVerifyErrantGTIDs, int64(1))
+	defer phase.Set(phaseNameVerifyErrantGTIDs, int64(0))
+	return fn()
+}
+
+// permanentError wraps an error that verifyPosition returns at once instead of retrying.
+type permanentError struct{ error }
+
+// checkPositionOnce makes one attempt at verifyPosition's check. Errant GTIDs,
+// and a primary status that can't be parsed, return a permanentError.
+func checkPositionOnce(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, pos replication.Position, check positionCheck) (primaryTerm, error) {
+	si, err := ts.GetShard(ctx, initKeyspace, initShard)
+	if err != nil {
+		return primaryTerm{}, vterrors.Wrap(err, "can't read shard")
+	}
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
+		return primaryTerm{}, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "shard %v/%v has no primary", initKeyspace, initShard)
+	}
+	primary := topoproto.TabletAliasString(si.PrimaryAlias)
+	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
+	if err != nil {
+		return primaryTerm{}, vterrors.Wrapf(err, "can't read primary tablet %v", primary)
+	}
+	status, err := tmc.PrimaryStatus(ctx, ti.Tablet)
+	if err != nil {
+		return primaryTerm{}, vterrors.Wrapf(err, "can't get the status of primary %v", primary)
+	}
+	// PrimaryStatus doesn't check the tablet type, so a primary that a reparent
+	// replaced or repointed during the call still answers, maybe with GTIDs that
+	// the new primary lacks. Check against the new primary instead.
+	term := primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}
+	if err := confirmPrimary(ctx, ts, term, check.what); err != nil {
+		return primaryTerm{}, err
+	}
+	primaryPos, err := replication.DecodePosition(status.Position)
+	if err != nil {
+		return primaryTerm{}, permanentError{vterrors.Wrapf(err, "can't decode the position %q of primary %v", status.Position, primary)}
+	}
+
+	// Errant GTID detection supports only MySQL56 GTID sets, as on tablets.
+	posSet, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
+	if !ok {
+		return term, nil
+	}
+	primarySet, ok := primaryPos.GTIDSet.(replication.Mysql56GTIDSet)
+	if !ok {
+		return term, nil
+	}
+	primarySID, err := replication.ParseSID(status.ServerUuid)
+	if err != nil {
+		return primaryTerm{}, permanentError{vterrors.Wrapf(err, "can't parse the server UUID of primary %v", primary)}
+	}
+
+	missing := posSet.Difference(primarySet)
+	// The tablets' rule, as in replication.ErrantGTIDsOnReplica: GTIDs under the
+	// primary's own UUID are not errant.
+	if errant := missing.RemoveUUID(primarySID); len(errant) > 0 {
+		return primaryTerm{}, permanentError{errantGTIDsError(check, errant, primary, primaryPos)}
+	}
+	if check.requireCommitted && len(missing) > 0 {
+		return primaryTerm{}, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "primary %v has not committed %v from %s yet; waiting for a semi-sync acknowledgement or a reparent", primary, missing, check.what)
+	}
+	return term, nil
+}
+
+// confirmPrimary checks, after a check has read the primary's status, that the
+// shard record still names term's primary in the same term, and that the
+// primary is still a PRIMARY tablet. An ERS starts repointing a primary that
+// still answers before it promotes the new one. The repoint makes the old
+// primary a REPLICA in topo, then turns off its primary-side semi-sync, which
+// commits writes waiting for an acknowledgement that the new primary never
+// gets, and the shard record keeps naming it until the new primary's shard sync
+// updates the record. Since the type is published first, a status read before
+// this check holds those writes only if the type here says REPLICA. Two cases
+// still slip through: the topo write of the type fails, and the tablet retries
+// it in the background; or ERS cancels a forced demotion after it turned off
+// semi-sync, which commits the writes while the type says PRIMARY until the
+// repoint, seconds later. Check 3 then catches the backup if the repoint comes
+// before the MANIFEST, and otherwise the next run's check 1 does.
+func confirmPrimary(ctx context.Context, ts *topo.Server, term primaryTerm, what string) error {
+	primary := topoproto.TabletAliasString(term.alias)
+	si, err := ts.GetShard(ctx, initKeyspace, initShard)
+	if err != nil {
+		return vterrors.Wrap(err, "can't read shard")
+	}
+	if !term.equal(primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}) {
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "the shard primary changed from %v while checking %s", primary, what)
+	}
+	ti, err := ts.GetTablet(ctx, term.alias)
+	if err != nil {
+		return vterrors.Wrapf(err, "can't read primary tablet %v", primary)
+	}
+	if ti.Type != topodatapb.TabletType_PRIMARY {
+		return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "shard primary %v is a %v tablet, as during a reparent, while checking %s", primary, ti.Type, what)
+	}
+	return nil
+}
+
+// errantGTIDsError reports errant GTIDs, with the remedy for each place they came from.
+func errantGTIDsError(check positionCheck, errant replication.Mysql56GTIDSet, primary string, primaryPos replication.Position) error {
+	msg := fmt.Sprintf("%s has errant GTIDs %v that primary %s (position %v) does not have", check.what, errant, primary, primaryPos)
+
+	var restored replication.Mysql56GTIDSet
+	if restoreSet, ok := check.restorePos.GTIDSet.(replication.Mysql56GTIDSet); ok {
+		restored = errant.Difference(errant.Difference(restoreSet))
+	}
+	rest := errant.Difference(restored)
+	var initSQL replication.Mysql56GTIDSet
+	if localSID, err := replication.ParseSID(check.localUUID); err == nil {
+		initSQL = rest.Difference(rest.RemoveUUID(localSID))
+		rest = rest.RemoveUUID(localSID)
+	}
+
+	switch {
+	case len(restored) == 0:
+	case restoreWithClone:
+		msg += fmt.Sprintf(". %v came from the donor, which has them too. With --clone-from-primary, the donor was a primary that a reparent replaced, and the next run clones the new one. With --clone-from-tablet, fix the donor's errant GTIDs or clone from another tablet", restored)
+	default:
+		msg += fmt.Sprintf(`. %v came from the restored backup, and tablets restored from it fail with "Errant GTID detected". vtbackup restores the newest backup, so take a new backup of a healthy replica, one without them, with vtctldclient Backup, and the next run starts from it. Then remove the backups that contain them with vtctldclient RemoveBackup, after copying any whose transactions the shard lost. Injecting an empty transaction for each one on the primary instead is safe only if they change no data, as with init SQL in an older vtbackup run: GTIDs under a former primary's UUID usually hold writes that a reparent lost`, restored)
+	}
+	if len(initSQL) > 0 {
+		msg += fmt.Sprintf(". %v were written by this run's --init-backup-sql-queries. Use the statements' NO_WRITE_TO_BINLOG or LOCAL forms, or start the queries with SET sql_log_bin = 0", initSQL)
+	}
+	switch {
+	case len(rest) == 0:
+	case restoreWithClone:
+		msg += fmt.Sprintf(". vtbackup applied %v during catch-up, and the primary doesn't have them, for example because a reparent lost them. No backup was completed; the next run clones the donor again. With --clone-from-tablet, if the donor applied them too, that run fails with the donor's errant GTIDs", rest)
+	default:
+		msg += fmt.Sprintf(". vtbackup applied %v during catch-up, and the primary doesn't have them, for example because a reparent lost them. No backup was completed; the next run starts from the previous backup and should succeed", rest)
+	}
+	return vterrors.New(vtrpc.Code_FAILED_PRECONDITION, msg)
+}
+
+// verifyNewBackup checks the position this run is about to back up (check 2),
+// and sets backupParams.VerifyPosition to check the position that the backup's
+// MANIFEST will record (check 3). Check 3 reuses check 2's result when the
+// shard record still names the primary that check 2 verified against, in the
+// same term, and the MANIFEST position is one that check 2 verified. Otherwise,
+// including when the shard record can't be read, it runs the full check, which
+// for a MySQL56 position waits for topo and then needs a reachable primary.
+//
+// The checks trust the shard record, which a new primary's shard sync updates
+// only after its promotion, and which an ERS doesn't wait for. An old primary
+// that still answers is repointed during the ERS, and confirmPrimary then sees
+// its REPLICA type, with the exceptions it lists. But a dead old primary's
+// tablet record still says PRIMARY, so in that gap, normally milliseconds but up
+// to --shard-sync-retry-delay if the new primary's topo write fails, the reuse
+// still passes, even if the new primary lacks GTIDs in the backup. As when a
+// later ERS loses transactions that a backup holds, the next run's check 1
+// catches the backup, and replica restores reject it.
+func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos replication.Position, backupParams *mysqlctl.BackupParams) error {
+	localPos, err := mysqld.PrimaryPosition(ctx)
+	if err != nil {
+		return vterrors.Wrap(err, "can't get the position to back up")
+	}
+	localUUID, err := mysqld.GetServerUUID(ctx)
+	if err != nil {
+		return vterrors.Wrap(err, "can't get the server UUID")
+	}
+	check := positionCheck{what: "the data to back up", restorePos: restorePos, localUUID: localUUID, requireCommitted: true}
+	verified, err := verifyPosition(ctx, tmc, ts, localPos, check)
+	if err != nil {
+		return err
+	}
+
+	check.what = "the new backup"
+	backupParams.VerifyPosition = func(ctx context.Context, pos replication.Position) error {
+		if verified.alias != nil && localPos.AtLeast(pos) {
+			opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+			err := confirmPrimary(opCtx, ts, verified, check.what)
+			cancel()
+			if err == nil {
+				log.Info("The shard primary is unchanged since the data to back up was verified",
+					slog.String("check", check.what),
+					slog.String("primary", topoproto.TabletAliasString(verified.alias)),
+				)
+				return nil
+			}
+		}
+		_, err := verifyPosition(ctx, tmc, ts, pos, check)
+		return err
+	}
+	return nil
 }
 
 // retryOnError keeps calling the given function until it succeeds, or the given
@@ -976,14 +1318,14 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 
 	// We need at least one backup so we can restore first, unless the user explicitly says we don't
 	if len(backups) == 0 && !allowFirstBackup {
-		return false, errors.New("no existing backups to restore from; backup is not possible since --initial_backup flag was not enabled")
+		return false, errors.New("no existing backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
 	}
 	if lastBackup == nil {
 		if allowFirstBackup {
 			// There's no complete backup, but we were told to take one from scratch anyway.
 			return true, nil
 		}
-		return false, errors.New("no complete backups to restore from; backup is not possible since --initial_backup flag was not enabled")
+		return false, errors.New("no complete backups to restore from; backup is not possible since --allow-first-backup flag was not enabled")
 	}
 
 	// Has it been long enough since the last complete backup to need a new one?

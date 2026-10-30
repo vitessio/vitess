@@ -19,15 +19,19 @@ limitations under the License.
 package servenv
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/orca"
 )
 
 func TestGetCGroupCpuUsageMetrics(t *testing.T) {
+	getCgroupCpuUsage()
 	sleepBeforeCpuSample()
 	cpu, err := getCgroupCpuUsage()
 	validateCpu(t, cpu, err)
@@ -46,6 +50,8 @@ func TestErrHandlingWithCgroups(t *testing.T) {
 		cgroupManager = origCgroupManager
 	}()
 
+	getCgroupCpuUsage()
+	sleepBeforeCpuSample()
 	cpu, err := getCgroupCpuUsage()
 	validateCpu(t, cpu, err)
 	mem, err := getCgroupMemoryUsage()
@@ -90,4 +96,30 @@ func TestCgroupCpuCount(t *testing.T) {
 			require.InDelta(t, tt.want, cgroupCpuCount(mountpoint, "/pod/ctr"), 1e-9)
 		})
 	}
+}
+
+func TestFirstCgroupCpuSampleIsNotPublished(t *testing.T) {
+	once.Do(setup)
+	origLastCpu, origLastTime := lastCpu, lastTime
+	t.Cleanup(func() { lastCpu, lastTime = origLastCpu, origLastTime })
+
+	lastTime = time.Time{}
+	cpu, err := getCgroupCpuUsage()
+	require.ErrorIs(t, err, errNoPreviousCpuSample)
+	require.Equal(t, -1, int(cpu))
+
+	lastTime = time.Time{}
+	recorder := orca.NewServerMetricsRecorder()
+	recorder.SetCPUUtilization(getCpuUsage())
+	require.Equal(t, float64(-1), recorder.ServerMetrics().CPUUtilization, "the first cgroup sample must not fall back to host CPU")
+}
+
+func TestGetCpuUsageFromSamplesRejectsShortInterval(t *testing.T) {
+	for _, interval := range []time.Duration{0, -time.Nanosecond, 999 * time.Nanosecond} {
+		_, err := getCpuUsageFromSamples(1_000, 2_000, interval, 1)
+		require.Errorf(t, err, "interval %v", interval)
+	}
+	cpu, err := getCpuUsageFromSamples(1_000, 2_000, time.Microsecond, 1)
+	require.NoError(t, err)
+	require.False(t, math.IsInf(cpu, 0) || math.IsNaN(cpu), "cpu %v", cpu)
 }

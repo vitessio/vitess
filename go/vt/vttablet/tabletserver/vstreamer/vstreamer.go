@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync/atomic"
@@ -95,7 +96,9 @@ type vstreamer struct {
 	stopPos        string
 	commitParent   int64
 	sequenceNumber int64
-	eventGTID      replication.GTID
+	// eventGTID is the formatted GTID of the current transaction, or empty
+	// outside one. It is set by setEventGTID and stamped on each VEvent.
+	eventGTID string
 
 	phase   string
 	vse     *Engine
@@ -184,6 +187,14 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	}
 }
 
+// setEventGTID formats gtid into eventGTID, or clears it if gtid is nil.
+func (vs *vstreamer) setEventGTID(gtid replication.GTID) {
+	vs.eventGTID = ""
+	if gtid != nil {
+		vs.eventGTID = gtid.String()
+	}
+}
+
 // Cancel stops the streaming.
 func (vs *vstreamer) Cancel() {
 	vs.cancel()
@@ -198,7 +209,7 @@ func (vs *vstreamer) Stream() error {
 		vs.vse.vstreamerCount.Add(-1)
 	}()
 	vs.vse.vstreamersCreated.Add(1)
-	log.Info("Starting Stream() with startPos " + vs.startPos)
+	log.Info("Starting Stream()", slog.String("start_position", vs.startPos))
 	pos, err := replication.DecodePosition(vs.startPos)
 	if err != nil {
 		vs.vse.errorCounts.Add("StreamRows", 1)
@@ -395,10 +406,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
-	wfNameLog := ""
-	if vs.filter != nil && vs.filter.WorkflowName != "" {
-		wfNameLog = " in workflow " + vs.filter.WorkflowName
-	}
 	throttlerErrs := make(chan error, 1) // How we share the error when we've been fully throttled too long
 	defer close(throttlerErrs)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
@@ -421,7 +428,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 						return
 					}
 				}
-				logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
+				logger.Info("vstreamer throttled",
+					slog.String("workflow", vs.filter.GetWorkflowName()),
+					slog.String("reason", checkResult.Summary()),
+				)
 				continue
 			}
 			throttledTime.Store(0) // We are no longer fully throttled
@@ -532,7 +542,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		if err != nil {
 			return nil, fmt.Errorf("can't parse FORMAT_DESCRIPTION_EVENT: %v, event data: %#v", err, ev)
 		}
-		vs.eventGTID = nil
+		vs.setEventGTID(nil)
 		return nil, nil
 	}
 
@@ -565,7 +575,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsRotate(), ev.IsStop():
-		vs.eventGTID = nil
+		vs.setEventGTID(nil)
 	case ev.IsPreviousGTIDs():
 		if !shouldSend(binlogdatapb.VEventType_PREVIOUS_GTIDS) {
 			return nil, nil
@@ -573,7 +583,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_PREVIOUS_GTIDS,
 		})
-		vs.eventGTID = nil
+		vs.setEventGTID(nil)
 	case ev.IsGTID():
 		gtid, hasBegin, commitParent, sequenceNumber, err := ev.GTID(vs.format)
 		if err != nil {
@@ -589,7 +599,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		vs.pos = replication.AppendGTID(vs.pos, gtid)
 		vs.commitParent = commitParent
 		vs.sequenceNumber = sequenceNumber
-		vs.eventGTID = gtid
+		vs.setEventGTID(gtid)
 	case ev.IsXID():
 		if shouldSend(binlogdatapb.VEventType_GTID) {
 			vevents = append(vevents, &binlogdatapb.VEvent{
@@ -766,7 +776,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				return nil, nil
 			}
 			vs.plans[id] = nil
-			log.Info(fmt.Sprintf("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name))
+			log.Info("table map changed",
+				slog.Uint64("id", id),
+				slog.String("from", plan.Table.Name),
+				slog.String("to", tm.Name))
 		}
 
 		// The database connector `vs.cp` points to the keyspace's database.
@@ -885,18 +898,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 		}
 		vs.vse.vstreamerCompressedTransactionsDecoded.Add(1)
 	}
-	vsEventGTIDString := ""
-	if vs.eventGTID != nil {
-		vsEventGTIDString = vs.eventGTID.String()
-	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
 		vevent.CurrentTime = timeNowUnixNano
 		vevent.SequenceNumber = vs.sequenceNumber
 		vevent.CommitParent = vs.commitParent
-		if vs.eventGTID != nil {
-			vevent.EventGtid = vsEventGTIDString
-		}
+		vevent.EventGtid = vs.eventGTID
 	}
 	return vevents, nil
 }
@@ -1050,7 +1057,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 	st, err := vs.se.GetTableForPos(vs.ctx, sqlparser.NewIdentifierCS(tm.Name), replication.EncodePosition(vs.pos))
 	if err != nil {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			log.Info("No schema found for table " + tm.Name)
+			log.Info("No schema found for table", slog.String("table", tm.Name))
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}
 		return fields, nil
@@ -1058,7 +1065,7 @@ func (vs *vstreamer) buildTableColumns(tm *mysql.TableMap) ([]*querypb.Field, er
 
 	if len(st.Fields) < len(tm.Types) {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			log.Info("Cannot determine columns for table " + tm.Name)
+			log.Info("Cannot determine columns for table", slog.String("table", tm.Name))
 			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, st.Fields)
 		}
 		return fields, nil
@@ -1238,6 +1245,23 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 			// both before and after images are filtered out
 			continue
 		}
+		if hasVindex && !beforeOK && afterOK && len(beforeRawValues) > 0 {
+			// An UPDATE whose row moves into the target key range is sent with
+			// only its after image, which the consumer has to apply as an
+			// INSERT. If that image does not carry every emitted value, because
+			// binlog_row_image=NOBLOB omitted an unchanged BLOB/TEXT column or
+			// binlog_row_value_options=PARTIAL_JSON sent a JSON diff that needs
+			// the previous value, the row cannot be reproduced: unlike a real
+			// INSERT, where an omitted column simply took its default, there is
+			// no existing target row to take the missing values from. Fail
+			// closed here, where we still know this was an UPDATE, rather than
+			// let the target insert defaults or NULLs.
+			if col := plan.unreconstructibleAfterColumn(&rows.DataColumns, &row.JSONPartialValues); col != "" {
+				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+					"table %s: a row moving into the target key range has a partial after image from which column %s cannot be reconstructed (binlog_row_image=NOBLOB omitted it, or binlog_row_value_options=PARTIAL_JSON sent a partial value) and the row cannot be inserted on the target; you will need to use binlog_row_image=FULL without PARTIAL_JSON",
+					plan.Table.Name, col)
+			}
+		}
 
 		// at least one image passes the filter and is not a sharded filter
 		if !hasVindex {
@@ -1273,11 +1297,15 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 					// DataColumns is intentionally left in the source table's column
 					// order: existing vplayers (and possibly other consumers) depend
 					// on that layout, and changing it would break replication between
-					// mixed-version tablets. See #21075 for a projected variant.
+					// mixed-version tablets.
 					rowChange.DataColumns = &binlogdatapb.RowChange_Bitmap{
 						Count: int64(rows.DataColumns.Count()),
 						Cols:  rows.DataColumns.Bits(),
 					}
+					// AfterDataColumns describes the columns as emitted, so project
+					// it through the plan the same way the values were. Consumers
+					// that know about it prefer it over DataColumns.
+					rowChange.AfterDataColumns = plan.mapBitmap(&rows.DataColumns)
 				}
 				if row.JSONPartialValues.Count() > 0 {
 					rowChange.JsonPartialValues = &binlogdatapb.RowChange_Bitmap{
@@ -1362,7 +1390,15 @@ func (vs *vstreamer) getValues(plan *streamerPlan, data []byte,
 		}
 		value, l, err := mysqlbinlog.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum], partialJSON)
 		if err != nil {
-			log.Error(fmt.Sprintf("extractRowAndFilter: %s, table: %s, colNum: %d, fields: %+v, current values: %+v", err, plan.Table.Name, colNum, plan.Table.Fields, values))
+			log.Error("failed to extract column value from binlog event",
+				slog.String("table", plan.Table.Name),
+				slog.String("column", plan.Table.Fields[colNum].Name),
+				slog.Int("col_num", colNum),
+				// Formatted as strings so types render by name; slog.Any would log
+				// querypb.Type as a number and drop the type from each value.
+				slog.String("fields", fmt.Sprint(plan.Table.Fields)),
+				slog.String("values", fmt.Sprint(values)),
+				slog.Any("error", err))
 			return nil, nil, false, vterrors.Wrapf(err, "failed to extract row's value for column %s from binlog event",
 				plan.Table.Fields[colNum].Name)
 		}
@@ -1515,10 +1551,14 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 	if err != nil {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
-		err = fmt.Errorf("stream (at source tablet) error @ (including the GTID we failed to process) %v: %v", stopPos, err)
-		log.Error(fmt.Sprint(err))
-		return err
+		log.Error("stream (at source tablet) error, position includes the GTID we failed to process",
+			slog.String("position", replication.EncodePosition(stopPos)),
+			slog.String("error_code", vterrors.Code(err).String()),
+			slog.Any("error", err))
+		// Wrap rather than reformat so that the error's code survives: the
+		// vplayer only treats FAILED_PRECONDITION stream errors as terminal.
+		return vterrors.Wrapf(err, "stream (at source tablet) error @ (including the GTID we failed to process) %v", stopPos)
 	}
-	log.Info(fmt.Sprintf("stream (at source tablet) ended @ (including the GTID we failed to process) %v", stopPos))
+	log.Info("stream (at source tablet) ended", slog.String("position", replication.EncodePosition(stopPos)))
 	return nil
 }

@@ -44,6 +44,7 @@ var (
 	lastCpu                      uint64
 	lastTime                     time.Time
 	errCgroupMetricsNotAvailable = errors.New("cgroup metrics are not available")
+	errNoPreviousCpuSample       = errors.New("no previous cgroup CPU sample")
 )
 
 func setup() {
@@ -57,11 +58,6 @@ func setup() {
 	}
 	cgroupManager = manager
 	cgroupPath = path
-	lastCpu, err = getCurrentCgroupCpuUsage()
-	if err != nil {
-		log.Warn(fmt.Sprintf("Failed to get initial cgroup CPU usage: %v", err))
-	}
-	lastTime = time.Now()
 }
 
 func getCgroupManager() (*cgroup2.Manager, string, error) {
@@ -86,6 +82,11 @@ func getCgroupCpuUsage() (float64, error) {
 	currentUsage, err = getCurrentCgroupCpuUsage()
 	if err != nil {
 		return -1, fmt.Errorf("failed to read current cgroup CPU usage: %w", err)
+	}
+	if lastTime.IsZero() {
+		lastCpu = currentUsage
+		lastTime = currentTime
+		return -1, errNoPreviousCpuSample
 	}
 	duration := currentTime.Sub(lastTime)
 	usage, err := getCpuUsageFromSamples(lastCpu, currentUsage, duration, cgroupCpuCount("/sys/fs/cgroup", cgroupPath))
@@ -149,6 +150,9 @@ func readCpuMax(path string) float64 {
 func getCpuUsageFromSamples(usage1 uint64, usage2 uint64, interval time.Duration, cpuCount float64) (float64, error) {
 	if usage1 == 0 && usage2 == 0 {
 		return -1, errors.New("CPU usage for both samples is zero")
+	}
+	if interval < time.Microsecond {
+		return -1, fmt.Errorf("CPU samples are too close together: %v", interval)
 	}
 
 	deltaUsage := usage2 - usage1

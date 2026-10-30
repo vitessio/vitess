@@ -689,6 +689,20 @@ func testVStreamCellFlag(t *testing.T) {
 					log.Info(fmt.Sprintf("%s:: remote error: %v", time.Now(), err))
 				}
 			})
+			if tc.expectError {
+				// The stream can never start since the cell has no tablets, so
+				// Recv would block until the full context timeout. The failed
+				// tablet pick is registered in vtgate's stats and is what we
+				// assert on anyway, so wait for it and end the stream early.
+				// getDebugVar is not usable here: it requires the var to exist,
+				// which it doesn't until the first failed pick is registered.
+				require.Eventually(t, func() bool {
+					body := getHTTPBody(t, fmt.Sprintf("http://localhost:%d/debug/vars", vc.ClusterConfig.vtgatePort))
+					val, _, _, err := jsonparser.Get(body, "TabletPickerNoTabletFoundErrorCount")
+					return err == nil && strings.Contains(string(val), nonExistingCell)
+				}, 10*time.Second, 100*time.Millisecond)
+				cancel()
+			}
 			wg.Wait()
 
 			if tc.expectError {
@@ -841,6 +855,50 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		workflowType := "MoveTables"
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
+
+		// json_tbl is created with stats_auto_recalc=0 and only a primary key, so
+		// InnoDB never recalculates its statistics on its own. The copy analyzes
+		// it, so each target shard that copied rows has statistics that count
+		// some, instead of the empty ones saved at create time. n_rows is a
+		// sampled estimate, so it is not compared with the row count.
+		statsQuery := "select n_rows from mysql.innodb_table_stats where database_name = 'vt_" + defaultTargetKs + "' and table_name = 'json_tbl'"
+		copiedRows := map[string]int64{}
+		for shard, tab := range map[string]*cluster.VttabletProcess{"-80": customerTab1, "80-": customerTab2} {
+			qr, err := tab.QueryTablet("select count(*) from json_tbl", defaultTargetKs, true)
+			require.NoError(t, err)
+			count, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err)
+			copiedRows[shard] = count
+			qr, err = tab.QueryTablet(statsQuery, defaultTargetKs, false)
+			require.NoError(t, err)
+			require.Len(t, qr.Rows, 1)
+			nRows, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err)
+			if count > 0 {
+				require.Positive(t, nRows, "json_tbl statistics on %s were not updated after the copy", tab.TabletPath)
+			}
+		}
+		require.Positive(t, copiedRows["-80"]+copiedRows["80-"])
+		// The ANALYZE TABLE is binlogged, so the targets' replicas, in every cell,
+		// get the statistics too.
+		for shard, count := range copiedRows {
+			if count == 0 {
+				continue
+			}
+			for _, tablet := range custKs.Shards[shard].Tablets {
+				if tablet.Vttablet.IsPrimary {
+					continue
+				}
+				require.Eventuallyf(t, func() bool {
+					qr, err := tablet.Vttablet.QueryTablet(statsQuery, defaultTargetKs, false)
+					if err != nil || len(qr.Rows) != 1 {
+						return false
+					}
+					nRows, err := qr.Rows[0][0].ToInt64()
+					return err == nil && nRows > 0
+				}, defaultTimeout, defaultTick, "json_tbl statistics on replica %s were not updated after the copy", tablet.Vttablet.TabletPath)
+			}
+		}
 
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.
@@ -1007,6 +1065,28 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			// Reverse Replicate
 			switchReads(t, workflowType, cellNames, ksWorkflow, true)
 			printShardPositions(vc, ksShards)
+
+			// A ReverseTraffic that fails, here because the reverse workflow
+			// cannot catch up, must leave the workflow in place.
+			reverseWorkflow := workflow + "_reverse"
+			err = vc.VtctldClient.ExecuteCommand("Workflow", "--keyspace", defaultSourceKs, "stop", "--workflow", reverseWorkflow)
+			require.NoError(t, err)
+			out, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", defaultTargetKs,
+				"ReverseTraffic", "--tablet-types=primary", "--timeout=10s")
+			require.Error(t, err)
+			require.Contains(t, out, "failed to sync up replication between the source and target")
+			out, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow)
+			require.NoError(t, err)
+			require.False(t, isEmptyWorkflowShowOutput(out), "the failed ReverseTraffic deleted the workflow")
+			// The workflow is frozen, as it was before the ReverseTraffic.
+			messages := gjson.Get(out, "workflows.0.shard_streams.@values.#.streams.#.message|@flatten").Array()
+			require.NotEmpty(t, messages)
+			for _, message := range messages {
+				require.Equal(t, "FROZEN", message.String())
+			}
+			// Canceling the switch restarted the reverse workflow.
+			require.NoError(t, waitForWorkflowState(vc, defaultSourceKs+"."+reverseWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
 			switchWrites(t, workflowType, ksWorkflow, true)
 
 			output, err := vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow)
@@ -1180,10 +1260,24 @@ func reshardCustomer3to1Merge(t *testing.T) { // to unsharded
 	})
 }
 
+// reshardOptions holds optional behavior changes for reshard.
+type reshardOptions struct {
+	// skipSwitchWritesErrorHandling skips the switch-writes error-handling
+	// subtest that reshard normally piggybacks onto workflows over the
+	// customer table. The vstream tests use it: the subtest asserts nothing
+	// about vstream, costs ~20s plus a known flake surface, and runs
+	// unchanged via the vreplication_basic and vreplication_cellalias shards.
+	skipSwitchWritesErrorHandling bool
+}
+
 func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string,
 	tabletIDBase int, counts map[string]int, dryRunResultSwitchReads, dryRunResultSwitchWrites []string, cells []*Cell, sourceCellOrAlias string,
-	autoIncrementStep int,
+	autoIncrementStep int, opts ...reshardOptions,
 ) {
+	var opt reshardOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
 	t.Run("reshard", func(t *testing.T) {
 		defaultCell := vc.Cells[vc.CellNames[0]]
 		if cells == nil {
@@ -1201,10 +1295,12 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		var sourceTablets, targetTablets []*cluster.VttabletProcess
 
 		// Test multi-primary setups, like a Galera cluster, which have auto increment steps > 1.
-		for _, tablet := range tablets {
-			autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
-				autoIncrementStep, autoIncrementStep)
-			tablet.QueryTablet(autoIncrementSetQuery, "", false)
+		if autoIncrementStep > 1 {
+			for _, tablet := range tablets {
+				autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
+					autoIncrementStep, autoIncrementStep)
+				require.NoError(t, tablet.MultiQueryTabletWithDB(autoIncrementSetQuery, ""))
+			}
 		}
 		reshardAction(t, "Create", workflow, ksName, sourceShards, targetShards, sourceCellOrAlias, "replica,primary")
 
@@ -1229,7 +1325,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		if dryRunResultSwitchWrites != nil {
 			reshardAction(t, "SwitchTraffic", workflow, ksName, "", "", callNames, "primary", "--dry-run")
 		}
-		if tableName == "customer" {
+		if tableName == "customer" && !opt.skipSwitchWritesErrorHandling {
 			testSwitchWritesErrorHandling(t, sourceTablets, targetTablets, workflow, "reshard")
 		}
 		// Now let's confirm that it works as expected with an error.

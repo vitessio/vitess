@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -99,8 +101,9 @@ const (
 	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
-	SqlMaxAllowedPacket  = "select @@session.max_allowed_packet as max_allowed_packet"
-	maxQuerySizeHeadroom = int64(64)
+	sqlGetTableStatsAutoRecalc = `select engine, create_options, @@global.innodb_stats_persistent, @@global.innodb_stats_auto_recalc from information_schema.tables where table_schema=%a and table_name=%a`
+	SqlMaxAllowedPacket        = "select @@session.max_allowed_packet as max_allowed_packet"
+	maxQuerySizeHeadroom       = int64(64)
 )
 
 // vreplicator provides the core logic to start vreplication streams
@@ -172,7 +175,11 @@ func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer
 		workflowConfig = vttablet.DefaultVReplicationConfig
 	}
 	if workflowConfig.HeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
-		log.Warn(fmt.Sprintf("The supplied value for vreplication-heartbeat-update-interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d", workflowConfig.HeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval))
+		log.Warn("The supplied value for vreplication-heartbeat-update-interval is larger than the maximum allowed, vreplication will fallback to the maximum",
+			slog.Int("stream_id", int(id)),
+			slog.Int("heartbeat_update_interval_seconds", workflowConfig.HeartbeatUpdateInterval),
+			slog.Int("max_heartbeat_update_interval_seconds", vreplicationMinimumHeartbeatUpdateInterval),
+		)
 	}
 	vttablet.InitVReplicationConfigDefaults()
 	vr := &vreplicator{
@@ -222,9 +229,24 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 		}
 	}
 	if err := vr.setMessage(err.Error()); err != nil {
-		binlogplayer.LogError("Failed to set error state", err)
+		log.Error("Failed to set error state",
+			vr.logAttrs(
+				slog.String("error", binlogplayer.MessageTruncate(err.Error())),
+			)...)
 	}
 	return err
+}
+
+// logAttrs returns the attributes that identify the stream in the
+// vreplicator's log records, followed by attrs. The workflow is left out
+// until loadSettings has read it.
+func (vr *vreplicator) logAttrs(attrs ...slog.Attr) []slog.Attr {
+	logAttrs := make([]slog.Attr, 0, 2+len(attrs))
+	if vr.WorkflowName != "" {
+		logAttrs = append(logAttrs, slog.String("workflow", vr.WorkflowName))
+	}
+	logAttrs = append(logAttrs, slog.Int("stream_id", int(vr.id)))
+	return append(logAttrs, attrs...)
 }
 
 // We do not support "minimal" at the moment. "noblob" will provide significant performance improvements. Implementing
@@ -316,16 +338,26 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 		switch {
 		case numTablesToCopy != 0:
 			if err := vr.clearFKCheck(vr.dbClient); err != nil {
-				log.Warn(fmt.Sprintf("Unable to clear FK check %v", err))
+				log.Warn("Unable to clear FK check",
+					vr.logAttrs(
+						slog.Any("error", err),
+					)...)
 				return err
 			}
 			if err := vr.clearFKRestrict(vr.dbClient); err != nil {
-				log.Warn(fmt.Sprintf("Unable to clear FK restrict %v", err))
+				log.Warn("Unable to clear FK restrict",
+					vr.logAttrs(
+						slog.Any("error", err),
+					)...)
 				return err
 			}
 			if vr.WorkflowSubType == int32(binlogdatapb.VReplicationWorkflowSubType_AtomicCopy) {
 				if err := newVCopier(vr).copyAll(ctx, settings); err != nil {
-					log.Info(fmt.Sprintf("Error atomically copying all tables: %v", err))
+					log.Info("Error atomically copying all tables",
+						vr.logAttrs(
+							slog.Any("error", err),
+							slog.String("error_code", vterrors.Code(err).String()),
+						)...)
 					vr.stats.ErrorCounts.Add([]string{"CopyAll"}, 1)
 					return err
 				}
@@ -356,11 +388,17 @@ func (vr *vreplicator) replicate(ctx context.Context) error {
 			}
 		default:
 			if err := vr.resetFKCheckAfterCopy(vr.dbClient); err != nil {
-				log.Warn(fmt.Sprintf("Unable to reset FK check %v", err))
+				log.Warn("Unable to reset FK check",
+					vr.logAttrs(
+						slog.Any("error", err),
+					)...)
 				return err
 			}
 			if err := vr.resetFKRestrictAfterCopy(vr.dbClient); err != nil {
-				log.Warn(fmt.Sprintf("Unable to reset FK restrict %v", err))
+				log.Warn("Unable to reset FK restrict",
+					vr.logAttrs(
+						slog.Any("error", err),
+					)...)
 				return err
 			}
 			if vr.source.StopAfterCopy {
@@ -569,10 +607,19 @@ func (vr *vreplicator) maxQuerySize(dbc *vdbClient) int64 {
 	maxQuerySize := int64(vr.workflowConfig.RelayLogMaxSize)
 	res, err := dbc.DBClient.ExecuteFetch(SqlMaxAllowedPacket, 1)
 	if err != nil {
-		log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+		log.Error("Error getting max_allowed_packet, will use the relay-log-max-size value",
+			vr.logAttrs(
+				slog.Int("relay_log_max_size", vr.workflowConfig.RelayLogMaxSize),
+				slog.Any("error", err),
+			)...)
 	} else {
 		if maxQuerySize, err = res.Rows[0][0].ToInt64(); err != nil {
-			log.Error(fmt.Sprintf("Error getting max_allowed_packet, will use the relay-log-max-size value of %d bytes: %v", vr.workflowConfig.RelayLogMaxSize, err))
+			log.Error("Error getting max_allowed_packet, will use the relay-log-max-size value",
+				vr.logAttrs(
+					slog.Int("relay_log_max_size", vr.workflowConfig.RelayLogMaxSize),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()),
+				)...)
 			maxQuerySize = int64(vr.workflowConfig.RelayLogMaxSize)
 		}
 	}
@@ -743,7 +790,11 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
 		_, err := dbClient.Execute(query)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Could not reset sql_mode on target using %s: %v", query, err))
+			log.Warn("Could not reset sql_mode on target",
+				vr.logAttrs(
+					slog.String("query", query),
+					slog.Any("error", err),
+				)...)
 		}
 	}
 	vreplicationSQLMode := SQLMode
@@ -926,7 +977,12 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		// READ-ONLY mode.
 		dbClient, err := vr.newClientConnection(ctx)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unable to connect to the database when saving secondary keys for deferred creation on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+			log.Error("Unable to connect to the database when saving secondary keys for deferred creation",
+				vr.logAttrs(
+					slog.String("table", tableName),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()),
+				)...)
 			return vterrors.Wrap(err, "unable to connect to the database when saving secondary keys for deferred creation")
 		}
 		defer dbClient.Close()
@@ -1208,6 +1264,13 @@ func writesetUniqueKeysFromSpec(plan *TablePlan, tableSpec *sqlparser.TableSpec)
 // connection executing the post copy actions when interrupted.
 const killActionsConnectionTimeout = 10 * time.Second
 
+// analyzeLockWaitTimeout bounds how long the ANALYZE TABLE at the end of a copy
+// cycle waits for a metadata lock, such as one held by LOCK TABLES or LOCK
+// INSTANCE FOR BACKUP, so that a lock holder can't stall the copy indefinitely.
+// Its wait for the table's rows in mysql.innodb_table_stats and
+// mysql.innodb_index_stats is bounded by the global innodb_lock_wait_timeout.
+var analyzeLockWaitTimeout = 60 * time.Second
+
 // execPostCopyActions executes any post copy actions recorded for the given
 // table, e.g. re-adding deferred secondary keys. ctx bounds the work itself
 // and typically carries the copy phase duration timeout, whose expiry must
@@ -1228,7 +1291,12 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 	// mode.
 	dbClient, err := vr.newClientConnection(ctx)
 	if err != nil {
-		log.Error(fmt.Sprintf("Unable to connect to the database when executing post copy actions on the %q table in the %q VReplication workflow: %v", tableName, vr.WorkflowName, err))
+		log.Error("Unable to connect to the database when executing post copy actions",
+			vr.logAttrs(
+				slog.String("table", tableName),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
+			)...)
 		return vterrors.Wrap(err, "unable to connect to the database when executing post copy actions")
 	}
 	defer dbClient.Close()
@@ -1249,21 +1317,6 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 
 	vr.insertLog(LogCopyStart, fmt.Sprintf("Executing %d post copy action(s) for %s table", len(qr.Rows), tableName))
 
-	// Save our connection ID so we can use it to easily KILL any
-	// running SQL action we may perform later if needed.
-	idqr, err := dbClient.ExecuteFetch("select connection_id()", 1)
-	if err != nil {
-		return err
-	}
-	// qr should never be nil, but check anyway to be extra safe.
-	if idqr == nil || len(idqr.Rows) != 1 {
-		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
-	}
-	connID, err := idqr.Rows[0][0].ToInt64()
-	if err != nil || connID == 0 {
-		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
-	}
-
 	deleteAction := func(dbc *vdbClient, id int64, vid int32, tn string) error {
 		delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Int32BindVariable(vid),
 			sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
@@ -1277,85 +1330,18 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 		return nil
 	}
 
-	// This could take hours so we start a monitoring goroutine to
-	// listen for the cancellations which indicate that the controller
-	// is stopping: engine shutdown (tablet shutdown or transition) or
-	// controller stop (the workflow is being stopped, deleted, or
-	// updated). If either happens we KILL the connection being used
-	// to execute the actions, using a DBA connection, so that any
-	// in-flight statement (e.g. an ALTER) is aborted and any
-	// subsequent statement on the connection fails immediately.
-	// If we don't do this then we could e.g. cause a PRS to fail as
-	// the running ALTER will block setting [super_]read_only, or cause
-	// a workflow delete to time out as the engine cannot process it
-	// until the controller has stopped.
-	// A failed/killed ALTER will be tried again when the copy
-	// phase starts up again on the (new) PRIMARY.
-	done := make(chan struct{})
-	defer close(done)
-	// killActionsConnection is deliberately independent of which
-	// action -- if any -- is currently executing so that a
-	// cancellation which arrives between actions cannot be lost.
-	// Non-SQL action types, if ever added, will need their own
-	// interruption mechanism.
-	killActionsConnection := func() error {
-		if connID < 1 {
-			return fmt.Errorf("invalid connection ID found (%d) when attempting to kill the connection executing post copy actions", connID)
-		}
-		// The attempt is bounded: the connection setup honors the
-		// context, and if the KILL query itself stalls the goroutine
-		// below closes the connection, which unblocks it. We don't
-		// parent this context on the ones whose cancellation got us
-		// here -- they are already done -- but we keep their values.
-		killCtx, cancel := context.WithTimeout(context.WithoutCancel(stopCtx), killActionsConnectionTimeout)
-		defer cancel()
-		killdbc, err := vr.mysqld.GetDbaConnection(killCtx)
-		if err != nil {
-			return fmt.Errorf("unable to connect to the database when attempting to kill the connection executing post copy actions: %v", err)
-		}
-		defer killdbc.Close()
-		go func() {
-			// killCtx is always cancelled when the attempt returns, so
-			// this goroutine cannot leak. Close is idempotent and safe
-			// to call concurrently with an in-flight query.
-			<-killCtx.Done()
-			killdbc.Close()
-		}()
-		_, kerr := killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1, false)
-		return kerr
+	// This could take hours, so interrupt the actions if the controller
+	// stops or the engine closes. A failed/killed ALTER will be tried
+	// again when the copy phase starts up again on the (new) PRIMARY.
+	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, dbClient, tableName,
+		func(attrs ...slog.Attr) { log.Info("Interrupting post copy actions", attrs...) },
+		func(attrs ...slog.Attr) {
+			log.Error("Failed to kill the connection executing post copy actions", attrs...)
+		})
+	if err != nil {
+		return err
 	}
-	go func() {
-		var reason string
-		select {
-		// Only kill the connection executing the post copy actions
-		// if the engine is closing or the controller is stopping.
-		case <-vr.vre.ctx.Done():
-			reason = "the engine is closing"
-		case <-stopCtx.Done():
-			reason = "the controller is stopping"
-		case <-done:
-			// We're done, so no longer need to listen for cancellation.
-			return
-		}
-		log.Info("Interrupting post copy actions",
-			slog.String("table", tableName),
-			slog.String("workflow", vr.WorkflowName),
-			slog.String("reason", reason),
-		)
-		// We make a single kill attempt: retrying a failed kill could
-		// exhaust DB connections when the DBA path is stalled -- the
-		// very state a failed kill tends to indicate. On failure we log
-		// the error and leave the in-flight action to complete, as it
-		// would have before the interruption support existed, and the
-		// interrupted operation can be retried by the user/caller.
-		if err := killActionsConnection(); err != nil {
-			log.Error("Failed to kill the connection executing post copy actions",
-				slog.String("table", tableName),
-				slog.String("workflow", vr.WorkflowName),
-				slog.Any("error", err),
-			)
-		}
-	}()
+	defer stopKillWatch()
 
 	for _, row := range qr.Named().Rows {
 		select {
@@ -1440,7 +1426,11 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 
 		switch action.Type {
 		case PostCopyActionSQL:
-			log.Info(fmt.Sprintf("Executing post copy SQL action on the %q table in the %q VReplication workflow: %s", tableName, vr.WorkflowName, action.Task))
+			log.Info("Executing post copy SQL action",
+				vr.logAttrs(
+					slog.String("table", tableName),
+					slog.String("query", action.Task),
+				)...)
 			// This will return an io.EOF / MySQL CRServerLost (errno 2013)
 			// error if it is killed by the monitoring goroutine.
 			if _, err := dbClient.ExecuteFetch(action.Task, -1); err != nil {
@@ -1505,6 +1495,231 @@ func (vr *vreplicator) execPostCopyActions(ctx, stopCtx context.Context, tableNa
 	return nil
 }
 
+// killConnectionOnStop watches for the cancellations which indicate that the
+// controller is stopping: engine shutdown (tablet shutdown or transition) or
+// controller stop (the workflow is being stopped, deleted, or updated). If
+// either happens before the returned function is called, it KILLs dbClient's
+// connection, using a DBA connection, so that any in-flight statement on it
+// (e.g. an ALTER, or an ANALYZE TABLE waiting for a lock) is aborted and any
+// subsequent statement on the connection fails immediately. Without this we
+// could e.g. cause a PRS to fail as the running statement will block setting
+// [super_]read_only, or cause a workflow delete to time out as the engine
+// cannot process it until the controller has stopped. logInterrupt and
+// logKillFailed log, with the given attributes, when it interrupts the work
+// done on the connection and when that fails. The caller must call the returned
+// function once that work is done.
+func (vr *vreplicator) killConnectionOnStop(stopCtx context.Context, dbClient *vdbClient, tableName string, logInterrupt, logKillFailed func(attrs ...slog.Attr)) (func(), error) {
+	// Save our connection ID so we can use it to easily KILL any
+	// running SQL statement we may execute later if needed.
+	idqr, err := dbClient.ExecuteFetch("select connection_id()", 1)
+	if err != nil {
+		return nil, err
+	}
+	// qr should never be nil, but check anyway to be extra safe.
+	if idqr == nil || len(idqr.Rows) != 1 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
+	}
+	connID, err := idqr.Rows[0][0].ToInt64()
+	if err != nil || connID == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected result (%d) from connection_id() query, error: %v", connID, err)
+	}
+
+	done := make(chan struct{})
+	// killConnection is deliberately independent of which statement --
+	// if any -- is currently executing so that a cancellation which
+	// arrives between statements cannot be lost.
+	killConnection := func() error {
+		// The attempt is bounded: the connection setup honors the
+		// context, and if the KILL query itself stalls the goroutine
+		// below closes the connection, which unblocks it. We don't
+		// parent this context on the ones whose cancellation got us
+		// here -- they are already done -- but we keep their values.
+		killCtx, cancel := context.WithTimeout(context.WithoutCancel(stopCtx), killActionsConnectionTimeout)
+		defer cancel()
+		killdbc, err := vr.mysqld.GetDbaConnection(killCtx)
+		if err != nil {
+			// Only ever logged: keep it on one line, which a wrapped vterrors
+			// error's %v formatting is not.
+			return fmt.Errorf("unable to connect to the database when attempting to kill the connection: %v", err)
+		}
+		defer killdbc.Close()
+		go func() {
+			// killCtx is always cancelled when the attempt returns, so
+			// this goroutine cannot leak. Close is idempotent and safe
+			// to call concurrently with an in-flight query.
+			<-killCtx.Done()
+			killdbc.Close()
+		}()
+		_, kerr := killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1, false)
+		return kerr
+	}
+	go func() {
+		var reason string
+		select {
+		// Only kill the connection if the engine is closing or the
+		// controller is stopping.
+		case <-vr.vre.ctx.Done():
+			reason = "the engine is closing"
+		case <-stopCtx.Done():
+			reason = "the controller is stopping"
+		case <-done:
+			// We're done, so no longer need to listen for cancellation.
+			return
+		}
+		logInterrupt(vr.logAttrs(
+			slog.String("table", tableName),
+			slog.String("reason", reason),
+		)...)
+		// We make a single kill attempt: retrying a failed kill could
+		// exhaust DB connections when the DBA path is stalled -- the
+		// very state a failed kill tends to indicate. On failure we log
+		// the error and leave the in-flight statement to complete, as it
+		// would have before the interruption support existed, and the
+		// interrupted operation can be retried by the user/caller.
+		if err := killConnection(); err != nil {
+			logKillFailed(vr.logAttrs(
+				slog.String("table", tableName),
+				slog.Any("error", err),
+			)...)
+		}
+	}()
+	return func() { close(done) }, nil
+}
+
+// analyzeTableIfStatsAutoRecalcDisabled runs ANALYZE TABLE on an InnoDB target
+// table whose persistent statistics are not recalculated automatically: because
+// it was created with STATS_AUTO_RECALC=0 like its source, or because it leaves
+// the option at its default and innodb_stats_auto_recalc is off. InnoDB saves
+// empty statistics for such a table when it is created and never refreshes them
+// on its own, so after a restart the optimizer would see an empty table. ANALYZE
+// TABLE is written to the binary log, so the target's replicas refresh their
+// statistics too. This is best effort: a failure is logged and does not fail
+// the copy. stopCtx is cancelled when the controller stops, not when a copy
+// phase cycle ends.
+//
+// It returns true if the table needed analyzing but the controller stopped or
+// the engine closed, so the ANALYZE TABLE may not have run. A copy that can
+// resume then keeps the table's copy state, so that the table is analyzed when
+// the copy resumes.
+func (vr *vreplicator) analyzeTableIfStatsAutoRecalcDisabled(stopCtx context.Context, tableName string) bool {
+	tableAttrs := vr.logAttrs(slog.String("table", tableName))
+	errAttrs := func(err error) []slog.Attr {
+		return slices.Concat(tableAttrs, []slog.Attr{slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String())})
+	}
+	// Failures also go to the workflow's log, where Workflow show surfaces
+	// them, as a table that isn't analyzed can keep empty statistics.
+	optionsFailed := func(err error) bool {
+		log.Warn("Unable to check the table options", errAttrs(err)...)
+		vr.insertLog(LogMessage, fmt.Sprintf("Unable to check whether the %s table needs ANALYZE TABLE to refresh its statistics: %v", tableName, err))
+		return false
+	}
+	dbName := vr.dbClient.DBName()
+	query, err := sqlparser.ParseAndBind(sqlGetTableStatsAutoRecalc, sqltypes.StringBindVariable(dbName), sqltypes.StringBindVariable(tableName))
+	if err != nil {
+		return optionsFailed(err)
+	}
+	qr, err := vr.dbClient.ExecuteFetch(query, 1)
+	if err != nil {
+		return optionsFailed(err)
+	}
+	if len(qr.Rows) == 0 || len(qr.Rows[0]) != 4 {
+		return false
+	}
+	// STATS_AUTO_RECALC applies only to InnoDB's persistent statistics. Other
+	// engines don't have them, and InnoDB recalculates transient statistics on
+	// its own. A table's STATS_PERSISTENT and STATS_AUTO_RECALC options override
+	// innodb_stats_persistent and innodb_stats_auto_recalc; create_options shows
+	// them only when they aren't DEFAULT.
+	row := qr.Rows[0]
+	if !strings.EqualFold(row[0].ToString(), "InnoDB") {
+		return false
+	}
+	createOptions := strings.ToLower(row[1].ToString())
+	enabled := func(option string, global sqltypes.Value) bool {
+		switch {
+		case strings.Contains(createOptions, option+"=0"):
+			return false
+		case strings.Contains(createOptions, option+"=1"):
+			return true
+		default:
+			return global.ToString() != "0"
+		}
+	}
+	if !enabled("stats_persistent", row[2]) || enabled("stats_auto_recalc", row[3]) {
+		return false
+	}
+	stopping := func() bool {
+		return stopCtx.Err() != nil || vr.vre.ctx.Err() != nil
+	}
+	if stopping() {
+		return true
+	}
+	warnUnableToConnect := func(attrs ...slog.Attr) { log.Warn("Unable to connect to the database to analyze the table", attrs...) }
+	warnUnableToAnalyze := func(attrs ...slog.Attr) { log.Warn("Unable to analyze the table", attrs...) }
+	// failed returns whether the controller stopped or the engine closed, which
+	// kill the ANALYZE TABLE. Otherwise it logs the failure with logFailure and
+	// records the cause in the workflow's log.
+	failed := func(logFailure func(attrs ...slog.Attr), cause string, attrs []slog.Attr) bool {
+		if stopping() {
+			log.Info("The table was not analyzed, as the controller stopped", attrs...)
+			return true
+		}
+		logFailure(attrs...)
+		vr.insertLog(LogMessage, fmt.Sprintf("Unable to analyze the %s table, so its statistics may stay empty until a later copy cycle analyzes it or ANALYZE TABLE is run on it: %s", tableName, cause))
+		return false
+	}
+	// ANALYZE TABLE causes an implicit commit, so use a new connection to not
+	// interfere with any transaction open on the shared one.
+	analyzeConn, err := vr.newClientConnection(stopCtx)
+	if err != nil {
+		return failed(warnUnableToConnect, err.Error(), errAttrs(err))
+	}
+	defer analyzeConn.Close()
+	// Bound the metadata lock wait; a timeout comes back as a failure row. The
+	// setting is not binlogged, so a replica applies the ANALYZE TABLE under its
+	// own lock_wait_timeout, as it does any DDL.
+	if _, err := analyzeConn.ExecuteFetch(fmt.Sprintf("set @@session.lock_wait_timeout = %d", int64(analyzeLockWaitTimeout/time.Second)), 0); err != nil {
+		return failed(warnUnableToAnalyze, err.Error(), errAttrs(err))
+	}
+	// ANALYZE TABLE can wait for a lock on the table, so interrupt it if the
+	// controller stops or the engine closes.
+	stopKillWatch, err := vr.killConnectionOnStop(stopCtx, analyzeConn, tableName,
+		func(attrs ...slog.Attr) { log.Info("Interrupting ANALYZE TABLE", attrs...) },
+		func(attrs ...slog.Attr) { log.Error("Failed to kill the connection executing ANALYZE TABLE", attrs...) })
+	if err != nil {
+		return failed(warnUnableToAnalyze, err.Error(), errAttrs(err))
+	}
+	defer stopKillWatch()
+	analyze := "analyze table " + sqlescape.EscapeID(dbName) + "." + sqlescape.EscapeID(tableName)
+	analyzeResult, err := analyzeConn.ExecuteFetch(analyze, 10)
+	if err != nil {
+		return failed(warnUnableToAnalyze, err.Error(), errAttrs(err))
+	}
+	// ANALYZE TABLE reports most failures as rows rather than as an error: a
+	// missing table as an error row, and a lock wait timeout on the table's
+	// row in mysql.innodb_table_stats as a status row with "Operation failed".
+	// Its columns are Table, Op, Msg_type and Msg_text. So the table was
+	// analyzed only if it reports status OK.
+	analyzed := false
+	var result []string
+	for _, row := range analyzeResult.Rows {
+		if len(row) != 4 {
+			continue
+		}
+		msgType, msgText := row[2].ToString(), row[3].ToString()
+		if strings.EqualFold(msgType, "status") && strings.EqualFold(msgText, "OK") {
+			analyzed = true
+		}
+		result = append(result, msgType+": "+msgText)
+	}
+	if !analyzed {
+		cause := strings.Join(result, "; ")
+		return failed(warnUnableToAnalyze, cause, slices.Concat(tableAttrs, []slog.Attr{slog.String("result", cause)}))
+	}
+	log.Info("Analyzed the table, as InnoDB does not recalculate its statistics automatically", tableAttrs...)
+	return false
+}
+
 // supportsDeferredSecondaryKeys tells you if related work should be done
 // for the workflow. Deferring secondary index generation is only supported
 // with MoveTables, Migrate, and Reshard.
@@ -1543,9 +1758,16 @@ func (vr *vreplicator) setExistingRowsCopied() {
 	if vr.stats.CopyRowCount.Get() == 0 {
 		rowsCopiedExisting, err := vr.readExistingRowsCopied(vr.id)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Failed to read existing rows copied value for %s workflow: %v", vr.WorkflowName, err))
+			log.Warn("Failed to read existing rows copied value",
+				vr.logAttrs(
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()),
+				)...)
 		} else if rowsCopiedExisting != 0 {
-			log.Info(fmt.Sprintf("Resuming the %s vreplication workflow started on another tablet, setting rows copied counter to %v", vr.WorkflowName, rowsCopiedExisting))
+			log.Info("Resuming the vreplication workflow started on another tablet, setting rows copied counter",
+				vr.logAttrs(
+					slog.Int64("rows_copied", rowsCopiedExisting),
+				)...)
 			vr.stats.CopyRowCount.Set(rowsCopiedExisting)
 		}
 	}

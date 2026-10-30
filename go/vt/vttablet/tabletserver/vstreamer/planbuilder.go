@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -377,6 +378,43 @@ func (plan *Plan) mapBitmap(source *mysql.Bitmap) *binlogdatapb.RowChange_Bitmap
 	}
 }
 
+// unreconstructibleAfterColumn returns the name of the first emitted column
+// whose value cannot be produced from a partial after image alone: a column
+// that binlog_row_image=NOBLOB omitted, a keyspace_id() with an omitted vindex
+// input, or a JSON column that binlog_row_value_options=PARTIAL_JSON sent as a
+// diff that can only be applied on top of the previous value. It returns ""
+// when every emitted value is complete. Columns the plan does not emit are
+// irrelevant, whatever the image says about them.
+func (plan *Plan) unreconstructibleAfterColumn(dataColumns *mysql.Bitmap, jsonPartialValues *mysql.Bitmap) string {
+	// jsonPartialValues has one bit per JSON column of the source table, in
+	// table order.
+	jsonOrdinal := make(map[int]int)
+	for i, field := range plan.Table.Fields {
+		if field.Type == querypb.Type_JSON {
+			jsonOrdinal[i] = len(jsonOrdinal)
+		}
+	}
+	for _, colExpr := range plan.ColExprs {
+		switch {
+		case colExpr.Vindex != nil:
+			for _, col := range colExpr.VindexColumns {
+				if !dataColumns.Bit(col) {
+					return colExpr.Field.Name
+				}
+			}
+		case colExpr.ColNum != -1:
+			if !dataColumns.Bit(colExpr.ColNum) {
+				return colExpr.Field.Name
+			}
+			if ordinal, isJSON := jsonOrdinal[colExpr.ColNum]; isJSON &&
+				jsonPartialValues.Count() > 0 && jsonPartialValues.Bit(ordinal) {
+				return colExpr.Field.Name
+			}
+		}
+	}
+	return ""
+}
+
 func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int, fields []*querypb.Field) (key.DestinationKeyspaceID, error) {
 	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
 	for _, col := range vindexColumns {
@@ -532,11 +570,14 @@ func buildREPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filte
 func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query, env.Parser())
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("failed to analyze select", slog.Any("error", err))
 		return nil, err
 	}
 	if fromTable.String() != ti.Name {
-		log.Error(fmt.Sprintf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name))
+		log.Error("unsupported: select expression table does not match the table entry name",
+			slog.String("table", ti.Name),
+			slog.String("select_table", sqlparser.String(fromTable)),
+		)
 		return nil, fmt.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 	}
 
@@ -545,11 +586,11 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		env:   env,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
-		log.Error(err.Error())
+		log.Error("failed to analyze where clause", slog.Any("error", err))
 		return nil, err
 	}
 	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
-		log.Error(err.Error())
+		log.Error("failed to analyze select expressions", slog.Any("error", err))
 		return nil, err
 	}
 
@@ -598,6 +639,52 @@ func (plan *Plan) setConvertColumnUsingUTF8(columnName string) {
 		plan.convertUsingUTF8Columns = map[string]bool{}
 	}
 	plan.convertUsingUTF8Columns[columnName] = true
+}
+
+// buildConvertTZ checks a convert_tz call from a filter's select list and
+// returns the call that the row streamer writes into its copy query in its
+// place. The filter comes from the client, and the copy query runs with the
+// privileges of the filtered user, so any other argument, such as a subquery or
+// load_file(), would let the client read data the filter does not cover. The
+// call is therefore accepted only in the form VDiff generates: the column it is
+// aliased as, converted between two time zones given as string literals.
+func buildConvertTZ(funcExpr *sqlparser.FuncExpr, column string) (*sqlparser.FuncExpr, error) {
+	unsupported := fmt.Errorf("unsupported convert_tz: %v; only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported", sqlparser.String(funcExpr))
+	if len(funcExpr.Exprs) != 3 || !funcExpr.Qualifier.IsEmpty() {
+		return nil, unsupported
+	}
+	colName, ok := funcExpr.Exprs[0].(*sqlparser.ColName)
+	if !ok || !colName.Qualifier.IsEmpty() || !colName.Name.EqualString(column) {
+		return nil, unsupported
+	}
+	timeZones := make([]sqlparser.Expr, 2)
+	for i, expr := range funcExpr.Exprs[1:] {
+		literal, ok := expr.(*sqlparser.Literal)
+		if !ok || literal.Type != sqlparser.StrVal || !isTimeZoneName(literal.Val) {
+			return nil, unsupported
+		}
+		timeZones[i] = sqlparser.NewStrLiteral(literal.Val)
+	}
+	return sqlparser.NewFuncExpr("convert_tz", sqlparser.NewColName(column), timeZones[0], timeZones[1]), nil
+}
+
+// isTimeZoneName reports whether tz can be a time zone that convert_tz accepts:
+// an offset such as +05:30, or a named zone such as UTC or America/New_York.
+// Limiting it to those characters keeps it from needing any escaping in the
+// copy query, whatever the server's sql_mode.
+func isTimeZoneName(tz string) bool {
+	if tz == "" {
+		return false
+	}
+	for _, c := range tz {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case c == '+', c == '-', c == ':', c == '/', c == '_', c == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // setColumnFuncExpr sets the function expression for the column, which
@@ -918,7 +1005,11 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 				return ColExpr{}, err
 			}
 			field := plan.Table.Fields[colnum]
-			plan.setColumnFuncExpr(field.Name, inner)
+			funcExpr, err := buildConvertTZ(inner, field.Name)
+			if err != nil {
+				return ColExpr{}, err
+			}
+			plan.setColumnFuncExpr(field.Name, funcExpr)
 			return ColExpr{
 				ColNum: colnum,
 				Field:  field,
@@ -979,7 +1070,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Field:  field,
 		}, nil
 	default:
-		log.Info(fmt.Sprintf("Unsupported expression: %v", inner))
+		log.Info("Unsupported expression", slog.String("expression", sqlparser.String(inner)))
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}
 }

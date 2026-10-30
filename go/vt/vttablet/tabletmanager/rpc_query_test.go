@@ -467,3 +467,37 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 		require.Contains(t, got, w)
 	}
 }
+
+// TestTabletManager_ExecuteFetchRewritesDoubleSlashComments checks that the
+// fetch RPCs, which check a query with Vitess's tokenizer and then send it to
+// MySQL as written, send each "//" comment rewritten to "#/".
+func TestTabletManager_ExecuteFetchRewritesDoubleSlashComments(t *testing.T) {
+	ctx := t.Context()
+	cp := mysql.ConnParams{}
+	db := fakesqldb.New(t)
+	db.AddQuery("select 42 #/ x", &sqltypes.Result{})
+	db.AddRejectedQuery("select 42 // x", errors.New("query sent as written"))
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
+
+	dbName := "testdb"
+	tm := &TabletManager{
+		MysqlDaemon:            daemon,
+		DBConfigs:              dbconfigs.NewTestDBConfigs(cp, cp, dbName),
+		QueryServiceControl:    tabletservermock.NewController(),
+		_waitForGrantsComplete: make(chan struct{}),
+		Env:                    vtenv.NewTestEnv(),
+	}
+	close(tm._waitForGrantsComplete)
+
+	query := []byte("select 42 // x")
+	_, err := tm.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{Query: query, DbName: dbName, MaxRows: 10})
+	require.NoError(t, err)
+	_, err = tm.ExecuteMultiFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteMultiFetchAsDbaRequest{Sql: query, DbName: dbName, MaxRows: 10})
+	require.NoError(t, err)
+	_, err = tm.ExecuteFetchAsAllPrivs(ctx, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{Query: query, DbName: dbName, MaxRows: 10})
+	require.NoError(t, err)
+	_, err = tm.ExecuteFetchAsApp(ctx, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{Query: query, MaxRows: 10})
+	require.NoError(t, err)
+	assert.Equal(t, 4, db.GetQueryCalledNum("select 42 #/ x"))
+}

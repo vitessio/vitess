@@ -97807,6 +97807,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @property {string|null} [backup_engine] BackupRequest backup_engine
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupRequest init_sql
+         * @property {boolean|null} [include_binlogs] BackupRequest include_binlogs
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -97894,6 +97895,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          */
         BackupRequest.prototype.init_sql = null;
 
+        /**
+         * BackupRequest include_binlogs.
+         * @member {boolean} include_binlogs
+         * @memberof tabletmanagerdata.BackupRequest
+         * @instance
+         */
+        BackupRequest.prototype.include_binlogs = false;
+
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
@@ -97949,6 +97958,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs") && message.include_binlogs !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.include_binlogs);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -98061,6 +98072,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                         message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32(), $undefined, _depth + 1, message.init_sql);
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.include_binlogs = value;
+                        else
+                            delete message.include_binlogs;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -98137,6 +98157,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 if (error)
                     return "init_sql." + error;
             }
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                if (typeof message.include_binlogs !== "boolean")
+                    return "include_binlogs: boolean expected";
             return null;
         };
 
@@ -98182,6 +98205,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     throw $TypeError(".tabletmanagerdata.BackupRequest.init_sql: object expected");
                 message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql, _depth + 1);
             }
+            if (object.include_binlogs != null)
+                if (object.include_binlogs)
+                    message.include_binlogs = $Boolean(object.include_binlogs);
             return message;
         };
 
@@ -98209,6 +98235,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.upgrade_safe = false;
                 object.mysql_shutdown_timeout = null;
                 object.init_sql = null;
+                object.include_binlogs = false;
             }
             if (message.concurrency != null && $Object.hasOwnProperty.call(message, "concurrency"))
                 object.concurrency = message.concurrency;
@@ -98224,6 +98251,8 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options, _depth + 1);
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options, _depth + 1);
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                object.include_binlogs = message.include_binlogs;
             return object;
         };
 
@@ -121513,6 +121542,7 @@ export const binlogdata = $root.binlogdata = (() => {
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [data_columns] RowChange data_columns
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [json_partial_values] RowChange json_partial_values
          * @property {binlogdata.RowChange.Bitmap.$Properties|null} [before_data_columns] RowChange before_data_columns
+         * @property {binlogdata.RowChange.Bitmap.$Properties|null} [after_data_columns] RowChange after_data_columns
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -121585,6 +121615,14 @@ export const binlogdata = $root.binlogdata = (() => {
         RowChange.prototype.before_data_columns = null;
 
         /**
+         * RowChange after_data_columns.
+         * @member {binlogdata.RowChange.Bitmap.$Properties|null|undefined} after_data_columns
+         * @memberof binlogdata.RowChange
+         * @instance
+         */
+        RowChange.prototype.after_data_columns = null;
+
+        /**
          * Creates a new RowChange instance using the specified properties.
          * @function create
          * @memberof binlogdata.RowChange
@@ -121626,6 +121664,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 $root.binlogdata.RowChange.Bitmap.encode(message.json_partial_values, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
             if (message.before_data_columns != null && $Object.hasOwnProperty.call(message, "before_data_columns"))
                 $root.binlogdata.RowChange.Bitmap.encode(message.before_data_columns, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+            if (message.after_data_columns != null && $Object.hasOwnProperty.call(message, "after_data_columns"))
+                $root.binlogdata.RowChange.Bitmap.encode(message.after_data_columns, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -121713,6 +121753,12 @@ export const binlogdata = $root.binlogdata = (() => {
                         message.before_data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before_data_columns);
                         continue;
                     }
+                case 6: {
+                        if (wireType !== 2)
+                            break;
+                        message.after_data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.after_data_columns);
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -121786,6 +121832,11 @@ export const binlogdata = $root.binlogdata = (() => {
                 if (error)
                     return "before_data_columns." + error;
             }
+            if (message.after_data_columns != null && $Object.hasOwnProperty.call(message, "after_data_columns")) {
+                let error = $root.binlogdata.RowChange.Bitmap.verify(message.after_data_columns, _depth + 1);
+                if (error)
+                    return "after_data_columns." + error;
+            }
             return null;
         };
 
@@ -121832,6 +121883,11 @@ export const binlogdata = $root.binlogdata = (() => {
                     throw $TypeError(".binlogdata.RowChange.before_data_columns: object expected");
                 message.before_data_columns = $root.binlogdata.RowChange.Bitmap.fromObject(object.before_data_columns, _depth + 1);
             }
+            if (object.after_data_columns != null) {
+                if (!$util.isObject(object.after_data_columns))
+                    throw $TypeError(".binlogdata.RowChange.after_data_columns: object expected");
+                message.after_data_columns = $root.binlogdata.RowChange.Bitmap.fromObject(object.after_data_columns, _depth + 1);
+            }
             return message;
         };
 
@@ -121858,6 +121914,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.data_columns = null;
                 object.json_partial_values = null;
                 object.before_data_columns = null;
+                object.after_data_columns = null;
             }
             if (message.before != null && $Object.hasOwnProperty.call(message, "before"))
                 object.before = $root.query.Row.toObject(message.before, options, _depth + 1);
@@ -121869,6 +121926,8 @@ export const binlogdata = $root.binlogdata = (() => {
                 object.json_partial_values = $root.binlogdata.RowChange.Bitmap.toObject(message.json_partial_values, options, _depth + 1);
             if (message.before_data_columns != null && $Object.hasOwnProperty.call(message, "before_data_columns"))
                 object.before_data_columns = $root.binlogdata.RowChange.Bitmap.toObject(message.before_data_columns, options, _depth + 1);
+            if (message.after_data_columns != null && $Object.hasOwnProperty.call(message, "after_data_columns"))
+                object.after_data_columns = $root.binlogdata.RowChange.Bitmap.toObject(message.after_data_columns, options, _depth + 1);
             return object;
         };
 
@@ -181644,6 +181703,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [backup_engine] BackupRequest backup_engine
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupRequest init_sql
+         * @property {boolean|null} [include_binlogs] BackupRequest include_binlogs
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -181739,6 +181799,14 @@ export const vtctldata = $root.vtctldata = (() => {
          */
         BackupRequest.prototype.init_sql = null;
 
+        /**
+         * BackupRequest include_binlogs.
+         * @member {boolean} include_binlogs
+         * @memberof vtctldata.BackupRequest
+         * @instance
+         */
+        BackupRequest.prototype.include_binlogs = false;
+
         // OneOf field names bound to virtual getters and setters
         let $oneOfFields;
 
@@ -181796,6 +181864,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs") && message.include_binlogs !== false)
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.include_binlogs);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -181914,6 +181984,15 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32(), $undefined, _depth + 1, message.init_sql);
                         continue;
                     }
+                case 9: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.include_binlogs = value;
+                        else
+                            delete message.include_binlogs;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -181995,6 +182074,9 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "init_sql." + error;
             }
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                if (typeof message.include_binlogs !== "boolean")
+                    return "include_binlogs: boolean expected";
             return null;
         };
 
@@ -182045,6 +182127,9 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $TypeError(".vtctldata.BackupRequest.init_sql: object expected");
                 message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql, _depth + 1);
             }
+            if (object.include_binlogs != null)
+                if (object.include_binlogs)
+                    message.include_binlogs = $Boolean(object.include_binlogs);
             return message;
         };
 
@@ -182073,6 +182158,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.upgrade_safe = false;
                 object.mysql_shutdown_timeout = null;
                 object.init_sql = null;
+                object.include_binlogs = false;
             }
             if (message.tablet_alias != null && $Object.hasOwnProperty.call(message, "tablet_alias"))
                 object.tablet_alias = $root.topodata.TabletAlias.toObject(message.tablet_alias, options, _depth + 1);
@@ -182090,6 +182176,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options, _depth + 1);
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options, _depth + 1);
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                object.include_binlogs = message.include_binlogs;
             return object;
         };
 
@@ -182499,6 +182587,8 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {string|null} [incremental_from_pos] BackupShardRequest incremental_from_pos
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupShardRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupShardRequest init_sql
+         * @property {boolean|null} [include_binlogs] BackupShardRequest include_binlogs
+         * @property {Array.<topodata.TabletType>|null} [tablet_types] BackupShardRequest tablet_types
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -182524,6 +182614,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BackupShardRequest = function (properties) {
+            this.tablet_types = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -182595,6 +182686,22 @@ export const vtctldata = $root.vtctldata = (() => {
         BackupShardRequest.prototype.init_sql = null;
 
         /**
+         * BackupShardRequest include_binlogs.
+         * @member {boolean} include_binlogs
+         * @memberof vtctldata.BackupShardRequest
+         * @instance
+         */
+        BackupShardRequest.prototype.include_binlogs = false;
+
+        /**
+         * BackupShardRequest tablet_types.
+         * @member {Array.<topodata.TabletType>} tablet_types
+         * @memberof vtctldata.BackupShardRequest
+         * @instance
+         */
+        BackupShardRequest.prototype.tablet_types = $util.emptyArray;
+
+        /**
          * Creates a new BackupShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.BackupShardRequest
@@ -182642,6 +182749,10 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.vttime.Duration.encode(message.mysql_shutdown_timeout, writer.uint32(/* id 7, wireType 2 =*/58).fork(), _depth + 1).ldelim();
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs") && message.include_binlogs !== false)
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.include_binlogs);
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 10, wireType 2 =*/82).int32s(message.tablet_types);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -182765,6 +182876,29 @@ export const vtctldata = $root.vtctldata = (() => {
                         message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32(), $undefined, _depth + 1, message.init_sql);
                         continue;
                     }
+                case 9: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.include_binlogs = value;
+                        else
+                            delete message.include_binlogs;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType === 2) {
+                            if (!(message.tablet_types && message.tablet_types.length))
+                                message.tablet_types = [];
+                            reader.int32s(message.tablet_types);
+                            continue;
+                        }
+                        if (wireType !== 0)
+                            break;
+                        if (!(message.tablet_types && message.tablet_types.length))
+                            message.tablet_types = [];
+                        message.tablet_types.push(reader.int32());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -182841,6 +182975,16 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (error)
                     return "init_sql." + error;
             }
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                if (typeof message.include_binlogs !== "boolean")
+                    return "include_binlogs: boolean expected";
+            if (message.tablet_types != null && $Object.hasOwnProperty.call(message, "tablet_types")) {
+                if (!$Array.isArray(message.tablet_types))
+                    return "tablet_types: array expected";
+                for (let i = 0; i < message.tablet_types.length; ++i)
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
+                        return "tablet_types: enum value[] expected";
+            }
             return null;
         };
 
@@ -182890,6 +183034,64 @@ export const vtctldata = $root.vtctldata = (() => {
                     throw $TypeError(".vtctldata.BackupShardRequest.init_sql: object expected");
                 message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.fromObject(object.init_sql, _depth + 1);
             }
+            if (object.include_binlogs != null)
+                if (object.include_binlogs)
+                    message.include_binlogs = $Boolean(object.include_binlogs);
+            if (object.tablet_types) {
+                if (!$Array.isArray(object.tablet_types))
+                    throw $TypeError(".vtctldata.BackupShardRequest.tablet_types: array expected");
+                message.tablet_types = [];
+                for (let i = 0; i < object.tablet_types.length; ++i)
+                    switch (object.tablet_types[i]) {
+                    case "UNKNOWN":
+                    case 0:
+                        message.tablet_types[message.tablet_types.length] = 0;
+                        break;
+                    case "PRIMARY":
+                    case 1:
+                        message.tablet_types[message.tablet_types.length] = 1;
+                        break;
+                    case "MASTER":
+                    case 1:
+                        message.tablet_types[message.tablet_types.length] = 1;
+                        break;
+                    case "REPLICA":
+                    case 2:
+                        message.tablet_types[message.tablet_types.length] = 2;
+                        break;
+                    case "RDONLY":
+                    case 3:
+                        message.tablet_types[message.tablet_types.length] = 3;
+                        break;
+                    case "BATCH":
+                    case 3:
+                        message.tablet_types[message.tablet_types.length] = 3;
+                        break;
+                    case "SPARE":
+                    case 4:
+                        message.tablet_types[message.tablet_types.length] = 4;
+                        break;
+                    case "EXPERIMENTAL":
+                    case 5:
+                        message.tablet_types[message.tablet_types.length] = 5;
+                        break;
+                    case "BACKUP":
+                    case 6:
+                        message.tablet_types[message.tablet_types.length] = 6;
+                        break;
+                    case "RESTORE":
+                    case 7:
+                        message.tablet_types[message.tablet_types.length] = 7;
+                        break;
+                    case "DRAINED":
+                    case 8:
+                        message.tablet_types[message.tablet_types.length] = 8;
+                        break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
+                    }
+            }
             return message;
         };
 
@@ -182910,6 +183112,8 @@ export const vtctldata = $root.vtctldata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.tablet_types = [];
             if (options.defaults) {
                 object.keyspace = "";
                 object.shard = "";
@@ -182919,6 +183123,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.incremental_from_pos = "";
                 object.mysql_shutdown_timeout = null;
                 object.init_sql = null;
+                object.include_binlogs = false;
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 object.keyspace = message.keyspace;
@@ -182936,6 +183141,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.mysql_shutdown_timeout = $root.vttime.Duration.toObject(message.mysql_shutdown_timeout, options, _depth + 1);
             if (message.init_sql != null && $Object.hasOwnProperty.call(message, "init_sql"))
                 object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options, _depth + 1);
+            if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
+                object.include_binlogs = message.include_binlogs;
+            if (message.tablet_types && message.tablet_types.length) {
+                object.tablet_types = $Array(message.tablet_types.length);
+                for (let j = 0; j < message.tablet_types.length; ++j)
+                    object.tablet_types[j] = options.enums === $String ? $root.topodata.TabletType[message.tablet_types[j]] === $undefined ? message.tablet_types[j] : $root.topodata.TabletType[message.tablet_types[j]] : message.tablet_types[j];
+            }
             return object;
         };
 
@@ -192696,6 +192908,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {boolean|null} [wait_for_all_tablets] EmergencyReparentShardRequest wait_for_all_tablets
          * @property {topodata.TabletAlias.$Properties|null} [expected_primary] EmergencyReparentShardRequest expected_primary
          * @property {boolean|null} [allow_split_brain_promotion] EmergencyReparentShardRequest allow_split_brain_promotion
+         * @property {string|null} [required_position] EmergencyReparentShardRequest required_position
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -192801,6 +193014,14 @@ export const vtctldata = $root.vtctldata = (() => {
         EmergencyReparentShardRequest.prototype.allow_split_brain_promotion = false;
 
         /**
+         * EmergencyReparentShardRequest required_position.
+         * @member {string} required_position
+         * @memberof vtctldata.EmergencyReparentShardRequest
+         * @instance
+         */
+        EmergencyReparentShardRequest.prototype.required_position = "";
+
+        /**
          * Creates a new EmergencyReparentShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.EmergencyReparentShardRequest
@@ -192851,6 +193072,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.topodata.TabletAlias.encode(message.expected_primary, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion") && message.allow_split_brain_promotion !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.allow_split_brain_promotion);
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position") && message.required_position !== "")
+                writer.uint32(/* id 10, wireType 2 =*/82).string(message.required_position);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -192979,6 +193202,15 @@ export const vtctldata = $root.vtctldata = (() => {
                             delete message.allow_split_brain_promotion;
                         continue;
                     }
+                case 10: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.required_position = value;
+                        else
+                            delete message.required_position;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -193066,6 +193298,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
                 if (typeof message.allow_split_brain_promotion !== "boolean")
                     return "allow_split_brain_promotion: boolean expected";
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position"))
+                if (!$util.isString(message.required_position))
+                    return "required_position: string expected";
             return null;
         };
 
@@ -193127,6 +193362,9 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.allow_split_brain_promotion != null)
                 if (object.allow_split_brain_promotion)
                     message.allow_split_brain_promotion = $Boolean(object.allow_split_brain_promotion);
+            if (object.required_position != null)
+                if (typeof object.required_position !== "string" || object.required_position.length)
+                    message.required_position = $String(object.required_position);
             return message;
         };
 
@@ -193158,6 +193396,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.wait_for_all_tablets = false;
                 object.expected_primary = null;
                 object.allow_split_brain_promotion = false;
+                object.required_position = "";
             }
             if (message.keyspace != null && $Object.hasOwnProperty.call(message, "keyspace"))
                 object.keyspace = message.keyspace;
@@ -193180,6 +193419,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.expected_primary = $root.topodata.TabletAlias.toObject(message.expected_primary, options, _depth + 1);
             if (message.allow_split_brain_promotion != null && $Object.hasOwnProperty.call(message, "allow_split_brain_promotion"))
                 object.allow_split_brain_promotion = message.allow_split_brain_promotion;
+            if (message.required_position != null && $Object.hasOwnProperty.call(message, "required_position"))
+                object.required_position = message.required_position;
             return object;
         };
 

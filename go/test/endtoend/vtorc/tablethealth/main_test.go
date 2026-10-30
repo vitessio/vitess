@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 	var cellInfos []*utils.CellInfo
 	cellInfos = append(cellInfos, &utils.CellInfo{
 		CellName:    utils.Cell1,
-		NumReplicas: 2,
+		NumReplicas: 3,
 		NumRdonly:   1,
 		UIDBase:     100,
 	})

@@ -18,6 +18,7 @@ package throttle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -33,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -195,6 +197,12 @@ func (ts *FakeTopoServer) GetTablet(ctx context.Context, alias *topodatapb.Table
 		},
 	}
 	return tablet, nil
+}
+
+func (ts *FakeTopoServer) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
+	return topo.NewShardInfo(keyspace, shard, &topodatapb.Shard{
+		PrimaryAlias: &topodatapb.TabletAlias{Cell: "fakezone0", Uid: 100},
+	}, nil), nil
 }
 
 func (ts *FakeTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
@@ -2052,7 +2060,9 @@ func TestReplica(t *testing.T) {
 
 	throttler := newTestThrottler()
 	throttler.dormantPeriod = time.Minute
-	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA }
+	var tabletType atomic.Int32
+	tabletType.Store(int32(topodatapb.TabletType_REPLICA))
+	throttler.tabletTypeFunc = func() topodatapb.TabletType { return topodatapb.TabletType(tabletType.Load()) }
 
 	tmClient, ok := throttler.overrideTmClient.(*fakeTMClient)
 	require.True(t, ok)
@@ -2287,6 +2297,216 @@ func TestReplica(t *testing.T) {
 				assert.NotNil(t, checkResult)
 				assert.Contains(t, checkResult.Summary(), testAppName.String()+" is denied access due to")
 			})
+
+			t.Run("RDONLY tablet stimulates the primary every half of the shortest lease", func(t *testing.T) {
+				// The REPLICA above stimulated the primary once, and a REPLICA would not again within dormantPeriod.
+				// The primary does not probe RDONLY tablets, so while one is checked it renews the lease itself.
+				tabletType.Store(int32(topodatapb.TabletType_RDONLY))
+				before := len(tmClient.AppNames())
+				assert.Eventually(t, func() bool {
+					throttler.Check(ctx, throttlerapp.VStreamerName.String(), nil, flags)
+					return len(tmClient.AppNames()) >= before+2
+				}, 30*time.Second, 200*time.Millisecond)
+				for _, appName := range tmClient.AppNames() {
+					assert.Equal(t, throttlerapp.ThrottlerStimulatorName.String(), appName)
+				}
+			})
 		}()
+	})
+}
+
+// stimulateTopoServer serves a single shard record and a set of tablet records, and counts reads.
+type stimulateTopoServer struct {
+	FakeTopoServer
+	primaryAlias *topodatapb.TabletAlias
+	tabletTypes  map[uint32]topodatapb.TabletType
+	shardErr     error
+	tabletErr    error
+
+	shardReads  int
+	tabletReads []*topodatapb.TabletAlias
+	listReads   int
+}
+
+func (ts *stimulateTopoServer) GetShard(ctx context.Context, keyspace, shard string) (*topo.ShardInfo, error) {
+	ts.shardReads++
+	if ts.shardErr != nil {
+		return nil, ts.shardErr
+	}
+	return topo.NewShardInfo(keyspace, shard, &topodatapb.Shard{PrimaryAlias: ts.primaryAlias}, nil), nil
+}
+
+func (ts *stimulateTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
+	ts.tabletReads = append(ts.tabletReads, alias)
+	if ts.tabletErr != nil {
+		return nil, ts.tabletErr
+	}
+	return &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: alias, Type: ts.tabletTypes[alias.Uid]}}, nil
+}
+
+func (ts *stimulateTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
+	ts.listReads++
+	return ts.FakeTopoServer.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+}
+
+// stimulateTMClient records which tablets were sent a CheckThrottler request.
+type stimulateTMClient struct {
+	tmclient.TabletManagerClient
+	checked  []*topodatapb.Tablet
+	checkErr error
+}
+
+func (c *stimulateTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	c.checked = append(c.checked, tablet)
+	if c.checkErr != nil {
+		return nil, c.checkErr
+	}
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
+// TestStimulatePrimaryThrottler verifies that a replica finds the primary to stimulate from the shard record
+// with one shard read and at most one tablet read, never walking the shard, and that it skips the round when
+// there is no primary or the tablet record does not say PRIMARY, and returns topo and RPC errors. A primary that
+// answered is reused for the next stimulation without reading the topo again; any other outcome is not.
+// It also verifies how often each tablet type stimulates the primary.
+func TestStimulatePrimaryThrottler(t *testing.T) {
+	primary := &topodatapb.TabletAlias{Cell: "fakezone1", Uid: 101}
+	errShard := errors.New("topo unavailable")
+	errTablet := errors.New("tablet record unavailable")
+	errCheck := errors.New("primary unreachable")
+
+	tcases := []struct {
+		name         string
+		primaryAlias *topodatapb.TabletAlias
+		tabletTypes  map[uint32]topodatapb.TabletType
+		shardErr     error
+		tabletErr    error
+		checkErr     error
+		expectErr    error
+		expectReads  int
+		expectTarget *topodatapb.TabletAlias
+	}{
+		{
+			name:         "stimulates the primary named by the shard record",
+			primaryAlias: primary,
+			tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_PRIMARY},
+			expectReads:  1,
+			expectTarget: primary,
+		},
+		{
+			name:        "no primary in the shard record",
+			expectReads: 0,
+		},
+		{
+			name:         "shard record names a tablet that is no longer primary",
+			primaryAlias: primary,
+			tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_REPLICA},
+			expectReads:  1,
+		},
+		{
+			name:      "shard read fails",
+			shardErr:  errShard,
+			expectErr: errShard,
+		},
+		{
+			name:         "primary tablet read fails",
+			primaryAlias: primary,
+			tabletErr:    errTablet,
+			expectErr:    errTablet,
+			expectReads:  1,
+		},
+		{
+			name:         "check on the primary fails",
+			primaryAlias: primary,
+			tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_PRIMARY},
+			checkErr:     errCheck,
+			expectErr:    errCheck,
+			expectReads:  1,
+			expectTarget: primary,
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			ts := &stimulateTopoServer{
+				primaryAlias: tcase.primaryAlias,
+				tabletTypes:  tcase.tabletTypes,
+				shardErr:     tcase.shardErr,
+				tabletErr:    tcase.tabletErr,
+			}
+			tmClient := &stimulateTMClient{checkErr: tcase.checkErr}
+			throttler := &Throttler{
+				keyspace:       "ks",
+				shard:          "-80",
+				ts:             ts,
+				dormantPeriod:  time.Minute,
+				tabletTypeFunc: func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA },
+			}
+
+			err := throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+			if tcase.expectErr != nil {
+				require.ErrorIs(t, err, tcase.expectErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			// One shard read and at most one tablet read; never a walk of the whole shard.
+			assert.Equal(t, 1, ts.shardReads)
+			assert.Zero(t, ts.listReads)
+			assert.Len(t, ts.tabletReads, tcase.expectReads)
+			if tcase.expectTarget == nil {
+				assert.Empty(t, tmClient.checked)
+				// Nothing was cached, so a second stimulation reads the shard record again.
+				_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+				assert.Equal(t, 2, ts.shardReads)
+				assert.Empty(t, tmClient.checked)
+				return
+			}
+			require.Len(t, tmClient.checked, 1)
+			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[0].Alias))
+
+			// A second stimulation reuses the primary only if the first one reached it.
+			_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+			if tcase.checkErr == nil {
+				assert.Equal(t, 1, ts.shardReads, "the primary that answered should be reused")
+			} else {
+				assert.Equal(t, 2, ts.shardReads, "a primary that failed the check should be read again")
+			}
+			require.Len(t, tmClient.checked, 2)
+			assert.Equal(t, topoproto.TabletAliasString(tcase.expectTarget), topoproto.TabletAliasString(tmClient.checked[1].Alias))
+
+			// A cached primary older than cachedPrimaryTTL is read again.
+			throttler.cachedPrimary.Store(&cachedPrimaryTablet{tablet: tmClient.checked[0], readAt: time.Now().Add(-cachedPrimaryTTL)})
+			reads := ts.shardReads
+			_ = throttler.stimulatePrimaryThrottler(t.Context(), tmClient)
+			assert.Equal(t, reads+1, ts.shardReads)
+		})
+	}
+
+	t.Run("stimulation interval", func(t *testing.T) {
+		intervalCases := []struct {
+			name       string
+			tabletType topodatapb.TabletType
+			listed     bool
+			expect     time.Duration
+		}{
+			{name: "primary", tabletType: topodatapb.TabletType_PRIMARY, expect: time.Minute},
+			{name: "replica, which the primary probes", tabletType: topodatapb.TabletType_REPLICA, expect: time.Minute},
+			{name: "rdonly", tabletType: topodatapb.TabletType_RDONLY, expect: 2 * time.Second},
+			{name: "spare", tabletType: topodatapb.TabletType_SPARE, expect: 2 * time.Second},
+			{name: "rdonly listed in --throttle-tablet-types", tabletType: topodatapb.TabletType_RDONLY, listed: true, expect: time.Minute},
+		}
+		for _, tcase := range intervalCases {
+			t.Run(tcase.name, func(t *testing.T) {
+				throttler := &Throttler{
+					dormantPeriod:  time.Minute,
+					tabletTypeFunc: func() topodatapb.TabletType { return tcase.tabletType },
+				}
+				throttler.initThrottleTabletTypes()
+				if tcase.listed {
+					throttler.throttleTabletTypesMap[tcase.tabletType] = true
+				}
+				assert.Equal(t, tcase.expect, throttler.primaryStimulationInterval())
+			})
+		}
 	})
 }

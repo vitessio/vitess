@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ import (
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -448,6 +450,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 	span.Annotate("backup_engine", req.BackupEngine)
+	span.Annotate("include_binlogs", req.IncludeBinlogs)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -475,38 +478,31 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 	span.Annotate("upgrade_safe", req.UpgradeSafe)
 	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
+	span.Annotate("include_binlogs", req.IncludeBinlogs)
+	span.Annotate("tablet_types", topoproto.MakeStringTypeCSV(req.TabletTypes))
+
+	if slices.Contains(req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"type PRIMARY cannot be listed in tablet types. to fall back to the primary when no listed type can take the backup, rerun the backup command with --allow-primary")
+		return err
+	}
+
+	if unsupported := reparentutil.UnsupportedBackupTabletTypes(req.TabletTypes); len(unsupported) > 0 {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet type %s cannot take a backup of a shard",
+			topoproto.MakeStringTypeCSV(unsupported))
+		return err
+	}
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
-	if err != nil {
-		tablets = reparentutil.GetBackupCandidates(tablets, stats)
-		// Only return err when no usable tablet
-		if len(tablets) == 0 {
-			return err
-		}
+	if err != nil && len(reparentutil.GetBackupCandidates(tablets, stats)) == 0 {
+		return err
 	}
 
-	var (
-		backupTablet    *topodatapb.Tablet
-		backupTabletLag uint32
-	)
+	var backupTablet *topodatapb.Tablet
 
-	for i, tablet := range tablets {
-		switch tablet.Type {
-		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
-		default:
-			continue
-		}
-
-		// ignore tablet with an unknown replication lag status
-		if stats[i].ReplicationLagUnknown {
-			continue
-		}
-
-		if lag := stats[i].ReplicationLagSeconds; backupTablet == nil || lag < backupTabletLag {
-			backupTablet = tablet.Tablet
-			backupTabletLag = lag
-		}
+	if tablet := reparentutil.ChooseBackupTablet(tablets, stats, req.TabletTypes); tablet != nil {
+		backupTablet = tablet.Tablet
 	}
 
 	if backupTablet == nil && req.AllowPrimary {
@@ -521,6 +517,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	}
 
 	if backupTablet == nil {
+		// A tablet that could not report may be one of the listed types, so give the status errors as the reason.
+		if err != nil && len(req.TabletTypes) > 0 {
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup: %v", err)
+			return err
+		}
 		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup")
 		return err
 	}
@@ -534,6 +535,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 		InitSql:              req.InitSql,
+		IncludeBinlogs:       req.IncludeBinlogs,
 	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
@@ -551,6 +553,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 		InitSql:              req.InitSql,
+		IncludeBinlogs:       req.IncludeBinlogs,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -1231,7 +1234,15 @@ func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.Delete
 	span.Annotate("recursive", req.Recursive)
 	span.Annotate("force", req.Force)
 
+	// Skip repeated shards: without Force, the second delete would fail to
+	// lock the shard that the first one deleted.
+	deleted := make(map[string]bool, len(req.Shards))
 	for _, shard := range req.Shards {
+		key := topoproto.KeyspaceShardString(shard.Keyspace, shard.Name)
+		if deleted[key] {
+			continue
+		}
+		deleted[key] = true
 		if err2 := deleteShard(ctx, s.ts, shard.Keyspace, shard.Name, req.Recursive, req.EvenIfServing, req.Force); err2 != nil {
 			err = err2
 			return nil, err
@@ -1317,6 +1328,12 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("shard", req.Shard)
 	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
+	span.Annotate("required_position", req.RequiredPosition)
+
+	requiredPosition, err := replication.DecodePositionDefaultFlavor(req.RequiredPosition, replication.Mysql56FlavorID)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid required position: %s", err.Error())
+	}
 
 	ignoreReplicaAliases := topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()
 	span.Annotate("ignore_replicas", strings.Join(ignoreReplicaAliases, ","))
@@ -1352,6 +1369,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 			ExpectedPrimaryAlias:      req.ExpectedPrimary,
+			RequiredPosition:          requiredPosition,
 		},
 	)
 
@@ -4892,8 +4910,9 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 
 	var shards []string
 	if len(req.Shards) != 0 {
-		// If the user has specified a list of specific shards, we'll use that.
-		shards = req.Shards
+		// If the user has specified a list of specific shards, we'll use that,
+		// without repeats.
+		shards = slices.Compact(slices.Sorted(slices.Values(req.Shards)))
 	} else {
 		// Validate all of the shards.
 		shards, err = s.ts.GetShardNames(ctx, req.Keyspace)
@@ -4983,8 +5002,9 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 
 	var shards []string
 	if len(req.Shards) != 0 {
-		// If the user has specified a list of specific shards, we'll use that.
-		shards = req.Shards
+		// If the user has specified a list of specific shards, we'll use that,
+		// without repeats.
+		shards = slices.Compact(slices.Sorted(slices.Values(req.Shards)))
 	} else {
 		// Otherwise we look at all the shards in the keyspace.
 		shards, err = s.ts.GetShardNames(ctx, keyspace)
@@ -5472,7 +5492,8 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 
 	defer panicHandler(&err)
 	keyspace := req.Keyspace
-	shards := req.Shards
+	// Validate each shard once, even if the request repeats it.
+	shards := slices.Compact(slices.Sorted(slices.Values(req.Shards)))
 	excludeTables := req.ExcludeTables
 	includeViews := req.IncludeViews
 

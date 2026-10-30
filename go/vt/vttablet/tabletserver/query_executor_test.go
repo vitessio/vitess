@@ -434,6 +434,9 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 		logWant string
 		// If empty, then we should expect the same as logWant.
 		inTxWant string
+		// principal is the effective caller principal. If empty, the
+		// immediate caller username is used in the annotation.
+		principal string
 	}{{
 		input: "select * from t",
 		dbResponses: []dbResponse{{
@@ -447,6 +450,34 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 		planWant:   "Select",
 		logWant:    "/* u1@PRIMARY */ select * from t limit 10001",
 		inTxWant:   "/* u1@PRIMARY */ select * from t limit 10001",
+	}, {
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  "select * from t limit 10001",
+			result: selectResult,
+		}, {
+			query:  "/* app-user_1@example.com@PRIMARY */ select * from t limit 10001",
+			result: selectResult,
+		}},
+		resultWant: selectResult,
+		planWant:   "Select",
+		logWant:    "/* app-user_1@example.com@PRIMARY */ select * from t limit 10001",
+		principal:  "app-user_1@example.com",
+	}, {
+		// A principal that closes the comment must not replace the query: its
+		// "*/" is escaped.
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  "select * from t limit 10001",
+			result: selectResult,
+		}, {
+			query:  "/* *\\/ select * from secret -- @PRIMARY */ select * from t limit 10001",
+			result: selectResult,
+		}},
+		resultWant: selectResult,
+		planWant:   "Select",
+		logWant:    "/* *\\/ select * from secret -- @PRIMARY */ select * from t limit 10001",
+		principal:  "*/ select * from secret -- ",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.input, func(t *testing.T) {
@@ -458,7 +489,11 @@ func TestQueryExecutorQueryAnnotation(t *testing.T) {
 			callerID := &querypb.VTGateCallerID{
 				Username: "u1",
 			}
-			ctx := callerid.NewContext(t.Context(), nil, callerID)
+			var effectiveCallerID *vtrpcpb.CallerID
+			if tcase.principal != "" {
+				effectiveCallerID = &vtrpcpb.CallerID{Principal: tcase.principal}
+			}
+			ctx := callerid.NewContext(t.Context(), effectiveCallerID, callerID)
 			tsv := newTestTabletServer(ctx, noFlags, db)
 			tsv.config.DB.DBName = "ks"
 			tsv.config.AnnotateQueries = true
@@ -967,6 +1002,99 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
+// TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
+// refill COMMIT leaves the sequence cache unchanged and that the next call
+// refills the cache from the sequence table.
+func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, "commit failed")
+
+	// Check that the cache stays empty. The table still holds next_id = 1.
+	seq := qre.plan.Table.SequenceInfo
+	require.Zero(t, seq.NextVal)
+	require.Zero(t, seq.LastVal)
+
+	// Make the retry read next_id = 4 from the table. A stale cache returns 1.
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 7 where id = 0", &sqltypes.Result{})
+	db.DeleteRejectedQuery("commit")
+
+	qre = newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	got, err := qre.Execute()
+	require.NoError(t, err)
+
+	want := &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		}},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(4),
+		}},
+	}
+	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
+}
+
+// TestQueryExecutorPlanNextvalPartialRefillCommitFailureKeepsCache verifies
+// that a failed refill COMMIT on a non-empty cache leaves the cached range
+// unchanged. The refill starts from the cached last value, which equals the
+// next_id in the sequence table.
+func TestQueryExecutorPlanNextvalPartialRefillCommitFailureKeepsCache(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+
+	// Use up the cached range [1, 4). The table now holds next_id = 4.
+	for range 3 {
+		qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+		_, err := qre.Execute()
+		require.NoError(t, err)
+	}
+
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(4), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 7 where id = 0", &sqltypes.Result{})
+	db.AddRejectedQuery("commit", errors.New("commit failed"))
+
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, "commit failed")
+
+	// Check that the cache keeps the used up range. A stale cache holds LastVal = 7.
+	seq := qre.plan.Table.SequenceInfo
+	require.EqualValues(t, 4, seq.NextVal)
+	require.EqualValues(t, 4, seq.LastVal)
+}
+
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	ctx := t.Context()
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
@@ -1125,7 +1253,10 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 // them under strict table ACL, bypassing the table ACL entirely
 // (GHSA-w6mx-2f8x-pqf4). Under strict ACL these must now be denied for a
 // non-exempt caller; an exempt caller, a dry run, and strict ACL off must
-// still run them.
+// still run them. The one non-exempt caller that may run them is one holding
+// every role in a table group covering every table ("%"), and then only DO and
+// a partially parsed CREATE TABLE among those here: CALL and LOAD DATA can act
+// beyond any table, so they stay denied for it.
 func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -1139,20 +1270,26 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	db.AddQueryPattern("(?is)do .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)call .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)load data .*", &sqltypes.Result{})
+	db.AddQueryPattern("(?is)create table .*", &sqltypes.Result{})
 
 	// A subquery-reading DO, a stored-procedure CALL, and a LOAD DATA: one per
 	// tablet plan type whose statement the parser leaves opaque.
+	// allTablesRuns tells whether a caller holding every role on every table
+	// may run the statement. A CALL can run a SQL SECURITY DEFINER procedure
+	// with its definer's privileges, and LOAD DATA INFILE reads files on the
+	// server, neither of which table ACL grants, so both stay exempt-only.
 	cases := []struct {
-		name   string
-		query  string
-		planID planbuilder.PlanType
+		name          string
+		query         string
+		planID        planbuilder.PlanType
+		allTablesRuns bool
 	}{
-		{"do with table subquery", "do (select email from test_table where pk = 3 limit 1)", planbuilder.PlanOtherAdmin},
-		{"call stored procedure", "call test_proc()", planbuilder.PlanCallProc},
+		{"do with table subquery", "do (select email from test_table where pk = 3 limit 1)", planbuilder.PlanOtherAdmin, true},
+		{"call stored procedure", "call test_proc()", planbuilder.PlanCallProc, false},
 		// LOAD DATA is the same gap on the write side: the parser discards
 		// everything after LOAD DATA, and the stock init_db.sql grants vt_app
 		// the FILE privilege, so a server-side INFILE into a denied table runs.
-		{"load data into table", "load data infile '/var/lib/mysql-files/x.csv' into table test_table", planbuilder.PlanLoad},
+		{"load data into table", "load data infile '/var/lib/mysql-files/x.csv' into table test_table", planbuilder.PlanLoad, false},
 	}
 
 	// test_table is readable only by "superuser"; the caller "u2" is in no group.
@@ -1166,6 +1303,28 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	require.NoError(t, tableacl.InitFromProto(config))
 	callerID := &querypb.VTGateCallerID{Username: "u2", Groups: []string{"eng", "beta"}}
 	ctx := callerid.NewContext(t.Context(), nil, callerID)
+
+	// allTablesConfig has a single group covering every table ("%"), the only
+	// group a "%" entry allows: u4 holds every role in it, u3 is a reader and a
+	// writer, and u5 only an ADMIN. The roles are granted separately, so u5
+	// cannot read.
+	allTablesConfig := &tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "all",
+			TableNamesOrPrefixes: []string{"%"},
+			Readers:              []string{"u3", "u4"},
+			Writers:              []string{"u3", "u4"},
+			Admins:               []string{"u4", "u5"},
+		}},
+	}
+	// useAllTablesConfig switches the table ACL to allTablesConfig for one
+	// sub-case and restores config when it ends.
+	useAllTablesConfig := func(t *testing.T) {
+		t.Helper()
+		require.NoError(t, tableacl.InitFromProto(allTablesConfig))
+		t.Cleanup(func() { require.NoError(t, tableacl.InitFromProto(config)) })
+	}
+	adminCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: "u4"})
 
 	// newServer starts a tablet server for one sub-case and stops it when that
 	// sub-case ends, whether or not its assertions pass, so a failure cannot
@@ -1239,8 +1398,117 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 				require.NoError(t, err, "with strict table ACL off the statement must still run")
 				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
 			})
+
+			// A caller holding every role in a group that covers every table may
+			// do anything to any table the statement could touch, so its
+			// unknown table set does not matter. One that lacks a role does not.
+			t.Run("a caller with every role on every table", func(t *testing.T) {
+				useAllTablesConfig(t)
+				tsv := newServer(t, enableStrictTableACL)
+				qre := newTestQueryExecutor(adminCtx, tsv, tc.query, 0)
+				require.True(t, qre.plan.TablesUndetermined)
+				if !tc.allTablesRuns {
+					calledBefore := db.GetQueryCalledNum(tc.query)
+					_, err := qre.Execute()
+					require.EqualError(t, err, tc.planID.String()+" command denied to user 'u4' for a table set that cannot be determined (ACL check error)")
+					assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
+					return
+				}
+				allowedKey := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u4"}, ".")
+				allowedBefore := tsv.stats.TableaclAllowed.Counts()[allowedKey]
+				calledBefore := db.GetQueryCalledNum(tc.query)
+				_, err := qre.Execute()
+				require.NoError(t, err, "a caller with every role on every table must be able to run the statement under strict table ACL")
+				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
+				assert.Equal(t, allowedBefore+1, tsv.stats.TableaclAllowed.Counts()[allowedKey], "the access must be counted as allowed, under the same empty table group as a denial")
+			})
+
+			// A dry run records what enforcement would do, so the access of a
+			// caller holding every role on every table is allowed, not a
+			// pseudo-denial.
+			if tc.allTablesRuns {
+				t.Run("a dry run counts a caller with every role on every table as allowed", func(t *testing.T) {
+					useAllTablesConfig(t)
+					tsv := newServer(t, enableStrictTableACL)
+					tsv.qe.enableTableACLDryRun = true
+					qre := newTestQueryExecutor(adminCtx, tsv, tc.query, 0)
+					key := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u4"}, ".")
+					allowedBefore := tsv.stats.TableaclAllowed.Counts()[key]
+					pseudoBefore := tsv.stats.TableaclPseudoDenied.Counts()[key]
+					_, err := qre.Execute()
+					require.NoError(t, err)
+					assert.Equal(t, allowedBefore+1, tsv.stats.TableaclAllowed.Counts()[key], "the access must be counted as allowed")
+					assert.Equal(t, pseudoBefore, tsv.stats.TableaclPseudoDenied.Counts()[key], "the access must not be counted as a pseudo-denial")
+				})
+			}
+
+			for _, user := range []string{"u3", "u5"} {
+				t.Run("a caller lacking a role on every table is denied/"+user, func(t *testing.T) {
+					useAllTablesConfig(t)
+					tsv := newServer(t, enableStrictTableACL)
+					userCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: user})
+					qre := newTestQueryExecutor(userCtx, tsv, tc.query, 0)
+					// The series keeps the empty table group it shipped with,
+					// so an alert on it still matches with a "%" group.
+					deniedKey := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), user}, ".")
+					deniedBefore := tsv.stats.TableaclDenied.Counts()[deniedKey]
+					calledBefore := db.GetQueryCalledNum(tc.query)
+					_, err := qre.Execute()
+					require.EqualError(t, err, tc.planID.String()+" command denied to user '"+user+"' for a table set that cannot be determined (ACL check error)")
+					assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
+					assert.Equal(t, deniedBefore+1, tsv.stats.TableaclDenied.Counts()[deniedKey], "the denial must be counted under an empty table group")
+				})
+			}
 		})
 	}
+
+	// A CREATE TABLE the parser only partially parses names the table it
+	// creates, but its body is opaque and may copy rows from other tables. A
+	// caller holding every role in a group covering every table may read those
+	// tables too, so the statement runs for it.
+	t.Run("a partially parsed CREATE TABLE runs for a caller with every role on every table", func(t *testing.T) {
+		useAllTablesConfig(t)
+		const query = "create table ct (select pk from test_table)"
+		tsv := newServer(t, enableStrictTableACL)
+		qre := newTestQueryExecutor(adminCtx, tsv, query, 0)
+		require.Equal(t, planbuilder.PlanDDL, qre.plan.PlanID)
+		require.True(t, qre.plan.TablesUndetermined)
+		calledBefore := db.GetQueryCalledNum(query)
+		_, err := qre.Execute()
+		require.NoError(t, err)
+		assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(query), "the statement must reach the backend")
+	})
+
+	// An ADMIN alone passes the check on the table a partially parsed CREATE
+	// TABLE names, so only the undetermined check keeps it from reading
+	// test_table through the statement's opaque body.
+	t.Run("a partially parsed CREATE TABLE is denied for a caller that is only an admin", func(t *testing.T) {
+		useAllTablesConfig(t)
+		const query = "create table ct (select pk from test_table)"
+		tsv := newServer(t, enableStrictTableACL)
+		userCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: "u5"})
+		qre := newTestQueryExecutor(userCtx, tsv, query, 0)
+		require.True(t, qre.plan.TablesUndetermined)
+		calledBefore := db.GetQueryCalledNum(query)
+		_, err := qre.Execute()
+		require.EqualError(t, err, "DDL command denied to user 'u5' for a table set that cannot be determined (ACL check error)")
+		assert.Equal(t, calledBefore, db.GetQueryCalledNum(query), "the backend must not see a statement the ACL denied")
+	})
+
+	// A plan checks every table against the configuration it was built with,
+	// like the tables it names in plan.Authorized; a reload clears the plan
+	// cache instead. So a statement planned under the "%" group still runs
+	// after a reload that removed it, rather than mix the two configurations.
+	t.Run("the group covering every table is resolved when the plan is built", func(t *testing.T) {
+		useAllTablesConfig(t)
+		const query = "do (select email from test_table where pk = 3 limit 1)"
+		tsv := newServer(t, enableStrictTableACL)
+		qre := newTestQueryExecutor(adminCtx, tsv, query, 0)
+		require.True(t, qre.plan.TablesUndetermined)
+		require.NoError(t, tableacl.InitFromProto(config))
+		_, err := qre.Execute()
+		require.NoError(t, err, "the plan must be checked against the configuration it was built with")
+	})
 }
 
 // TestQueryExecutorTableAclCTEBypass guards against GHSA-mv22-c3rp-c6m4: a
@@ -2645,6 +2913,57 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{validSetting})
 	require.NoError(t, err)
 	require.NoError(t, tsv.te.Release(ctx, connID))
+}
+
+// A connection starts out in a character set Vitess can parse safely, and a
+// session must not be able to switch it to one it cannot: not through a SET
+// statement sent to the query service, and not through connection settings,
+// which a VTGate gRPC client controls through its session's system variables.
+// Connection settings refuse any character set change, on the settings-pool
+// path and on either reservation path, since undoing one restores the server's
+// global character set.
+func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
+	t.Cleanup(tsv.StopService)
+
+	assertSettingRefused := func(t *testing.T, setting string) {
+		const settingsErr = "the connection character set cannot be changed through connection settings"
+		_, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+		_, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+		_, err = tsv.qe.GetConnSetting(ctx, []string{setting})
+		require.ErrorContains(t, err, settingsErr)
+	}
+
+	for _, setting := range []string{"set character_set_client = 'gbk'", "set names 'sjis'", "set collation_connection = 'cp932_japanese_ci'"} {
+		t.Run(setting, func(t *testing.T) {
+			assertSettingRefused(t, setting)
+			_, err := tsv.Execute(ctx, nil, tsv.sm.Target(), setting, nil, 0, 0, nil)
+			require.ErrorContains(t, err, "unsupported connection character set")
+			assert.Zero(t, db.GetQueryCalledNum(setting), "a rejected setting must not reach the backend")
+		})
+	}
+
+	// even a safe character set is refused as a connection setting
+	safeSetting := "set character_set_client = 'utf8mb4'"
+	assertSettingRefused(t, safeSetting)
+	assert.Zero(t, db.GetQueryCalledNum(safeSetting), "a refused setting must not reach the backend")
+
+	// a user-defined variable named like a connection character set variable
+	// changes no connection setting, so a reserved connection may assign it
+	userVariableSetting := "set @charset = 'latin1'"
+	db.AddQuery(userVariableSetting, &sqltypes.Result{})
+	connID, _, err := tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{userVariableSetting})
+	require.NoError(t, err)
+	require.NoError(t, tsv.te.Release(ctx, connID))
+	connID, err = tsv.te.Reserve(ctx, &querypb.ExecuteOptions{}, 0, []string{userVariableSetting})
+	require.NoError(t, err)
+	require.NoError(t, tsv.te.Release(ctx, connID))
+	assert.Equal(t, 2, db.GetQueryCalledNum(userVariableSetting), "the pre-query must reach the backend on both reservation paths")
 }
 
 // A setting is applied with no table ACL check, so under strict table ACL one

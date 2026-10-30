@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"slices"
 	"sync"
@@ -172,7 +173,11 @@ func (rs *rowStreamer) buildPlan() error {
 	// filtering will work.
 	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to build table plan for %s in row streamer: %v", ti.Name, err))
+		log.Error("Failed to build table plan in row streamer",
+			slog.String("table", ti.Name),
+			slog.String("error_code", vterrors.Code(err).String()),
+			slog.Any("error", err),
+		)
 		return err
 	}
 
@@ -290,8 +295,16 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 	buf.Myprintf(" from %v%s", sqlparser.NewIdentifierCS(rs.plan.Table.Name), indexHint)
 	if len(rs.lastpk) != 0 { // We're in the Nth copy phase cycle and need to resume
 		if len(rs.lastpk) != len(rs.pkColumns) {
-			return "", fmt.Errorf("cannot build a row streamer plan for the %s table as a lastpk value was provided (%v) and the number of primary key values within it (%d) does not match the number of primary key columns in the table (%d)",
+			return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot build a row streamer plan for the %s table as a lastpk value was provided (%v) and the number of primary key values within it (%d) does not match the number of primary key columns in the table (%d)",
 				st.Name, rs.lastpk, len(rs.lastpk), len(rs.pkColumns))
+		}
+		// A lastpk can come straight from a client's VStream request, with types
+		// the client chose. Check the values against the table's own columns, and
+		// write the copies typed as those columns, before any of them reaches the
+		// query.
+		lastpk, err := validateLastPK(rs.lastpk, rs.plan.Table.Fields, rs.pkColumns)
+		if err != nil {
+			return "", err
 		}
 		buf.WriteString(" where ")
 		// This closure handles the case for composite PKs. For example,
@@ -306,11 +319,11 @@ func (rs *rowStreamer) buildSelect(st *binlogdatapb.MinimalTable) (string, error
 				prefix = " or "
 				for i, pk := range rs.pkColumns[:lastcol] {
 					buf.Myprintf("%v = ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pk].Name))
-					rs.lastpk[i].EncodeSQL(buf)
+					writeLastPKValue(buf, lastpk[i])
 					buf.Myprintf(" and ")
 				}
 				buf.Myprintf("%v > ", sqlparser.NewIdentifierCI(rs.plan.Table.Fields[pkCol].Name))
-				rs.lastpk[lastcol].EncodeSQL(buf)
+				writeLastPKValue(buf, lastpk[lastcol])
 				buf.Myprintf(")")
 			}
 		}
@@ -365,7 +378,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		rotatedLog bool
 		err        error
 	)
-	log.Info(fmt.Sprintf("Streaming rows for query: %s\n", rs.sendQuery))
+	log.Info("row streamer executing query", slog.String("query", rs.sendQuery))
 	if rs.mode == RowStreamerModeSingleTable {
 		gtid, rotatedLog, err = rs.conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 		if err != nil {
@@ -444,7 +457,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(rs.ctx, &binlogdatapb.VStreamRowsResponse{Throttled: true, ThrottledReason: checkResult.Summary()})
 			})
-			logger.Infof("Throttled streaming rows for %s", rs.sendQuery)
+			logger.Info("Throttled streaming rows", slog.String("query", rs.sendQuery))
 			continue
 		}
 
