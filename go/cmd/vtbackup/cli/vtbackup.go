@@ -718,9 +718,10 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 // catchUpReplicationForBackup catches a restored mysqld up to the current
 // primary position and returns the final replication status after it stops
 // replication again, and the goal it caught up to. With stopAtTarget, when
-// replication stops and is restarted, the goal becomes the committed position of
-// the primary it restarts from, and replication stops there. Otherwise
-// replication restarts as it always did.
+// replication stops and is restarted, it stops at the goal again if the primary
+// it restarts from has committed all of it, and otherwise at that primary's
+// committed position, which becomes the goal. Without stopAtTarget, replication
+// restarts as it always did.
 func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManagerClient, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos, primaryPos replication.Position, stopAtTarget bool) (replication.ReplicationStatus, replication.Position, error) {
 	// Wait for replication to catch up.
 	phase.Set(phaseNameCatchupReplication, int64(1))
@@ -786,10 +787,26 @@ func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManager
 					// counts against how long it may stay stopped. The stop position
 					// stays in force.
 					log.Warn("Can't read the shard primary to restart replication from", slog.Any("error", err))
-				} else if err := startReplicationAt(ctx, mysqld, target); err != nil {
-					log.Warn("Failed to restart replication", slog.Any("error", err))
 				} else {
-					primaryPos = target.pos
+					// Keep the goal when the primary has committed all of it, so that a
+					// run on a busy shard doesn't keep chasing the primary's position.
+					// Replicating from a primary that lacks part of it, after a reparent
+					// that lost transactions, never reaches it, so the goal becomes
+					// that primary's committed position instead.
+					if target.pos.AtLeast(primaryPos) {
+						target.pos = primaryPos
+					}
+					if err := startReplicationAt(ctx, mysqld, target); err != nil {
+						log.Warn("Failed to restart replication", slog.Any("error", err))
+					} else {
+						if !target.pos.Equal(primaryPos) {
+							log.Info("The primary lacks part of the catch-up goal, so the goal becomes its committed position",
+								slog.String("primary", topoproto.TabletAliasString(target.tablet.Alias)),
+								slog.String("old_goal", primaryPos.String()),
+								slog.String("goal", target.pos.String()))
+						}
+						primaryPos = target.pos
+					}
 				}
 			} else if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warn(fmt.Sprintf("Failed to restart replication: %v", err))

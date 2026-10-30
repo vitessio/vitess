@@ -130,36 +130,51 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 		})
 	})
 
-	// vtbackup was catching up to 100's committed position when a reparent made
-	// 101 the primary and replication broke.
-	t.Run("restarts up to the committed position of the primary it repoints to", func(t *testing.T) {
-		synctest.Test(t, func(t *testing.T) {
-			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
-			oldGoal := testGTIDPosition(t, testPrimaryUUID+":1-3")
-			newGoal := testGTIDPosition(t, testPrimaryUUID+":1-3,"+testNewPrimaryUUID+":1-2")
-			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-3,"+testNewPrimaryUUID+":1-2"), nil
+	// vtbackup was catching up to 100's committed position when replication broke,
+	// and the primary it restarts from has committed all of the goal and more.
+	for _, tc := range []struct {
+		name    string
+		primary uint32
+		status  *replicationdatapb.PrimaryStatus
+	}{
+		{
+			name:    "the same primary",
+			primary: 100,
+			status:  primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-5"),
+		},
+		{
+			name:    "a primary that a planned reparent promoted",
+			primary: 101,
+			status:  primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-3,"+testNewPrimaryUUID+":1-2"),
+		},
+	} {
+		t.Run("keeps the goal when restarting from "+tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+				goal := testGTIDPosition(t, testPrimaryUUID+":1-3")
+				vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+					return tc.status, nil
+				})
+				vt.setPrimary(t, tc.primary)
+				caughtUp := replication.ReplicationStatus{Position: goal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning}
+				mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
+					{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
+					caughtUp,
+					caughtUp,
+				}}
+
+				status, gotGoal, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, goal, true)
+
+				require.NoError(t, err)
+				assert.True(t, gotGoal.Equal(goal), "goal %v", gotGoal)
+				assert.True(t, status.Position.Equal(goal), "position %v", status.Position)
+				assert.Equal(t, []string{fmt.Sprintf("primary-%d.test:3306", tc.primary)}, mysqld.sources)
+				assert.Equal(t, []bool{false}, mysqld.startReplicationAfter, "the source must be set without starting replication")
+				require.Len(t, mysqld.startUntil, 1)
+				assert.True(t, mysqld.startUntil[0].Equal(goal), "replication must stop at the goal, not at %v", mysqld.startUntil[0])
 			})
-			vt.setPrimary(t, 101)
-			mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
-				{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
-				// The goal read from 100 is reached, but not the one read from 101.
-				{Position: oldGoal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
-				{Position: newGoal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
-				{Position: newGoal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning},
-			}}
-
-			status, goal, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, oldGoal, true)
-
-			require.NoError(t, err)
-			assert.True(t, goal.Equal(newGoal), "goal %v", goal)
-			assert.True(t, status.Position.Equal(newGoal), "position %v", status.Position)
-			assert.Equal(t, []string{"primary-101.test:3306"}, mysqld.sources)
-			assert.Equal(t, []bool{false}, mysqld.startReplicationAfter, "the source must be set without starting replication")
-			require.Len(t, mysqld.startUntil, 1)
-			assert.True(t, mysqld.startUntil[0].Equal(newGoal), "replication must stop at 101's committed position, not at %v", mysqld.startUntil[0])
 		})
-	})
+	}
 
 	// The primary's tablet record was deleted, which clears the shard record's
 	// primary, and a new primary was elected while replication was down.
@@ -234,6 +249,9 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, gotGoal.Equal(goal), "goal %v", gotGoal)
 			assert.Equal(t, []string{"primary-101.test:3306"}, mysqld.sources)
+			// 101 lacks 100's GTID 3, so replication stops at 101's committed position.
+			require.Len(t, mysqld.startUntil, 1)
+			assert.True(t, mysqld.startUntil[0].Equal(goal), "replication must stop at 101's committed position, not at %v", mysqld.startUntil[0])
 		})
 	})
 
