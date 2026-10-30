@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -656,7 +657,8 @@ func (tm *TabletManager) UpdateVReplicationWorkflow(ctx context.Context, req *ta
 
 // getOptionSetString takes the option keys passed in and creates a sql clause to update the existing options
 // field in the vreplication table. The clause is built using the json_set() for new and updated options
-// and json_remove() for deleted options, denoted by an empty value.
+// and json_remove() for deleted options, denoted by an empty value. Keys and values come from the request,
+// so they are encoded as SQL string literals, and each key is quoted as a JSON path member.
 func getOptionSetString(config map[string]string) string {
 	if len(config) == 0 {
 		return ""
@@ -678,25 +680,37 @@ func getOptionSetString(config map[string]string) string {
 	sort.Strings(deletedKeys)
 	clause := "options"
 	if len(deletedKeys) > 0 {
-		// We need to quote the key in the json functions because flag names can contain hyphens.
-		clause = fmt.Sprintf("json_remove(options, '$.config.\"%s\"'", deletedKeys[0])
+		clause = "json_remove(options, " + configOptionPath(deletedKeys[0])
+		var clauseSb681 strings.Builder
 		for _, k := range deletedKeys[1:] {
-			clause += fmt.Sprintf(", '$.config.\"%s\"'", k)
+			fmt.Fprintf(&clauseSb681, ", %s", configOptionPath(k))
 		}
+		clause += clauseSb681.String()
 		clause += ")"
 	}
 	if len(keys) > 0 {
 		clause = fmt.Sprintf("json_set(json_insert(%s, '$.config', json_object()), ", clause)
+		var clauseSb688 strings.Builder
 		for i, k := range keys {
 			if i > 0 {
-				clause += ", "
+				clauseSb688.WriteString(", ")
 			}
-			clause += fmt.Sprintf("'$.config.\"%s\"', '%s'", k, strings.TrimSpace(config[k]))
+			fmt.Fprintf(&clauseSb688, "%s, %s", configOptionPath(k), sqltypes.EncodeStringSQL(strings.TrimSpace(config[k])))
 		}
+		clause += clauseSb688.String()
 		clause += ")"
 	}
-	options = fmt.Sprintf(", options = %s", clause)
+	options = ", options = " + clause
 	return options
+}
+
+// configOptionPath returns the JSON path of the config override key in the
+// options field, as a SQL string literal. The key is a JSON-quoted path member
+// because flag names can contain hyphens, and because MySQL decodes JSON string
+// escapes in a quoted member, so any key names exactly that member.
+func configOptionPath(key string) string {
+	quotedKey, _ := json.Marshal(key) // Marshaling a string cannot fail.
+	return sqltypes.EncodeStringSQL("$.config." + string(quotedKey))
 }
 
 // UpdateVReplicationWorkflows operates in much the same way that
