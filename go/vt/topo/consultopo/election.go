@@ -123,9 +123,10 @@ func (mp *consulLeaderParticipation) Stop() {
 // GetCurrentLeaderID is part of the topo.LeaderParticipation interface
 func (mp *consulLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string, error) {
 	electionPath := path.Join(mp.s.root, electionsPath, mp.name)
-	pair, _, err := mp.s.kv.Get(electionPath, nil)
+	options := &api.QueryOptions{}
+	pair, _, err := mp.s.kv.Get(electionPath, options.WithContext(ctx))
 	if err != nil {
-		return "", err
+		return "", convertError(err, electionPath)
 	}
 	if pair == nil {
 		return "", nil

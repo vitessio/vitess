@@ -19,7 +19,6 @@ package consultopo
 import (
 	"context"
 	"errors"
-	"net/url"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -35,15 +34,11 @@ var (
 	ErrBadResponse = errors.New("consul request returned success, but response is missing required data")
 )
 
-// convertError converts a context error into a topo error. All errors
-// are either application-level errors, or context errors.
+// convertError converts a context error into a topo error. It returns
+// any other error unchanged, so that errors from the Go HTTP client keep
+// their request URL.
 func convertError(err error, nodePath string) error {
-	// Unwrap errors from the Go HTTP client.
-	if urlErr, ok := errors.AsType[*url.Error](err); ok {
-		err = urlErr.Err
-	}
-
-	// Convert specific sentinel values.
+	// errors.Is sees through the *url.Error that the Go HTTP client returns.
 	switch {
 	case errors.Is(err, context.Canceled):
 		return topo.NewError(topo.Interrupted, nodePath)
