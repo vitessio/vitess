@@ -228,3 +228,50 @@ func TestValidateMySQLVersionUpgradeCompatible(t *testing.T) {
 		})
 	}
 }
+
+func TestIsSameMySQLRelease(t *testing.T) {
+	testCases := []struct {
+		name  string
+		a     string
+		b     string
+		want  bool
+		error string
+	}{
+		{
+			name: "same version",
+			a:    "mysqld  Ver 8.0.36",
+			b:    "mysqld  Ver 8.0.36",
+			want: true,
+		},
+		{
+			name: "same release, different patch",
+			a:    "mysqld  Ver 8.0.32",
+			b:    "mysqld  Ver 8.0.36",
+			want: true,
+		},
+		{
+			name: "different release",
+			a:    "mysqld  Ver 8.0.36",
+			b:    "mysqld  Ver 8.4.10",
+			want: false,
+		},
+		{
+			name:  "unparsable version",
+			a:     "mysqld  Ver 8.0.36",
+			b:     "not a version",
+			error: "could not parse server version from: not a version",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := isSameMySQLRelease(tc.a, tc.b)
+			if tc.error != "" {
+				assert.ErrorContains(t, err, tc.error)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

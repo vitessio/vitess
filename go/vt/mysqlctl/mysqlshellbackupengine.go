@@ -451,6 +451,12 @@ func (be *MySQLShellBackupEngine) ShouldSkipVersionCheck() bool {
 	return mysqlShellRestoreSkipVersionCheck
 }
 
+// BlocksCrossReleaseRestore returns false because mysql-shell performs a logical
+// restore, so its backups are not tied to the on-disk format of a MySQL release series.
+func (be *MySQLShellBackupEngine) BlocksCrossReleaseRestore() bool {
+	return false
+}
+
 func (be *MySQLShellBackupEngine) Name() string { return mysqlShellBackupEngineName }
 
 // isObjectStoreFlags returns true if the given flags JSON string contains

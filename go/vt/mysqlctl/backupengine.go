@@ -202,6 +202,14 @@ type versionCheckSkipper interface {
 	ShouldSkipVersionCheck() bool
 }
 
+// crossReleaseRestoreBlocker is an optional interface a RestoreEngine may implement to
+// refuse restoring its backups onto a different MySQL release series (e.g. 8.0 -> 8.4),
+// regardless of the backup manifest's UpgradeSafe value. Engines that don't implement
+// it are treated as not blocking cross-release restores.
+type crossReleaseRestoreBlocker interface {
+	BlocksCrossReleaseRestore() bool
+}
+
 // BackupRestoreEngine is a combination of BackupEngine and RestoreEngine.
 type BackupRestoreEngine interface {
 	BackupEngine
@@ -593,6 +601,17 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 						params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
 						continue
 					}
+					if blocker, ok := BackupRestoreEngineMap[engineName].(crossReleaseRestoreBlocker); ok && blocker.BlocksCrossReleaseRestore() {
+						sameRelease, err := isSameMySQLRelease(mysqlVersion, bm.MySQLVersion)
+						if err != nil {
+							params.Logger.Warningf("Skipping backup %v/%v: cannot compare MySQL release series of %v and %v: %v", backupDir, bh.Name(), bm.MySQLVersion, mysqlVersion, err)
+							continue
+						}
+						if !sameRelease {
+							params.Logger.Warningf("Skipping backup %v/%v: engine %v cannot restore across MySQL release series (%v -> %v)", backupDir, bh.Name(), engineName, bm.MySQLVersion, mysqlVersion)
+							continue
+						}
+					}
 				}
 
 				switch {
@@ -953,4 +972,18 @@ func binlogFilesToBackup(cnf *Mycnf, binlogFiles []string) (result []FileEntry, 
 		totalSize = totalSize + fi.Size()
 	}
 	return result, totalSize, nil
+}
+
+// isSameMySQLRelease reports whether the two mysqld --version strings belong to
+// the same MySQL release series (same major and minor version).
+func isSameMySQLRelease(a, b string) (bool, error) {
+	_, parsedA, err := ParseVersionString(a)
+	if err != nil {
+		return false, err
+	}
+	_, parsedB, err := ParseVersionString(b)
+	if err != nil {
+		return false, err
+	}
+	return parsedA.isSameRelease(parsedB), nil
 }

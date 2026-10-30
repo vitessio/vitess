@@ -1824,6 +1824,13 @@ func (be *BuiltinBackupEngine) ShouldStartMySQLAfterRestore() bool {
 	return true
 }
 
+// BlocksCrossReleaseRestore returns false because whether a builtin backup can be
+// restored onto a different MySQL release series is governed by the manifest's
+// UpgradeSafe value (i.e. whether it was taken with innodb_fast_shutdown=0).
+func (be *BuiltinBackupEngine) BlocksCrossReleaseRestore() bool {
+	return false
+}
+
 func (be *BuiltinBackupEngine) Name() string { return builtinBackupEngineName }
 
 func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (replication.Position, error) {

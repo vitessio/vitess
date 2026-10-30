@@ -269,7 +269,9 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 			FinishedTime:   FormatRFC3339(time.Now().UTC()),
 			MySQLVersion:   mysqlVersion,
 			// xtrabackup backups are always created such that they
-			// are safe to use for upgrades later on.
+			// are safe to use for upgrades within the same MySQL release
+			// series. Cross-release restores are refused, see
+			// BlocksCrossReleaseRestore.
 			UpgradeSafe: true,
 		},
 
@@ -972,6 +974,13 @@ func (be *XtrabackupEngine) ShouldDrainForBackup(req *tabletmanagerdatapb.Backup
 
 // ShouldStartMySQLAfterRestore signifies if this backup engine needs to restart MySQL once the restore is completed.
 func (be *XtrabackupEngine) ShouldStartMySQLAfterRestore() bool {
+	return true
+}
+
+// BlocksCrossReleaseRestore returns true because xtrabackup can only prepare backups
+// taken from a server in its own MySQL release series, so a backup taken on e.g.
+// MySQL 8.0 cannot be restored onto a MySQL 8.4 host.
+func (be *XtrabackupEngine) BlocksCrossReleaseRestore() bool {
 	return true
 }
 

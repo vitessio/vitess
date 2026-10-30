@@ -43,6 +43,7 @@
     - **[Backup/Restore](#minor-changes-backup)**
         - [Chunked backup/restore for the builtinbackupengine](#backup-chunked-builtin)
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
+        - [xtrabackup backups are no longer restored across MySQL release series](#backup-xtrabackup-cross-release)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
 
@@ -406,6 +407,12 @@ See [#20167](https://github.com/vitessio/vitess/pull/20167) for details.
 The builtin backup engine's shutdown deadline (`--builtinbackup-mysqld-timeout`) is now raised to the backup request's mysqld shutdown timeout (e.g. vtbackup's `--mysql-shutdown-timeout`) plus a 30 second grace period whenever that is larger, so the two settings can no longer silently conflict. The same grace period now pads the shutdown contexts of `mysqlctl`, `mysqlctld` and `vtbackup`, which moves `mysqlctld`'s derived `--onterm-timeout` default from `5m10s` to `5m30s`.
 
 In addition, when `mysqladmin` gives up waiting for mysqld to stop, the shutdown is no longer failed immediately: the `SHUTDOWN` command has already been delivered at that point, so Vitess keeps waiting on the pid/socket files until the caller's deadline expires (or for a 30 second grace period, when the caller has no deadline). Slow-but-clean shutdowns, such as upgrade-safe backups running with `innodb_fast_shutdown=0` on large databases, previously failed with `Aborted waiting on pid file` even though mysqld was stopping normally.
+
+#### <a id="backup-xtrabackup-cross-release"/>xtrabackup backups are no longer restored across MySQL release series</a>
+
+Restores no longer select an `xtrabackup` backup that was taken on a different MySQL release series than the restoring host (e.g. an 8.0 backup onto an 8.4 host). xtrabackup can only prepare backups taken from a server in its own release series, so such restores previously failed at the prepare step. This applies to existing backups too, regardless of the `UpgradeSafe` value in their manifest. Restores within the same release series (e.g. 8.0.32 onto 8.0.33) are unaffected.
+
+**Impact**: A host on a newer MySQL release series will skip `xtrabackup` backups from the previous series and restore from another compatible backup, or fail with no valid backup found. To seed hosts across a MySQL release series upgrade, take an upgrade-safe backup with the `builtin` engine (`--upgrade-safe`).
 
 ### <a id="minor-changes-general"/>General</a>
 

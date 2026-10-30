@@ -601,6 +601,105 @@ func TestMySQLShellEngineShouldSkipVersionCheck(t *testing.T) {
 	require.False(t, be.ShouldSkipVersionCheck())
 }
 
+// TestFindBackupToRestoreCrossReleaseBlocked tests that FindBackupToRestore skips
+// upgrade-safe backups taken on a different MySQL release series exactly when the
+// engine that created the backup reports BlocksCrossReleaseRestore() == true.
+func TestFindBackupToRestoreCrossReleaseBlocked(t *testing.T) {
+	testCases := []struct {
+		name           string
+		backupVersion  string
+		restoreVersion string
+		engineBlocks   bool
+		wantBackup     bool
+	}{
+		{
+			name:           "cross release, engine blocks",
+			backupVersion:  "mysqld  Ver 8.0.36",
+			restoreVersion: "mysqld  Ver 8.4.10",
+			engineBlocks:   true,
+			wantBackup:     false,
+		},
+		{
+			name:           "cross release, engine allows",
+			backupVersion:  "mysqld  Ver 8.0.36",
+			restoreVersion: "mysqld  Ver 8.4.10",
+			engineBlocks:   false,
+			wantBackup:     true,
+		},
+		{
+			name:           "same release patch upgrade, engine blocks",
+			backupVersion:  "mysqld  Ver 8.0.32",
+			restoreVersion: "mysqld  Ver 8.0.33",
+			engineBlocks:   true,
+			wantBackup:     true,
+		},
+		{
+			name:           "same version, engine blocks",
+			backupVersion:  "mysqld  Ver 8.4.10",
+			restoreVersion: "mysqld  Ver 8.4.10",
+			engineBlocks:   true,
+			wantBackup:     true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := createFakeBackupRestoreEnv(t)
+			env.mysqld.Version = tc.restoreVersion
+			env.backupEngine.BlocksCrossReleaseRestoreReturn = tc.engineBlocks
+			// look at all backups, regardless of when they were taken.
+			env.restoreParams.StartTime = time.Time{}
+
+			manifest := BackupManifest{
+				BackupTime:   FormatRFC3339(time.Now().Add(-1 * time.Hour)),
+				BackupMethod: fakeBackupEngineName,
+				Keyspace:     "test",
+				Shard:        "-",
+				MySQLVersion: tc.backupVersion,
+				UpgradeSafe:  true,
+			}
+			manifestBytes, err := json.Marshal(manifest)
+			require.NoError(t, err)
+
+			bhs := []backupstorage.BackupHandle{
+				&FakeBackupHandle{
+					ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+						return io.NopCloser(bytes.NewBuffer(manifestBytes)), nil
+					},
+				},
+			}
+
+			restorePath, err := FindBackupToRestore(env.ctx, env.restoreParams, bhs)
+			if tc.wantBackup {
+				require.NoError(t, err)
+				require.False(t, restorePath.IsEmpty())
+			} else {
+				require.ErrorIs(t, err, ErrNoCompleteBackup)
+			}
+		})
+	}
+}
+
+// TestEnginesBlocksCrossReleaseRestore pins down which built-in engines refuse
+// restoring their backups onto a different MySQL release series.
+func TestEnginesBlocksCrossReleaseRestore(t *testing.T) {
+	testCases := []struct {
+		name   string
+		engine crossReleaseRestoreBlocker
+		want   bool
+	}{
+		{name: "xtrabackup", engine: &XtrabackupEngine{}, want: true},
+		{name: "builtin", engine: &BuiltinBackupEngine{}, want: false},
+		{name: "mysqlshell", engine: &MySQLShellBackupEngine{}, want: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.engine.BlocksCrossReleaseRestore())
+		})
+	}
+}
+
 type forTest []FileEntry
 
 func (f forTest) Len() int           { return len(f) }

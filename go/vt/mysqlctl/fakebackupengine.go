@@ -36,6 +36,8 @@ type FakeBackupEngine struct {
 	ShouldDrainForBackupCalls    int
 	ShouldDrainForBackupReturn   bool
 	ShouldSkipVersionCheckReturn bool
+
+	BlocksCrossReleaseRestoreReturn bool
 }
 
 type FakeBackupEngineExecuteBackupCall struct {
@@ -103,4 +105,8 @@ func (be *FakeBackupEngine) ShouldStartMySQLAfterRestore() bool {
 
 func (be *FakeBackupEngine) ShouldSkipVersionCheck() bool {
 	return be.ShouldSkipVersionCheckReturn
+}
+
+func (be *FakeBackupEngine) BlocksCrossReleaseRestore() bool {
+	return be.BlocksCrossReleaseRestoreReturn
 }
