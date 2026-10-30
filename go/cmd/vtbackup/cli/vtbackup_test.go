@@ -132,10 +132,13 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 
 	// vtbackup was catching up to 100's committed position when replication broke,
 	// and the primary it restarts from has committed all of the goal and more.
+	// With the errant GTID checks, the restart checks that primary first and finds
+	// nothing errant.
 	for _, tc := range []struct {
 		name    string
 		primary uint32
 		status  *replicationdatapb.PrimaryStatus
+		checks  bool
 	}{
 		{
 			name:    "the same primary",
@@ -147,8 +150,23 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			primary: 101,
 			status:  primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-3,"+testNewPrimaryUUID+":1-2"),
 		},
+		{
+			name:    "the same primary, with the errant GTID checks",
+			primary: 100,
+			status:  primaryStatus(testPrimaryUUID, testPrimaryUUID+":1-5"),
+			checks:  true,
+		},
+		{
+			name:    "a primary that a planned reparent promoted, with the errant GTID checks",
+			primary: 101,
+			status:  primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-3,"+testNewPrimaryUUID+":1-2"),
+			checks:  true,
+		},
 	} {
 		t.Run("keeps the goal when restarting from "+tc.name, func(t *testing.T) {
+			oldChecks := errantGTIDChecks
+			t.Cleanup(func() { errantGTIDChecks = oldChecks })
+			errantGTIDChecks = tc.checks
 			synctest.Test(t, func(t *testing.T) {
 				restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
 				goal := testGTIDPosition(t, testPrimaryUUID+":1-3")
@@ -175,6 +193,42 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			})
 		})
 	}
+
+	// A reparent made 101 the primary and lost 100's GTIDs 3-4, so the restart's
+	// stop position is 101's committed position. The first start reports an error
+	// although replication runs, so the goal must stay until a start succeeds, and
+	// catch-up must not end at 101's position before replication was started to
+	// stop there.
+	t.Run("keeps the goal when the start fails", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+			oldGoal := testGTIDPosition(t, testPrimaryUUID+":1-4")
+			newGoal := testGTIDPosition(t, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-5")
+			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-5"), nil
+			})
+			vt.setPrimary(t, 101)
+			running := replication.ReplicationStatus{Position: newGoal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateRunning}
+			mysqld := &catchupReplicationMysqlDaemon{
+				statuses: []replication.ReplicationStatus{
+					{Position: restorePos, IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
+					running,
+					// The applier stopped, so the next restart succeeds.
+					{Position: newGoal, IOState: replication.ReplicationStateRunning, SQLState: replication.ReplicationStateStopped},
+					running,
+					running,
+				},
+				failStartUntil: 1,
+			}
+
+			_, gotGoal, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, oldGoal, true)
+
+			require.NoError(t, err)
+			assert.True(t, gotGoal.Equal(newGoal), "goal %v", gotGoal)
+			assert.Len(t, mysqld.startUntil, 2, "catch-up must restart again after the failed start")
+			assert.Equal(t, 5, mysqld.statusCalls)
+		})
+	})
 
 	// The primary's tablet record was deleted, which clears the shard record's
 	// primary, and a new primary was elected while replication was down.
@@ -441,6 +495,8 @@ type catchupReplicationMysqlDaemon struct {
 	startUntil           []replication.Position
 	startCalls           int
 	stopReplicationCalls int
+	// failStartUntil is how many of the first StartReplicationUntilAfter calls fail.
+	failStartUntil int
 }
 
 func (m *catchupReplicationMysqlDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
@@ -465,6 +521,9 @@ func (m *catchupReplicationMysqlDaemon) SetReplicationSource(ctx context.Context
 
 func (m *catchupReplicationMysqlDaemon) StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error {
 	m.startUntil = append(m.startUntil, pos)
+	if len(m.startUntil) <= m.failStartUntil {
+		return errors.New("can't start replication")
+	}
 	return nil
 }
 
