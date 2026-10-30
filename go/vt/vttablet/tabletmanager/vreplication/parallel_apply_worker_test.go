@@ -49,6 +49,8 @@ type failingDBClient struct {
 	multiStatementsErr error
 	// closed is set by Close, so IsClosed reports it as the real client does.
 	closed bool
+	// binlogFormat, when set, is the session's binlog_format.
+	binlogFormat string
 }
 
 type recordingDBClient struct {
@@ -67,6 +69,9 @@ func (f *failingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Res
 		if strings.Contains(query, key) {
 			return nil, err
 		}
+	}
+	if f.binlogFormat != "" && strings.Contains(query, "@@session.binlog_format") {
+		return sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@session.binlog_format", "varchar"), f.binlogFormat), nil
 	}
 	if strings.Contains(query, getSQLModeQuery) {
 		return sqltypes.MakeTestResult(
@@ -255,6 +260,7 @@ func TestNewApplyWorker(t *testing.T) {
 	mockDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
+	mockDB.AddInvariant("select @@session.binlog_format", &sqltypes.Result{})
 	mockDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	mockDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -412,6 +418,7 @@ func TestCreateWorkerConn_UsesSerialSQLModeContract(t *testing.T) {
 			workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
+			workerDB.AddInvariant("select @@session.binlog_format", &sqltypes.Result{})
 			workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 			workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -458,6 +465,7 @@ func TestCreateWorkerConn_UsesRunningFKSessionSettings(t *testing.T) {
 	workerDB.AddInvariant("set session transaction isolation level read committed", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.innodb_lock_wait_timeout", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.lock_wait_timeout", &sqltypes.Result{})
+	workerDB.AddInvariant("select @@session.binlog_format", &sqltypes.Result{})
 	workerDB.AddInvariant("set names 'binary'", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_read_timeout", &sqltypes.Result{})
 	workerDB.AddInvariant("set @@session.net_write_timeout", &sqltypes.Result{})
@@ -707,6 +715,25 @@ func TestCreateWorkerConnSetsReadCommitted(t *testing.T) {
 	// wait timeout, so it must be short, for row locks and metadata locks.
 	require.Contains(t, recording.queries, "set @@session.innodb_lock_wait_timeout = 1")
 	require.Contains(t, recording.queries, "set @@session.lock_wait_timeout = 1")
+
+	// InnoDB is limited to row-based logging at READ COMMITTED, so a target
+	// that logs statements would fail every DML: refuse it, with the cause
+	// and the remedy.
+	for _, binlogFormat := range []string{"ROW", "MIXED", "STATEMENT"} {
+		client := &failingDBClient{binlogFormat: binlogFormat}
+		vr.vre.dbClientFactoryFiltered = func() binlogplayer.DBClient { return client }
+		conn, err := createWorkerConn(t.Context(), vr)
+		if binlogFormat != "STATEMENT" {
+			require.NoError(t, err, binlogFormat)
+			require.NotNil(t, conn, binlogFormat)
+			continue
+		}
+		require.Nil(t, conn)
+		require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "%v", err)
+		require.ErrorContains(t, err, "binlog_format=STATEMENT")
+		require.ErrorContains(t, err, "set binlog_format to ROW or MIXED")
+		require.True(t, client.closed, "the refused connection must be closed")
+	}
 }
 
 func (r *recordingDBClient) SetMultiStatements(on bool) error { return nil }

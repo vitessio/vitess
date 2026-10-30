@@ -23,9 +23,11 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type applyWorker struct {
@@ -89,6 +91,19 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 	if _, err := dbClient.ExecuteFetch("set session transaction isolation level read committed", 1); err != nil {
 		dbClient.Close()
 		return nil, err
+	}
+	// InnoDB is limited to row-based logging at READ COMMITTED, so with
+	// binlog_format=STATEMENT every DML would fail
+	// (ER_BINLOG_STMT_MODE_AND_ROW_ENGINE). Say why, and what to change.
+	qr, err := dbClient.ExecuteFetch("select @@session.binlog_format", 1)
+	if err != nil {
+		dbClient.Close()
+		return nil, err
+	}
+	if len(qr.Rows) == 1 && qr.Rows[0][0].ToString() == "STATEMENT" {
+		dbClient.Close()
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"parallel apply cannot run on a target with binlog_format=STATEMENT: its workers apply at READ COMMITTED, where InnoDB is limited to row-based logging; set binlog_format to ROW or MIXED, or set vreplication-parallel-replication-workers to 1 to disable parallel apply")
 	}
 	// Even under READ COMMITTED, InnoDB takes gap locks on a unique index
 	// when an INSERT finds a delete-marked entry with the same value, so a
