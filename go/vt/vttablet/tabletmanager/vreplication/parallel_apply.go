@@ -924,6 +924,11 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 		for table, refs := range fkRefs {
 			for _, ref := range refs {
 				log.Info("Parallel apply: FK ref", slog.String("child", table), slog.String("parent", ref.ParentTable), slog.Any("childCols", ref.ChildColumnNames), slog.Any("referencedCols", ref.ReferencedColumnNames))
+				if ref.HashIncompatible {
+					log.Warn("Parallel apply: FK column definitions differ in a way writeset hashing cannot match; transactions on both tables will serialize", vp.vr.logAttrs(
+						slog.String("child", table), slog.String("parent", ref.ParentTable),
+						slog.Any("childCols", ref.ChildColumnNames), slog.Any("referencedCols", ref.ReferencedColumnNames))...)
+				}
 			}
 		}
 	} else {
@@ -933,7 +938,7 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	vp.parentFKRefs = buildParentFKRefs(fkRefs)
 	vp.cascadeUnsafeTables = buildCascadeUnsafeTableSet(fkRefs)
 	for table := range vp.cascadeUnsafeTables {
-		log.Info("Parallel apply: transactions on this table will serialize; its cascading FK actions can reach tables beyond writeset conflict detection", slog.String("table", table))
+		log.Info("Parallel apply: transactions on this table will serialize; its FK relationships are beyond writeset conflict detection", slog.String("table", table))
 	}
 
 	// sendWorkerErr is a non-blocking send to workerErr. The channel is

@@ -219,6 +219,12 @@ type fkConstraintRef struct {
 	ReferencedColumnNames []string // parent column names, in FK ordinal order
 	DeleteRule            string   // referential DELETE_RULE, uppercase (e.g. "CASCADE", "NO ACTION")
 	UpdateRule            string   // referential UPDATE_RULE, uppercase
+	// HashIncompatible is set when a child/parent column pair can hold
+	// values that the FK check treats as equal but that hash to different
+	// writeset keys (see fkColumnsHashAlike), so the FK keys cannot order
+	// the two tables' transactions. Both tables then serialize (see
+	// buildCascadeUnsafeTableSet).
+	HashIncompatible bool
 }
 
 // parentFKRef represents a foreign key constraint from the parent table's
@@ -1189,18 +1195,22 @@ func writesetKeysForChangeWithFieldIdx(plan *TablePlan, tableName string, identi
 // child table name to a list of FK constraints. Each constraint includes
 // the referenced (parent) table name and the child column names in ordinal
 // order, so that writeset keys generated for child rows will match the
-// parent table's PK-based writeset keys.
+// parent table's PK-based writeset keys. A constraint whose column pairs may
+// hash FK-equal values apart is returned with HashIncompatible set.
 func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintRef, error) {
 	query := fmt.Sprintf(
 		"SELECT kcu.TABLE_NAME, kcu.CONSTRAINT_NAME, kcu.COLUMN_NAME, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME, "+
 			"child_cols.DATA_TYPE, COALESCE(child_cols.CHARACTER_SET_NAME, ''), COALESCE(child_cols.COLLATION_NAME, ''), COALESCE(child_cols.COLUMN_TYPE, ''), "+
 			"parent_cols.DATA_TYPE, COALESCE(parent_cols.CHARACTER_SET_NAME, ''), COALESCE(parent_cols.COLLATION_NAME, ''), COALESCE(parent_cols.COLUMN_TYPE, ''), "+
-			"COALESCE(rc.DELETE_RULE, ''), COALESCE(rc.UPDATE_RULE, '') "+
+			"COALESCE(rc.DELETE_RULE, ''), COALESCE(rc.UPDATE_RULE, ''), coll.ID "+
 			"FROM information_schema.KEY_COLUMN_USAGE kcu "+
 			"JOIN information_schema.COLUMNS child_cols "+
 			"ON child_cols.TABLE_SCHEMA = kcu.TABLE_SCHEMA AND child_cols.TABLE_NAME = kcu.TABLE_NAME AND child_cols.COLUMN_NAME = kcu.COLUMN_NAME "+
 			"JOIN information_schema.COLUMNS parent_cols "+
 			"ON parent_cols.TABLE_SCHEMA = kcu.TABLE_SCHEMA AND parent_cols.TABLE_NAME = kcu.REFERENCED_TABLE_NAME AND parent_cols.COLUMN_NAME = kcu.REFERENCED_COLUMN_NAME "+
+			// The child column's collation ID, to look up whether it pads
+			// (fkColumnsHashAlike only uses it when both sides share it).
+			"LEFT JOIN information_schema.COLLATIONS coll ON coll.COLLATION_NAME = child_cols.COLLATION_NAME "+
 			// LEFT JOIN so a missing REFERENTIAL_CONSTRAINTS row can never drop the FK
 			// edge itself; an empty rule is treated as cascading (fail closed) instead.
 			"LEFT JOIN information_schema.REFERENTIAL_CONSTRAINTS rc "+
@@ -1233,36 +1243,21 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 		referencedCols []string // parent column names in ordinal order
 		deleteRule     string   // uppercase referential DELETE_RULE
 		updateRule     string   // uppercase referential UPDATE_RULE
+		// hashIncompatible is set if any column pair fails fkColumnsHashAlike.
+		hashIncompatible bool
 	}
 
 	// Use a slice to preserve order; there are typically very few FK constraints.
 	var constraints []constraintEntry
 	idx := map[constraintKey]int{}
 
-	type fkColumnDigestMeta struct {
-		dataType   string
-		charset    string
-		collation  string
-		columnType string
-	}
 	parseDigestMeta := func(offset int, row []sqltypes.Value) fkColumnDigestMeta {
 		return fkColumnDigestMeta{
 			dataType:   strings.ToLower(row[offset].ToString()),
 			charset:    row[offset+1].ToString(),
 			collation:  row[offset+2].ToString(),
-			columnType: strings.ToLower(row[offset+3].ToString()),
+			columnType: row[offset+3].ToString(),
 		}
-	}
-	usesTextDigest := func(meta fkColumnDigestMeta) bool {
-		return meta.charset != "" || meta.collation != ""
-	}
-	columnsShareWritesetEncoding := func(child, parent fkColumnDigestMeta) bool {
-		if usesTextDigest(child) || usesTextDigest(parent) {
-			return usesTextDigest(child) && usesTextDigest(parent) &&
-				child.charset == parent.charset &&
-				child.collation == parent.collation
-		}
-		return child.columnType == parent.columnType
 	}
 
 	for _, row := range qr.Rows {
@@ -1273,34 +1268,25 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 		referencedColName := row[4].ToString()
 		childMeta := parseDigestMeta(5, row)
 		parentMeta := parseDigestMeta(9, row)
-		if !columnsShareWritesetEncoding(childMeta, parentMeta) {
-			return nil, vterrors.Errorf(
-				vtrpcpb.Code_FAILED_PRECONDITION,
-				"incompatible FK column definitions for %s.%s referencing %s.%s: child=%s/%s parent=%s/%s; align the definitions or disable parallel apply for this workflow",
-				childTable,
-				colName,
-				parentTable,
-				referencedColName,
-				childMeta.columnType,
-				childMeta.collation,
-				parentMeta.columnType,
-				parentMeta.collation,
-			)
-		}
+		// A NULL (non-text) or unparsable ID leaves 0, an unknown collation.
+		collationID, _ := row[15].ToUint64()
+		hashAlike := fkColumnsHashAlike(childMeta, parentMeta, collations.ID(collationID))
 
 		k := constraintKey{childTable: childTable, constraintName: constraintName}
 		if i, ok := idx[k]; ok {
 			constraints[i].cols = append(constraints[i].cols, colName)
 			constraints[i].referencedCols = append(constraints[i].referencedCols, referencedColName)
+			constraints[i].hashIncompatible = constraints[i].hashIncompatible || !hashAlike
 		} else {
 			idx[k] = len(constraints)
 			constraints = append(constraints, constraintEntry{
-				key:            k,
-				parentTable:    parentTable,
-				cols:           []string{colName},
-				referencedCols: []string{referencedColName},
-				deleteRule:     strings.ToUpper(row[13].ToString()),
-				updateRule:     strings.ToUpper(row[14].ToString()),
+				key:              k,
+				parentTable:      parentTable,
+				cols:             []string{colName},
+				referencedCols:   []string{referencedColName},
+				deleteRule:       strings.ToUpper(row[13].ToString()),
+				updateRule:       strings.ToUpper(row[14].ToString()),
+				hashIncompatible: !hashAlike,
 			})
 		}
 	}
@@ -1313,10 +1299,60 @@ func queryFKRefs(dbClient *vdbClient, dbName string) (map[string][]fkConstraintR
 			ReferencedColumnNames: c.referencedCols,
 			DeleteRule:            c.deleteRule,
 			UpdateRule:            c.updateRule,
+			HashIncompatible:      c.hashIncompatible,
 		})
 	}
 
 	return result, nil
+}
+
+// fkColumnDigestMeta is the information_schema.COLUMNS metadata of one FK
+// column that fkColumnsHashAlike needs.
+type fkColumnDigestMeta struct {
+	dataType   string // lowercase DATA_TYPE
+	charset    string // CHARACTER_SET_NAME, empty for non-text columns
+	collation  string // COLLATION_NAME, empty for non-text columns
+	columnType string // COLUMN_TYPE, with ENUM and SET members in their own case
+}
+
+// fkColumnsHashAlike reports whether every pair of values that the FK check
+// treats as equal across the child and parent columns gets the same writeset
+// digest (see writesetDigestAddFieldValue). collationID is the shared
+// collation's ID when both columns are text. MySQL 8.0 and 8.4 accept FKs
+// between many pairs of column definitions that differ, and the FK check
+// compares the stored values:
+//   - Integers hash the streamed type and the decimal digits, which display
+//     width and ZEROFILL do not change. MySQL requires the same size and sign.
+//   - VARBINARY values compare and hash byte for byte, whatever the length.
+//   - Text values hash their collation weights, so the collation must match.
+//     A CHAR and a VARCHAR column also need a PAD SPACE collation: under NO
+//     PAD the FK check can match values that differ in trailing spaces (a
+//     VARCHAR child 'b   ' matches a CHAR(4) parent 'b'), which the digest
+//     keeps.
+//   - ENUM and SET compare the member index and hash the member name, so the
+//     member lists must match, case included.
+//
+// Any other pair must have the same column type.
+func fkColumnsHashAlike(child, parent fkColumnDigestMeta, collationID collations.ID) bool {
+	childText := child.charset != "" || child.collation != ""
+	parentText := parent.charset != "" || parent.collation != ""
+	if childText != parentText || child.charset != parent.charset || child.collation != parent.collation {
+		return false
+	}
+	if child.dataType != parent.dataType {
+		isCharType := func(dataType string) bool { return dataType == "char" || dataType == "varchar" }
+		collation := colldata.Lookup(collationID)
+		return isCharType(child.dataType) && isCharType(parent.dataType) && collation != nil && collationUsesPadSpace(collation)
+	}
+	switch child.dataType {
+	case "enum", "set":
+		return child.columnType == parent.columnType
+	case "tinyint", "smallint", "mediumint", "int", "bigint":
+		return strings.Contains(child.columnType, "unsigned") == strings.Contains(parent.columnType, "unsigned")
+	case "varbinary":
+		return true
+	}
+	return childText || child.columnType == parent.columnType
 }
 
 // fkRuleMayModifyChildRows reports whether a referential action rule can make
@@ -1356,20 +1392,27 @@ func fkRuleMayModifyChildRows(rule string) bool {
 // CASCADE rather than proving the rewritten columns cannot participate in a
 // unique key or a grandchild reference — the precision would cost
 // column-level analysis for schemas that are rare in practice.
+//
+// Both tables of a HashIncompatible constraint are unsafe as well: their FK
+// writeset keys cannot be trusted to conflict, so only serializing their
+// transactions keeps them in order.
 func buildCascadeUnsafeTableSet(fkRefs map[string][]fkConstraintRef) map[string]struct{} {
 	if len(fkRefs) == 0 {
 		return nil
 	}
 	var unsafeTables map[string]struct{}
-	for _, refs := range fkRefs {
+	for childTable, refs := range fkRefs {
 		for _, ref := range refs {
-			if !fkRuleMayModifyChildRows(ref.DeleteRule) && !fkRuleMayModifyChildRows(ref.UpdateRule) {
+			if !ref.HashIncompatible && !fkRuleMayModifyChildRows(ref.DeleteRule) && !fkRuleMayModifyChildRows(ref.UpdateRule) {
 				continue
 			}
 			if unsafeTables == nil {
 				unsafeTables = make(map[string]struct{})
 			}
 			unsafeTables[ref.ParentTable] = struct{}{}
+			if ref.HashIncompatible {
+				unsafeTables[childTable] = struct{}{}
+			}
 		}
 	}
 	return unsafeTables

@@ -672,12 +672,13 @@ func TestQueryFKRefs(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE",
-			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE|COLLATION_ID",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|int64",
 		),
-		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int|CASCADE|NO ACTION",
-		"child|fk_child_parent|parent_id2|parent|id2|int|||int|int|||int|CASCADE|NO ACTION",
-		"other|fk_other_parent|parent_id|parent|id|int|||int|int|||int|NO ACTION|NO ACTION",
+		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int|CASCADE|NO ACTION|0",
+		// One column pair that hashes apart flags the whole constraint.
+		"child|fk_child_parent|parent_id2|parent|id2|datetime|||datetime(3)|datetime|||datetime(6)|CASCADE|NO ACTION|0",
+		"other|fk_other_parent|parent_id|parent|id|int|||int|int|||int|NO ACTION|NO ACTION|0",
 	)
 	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
 	refs, err := queryFKRefs(client, "db")
@@ -691,6 +692,8 @@ func TestQueryFKRefs(t *testing.T) {
 	require.Equal(t, "NO ACTION", refs["child"][0].UpdateRule)
 	require.Equal(t, "NO ACTION", refs["other"][0].DeleteRule)
 	require.Equal(t, "NO ACTION", refs["other"][0].UpdateRule)
+	require.True(t, refs["child"][0].HashIncompatible)
+	require.False(t, refs["other"][0].HashIncompatible)
 }
 
 func TestBuildCascadeUnsafeTableSet(t *testing.T) {
@@ -773,6 +776,20 @@ func TestBuildCascadeUnsafeTableSet(t *testing.T) {
 			want: []string{"a"},
 		},
 		{
+			// The FK keys of a hash-incompatible constraint cannot be trusted
+			// to conflict, so both of its tables serialize, whatever the rules.
+			name: "hash-incompatible FK marks the child and the parent",
+			fkRefs: map[string][]fkConstraintRef{
+				"b": {func() fkConstraintRef {
+					ref := edge("a", "NO ACTION", "NO ACTION")
+					ref.HashIncompatible = true
+					return ref
+				}()},
+				"c": {edge("b", "RESTRICT", "NO ACTION")},
+			},
+			want: []string{"a", "b"},
+		},
+		{
 			name: "three-level cascade marks every cascading parent",
 			fkRefs: map[string][]fkConstraintRef{
 				"b": {edge("a", "CASCADE", "NO ACTION")},
@@ -852,10 +869,10 @@ func TestQueryFKRefsFetchesAllRows(t *testing.T) {
 
 	qr := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE",
-			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
+			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE|COLLATION_ID",
+			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|int64",
 		),
-		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int|NO ACTION|NO ACTION",
+		"child|fk_child_parent|parent_id|parent|id|int|||int|int|||int|NO ACTION|NO ACTION|0",
 	)
 	client := newVDBClient(&maxRowsAssertingDBClient{
 		result: qr,
@@ -881,45 +898,64 @@ func TestQueryFKRefsFetchesAllRows(t *testing.T) {
 	require.Equal(t, []string{"id"}, refs["child"][0].ReferencedColumnNames)
 }
 
-func TestQueryFKRefsRejectsHashIncompatibleFKColumnDefinitions(t *testing.T) {
+// TestQueryFKRefsFlagsHashIncompatibleFKColumnDefinitions checks, against the
+// real information_schema, which FK column pairs that MySQL accepts are
+// flagged HashIncompatible: a pair hashes alike only if every pair of values
+// the FK check treats as equal gets the same writeset digest. queryFKRefs
+// reads every FK in the database, so none of them may fail it.
+func TestQueryFKRefsFlagsHashIncompatibleFKColumnDefinitions(t *testing.T) {
+	tcases := []struct {
+		name             string
+		childType        string
+		parentType       string
+		hashIncompatible bool
+	}{
+		{name: "boolean to tinyint", childType: "tinyint(1)", parentType: "tinyint"},
+		{name: "zerofill", childType: "int unsigned", parentType: "int unsigned zerofill"},
+		{name: "varbinary lengths", childType: "varbinary(16)", parentType: "varbinary(32)"},
+		{name: "varchar lengths", childType: "varchar(16) collate utf8mb4_0900_ai_ci", parentType: "varchar(32) collate utf8mb4_0900_ai_ci"},
+		{name: "char to varchar, pad space", childType: "char(16) collate utf8mb4_general_ci", parentType: "varchar(32) collate utf8mb4_general_ci"},
+		// Under NO PAD the FK check matches a char child 'a' to a varchar
+		// parent 'a ', and a varchar child 'a' plus padding to a char parent
+		// 'a', while the digest keeps trailing spaces.
+		{name: "char to varchar, no pad", childType: "char(16) collate utf8mb4_0900_ai_ci", parentType: "varchar(32) collate utf8mb4_0900_ai_ci", hashIncompatible: true},
+		{name: "varchar to char, no pad", childType: "varchar(32) collate utf8mb4_0900_ai_ci", parentType: "char(16) collate utf8mb4_0900_ai_ci", hashIncompatible: true},
+		{name: "enum same members", childType: "enum('x','y')", parentType: "enum('x','y')"},
+		// The FK check matches child 'y' (index 1) to parent 'x' (index 1).
+		{name: "enum member order", childType: "enum('y','x')", parentType: "enum('x','y')", hashIncompatible: true},
+		// The FK check matches child 'A' to parent 'a' (the same index).
+		{name: "enum member case", childType: "enum('A','B')", parentType: "enum('a','b')", hashIncompatible: true},
+		{name: "set member case", childType: "set('X','Y')", parentType: "set('x','y')", hashIncompatible: true},
+		{name: "datetime precision", childType: "datetime(3)", parentType: "datetime(6)", hashIncompatible: true},
+		{name: "binary to varbinary", childType: "binary(16)", parentType: "varbinary(16)", hashIncompatible: true},
+		{name: "decimal sign", childType: "decimal(10,2)", parentType: "decimal(10,2) unsigned", hashIncompatible: true},
+	}
+	var creates, drops []string
+	for i, tcase := range tcases {
+		parent, child := fmt.Sprintf("fk_hash_p%d", i), fmt.Sprintf("fk_hash_c%d", i)
+		creates = append(creates,
+			fmt.Sprintf("create table %s.%s (id %s primary key)", vrepldb, parent, tcase.parentType),
+			fmt.Sprintf("create table %s.%s (id int primary key, pid %s, foreign key (pid) references %s(id))", vrepldb, child, tcase.childType, parent),
+		)
+		drops = append(drops, "drop table if exists "+vrepldb+"."+child, "drop table if exists "+vrepldb+"."+parent)
+	}
+	execStatements(t, creates)
+	t.Cleanup(func() { execStatements(t, drops) })
+
+	db := &realDBClient{nolog: true}
+	require.NoError(t, db.Connect())
+	t.Cleanup(db.Close)
 	stats := binlogplayer.NewStats()
 	stats.VReplicationLagGauges.Stop()
 	t.Cleanup(stats.Stop)
 
-	qr := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE",
-			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
-		),
-		"child|fk_child_parent|parent_id|parent|id|int|||int|bigint|||bigint|NO ACTION|NO ACTION",
-	)
-
-	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
-	refs, err := queryFKRefs(client, "db")
-	require.Error(t, err)
-	require.ErrorContains(t, err, "incompatible FK column definitions")
-	require.Nil(t, refs)
-}
-
-func TestQueryFKRefsAllowsCompatibleCharacterFKColumns(t *testing.T) {
-	stats := binlogplayer.NewStats()
-	stats.VReplicationLagGauges.Stop()
-	t.Cleanup(stats.Stop)
-
-	qr := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"TABLE_NAME|CONSTRAINT_NAME|COLUMN_NAME|REFERENCED_TABLE_NAME|REFERENCED_COLUMN_NAME|CHILD_DATA_TYPE|CHILD_CHARACTER_SET_NAME|CHILD_COLLATION_NAME|CHILD_COLUMN_TYPE|PARENT_DATA_TYPE|PARENT_CHARACTER_SET_NAME|PARENT_COLLATION_NAME|PARENT_COLUMN_TYPE|DELETE_RULE|UPDATE_RULE",
-			"varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar|varchar",
-		),
-		"child|fk_child_parent|parent_code|parent|code|varchar|utf8mb4|utf8mb4_0900_ai_ci|varchar(64)|char|utf8mb4|utf8mb4_0900_ai_ci|char(32)|NO ACTION|NO ACTION",
-	)
-
-	client := newVDBClient(&stubDBClient{result: qr}, stats, 100)
-	refs, err := queryFKRefs(client, "db")
+	refs, err := queryFKRefs(newVDBClient(db, stats, 100), vrepldb)
 	require.NoError(t, err)
-	require.Len(t, refs["child"], 1)
-	require.Equal(t, []string{"parent_code"}, refs["child"][0].ChildColumnNames)
-	require.Equal(t, []string{"code"}, refs["child"][0].ReferencedColumnNames)
+	for i, tcase := range tcases {
+		childRefs := refs[fmt.Sprintf("fk_hash_c%d", i)]
+		require.Len(t, childRefs, 1, tcase.name)
+		assert.Equal(t, tcase.hashIncompatible, childRefs[0].HashIncompatible, tcase.name)
+	}
 }
 
 func TestBuildTxnWritesetMissingTablePlan(t *testing.T) {

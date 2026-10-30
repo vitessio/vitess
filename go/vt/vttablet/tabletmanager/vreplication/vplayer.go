@@ -139,8 +139,9 @@ type vplayer struct {
 	// rows their own row events never mention, via cascading referential
 	// actions. Transactions touching them must go through the global path —
 	// their writeset cannot cover the child rows the cascade deletes or
-	// rewrites (nor any grandchild rows those changes lock). See
-	// buildCascadeUnsafeTableSet.
+	// rewrites (nor any grandchild rows those changes lock). It also holds
+	// both tables of an FK whose column definitions writeset hashing cannot
+	// match. See buildCascadeUnsafeTableSet.
 	cascadeUnsafeTables map[string]struct{}
 	// postDDLDroppedTables records dropped table names from executed DDLs so the
 	// parallel scheduler can clear post-DDL barriers without mutating tablePlans.
