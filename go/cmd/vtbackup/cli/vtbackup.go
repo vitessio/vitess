@@ -983,8 +983,10 @@ func readInitialTarget(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 
 		var err error
 		target, err = readPrimaryTarget(opCtx, tmc, ts)
-		if _, ok := errors.AsType[noPrimaryError](err); ok {
-			return permanentError{err}
+		if noPrimary, ok := errors.AsType[noPrimaryError](err); ok {
+			// retryOnError then returns the inner error, since noPrimaryError hides its
+			// code from vterrors.Code.
+			return permanentError(noPrimary)
 		}
 		return err
 	})

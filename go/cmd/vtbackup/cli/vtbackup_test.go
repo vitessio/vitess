@@ -634,6 +634,7 @@ func TestReadPrimaryTarget(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		_, err := readInitialTarget(boundedContext(t), vt.tmc, vt.ts)
 		require.ErrorContains(t, err, "shard test_keyspace/0 has no primary")
+		assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
 		assert.Zero(t, vt.tmc.calls)
 	})
 
