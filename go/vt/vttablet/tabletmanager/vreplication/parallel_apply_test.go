@@ -5769,19 +5769,53 @@ func TestScheduleItems_HeartbeatSetsMustSave(t *testing.T) {
 	commitEvent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_COMMIT,
 	}
+	secondGTIDEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+	}
+	secondRowEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName:  "t1",
+			RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("2"), Lengths: []int64{1}}}},
+		},
+		Timestamp: 100,
+	}
 
-	// GTID, ROW, HEARTBEAT, COMMIT — heartbeat should set curMustSave
-	// because there are accumulated events when heartbeat arrives
-	items := [][]*binlogdatapb.VEvent{{gtidEvent, rowEvent, heartbeatEvent, commitEvent}}
+	// GTID, ROW, HEARTBEAT, COMMIT, then a second transaction. The heartbeat
+	// arrives with accumulated events, so it forces the first COMMIT to
+	// flush rather than batch with the second transaction ahead of it.
+	items := [][]*binlogdatapb.VEvent{{gtidEvent, rowEvent, heartbeatEvent, commitEvent, secondGTIDEvent, secondRowEvent, commitEvent}}
 	err := vp.scheduleItems(ctx, scheduler, state, items)
 	require.NoError(t, err)
 
+	scheduler.mu.Lock()
+	pending := scheduler.pendingCount
+	scheduler.mu.Unlock()
+	require.Equal(t, 2, pending, "the heartbeat must stop the first COMMIT from batching into the second")
 	got, err := scheduler.nextReady(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, got)
-	// The heartbeat forced curMustSave=true, which means the transaction was flushed
-	// even if batching would otherwise accumulate it
 	assert.Equal(t, int64(1), got.order)
+	assert.True(t, got.payload.mustSave)
+	assert.Equal(t, []*binlogdatapb.VEvent{rowEvent}, got.payload.events)
+
+	// A heartbeat ahead of an empty transaction's COMMIT does not stop the
+	// stream: only the stop position does.
+	rowsQueryEvent := &binlogdatapb.VEvent{
+		Type:      binlogdatapb.VEventType_ROWS_QUERY,
+		Statement: "update t1 set id = id where id = 3",
+	}
+	thirdGTIDEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-7",
+	}
+	items = [][]*binlogdatapb.VEvent{{thirdGTIDEvent, rowsQueryEvent, heartbeatEvent, commitEvent}}
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, items))
+	vp.serialMu.Lock()
+	assert.Equal(t, commitEvent, vp.unsavedEvent)
+	vp.serialMu.Unlock()
+	assert.False(t, state.curMustSave)
 }
 
 func TestScheduleItems_BatchingSkipsFlushWhenAnotherCommitAhead(t *testing.T) {

@@ -1204,7 +1204,8 @@ type parallelScheduleState struct {
 	// current transaction, used for the time_updated column on flush.
 	curTimestamp int64
 	// curMustSave forces the next flush to save the position immediately
-	// (set when stop position is reached or time-based batch bound fires).
+	// (set when stop position is reached, the time-based batch bound fires,
+	// or a heartbeat arrives while events are accumulated).
 	curMustSave bool
 	// curPos is the GTID position from the most recent GTID event,
 	// recorded in _vt.vreplication when the transaction is committed.
@@ -1631,9 +1632,10 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				}
 			case binlogdatapb.VEventType_COMMIT:
 				posReached := stopPosReached(state.curPos)
-				state.curMustSave = posReached
+				// Keep a save that a heartbeat forced (see HEARTBEAT below).
+				state.curMustSave = state.curMustSave || posReached
 				if !txnNeedsWorker(state.curEvents) {
-					if state.curMustSave {
+					if posReached {
 						eventCopy := event
 						if err := vp.enqueueCommitOnly(ctx, scheduler, eventCopy, true, true, state.curSequence, state.curCommitParent, state.curHasCommitMeta); err != nil {
 							return err
