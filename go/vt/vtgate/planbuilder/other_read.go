@@ -18,6 +18,8 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -38,4 +40,28 @@ func buildOtherReadAndAdmin(sql string, vschema plancontext.VSchema) (*planResul
 		Query:             sql, // This is original sql query to be passed as the parser can provide partial ddl AST.
 		SingleShardOnly:   true,
 	}), nil
+}
+
+// checkDoLockFuncs rejects a DO statement that acquires or releases a named lock. The statement is sent
+// as-is to any shard, so the lock would be taken on a pooled vttablet connection that goes on to serve
+// other sessions, and released from whichever session borrows that connection next. SELECT runs these
+// functions on the session's lock connection instead.
+func checkDoLockFuncs(stmt *sqlparser.OtherAdmin) error {
+	for _, expr := range stmt.Exprs {
+		err := sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			lockFunc, ok := node.(*sqlparser.LockingFunc)
+			if !ok {
+				return true, nil
+			}
+			switch lockFunc.Type {
+			case sqlparser.GetLock, sqlparser.ReleaseLock, sqlparser.ReleaseAllLocks:
+				return false, vterrors.VT12001(lockFunc.Type.ToString() + " in a DO statement, use SELECT instead")
+			}
+			return true, nil
+		}, expr)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -761,10 +761,14 @@ type (
 	}
 
 	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
-	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
+	// such as REPAIR, OPTIMIZE, TRUNCATE or DO statement.
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
-	OtherAdmin struct{}
+	OtherAdmin struct {
+		// Exprs holds the expressions of a DO statement, so that lock
+		// functions in them can be found. It is empty for other statements.
+		Exprs []Expr
+	}
 
 	// CommentOnly represents a query which only has comments
 	CommentOnly struct {
