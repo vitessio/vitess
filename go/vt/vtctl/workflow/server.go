@@ -3253,6 +3253,9 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		if err != nil {
 			return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
 		}
+		if err := sw.prepareTargetSequences(ctx, sequenceMetadata); err != nil {
+			return handleError(fmt.Sprintf("failed to prepare the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
+		}
 	}
 
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.

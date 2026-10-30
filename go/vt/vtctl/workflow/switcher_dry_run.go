@@ -517,27 +517,41 @@ func (dr *switcherDryRun) resetSequences(ctx context.Context) error {
 	return nil
 }
 
-func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+func (dr *switcherDryRun) prepareTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
 	// Sort keys for deterministic output.
 	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
 	slices.Sort(sortedBackingTableNames)
 
-	var registrations []string
+	var creations, registrations []string
 	for _, backingTable := range sortedBackingTableNames {
-		if sm := sequencesByBackingTable[backingTable]; sm.registerInVSchema {
+		sm := sequencesByBackingTable[backingTable]
+		if sm.createBackingTable {
+			creations = append(creations, sm.backingTableKeyspace+"."+sm.backingTableName)
+		}
+		if sm.registerInVSchema {
 			registrations = append(registrations, sm.backingTableKeyspace+"."+sm.backingTableName)
 		}
+	}
+	if len(creations) > 0 {
+		dr.drLog.Logf("Sequence backing tables [%s] will be created", strings.Join(creations, ","))
 	}
 	if len(registrations) > 0 {
 		dr.drLog.Logf("Sequence backing tables [%s] will be added to the vschema of their keyspace", strings.Join(registrations, ","))
 	}
+	return nil
+}
+
+func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	// Sort keys for deterministic output.
+	sortedBackingTableNames := maps.Keys(sequencesByBackingTable)
+	slices.Sort(sortedBackingTableNames)
 
 	maxValues, err := dr.ts.getMaxSequenceValues(ctx, sequencesByBackingTable)
 	if err != nil {
 		dr.drLog.Logf("Error getting max sequence values: %v", err)
 		return err
 	}
-	curValues, err := dr.ts.getCurrentSequenceValues(ctx, sequencesByBackingTable)
+	curValues, missing, err := dr.ts.getCurrentSequenceValues(ctx, sequencesByBackingTable)
 	if err != nil {
 		dr.drLog.Logf("Error getting current sequence values: %v", err)
 		return err
@@ -545,6 +559,10 @@ func (dr *switcherDryRun) initializeTargetSequences(ctx context.Context, sequenc
 
 	dr.drLog.Log("The following sequence backing tables used by tables being moved will be initialized:")
 	for _, backingTable := range sortedBackingTableNames {
+		if missing[backingTable] {
+			dr.drLog.Logf("\tBacking table: %s, will be created, new value %d", backingTable, maxValues[backingTable]+1)
+			continue
+		}
 		dr.drLog.Logf("\tBacking table: %s, current value %d, new value %d",
 			backingTable, curValues[backingTable], maxValues[backingTable]+1)
 	}

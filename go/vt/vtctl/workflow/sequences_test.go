@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
@@ -85,8 +86,9 @@ func TestInitializeTargetSequences(t *testing.T) {
 	require.NoError(t, err)
 	sw := &switcher{ts: ts, s: env.ws}
 
-	// Both backing tables were missing from the vschema when it was checked,
-	// but my-seq2 has been added since, with an escaped name.
+	// my-seq1 was missing from every keyspace's vschema, and both backing
+	// tables were missing from the vschema when it was checked, but my-seq2
+	// has been added since, with an escaped name.
 	mySeq2Definition := func() *vschema.Table {
 		return &vschema.Table{Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}}
 	}
@@ -108,7 +110,8 @@ func TestInitializeTargetSequences(t *testing.T) {
 					Sequence: sourceKeyspace.KeyspaceName + ".my-seq1",
 				},
 			},
-			registerInVSchema: true,
+			registerInVSchema:  true,
+			createBackingTable: true,
 		},
 		"my-seq2": {
 			backingTableName:     "my-seq2",
@@ -221,16 +224,29 @@ func TestInitializeTargetSequences(t *testing.T) {
 			env.tmc.expectGetMaxValueForSequencesRequest(200, tc.maxValueRequest)
 			env.tmc.expectUpdateSequenceTablesRequest(100, tc.updateSeqTableRequest)
 
-			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
+			// SwitchTraffic prepares the sequences before it stops writes:
+			// it creates my-seq1, and adds only it to the vschema.
+			env.tmc.expectApplySchemaRequest(100, &applySchemaRequestResponse{
+				change: &tmutils.SchemaChange{
+					SQL:                     sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlescape.EscapeID("my-seq1")).Query,
+					AllowReplication:        true,
+					SQLMode:                 vreplication.SQLMode,
+					DisableForeignKeyChecks: true,
+				},
+				res: &tabletmanagerdatapb.SchemaChangeResult{},
+			})
+			err = sw.prepareTargetSequences(ctx, sequencesByBackingTable)
 			require.NoError(t, err)
-
-			// Only the missing backing table is added to the vschema.
+			assert.Empty(t, env.tmc.applySchemaRequests[100], "expected no remaining ApplySchema requests")
 			kvs, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
 			require.NoError(t, err)
 			assert.Equal(t, map[string]*vschema.Table{
 				"my-seq1":   {Type: "sequence"},
 				"`my-seq2`": mySeq2Definition(),
 			}, kvs.Tables)
+
+			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
+			require.NoError(t, err)
 
 			// Expect the requests to be cleared.
 			assert.Emptyf(t, env.tmc.updateSequenceTablesRequests, "expected no remaining UpdateSequenceTables requests")
@@ -280,15 +296,14 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	}
 
 	type testCase struct {
-		name                                   string
-		sourceVSchema                          *vschema.Keyspace
-		targetVSchema                          *vschema.Keyspace
-		globalVSchema                          *vschema.Keyspace
-		options                                *vtctldatapb.WorkflowOptions
-		want                                   map[string]*sequenceMetadata
-		expectSourceApplySchemaRequestResponse *applySchemaRequestResponse
-		err                                    string
-		errCode                                vtrpcpb.Code
+		name          string
+		sourceVSchema *vschema.Keyspace
+		targetVSchema *vschema.Keyspace
+		globalVSchema *vschema.Keyspace
+		options       *vtctldatapb.WorkflowOptions
+		want          map[string]*sequenceMetadata
+		err           string
+		errCode       vtrpcpb.Code
 	}
 	tests := []testCase{
 		{
@@ -389,16 +404,6 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
 				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
 			},
-			expectSourceApplySchemaRequestResponse: &applySchemaRequestResponse{
-				change: &tmutils.SchemaChange{
-					SQL:                     sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlescape.EscapeID("my-seq2")).Query,
-					Force:                   false,
-					AllowReplication:        true,
-					SQLMode:                 vreplication.SQLMode,
-					DisableForeignKeyChecks: true,
-				},
-				res: &tabletmanagerdatapb.SchemaChangeResult{},
-			},
 			targetVSchema: &vschema.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschema.Table{
@@ -443,12 +448,14 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 							Sequence: "my-seq2",
 						},
 					},
+					registerInVSchema:  true,
+					createBackingTable: true,
 				},
 			},
 		},
 		{
 			// The search finds my-seq1 under its escaped name, so only the
-			// missing my-seq2 is created.
+			// missing my-seq2 is to be created.
 			name: "escaped and missing unqualified sequences",
 			sourceVSchema: &vschema.Keyspace{
 				Tables: map[string]*vschema.Table{
@@ -458,16 +465,6 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			options: &vtctldatapb.WorkflowOptions{
 				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
 				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
-			},
-			expectSourceApplySchemaRequestResponse: &applySchemaRequestResponse{
-				change: &tmutils.SchemaChange{
-					SQL:                     sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlescape.EscapeID("my-seq2")).Query,
-					Force:                   false,
-					AllowReplication:        true,
-					SQLMode:                 vreplication.SQLMode,
-					DisableForeignKeyChecks: true,
-				},
-				res: &tabletmanagerdatapb.SchemaChangeResult{},
 			},
 			targetVSchema: &vschema.Keyspace{
 				Sharded: true,
@@ -512,8 +509,35 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 							Sequence: "my-seq2",
 						},
 					},
+					registerInVSchema:  true,
+					createBackingTable: true,
 				},
 			},
+		},
+		{
+			name: "missing sequence that the global keyspace defines as a table",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               globalKeyspace,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+				},
+			},
+			err:     "table global-ks.my-seq1 is not a sequence in vschema; correct the backing table definition or the target auto_increment sequence reference",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
 			name: "qualified sequence in a keyspace that doesn't exist",
@@ -577,17 +601,6 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
 				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
 			},
-			expectSourceApplySchemaRequestResponse: &applySchemaRequestResponse{
-				change: &tmutils.SchemaChange{
-					SQL: sqlparser.BuildParsedQuery(sqlCreateSequenceTable,
-						sqlescape.EscapeID(fmt.Sprintf(autoSequenceTableFormat, unescapedTable))).Query,
-					Force:                   false,
-					AllowReplication:        true,
-					SQLMode:                 vreplication.SQLMode,
-					DisableForeignKeyChecks: true,
-				},
-				res: &tabletmanagerdatapb.SchemaChangeResult{},
-			},
 			targetVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
 				Tables: map[string]*vschema.Table{
@@ -610,6 +623,8 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					backingTableName:     fmt.Sprintf(autoSequenceTableFormat, unescapedTable),
 					backingTableKeyspace: "source-ks",
 					backingTableDBName:   "vt_source-ks",
+					registerInVSchema:    true,
+					createBackingTable:   true,
 					usingTableName:       unescapedTable,
 					usingTableDBName:     "vt_targetks",
 					usingTableDefinition: &vschema.Table{
@@ -968,9 +983,6 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 						Tablet: tablet,
 					},
 				}
-				if tc.expectSourceApplySchemaRequestResponse != nil {
-					env.tmc.expectApplySchemaRequest(tablet.Alias.Uid, tc.expectSourceApplySchemaRequestResponse)
-				}
 			}
 			for i, shard := range targetKeyspace.ShardNames {
 				tablet := env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+(i*tabletUIDStep)]
@@ -1001,11 +1013,10 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 				require.NoError(t, err)
 			}
 			require.Equal(t, tc.want, got)
-			if tc.expectSourceApplySchemaRequestResponse == nil {
-				// Only creating a missing backing table changes a vschema, as
-				// this also runs on dry runs.
-				assert.Equal(t, vschemasBefore, vschemas())
-			}
+			// This also runs on dry runs, so it changes no vschema, and it
+			// creates no backing table: the test tablet manager client
+			// fails an unexpected ApplySchema.
+			assert.Equal(t, vschemasBefore, vschemas())
 		})
 	}
 }
@@ -1073,6 +1084,7 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 	sm3.usingTableName = "t3"
 	sm3.usingTableDefinition.AutoIncrement.Sequence = "seq3"
 	sm3.registerInVSchema = true
+	sm3.createBackingTable = true
 
 	tables := map[string]*sequenceMetadata{
 		"t1": &sm1,
@@ -1086,19 +1098,45 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 		env.tmc.expectVRQuery(200, "/select max.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("maxval", "int64"), "10"))
 		env.tmc.expectVRQuery(100, "/select next_id.*.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "1"))
 	}
-	env.tmc.expectVRQuery(100, "/select next_id.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "1"))
 
+	err = dr.prepareTargetSequences(ctx, tables)
+	require.NoError(t, err)
 	err = dr.initializeTargetSequences(ctx, tables)
 	require.NoError(t, err)
-	require.Len(t, drLog.logs, 5)
-	require.Contains(t, drLog.logs[0], "Sequence backing tables [sourceks.seq3] will be added to the vschema of their keyspace")
-	require.Contains(t, drLog.logs[1], "The following sequence backing tables used by tables being moved will be initialized:")
+	require.Len(t, drLog.logs, 6)
+	require.Contains(t, drLog.logs[0], "Sequence backing tables [sourceks.seq3] will be created")
+	require.Contains(t, drLog.logs[1], "Sequence backing tables [sourceks.seq3] will be added to the vschema of their keyspace")
+	require.Contains(t, drLog.logs[2], "The following sequence backing tables used by tables being moved will be initialized:")
 	for i, sm := range []sequenceMetadata{sm1, sm2, sm3} {
-		require.Contains(t, drLog.logs[i+2], fmt.Sprintf("Backing table: %s, current value 0, new value 1", sm.usingTableName))
+		require.Contains(t, drLog.logs[i+3], fmt.Sprintf("Backing table: %s, current value 0, new value 1", sm.usingTableName))
 	}
 	vschemaAfter, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
 	require.NoError(t, err)
 	assert.Equal(t, vschemaBefore.Keyspace, vschemaAfter.Keyspace)
+
+	// A backing table that doesn't exist yet, as on a dry run nothing
+	// creates it, is reported as one that initializing the sequences
+	// creates.
+	sm4 := sequenceMetadata{
+		backingTableName:     "seq4",
+		backingTableKeyspace: "sourceks",
+		backingTableDBName:   "ks1",
+		usingTableName:       "t4",
+		usingTableDBName:     "targetks",
+		usingTableDefinition: &vschema.Table{
+			AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "seq4"},
+		},
+	}
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{
+		query: "/select next_id from `ks1`.`seq4`.*",
+		err:   sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownTable, "Table 'ks1.seq4' doesn't exist"),
+	})
+	drLog = NewLogRecorder()
+	dr.drLog = drLog
+	err = dr.initializeTargetSequences(ctx, map[string]*sequenceMetadata{"seq4": &sm4})
+	require.NoError(t, err)
+	require.Len(t, drLog.logs, 2)
+	require.Contains(t, drLog.logs[1], "Backing table: seq4, will be created, new value 1")
 }
 
 // TestDryRunInitializeTargetSequencesDbNameOverride validates that the dry run

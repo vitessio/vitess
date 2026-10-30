@@ -61,9 +61,12 @@ type sequenceMetadata struct {
 	usingTableDBName string
 	// The using table definition.
 	usingTableDefinition *vschemapb.Table
-	// Whether the backing table needs to be added to the vschema of the
-	// keyspace that a qualified sequence reference names.
+	// Whether the backing table needs to be added to the vschema of its
+	// keyspace.
 	registerInVSchema bool
+	// Whether the backing table needs to be created in the global keyspace,
+	// as no keyspace's vschema has it.
+	createBackingTable bool
 
 	// escaped values
 	escaped                       bool
@@ -158,38 +161,45 @@ func (ts *trafficSwitcher) getMaxSequenceValues(ctx context.Context, sequences m
 	return maxValuesByBackingTable, errs
 }
 
-func (ts *trafficSwitcher) getCurrentSequenceValues(ctx context.Context, sequences map[string]*sequenceMetadata) (map[string]int64, error) {
+// getCurrentSequenceValues returns the current value of each backing table,
+// and the backing tables that don't exist yet, which initializing the
+// sequences creates.
+func (ts *trafficSwitcher) getCurrentSequenceValues(ctx context.Context, sequences map[string]*sequenceMetadata) (map[string]int64, map[string]bool, error) {
 	currentValues := make(map[string]int64, len(sequences))
+	missing := make(map[string]bool)
 	mu := sync.Mutex{}
 	initGroup, gctx := errgroup.WithContext(ctx)
 	for _, sm := range sequences {
 		initGroup.Go(func() error {
-			currentVal, err := ts.getCurrentSequenceValue(gctx, sm)
+			currentVal, exists, err := ts.getCurrentSequenceValue(gctx, sm)
 			if err != nil {
 				return err
 			}
 			mu.Lock()
 			defer mu.Unlock()
 			currentValues[sm.backingTableName] = currentVal
+			if !exists {
+				missing[sm.backingTableName] = true
+			}
 			return nil
 		})
 	}
 	errs := initGroup.Wait()
 	if errs != nil {
-		return nil, errs
+		return nil, nil, errs
 	}
-	return currentValues, nil
+	return currentValues, missing, nil
 }
 
-func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *sequenceMetadata) (int64, error) {
+func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *sequenceMetadata) (int64, bool, error) {
 	sequenceShard, ierr := ts.TopoServer().GetOnlyShard(ctx, seq.backingTableKeyspace)
 	if ierr != nil || sequenceShard == nil || sequenceShard.PrimaryAlias == nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 			seq.backingTableKeyspace, ierr)
 	}
 	sequenceTablet, ierr := ts.TopoServer().GetTablet(ctx, sequenceShard.PrimaryAlias)
 	if ierr != nil || sequenceTablet == nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
+		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the primary tablet for keyspace %s: %v",
 			seq.backingTableKeyspace, ierr)
 	}
 	// The backing table db name defaults to vt_<keyspace> when the sequence
@@ -202,11 +212,11 @@ func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *seq
 		seq.backingTableDBName = sequenceTablet.DbNameOverride
 	}
 	if err := seq.escapeValues(); err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	backingDB, err := sqlescape.EnsureEscaped(seq.backingTableDBName)
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid database name %s specified for sequence backing table: %v",
+		return 0, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid database name %s specified for sequence backing table: %v",
 			seq.backingTableDBName, err)
 	}
 	seq.backingDB = backingDB
@@ -218,20 +228,23 @@ func (ts *trafficSwitcher) getCurrentSequenceValue(ctx context.Context, seq *seq
 		Query:   []byte(query.Query),
 		MaxRows: 1,
 	})
+	if IsTableDidNotExistError(ierr) {
+		return 0, false, nil
+	}
 	if ierr != nil || len(qr.Rows) != 1 {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the current value for the sequence table %s.%s: %v",
+		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to get the current value for the sequence table %s.%s: %v",
 			seq.backingTableDBName, seq.backingTableName, ierr)
 	}
 	rawVal := sqltypes.Proto3ToResult(qr).Rows[0][0]
 	if rawVal.IsNull() {
-		return 0, nil
+		return 0, true, nil
 	}
 	currentVal, err := rawVal.ToInt64()
 	if err != nil {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to convert the current value for the sequence table %s.%s: %v",
+		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to convert the current value for the sequence table %s.%s: %v",
 			seq.backingTableDBName, seq.backingTableName, err)
 	}
-	return currentVal, nil
+	return currentVal, true, nil
 }
 
 func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences []*sequenceMetadata, maxValues map[string]int64) error {
@@ -281,10 +294,8 @@ func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences [
 // table on demand during initialization. A default global keyspace is
 // only required when an unqualified sequence reference is not found in
 // any keyspace's vschema, in which case both the backing table and its
-// vschema entry are created there (see createMissingSequenceTables).
-// A backing table that a qualified sequence reference names but that is
-// missing from that keyspace's vschema is first added to it (see
-// checkQualifiedSequenceVSchema).
+// vschema entry are created there before writes are stopped (see
+// prepareTargetSequences).
 //
 // This function will then ensure that the next value is set to a value
 // greater than any currently stored in the using table on the target
@@ -293,9 +304,6 @@ func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences [
 // refresh/reset its cache to be sure that it does not provide a value
 // that is less than the current max.
 func (ts *trafficSwitcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
-	if err := ts.registerSequencesInVSchema(ctx, sequencesByBackingTable); err != nil {
-		return err
-	}
 	maxValues, err := ts.getMaxSequenceValues(ctx, sequencesByBackingTable)
 	if err != nil {
 		return err
@@ -445,8 +453,8 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 	}
 
 	if len(tablesFound) != tableCount {
-		// Try and create the missing backing sequence tables if we can.
-		if err := ts.createMissingSequenceTables(ctx, sequencesByBackingTable, tablesFound); err != nil {
+		// Put the missing backing sequence tables in the global keyspace if we can.
+		if err := ts.assignMissingSequenceTables(ctx, sequencesByBackingTable, tablesFound); err != nil {
 			return nil, err
 		}
 	}
@@ -457,9 +465,8 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 // checkQualifiedSequenceVSchema checks the vschema entries of the backing
 // tables that qualified sequence references name, without searching other
 // keyspaces. A backing table must be a sequence in an unsharded keyspace, or
-// be missing from its vschema, in which case it is marked to be added when
-// the sequences are initialized. It changes nothing, as it also runs on dry
-// runs.
+// be missing from its vschema, in which case it is marked to be added by
+// prepareTargetSequences. It changes nothing, as it also runs on dry runs.
 func (ts *trafficSwitcher) checkQualifiedSequenceVSchema(ctx context.Context, sequences map[string]*sequenceMetadata) error {
 	keyspaces := make(map[string]*topo.KeyspaceVSchemaInfo)
 	for _, sm := range sequences {
@@ -489,11 +496,10 @@ func (ts *trafficSwitcher) checkQualifiedSequenceVSchema(ctx context.Context, se
 	return nil
 }
 
-// registerSequencesInVSchema adds the backing tables that
-// checkQualifiedSequenceVSchema found missing to the vschema of their
-// keyspace, unless they have been added since. The physical tables are
-// created when the sequences are initialized, and the serving VSchema is
-// rebuilt in every cell when changeRouting switches the write traffic.
+// registerSequencesInVSchema adds the backing tables that are marked as
+// missing from the vschema of their keyspace to it, unless they have been
+// added since. The serving VSchema is rebuilt in every cell when
+// changeRouting switches the write traffic.
 func (ts *trafficSwitcher) registerSequencesInVSchema(ctx context.Context, sequences map[string]*sequenceMetadata) error {
 	tablesByKeyspace := make(map[string][]string)
 	for _, sm := range sequences {
@@ -552,9 +558,11 @@ func findSequenceInVSchema(kvs *topo.KeyspaceVSchemaInfo, tableName string) (boo
 	return found, nil
 }
 
-// createMissingSequenceTables will create the backing sequence tables for those that
-// could not be found in any current keyspace.
-func (ts *trafficSwitcher) createMissingSequenceTables(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata, tablesFound map[string]struct{}) error {
+// assignMissingSequenceTables puts the backing sequence tables that could not
+// be found in any keyspace's vschema in the global keyspace, and marks them to
+// be created there and added to its vschema by prepareTargetSequences. It
+// changes nothing, as it also runs on dry runs.
+func (ts *trafficSwitcher) assignMissingSequenceTables(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata, tablesFound map[string]struct{}) error {
 	globalKeyspace := ts.options.GetGlobalKeyspace()
 	if globalKeyspace == "" {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: %s",
@@ -579,40 +587,54 @@ func (ts *trafficSwitcher) createMissingSequenceTables(ctx context.Context, sequ
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "global-keyspace %s does not currently have a primary tablet",
 			globalKeyspace)
 	}
-	primary, err := ts.ws.ts.GetTablet(ctx, shard.PrimaryAlias)
-	if err != nil {
-		return err
-	}
-	updatedGlobalVSchema := false
 	for tableName, sequenceMetadata := range sequencesByBackingTable {
-		if _, ok := tablesFound[tableName]; !ok {
-			// Create the backing table.
-
-			if err := ts.createSequenceTable(ctx, tableName, primary); err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
-					"failed to create the backing sequence table %s in the global-keyspace %s: %v",
-					tableName, globalKeyspace, err)
-			}
-			if bt := globalVSchema.Tables[sequenceMetadata.backingTableName]; bt == nil {
-				if globalVSchema.Tables == nil {
-					globalVSchema.Tables = make(map[string]*vschemapb.Table)
-				}
-				globalVSchema.Tables[tableName] = &vschemapb.Table{
-					Type: vindexes.TypeSequence,
-				}
-				updatedGlobalVSchema = true
-				sequenceMetadata.backingTableDBName = "vt_" + globalKeyspace // This will be overridden later if needed
-				sequenceMetadata.backingTableKeyspace = globalKeyspace
-			}
+		if _, ok := tablesFound[tableName]; ok {
+			continue
 		}
-	}
-	if updatedGlobalVSchema {
-		err = ts.ws.ts.SaveVSchema(ctx, globalVSchema)
+		found, err := findSequenceInVSchema(globalVSchema, sequenceMetadata.backingTableName)
 		if err != nil {
-			return vterrors.Wrapf(err, "failed to update vschema in the global-keyspace %s", globalKeyspace)
+			return err
 		}
+		sequenceMetadata.backingTableDBName = "vt_" + globalKeyspace // This will be overridden later if needed
+		sequenceMetadata.backingTableKeyspace = globalKeyspace
+		sequenceMetadata.createBackingTable = true
+		sequenceMetadata.registerInVSchema = !found
 	}
 	return nil
+}
+
+// prepareTargetSequences creates the backing sequence tables that
+// assignMissingSequenceTables put in the global keyspace, and adds the
+// backing tables that are missing from the vschema of their keyspace to it.
+// It runs before writes are stopped.
+func (ts *trafficSwitcher) prepareTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	primaries := make(map[string]*topo.TabletInfo)
+	for _, sm := range sequencesByBackingTable {
+		if !sm.createBackingTable {
+			continue
+		}
+		primary := primaries[sm.backingTableKeyspace]
+		if primary == nil {
+			shard, err := ts.TopoServer().GetOnlyShard(ctx, sm.backingTableKeyspace)
+			if err != nil {
+				return err
+			}
+			if shard.PrimaryAlias == nil {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "global-keyspace %s does not currently have a primary tablet",
+					sm.backingTableKeyspace)
+			}
+			if primary, err = ts.TopoServer().GetTablet(ctx, shard.PrimaryAlias); err != nil {
+				return err
+			}
+			primaries[sm.backingTableKeyspace] = primary
+		}
+		if err := ts.createSequenceTable(ctx, sm.backingTableName, primary); err != nil {
+			return vterrors.Errorf(vtrpcpb.Code_INTERNAL,
+				"failed to create the backing sequence table %s in the global-keyspace %s: %v",
+				sm.backingTableName, sm.backingTableKeyspace, err)
+		}
+	}
+	return ts.registerSequencesInVSchema(ctx, sequencesByBackingTable)
 }
 
 func (ts *trafficSwitcher) createSequenceTable(ctx context.Context, tableName string, primary *topo.TabletInfo) error {
