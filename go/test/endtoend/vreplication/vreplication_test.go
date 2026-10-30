@@ -275,6 +275,15 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	testBasicVreplicationWorkflow(t, "noblob")
 }
 
+func TestVreplicationCopyParallel(t *testing.T) {
+	defaultSourceKsOpts["DBTypeVersion"] = "mysql-5.7"
+	defaultTargetKsOpts["DBTypeVersion"] = "mysql-5.7"
+	extraVTTabletArgs = []string{
+		parallelInsertWorkers,
+	}
+	testBasicVreplicationWorkflow(t, "")
+}
+
 func TestVreplicationParallel(t *testing.T) {
 	defaultSourceKsOpts["DBTypeVersion"] = "mysql-8.4"
 	defaultTargetKsOpts["DBTypeVersion"] = "mysql-8.4"
@@ -855,6 +864,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		workflowType := "MoveTables"
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
+		if parallelApplyEnabledOnTablets() {
+			requireParallelApplierStarted(t, customerTab1, workflow, 4)
+			requireParallelApplierStarted(t, customerTab2, workflow, 4)
+		}
 
 		// json_tbl is created with stats_auto_recalc=0 and only a primary key, so
 		// InnoDB never recalculates its statistics on its own. The copy analyzes

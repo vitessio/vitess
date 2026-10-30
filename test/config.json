@@ -2219,7 +2219,7 @@
       ],
       "Args": [
         "-run",
-        "TestVreplicationParallel",
+        "TestVreplicationParallel|TestVreplicationCopyParallel",
         "-timeout",
         "20m"
       ],
