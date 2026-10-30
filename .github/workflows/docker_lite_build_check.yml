@@ -18,7 +18,7 @@ permissions:
 jobs:
   generate-matrix:
     name: Generate matrix
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     outputs:
       dockerfiles: ${{ steps.generate-matrix.outputs.dockerfiles }}
     steps:
@@ -35,7 +35,10 @@ jobs:
 
   build:
     name: Build ${{ matrix.dockerfile }}
-    runs-on: ubuntu-24.04
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     needs: generate-matrix
 
     strategy:
@@ -45,7 +48,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
@@ -59,9 +62,41 @@ jobs:
       - name: Check out code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 2
           persist-credentials: 'false'
 
+      - name: Find the base of the pull request's merge commit
+        id: merge-base
+        if: github.event_name == 'pull_request'
+        run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
+      - name: Check for changes in relevant files
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: changes
+        with:
+          token: ''
+          base: ${{ steps.merge-base.outputs.sha }}
+          filters: |
+            docker_lite:
+              - 'go/**/!(*_test).go'
+              - 'go/**/*.s'
+              - 'go/vt/sidecardb/**/*.sql'
+              - 'go/mysql/collations/colldata/**'
+              - 'go/mysql/icuregex/internal/icudata/**'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'tools/**'
+              - 'config/**'
+              - 'web/vtadmin/**'
+              - 'docker/lite/**'
+              - 'docker/utils/**'
+              - '.dockerignore'
+              - '.github/workflows/docker_lite_build_check.yml'
+
       - name: Build lite image
+        if: steps.changes.outputs.docker_lite == 'true'
         timeout-minutes: 15
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:

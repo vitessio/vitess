@@ -17,7 +17,7 @@ permissions:
 jobs:
   build_and_push_vttestserver:
     name: Build and push vttestserver
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    runs-on: cncf-ubuntu-24.04-16-64-x86
     if: github.repository == 'vitessio/vitess'
 
     strategy:
@@ -27,7 +27,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
@@ -146,7 +146,7 @@ jobs:
 
   build_and_push_components:
     name: Build and push
-    runs-on: oracle-vm-16cpu-64gb-x86-64
+    runs-on: cncf-ubuntu-24.04-16-64-x86
     if: github.repository == 'vitessio/vitess' && needs.build_and_push_lite.result == 'success'
     needs:
       - build_and_push_lite

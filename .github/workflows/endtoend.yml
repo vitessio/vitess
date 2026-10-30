@@ -11,25 +11,18 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'endtoend')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
 jobs:
-
-  build:
-    name: End-to-End Test
-    runs-on: ubuntu-24.04
+  # Path filtering runs here, on a small runner (a CNCF container in
+  # vitess-security), so that the job below claims a VM there only when
+  # something relevant changed.
+  changes:
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
+    timeout-minutes: 5
+    outputs:
+      end_to_end: ${{ steps.changes.outputs.end_to_end }}
     steps:
-    - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
-      with:
-        egress-policy: audit
-
-    - name: Skip CI
-      run: |
-        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
-          echo "skipping CI due to the 'Skip CI' label"
-          exit 1
-        fi
-
     - name: Check out code
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -74,26 +67,63 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/endtoend.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
 
+  build:
+    name: End-to-End Test
+    needs: changes
+    if: ${{ !cancelled() }}
+    # When nothing relevant changed the job still runs (so its required status
+    # check is reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the job then only fails at that step.
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && (needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && 'cncf-ubuntu-24.04-4-16-x86' || 'cncf-c-ubuntu-2-8-x86') || 'ubuntu-24.04' }}
+    steps:
+    - name: Fail if the gate job failed
+      # A failed gate must not turn into a silently-skipped (i.e. passing) required check.
+      if: needs.changes.result != 'success'
+      run: exit 1
+
+    - name: Harden the runner (Audit all outbound calls)
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      with:
+        egress-policy: audit
+
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
+    - name: Check out code
+      if: needs.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: 'false'
+
     - name: Set up Go
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       uses: $/.github/actions/setup-go
 
     - name: Tune the OS
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       uses: $/.github/actions/tune-os
 
     - name: Setup MySQL
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 8
       uses: $/.github/actions/setup-mysql
       with:
         flavor: mysql-8.0
 
     - name: Get dependencies
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         sudo apt-get update
@@ -102,19 +132,19 @@ jobs:
         sudo service etcd stop
 
     - name: Run make minimaltools
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 5
       run: |
         make minimaltools
 
     - name: Build
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 10
       run: |
         NOVTADMINBUILD=1 make build
 
     - name: endtoend
-      if: steps.changes.outputs.end_to_end == 'true'
+      if: needs.changes.outputs.end_to_end == 'true'
       timeout-minutes: 30
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file

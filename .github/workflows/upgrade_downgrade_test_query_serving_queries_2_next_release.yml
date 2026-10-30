@@ -20,11 +20,12 @@ permissions:
 
 jobs:
 
-  # Path filtering and release-branch discovery run once here, on a
-  # GitHub-hosted runner, so that the test job below (on a large runner) is not
-  # started at all when nothing relevant changed or there is no next release.
+  # Path filtering and release-branch discovery run once here, on a small
+  # runner (a CNCF container in vitess-security), so that the test job below
+  # (on a large runner) is not started at all when nothing relevant changed or
+  # there is no next release.
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       end_to_end: ${{ steps.changes.outputs.end_to_end }}
@@ -82,6 +83,7 @@ jobs:
             - 'bootstrap.sh'
             - '.github/workflows/upgrade_downgrade_test_query_serving_queries_2_next_release.yml'
             - '.github/actions/setup-mysql/action.yml'
+            - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
 
   upgrade_downgrade_test:
@@ -95,7 +97,7 @@ jobs:
     name: Run Upgrade Downgrade Test - Query Serving (Queries - 2) Next Release (${{ matrix.name }})
     # The large runner is only claimed when the tests will actually run; a
     # failed or cancelled gate and the 'Skip CI' label only report a failure.
-    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ needs.changes.result == 'success' && needs.changes.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     # Each version mix runs the whole suite, so the mixes run as separate
     # jobs in parallel instead of one after the other in a single job.
     strategy:
@@ -109,7 +111,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
       with:
         egress-policy: audit
 
@@ -219,6 +221,8 @@ jobs:
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
+        # Keep the path of the mysql.sock file short: under the checkout it can exceed the 107-character limit for a Unix socket path.
+        export VTDATAROOT=/tmp/vtdataroot
 
         source build.env
         go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries_2
@@ -230,7 +234,7 @@ jobs:
     needs: upgrade_downgrade_test
     if: ${{ !cancelled() }}
     name: Run Upgrade Downgrade Test - Query Serving (Queries - 2) Next Release
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
     - name: Check the result of every version mix

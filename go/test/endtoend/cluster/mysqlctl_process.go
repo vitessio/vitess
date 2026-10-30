@@ -48,6 +48,9 @@ type MysqlctlProcess struct {
 	ExtraArgs       []string
 	InitMysql       bool
 	SecureTransport bool
+	// ProcessGroup starts mysqlctl in a process group of its own, which also holds the
+	// mysqld it starts, so that the group can be killed as a whole.
+	ProcessGroup bool
 }
 
 // InitDb executes mysqlctl command to add cell info
@@ -160,6 +163,9 @@ ssl_key={{.ServerKey}}
 	}
 	tmpProcess.Env = append(tmpProcess.Env, os.Environ()...)
 	tmpProcess.Env = append(tmpProcess.Env, DefaultVttestEnv)
+	if mysqlctl.ProcessGroup {
+		tmpProcess.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}
 	log.Info(fmt.Sprintf("Starting mysqlctl with command: %v", tmpProcess.Args))
 	return tmpProcess, tmpProcess.Start()
 }
