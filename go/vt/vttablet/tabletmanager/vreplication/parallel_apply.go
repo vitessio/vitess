@@ -944,6 +944,8 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 		log.Info("Parallel apply: transactions on this table will serialize; its FK relationships are beyond writeset conflict detection", vp.vr.logAttrs(slog.String("table", table))...)
 	}
 
+	log.Info("Parallel applier started", vp.vr.logAttrs(slog.Int("workers", workerCount))...)
+
 	// sendWorkerErr is a non-blocking send to workerErr. The channel is
 	// buffered to workerCount, so in normal operation this always succeeds;
 	// the non-blocking form is defensive against test hooks or double-send

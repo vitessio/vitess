@@ -1094,7 +1094,7 @@ func TestApplyEventsParallelReturnsWorkerErrorEvenIfCancellationLooksLikeEOF(t *
 				{Type: binlogdatapb.VEventType_COMMIT},
 			}))
 
-			logs := logtest.Capture(t, slog.LevelError)
+			logs := logtest.Capture(t, slog.LevelInfo)
 			// A worker error that is swallowed instead of returned leaves the
 			// applier waiting for more events, so bound the wait to fail fast.
 			errCh := make(chan error, 1)
@@ -1116,6 +1116,10 @@ func TestApplyEventsParallelReturnsWorkerErrorEvenIfCancellationLooksLikeEOF(t *
 			assert.Equal(t, vterrors.Code(tcase.err), vterrors.Code(err))
 			assert.True(t, isUnrecoverableError(err))
 			assert.Equal(t, tcase.conflict, isParallelApplyConflictError(err))
+
+			// The e2e tests rely on this record to know the parallel path ran.
+			started := logs.Record(t, "Parallel applier started")
+			assert.EqualValues(t, 2, started["workers"])
 		})
 	}
 }
