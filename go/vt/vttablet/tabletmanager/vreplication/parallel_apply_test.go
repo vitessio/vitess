@@ -43,7 +43,9 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -415,6 +417,7 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 		id:             1,
 		stats:          stats,
 		dbClient:       newVDBClient(mockDB, stats, config.RelayLogMaxItems),
+		mysqld:         unreachableMysqld{},
 		workflowConfig: config,
 		vre:            &Engine{},
 		source:         &binlogdatapb.BinlogSource{OnDdl: binlogdatapb.OnDDLAction_IGNORE},
@@ -439,6 +442,16 @@ func testVPlayer(t *testing.T) (*vplayer, *binlogplayer.MockDBClient) {
 		dbClient: vr.dbClient,
 	}
 	return vp, mockDB
+}
+
+// unreachableMysqld is a mysqld that cannot be connected to, as when it is
+// down. Its other methods are not implemented.
+type unreachableMysqld struct {
+	mysqlctl.MysqlDaemon
+}
+
+func (unreachableMysqld) GetDbaConnection(ctx context.Context) (*dbconnpool.DBConnection, error) {
+	return nil, errors.New("mysqld is unreachable")
 }
 
 func TestTestVPlayerDoesNotMutateDefaultWorkflowConfig(t *testing.T) {
@@ -1175,11 +1188,18 @@ func TestWorkerLoopCancelDoesNotUnblockBlockedBatchFlush(t *testing.T) {
 // the connection to the commitLoop, and worker.close() only runs after the
 // commitLoop returns. Without a commit-phase hook that closes the committing
 // connection on ctx.Done(), applyEventsParallel's `<-commitDone` wait — and
-// with it the controller's shutdown — hangs indefinitely.
+// with it the controller's shutdown — hangs indefinitely. Nor may the wait
+// for the interrupted commit to land (see
+// TestCommitLoopCancelWaitsForInterruptedCommit) hang it when mysqld cannot
+// be reached: the commitLoop returns at once.
 func TestCommitLoopCancelUnblocksBlockedCommit(t *testing.T) {
 	ctx, cancel := context.WithCancel(testCtx(t))
 	defer cancel()
 
+	// Longer than the wait for the commitLoop to return below.
+	oldTimeout := interruptedCommitWaitTimeout
+	interruptedCommitWaitTimeout = time.Minute
+	t.Cleanup(func() { interruptedCommitWaitTimeout = oldTimeout })
 	vp, _ := testVPlayer(t)
 	scheduler := newApplyScheduler(ctx)
 
@@ -1230,6 +1250,136 @@ func TestCommitLoopCancelUnblocksBlockedCommit(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "commitLoop remained stuck after cancellation while the commit's wire call was blocked")
 	}
+}
+
+// TestCommitLoopCancelWaitsForInterruptedCommit pins what follows when the
+// commitLoop closes a connection mid-commit on cancellation: mysqld finishes
+// a COMMIT it has received after its client has gone away, so the commit can
+// land after the commit call has returned, and a restart that read the
+// stream's position before then would apply the transaction again. The
+// commitLoop must not return until the transaction has landed or rolled
+// back, and must not wait for it indefinitely either. FLUSH TABLES WITH READ
+// LOCK holds the commit, as a slow commit (e.g. one waiting for a semi-sync
+// ACK) would.
+func TestCommitLoopCancelWaitsForInterruptedCommit(t *testing.T) {
+	for _, lands := range []bool{true, false} {
+		t.Run(fmt.Sprintf("lands=%v", lands), func(t *testing.T) {
+			testCommitLoopCancelWaitsForInterruptedCommit(t, lands)
+		})
+	}
+}
+
+func testCommitLoopCancelWaitsForInterruptedCommit(t *testing.T, lands bool) {
+	if !lands {
+		oldTimeout := interruptedCommitWaitTimeout
+		interruptedCommitWaitTimeout = 2 * time.Second
+		t.Cleanup(func() { interruptedCommitWaitTimeout = oldTimeout })
+	}
+	ctx, cancel := context.WithCancel(testCtx(t))
+	defer cancel()
+	tableName := fmt.Sprintf("parallel_apply_interrupted_commit_%v", lands)
+	vp, qualifiedTableName := newCommitOrderDeadlockVPlayer(t, ctx, tableName)
+
+	// Closing this connection releases the lock.
+	locker, err := env.Mysqld.GetDbaConnection(ctx)
+	require.NoError(t, err)
+	t.Cleanup(locker.Close)
+
+	// A connection of its own, whose commit can wait on the lock for longer
+	// than a worker connection's lock_wait_timeout.
+	db := &realDBClient{nolog: true}
+	require.NoError(t, db.Connect())
+	t.Cleanup(db.Close)
+	qr, err := db.ExecuteFetch("select connection_id()", 1)
+	require.NoError(t, err)
+	connID := qr.Rows[0][0].ToString()
+	client := newVDBClient(db, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+	require.NoError(t, client.Begin())
+	_, err = client.ExecuteFetch("insert into "+qualifiedTableName+" values (4, 12)", 1)
+	require.NoError(t, err)
+
+	readPos := func() string {
+		qr, err := env.Mysqld.FetchSuperQuery(t.Context(), fmt.Sprintf("select pos from _vt.vreplication where id = %d", vp.vr.id))
+		require.NoError(t, err)
+		return qr.Rows[0][0].ToString()
+	}
+	oldPos := readPos()
+	pos, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	locked := make(chan struct{})
+	txn := &applyTxn{order: 1, done: make(chan struct{}, 1), payload: &applyTxnPayload{
+		pos: pos, client: client,
+		query: func(ctx context.Context, sql string) (*sqltypes.Result, error) {
+			qr, err := client.Execute(sql)
+			if err != nil {
+				return nil, err
+			}
+			// The position update holds the stream's row: hold the commit.
+			_, err = locker.ExecuteFetch("flush tables with read lock", 1, false)
+			close(locked)
+			return qr, err
+		},
+		commit: client.Commit,
+	}}
+
+	scheduler := newApplyScheduler(ctx)
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- txn
+	var loops sync.WaitGroup
+	t.Cleanup(func() {
+		cancel()
+		// Release the lock first, so that the commitLoop can return.
+		locker.Close()
+		loops.Wait()
+	})
+	done := make(chan error, 1)
+	loops.Go(func() { done <- vp.commitLoop(ctx, scheduler, commitCh) })
+
+	processState := func(where string) string {
+		qr, err := env.Mysqld.FetchSuperQuery(t.Context(), "select ifnull(state, '') from information_schema.processlist where "+where)
+		if err != nil {
+			t.Logf("processlist query failed: %v", err)
+			return ""
+		}
+		if len(qr.Rows) != 1 {
+			return ""
+		}
+		return qr.Rows[0][0].ToString()
+	}
+	select {
+	case <-locked:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "timed out waiting for the commitLoop to update the position")
+	}
+	require.Eventually(t, func() bool {
+		return processState("id = "+connID) == "Waiting for commit lock"
+	}, 30*time.Second, 10*time.Millisecond, "the commit must wait on the lock")
+
+	cancel()
+	if !lands {
+		select {
+		case <-done:
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "the commitLoop must stop waiting for the interrupted commit")
+		}
+		assert.Equal(t, "Waiting for commit lock", processState("id = "+connID), "the interrupted commit must still be waiting")
+		assert.Equal(t, oldPos, readPos())
+		return
+	}
+	require.Eventually(t, func() bool {
+		return processState("info like 'select pos from %vreplication where id = "+strconv.Itoa(int(vp.vr.id))+" for update'") != ""
+	}, 30*time.Second, 10*time.Millisecond, "the commitLoop must wait for the interrupted commit")
+	require.Empty(t, done, "the commitLoop must not return while the interrupted commit waits")
+
+	_, err = locker.ExecuteFetch("unlock tables", 1, false)
+	require.NoError(t, err)
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the commitLoop must return once the interrupted commit lands")
+	}
+	// The commit landed before the commitLoop returned.
+	require.Equal(t, replication.EncodePosition(pos), readPos())
 }
 
 // closeTrackingDBClient records whether its connection was closed.

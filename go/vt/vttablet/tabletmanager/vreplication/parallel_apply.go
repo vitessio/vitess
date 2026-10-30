@@ -31,6 +31,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -2260,6 +2261,42 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 	}
 }
 
+// interruptedCommitWaitTimeout bounds how long the commitLoop waits on exit
+// for the transaction of a connection it closed mid-commit to land or roll
+// back.
+var interruptedCommitWaitTimeout = 10 * time.Second
+
+// waitForInterruptedCommit waits, for at most interruptedCommitWaitTimeout,
+// until no transaction holds the lock on this stream's row in
+// _vt.vreplication. A transaction that updated the position holds it until
+// it lands or rolls back, so this waits for the commit of a connection the
+// commitLoop closed. It gives up at once if mysqld cannot be reached.
+func (vp *vplayer) waitForInterruptedCommit(ctx context.Context) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), interruptedCommitWaitTimeout)
+	defer cancel()
+	err := func() error {
+		conn, err := vp.vr.mysqld.GetDbaConnection(ctx)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		// The context bounds the connect; close the connection at its
+		// deadline in case mysqld does not answer the queries either.
+		defer context.AfterFunc(ctx, conn.Close)()
+		// Don't let the server's lock wait timeouts end the wait first.
+		timeout := int64(interruptedCommitWaitTimeout / time.Second)
+		if _, err := conn.ExecuteFetch(fmt.Sprintf("set @@session.innodb_lock_wait_timeout = %d, @@session.lock_wait_timeout = %d", timeout, timeout), 1, false); err != nil {
+			return err
+		}
+		_, err = conn.ExecuteFetch(fmt.Sprintf("select pos from %s.vreplication where id = %d for update", sidecar.GetIdentifier(), vp.vr.id), 1, false)
+		return err
+	}()
+	if err != nil {
+		log.Warn("Parallel apply: could not wait for an interrupted commit to land or roll back; a restart may apply it again",
+			vp.vr.logAttrs(slog.Any("error", err))...)
+	}
+}
+
 // commitLoop receives completed transactions from workers via commitCh and
 // commits them in strict order (by the order field). For worker transactions,
 // it executes the position update and commit on the worker's connection
@@ -2275,17 +2312,26 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	// therefore hang applyEventsParallel's commitDone wait — and with it
 	// the controller's shutdown — indefinitely. Publish the connection each
 	// commit uses so ctx cancellation closes it, erroring the blocked call.
-	// Closing a connection mid-commit is safe: the position update commits
-	// in the same transaction as the row data, so either the commit landed
-	// (and the position advanced with it) or it rolled back (and the
-	// restart resumes from the previous durable position).
+	// The position update commits in the same transaction as the row data,
+	// but mysqld finishes a COMMIT it has received after its client has gone
+	// away, so the commit can land after the call has returned: a restart
+	// that read the position before then would apply the transaction again.
+	// So once a connection has been closed here, wait for its transaction to
+	// land or roll back before returning.
 	var activeCommitClient atomic.Pointer[vdbClient]
+	var closedMidCommit atomic.Bool
 	stopInterrupt := context.AfterFunc(ctx, func() {
 		if c := activeCommitClient.Load(); c != nil {
+			closedMidCommit.Store(true)
 			c.Close()
 		}
 	})
-	defer stopInterrupt()
+	defer func() {
+		stopInterrupt()
+		if closedMidCommit.Load() {
+			vp.waitForInterruptedCommit(ctx)
+		}
+	}()
 
 	updateLag := func(payload *applyTxnPayload) {
 		if payload.lastEventTimestamp != 0 {
