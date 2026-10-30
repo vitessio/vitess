@@ -19,8 +19,6 @@ limitations under the License.
 package vtctld
 
 import (
-	"time"
-
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -37,18 +35,4 @@ func init() {
 
 func registerVtctldFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &sanitizeLogMessages, "vtctld-sanitize-log-messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
-
-	// These flags configured the HTTP API under /api/ that served the
-	// vtctld web UI, which VTAdmin replaced in v16. The API has been
-	// removed; the flags are kept for one release so that processes
-	// started with them keep starting.
-	const deprecationMsg = "this flag is a no-op and will be removed in v26"
-	fs.String("cell", "", "(DEPRECATED) This flag is a no-op: the HTTP API it configured has been removed.")
-	_ = fs.MarkDeprecated("cell", deprecationMsg)
-	fs.Bool("proxy-tablets", false, "(DEPRECATED) This flag is a no-op: the HTTP API it configured has been removed.")
-	_ = fs.MarkDeprecated("proxy-tablets", deprecationMsg)
-	fs.Duration("action-timeout", time.Minute, "(DEPRECATED) This flag is a no-op: the HTTP API it configured has been removed.")
-	_ = fs.MarkDeprecated("action-timeout", deprecationMsg)
-	fs.Duration("tablet-health-keep-alive", 5*time.Minute, "(DEPRECATED) This flag is a no-op: the HTTP API it configured has been removed.")
-	_ = fs.MarkDeprecated("tablet-health-keep-alive", deprecationMsg)
 }
