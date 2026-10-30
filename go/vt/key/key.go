@@ -118,10 +118,13 @@ func KeyRangeAdd(a, b *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
 
 // KeyRangeContains returns true if the provided id is in the keyrange.
 func KeyRangeContains(keyRange *topodatapb.KeyRange, id []byte) bool {
-	if KeyRangeIsComplete(keyRange) {
+	if keyRange == nil {
 		return true
 	}
-	return (Empty(keyRange.Start) || Compare(id, keyRange.Start) >= 0) && (Empty(keyRange.End) || Compare(id, keyRange.End) < 0)
+	id = Normalize(id)
+	start := Normalize(keyRange.Start)
+	end := Normalize(keyRange.End)
+	return (len(start) == 0 || bytes.Compare(id, start) >= 0) && (len(end) == 0 || bytes.Compare(id, end) < 0)
 }
 
 // ParseKeyRangeParts parses a Start and End as hex encoded strings and builds a proto KeyRange.
