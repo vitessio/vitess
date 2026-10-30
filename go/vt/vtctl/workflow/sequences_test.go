@@ -223,11 +223,10 @@ func TestInitializeTargetSequences(t *testing.T) {
 // left by MoveTables REPLACE's qualified sequence references.
 func TestQualifiedSequenceRegistration(t *testing.T) {
 	for _, tc := range []struct {
-		name         string
-		backing      *vschema.Keyspace
-		unqualified  bool
-		staleServing bool
-		wantError    string
+		name        string
+		backing     *vschema.Keyspace
+		unqualified bool
+		wantError   string
 	}{
 		{name: "missing entry", backing: &vschema.Keyspace{}},
 		{name: "existing sequence", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
@@ -236,9 +235,6 @@ func TestQualifiedSequenceRegistration(t *testing.T) {
 		{name: "escaped existing sequence", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
 			"`t1_seq`": {Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}},
 		}}},
-		{name: "retry publication", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
-			"t1_seq": {Type: "sequence"},
-		}}, staleServing: true},
 		{name: "conflicting table", backing: &vschema.Keyspace{Tables: map[string]*vschema.Table{
 			"t1_seq": {},
 		}}, wantError: "not a sequence"},
@@ -267,14 +263,6 @@ func TestQualifiedSequenceRegistration(t *testing.T) {
 			}
 			require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "target", Keyspace: targetVSchema}))
 			require.NoError(t, env.ts.RebuildSrvVSchema(ctx, nil))
-			if tc.staleServing {
-				// Simulate a previous attempt saving the global VSchema but
-				// failing to publish it to this cell.
-				serving, err := env.ts.GetSrvVSchema(ctx, "cell")
-				require.NoError(t, err)
-				serving.Keyspaces["global-ks"] = &vschema.Keyspace{}
-				require.NoError(t, env.ts.UpdateSrvVSchema(ctx, "cell", serving))
-			}
 			ts := &trafficSwitcher{
 				ws: env.ws, sourceKeyspace: "source", targetKeyspace: "target", tables: []string{"t1", "t2"},
 				options: &vtctldatapb.WorkflowOptions{GlobalKeyspace: "source"},
@@ -305,9 +293,6 @@ func TestQualifiedSequenceRegistration(t *testing.T) {
 				} else {
 					assert.Equal(t, map[string]*vschema.Table{"t1_seq": {Type: "sequence"}}, got.Tables)
 				}
-				serving, err := env.ts.GetSrvVSchema(ctx, "cell")
-				require.NoError(t, err)
-				assert.Equal(t, got.Keyspace, serving.Keyspaces["global-ks"])
 			}
 		})
 	}

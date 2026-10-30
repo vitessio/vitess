@@ -491,15 +491,12 @@ func (ts *trafficSwitcher) ensureQualifiedSequenceVSchema(ctx context.Context, s
 			updated[keyspace] = true
 		}
 	}
+	// The serving VSchema is rebuilt in every cell when changeRouting
+	// switches the write traffic.
 	for keyspace := range updated {
 		if err := ts.TopoServer().SaveVSchema(ctx, keyspaces[keyspace]); err != nil {
 			return vterrors.Wrapf(err, "failed to register sequences in keyspace %s", keyspace)
 		}
-	}
-	// Rebuild even on a retry with existing entries: an earlier attempt may
-	// have saved the VSchema but failed to publish it to one of the cells.
-	if len(keyspaces) > 0 {
-		return ts.TopoServer().RebuildSrvVSchema(ctx, nil)
 	}
 	return nil
 }

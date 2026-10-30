@@ -969,9 +969,6 @@ func TestShardedAutoIncHandling(t *testing.T) {
 					globalVSchema, err = env.ws.ts.GetVSchema(ctx, tc.globalKeyspace)
 					require.NoError(t, err)
 					assert.Equal(t, map[string]*vschemapb.Table{"t-1_seq": {Type: "sequence"}}, globalVSchema.Tables)
-					serving, err := env.ws.ts.GetSrvVSchema(ctx, env.cell)
-					require.NoError(t, err)
-					assert.True(t, proto.Equal(globalVSchema.Keyspace, serving.Keyspaces[tc.globalKeyspace]))
 				}
 			}
 		})
