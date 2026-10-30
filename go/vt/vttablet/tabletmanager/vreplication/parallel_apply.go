@@ -578,6 +578,70 @@ func shouldPublishExecIgnoreDDLBarrier(ctx context.Context, vp *vplayer, stateme
 	return false, nil
 }
 
+// rebuildPostDDLTablePlans lifts the post-DDL barrier when the DDL commits, for
+// each table that the DDL changed in place, instead of waiting for the table's
+// next FIELD event, which comes only with its next row event and so can take a
+// long time for a table that is rarely written.
+//
+// The target's live schema enters a table plan only through the unique-key
+// analysis. The rest of the plan comes from the source's fields and from the
+// plan and column info built when the stream started, which the DDL does not
+// change. If the
+// DDL changed the source table's fields, the source sends a FIELD event with
+// its next row event for the table, and that event rebuilds the plan from the
+// new fields. So the current plan with its unique-key analysis redone is the
+// plan that a FIELD event with unchanged fields would build.
+//
+// These tables keep the barrier until their FIELD event arrives:
+//   - a renamed table, as only the source's fields can build the plan for its
+//     new name;
+//   - every table after an unparsed DDL, which may have renamed or recreated
+//     any of them;
+//   - a dropped table, and one recreated after a drop: its name counts as
+//     dropped until its FIELD event, so a later DDL on it is not tracked, and
+//     only this barrier makes that FIELD event redo the unique-key analysis;
+//   - a table whose target schema cannot be read.
+//
+// Callers hold serialMu.
+func (vp *vplayer) rebuildPostDDLTablePlans(ctx context.Context) {
+	if vp.postDDLConservative {
+		return
+	}
+	for name, stale := range vp.postDDLStalePlans {
+		if _, inPlace := stale.refreshedPlans[name]; !inPlace || len(stale.refreshedPlans) != 1 {
+			continue
+		}
+		if _, dropped := vp.postDDLDroppedTables[canonicalPostDDLTableKey(vp.postDDLDroppedTables, name)]; dropped {
+			continue
+		}
+		vp.tablePlansMu.RLock()
+		plan := vp.tablePlans[name]
+		vp.tablePlansMu.RUnlock()
+		if plan == nil {
+			continue
+		}
+		rebuilt := *plan
+		uniqueKeys, mustSerialize, err := vp.vr.writesetUniqueKeys(ctx, rebuilt.TargetName, &rebuilt)
+		if err != nil {
+			log.Warn("Parallel apply could not rebuild a table plan after a DDL, so it waits for the table's next FIELD event",
+				vp.vr.logAttrs(slog.String("table", name), slog.Any("error", err))...)
+			continue
+		}
+		rebuilt.UniqueKeyColumns = uniqueKeys
+		rebuilt.HasExtraUniqueSecondary = mustSerialize
+		vp.tablePlansMu.Lock()
+		replaced := vp.tablePlans[name] == plan
+		if replaced {
+			vp.tablePlans[name] = &rebuilt
+			vp.tablePlansVersion.Add(1)
+		}
+		vp.tablePlansMu.Unlock()
+		if replaced {
+			delete(vp.postDDLStalePlans, name)
+		}
+	}
+}
+
 // retargetPostDDLStalePlans rewrites in-flight barrier entries after a RENAME
 // has landed: the FIELD refresh that satisfies each stale plan will now
 // arrive under the destination name, so the watched refreshed-name must
@@ -1278,7 +1342,9 @@ type parallelScheduleState struct {
 	// object in the live tablePlans map. When a FIELD event for the DDL-
 	// affected table arrives, vplayer.applyEvent builds a new *TablePlan
 	// and stores it in tablePlans, replacing the stale pointer. At that
-	// point the guard clears for that table.
+	// point the guard clears for that table. For a table that the DDL
+	// changed in place, the commitLoop instead rebuilds the plan when the
+	// DDL commits (see rebuildPostDDLTablePlans).
 	//
 	// This is per-table rather than global-version-based because vstreamer
 	// only emits FIELD on first-seen or remapped table ids. An unrelated
@@ -1301,7 +1367,8 @@ type parallelScheduleState struct {
 // logPostDDLBarrierChange logs when the stream enters or leaves the post-DDL
 // barrier. While it is active, the scheduleLoop waits for the pipeline to
 // drain after every fetch, which lasts until a FIELD event refreshes the plan
-// of each table the DDL changed, and can be long for a table that is rarely
+// of each table whose plan was not rebuilt when the DDL committed (see
+// rebuildPostDDLTablePlans), and can be long for a table that is rarely
 // written.
 func (vp *vplayer) logPostDDLBarrierChange(state *parallelScheduleState) {
 	active := state.postDDLStalePlans != nil
@@ -2672,6 +2739,7 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			vp.postDDLStalePlans = mergePostDDLStalePlans(vp.postDDLStalePlans, ddlStalePlans)
 			vp.postDDLConservative = vp.postDDLConservative || conservative
 			vp.postDDLDroppedTables = mergeDroppedTables(vp.postDDLDroppedTables, extractDroppedTables(event.Statement, vp.vr.vre.env.Parser()))
+			vp.rebuildPostDDLTablePlans(ctx)
 		}
 		updateLag(payload)
 		if err := scheduler.markCommitted(txn); err != nil {
