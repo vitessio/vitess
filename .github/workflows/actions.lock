@@ -155,6 +155,9 @@ workflows:
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1'
         - 'step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1'
+    '.github/workflows/tag_go_module_dev_version.yml':
+        - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+        - 'step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25'
     '.github/workflows/unit_test.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
