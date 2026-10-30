@@ -2073,8 +2073,9 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		vp.vr.source.OnDdl == binlogdatapb.OnDDLAction_EXEC_IGNORE
 
 	// applyOnce applies the transaction's events on the worker's active
-	// connection, flushing them in batch mode, and rolls back on error.
-	applyOnce := func(payload *applyTxnPayload) error {
+	// connection, flushing them in batch mode, and rolls back on error. It
+	// returns the event that failed, if any (none when the flush fails).
+	applyOnce := func(payload *applyTxnPayload) (*binlogdatapb.VEvent, error) {
 		// Publish the current worker client so the worker-scoped
 		// context.AfterFunc can close it if ctx is cancelled.
 		activeApplyClient.Store(worker.client)
@@ -2085,7 +2086,7 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// Store above with a nil client, leaving the apply's blocking calls
 		// with no closer.
 		if err := ctx.Err(); err != nil {
-			return err
+			return nil, err
 		}
 		// DDL bookkeeping (postDDLStalePlans, postDDLDroppedTables) is only
 		// populated when OnDdl is EXEC or EXEC_IGNORE. In the default IGNORE
@@ -2102,7 +2103,7 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		for _, event := range payload.events {
 			if err := worker.applyEvent(ctx, event, payload.mustSave, &workerVP); err != nil {
 				worker.rollback()
-				return err
+				return event, err
 			}
 		}
 		// In batch mode, flush all buffered SQL statements to MySQL in
@@ -2111,19 +2112,20 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 		// commitLoop only needs to do a cheap COMMIT + position update.
 		if err := worker.flushWorkerBatch(); err != nil {
 			worker.rollback()
-			return err
+			return nil, err
 		}
-		return nil
+		return nil, nil
 	}
 
 	// applyWithRetry applies the transaction, and applies it again after a
 	// lock wait timeout or deadlock, which a commit-order deadlock surfaces
 	// as (see resolveCommitOrderLockWait). It returns the abort generation
-	// the successful attempt began at.
+	// the successful attempt began at. Other errors are counted, logged and
+	// wrapped as the serial applier does.
 	applyWithRetry := func(txn *applyTxn) (int64, error) {
 		for attempt := 0; ; attempt++ {
 			applyGen, _ := scheduler.abortState()
-			err := applyOnce(txn.payload)
+			event, err := applyOnce(txn.payload)
 			if err == nil {
 				return applyGen, nil
 			}
@@ -2131,6 +2133,9 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 				return 0, ctx.Err()
 			}
 			if !isLockWaitError(err) {
+				if err != io.EOF {
+					err = vp.applyEventError(err, event, txn.payload.pos, !txn.payload.pos.IsZero())
+				}
 				return 0, err
 			}
 			if err := vp.resolveCommitOrderLockWait(ctx, scheduler, txn.order, attempt, err); err != nil {
@@ -2770,6 +2775,20 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		}
 	}
 
+	// applyError counts, logs and wraps an error from applying or committing
+	// a transaction, as the serial applier does for the events it applies,
+	// unless the error ends the stream or comes from cancellation.
+	applyError := func(err error, payload *applyTxnPayload) error {
+		if errors.Is(err, io.EOF) || ctx.Err() != nil {
+			return err
+		}
+		var event *binlogdatapb.VEvent
+		if payload.commitOnly && len(payload.events) > 0 {
+			event = payload.events[0]
+		}
+		return vp.applyEventError(err, event, payload.pos, !payload.pos.IsZero())
+	}
+
 	drainPending := func() error {
 		for {
 			next := pending[nextOrder]
@@ -2780,14 +2799,14 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			if next.payload.aborted {
 				if err := reapply(next); err != nil {
 					pending[nextOrder] = next
-					return err
+					return applyError(err, next.payload)
 				}
 			}
 			if err := commitTxn(next); err != nil {
 				// Re-add the failed txn so the defer cleanup can
 				// signal its done channel and release it to the pool.
 				pending[nextOrder] = next
-				return err
+				return applyError(err, next.payload)
 			}
 			releaseApplyTxn(next)
 			nextOrder++

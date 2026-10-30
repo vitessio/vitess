@@ -45,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1030,55 +1031,93 @@ func TestApplyEventsParallelReturnsNilAfterScheduledRelevantJournalEvenIfLaterSc
 }
 
 func TestApplyEventsParallelReturnsWorkerErrorEvenIfCancellationLooksLikeEOF(t *testing.T) {
-	vp, mockDB := testVPlayer(t)
-	ctx := testCtx(t)
-
-	vp.vr.workflowConfig.ParallelReplicationWorkers = 2
-	vp.vr.workflowConfig.ExperimentalFlags = 0
-	vp.canAcceptStmtEvents = true
-
-	// A terminal error: its code has to survive the parallel applier so the
-	// controller does not retry it.
-	workerApplyErr := vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "worker apply failed")
-	mockDB.AddInvariant("information_schema.key_column_usage", &sqltypes.Result{})
-	mockDB.AddInvariant("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
-		"0",
-	))
-	mockDB.AddInvariant("rollback", &sqltypes.Result{})
-
-	if vp.vr.vre == nil {
-		vp.vr.vre = &Engine{}
+	// Terminal errors: the controller reads a vterror's code and a MySQL
+	// error's number, so both have to survive the parallel applier for it to
+	// classify them as it would the serial applier's.
+	tcases := []struct {
+		name     string
+		err      error
+		conflict bool
+	}{
+		{name: "vterror", err: vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "worker apply failed")},
+		{name: "mysql error", err: sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '1' for key 't1.PRIMARY'"), conflict: true},
 	}
-	if vp.vr.vre.throttlerClient == nil {
-		vp.vr.vre.throttlerClient = throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope)
-	}
-	vp.vr.vre.dbClientFactoryFiltered = func() binlogplayer.DBClient {
-		return &failingDBClient{failOnQuery: map[string]error{
-			"insert into t1": workerApplyErr,
-		}}
-	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			vp, mockDB := testVPlayer(t)
+			ctx := testCtx(t)
 
-	relay := newRelayLog(ctx, 10, 100, nil)
-	require.NoError(t, relay.Send([]*binlogdatapb.VEvent{
-		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
-		{Type: binlogdatapb.VEventType_INSERT, Dml: "insert into t1(id) values (1)", Timestamp: 100},
-		{Type: binlogdatapb.VEventType_COMMIT},
-	}))
+			vp.vr.workflowConfig.ParallelReplicationWorkers = 2
+			vp.vr.workflowConfig.ExperimentalFlags = 0
+			vp.replicatorPlan = &ReplicatorPlan{TablePlans: map[string]*TablePlan{
+				"t1": {
+					TargetName:       "t1",
+					IdentityColumns:  []string{"id"},
+					Insert:           sqlparser.BuildParsedQuery("insert into t1 values (:a_id)"),
+					Fields:           []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+					PKIndices:        []bool{true},
+					PKReferences:     []string{"id"},
+					Stats:            vp.vr.stats,
+					TablePlanBuilder: &tablePlanBuilder{},
+					WorkflowConfig:   vp.vr.workflowConfig,
+				},
+			}}
+			vp.tablePlans["t1"] = vp.replicatorPlan.TablePlans["t1"]
+			vp.tablePlansVersion.Store(1)
 
-	// A worker error that is swallowed instead of returned leaves the
-	// applier waiting for more events, so bound the wait to fail fast.
-	errCh := make(chan error, 1)
-	go func() { errCh <- vp.applyEventsParallel(ctx, relay) }()
-	var err error
-	select {
-	case err = <-errCh:
-	case <-time.After(30 * time.Second):
-		require.FailNow(t, "applyEventsParallel did not return the worker error")
+			mockDB.AddInvariant("information_schema.key_column_usage", &sqltypes.Result{})
+			mockDB.AddInvariant("select count(distinct table_name) from _vt.copy_state where vrepl_id=1", sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("count(distinct table_name)", "int64"),
+				"0",
+			))
+			mockDB.AddInvariant("rollback", &sqltypes.Result{})
+
+			if vp.vr.vre == nil {
+				vp.vr.vre = &Engine{}
+			}
+			if vp.vr.vre.throttlerClient == nil {
+				vp.vr.vre.throttlerClient = throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope)
+			}
+			vp.vr.vre.dbClientFactoryFiltered = func() binlogplayer.DBClient {
+				return &failingDBClient{failOnQuery: map[string]error{
+					"insert into t1": tcase.err,
+				}}
+			}
+
+			relay := newRelayLog(ctx, 10, 100, nil)
+			require.NoError(t, relay.Send([]*binlogdatapb.VEvent{
+				{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
+				{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+					TableName:  "t1",
+					RowChanges: []*binlogdatapb.RowChange{{After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}}}},
+				}, Timestamp: 100},
+				{Type: binlogdatapb.VEventType_COMMIT},
+			}))
+
+			logs := logtest.Capture(t, slog.LevelError)
+			// A worker error that is swallowed instead of returned leaves the
+			// applier waiting for more events, so bound the wait to fail fast.
+			errCh := make(chan error, 1)
+			go func() { errCh <- vp.applyEventsParallel(ctx, relay) }()
+			var err error
+			select {
+			case err = <-errCh:
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "applyEventsParallel did not return the worker error")
+			}
+			// Like the serial applier's, the error names the table and the
+			// position, and is counted under Apply and logged.
+			require.ErrorContains(t, err, "error applying event for table t1 while processing position 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5: "+tcase.err.Error())
+			assert.Equal(t, map[string]int64{"Apply": 1}, vp.vr.stats.ErrorCounts.Counts())
+			record := logs.Record(t, "Error applying event")
+			assert.Equal(t, "t1", record["table"])
+			assert.Equal(t, "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5", record["processing_position"])
+			assert.Contains(t, record["error"], tcase.err.Error())
+			assert.Equal(t, vterrors.Code(tcase.err), vterrors.Code(err))
+			assert.True(t, isUnrecoverableError(err))
+			assert.Equal(t, tcase.conflict, isParallelApplyConflictError(err))
+		})
 	}
-	require.ErrorContains(t, err, workerApplyErr.Error())
-	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
-	require.True(t, isUnrecoverableError(err))
 }
 
 type blockingBatchDBClient struct {
@@ -6851,6 +6890,30 @@ func TestCommitLoop_WorkerStopPosStateFailureDoesNotCommit(t *testing.T) {
 	assert.Zero(t, scheduler.inflightCommitMeta)
 }
 
+// TestCommitLoop_ReapplyFailureIsWrapped checks that when the commitLoop
+// cannot apply an aborted transaction again, the error is counted and wrapped
+// like an error from the serial applier.
+func TestCommitLoop_ReapplyFailureIsWrapped(t *testing.T) {
+	ctx := testCtx(t)
+	vp, _ := testVPlayer(t)
+	scheduler := newApplyScheduler(ctx)
+
+	pos1, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	// The client recorded no transaction, so there is nothing to replay.
+	commitCh := make(chan *applyTxn, 1)
+	commitCh <- &applyTxn{order: 1, done: make(chan struct{}, 1), payload: &applyTxnPayload{
+		pos:     pos1,
+		client:  newVDBClient(&recordingDBClient{}, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems),
+		aborted: true,
+	}}
+	close(commitCh)
+
+	err = vp.commitLoop(ctx, scheduler, commitCh)
+	require.ErrorContains(t, err, "error applying event while processing position 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5: failed to apply transaction 1 again after a commit-order deadlock abort: no transaction to replay")
+	assert.Equal(t, map[string]int64{"Apply": 1}, vp.vr.stats.ErrorCounts.Counts())
+}
+
 // TestCommitLoop_WorkerPosUpdateFailureDoesNotCommit pins the failure path
 // where the position update on the worker's connection fails: the commitLoop
 // must return the error without committing the worker's transaction, without
@@ -6895,6 +6958,10 @@ func TestCommitLoop_WorkerPosUpdateFailureDoesNotCommit(t *testing.T) {
 
 	err = vp.commitLoop(ctx, scheduler, commitCh)
 	require.ErrorContains(t, err, posErr.Error())
+	// Like the serial applier's, the error names the position and is
+	// counted under Apply.
+	assert.True(t, strings.HasPrefix(err.Error(), "error applying event while processing position 3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5: "), err.Error())
+	assert.Equal(t, map[string]int64{"Apply": 1}, vp.vr.stats.ErrorCounts.Counts())
 	assert.True(t, workerClient.InTransaction)
 	assert.NotContains(t, workerClient.queries, "commit")
 	select {

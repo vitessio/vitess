@@ -889,25 +889,8 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				}
 				if err := vp.applyEvent(ctx, event, mustSave); err != nil {
 					if err != io.EOF {
-						vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
-						var table, tableLogMsg, gtidLogMsg string
-						switch {
-						case event.GetFieldEvent() != nil:
-							table = event.GetFieldEvent().TableName
-						case event.GetRowEvent() != nil:
-							table = event.GetRowEvent().TableName
-						}
-						attrs := vp.vr.logAttrs()
-						if table != "" {
-							tableLogMsg = " for table " + table
-							attrs = append(attrs, slog.String("table", table))
-						}
-						if pos, ok := getNextPosition(items, i, j+1); ok && pos.String() != "" {
-							gtidLogMsg = " while processing position " + pos.String()
-							attrs = append(attrs, slog.String("processing_position", replication.EncodePosition(pos)))
-						}
-						log.Error("Error applying event", append(attrs, slog.Any("error", err))...)
-						err = vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
+						pos, ok := getNextPosition(items, i, j+1)
+						err = vp.applyEventError(err, event, pos, ok)
 					}
 					return err
 				}
@@ -955,6 +938,30 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 		i++
 	}
 	return false
+}
+
+// applyEventError counts and logs an error from applying event, and wraps it
+// with the event's table and, if known, the position being processed.
+func (vp *vplayer) applyEventError(err error, event *binlogdatapb.VEvent, pos replication.Position, havePos bool) error {
+	vp.vr.stats.ErrorCounts.Add([]string{"Apply"}, 1)
+	var table, tableLogMsg, gtidLogMsg string
+	switch {
+	case event.GetFieldEvent() != nil:
+		table = event.GetFieldEvent().TableName
+	case event.GetRowEvent() != nil:
+		table = event.GetRowEvent().TableName
+	}
+	attrs := vp.vr.logAttrs()
+	if table != "" {
+		tableLogMsg = " for table " + table
+		attrs = append(attrs, slog.String("table", table))
+	}
+	if havePos && pos.String() != "" {
+		gtidLogMsg = " while processing position " + pos.String()
+		attrs = append(attrs, slog.String("processing_position", replication.EncodePosition(pos)))
+	}
+	log.Error("Error applying event", append(attrs, slog.Any("error", err))...)
+	return vterrors.Wrapf(err, "error applying event%s%s", tableLogMsg, gtidLogMsg)
 }
 
 // getNextPosition returns the GTID set/position we would be at if the current
