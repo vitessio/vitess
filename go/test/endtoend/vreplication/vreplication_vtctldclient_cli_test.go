@@ -541,8 +541,9 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 		{
 			name: "clear flags",
 			config: map[string]string{
-				"vreplication-heartbeat-update-interval": "",
-				"vreplication-store-compressed-gtid":     "",
+				"vreplication-heartbeat-update-interval":    "",
+				"vreplication-store-compressed-gtid":        "",
+				"vreplication-parallel-replication-workers": "",
 			},
 			clears: true,
 		},
