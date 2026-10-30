@@ -127,9 +127,9 @@ As with MySQL's own parallel replica, an applied transaction that waits for its 
 
 Note:
 
-- Each worker holds two MySQL connections, so a workflow with `N` workers uses `2N+1` target-side connections.
+- Each worker holds two MySQL connections, so each stream with `N` workers uses `2N+1` connections on its target primary. A target primary runs one stream per source shard whose key range overlaps its own, or per source shard for a `MoveTables` between keyspaces with different primary vindexes: for example, merging 16 shards into one with `N = 8` uses 16 × 17 = 272 connections on that target primary, on top of `vttablet`'s own pools. Size `max_connections` accordingly.
 - The `vttablet` flag applies to every workflow on the tablet, including the ones that run Online DDL migrations. When a migration's workflow uses parallel apply, its cut-over waits for the workflow to catch up before it renames the tables, in a new `post-lock: waiting for vreplication to catch up` stage.
-- Only set the `vreplication-parallel-replication-workers` per-workflow override once all of the workflow's target tablets run v25 or later: earlier versions reject the unknown key, and the workflow then fails to start.
+- Only set the `vreplication-parallel-replication-workers` per-workflow override once all of the workflow's source and target tablets run v25 or later: earlier versions reject the unknown key, and the workflow then fails to start. The source tablets matter because `SwitchTraffic` copies the workflow's overrides to the reverse workflow that it creates on them. Remove the override before downgrading a tablet, with a v25 `vtctldclient`: earlier clients reject the unknown key even when removing it.
 
 #### <a id="vtorc-quorum-unreachable-primary"/>VTOrc failover of an unreachable primary `vttablet` via replica quorum</a>
 

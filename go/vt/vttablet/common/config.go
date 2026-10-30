@@ -32,8 +32,9 @@ import (
 
 // maxParallelReplicationWorkers bounds --vreplication-parallel-replication-workers
 // and its per-workflow override. Each worker holds two MySQL connections per
-// workflow (double-buffered apply), plus the main connection, so an unbounded
-// value would let a single workflow exhaust the target's max_connections.
+// stream (double-buffered apply), plus the stream's main connection, so an
+// unbounded value would let a single workflow exhaust the target's
+// max_connections.
 const maxParallelReplicationWorkers = 64
 
 // warnParallelReplicationWorkersCap rate-limits the flag-clamp warning to once
@@ -232,7 +233,7 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				// fall through to the serial applier path.
 				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be >= 0; 0 or 1 disables parallel apply)", k, value))
 			} else if value > maxParallelReplicationWorkers {
-				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be at most %d; each worker holds two MySQL connections per workflow)", k, value, maxParallelReplicationWorkers))
+				errors = append(errors, fmt.Sprintf("invalid value for %s: %d (must be at most %d; each worker holds two MySQL connections per stream)", k, value, maxParallelReplicationWorkers))
 			} else {
 				c.ParallelReplicationWorkers = value
 			}
