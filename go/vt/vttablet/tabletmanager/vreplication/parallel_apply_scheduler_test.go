@@ -438,7 +438,7 @@ func TestApplySchedulerNextReadyWaitsForBlockedPendingAfterClose(t *testing.T) {
 	require.ErrorIs(t, err, io.EOF)
 }
 
-func TestApplySchedulerEnqueueBlocksWhenOutstandingOrdersReachCap(t *testing.T) {
+func TestApplySchedulerEnqueueBlocksWhenOutstandingWorkReachesCap(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
@@ -461,7 +461,7 @@ func TestApplySchedulerEnqueueBlocksWhenOutstandingOrdersReachCap(t *testing.T) 
 	// lastCommittedOrder and wakes the order-window waiter (orderCond).
 	require.NoError(t, s.markCommitted(&applyTxn{order: 1, noConflict: true}))
 
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		return len(errCh) > 0
 	}, 30*time.Second, 5*time.Millisecond)
 	require.NoError(t, <-errCh)
@@ -469,6 +469,57 @@ func TestApplySchedulerEnqueueBlocksWhenOutstandingOrdersReachCap(t *testing.T) 
 	s.mu.Lock()
 	require.Equal(t, 3, s.pendingCount)
 	s.mu.Unlock()
+
+	// The byte budget holds transactions back the same way.
+	s = newApplyScheduler(ctx)
+	s.maxOutstandingBytes = 100
+	outstandingBytes := func() int64 {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		return s.outstandingBytes
+	}
+
+	// A transaction larger than the budget is enqueued when nothing else is
+	// outstanding, so it cannot stall the pipeline, and it holds back the
+	// next one until it commits.
+	oversized := &applyTxn{order: 1, noConflict: true, bytes: 150}
+	require.NoError(t, s.enqueue(oversized))
+	small := &applyTxn{order: 2, noConflict: true, bytes: 60}
+	go func() {
+		errCh <- s.enqueue(small)
+	}()
+	assert.Never(t, func() bool {
+		return len(errCh) > 0
+	}, 100*time.Millisecond, 5*time.Millisecond)
+	require.NoError(t, s.markCommitted(oversized))
+	require.Eventually(t, func() bool {
+		return len(errCh) > 0
+	}, 30*time.Second, 5*time.Millisecond)
+	require.NoError(t, <-errCh)
+	require.Equal(t, int64(60), outstandingBytes())
+
+	// A transaction that fits in the rest of the budget is enqueued at once;
+	// one that does not waits for a commit to release enough bytes.
+	fits := &applyTxn{order: 3, noConflict: true, bytes: 40}
+	require.NoError(t, s.enqueue(fits))
+	last := &applyTxn{order: 4, noConflict: true, bytes: 1}
+	go func() {
+		errCh <- s.enqueue(last)
+	}()
+	assert.Never(t, func() bool {
+		return len(errCh) > 0
+	}, 100*time.Millisecond, 5*time.Millisecond)
+	require.NoError(t, s.markCommitted(small))
+	require.Eventually(t, func() bool {
+		return len(errCh) > 0
+	}, 30*time.Second, 5*time.Millisecond)
+	require.NoError(t, <-errCh)
+	require.Equal(t, int64(41), outstandingBytes())
+
+	// Committing the rest releases every byte.
+	require.NoError(t, s.markCommitted(fits))
+	require.NoError(t, s.markCommitted(last))
+	require.Zero(t, outstandingBytes())
 }
 
 func TestApplySchedulerLaterNoConflictBypassesBlockedEarlierTxn(t *testing.T) {
@@ -533,7 +584,8 @@ func TestApplySchedulerPendingCompaction(t *testing.T) {
 //     forceGlobal transactions run exclusively (verified by an external
 //     conflict tracker, independent of the scheduler's own bookkeeping).
 //   - Every enqueued transaction is dispatched exactly once.
-//   - After all work drains, every inflight counter is zero.
+//   - After all work drains, every inflight counter and the outstanding
+//     byte count are zero.
 func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -546,9 +598,11 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 		maxWritesetKeys     = 4
 		writesetKeySpace    = 32
 		maxOutstandingOrder = int64(128)
+		maxOutstandingBytes = int64(2048)
 	)
 	totalTxns := numProducers * txnsPerProducer
 	s.maxOutstandingOrders = maxOutstandingOrder
+	s.maxOutstandingBytes = maxOutstandingBytes
 
 	// Atomically assigned order so all producers share one sequence.
 	var nextOrder atomic.Int64
@@ -566,6 +620,11 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 			for i := range txnsPerProducer {
 				txn := &applyTxn{
 					order: nextOrder.Add(1),
+					bytes: int64(1 + rng.IntN(64)),
+				}
+				// 1% of transactions exceed the byte budget on their own.
+				if rng.IntN(100) == 0 {
+					txn.bytes = 2 * maxOutstandingBytes
 				}
 				// 5% of transactions force-global, others carry a writeset.
 				if rng.IntN(20) == 0 {
@@ -687,6 +746,7 @@ func TestApplySchedulerConcurrentEnqueueAndCommitStress(t *testing.T) {
 	require.Zero(t, s.inflightNoConflict, "inflightNoConflict leaked")
 	require.Empty(t, s.inflightWriteset, "inflightWriteset leaked")
 	require.Zero(t, s.pendingCount, "pendingCount not drained")
+	require.Zero(t, s.outstandingBytes, "outstandingBytes leaked")
 	require.Len(t, observed, totalTxns)
 
 	// All order numbers from 1..totalTxns must appear exactly once.

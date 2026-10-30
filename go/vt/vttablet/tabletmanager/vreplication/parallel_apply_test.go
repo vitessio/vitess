@@ -1675,64 +1675,84 @@ func TestScheduleItems_GTIDAndROWAndCOMMIT(t *testing.T) {
 }
 
 func TestScheduleItemsBackpressuresOutstandingOrderedTransactions(t *testing.T) {
-	ctx, cancel := context.WithCancel(testCtx(t))
-	defer cancel()
-
-	vp, _ := testVPlayer(t)
-	scheduler := newApplyScheduler(ctx)
-	scheduler.maxOutstandingOrders = 3
-	state := &parallelScheduleState{
-		lastFlushTime:        time.Now(),
-		lastHeartbeatRefresh: time.Now(),
-		maxBatchedCommits:    1,
+	// Each of the four transactions carries one row whose value is one byte
+	// long, so either cap holds the fourth back while three are outstanding.
+	testCases := []struct {
+		name                 string
+		maxOutstandingOrders int64
+		maxOutstandingBytes  int64
+	}{
+		{name: "order cap", maxOutstandingOrders: 3},
+		{name: "byte budget", maxOutstandingBytes: 3},
 	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(testCtx(t))
+			defer cancel()
 
-	vp.tablePlans["t1"] = &TablePlan{
-		TargetName: "t1",
-		Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
-		PKIndices:  []bool{true},
+			vp, _ := testVPlayer(t)
+			scheduler := newApplyScheduler(ctx)
+			scheduler.maxOutstandingOrders = tc.maxOutstandingOrders
+			scheduler.maxOutstandingBytes = tc.maxOutstandingBytes
+			state := &parallelScheduleState{
+				lastFlushTime:        time.Now(),
+				lastHeartbeatRefresh: time.Now(),
+				maxBatchedCommits:    1,
+			}
+
+			vp.tablePlans["t1"] = &TablePlan{
+				TargetName: "t1",
+				Fields:     []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}},
+				PKIndices:  []bool{true},
+			}
+			vp.tablePlansVersion.Store(1)
+
+			batch := make([]*binlogdatapb.VEvent, 0, 12)
+			for i := 1; i <= 4; i++ {
+				gtid := fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", i)
+				value := strconv.Itoa(i)
+				batch = append(batch,
+					&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: gtid},
+					&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
+						TableName: "t1",
+						RowChanges: []*binlogdatapb.RowChange{{
+							After: &querypb.Row{Values: []byte(value), Lengths: []int64{int64(len(value))}},
+						}},
+					}, Timestamp: int64(100 + i)},
+					&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT},
+				)
+			}
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{batch})
+			}()
+
+			assert.Eventually(t, func() bool {
+				scheduler.mu.Lock()
+				defer scheduler.mu.Unlock()
+				return scheduler.pendingCount >= 3
+			}, 30*time.Second, 5*time.Millisecond)
+
+			assert.Never(t, func() bool {
+				scheduler.mu.Lock()
+				defer scheduler.mu.Unlock()
+				return scheduler.pendingCount > 3
+			}, 100*time.Millisecond, 5*time.Millisecond)
+
+			assert.Never(t, func() bool {
+				return len(errCh) > 0
+			}, 100*time.Millisecond, 5*time.Millisecond)
+
+			// The outstanding transactions' bytes are their row data.
+			scheduler.mu.Lock()
+			assert.Equal(t, int64(3), scheduler.outstandingBytes)
+			scheduler.mu.Unlock()
+
+			cancel()
+			require.ErrorIs(t, <-errCh, context.Canceled)
+		})
 	}
-	vp.tablePlansVersion.Store(1)
-
-	batch := make([]*binlogdatapb.VEvent, 0, 12)
-	for i := 1; i <= 4; i++ {
-		gtid := fmt.Sprintf("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-%d", i)
-		value := strconv.Itoa(i)
-		batch = append(batch,
-			&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_GTID, Gtid: gtid},
-			&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{
-				TableName: "t1",
-				RowChanges: []*binlogdatapb.RowChange{{
-					After: &querypb.Row{Values: []byte(value), Lengths: []int64{int64(len(value))}},
-				}},
-			}, Timestamp: int64(100 + i)},
-			&binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT},
-		)
-	}
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{batch})
-	}()
-
-	assert.Eventually(t, func() bool {
-		scheduler.mu.Lock()
-		defer scheduler.mu.Unlock()
-		return int64(scheduler.pendingCount) >= scheduler.maxOutstandingOrders
-	}, 200*time.Millisecond, 5*time.Millisecond)
-
-	assert.Never(t, func() bool {
-		scheduler.mu.Lock()
-		defer scheduler.mu.Unlock()
-		return int64(scheduler.pendingCount) > scheduler.maxOutstandingOrders
-	}, 100*time.Millisecond, 5*time.Millisecond)
-
-	assert.Never(t, func() bool {
-		return len(errCh) > 0
-	}, 100*time.Millisecond, 5*time.Millisecond)
-
-	cancel()
-	require.ErrorIs(t, <-errCh, context.Canceled)
 }
 
 // dispatchUncommittedRowTxn puts the scheduler into a busy state: one ordered

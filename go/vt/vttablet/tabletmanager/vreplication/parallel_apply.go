@@ -885,6 +885,9 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	// applying transaction per worker plus the commit buffer. This provides
 	// end-to-end backpressure when commitLoop is stalled on an early order.
 	scheduler.maxOutstandingOrders = int64(workerCount + cap(commitCh))
+	// Bound the same window by size too, so large transactions cannot hold
+	// many times the relay log's size in memory.
+	scheduler.maxOutstandingBytes = maxOutstandingTxnBytes
 	applyErr := make(chan error, 2)
 	commitLoopErr := make(chan error, 1)
 	workerErr := make(chan error, workerCount)
@@ -1459,6 +1462,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		// set them to its own connection before sending to commitCh.
 		txn := acquireApplyTxn()
 		txn.order = order
+		txn.bytes = int64(eventsSize(state.curEvents))
 		if !state.batchMissingCommitMeta {
 			txn.sequenceNumber = state.curSequence
 			txn.commitParent = state.curCommitParent

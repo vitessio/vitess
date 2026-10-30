@@ -30,6 +30,13 @@ import (
 // treating the abandoned pending work as "stream finished cleanly".
 var errSchedulerAbandonedPendingWork = errors.New("parallel apply scheduler closed with unreachable pending transactions")
 
+// maxOutstandingTxnBytes caps the row data (as eventsSize measures it, like
+// the relay log) of the transactions a parallel applier stream has scheduled
+// but not yet committed. It matches the default of MySQL's
+// replica_pending_jobs_size_max, which bounds the same queue for MySQL's
+// multithreaded replica.
+const maxOutstandingTxnBytes = 128 * 1024 * 1024
+
 type applyTxn struct {
 	// order is a monotonically increasing sequence number assigned by
 	// scheduleLoop. The commitLoop commits transactions in strict order
@@ -57,6 +64,9 @@ type applyTxn struct {
 	// Using uint64 hashes instead of strings eliminates per-txn heap allocations
 	// in the scheduler hot path, reducing GC pressure at high TPS.
 	writeset []uint64
+	// bytes is the size of the transaction's row data, counted against the
+	// scheduler's maxOutstandingBytes from enqueue until markCommitted.
+	bytes int64
 	// payload carries the transaction's events and DB connection info.
 	// Pooled via applyTxnPayloadPool to reduce allocations.
 	payload *applyTxnPayload
@@ -76,11 +86,11 @@ type applyScheduler struct {
 	mu   sync.Mutex
 	cond *sync.Cond
 	// orderCond is a dedicated condition for the enqueue backpressure wait
-	// (maxOutstandingOrders). The shared cond's Signal in markCommitted can
-	// land on an idle worker that consumes the wakeup without re-signaling,
-	// leaving the scheduleLoop asleep until the pipeline fully drains (the
-	// allDrained Broadcast backstop). A dedicated cond makes the order-window
-	// wakeup deterministic.
+	// (maxOutstandingOrders, maxOutstandingBytes). The shared cond's Signal
+	// in markCommitted can land on an idle worker that consumes the wakeup
+	// without re-signaling, leaving the scheduleLoop asleep until the
+	// pipeline fully drains (the allDrained Broadcast backstop). A dedicated
+	// cond makes the order-window wakeup deterministic.
 	orderCond *sync.Cond
 
 	// pending is the queue of transactions waiting to be dispatched to
@@ -122,6 +132,12 @@ type applyScheduler struct {
 	// maxOutstandingOrders caps how many ordered transactions may exist ahead
 	// of durable commit progress. Zero disables the cap.
 	maxOutstandingOrders int64
+	// maxOutstandingBytes caps outstandingBytes, the bytes of the enqueued
+	// transactions that have not committed yet. A transaction that alone
+	// exceeds it is still enqueued once nothing else is outstanding, so it
+	// cannot stall the pipeline. Zero disables the cap.
+	maxOutstandingBytes int64
+	outstandingBytes    int64
 
 	// inflightWriteset maps writeset key hashes to reference counts.
 	// A transaction is blocked if any of its writeset keys are present
@@ -183,7 +199,8 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 	if s.closed {
 		return io.EOF
 	}
-	for s.maxOutstandingOrders > 0 && txn.order > 0 && txn.order-s.lastCommittedOrder > s.maxOutstandingOrders {
+	for (s.maxOutstandingOrders > 0 && txn.order > 0 && txn.order-s.lastCommittedOrder > s.maxOutstandingOrders) ||
+		(s.maxOutstandingBytes > 0 && s.outstandingBytes > 0 && s.outstandingBytes+txn.bytes > s.maxOutstandingBytes) {
 		s.orderCond.Wait()
 		if err := s.ctx.Err(); err != nil {
 			return err
@@ -192,6 +209,7 @@ func (s *applyScheduler) enqueue(txn *applyTxn) error {
 			return io.EOF
 		}
 	}
+	s.outstandingBytes += txn.bytes
 	s.pending = append(s.pending, txn)
 	s.pendingCount++
 	// Signal wakes one worker. enqueue adds at most one transaction, so at
@@ -261,6 +279,17 @@ func (s *applyScheduler) markCommitted(txn *applyTxn) error {
 	defer s.mu.Unlock()
 	if err := s.ctx.Err(); err != nil {
 		return err
+	}
+	// Release the transaction's bytes. Committing is the only way out of a
+	// scheduler that can still enqueue: an aborted transaction stays
+	// outstanding until it is applied again and commits, and a closed
+	// scheduler, or one whose context is done, enqueues nothing more.
+	// Zeroing the bytes keeps a repeated call from releasing them twice.
+	if txn.bytes > 0 {
+		s.outstandingBytes -= txn.bytes
+		txn.bytes = 0
+		// Wake the scheduleLoop if it is blocked on the byte budget.
+		s.orderCond.Broadcast()
 	}
 	if txn.order > 0 && txn.order > s.lastCommittedOrder {
 		s.lastCommittedOrder = txn.order
