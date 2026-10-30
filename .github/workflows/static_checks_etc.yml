@@ -85,6 +85,10 @@ jobs:
               - 'tools/**/go.mod'
               - 'tools/**/go.sum'
               - '.github/workflows/static_checks_etc.yml'
+            logcheck:
+              - 'go/tools/logcheck/packages.txt'
+              - 'tools/check_logcheck.sh'
+              - 'Makefile'
             parser_changes:
               - 'go/vt/sqlparser/**'
               - 'go.sum'
@@ -154,7 +158,7 @@ jobs:
               - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
-        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true' || steps.changes.outputs.logcheck == 'true')
         uses: $/.github/actions/setup-go
         with:
           build-cache: build,unit,tools
@@ -237,6 +241,12 @@ jobs:
           }
           lint config verify
           lint run --timeout 10m ./go/...
+
+      - name: Run logcheck
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.logcheck == 'true')
+        timeout-minutes: 10
+        run: |
+          make lint-logcheck
 
       - name: Check license headers
         if: steps.changes.outputs.go_files == 'true'
