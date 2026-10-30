@@ -100,7 +100,7 @@ func createWorkerConn(ctx context.Context, vr *vreplicator) (*vdbClient, error) 
 		dbClient.Close()
 		return nil, err
 	}
-	vdbc := newVDBClientWithID(dbClient, vr.stats, vr.workflowConfig.RelayLogMaxItems, vr.id)
+	vdbc := newVDBClient(dbClient, vr.stats, vr.workflowConfig.RelayLogMaxItems)
 	if _, err := vr.setSQLMode(ctx, vdbc); err != nil {
 		dbClient.Close()
 		return nil, err

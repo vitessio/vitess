@@ -544,13 +544,6 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 			return nil
 		default:
 		}
-		// If the vstream received a gRPC CANCELED error, it means the
-		// context was canceled but the Go context hasn't propagated yet.
-		// Treat this the same as ctx.Done() — return nil to avoid a
-		// spurious retry.
-		if vterrors.Code(err) == vtrpcpb.Code_CANCELED && ctx.Err() != nil {
-			return nil
-		}
 		// If the stream ends normally we have to return an error indicating
 		// that the controller has to retry a different vttablet.
 		if err == nil || err == io.EOF {

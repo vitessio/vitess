@@ -39,7 +39,6 @@ const beginStmtLen = int64(len("begin;"))
 type vdbClient struct {
 	binlogplayer.DBClient
 	stats                            *binlogplayer.Stats
-	vreplicationID                   int32
 	InTransaction                    bool
 	foreignKeyChecksEnabled          bool
 	foreignKeyChecksStateInitialized bool
@@ -57,15 +56,6 @@ func newVDBClient(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, rel
 		stats:            stats,
 		relayLogMaxItems: relayLogMaxItems,
 	}
-}
-
-// newVDBClientWithID creates a vdbClient with a pre-set vreplicationID.
-// Used by parallel apply workers so each worker's connection is associated
-// with the correct vreplication stream for relay log batching.
-func newVDBClientWithID(dbclient binlogplayer.DBClient, stats *binlogplayer.Stats, relayLogMaxItems int, vreplicationID int32) *vdbClient {
-	client := newVDBClient(dbclient, stats, relayLogMaxItems)
-	client.vreplicationID = vreplicationID
-	return client
 }
 
 func (vc *vdbClient) Begin() error {
