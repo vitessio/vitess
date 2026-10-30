@@ -2360,6 +2360,11 @@ func TestScheduleItems_PostDDLAlterClearsAfterSameTableFieldRefresh(t *testing.T
 	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}}, PKIndices: []bool{true}}
 	vp.tablePlansVersion.Store(1)
 
+	// Entering and leaving the barrier is logged once each, not once per fetch.
+	var logBuf bytes.Buffer
+	oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
+	t.Cleanup(func() { log.SwapLogger(oldLogger) })
+
 	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5"},
 		{Type: binlogdatapb.VEventType_DDL, Statement: "alter table t1 add column c1 int", Timestamp: 200},
@@ -2367,6 +2372,9 @@ func TestScheduleItems_PostDDLAlterClearsAfterSameTableFieldRefresh(t *testing.T
 	commitScheduledExecutedDDL(t, ctx, scheduler, state, vp)
 	require.NotNil(t, state.postDDLStalePlans)
 	require.Contains(t, state.postDDLStalePlans, "t1")
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, nil))
+	assert.Equal(t, 1, strings.Count(logBuf.String(), "Parallel apply is draining the pipeline"))
+	assert.NotContains(t, logBuf.String(), "post-DDL barrier cleared")
 
 	vp.tablePlansMu.Lock()
 	vp.tablePlans["t1"] = &TablePlan{TargetName: "t1", Fields: []*querypb.Field{{Name: "id", Type: querypb.Type_INT64}, {Name: "c1", Type: querypb.Type_INT64}}, PKIndices: []bool{true, false}}
@@ -2386,6 +2394,8 @@ func TestScheduleItems_PostDDLAlterClearsAfterSameTableFieldRefresh(t *testing.T
 	require.NoError(t, err)
 	assert.False(t, got.forceGlobal)
 	assert.Nil(t, state.postDDLStalePlans)
+	assert.Equal(t, 1, strings.Count(logBuf.String(), "Parallel apply is draining the pipeline"))
+	assert.Equal(t, 1, strings.Count(logBuf.String(), "post-DDL barrier cleared"))
 }
 
 func TestScheduleItems_PostDDLSecondDDLDoesNotReplaceEarlierUnresolvedBarrier(t *testing.T) {

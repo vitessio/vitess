@@ -1281,6 +1281,28 @@ type parallelScheduleState struct {
 	// postDDLConservative marks barriers from unparsed DDL, where we must keep
 	// serializing tracked-table transactions until every captured plan refreshes.
 	postDDLConservative bool
+	// postDDLBarrierLogged is whether the entry into the post-DDL barrier
+	// was logged, so entering and leaving it are each logged once.
+	postDDLBarrierLogged bool
+}
+
+// logPostDDLBarrierChange logs when the stream enters or leaves the post-DDL
+// barrier. While it is active, the scheduleLoop waits for the pipeline to
+// drain after every fetch, which lasts until a FIELD event refreshes the plan
+// of each table the DDL changed, and can be long for a table that is rarely
+// written.
+func (vp *vplayer) logPostDDLBarrierChange(state *parallelScheduleState) {
+	active := state.postDDLStalePlans != nil
+	if active == state.postDDLBarrierLogged {
+		return
+	}
+	state.postDDLBarrierLogged = active
+	if active {
+		log.Info("Parallel apply is draining the pipeline after every fetch until DDL-affected table plans are refreshed",
+			vp.vr.logAttrs(slog.Int("tables", len(state.postDDLStalePlans)), slog.Bool("conservative", state.postDDLConservative))...)
+		return
+	}
+	log.Info("Parallel apply post-DDL barrier cleared", vp.vr.logAttrs()...)
 }
 
 // scheduleItems processes one relay log fetch worth of event batches. It tracks
@@ -1289,6 +1311,7 @@ type parallelScheduleState struct {
 // applyTxn structs into the scheduler. Empty transactions bypass the scheduler
 // and are saved via unsavedEvent / idle timeout.
 func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler, state *parallelScheduleState, items [][]*binlogdatapb.VEvent) error {
+	defer vp.logPostDDLBarrierChange(state)
 	stopPosReached := func(pos replication.Position) bool {
 		return !vp.stopPos.IsZero() && !pos.IsZero() && pos.AtLeast(vp.stopPos)
 	}
