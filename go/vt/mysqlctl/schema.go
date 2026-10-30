@@ -370,7 +370,7 @@ func (mysqld *Mysqld) GetColumns(ctx context.Context, dbName, table string) ([]*
 	if err != nil {
 		return nil, nil, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	return GetColumns(dbName, table, conn.Conn.ExecuteFetch)
 }
 
@@ -389,7 +389,7 @@ func (mysqld *Mysqld) getPrimaryKeyColumns(ctx context.Context, dbName string, t
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	tableList, err := tableListSQL(tables)
 	if err != nil {
