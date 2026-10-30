@@ -328,34 +328,42 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 		})
 	})
 
-	t.Run("fails before repointing to a primary that lacks applied GTIDs, with the errant GTID checks", func(t *testing.T) {
-		oldChecks := errantGTIDChecks
-		t.Cleanup(func() { errantGTIDChecks = oldChecks })
-		errantGTIDChecks = true
-		synctest.Test(t, func(t *testing.T) {
-			restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
-			vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
-				// The reparent lost testPrimaryUUID:3-4, and vtbackup applied 3.
-				return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-5"), nil
+	for _, stop := range []struct {
+		name         string
+		stopAtTarget bool
+	}{
+		{name: "with a stop position", stopAtTarget: true},
+		{name: "without a stop position", stopAtTarget: false},
+	} {
+		t.Run("fails before repointing to a primary that lacks applied GTIDs, with the errant GTID checks, "+stop.name, func(t *testing.T) {
+			oldChecks := errantGTIDChecks
+			t.Cleanup(func() { errantGTIDChecks = oldChecks })
+			errantGTIDChecks = true
+			synctest.Test(t, func(t *testing.T) {
+				restorePos := testGTIDPosition(t, testPrimaryUUID+":1-2")
+				vt := newVerifyPositionTest(t, func(*topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+					// The reparent lost testPrimaryUUID:3-4, and vtbackup applied 3.
+					return primaryStatus(testNewPrimaryUUID, testPrimaryUUID+":1-2,"+testNewPrimaryUUID+":1-5"), nil
+				})
+				vt.setPrimary(t, 101)
+				mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
+					{Position: testGTIDPosition(t, testPrimaryUUID+":1-3"), IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
+				}}
+
+				_, _, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, testGTIDPosition(t, testPrimaryUUID+":1-4"), stop.stopAtTarget)
+
+				require.ErrorContains(t, err, "the data caught up so far has errant GTIDs "+testPrimaryUUID+":3 that primary zone1-0000000101")
+				require.ErrorContains(t, err, "during catch-up")
+				assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+				assert.Zero(t, mysqld.setReplicationSourceCalls, "vtbackup must not repoint to a primary that lacks GTIDs it applied")
 			})
-			vt.setPrimary(t, 101)
-			mysqld := &catchupReplicationMysqlDaemon{statuses: []replication.ReplicationStatus{
-				{Position: testGTIDPosition(t, testPrimaryUUID+":1-3"), IOState: replication.ReplicationStateConnecting, LastIOError: lostPrimaryIOError, SQLState: replication.ReplicationStateRunning},
-			}}
-
-			_, _, err := catchUpReplicationForBackup(boundedContext(t), vt.tmc, vt.ts, mysqld, restorePos, testGTIDPosition(t, testPrimaryUUID+":1-4"), true)
-
-			require.ErrorContains(t, err, "the data caught up so far has errant GTIDs "+testPrimaryUUID+":3 that primary zone1-0000000101")
-			require.ErrorContains(t, err, "during catch-up")
-			assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
-			assert.Zero(t, mysqld.setReplicationSourceCalls, "vtbackup must not repoint to a primary that lacks GTIDs it applied")
 		})
-	})
+	}
 
-	// Without a stop position, a restart repoints as it always did, without reading
-	// the primary, even with the errant GTID checks. The check of the data to back
-	// up catches errant GTIDs instead.
-	t.Run("without a stop position, restarts as before without reading the primary, with the errant GTID checks", func(t *testing.T) {
+	// Without a stop position, with the errant GTID checks, a restart reads and
+	// checks the primary before repointing to it, and then replicates without a
+	// stop position and keeps the goal, as before.
+	t.Run("without a stop position, checks the primary before repointing and keeps the goal, with the errant GTID checks", func(t *testing.T) {
 		oldChecks := errantGTIDChecks
 		t.Cleanup(func() { errantGTIDChecks = oldChecks })
 		errantGTIDChecks = true
@@ -379,7 +387,8 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			assert.True(t, gotGoal.Equal(goal), "goal %v", gotGoal)
 			assert.Equal(t, []string{"primary-101.test:3306"}, mysqld.sources)
 			assert.Equal(t, []bool{true}, mysqld.startReplicationAfter)
-			assert.Zero(t, vt.tmc.calls, "a restart without a stop position must not read the primary")
+			assert.Empty(t, mysqld.startUntil)
+			assert.Equal(t, 1, vt.tmc.calls, "the restart must read the primary to check it")
 		})
 	})
 

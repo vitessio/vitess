@@ -721,7 +721,9 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 // replication stops and is restarted, it stops at the goal again if the primary
 // it restarts from has committed all of it, and otherwise at that primary's
 // committed position, which becomes the goal. Without stopAtTarget, replication
-// restarts as it always did.
+// restarts without a stop position and the goal stays, but with
+// --enable-errant-gtid-checks the restart first reads and checks the primary as
+// it does with stopAtTarget.
 func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManagerClient, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos, primaryPos replication.Position, stopAtTarget bool) (replication.ReplicationStatus, replication.Position, error) {
 	// Wait for replication to catch up.
 	phase.Set(phaseNameCatchupReplication, int64(1))
@@ -777,17 +779,24 @@ func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManager
 			lastErr.Record(errors.New(strings.ToLower(errStr)))
 
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 1)
-			if stopAtTarget {
+			if stopAtTarget || errantGTIDChecks {
 				target, err := readRestartTarget(ctx, tmc, topoServer, restorePos, status.Position)
 				if permanent, ok := errors.AsType[permanentError](err); ok {
 					return replication.ReplicationStatus{}, replication.Position{}, permanent.error
 				}
-				if err != nil {
+				switch {
+				case err != nil:
 					// As when a restart fails, replication stays stopped, and the time
-					// counts against how long it may stay stopped. The stop position
+					// counts against how long it may stay stopped. A stop position
 					// stays in force.
 					log.Warn("Can't read the shard primary to restart replication from", slog.Any("error", err))
-				} else {
+				case !stopAtTarget:
+					// Repoint to the primary that the errant GTID check read, without a
+					// stop position, and keep the goal, as before.
+					if err := mysqld.SetReplicationSource(ctx, target.tablet.MysqlHostname, target.tablet.MysqlPort, 0, true, true); err != nil {
+						log.Warn("Failed to restart replication", slog.Any("error", err))
+					}
+				default:
 					// Keep the goal when the primary has committed all of it, so that a
 					// run on a busy shard doesn't keep chasing the primary's position.
 					// Replicating from a primary that lacks part of it, after a reparent
@@ -1128,11 +1137,11 @@ func startReplicationAt(ctx context.Context, mysqld mysqlctl.MysqlDaemon, target
 
 // readRestartTarget reads, within restartReadTimeout, the shard primary that
 // replication restarts from during a catch-up that stops at the committed
-// position, and the primary's committed position. With --enable-errant-gtid-checks,
-// it returns a permanentError if the primary lacks GTIDs in applied, so that
-// vtbackup fails without changing its source, which can't undo them. The applier
-// can still apply transactions after applied was read; the check of the data to
-// back up catches those.
+// position or runs the errant GTID checks, and the primary's committed position.
+// With --enable-errant-gtid-checks, it returns a permanentError if the primary
+// lacks GTIDs in applied, so that vtbackup fails without changing its source,
+// which can't undo them. The applier can still apply transactions after applied
+// was read; the check of the data to back up catches those.
 func readRestartTarget(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, restorePos, applied replication.Position) (primaryTarget, error) {
 	readCtx, cancel := context.WithTimeout(ctx, restartReadTimeout)
 	defer cancel()

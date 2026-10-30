@@ -892,7 +892,8 @@ It stops catch-up at the primary's committed position, which, with semi-sync's d
 When `vtbackup` stops at the committed position:
 - At startup, it waits while it can't read the shard primary or that tablet's record doesn't say `PRIMARY`, but a shard with no primary still fails the run at once. As with the existing wait for an unreachable primary, only the job's deadline, if it has one, bounds this wait.
 - If replication breaks, it restarts replication only from a primary whose `vttablet` answers and whose tablet record says `PRIMARY`. As before, the run fails once replication has stayed stopped for 60 seconds.
-- With `--enable-errant-gtid-checks`, it checks the data caught up so far for errant GTIDs before each restart, and fails the run if it finds any.
+
+With `--enable-errant-gtid-checks`, whether or not catch-up stops at the committed position, a restart after replication breaks also needs such a primary, and `vtbackup` first checks the data caught up so far for errant GTIDs, failing the run if it finds any.
 
 See [#20676](https://github.com/vitessio/vitess/issues/20676) and [#20679](https://github.com/vitessio/vitess/issues/20679).
 
