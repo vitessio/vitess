@@ -100,12 +100,12 @@ type vplayer struct {
 	// timeLastSaved tracks when the latest pending position was durably saved.
 	// Older saves behind a later unsavedEvent must not refresh it.
 	timeLastSaved time.Time
-	// lagSnapshot packs the last timestamp seen and the clock offset to the
-	// source tablet into a single atomic struct. Storing them together (vs
-	// two independent atomic.Int64 fields) prevents the parallel applier's
+	// lagSnapshot packs the parallel applier's last timestamp seen and clock
+	// offset to the source tablet into a single atomic struct. Storing them
+	// together (vs two independent atomic.Int64 fields) prevents its
 	// throttled-path lag estimator from seeing a torn pair (new ts with
 	// stale offset, or vice versa) when the commitLoop's updateLag races
-	// with the scheduleLoop's reader.
+	// with the scheduleLoop's reader. The serial applier keeps its own.
 	lagSnapshot *atomic.Pointer[lagSnapshot]
 	// numAccumulatedHeartbeats keeps track of how many heartbeats have been received since we updated the time_updated column of _vt.vreplication
 	numAccumulatedHeartbeats int
@@ -814,9 +814,13 @@ func (vp *vplayer) recordHeartbeat() error {
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	defer vp.vr.dbClient.Rollback()
 
+	// The last timestamp seen and the clock offset to the source tablet, for
+	// estimating the lag. Only this goroutine reads them, so unlike the
+	// parallel applier it keeps them in plain variables: storing a
+	// lagSnapshot would allocate on every event.
+	var lastTimestampNs, timeOffsetNs int64
 	estimateLag := func() {
-		snap := vp.loadLagSnapshot()
-		behind := time.Now().UnixNano() - snap.timestampNs - snap.offsetNs
+		behind := time.Now().UnixNano() - lastTimestampNs - timeOffsetNs
 		behindSecs := behind / 1e9
 		vp.vr.stats.ReplicationLagSeconds.Store(behindSecs)
 		vp.vr.stats.VReplicationLagGauges.Set(vp.idStr, behindSecs)
@@ -902,11 +906,10 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 					// determine the actual lag, as the vstreamer is fully throttled, and we
 					// will estimate it after processing the batch.
 					if event.Type != binlogdatapb.VEventType_HEARTBEAT || !event.Throttled {
-						tsNs := event.Timestamp * 1e9
+						lastTimestampNs = event.Timestamp * 1e9
 						now := time.Now().UnixNano()
-						offset := now - event.CurrentTime
-						vp.storeLagSnapshot(tsNs, offset)
-						lag = now - tsNs - offset
+						timeOffsetNs = now - event.CurrentTime
+						lag = now - lastTimestampNs - timeOffsetNs
 					}
 				}
 			}
