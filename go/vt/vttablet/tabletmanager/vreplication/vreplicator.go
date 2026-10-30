@@ -144,6 +144,13 @@ type vreplicator struct {
 
 	throttleUpdatesRateLimiter *timer.RateLimiter
 	workflowConfig             *vttablet.VReplicationConfig
+
+	// parallelApplyErr is the error that ended the parallel applier, if it
+	// ran. The controller falls back to the serial applier when it is a
+	// duplicate-key or FK error (see isParallelApplyConflictError). The
+	// apply goroutine sets it before fetchAndApply, which waits for that
+	// goroutine, returns.
+	parallelApplyErr error
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:

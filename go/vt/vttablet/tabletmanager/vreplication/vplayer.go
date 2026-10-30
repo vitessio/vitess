@@ -511,7 +511,9 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	go func() {
 		applyErr <- runWithRecover(vp.vr.WorkflowName, "applyEvents", func() error {
 			if vp.vr.workflowConfig.ParallelReplicationWorkers > 1 && len(vp.copyState) == 0 {
-				return vp.applyEventsParallel(ctx, relay)
+				err := vp.applyEventsParallel(ctx, relay)
+				vp.vr.parallelApplyErr = err
+				return err
 			}
 			return vp.applyEvents(ctx, relay)
 		})

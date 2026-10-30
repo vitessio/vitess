@@ -93,6 +93,11 @@ type controller struct {
 	lastWorkflowError *vterrors.LastError
 	WorkflowConfig    *vttablet.VReplicationConfig
 
+	// serialApplyFallback is set once the parallel applier fails with a
+	// duplicate-key or FK error. The controller's later streams then apply
+	// serially; a new controller starts parallel again.
+	serialApplyFallback bool
+
 	// Used to ignore tablets with non-transient errors.
 	ignoreTablets []*topodatapb.TabletAlias
 
@@ -370,9 +375,27 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		defer vsClient.Close(ctx)
 
-		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, ct.WorkflowConfig)
+		workflowConfig := ct.WorkflowConfig
+		if ct.serialApplyFallback {
+			serialConfig := *workflowConfig
+			serialConfig.ParallelReplicationWorkers = 1
+			workflowConfig = &serialConfig
+		}
+		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre, workflowConfig)
 		err = vr.Replicate(ctx)
 		ct.lastWorkflowError.Record(err)
+
+		// The parallel scheduler reads unique keys and FKs from the target
+		// schema, which can change outside the stream. A duplicate-key or FK
+		// error from the parallel applier can then be a conflict it missed,
+		// so retry with the serial applier, which classifies the error as
+		// usual if it hits it too.
+		if err != nil && isParallelApplyConflictError(vr.parallelApplyErr) {
+			ct.serialApplyFallback = true
+			ct.blpStats.ErrorCounts.Add([]string{"ParallelApplyFallback"}, 1)
+			log.Warn("parallel apply failed with a duplicate-key or foreign key error, retrying with the serial applier", ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
+			return err
+		}
 
 		// If this is a MySQL error that we know needs manual intervention or
 		// it's a FAILED_PRECONDITION vterror, OR we cannot identify this as
