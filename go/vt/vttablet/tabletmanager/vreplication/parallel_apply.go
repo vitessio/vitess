@@ -45,24 +45,24 @@ import (
 )
 
 // recoverParallelApply is a defer helper used by every goroutine the parallel
-// applier spawns. A panic in a worker, commitLoop, or scheduleLoop must not
-// crash the entire vttablet process; it must turn into a normal error that
+// applier spawns for vr. A panic in a worker, commitLoop, or scheduleLoop must
+// not crash the entire vttablet process; it must turn into a normal error that
 // propagates through the usual shutdown machinery. The callback receives the
 // converted error and is expected to (a) push the error onto the orchestrator's
 // error channel and (b) cancel the shared context so sibling goroutines
 // unwind promptly. Passing nil for cb is allowed when the caller already
 // returns an error it will examine itself.
-func recoverParallelApply(name string, cb func(err error)) {
+func recoverParallelApply(vr *vreplicator, name string, cb func(err error)) {
 	r := recover()
 	if r == nil {
 		return
 	}
 	stack := debug.Stack()
-	log.Error("parallel apply goroutine panicked",
+	log.Error("parallel apply goroutine panicked", vr.logAttrs(
 		slog.String("goroutine", name),
 		slog.Any("panic", r),
 		slog.String("stack", string(stack)),
-	)
+	)...)
 	err := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "parallel apply: %s panicked: %v", name, r)
 	if cb != nil {
 		cb(err)
@@ -926,7 +926,7 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	if len(fkRefs) > 0 {
 		for table, refs := range fkRefs {
 			for _, ref := range refs {
-				log.Info("Parallel apply: FK ref", slog.String("child", table), slog.String("parent", ref.ParentTable), slog.Any("childCols", ref.ChildColumnNames), slog.Any("referencedCols", ref.ReferencedColumnNames))
+				log.Info("Parallel apply: FK ref", vp.vr.logAttrs(slog.String("child", table), slog.String("parent", ref.ParentTable), slog.Any("childCols", ref.ChildColumnNames), slog.Any("referencedCols", ref.ReferencedColumnNames))...)
 				if ref.HashIncompatible {
 					log.Warn("Parallel apply: FK column definitions differ in a way writeset hashing cannot match; transactions on both tables will serialize", vp.vr.logAttrs(
 						slog.String("child", table), slog.String("parent", ref.ParentTable),
@@ -935,13 +935,13 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 			}
 		}
 	} else {
-		log.Info("Parallel apply: no FK refs found", slog.String("db", vp.vr.dbClient.DBName()))
+		log.Info("Parallel apply: no FK refs found", vp.vr.logAttrs(slog.String("db", vp.vr.dbClient.DBName()))...)
 	}
 	vp.fkRefs = fkRefs
 	vp.parentFKRefs = buildParentFKRefs(fkRefs)
 	vp.cascadeUnsafeTables = buildCascadeUnsafeTableSet(fkRefs)
 	for table := range vp.cascadeUnsafeTables {
-		log.Info("Parallel apply: transactions on this table will serialize; its FK relationships are beyond writeset conflict detection", slog.String("table", table))
+		log.Info("Parallel apply: transactions on this table will serialize; its FK relationships are beyond writeset conflict detection", vp.vr.logAttrs(slog.String("table", table))...)
 	}
 
 	// sendWorkerErr is a non-blocking send to workerErr. The channel is
@@ -971,7 +971,7 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 			// Recover from panics so a buggy event or driver crash does not
 			// tear down the entire vttablet process. The recovered error is
 			// routed through the same path as a normal worker error.
-			defer recoverParallelApply(fmt.Sprintf("worker %d", workerIdx), sendWorkerErr)
+			defer recoverParallelApply(vp.vr, fmt.Sprintf("worker %d", workerIdx), sendWorkerErr)
 			err := vp.workerLoop(ctx, scheduler, commitCh, worker)
 			if err != nil && err != io.EOF {
 				sendWorkerErr(err)
@@ -985,7 +985,7 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 		// Recover from panics so a buggy commit path does not tear down the
 		// entire vttablet process. The recovered error is routed through the
 		// same path as a normal commitLoop error.
-		defer recoverParallelApply("commitLoop", sendCommitLoopErr)
+		defer recoverParallelApply(vp.vr, "commitLoop", sendCommitLoopErr)
 		if err := vp.commitLoop(ctx, scheduler, commitCh); err != nil {
 			commitLoopErr <- err
 			// Always cancel context when commitLoop exits with an error,
@@ -1000,7 +1000,7 @@ func (vp *vplayer) applyEventsParallel(ctx context.Context, relay *relayLog) err
 	// rather than crashing the process. Routed to applyErr via the closure.
 	var schedulePanicErr error
 	func() {
-		defer recoverParallelApply("scheduleLoop", func(err error) {
+		defer recoverParallelApply(vp.vr, "scheduleLoop", func(err error) {
 			schedulePanicErr = err
 			cancel()
 		})
@@ -1443,15 +1443,24 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 		return planSnapshot, fkBatchingResolvedTables
 	}
 
-	flush := func(commitOnly bool) error {
+	// flush enqueues the accumulated events as one transaction. commit is the
+	// COMMIT event that ends it, if any: like the serial applier, the
+	// transaction then saves the COMMIT's timestamp, and its lag is computed
+	// from the COMMIT.
+	flush := func(commitOnly bool, commit *binlogdatapb.VEvent) error {
 		if len(state.curEvents) == 0 && !commitOnly {
 			return nil
 		}
 		order := vp.parallelOrder.Add(1)
+		timestamp := state.curTimestamp
 		lastTs, lastCT := computeLastEventTimestamp(state.curEvents)
+		if commit != nil && commit.Timestamp != 0 {
+			timestamp = commit.Timestamp
+			lastTs, lastCT = commit.Timestamp, commit.CurrentTime
+		}
 		payload := acquireApplyTxnPayload()
 		payload.pos = state.curPos
-		payload.timestamp = state.curTimestamp
+		payload.timestamp = timestamp
 		payload.mustSave = state.curMustSave
 		payload.events = state.curEvents
 		payload.rowOnly = state.curRowOnly
@@ -1769,7 +1778,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 					state.curMustSave = false
 					continue
 				}
-				if err := flush(false); err != nil {
+				if err := flush(false, event); err != nil {
 					return err
 				}
 				if posReached {
@@ -1804,7 +1813,7 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				state.curRowOnly = false
 				state.curRowOnlySet = true
 			case binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_JOURNAL:
-				if err := flush(false); err != nil {
+				if err := flush(false, nil); err != nil {
 					return err
 				}
 				posReached := stopPosReached(state.curPos)
@@ -1922,8 +1931,14 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				vp.serialMu.Lock()
 				vp.numAccumulatedHeartbeats++
 				var err error
-				if len(state.curEvents) == 0 && vp.mustUpdateHeartbeat() && scheduler.idle() {
-					err = vp.recordHeartbeat()
+				if len(state.curEvents) == 0 {
+					if vp.mustUpdateHeartbeat() && scheduler.idle() {
+						err = vp.recordHeartbeat()
+					} else {
+						// Still record that the heartbeat arrived, as the
+						// serial applier does between transactions.
+						vp.vr.stats.RecordHeartbeat(time.Now().Unix())
+					}
 				}
 				vp.serialMu.Unlock()
 				if err != nil {
@@ -2144,7 +2159,7 @@ func (vp *vplayer) workerLoop(ctx context.Context, scheduler *applyScheduler, co
 				}
 				return 0, err
 			}
-			if err := vp.resolveCommitOrderLockWait(ctx, scheduler, txn.order, attempt, err); err != nil {
+			if err := vp.resolveCommitOrderLockWait(ctx, scheduler, txn, attempt, err); err != nil {
 				return 0, err
 			}
 		}
@@ -2769,7 +2784,7 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 			if !isLockWaitError(err) {
 				return vterrors.Wrapf(err, "failed to apply transaction %d again after a commit-order deadlock abort", txn.order)
 			}
-			if err := vp.resolveCommitOrderLockWait(ctx, scheduler, txn.order, attempt, err); err != nil {
+			if err := vp.resolveCommitOrderLockWait(ctx, scheduler, txn, attempt, err); err != nil {
 				return err
 			}
 			if err := receiveQueued(); err != nil {

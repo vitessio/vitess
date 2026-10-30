@@ -1239,10 +1239,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				vp.warnedUnknownEventTypes = make(map[binlogdatapb.VEventType]struct{})
 			}
 			vp.warnedUnknownEventTypes[event.Type] = struct{}{}
-			log.Warn("Skipping unsupported vevent type",
-				slog.String("workflow", vp.vr.WorkflowName),
-				slog.String("type", event.Type.String()),
-			)
+			log.Warn("Skipping unsupported vevent type", vp.vr.logAttrs(slog.String("type", event.Type.String()))...)
 		}
 	}
 

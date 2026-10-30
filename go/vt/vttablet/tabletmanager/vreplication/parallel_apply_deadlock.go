@@ -19,10 +19,13 @@ package vreplication
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
 // workerLockWaitTimeout is the innodb_lock_wait_timeout and the
@@ -44,26 +47,32 @@ func isLockWaitError(err error) bool {
 	return sqlErr.Num == sqlerror.ERLockWaitTimeout || sqlErr.Num == sqlerror.ERLockDeadlock
 }
 
-// resolveCommitOrderLockWait is called after the transaction with the given
-// order hit a lock wait timeout or deadlock and was rolled back, before it is
-// applied again. When every earlier transaction has committed, a later one
-// holds the lock (or something outside the stream does): abort every later
-// uncommitted transaction, and if this is not the first attempt, wait as the
-// serial applier does before retrying, in case the lock is not ours. Otherwise
-// the lock may be held by an earlier transaction, which commits first: wait
-// for this one's turn and apply it then, alone.
-func (vp *vplayer) resolveCommitOrderLockWait(ctx context.Context, scheduler *applyScheduler, order int64, attempt int, cause error) error {
-	if !scheduler.isNext(order) {
-		return scheduler.waitForTurn(ctx, order)
+// resolveCommitOrderLockWait is called after txn hit a lock wait timeout or
+// deadlock and was rolled back, before it is applied again. When every
+// earlier transaction has committed, a later one holds the lock (or something
+// outside the stream does): abort every later uncommitted transaction, and if
+// this is not the first attempt, wait as the serial applier does before
+// retrying, in case the lock is not ours. Otherwise the lock may be held by
+// an earlier transaction, which commits first: wait for this one's turn and
+// apply it then, alone.
+func (vp *vplayer) resolveCommitOrderLockWait(ctx context.Context, scheduler *applyScheduler, txn *applyTxn, attempt int, cause error) error {
+	if !scheduler.isNext(txn.order) {
+		return scheduler.waitForTurn(ctx, txn.order)
 	}
-	scheduler.requestAbortAfter(order)
+	scheduler.requestAbortAfter(txn.order)
 	vp.vr.stats.ErrorCounts.Add([]string{"CommitOrderDeadlock"}, 1)
-	log.Info("Parallel apply lock wait: aborting later uncommitted transactions",
-		slog.String("workflow", vp.vr.WorkflowName),
-		slog.Int64("order", order),
+	// Log the error's code rather than its text, which holds the statement
+	// with its row values, and the tables the transaction writes: the error
+	// does not say which of its statements waited.
+	attrs := vp.vr.logAttrs(
+		slog.Int64("order", txn.order),
 		slog.Int("attempt", attempt),
-		slog.Any("error", cause),
+		slog.Any("tables", rowEventTables(txn.payload.events)),
 	)
+	if sqlErr, ok := sqlerror.NewSQLErrorFromError(cause).(*sqlerror.SQLError); ok {
+		attrs = append(attrs, slog.Int("errno", int(sqlErr.Num)), slog.String("sqlstate", sqlErr.State))
+	}
+	log.Info("Parallel apply lock wait: aborting later uncommitted transactions", attrs...)
 	if attempt == 0 {
 		return nil
 	}
@@ -73,4 +82,18 @@ func (vp *vplayer) resolveCommitOrderLockWait(ctx context.Context, scheduler *ap
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// rowEventTables returns the distinct tables of the row events in events.
+func rowEventTables(events []*binlogdatapb.VEvent) []string {
+	var tables []string
+	for _, event := range events {
+		if event.Type != binlogdatapb.VEventType_ROW || event.RowEvent == nil {
+			continue
+		}
+		if !slices.Contains(tables, event.RowEvent.TableName) {
+			tables = append(tables, event.RowEvent.TableName)
+		}
+	}
+	return tables
 }

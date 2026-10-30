@@ -1865,12 +1865,17 @@ func TestScheduleItemsHeartbeatEventWaitsForPendingWork(t *testing.T) {
 	}
 
 	// While an ordered row transaction is dispatched but uncommitted, a
-	// heartbeat must not write time_updated/time_heartbeat.
+	// heartbeat must not write time_updated/time_heartbeat. It is still
+	// recorded in the stats, as the serial applier records every heartbeat
+	// between transactions.
 	inflight := dispatchUncommittedRowTxn(t, ctx, scheduler)
+	start := time.Now()
 	err := vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{heartbeat()})
 	require.NoError(t, err)
 	assert.Zero(t, countHeartbeatWrites(recording),
 		"heartbeat must not report caught-up while an ordered transaction is uncommitted")
+	assert.GreaterOrEqual(t, vp.vr.stats.Heartbeat(), start.Unix(),
+		"a received heartbeat must be recorded in the stats while work is in flight")
 	require.NoError(t, scheduler.markCommitted(inflight))
 
 	// A heartbeat arriving mid-transaction (row events accumulated, COMMIT
@@ -5235,14 +5240,21 @@ func TestScheduleItems_UnknownVEventTypeFailsFast(t *testing.T) {
 	// keeps replicating from a newer source that sends a type it does not
 	// know, as in earlier versions. It warns once per type, not once per
 	// event, as such a source can send one with every transaction.
-	var logBuf bytes.Buffer
-	oldLogger := log.SwapLogger(slog.New(slog.NewTextHandler(&logBuf, nil)))
-	t.Cleanup(func() { log.SwapLogger(oldLogger) })
+	logs := logtest.Capture(t, slog.LevelInfo)
 	for range 3 {
 		require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType(12345)}, false))
 	}
 	require.NoError(t, vp.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType(12346)}, false))
-	require.Equal(t, 2, strings.Count(logBuf.String(), "Skipping unsupported vevent type"))
+	var warnings []map[string]any
+	for _, record := range logs.Records(t) {
+		if record["msg"] == "Skipping unsupported vevent type" {
+			warnings = append(warnings, record)
+		}
+	}
+	require.Len(t, warnings, 2)
+	for _, record := range warnings {
+		assert.EqualValues(t, 1, record["stream_id"])
+	}
 }
 
 func TestScheduleItems_InsertStatementEventDoesNotFailFast(t *testing.T) {
@@ -5303,8 +5315,29 @@ func TestScheduleItems_TimestampTracking(t *testing.T) {
 
 	got, err := scheduler.nextReady(ctx)
 	require.NoError(t, err)
-	// Timestamp from the ROW event should be tracked
+	// Without a COMMIT timestamp, the ROW event's is tracked.
 	assert.Equal(t, int64(100), got.payload.timestamp)
+	assert.Equal(t, int64(100), got.payload.lastEventTimestamp)
+	require.NoError(t, scheduler.markCommitted(got))
+
+	// Like the serial applier, a transaction saves its COMMIT's timestamp
+	// and computes its lag from the COMMIT.
+	commitEvent = &binlogdatapb.VEvent{
+		Type:        binlogdatapb.VEventType_COMMIT,
+		Timestamp:   105,
+		CurrentTime: 106_000_000_000,
+	}
+	gtidEvent = &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-6",
+	}
+	items = [][]*binlogdatapb.VEvent{{gtidEvent, rowEvent, commitEvent}}
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, items))
+	got, err = scheduler.nextReady(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, int64(105), got.payload.timestamp)
+	assert.Equal(t, int64(105), got.payload.lastEventTimestamp)
+	assert.Equal(t, int64(106_000_000_000), got.payload.lastEventCurrentTime)
 }
 
 func TestScheduleItems_WritesetBuild(t *testing.T) {
@@ -8177,30 +8210,39 @@ func TestScheduleItems_DDLFlushesAccumulatedEvents(t *testing.T) {
 // pushes onto the orchestrator's error channel and cancels ctx). Without
 // this helper a panic in any worker would crash the entire vttablet.
 func TestRecoverParallelApplyCatchesPanic(t *testing.T) {
+	vr := &vreplicator{id: 7, WorkflowName: "wf"}
+
 	t.Run("nil callback does not panic", func(t *testing.T) {
 		// Explicitly runs the helper with no callback supplied to ensure
 		// the nil-cb branch is safe.
 		func() {
-			defer recoverParallelApply("testGoroutine", nil)
+			defer recoverParallelApply(vr, "testGoroutine", nil)
 			panic("boom")
 		}()
 	})
 
 	t.Run("callback receives a wrapped error on panic", func(t *testing.T) {
+		logs := logtest.Capture(t, slog.LevelInfo)
 		var got error
 		func() {
-			defer recoverParallelApply("worker-1", func(err error) { got = err })
+			defer recoverParallelApply(vr, "worker-1", func(err error) { got = err })
 			panic("ouch")
 		}()
 		require.Error(t, got)
 		require.ErrorContains(t, got, "worker-1")
 		require.ErrorContains(t, got, "panicked")
+
+		// The log names the stream, like the rest of vreplication's logs.
+		record := logs.Record(t, "parallel apply goroutine panicked")
+		assert.Equal(t, "wf", record["workflow"])
+		assert.EqualValues(t, 7, record["stream_id"])
+		assert.Equal(t, "worker-1", record["goroutine"])
 	})
 
 	t.Run("no panic means no callback invocation", func(t *testing.T) {
 		invoked := false
 		func() {
-			defer recoverParallelApply("happy", func(err error) { invoked = true })
+			defer recoverParallelApply(vr, "happy", func(err error) { invoked = true })
 		}()
 		require.False(t, invoked, "callback must not fire without a panic")
 	})
@@ -8208,7 +8250,7 @@ func TestRecoverParallelApplyCatchesPanic(t *testing.T) {
 	t.Run("runtime panic types are caught and surfaced", func(t *testing.T) {
 		var got error
 		func() {
-			defer recoverParallelApply("oob", func(err error) { got = err })
+			defer recoverParallelApply(vr, "oob", func(err error) { got = err })
 			// Force a runtime-panic path (slice index OOB) rather than an
 			// explicit panic() call to exercise Go's typed-panic surface.
 			s := []int{1, 2, 3}
@@ -8406,6 +8448,7 @@ func testCommitOrderDeadlockAbortsLaterTransaction(t *testing.T, tableName strin
 		done: make(chan struct{}, 1),
 	}
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	scheduler := newApplyScheduler(ctx)
 	commitCh := make(chan *applyTxn, 2)
 	commitCh <- later
@@ -8447,6 +8490,23 @@ func testCommitOrderDeadlockAbortsLaterTransaction(t *testing.T, tableName strin
 	require.NoError(t, err)
 	require.Equal(t, want, fmt.Sprintf("%v", qr.Rows))
 	require.Positive(t, vp.vr.stats.ErrorCounts.Counts()["CommitOrderDeadlock"])
+
+	// The lock wait's log names the stream, the error's code and the table,
+	// and leaves out the error's text, which holds the statement with its
+	// row values.
+	const msg = "Parallel apply lock wait: aborting later uncommitted transactions"
+	record := logs.Wait(t, msg)
+	assert.EqualValues(t, vp.vr.id, record["stream_id"])
+	assert.EqualValues(t, int(sqlerror.ERLockWaitTimeout), record["errno"])
+	assert.Equal(t, "HY000", record["sqlstate"])
+	assert.Equal(t, []any{tableName}, record["tables"])
+	assert.EqualValues(t, 1, record["order"])
+	assert.NotContains(t, record, "error")
+	for _, record := range logs.Records(t) {
+		if record["msg"] == msg {
+			assert.NotContains(t, fmt.Sprint(record), "insert into")
+		}
+	}
 }
 
 // rowEventTxn builds a worker transaction of ROW events on tableName, each
