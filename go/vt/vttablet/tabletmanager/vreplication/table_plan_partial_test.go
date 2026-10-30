@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -678,4 +679,17 @@ func TestPartialBitmapsCacheKeyIncludesCount(t *testing.T) {
 	assert.Equal(t, []bool{true, false}, bitmapBits(gotShort.target), "Count=1: only id is in range")
 	assert.Equal(t, []bool{true, true}, bitmapBits(gotFull.target), "Count=2: id and val are both present")
 	assert.Len(t, tp.PartialBitmaps, 2)
+
+	// Parallel-apply workers share the plan, so the cache must be safe for
+	// concurrent use (run with -race).
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Go(func() {
+			for i := range 200 {
+				_, err := tp.mappedDataColumnsFor(&binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{byte(i)}})
+				assert.NoError(t, err)
+			}
+		})
+	}
+	wg.Wait()
 }
