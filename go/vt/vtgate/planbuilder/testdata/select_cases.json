@@ -555,9 +555,9 @@
     "skip_e2e": true
   },
   {
-    "comment": "unsupported json aggregation expressions in scatter query",
+    "comment": "unsupported json aggregation comparison in scatter query",
     "query": "select count(1) from user where cola = 'abc' group by n_id having json_arrayagg(a_id) = '[]'",
-    "plan": "VT12001: unsupported: in scatter query: aggregation function 'json_arrayagg(a_id)'",
+    "plan": "VT12001: unsupported: comparison consumes a vtgate-merged JSON aggregate whose MySQL binary, bit, decimal, or temporal scalar subtype is not preserved across shard serialization: json_arrayagg(a_id) = '[]'",
     "skip_e2e": true
   },
   {
@@ -687,7 +687,7 @@
         "FieldQuery": "select * from pin_test where 1 != 1",
         "Query": "select * from pin_test",
         "Values": [
-          "'\ufffd'"
+          "'�'"
         ],
         "Vindex": "binary"
       },
