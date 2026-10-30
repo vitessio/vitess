@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -112,7 +113,7 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	}
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		log.Error(fmt.Sprintf("unable to read tableACL config file: %v  Error: %v", configFile, err))
+		log.Error("unable to read tableACL config file", slog.String("path", configFile), slog.Any("error", err))
 		return err
 	}
 	if len(data) == 0 {
@@ -123,7 +124,8 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	if err := config.UnmarshalVT(data); err != nil {
 		// try to parse tableacl as json file
 		if jsonErr := json2.UnmarshalPB(data, config); jsonErr != nil {
-			log.Error(fmt.Sprintf("unable to parse tableACL config file as a protobuf or json file.  protobuf err: %v  json err: %v", err, jsonErr))
+			log.Error("unable to parse tableACL config file as a protobuf file", slog.String("path", configFile), slog.Any("error", err))
+			log.Error("unable to parse tableACL config file as a json file", slog.String("path", configFile), slog.Any("error", jsonErr))
 			return fmt.Errorf("unable to unmarshal Table ACL data: %s", data)
 		}
 	}

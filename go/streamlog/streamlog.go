@@ -20,6 +20,7 @@ package streamlog
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
@@ -221,7 +222,7 @@ func (logger *StreamLogger[T]) ServeLogs(url string, logf LogFormatter) {
 			w.(http.Flusher).Flush()
 		}
 	})
-	log.Info(fmt.Sprintf("Streaming logs from %s at %v.", logger.Name(), url))
+	log.Info("Streaming logs", slog.String("stream_logger", logger.Name()), slog.String("url", url))
 }
 
 // LogToFile starts logging to the specified file path and will reopen the

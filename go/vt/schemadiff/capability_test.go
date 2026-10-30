@@ -17,12 +17,14 @@ limitations under the License.
 package schemadiff
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -466,4 +468,28 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			assert.Equal(t, tcase.expectCapableOfInstantDDL, isCapableOf)
 		})
 	}
+}
+
+func TestAlterTableCapableOfInstantDDLLogsCapabilityError(t *testing.T) {
+	capableOf := func(capability capabilities.FlavorCapability) (bool, error) {
+		if capability == capabilities.InstantDDLFlavorCapability {
+			return true, nil
+		}
+		return false, capabilities.ErrUnspecifiedServerVersion
+	}
+	parser := sqlparser.NewTestParser()
+	createTable, err := parser.ParseStrictDDL("create table t1 (id int, i1 int)")
+	require.NoError(t, err)
+	alterTable, err := parser.ParseStrictDDL("alter table t1 add column i2 int first")
+	require.NoError(t, err)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, err = AlterTableCapableOfInstantDDL(alterTable.(*sqlparser.AlterTable), createTable.(*sqlparser.CreateTable), capableOf)
+	require.ErrorIs(t, err, capabilities.ErrUnspecifiedServerVersion)
+
+	record := logs.Record(t, "Error while checking MySQL server INSTANT DDL capability for ALTER")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "ADD COLUMN `i2` int FIRST", record["alter"])
+	assert.Equal(t, "server version unspecified", record["error"])
+	assert.Equal(t, "INTERNAL", record["error_code"])
 }

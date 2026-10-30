@@ -18,14 +18,17 @@ package throttler
 
 import (
 	"context"
+	"log/slog"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -355,9 +358,15 @@ func TestThrottle_MaxRateDisabled(t *testing.T) {
 // set to threadCount.
 func TestThrottle_MaxRateLowerThanThreadCount(t *testing.T) {
 	fc := &fakeClock{}
+	logs := logtest.Capture(t, slog.LevelInfo)
 	// 2 Thread, 1 QPS.
 	throttler, _ := newThrottlerWithClock("test", "queries", 2, 1, ReplicationLagModuleDisabled, fc.now)
 	defer throttler.Close()
+
+	record := logs.Record(t, "Set maxRate is less than the number of threads. To prevent threads from starving, maxRate was increased to the number of threads.")
+	assert.Equal(t, "WARN", record["level"])
+	assert.EqualValues(t, 2, record["thread_count"])
+	assert.EqualValues(t, 1, record["configured_max_rate"])
 
 	// 2 QPS instead of configured 1 QPS allowed since there are 2 threads which
 	// must not starve.
