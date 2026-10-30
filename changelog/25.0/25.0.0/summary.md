@@ -86,6 +86,7 @@
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
         - [Statements are trimmed of MySQL's space characters only](#sqlparser-mysql-space-set)
         - [Charset and collation names are quoted when regenerated](#sqlparser-charset-name-quoting)
+        - [New `--topo-cell-info-cache-ttl` flag](#topo-cell-info-cache)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -994,3 +995,9 @@ User-visible consequences:
 - **`COLLATE binary` in an expression is quoted.** `expr COLLATE binary` regenerates as ``expr COLLATE `binary` ``, because MySQL's expression `COLLATE` only accepts `binary` quoted. Column, table and database `COLLATE binary` and `CHARACTER SET binary` stay bare.
 - **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
 - **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.
+
+#### <a id="topo-cell-info-cache"/>New `--topo-cell-info-cache-ttl` flag</a>
+
+Every read of a cell's local topo first reads the cell's `CellInfo` from the global topo, even though the connection to the cell is already cached, only to detect the cell being pointed at a different topo server. For the tablet throttler, whose primary refreshes its shard's tablet inventory every 10 seconds by default, that is a global read per cell and per tablet in the shard on each refresh. A new flag, `--topo-cell-info-cache-ttl` (default `0`, which keeps reading it on every call), lets the throttler's inventory reads, `GetTablet` and `FindAllTabletAliasesInShard`, reuse a cell's `CellInfo` for that long. All other topo reads and writes, including the throttler's read of its config from `SrvKeyspace`, read `CellInfo` on every call as before. A process's own `CreateCellInfo`, `UpdateCellInfoFields` and `DeleteCellInfo` take effect in it immediately.
+
+**Impact**: with the flag set, after another process re-points a cell with `vtctldclient UpdateCellInfo` or deletes it with `vtctldclient DeleteCellInfo`, the throttler can keep reading that cell's tablet records from the cell's old topo server for up to the TTL, so for that long it may probe a stale set of tablets.

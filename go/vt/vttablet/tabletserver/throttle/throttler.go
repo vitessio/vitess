@@ -138,6 +138,27 @@ type throttlerTopoService interface {
 	GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error)
 }
 
+// throttlerTopoServer is the throttlerTopoService of a topo.Server. It reads tablet records through the
+// server's StaleTolerantView: the tablets they list only decide which tablets the throttler probes, and
+// --topo-cell-info-cache-ttl then saves a global CellInfo read per cell and per tablet on each inventory
+// refresh.
+type throttlerTopoServer struct {
+	*topo.Server
+	view *topo.StaleTolerantView
+}
+
+func newThrottlerTopoServer(ts *topo.Server) throttlerTopoServer {
+	return throttlerTopoServer{Server: ts, view: ts.StaleTolerantView()}
+}
+
+func (s throttlerTopoServer) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*topo.TabletInfo, error) {
+	return s.view.GetTablet(ctx, alias)
+}
+
+func (s throttlerTopoServer) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
+	return s.view.FindAllTabletAliasesInShard(ctx, keyspace, shard)
+}
+
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {
@@ -236,7 +257,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
 		srvTopoServer:   srvTopoServer,
-		ts:              ts,
+		ts:              newThrottlerTopoServer(ts),
 		heartbeatWriter: heartbeatWriter,
 		pool: connpool.NewPool(env, connectionPoolName, tabletenv.ConnPoolConfig{
 			Size:        2,
