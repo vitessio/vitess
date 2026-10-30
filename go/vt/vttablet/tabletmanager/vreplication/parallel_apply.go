@@ -2310,8 +2310,9 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 	// is handed to the commitLoop, and worker.close() only runs after the
 	// commitLoop returns. A commit stalled on a dead MySQL connection would
 	// therefore hang applyEventsParallel's commitDone wait — and with it
-	// the controller's shutdown — indefinitely. Publish the connection each
-	// commit uses so ctx cancellation closes it, erroring the blocked call.
+	// the controller's shutdown — indefinitely. Publish the worker connection
+	// each commit uses so ctx cancellation closes it, erroring the blocked
+	// call. (commitOnlyTxn lets the work on the main connection finish.)
 	// The position update commits in the same transaction as the row data,
 	// but mysqld finishes a COMMIT it has received after its client has gone
 	// away, so the commit can land after the call has returned: a restart
@@ -2488,21 +2489,14 @@ func (vp *vplayer) commitLoop(ctx context.Context, scheduler *applyScheduler, co
 		if dbClient == nil {
 			dbClient = vp.activeDBClient()
 		}
-		// A DDL cannot commit atomically with its position, and mysqld
-		// finishes a statement whose client has gone away, so closing the
-		// connection mid-DDL would leave the DDL applied without its
-		// position and the restarted workflow would fail replaying it. Like
-		// the serial vplayer, let a DDL finish: only publish the connection
-		// for the transactional commits.
-		if !(len(payload.events) > 0 && payload.events[0].Type == binlogdatapb.VEventType_DDL) {
-			activeCommitClient.Store(dbClient)
-			defer activeCommitClient.Store(nil)
-			// Recheck after publishing; see the matching comment in
-			// commitWorkerTxn for the missed-cancellation window this closes.
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-		}
+		// Like the serial vplayer, let the work on the main connection
+		// finish rather than publish it to the cancellation hook. The stream
+		// writes its error on this connection once the pipeline stops, and
+		// the cancellation can come from a worker failure. And a DDL cannot
+		// commit atomically with its position, and mysqld finishes a
+		// statement whose client has gone away, so closing the connection
+		// mid-DDL would leave the DDL applied without its position and the
+		// restarted workflow would fail replaying it.
 		vp.serialMu.Lock()
 		defer vp.serialMu.Unlock()
 

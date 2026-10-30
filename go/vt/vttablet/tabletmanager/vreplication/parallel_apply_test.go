@@ -1390,15 +1390,46 @@ type closeTrackingDBClient struct {
 
 func (c *closeTrackingDBClient) Close() { c.closed.Store(true) }
 
-// TestCommitLoopCancelLetsDDLFinish pins the opposite of
-// TestCommitLoopCancelUnblocksBlockedCommit for a DDL. A DDL cannot commit
-// atomically with its position, and mysqld finishes a statement whose client
-// has gone away, so closing the main connection mid-DDL on cancellation would
-// leave the DDL applied without its position; the restarted workflow would
-// replay it and fail on it (e.g. with a duplicate column error, which ends the
-// workflow). Like the serial vplayer, the commitLoop has to let the DDL finish
-// and save its position.
-func TestCommitLoopCancelLetsDDLFinish(t *testing.T) {
+// TestCommitLoopCancelLetsMainConnectionWorkFinish pins the opposite of
+// TestCommitLoopCancelUnblocksBlockedCommit for the work the commitLoop does
+// on the main connection. A DDL cannot commit atomically with its position,
+// and mysqld finishes a statement whose client has gone away, so closing the
+// main connection mid-DDL on cancellation would leave the DDL applied without
+// its position; the restarted workflow would replay it and fail on it (e.g.
+// with a duplicate column error, which ends the workflow). And the
+// cancellation can come from a worker failure, whose error the stream then
+// writes on the main connection, so closing it mid position save would lose
+// that error. Like the serial vplayer, the commitLoop has to let the work
+// finish.
+func TestCommitLoopCancelLetsMainConnectionWorkFinish(t *testing.T) {
+	pos, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+	require.NoError(t, err)
+	t.Run("DDL", func(t *testing.T) {
+		testCommitLoopCancelLetsMainConnectionWorkFinish(t, &applyTxnPayload{
+			commitOnly: true,
+			pos:        pos,
+			events: []*binlogdatapb.VEvent{{
+				Type:      binlogdatapb.VEventType_DDL,
+				Statement: "alter table t1 add column c int",
+				Timestamp: 100,
+			}},
+		}, "alter table", 2)
+	})
+	t.Run("position save", func(t *testing.T) {
+		testCommitLoopCancelLetsMainConnectionWorkFinish(t, &applyTxnPayload{
+			commitOnly:    true,
+			updatePosOnly: true,
+			pos:           pos,
+			timestamp:     100,
+		}, "update _vt.vreplication set pos=", 1)
+	})
+}
+
+// testCommitLoopCancelLetsMainConnectionWorkFinish cancels the commitLoop
+// while the main connection runs the payload's query starting with blockOn,
+// and checks that the work finishes, with wantQueries queries, the last of
+// them the position update.
+func testCommitLoopCancelLetsMainConnectionWorkFinish(t *testing.T, payload *applyTxnPayload, blockOn string, wantQueries int) {
 	ctx, cancel := context.WithCancel(testCtx(t))
 	defer cancel()
 
@@ -1413,35 +1444,25 @@ func TestCommitLoopCancelLetsDDLFinish(t *testing.T) {
 	// connection too.
 	vp.vr.dbClient = vp.dbClient
 
-	ddlEntered := make(chan struct{})
-	releaseDDL := make(chan struct{})
+	entered := make(chan struct{})
+	release := make(chan struct{})
 	var queriesMu sync.Mutex
 	var queries []string
 	vp.query = func(ctx context.Context, sql string) (*sqltypes.Result, error) {
 		queriesMu.Lock()
 		queries = append(queries, sql)
 		queriesMu.Unlock()
-		if strings.HasPrefix(sql, "alter table") {
-			close(ddlEntered)
-			<-releaseDDL
+		if strings.HasPrefix(sql, blockOn) {
+			close(entered)
+			<-release
 		}
 		return &sqltypes.Result{}, nil
 	}
 
-	pos, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
-	require.NoError(t, err)
 	txn := acquireApplyTxn()
 	txn.order = 1
 	txn.forceGlobal = true
-	txn.payload = &applyTxnPayload{
-		commitOnly: true,
-		pos:        pos,
-		events: []*binlogdatapb.VEvent{{
-			Type:      binlogdatapb.VEventType_DDL,
-			Statement: "alter table t1 add column c int",
-			Timestamp: 100,
-		}},
-	}
+	txn.payload = payload
 	commitCh := make(chan *applyTxn, 1)
 	commitCh <- txn
 	close(commitCh)
@@ -1452,25 +1473,25 @@ func TestCommitLoopCancelLetsDDLFinish(t *testing.T) {
 	}()
 
 	select {
-	case <-ddlEntered:
+	case <-entered:
 	case <-time.After(30 * time.Second):
-		require.FailNow(t, "timed out waiting for the commitLoop to run the DDL")
+		require.FailNow(t, "timed out waiting for the commitLoop to run the query")
 	}
 
 	cancel()
 	assert.Never(t, mainClient.closed.Load, time.Second, 10*time.Millisecond,
-		"the main connection must not be closed while a DDL runs on it")
-	close(releaseDDL)
+		"the main connection must not be closed while the commitLoop runs a query on it")
+	close(release)
 
 	select {
 	case <-done:
 	case <-time.After(30 * time.Second):
-		require.FailNow(t, "commitLoop did not return after the DDL finished")
+		require.FailNow(t, "commitLoop did not return after the query finished")
 	}
 	queriesMu.Lock()
 	defer queriesMu.Unlock()
-	require.Len(t, queries, 2)
-	assert.Contains(t, queries[1], "update _vt.vreplication set pos=", "the DDL's position must be saved")
+	require.Len(t, queries, wantQueries)
+	assert.Contains(t, queries[wantQueries-1], "update _vt.vreplication set pos=", "the position must be saved")
 }
 
 // TestCommitLoopSpentCancellationNeverTouchesConnection pins the terminal
@@ -1479,9 +1500,9 @@ func TestCommitLoopCancelLetsDDLFinish(t *testing.T) {
 // connection). From that state, a queued commit must never enter a blocking
 // wire call — nothing could unblock it — so the loop must return without
 // touching the connection. Together with the recheck-after-publish in
-// commitWorkerTxn/commitOnlyTxn (which closes the window between the ctx
-// check and the connection's publication), this keeps every blocking call
-// reachable only while a closer is armed.
+// commitWorkerTxn (which closes the window between the ctx check and the
+// connection's publication), this keeps every blocking call reachable only
+// while a closer is armed.
 func TestCommitLoopSpentCancellationNeverTouchesConnection(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	ctx, cancel := context.WithCancel(testCtx(t))
