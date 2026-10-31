@@ -2892,13 +2892,37 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 		}
 	}
 
+	// The read-only tablet types whose reads this call switched, which we need to
+	// switch back if we then fail to switch writes, and those that were already
+	// switched in some cells, which we cannot fully switch back.
+	var readsSwitched, readsPartiallySwitched []topodatapb.TabletType
+	// The state, read while holding the workflow lock, from which we determine those.
+	var readsStartState *State
 	if switchReplica || switchRdonly {
+		// Determine the tablet types to switch reads for, which can include rdonly
+		// reads switched along with replica reads, before changing any routing, so
+		// that the same ones are switched and, if needed, switched back.
+		var readTabletTypes []topodatapb.TabletType
+		if readTabletTypes, err = s.readTabletTypesToSwitch(ctx, req.Cells, req.TabletTypes); err != nil {
+			return nil, err
+		}
+		// To know which reads this call switches, and so may need to switch back, we
+		// read the state again now that we hold the workflow lock, as another call may
+		// have switched reads since we first read it.
+		if !req.DryRun && switchPrimary {
+			if _, readsStartState, err = s.getWorkflowState(ctx, ts.TargetKeyspaceName(), ts.WorkflowName()); err != nil {
+				return nil, err
+			}
+		}
 		// If we're going to switch writes immediately after then we don't need to
 		// rebuild the SrvVSchema here as we will do it after switching writes.
-		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, !switchPrimary /* rebuildSrvVSchema */, direction); err != nil {
+		if rdDryRunResults, err = s.switchReads(ctx, req, ts, startState, readTabletTypes, !switchPrimary /* rebuildSrvVSchema */, direction); err != nil {
 			return nil, err
 		}
 		s.Logger().Infof("Switch Reads done for workflow %s.%s", req.Keyspace, req.Workflow)
+		if readsStartState != nil {
+			readsSwitched, readsPartiallySwitched = readsSwitchedFromState(readsStartState, readTabletTypes)
+		}
 	}
 	if rdDryRunResults != nil {
 		dryRunResults = append(dryRunResults, *rdDryRunResults...)
@@ -2906,6 +2930,17 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 
 	if switchPrimary {
 		if _, wrDryRunResults, err = s.switchWrites(ctx, req, ts, startState, timeout, false); err != nil {
+			if (len(readsSwitched) > 0 || len(readsPartiallySwitched) > 0) && direction == DirectionForward {
+				// Tell the user what happened to the reads this call switched, keeping
+				// the code of the error that failed the write switch.
+				outcome, rerr := s.revertReadsSwitch(ctx, req, ts, readsStartState, readsSwitched, readsPartiallySwitched)
+				if rerr != nil {
+					outcome = fmt.Sprintf("failed to switch reads back after failing to switch writes, manual cleanup work may be necessary: %v", rerr)
+				}
+				if outcome != "" {
+					err = vterrors.Wrapf(err, "%s", outcome)
+				}
+			}
 			return nil, err
 		}
 		s.Logger().Infof("Switch Writes done for workflow %s.%s", req.Keyspace, req.Workflow)
@@ -2957,8 +2992,12 @@ func (s *Server) WorkflowSwitchTraffic(ctx context.Context, req *vtctldatapb.Wor
 	return resp, nil
 }
 
-// switchReads is a generic way of switching read traffic for a workflow.
-func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State, rebuildSrvVSchema bool, direction TrafficSwitchDirection) (*[]string, error) {
+// switchReads is a generic way of switching read traffic for a workflow. The request is
+// validated against the requested tablet types, and the reads are switched for
+// readTabletTypes, which readTabletTypesToSwitch returns for them.
+func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State,
+	readTabletTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection,
+) (*[]string, error) {
 	var roTabletTypes []topodatapb.TabletType
 	// When we are switching all traffic we also get the primary tablet type, which we need to
 	// filter out for switching reads.
@@ -3025,27 +3064,144 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		}
 	}
 
-	// If there are no rdonly tablets in the cells ask to switch rdonly tablets as well so that routing rules
-	// are updated for rdonly as well. Otherwise vitess will not know that the workflow has completed and will
-	// incorrectly report that not all reads have been switched. User currently is forced to switch non-existent
-	// rdonly tablets.
-	if switchReplica && !switchRdonly {
-		var err error
-		rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, req.Cells)
-		if err != nil {
-			return nil, err
-		}
-		if !rdonlyTabletsExist {
-			roTabletTypes = append(roTabletTypes, topodatapb.TabletType_RDONLY)
-		}
-	}
+	roTabletTypes = slices.DeleteFunc(slices.Clone(readTabletTypes), func(tabletType topodatapb.TabletType) bool {
+		return tabletType == topodatapb.TabletType_PRIMARY
+	})
+	return s.switchReadsForTabletTypes(ctx, req, ts, state, roTabletTypes, rebuildSrvVSchema, direction, false /* revert */)
+}
 
-	journalsExist, _, err := ts.checkJournals(ctx)
-	if err != nil && !req.GetForce() {
-		return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
+// readTabletTypesToSwitch returns the given tablet types, with RDONLY added if REPLICA is
+// among them and there are no rdonly tablets in the cells. We then switch rdonly reads as
+// well so that the routing rules are updated for rdonly too. Otherwise vitess will not know
+// that the workflow has completed and will incorrectly report that not all reads have been
+// switched. User currently is forced to switch non-existent rdonly tablets.
+func (s *Server) readTabletTypesToSwitch(ctx context.Context, cells []string, tabletTypes []topodatapb.TabletType) ([]topodatapb.TabletType, error) {
+	if !slices.Contains(tabletTypes, topodatapb.TabletType_REPLICA) || slices.Contains(tabletTypes, topodatapb.TabletType_RDONLY) {
+		return tabletTypes, nil
 	}
-	if journalsExist {
-		s.Logger().Infof("Found a previous journal entry for %d", ts.id)
+	rdonlyTabletsExist, err := topotools.DoCellsHaveRdonlyTablets(ctx, s.ts, cells)
+	if err != nil {
+		return nil, err
+	}
+	if rdonlyTabletsExist {
+		return tabletTypes, nil
+	}
+	return append(slices.Clone(tabletTypes), topodatapb.TabletType_RDONLY), nil
+}
+
+// readsSwitchedFromState returns the read-only tablet types, out of those requested, whose
+// reads were not switched in any cell in the given state, and which a forward switch of
+// reads therefore moved over in full. It also returns those that were already switched
+// in some cells but not others. These cannot be switched back without undoing the earlier
+// switch, as the table routing rules that MoveTables uses are global rather than per cell,
+// so we leave them switched.
+func readsSwitchedFromState(state *State, tabletTypes []topodatapb.TabletType) (switched, partiallySwitched []topodatapb.TabletType) {
+	for _, tabletType := range tabletTypes {
+		var cellsSwitched, cellsNotSwitched []string
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA:
+			cellsSwitched, cellsNotSwitched = state.ReplicaCellsSwitched, state.ReplicaCellsNotSwitched
+		case topodatapb.TabletType_RDONLY:
+			cellsSwitched, cellsNotSwitched = state.RdonlyCellsSwitched, state.RdonlyCellsNotSwitched
+		default:
+			continue
+		}
+		// The state of a reverse workflow is reported from the perspective of the
+		// original workflow, so switching its reads forward moves them back to the
+		// not switched state.
+		alreadySwitched := len(cellsSwitched) > 0
+		notYetSwitched := len(cellsNotSwitched) > 0
+		if state.IsReverse {
+			alreadySwitched, notYetSwitched = notYetSwitched, alreadySwitched
+		}
+		switch {
+		case !alreadySwitched:
+			switched = append(switched, tabletType)
+		case notYetSwitched:
+			partiallySwitched = append(partiallySwitched, tabletType)
+		}
+	}
+	return switched, partiallySwitched
+}
+
+// errSwitchWritesPastPointOfNoReturn is returned when we do not switch reads back because
+// switching writes passed the point of no return.
+var errSwitchWritesPastPointOfNoReturn = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "switching writes passed the point of no return")
+
+// revertReadsSwitch switches the reads for the given read-only tablet types back after
+// we switched them and then failed to switch writes in the same SwitchTraffic call, so
+// that we do not leave reads on a target that is not in sync with the source. Tablet
+// types that were partially switched before the call are left switched. It returns a
+// description of what happened to the reads, for the user.
+func (s *Server) revertReadsSwitch(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State,
+	roTabletTypes, partiallySwitchedTabletTypes []topodatapb.TabletType,
+) (string, error) {
+	if ts.MigrationType() == binlogdatapb.MigrationType_TABLES && (ts.IsMultiTenantMigration() || ts.isPartialMigration) {
+		// Reads for these migrations are switched along with writes, or cannot be
+		// switched back on their own.
+		return "", nil
+	}
+	var outcomes []string
+	if len(partiallySwitchedTabletTypes) > 0 {
+		outcome := fmt.Sprintf("did not switch reads back for tablet types %s as they were already switched in some cells before this call, so the cells this call switched stay switched",
+			topoproto.MakeStringTypeCSV(partiallySwitchedTabletTypes))
+		ts.Logger().Warningf("Workflow %s.%s: %s", ts.targetKeyspace, ts.workflow, outcome)
+		outcomes = append(outcomes, outcome)
+	}
+	if len(roTabletTypes) == 0 {
+		return strings.Join(outcomes, "; "), nil
+	}
+	// The original context may have been canceled or timed out, which may be
+	// why we failed to switch writes, so we use a new one, as is done when
+	// canceling the migration.
+	revertCtx, revertCancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Minute)
+	defer revertCancel()
+
+	// The forward switch of reads already removed any read mirror rules. Removing
+	// them again would rebuild the SrvVSchema in every cell while the routing rules
+	// still send reads to the target, leaving any cells we do not switch back there.
+	revertState := *state
+	revertState.ReadsMirrored = false
+
+	ts.Logger().Infof("Switching reads back for workflow %s.%s, tablet types: %s, after failing to switch writes",
+		ts.targetKeyspace, ts.workflow, topoproto.MakeStringTypeCSV(roTabletTypes))
+	_, err := s.switchReadsForTabletTypes(revertCtx, req, ts, &revertState, roTabletTypes, true /* rebuildSrvVSchema */, DirectionBackward,
+		true /* revert */)
+	switch {
+	case errors.Is(err, errSwitchWritesPastPointOfNoReturn):
+		outcomes = append(outcomes, fmt.Sprintf("did not switch reads back for tablet types %s as switching writes passed the point of no return; run SwitchTraffic again to complete it",
+			topoproto.MakeStringTypeCSV(roTabletTypes)))
+	case err != nil:
+		return "", err
+	default:
+		outcomes = append(outcomes, "switched reads back for tablet types "+topoproto.MakeStringTypeCSV(roTabletTypes))
+	}
+	return strings.Join(outcomes, "; "), nil
+}
+
+// switchReadsForTabletTypes switches read traffic for the given read-only tablet types
+// in the given direction, without validating the request against the workflow state.
+// When revert is set, we are switching reads back after failing to switch writes, and
+// we do not do so if switching writes passed the point of no return.
+func (s *Server) switchReadsForTabletTypes(ctx context.Context, req *vtctldatapb.WorkflowSwitchTrafficRequest, ts *trafficSwitcher, state *State,
+	roTabletTypes []topodatapb.TabletType, rebuildSrvVSchema bool, direction TrafficSwitchDirection, revert bool,
+) (*[]string, error) {
+	if revert && (direction != DirectionBackward || !rebuildSrvVSchema) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "switching reads back must be done backward and rebuild the SrvVSchema")
+	}
+	roTypesToSwitchStr := topoproto.MakeStringTypeCSV(roTabletTypes)
+	cellsStr := strings.Join(req.Cells, ",")
+
+	// When switching reads back, we check the journals while holding the keyspace
+	// locks below instead.
+	if !revert {
+		journalsExist, _, err := ts.checkJournals(ctx)
+		if err != nil && !req.GetForce() {
+			return defaultErrorHandler(ts.Logger(), fmt.Sprintf("failed to read journal in the %s keyspace", ts.SourceKeyspaceName()), err)
+		}
+		if journalsExist {
+			s.Logger().Infof("Found a previous journal entry for %d", ts.id)
+		}
 	}
 
 	var sw iswitcher
@@ -3105,6 +3261,24 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		return nil
 	}
 
+	if revert {
+		// Once the journals have been created, switching writes has passed the point
+		// of no return: it cannot be canceled, running SwitchTraffic again completes
+		// it, and writes may already be routed to the target. Switching reads back to
+		// the source would then serve stale reads, so we leave them on the target.
+		// We check while holding the keyspace locks, which creating the journals
+		// requires, so that they cannot be created between the check and the switch.
+		journaled, _, err := ts.checkJournals(ctx)
+		if err != nil {
+			return defaultErrorHandler(ts.Logger(), "failed to check whether switching writes passed the point of no return", err)
+		}
+		if journaled {
+			ts.Logger().Warningf("Not switching reads back for workflow %s.%s as switching writes passed the point of no return; run SwitchTraffic again to complete it",
+				ts.targetKeyspace, ts.workflow)
+			return nil, errSwitchWritesPastPointOfNoReturn
+		}
+	}
+
 	// Remove mirror rules for the specified tablet types.
 	if state.ReadsMirrored {
 		if err := sw.mirrorTableTraffic(ctx, roTabletTypes, 0); err != nil {
@@ -3124,7 +3298,15 @@ func (s *Server) switchReads(ctx context.Context, req *vtctldatapb.WorkflowSwitc
 		case ts.isPartialMigration:
 			ts.Logger().Infof("Partial migration, skipping switchTableReads as traffic is all or nothing per shard and overridden for reads AND writes in the ShardRoutingRule created when switching writes.")
 		default:
-			err := sw.switchTableReads(ctx, req.Cells, roTabletTypes, rebuildSrvVSchema, direction)
+			cells := req.Cells
+			if revert {
+				// The routing rules are global, and switching writes may have published
+				// the switched read rules in every cell, for example when removing primary
+				// mirror rules. We only switch back tablet types that were not switched in
+				// any cell before, so we can rebuild the SrvVSchema in every cell.
+				cells = nil
+			}
+			err := sw.switchTableReads(ctx, cells, roTabletTypes, rebuildSrvVSchema, direction)
 			if err != nil {
 				return defaultErrorHandler(ts.Logger(), "failed to switch read traffic for the tables", err)
 			}
