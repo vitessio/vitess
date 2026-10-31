@@ -238,9 +238,12 @@ func (w *applyWorker) rotate() {
 // multi-statement call via ExecuteTrxQueryBatch. This is called after
 // the worker has finished applying all events for a transaction, moving
 // the MySQL work into the parallel apply phase (before the serial
-// commitLoop). If batch mode is disabled, this is a no-op.
+// commitLoop). If batch mode is disabled, this is a no-op. So is a
+// transaction whose events were all skipped (statement DML on the
+// mysql.rds_* and percona.checksums tables): it never began, so it has
+// nothing unsent, and MySQL rejects an empty batch (error 1065).
 func (w *applyWorker) flushWorkerBatch() error {
-	if !w.batchMode || w.client == nil {
+	if !w.batchMode || w.client == nil || !w.client.InTransaction {
 		return nil
 	}
 	_, err := w.client.ExecuteTrxQueryBatch()

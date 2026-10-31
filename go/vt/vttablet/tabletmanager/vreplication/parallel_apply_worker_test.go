@@ -236,6 +236,27 @@ func TestApplyWorkerApplyEventInsertStatementAcceptsMatchAllFilter(t *testing.T)
 	err := worker.applyEvent(ctx, event, false, &workerVP)
 	require.NoError(t, err)
 	assert.Contains(t, db.queries, event.Dml)
+
+	// Statement DML on the mysql.rds_* and percona.checksums tables is
+	// skipped, so a transaction of only such events never begins. Its
+	// flush must send nothing, since MySQL rejects an empty query (error
+	// 1065); the commitLoop saves its position in a transaction of its own.
+	t.Run("batching worker whose events are all skipped", func(t *testing.T) {
+		db := &recordingDBClient{}
+		client := newVDBClient(db, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+		client.maxBatchSize = 1024
+		worker := &applyWorker{ctx: ctx, client: client, batchMode: true}
+		worker.bindFunctions()
+		for _, dml := range []string{
+			"insert into mysql.rds_heartbeat2(id, value) values (1, 1)",
+			"insert into percona.checksums(db) values ('vt')",
+		} {
+			require.NoError(t, worker.applyEvent(ctx, &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_INSERT, Dml: dml}, false, &workerVP))
+		}
+		require.False(t, client.InTransaction)
+		require.NoError(t, worker.flushWorkerBatch())
+		assert.Empty(t, db.queries)
+	})
 }
 
 func TestApplyWorkerStatsReturnsVReplicatorStats(t *testing.T) {
