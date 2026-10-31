@@ -3622,3 +3622,88 @@ func TestTabletServerValidatesBindVariablesBeforeHotRowProtection(t *testing.T) 
 		})
 	}
 }
+
+// TestTabletServerBeginRejectsPostBeginQueriesNeedingReservedConn pins that
+// BeginExecute and BeginStreamExecute refuse a post-begin query that needs a
+// reserved connection, as Execute does, and before a transaction is begun.
+// Without the check a SET ran on a pooled transaction connection, which went
+// back to the pool with its session changed when the transaction ended.
+func TestTabletServerBeginRejectsPostBeginQueriesNeedingReservedConn(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	// Each statement would succeed if it reached MySQL, so a failure can only
+	// come from the validation.
+	queries := map[string]string{
+		"set":             "set character_set_client = 'latin1'",
+		"lock function":   "select get_lock('foo', 10) from dual",
+		"temporary table": "create temporary table temp_t(id int)",
+	}
+	db.AddQueryPattern("set character_set_client = .*", &sqltypes.Result{})
+	db.AddQueryPattern("select get_lock.*", &sqltypes.Result{})
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select 1 from dual limit 10001", &sqltypes.Result{})
+
+	for name, query := range queries {
+		postBeginQueries := []string{query}
+		t.Run("BeginExecute rejects "+name, func(t *testing.T) {
+			begins := db.GetQueryCalledNum("begin")
+			state, _, err := tsv.BeginExecute(ctx, nil, &target, postBeginQueries, "select 1", nil, 0, nil)
+			require.ErrorContains(t, err, "not allowed without reserved connection")
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			assert.Zero(t, state.TransactionID, "no transaction should be begun")
+			assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
+		})
+		t.Run("BeginStreamExecute rejects "+name, func(t *testing.T) {
+			begins := db.GetQueryCalledNum("begin")
+			state, err := tsv.BeginStreamExecute(ctx, nil, &target, postBeginQueries, "select 1", nil, 0, nil, func(*sqltypes.Result) error { return nil })
+			require.ErrorContains(t, err, "not allowed without reserved connection")
+			assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			assert.Zero(t, state.TransactionID, "no transaction should be begun")
+			assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
+		})
+	}
+
+	// ReserveBeginExecute falls back to a reserved connection on that error,
+	// where the SET is allowed and its session is discarded on release.
+	t.Run("ReserveBeginExecute runs a SET on a reserved connection", func(t *testing.T) {
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, nil, []string{queries["set"]}, "select 1", nil, nil)
+		require.NoError(t, err)
+		assert.NotZero(t, state.ReservedID, "the SET should run on a reserved connection")
+		require.NoError(t, tsv.Release(ctx, &target, state.TransactionID, state.ReservedID))
+	})
+
+	// Settings don't exempt a post-begin SET: the pool resets only the settings
+	// it applied, so the SET must still go to a reserved connection.
+	settings := []string{"set sql_mode = ''"}
+	db.AddQuery("set sql_mode = ''", &sqltypes.Result{})
+	t.Run("ReserveBeginExecute with settings runs a SET on a reserved connection", func(t *testing.T) {
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, []string{queries["set"]}, "select 1", nil, nil)
+		require.NoError(t, err)
+		assert.NotZero(t, state.ReservedID, "the SET should run on a reserved connection")
+		require.NoError(t, tsv.Release(ctx, &target, state.TransactionID, state.ReservedID))
+	})
+	t.Run("ReserveBeginStreamExecute with settings rejects a SET", func(t *testing.T) {
+		begins := db.GetQueryCalledNum("begin")
+		state, err := tsv.ReserveBeginStreamExecute(ctx, nil, &target, settings, []string{queries["set"]}, "select 1", nil, nil, func(*sqltypes.Result) error { return nil })
+		require.ErrorContains(t, err, "not allowed without reserved connection")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
+	})
+
+	// When a post-begin query fails on the reserved connection of the fallback,
+	// the reservation is released: its ID is not returned with the error, so the
+	// caller could not release it.
+	t.Run("ReserveBeginExecute releases the reservation when a post-begin query fails", func(t *testing.T) {
+		db.AddRejectedQuery("set unique_checks = 0", errors.New("rejected"))
+		active := tsv.te.txPool.scp.active.Size()
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, nil, []string{"set unique_checks = 0"}, "select 1", nil, nil)
+		require.ErrorContains(t, err, "rejected")
+		assert.Zero(t, state.ReservedID)
+		assert.Equal(t, active, tsv.te.txPool.scp.active.Size(), "the reservation should be released")
+	})
+}
