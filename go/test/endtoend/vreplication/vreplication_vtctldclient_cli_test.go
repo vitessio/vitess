@@ -224,9 +224,10 @@ func TestVtctldclientCLI(t *testing.T) {
 func testMoveTablesFlags1(t *testing.T, mt *iMoveTables, sourceKeyspace, targetKeyspace, defaultWorkflowName string, targetTabs map[string]*cluster.VttabletProcess) {
 	tables := "customer,customer2"
 	overrides := map[string]string{
-		"vreplication-net-read-timeout":        "6000",
-		"relay-log-max-items":                  "10000",
-		"vreplication-parallel-insert-workers": "10",
+		"vreplication-net-read-timeout":             "6000",
+		"relay-log-max-items":                       "10000",
+		"vreplication-parallel-insert-workers":      "10",
+		"vreplication-parallel-replication-workers": "3",
 	}
 	createFlags := []string{
 		"--auto-start=false", "--defer-secondary-keys=false", "--stop-after-copy",
@@ -323,6 +324,31 @@ func testMoveTablesFlags2(t *testing.T, mt *iMoveTables, sourceKeyspace, targetK
 		}
 	})
 	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+	t.Run("Test per-workflow parallel apply override", func(t *testing.T) {
+		// The tablets default to a single worker, so the parallel applier is only used for streams
+		// with the override. The vdiff confirms that its data is correct.
+		const workers = 2
+		_, err := vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKeyspace, "update",
+			"--workflow", defaultWorkflowName, "--config-overrides", fmt.Sprintf("vreplication-parallel-replication-workers=%d", workers))
+		require.NoError(t, err)
+		for _, tab := range targetTabs {
+			requireParallelApplierStarted(t, tab, defaultWorkflowName, workers)
+		}
+		require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+		// Write new rows to the source so that the parallel applier applies replicated
+		// changes (across both target shards) that the vdiff then checks.
+		vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
+		defer vtgateConn.Close()
+		for cid := 90001; cid <= 90020; cid++ {
+			_, err := execVtgateQuery(vtgateConn, sourceKeyspace, fmt.Sprintf("insert into customer (cid, name) values (%d, 'parallel-%d')", cid, cid))
+			require.NoError(t, err)
+		}
+		for _, tab := range targetTabs {
+			catchup(t, tab, defaultWorkflowName, "MoveTables")
+		}
+		vdiff(t, targetKeyspace, defaultWorkflowName, "zone1", nil)
+	})
 
 	for _, tab := range targetTabs {
 		catchup(t, tab, defaultWorkflowName, "MoveTables")
@@ -515,8 +541,9 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 		{
 			name: "two values",
 			config: map[string]string{
-				"vreplication-heartbeat-update-interval": "100",
-				"vreplication-store-compressed-gtid":     "true",
+				"vreplication-heartbeat-update-interval":    "100",
+				"vreplication-store-compressed-gtid":        "true",
+				"vreplication-parallel-replication-workers": "5",
 			},
 		},
 		{
@@ -539,8 +566,9 @@ func testWorkflowUpdateConfig(t *testing.T, mt *iMoveTables, targetTabs map[stri
 		{
 			name: "clear flags",
 			config: map[string]string{
-				"vreplication-heartbeat-update-interval": "",
-				"vreplication-store-compressed-gtid":     "",
+				"vreplication-heartbeat-update-interval":    "",
+				"vreplication-store-compressed-gtid":        "",
+				"vreplication-parallel-replication-workers": "",
 			},
 			clears: true,
 		},

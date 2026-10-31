@@ -19,6 +19,8 @@ package vreplication
 import (
 	_ "embed"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +84,15 @@ innodb, to confirm that vtgate's fkmanaged mode is working properly.
 */
 
 func TestFKExt(t *testing.T) {
+	testFKExt(t)
+}
+
+// TestFKExtParallelApply runs TestFKExt with the parallel applier.
+func TestFKExtParallelApply(t *testing.T) {
+	testFKExt(t, parallelReplicationWorkers)
+}
+
+func testFKExt(t *testing.T, extraArgs ...string) {
 	setSidecarDBName("_vt")
 
 	// Ensure that there are multiple copy phase cycles per table.
@@ -89,6 +100,7 @@ func TestFKExt(t *testing.T) {
 		"--vstream-packet-size=256",
 		"--queryserver-config-schema-change-signal",
 		parallelInsertWorkers)
+	extraVTTabletArgs = append(extraVTTabletArgs, extraArgs...)
 	extraVTGateArgs = append(extraVTGateArgs, "--schema-change-signal"+"=true", "--planner-version", "Gen4")
 	defer func() { extraVTTabletArgs = nil }()
 	initFKExtConfig(t)
@@ -150,7 +162,7 @@ func TestFKExt(t *testing.T) {
 			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy"+"=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
-		doReshard(t, fkextConfig.target2KeyspaceName, "reshard2to3", "-80,80-", threeShards, tablets)
+		doReshard(t, fkextConfig.target2KeyspaceName, "reshard2to3", "-80,80-", threeShards, tablets, true)
 	})
 	t.Run("Reshard keyspace from 3 shards to 1 shard", func(t *testing.T) {
 		tabletID := 800
@@ -163,7 +175,7 @@ func TestFKExt(t *testing.T) {
 			output, err := vc.VtctldClient.ExecuteCommandWithOutput("ApplySchema", "--ddl-strategy"+"=direct", "--sql", sql, keyspaceName)
 			require.NoErrorf(t, err, output)
 		}
-		doReshard(t, fkextConfig.target2KeyspaceName, "reshard3to1", threeShards, "0", tablets)
+		doReshard(t, fkextConfig.target2KeyspaceName, "reshard3to1", threeShards, "0", tablets, false)
 	})
 	lg.Stop()
 	waitForLowLag(t, fkextConfig.target1KeyspaceName, "mat")
@@ -230,7 +242,10 @@ func compareRowCounts(t *testing.T, keyspace string, sourceShards, targetShards 
 	return nil
 }
 
-func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess) {
+// doReshard runs a reshard with the load generator running. When restartTarget is set and the parallel applier
+// is enabled, it also restarts a target primary while the streams are running to confirm that the parallel
+// applier resumes and that the data is still correct (the row counts and vdiffs below).
+func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards string, targetTabs map[string]*cluster.VttabletProcess, restartTarget bool) {
 	rs := newReshard(vc, &reshardWorkflow{
 		workflowInfo: &workflowInfo{
 			vc:             vc,
@@ -243,6 +258,20 @@ func doReshard(t *testing.T, keyspace, workflowName, sourceShards, targetShards 
 	}, workflowFlavorVtctld)
 	rs.Create()
 	require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
+	if parallelApplyEnabledOnTablets() {
+		for _, targetTab := range targetTabs {
+			requireParallelApplierStarted(t, targetTab, workflowName, 4)
+		}
+		if restartTarget {
+			// Restarting the vttablet truncates its log, so the next check only passes if the stream
+			// was resumed by the new process using the parallel applier.
+			targetTab := targetTabs[slices.Sorted(maps.Keys(targetTabs))[0]]
+			require.NoError(t, targetTab.TearDown())
+			require.NoError(t, targetTab.Setup())
+			require.NoError(t, waitForWorkflowState(vc, fmt.Sprintf("%s.%s", keyspace, workflowName), binlogdatapb.VReplicationWorkflowState_Running.String()))
+			requireParallelApplierStarted(t, targetTab, workflowName, 4)
+		}
+	}
 	for _, targetTab := range targetTabs {
 		catchup(t, targetTab, workflowName, "Reshard")
 	}
@@ -304,6 +333,9 @@ func materializeTables(t *testing.T) {
 	materialize(t, materializeSpec)
 	tab := vc.getPrimaryTablet(t, fkextConfig.target1KeyspaceName, "0")
 	catchup(t, tab, wfName, "Materialize")
+	if parallelApplyEnabledOnTablets() {
+		requireParallelApplierStarted(t, tab, wfName, 4)
+	}
 	validateMaterializeRowCounts(t)
 }
 

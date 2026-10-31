@@ -158,6 +158,8 @@ func (tp *TablePlan) targetDataColumns(streamed *binlogdatapb.RowChange_Bitmap) 
 // onto the target expressions, computing it on first use.
 func (tp *TablePlan) mappedDataColumnsFor(streamed *binlogdatapb.RowChange_Bitmap) (*mappedDataColumns, error) {
 	key := partialBitmapKey(streamed)
+	tp.partialMu.Lock()
+	defer tp.partialMu.Unlock()
 	if mapped, ok := tp.PartialBitmaps[key]; ok {
 		return mapped, nil
 	}
@@ -453,6 +455,8 @@ func (tp *TablePlan) getPartialInsertQuery(rowChange *binlogdatapb.RowChange) (*
 		return nil, err
 	}
 	key := hex.EncodeToString(dataColumns.Cols)
+	tp.partialMu.Lock()
+	defer tp.partialMu.Unlock()
 	ins, ok := tp.PartialInserts[key]
 	if ok {
 		return ins, nil
@@ -475,6 +479,8 @@ func (tp *TablePlan) getPartialUpdateQuery(rowChange *binlogdatapb.RowChange) (*
 		return nil, err
 	}
 	key := hex.EncodeToString(dataColumns.Cols)
+	tp.partialMu.Lock()
+	defer tp.partialMu.Unlock()
 	upd, ok := tp.PartialUpdates[key]
 	if ok {
 		return upd, nil
