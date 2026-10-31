@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -2245,9 +2246,26 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 		result: &querypb.QueryResult{},
 	}
 
+	// A target vschema whose table uses a qualified auto_increment sequence
+	// in an unsharded keyspace whose vschema doesn't define it yet.
+	sequenceKeyspaceName := "global-ks"
+	targetVSchemaWithSequence := &vschemapb.Keyspace{
+		Sharded: true,
+		Tables: map[string]*vschemapb.Table{
+			table1Name: {
+				AutoIncrement: &vschemapb.AutoIncrement{
+					Column:   "id",
+					Sequence: fmt.Sprintf("`%s`.`t1_seq`", sequenceKeyspaceName),
+				},
+			},
+			table2Name: {},
+		},
+	}
+
 	testcases := []struct {
 		name                           string
 		sourceKeyspace, targetKeyspace *testKeyspace
+		targetVSchema                  *vschemapb.Keyspace
 		req                            *vtctldatapb.WorkflowSwitchTrafficRequest
 		want                           []string
 	}{
@@ -2281,6 +2299,52 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position, sourceKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
 				"Create reverse vreplication workflow " + ReverseWorkflowName(workflowName),
+				"Create journal entries on source databases",
+				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", targetKeyspaceName, tablesStr),
+				fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", sourceKeyspaceName, targetKeyspaceName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				fmt.Sprintf("Switch writes completed, freeze and delete vreplication streams on: [tablet:%d,tablet:%d]", startingTargetTabletUID, startingTargetTabletUID+tabletUIDStep),
+				fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:%d;workflow:%s;dbname:vt_%s,keyspace:%s;shard:80-;tablet:%d;workflow:%s;dbname:vt_%s]",
+					targetKeyspaceName, startingTargetTabletUID, workflowName, targetKeyspaceName, targetKeyspaceName, startingTargetTabletUID+tabletUIDStep, workflowName, targetKeyspaceName),
+				"Unlock keyspace " + targetKeyspaceName,
+				"Unlock keyspace " + sourceKeyspaceName,
+			},
+		},
+		{
+			name: "forward with sequence initialization",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			targetVSchema: targetVSchemaWithSequence,
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:                  targetKeyspaceName,
+				Workflow:                  workflowName,
+				Direction:                 int32(DirectionForward),
+				TabletTypes:               allTabletTypes,
+				DryRun:                    true,
+				InitializeTargetSequences: true,
+			},
+			want: []string{
+				"Lock keyspace " + sourceKeyspaceName,
+				"Lock keyspace " + targetKeyspaceName,
+				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				"Unlock keyspace " + targetKeyspaceName,
+				"Unlock keyspace " + sourceKeyspaceName,
+				"Lock keyspace " + sourceKeyspaceName,
+				"Lock keyspace " + targetKeyspaceName,
+				fmt.Sprintf("Sequence backing tables [%s.t1_seq] will be added to the vschema of their keyspace", sequenceKeyspaceName),
+				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:0;position:%s]",
+					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position),
+				"Wait for vreplication on stopped streams to catchup for up to 30s",
+				"Create reverse vreplication workflow " + ReverseWorkflowName(workflowName),
+				"The following sequence backing tables used by tables being moved will be initialized:",
+				"\tBacking table: t1_seq, will be created, new value 1",
 				"Create journal entries on source databases",
 				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", targetKeyspaceName, tablesStr),
 				fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", sourceKeyspaceName, targetKeyspaceName),
@@ -2369,6 +2433,17 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
 			defer env.close()
 			env.tmc.schema = schema
+			if tc.targetVSchema != nil {
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: tc.targetKeyspace.KeyspaceName, Keyspace: tc.targetVSchema})
+				require.NoError(t, err)
+				env.addTablet(t, ctx, 300, sequenceKeyspaceName, "0", topodatapb.TabletType_PRIMARY, true)
+				require.NoError(t, env.ts.RebuildSrvVSchema(ctx, nil))
+				// The backing table doesn't exist yet either.
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(sequenceKeyspaceName, &queryResult{
+					query: "/select next_id from `vt_global-ks`.`t1_seq`.*",
+					err:   sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownTable, "Table 'vt_global-ks.t1_seq' doesn't exist"),
+				})
+			}
 			if tc.req.Direction == int32(DirectionForward) {
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
@@ -2400,6 +2475,12 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
+			if tc.targetVSchema != nil {
+				// A dry run changes no vschema.
+				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
+				require.NoError(t, err)
+				assert.Empty(t, kvs.Tables)
+			}
 		})
 	}
 }

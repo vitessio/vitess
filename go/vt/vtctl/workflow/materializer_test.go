@@ -950,6 +950,30 @@ func TestShardedAutoIncHandling(t *testing.T) {
 					require.NoError(t, err)
 					require.True(t, proto.Equal(targetVSchema, tc.wantTargetVSchema), "got: %v, want: %v", targetVSchema, tc.wantTargetVSchema)
 				}
+				if tc.name == "replace" {
+					// Feed Create's actual output into the SwitchTraffic metadata
+					// path. Qualification must not skip backing VSchema setup.
+					globalVSchema, err := env.ws.ts.GetVSchema(ctx, tc.globalKeyspace)
+					require.NoError(t, err)
+					require.Empty(t, globalVSchema.Tables)
+					ts := &trafficSwitcher{
+						ws: env.ws, targetKeyspace: ms.TargetKeyspace, tables: []string{tableName},
+						targets: map[string]*MigrationTarget{
+							"-80": {primary: &topo.TabletInfo{Tablet: env.tablets[startingTargetTabletUID]}},
+						},
+					}
+					metadata, err := ts.getTargetSequenceMetadata(ctx)
+					require.NoError(t, err)
+					require.Contains(t, metadata, "t-1_seq")
+					assert.Equal(t, tc.globalKeyspace, metadata["t-1_seq"].backingTableKeyspace)
+					assert.True(t, metadata["t-1_seq"].registerInVSchema)
+					// SwitchTraffic then prepares the sequences, which adds it to
+					// the global keyspace's vschema.
+					require.NoError(t, ts.prepareTargetSequences(ctx, metadata))
+					globalVSchema, err = env.ws.ts.GetVSchema(ctx, tc.globalKeyspace)
+					require.NoError(t, err)
+					assert.Equal(t, map[string]*vschemapb.Table{"t-1_seq": {Type: "sequence"}}, globalVSchema.Tables)
+				}
 			}
 		})
 	}
