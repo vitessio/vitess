@@ -19,7 +19,7 @@ limitations under the License.
 package tabletenv
 
 import (
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
@@ -65,7 +65,7 @@ func (te *testEnv) Environment() *vtenv.Environment { return te.env }
 
 func (te *testEnv) LogError() {
 	if x := recover(); x != nil {
-		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error("Uncaught panic", slog.Any("panic", x), slog.String("stack", string(tb.Stack(4))))
 		te.Stats().InternalErrors.Add("Panic", 1)
 	}
 }

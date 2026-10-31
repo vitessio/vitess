@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"slices"
 	"sync"
@@ -235,7 +236,11 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, ptsTime
 		state = StateNotConnected
 	}
 
-	log.Info(fmt.Sprintf("Starting transition to %v %v, primary term start timestamp: %v", tabletType, state, ptsTimestamp))
+	log.Info("Starting transition",
+		slog.String("tablet_type", tabletType.String()),
+		slog.String("state", state.String()),
+		slog.Time("primary_term_start_time", ptsTimestamp),
+	)
 	if sm.mustTransition(tabletType, ptsTimestamp, state, reason) {
 		return sm.execTransition(tabletType, state)
 	}
@@ -288,12 +293,21 @@ func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state s
 	sm.transitionErr = err
 	sm.mu.Unlock()
 	if err != nil {
-		sm.retryTransition(fmt.Sprintf("Error transitioning to the desired state: %v, %v, will keep retrying: %v", tabletType, state, err))
+		sm.retryTransition(func() {
+			log.Error("Error transitioning to the desired state, will keep retrying",
+				slog.String("tablet_type", tabletType.String()),
+				slog.String("state", state.String()),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
+			)
+		})
 	}
 	return err
 }
 
-func (sm *stateManager) retryTransition(message string) {
+// retryTransition starts retrying the transition unless it's already being
+// retried. logFailure is called only when a retry starts.
+func (sm *stateManager) retryTransition(logFailure func()) {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if sm.retrying {
@@ -301,7 +315,7 @@ func (sm *stateManager) retryTransition(message string) {
 	}
 	sm.retrying = true
 
-	log.Error(message)
+	logFailure()
 	go func() {
 		for {
 			time.Sleep(transitionRetryInterval)
@@ -364,7 +378,9 @@ func (sm *stateManager) checkMySQL() {
 		// Serving state. The retry will only succeed once MySQL is reachable again
 		// Until then EnsureConnectionAndDB will error out.
 		sm.setWantState(StateServing)
-		sm.retryTransition(fmt.Sprintf("Cannot connect to MySQL, shutting down query service: %v", err))
+		sm.retryTransition(func() {
+			log.Error("Cannot connect to MySQL, shutting down query service", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+		})
 	}()
 }
 
@@ -616,7 +632,7 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		}
 		// Prevent any new queries from being added before we kill all the queries in the list.
 		sm.markClusterAction(ClusterActionNoQueries)
-		log.Info(fmt.Sprintf("Grace Period %v exceeded. Killing all OLTP queries.", sm.shutdownGracePeriod))
+		log.Info("Grace Period exceeded. Killing all OLTP queries.", slog.Duration("shutdown_grace_period", sm.shutdownGracePeriod))
 		sm.statelessql.TerminateAll()
 		log.Info("Killed all stateless OLTP queries.")
 		sm.statefulql.TerminateAll()
@@ -665,15 +681,20 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 // setState changes the state and logs the event.
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
 	defer logInitTime.Do(func() {
-		log.Info(fmt.Sprintf("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds()))
+		log.Info("Tablet Init finished", slog.Duration("duration", time.Since(servenv.GetInitStartTime())))
 	})
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if tabletType == topodatapb.TabletType_UNKNOWN {
 		tabletType = sm.wantTabletType
 	}
-	log.Info(fmt.Sprintf("TabletServer transition: %v -> %v for tablet %s:%s/%s", sm.stateStringLocked(sm.target.TabletType, sm.state), sm.stateStringLocked(tabletType, state),
-		sm.target.Cell, sm.target.Keyspace, sm.target.Shard))
+	log.Info("TabletServer transition",
+		slog.String("from_state", sm.stateStringLocked(sm.target.TabletType, sm.state)),
+		slog.String("to_state", sm.stateStringLocked(tabletType, state)),
+		slog.String("cell", sm.target.Cell),
+		slog.String("keyspace", sm.target.Keyspace),
+		slog.String("shard", sm.target.Shard),
+	)
 	sm.handleTransitionGracePeriod(tabletType)
 	sm.target.TabletType = tabletType
 	if sm.state == StateNotConnected {
@@ -739,13 +760,13 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 	lag, err := sm.rt.Status()
 	if err != nil {
 		if sm.replHealthy {
-			log.Info(fmt.Sprintf("Going unhealthy due to replication error: %v", err))
+			log.Info("Going unhealthy due to replication error", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 		sm.replHealthy = false
 	} else {
 		if lag > time.Duration(sm.unhealthyThreshold.Load()) {
 			if sm.replHealthy {
-				log.Info(fmt.Sprintf("Going unhealthy due to high replication lag: %v", lag))
+				log.Info("Going unhealthy due to high replication lag", slog.Duration("replication_lag", lag))
 			}
 			sm.replHealthy = false
 		} else {

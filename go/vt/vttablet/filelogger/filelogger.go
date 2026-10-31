@@ -18,6 +18,8 @@ limitations under the License.
 package filelogger
 
 import (
+	"log/slog"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/streamlog"
@@ -61,7 +63,7 @@ func (l *fileLogger) Stop() {
 
 // Init starts logging to the given file path.
 func Init(path string) (FileLogger, error) {
-	log.Info("Logging queries to file " + path)
+	log.Info("Logging queries to file", slog.String("path", path))
 	logChan, err := tabletenv.StatsLogger.LogToFile(path, streamlog.GetFormatter(tabletenv.StatsLogger))
 	if err != nil {
 		return nil, err

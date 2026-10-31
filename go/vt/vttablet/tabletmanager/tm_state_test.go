@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -28,6 +29,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -443,10 +445,23 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 		Uid:  2,
 	}
 
+	logs := logtest.Capture(t, slog.LevelInfo)
+	assertErrorLogged := func(msg string) {
+		t.Helper()
+		record := logs.Record(t, msg)
+		assert.Equal(t, "mocking resource exhaustion error ", record["error"])
+		assert.Equal(t, "RESOURCE_EXHAUSTED", record["error_code"])
+	}
+
 	// change table type to primary
 	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite)
 	errMsg := "Cannot start query service: Code: RESOURCE_EXHAUSTED\nmocking resource exhaustion error \n: mocking resource exhaustion error "
 	require.EqualError(t, err, errMsg)
+	assertErrorLogged("Cannot start query service")
+	record := logs.Record(t, "Changing Tablet Type")
+	assert.Equal(t, "PRIMARY", record["tablet_type"])
+	assert.Equal(t, "cell1-0000000002", record["tablet"])
+	logs.Reset()
 
 	ti, err := ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
@@ -459,6 +474,8 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone)
 	require.EqualError(t, err, errMsg)
+	assertErrorLogged("Cannot start query service")
+	logs.Reset()
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	// even though SetServingType failed. It still is expected to publish the new table type
@@ -473,6 +490,9 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	err = tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_SPARE, DBActionNone)
 	errMsg = "SetServingType(serving=false) failed: Code: RESOURCE_EXHAUSTED\nmocking resource exhaustion error \n: mocking resource exhaustion error "
 	require.EqualError(t, err, errMsg)
+	assertErrorLogged("SetServingType(serving=false) failed")
+	record = logs.Record(t, "Disabling query service")
+	assert.Equal(t, "not a serving tablet type(SPARE)", record["reason"])
 	ti, err = ts.GetTablet(ctx, alias)
 	require.NoError(t, err)
 	// even though SetServingType failed. It still is expected to publish the new table type
@@ -481,6 +501,29 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, "spare", statsTabletType.Get())
 	assert.Len(t, statsTabletTypeCount.Counts(), 3)
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["spare"])
+}
+
+// TestStateDenyListFailureLogsError checks the error logged when the denied
+// tables can't be resolved, and that the returned error is unchanged.
+func TestStateDenyListFailureLogsError(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 3, "ks", "0", nil)
+	defer tm.Stop()
+	tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon).SchemaFunc = func() (*tabletmanagerdatapb.SchemaDefinition, error) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "schema unavailable")
+	}
+	tm.tmState.mu.Lock()
+	tm.tmState.deniedTables[topodatapb.TabletType_RDONLY] = []string{"t1"}
+	tm.tmState.mu.Unlock()
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_RDONLY, DBActionNone)
+	require.EqualError(t, err, "Cannot update denied tables rule: Code: UNAVAILABLE\nschema unavailable\n: schema unavailable")
+
+	record := logs.Record(t, "Cannot update denied tables rule")
+	assert.Equal(t, "schema unavailable", record["error"])
+	assert.Equal(t, "UNAVAILABLE", record["error_code"])
 }
 
 // TestChangeTypeErrorWhileWritingToTopo tests the case where we fail while writing to the topo-server
@@ -588,6 +631,7 @@ func TestPublishStateNew(t *testing.T) {
 	// If hostname doesn't match, it should not update.
 	tab3 := tm.Tablet()
 	tab3.Hostname = "tab3"
+	logs := logtest.Capture(t, slog.LevelError)
 	tm.tmState.mu.Lock()
 	tm.tmState.tablet = tab3
 	tm.tmState.publishStateLocked(ctx)
@@ -595,12 +639,17 @@ func TestPublishStateNew(t *testing.T) {
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	utils.MustMatch(t, tab2, ttablet.Tablet)
+	record := logs.Record(t, "Tablet record ownership check failed")
+	assert.Contains(t, record["error"], "tablet record was taken over by another process")
 
 	// Same for retryPublish.
+	logs.Reset()
 	tm.tmState.retryPublish()
 	ttablet, err = tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	require.NoError(t, err)
 	utils.MustMatch(t, tab2, ttablet.Tablet)
+	record = logs.Record(t, "Tablet record ownership check failed")
+	assert.Contains(t, record["error"], "tablet record was taken over by another process")
 }
 
 func TestPublishDeleted(t *testing.T) {

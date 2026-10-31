@@ -19,6 +19,7 @@ package semisyncmonitor
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -199,7 +200,7 @@ func (m *Monitor) checkAndFixSemiSyncBlocked() {
 		m.errorCount.Add(1)
 		// If we are unable to determine whether the primary is blocked or not,
 		// then we can just abort the function and try again later.
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed to check if primary is blocked on semi-sync: %v", err))
+		log.Error("SemiSync Monitor: failed to check if primary is blocked on semi-sync", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 	// Set the isBlocked state.
@@ -268,7 +269,7 @@ func (m *Monitor) WaitUntilSemiSyncUnblocked(ctx context.Context) error {
 		log.Info("Finished waiting for semi-sync to be unblocked")
 		return nil
 	case <-ctx.Done():
-		log.Info("Error while waiting for semi-sync to be unblocked - " + ctx.Err().Error())
+		log.Info("Error while waiting for semi-sync to be unblocked", slog.Any("error", ctx.Err()))
 		return ctx.Err()
 	}
 }
@@ -373,7 +374,7 @@ func (m *Monitor) write() {
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
 		m.errorCount.Add(1)
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table: %v", err))
+		log.Error("SemiSync Monitor: failed to get a connection when writing to semisync_heartbeat table", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 	err = m.setLockWaitTimeout(conn)
@@ -383,7 +384,7 @@ func (m *Monitor) write() {
 	conn.Recycle()
 	if err != nil {
 		m.errorCount.Add(1)
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed to write to semisync_heartbeat table: %v", err))
+		log.Error("SemiSync Monitor: failed to write to semisync_heartbeat table", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	} else {
 		// One of the writes went through without an error.
 		// This means that we aren't blocked on semi-sync anymore.
@@ -415,7 +416,7 @@ func (m *Monitor) clearAllData() {
 	conn, err := m.appPool.Get(ctx)
 	if err != nil {
 		m.errorCount.Add(1)
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed get a connection to clear semisync_heartbeat table: %v", err))
+		log.Error("SemiSync Monitor: failed to get a connection to clear semisync_heartbeat table", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 	defer conn.Recycle()
@@ -425,7 +426,7 @@ func (m *Monitor) clearAllData() {
 	}
 	if err != nil {
 		m.errorCount.Add(1)
-		log.Error(fmt.Sprintf("SemiSync Monitor: failed to clear semisync_heartbeat table: %v", err))
+		log.Error("SemiSync Monitor: failed to clear semisync_heartbeat table", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 }
 

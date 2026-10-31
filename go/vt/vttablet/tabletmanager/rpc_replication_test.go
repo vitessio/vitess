@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -466,6 +468,7 @@ func TestDemotePrimaryStalled(t *testing.T) {
 		QueryServiceControl: qsc,
 		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
 	}
+	logs := logtest.Capture(t, slog.LevelError)
 
 	go func() {
 		tm.demotePrimary(t.Context(), false /* revertPartialFailure */, false /* force */)
@@ -475,6 +478,9 @@ func TestDemotePrimaryStalled(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return qsc.primaryStalled.Load()
 	}, 5*time.Second, 100*time.Millisecond)
+	logs.Wait(t, "DemotePrimary seems to be stalled. Collecting more information.")
+	stack := logs.Wait(t, "Stack trace")
+	assert.Contains(t, stack["stack"], "demotePrimary")
 
 	// Unblock the DemotePrimary call by closing the channel.
 	close(qsc.qsWaitChan)
@@ -1004,9 +1010,14 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 
 		tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), fakeMysqlDaemon, ts)
 
+		logs := logtest.Capture(t, slog.LevelInfo)
 		// InitReplica should recover the start failure and still complete.
 		err = tm.InitReplica(ctx, parent.Alias, "", 0, false)
 		require.NoError(t, err)
+		record := logs.Record(t, "InitReplica")
+		assert.Equal(t, "cell1-0000000200", record["parent_tablet"])
+		assert.EqualValues(t, 0, record["time_created_ns"])
+		assert.Equal(t, false, record["semi_sync"])
 		require.Equal(t, "mysql-primary", fakeMysqlDaemon.CurrentSourceHost)
 		require.EqualValues(t, 3306, fakeMysqlDaemon.CurrentSourcePort)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
@@ -1099,8 +1110,14 @@ func TestSetReplicationSourceRecovery(t *testing.T) {
 
 		// SetReplicationSource should recover the source-change error, then
 		// leave the replica configured for the new primary.
+		logs := logtest.Capture(t, slog.LevelInfo)
 		err = tm.SetReplicationSource(ctx, parent.Alias, 0, "", false, false, 0)
 		require.NoError(t, err)
+		record := logs.Record(t, "SetReplicationSource")
+		assert.Equal(t, "cell1-0000000200", record["parent_tablet"])
+		assert.Equal(t, false, record["force_start_replication"])
+		assert.Equal(t, false, record["semi_sync"])
+		assert.EqualValues(t, 0, record["time_created_ns"])
 
 		require.Equal(t, 2, setSourceCalls)
 		require.Equal(t, "mysql-new-primary", fakeMysqlDaemon.CurrentSourceHost)
@@ -1652,4 +1669,45 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	snap := tm.shardPeerHealthSnapshot()
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
+}
+
+// TestPopulateReparentJournalLogsEachValueOnce checks that the journal entry's
+// values are logged once each, with the primary as an alias.
+func TestPopulateReparentJournalLogsEachValueOnce(t *testing.T) {
+	tm := newTestReplicationTM(newTestTablet(t, 100, "ks", "0", nil), newTestMysqlDaemon(t, 1), nil)
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	// The position doesn't parse, so the call returns once it has logged.
+	err := tm.PopulateReparentJournal(t.Context(), 42, "PlannedReparentShard", &topodatapb.TabletAlias{Cell: "cell1", Uid: 200}, "bogus")
+	require.Error(t, err)
+
+	record := logs.Record(t, "PopulateReparentJournal")
+	assert.Equal(t, map[string]any{
+		"time":            record["time"],
+		"level":           "INFO",
+		"msg":             "PopulateReparentJournal",
+		"action":          "PlannedReparentShard",
+		"primary_tablet":  "cell1-0000000200",
+		"position":        "bogus",
+		"time_created_ns": float64(42),
+	}, record)
+}
+
+func TestReplicationWaitRPCsLogWaitTimeout(t *testing.T) {
+	tm := &TabletManager{_waitForGrantsComplete: make(chan struct{})}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	_, err := tm.StopReplicationMinimum(ctx, "MySQL56/a:1-5", 3*time.Second)
+	require.ErrorIs(t, err, context.Canceled)
+	err = tm.StartReplicationUntilAfter(ctx, "MySQL56/a:1-6", 4*time.Second)
+	require.ErrorIs(t, err, context.Canceled)
+
+	record := logs.Record(t, "StopReplicationMinimum")
+	assert.Equal(t, "MySQL56/a:1-5", record["position"])
+	assert.EqualValues(t, (3 * time.Second).Nanoseconds(), record["wait_timeout"])
+	record = logs.Record(t, "StartReplicationUntilAfter")
+	assert.Equal(t, "MySQL56/a:1-6", record["position"])
+	assert.EqualValues(t, (4 * time.Second).Nanoseconds(), record["wait_timeout"])
 }

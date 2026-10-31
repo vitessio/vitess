@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"syscall"
@@ -208,7 +209,7 @@ func (ts *tmState) prepareForDisableQueryService(ctx context.Context, servType t
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	log.Info(fmt.Sprintf("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String()))
+	log.Info("Changing Tablet Type", slog.String("tablet_type", tabletType.String()), slog.String("tablet", topoproto.TabletAliasString(ts.tablet.Alias)))
 
 	var primaryTermStartTime *vttime.Time
 	if tabletType == topodatapb.TabletType_PRIMARY {
@@ -217,7 +218,11 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		// Update the tablet record first.
 		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, primaryTermStartTime)
 		if err != nil {
-			log.Error(fmt.Sprintf("Error changing type in topo record for tablet %s :- %v\nWill keep trying to read from the toposerver", topoproto.TabletAliasString(ts.tm.tabletAlias), err))
+			log.Error("Error changing type in topo record for tablet. Will keep trying to read from the toposerver",
+				slog.String("tablet", topoproto.TabletAliasString(ts.tm.tabletAlias)),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
+			)
 			// In case of a topo error, we aren't sure if the data has been written or not.
 			// We must read the data again and verify whether the previous write succeeded or not.
 			// The only way to guarantee safety is to keep retrying read until we succeed
@@ -277,7 +282,7 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 func (ts *tmState) ChangeTabletTags(ctx context.Context, tabletTags map[string]string) {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	log.Info(fmt.Sprintf("Changing Tablet Tags: %v for %s", tabletTags, ts.tablet.Alias.String()))
+	log.Info("Changing Tablet Tags", slog.Any("tablet_tags", tabletTags), slog.String("tablet", topoproto.TabletAliasString(ts.tablet.Alias)))
 
 	ts.tablet.Tags = tabletTags
 	ts.publishStateLocked(ctx)
@@ -316,7 +321,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	// before other services are shutdown.
 	reason := ts.canServe(ts.tablet.Type)
 	if reason != "" {
-		log.Info(fmt.Sprintf("Disabling query service: %v", reason))
+		log.Info("Disabling query service", slog.String("reason", reason))
 		// SetServingType can result in error. Although we have forever retries to fix these transient errors
 		// but, under certain conditions these errors are non-transient (see https://github.com/vitessio/vitess/issues/10145).
 		// There is no way to distinguish between retry (transient) and non-retryable errors, therefore we will
@@ -325,7 +330,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		// to propagate error to client hence no changes there but we will propagate error from 'ChangeTabletType' to client.
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, ptsTime, false, reason); err != nil {
 			errStr := fmt.Sprintf("SetServingType(serving=false) failed: %v", err)
-			log.Error(errStr)
+			log.Error("SetServingType(serving=false) failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			// No need to short circuit. Apply all steps and return error in the end.
 			returnErr = vterrors.Wrap(err, errStr)
 		}
@@ -333,7 +338,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 
 	if err := ts.applyDenyList(ctx); err != nil {
 		errStr := fmt.Sprintf("Cannot update denied tables rule: %v", err)
-		log.Error(errStr)
+		log.Error("Cannot update denied tables rule", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		// No need to short circuit. Apply all steps and return error in the end.
 		returnErr = vterrors.Wrap(err, errStr)
 	}
@@ -374,7 +379,7 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	if reason == "" {
 		if err := ts.tm.QueryServiceControl.SetServingType(ts.tablet.Type, ptsTime, true, ""); err != nil {
 			errStr := fmt.Sprintf("Cannot start query service: %v", err)
-			log.Error(errStr)
+			log.Error("Cannot start query service", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			returnErr = vterrors.Wrap(err, errStr)
 		}
 	}
@@ -407,7 +412,7 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 		// Verify that at least one table matches the wildcards, so
 		// that we don't add a rule to deny all tables
 		if len(tables) > 0 {
-			log.Info(fmt.Sprintf("Denying tables %v", strings.Join(tables, ", ")))
+			log.Info("Denying tables", slog.String("tables", strings.Join(tables, ",")))
 			qr := rules.NewQueryRule("enforce denied tables", "denied_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)
@@ -430,13 +435,16 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 
 	loadRuleErr := ts.tm.QueryServiceControl.SetQueryRules(denyListQueryList, denyListRules)
 	if loadRuleErr != nil {
-		log.Warn(fmt.Sprintf("Fail to load query rule set %s: %s", denyListQueryList, loadRuleErr))
+		log.Warn("Fail to load query rule set", slog.String("query_rule_set", denyListQueryList), slog.Any("error", loadRuleErr))
 	}
 	return nil
 }
 
 func (ts *tmState) publishStateLocked(ctx context.Context) {
-	log.Info(fmt.Sprintf("Publishing state: %v", ts.tablet))
+	log.Info("Publishing state",
+		slog.String("tablet", topoproto.TabletAliasString(ts.tablet.Alias)),
+		slog.String("tablet_record", fmt.Sprintf("%v", ts.tablet)),
+	)
 	// If retry is in progress, there's nothing to do.
 	if ts.isPublishing {
 		return
@@ -446,7 +454,7 @@ func (ts *tmState) publishStateLocked(ctx context.Context) {
 	defer cancel()
 	_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if err := topotools.CheckOwnership(tablet, ts.tablet); err != nil {
-			log.Error(fmt.Sprint(err))
+			log.Error("Tablet record ownership check failed", slog.Any("error", err))
 			return topo.NewError(topo.NoUpdateNeeded, "")
 		}
 		proto.Reset(tablet)
@@ -459,7 +467,7 @@ func (ts *tmState) publishStateLocked(ctx context.Context) {
 			servenv.ExitChan <- syscall.SIGTERM
 			return
 		}
-		log.Error(fmt.Sprintf("Unable to publish state to topo, will keep retrying: %v", err))
+		log.Error("Unable to publish state to topo, will keep retrying", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		ts.isPublishing = true
 		// Keep retrying until success.
 		go ts.retryPublish()
@@ -478,7 +486,7 @@ func (ts *tmState) retryPublish() {
 		ctx, cancel := context.WithTimeout(ts.ctx, topo.RemoteOperationTimeout)
 		_, err := ts.tm.TopoServer.UpdateTabletFields(ctx, ts.tm.tabletAlias, func(tablet *topodatapb.Tablet) error {
 			if err := topotools.CheckOwnership(tablet, ts.tablet); err != nil {
-				log.Error(fmt.Sprint(err))
+				log.Error("Tablet record ownership check failed", slog.Any("error", err))
 				return topo.NewError(topo.NoUpdateNeeded, "")
 			}
 			proto.Reset(tablet)
@@ -492,13 +500,16 @@ func (ts *tmState) retryPublish() {
 				servenv.ExitChan <- syscall.SIGTERM
 				return
 			}
-			log.Error(fmt.Sprintf("Unable to publish state to topo, will keep retrying: %v", err))
+			log.Error("Unable to publish state to topo, will keep retrying", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			ts.mu.Unlock()
 			time.Sleep(publishRetryInterval)
 			ts.mu.Lock()
 			continue
 		}
-		log.Info(fmt.Sprintf("Published state: %v", ts.tablet))
+		log.Info("Published state",
+			slog.String("tablet", topoproto.TabletAliasString(ts.tablet.Alias)),
+			slog.String("tablet_record", fmt.Sprintf("%v", ts.tablet)),
+		)
 		return
 	}
 }

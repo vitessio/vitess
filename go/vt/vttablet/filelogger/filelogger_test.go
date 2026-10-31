@@ -17,6 +17,7 @@ limitations under the License.
 package filelogger
 
 import (
+	"log/slog"
 	"os"
 	"path"
 	"testing"
@@ -26,17 +27,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
 // TestFileLog sends a stream of five query records to the plugin, and verifies that they are logged.
 func TestFileLog(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dir := t.TempDir()
 
 	logPath := path.Join(dir, "test.log")
 	logger, err := Init(logPath)
 	defer logger.Stop()
 	require.NoError(t, err)
+	assert.Equal(t, logPath, logs.Record(t, "Logging queries to file")["path"])
 
 	ctx := t.Context()
 

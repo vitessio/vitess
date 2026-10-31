@@ -20,12 +20,14 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"reflect"
 	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -33,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -358,14 +361,22 @@ func TestMessageManagerSendError(t *testing.T) {
 		return errors.New("intentional error")
 	})
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	postponech := make(chan string, 20)
 	tsv.SetChannel(postponech)
-	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL}})
+	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("id-sentinel"), sqltypes.NULL}})
 	<-ch
 
 	// Ensure Postpone got called.
 	got, want := <-postponech, "postpone"
 	assert.Equalf(t, want, got, "Postpone: %s, want %v", got, want)
+
+	// The send error is logged before postpone is called.
+	record := logs.Record(t, "messageManager - Error sending messages")
+	assert.Equal(t, "foo", record["table"])
+	assert.Contains(t, record["result"], "id-sentinel")
+	assert.Equal(t, "intentional error", record["error"])
+	assert.Equal(t, "UNKNOWN", record["error_code"])
 }
 
 func TestMessageManagerFieldSendError(t *testing.T) {
@@ -899,4 +910,59 @@ func (fv *fakeVStreamer) StreamResults(ctx context.Context, query string, send f
 		}
 	}
 	return nil
+}
+
+// endingVStreamer ends its first stream cleanly, its second with an error,
+// and keeps the third open until the context is done.
+type endingVStreamer struct {
+	fakeVStreamer
+	calls atomic.Int64
+}
+
+func (ev *endingVStreamer) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
+	filter *binlogdatapb.Filter, throttlerApp throttlerapp.Name, send func([]*binlogdatapb.VEvent) error, options *binlogdatapb.VStreamOptions,
+) error {
+	switch ev.calls.Add(1) {
+	case 1:
+		return nil
+	case 2:
+		return errors.New("stream failed")
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// TestMessageManagerVStreamEndedLogsErrorOnlyWhenSet checks that a stream that
+// ends cleanly is logged without an error.
+func TestMessageManagerVStreamEndedLogsErrorOnlyWhenSet(t *testing.T) {
+	// The manager starts stats goroutines that outlive the test, so it's
+	// created outside the bubble.
+	mm := newMessageManager(newFakeTabletServer(), &endingVStreamer{}, newMMTable(), semaphore.NewWeighted(1))
+	logs := logtest.Capture(t, slog.LevelInfo)
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		done := make(chan struct{})
+		go func() {
+			mm.runVStream(ctx)
+			close(done)
+		}()
+		// Both retries sleep 5 seconds; the bubble's clock skips them.
+		time.Sleep(11 * time.Second)
+		cancel()
+		<-done
+
+		var ended []map[string]any
+		for _, record := range logs.Records(t) {
+			if record["msg"] == "messageManager - VStream ended, retrying in 5 seconds" {
+				ended = append(ended, record)
+			}
+		}
+		if assert.Len(t, ended, 2) {
+			assert.Equal(t, "foo", ended[0]["table"])
+			assert.NotContains(t, ended[0], "error")
+			assert.NotContains(t, ended[0], "error_code")
+			assert.Equal(t, "stream failed", ended[1]["error"])
+			assert.Equal(t, "UNKNOWN", ended[1]["error_code"])
+		}
+	})
 }

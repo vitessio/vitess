@@ -20,8 +20,8 @@ package tabletconntest
 
 import (
 	"context"
-	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -1088,7 +1088,6 @@ func SetProtocol(name string, protocol string) {
 	servenv.ParseFlagsForTests(name)
 
 	if err := pflag.Set(tabletProtocolFlagName, protocol); err != nil {
-		msg := "failed to set flag %q to %q: %v"
-		log.Error(fmt.Sprintf(msg, tabletProtocolFlagName, protocol, err))
+		log.Error("failed to set flag", slog.String("flag", tabletProtocolFlagName), slog.String("protocol", protocol), slog.Any("error", err))
 	}
 }

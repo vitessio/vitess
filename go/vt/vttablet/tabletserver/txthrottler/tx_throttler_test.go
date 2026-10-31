@@ -22,6 +22,7 @@ package txthrottler
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -30,6 +31,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -55,6 +57,23 @@ func TestDisabledThrottler(t *testing.T) {
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.Zero(t, throttlerImpl.throttlerRunning.Get())
 	throttler.Close()
+}
+
+func TestThrottlerInitLogsHealthCheckCells(t *testing.T) {
+	ts := memorytopo.NewServer(t.Context(), "cell1", "cell2")
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.EnableTxThrottler = true
+	cfg.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}
+	cfg.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
+
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name())
+	logs := logtest.Capture(t, slog.LevelInfo)
+	NewTxThrottler(env, ts)
+
+	initialized := logs.Record(t, "Initialized transaction throttler")
+	assert.Equal(t, "rdonly,replica", initialized["tablet_types"])
+	assert.Equal(t, "cell1,cell2", initialized["health_check_cells"])
+	assert.NotContains(t, initialized, "cells_from_topo")
 }
 
 func TestEnabledThrottler(t *testing.T) {
@@ -128,9 +147,15 @@ func TestEnabledThrottler(t *testing.T) {
 	cfg.TxThrottlerTabletTypes = &topoproto.TabletTypeListFlag{topodatapb.TabletType_REPLICA}
 
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name())
+	logs := logtest.Capture(t, slog.LevelInfo)
 	throttler := NewTxThrottler(env, ts)
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.NotNil(t, throttlerImpl)
+	initialized := logs.Record(t, "Initialized transaction throttler")
+	assert.Equal(t, "replica", initialized["tablet_types"])
+	assert.Equal(t, true, initialized["cells_from_topo"])
+	assert.EqualValues(t, cfg.TxThrottlerTopoRefreshInterval.Nanoseconds(), initialized["topo_refresh_interval"])
+	assert.Equal(t, cfg.TxThrottlerConfig.Get().String(), initialized["tx_throttler_config"])
 	throttler.InitDBConfig(&querypb.Target{
 		Cell:     "cell1",
 		Keyspace: "keyspace",

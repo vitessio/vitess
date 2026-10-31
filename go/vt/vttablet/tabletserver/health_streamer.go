@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -303,7 +304,7 @@ func (hs *healthStreamer) MakePrimary(serving bool) {
 	if serving && hs.signalWhenSchemaChange {
 		hs.se.RegisterNotifier("healthStreamer", func(full map[string]*schema.Table, created, altered, dropped []*schema.Table, udfsChanged bool) {
 			if err := hs.reload(created, altered, dropped, udfsChanged); err != nil {
-				log.Error(fmt.Sprintf("periodic schema reload failed in health stream: %v", err))
+				log.Error("periodic schema reload failed in health stream", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}, false)
 	}

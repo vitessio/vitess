@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -91,11 +92,11 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			if event != nil {
 				if event.Err != nil {
 					// The watch failed. Stop it so we start a new one if needed.
-					log.Error(fmt.Sprintf("Shard watch failed: %v", event.Err))
+					log.Error("Shard watch failed", slog.Any("error", event.Err), slog.String("error_code", vterrors.Code(event.Err).String()))
 					shardWatch.stop()
 				}
 			} else {
-				log.Info(fmt.Sprintf("Got a nil event from the shard watcher for %s. This should not happen.", tm.tabletAlias))
+				log.Info("Got a nil event from the shard watcher. This should not happen.", slog.String("tablet", topoproto.TabletAliasString(tm.tabletAlias)))
 			}
 		case <-ctx.Done():
 			// Our context was cancelled. Terminate the loop.
@@ -114,7 +115,10 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			// This is a failsafe code because we've seen races that can cause
 			// primary term start time to become zero.
 			if tablet.PrimaryTermStartTime == nil {
-				log.Error(fmt.Sprintf("PrimaryTermStartTime should not be nil: %v", tablet))
+				log.Error("PrimaryTermStartTime should not be nil",
+					slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+					slog.String("tablet_record", fmt.Sprintf("%v", tablet)),
+				)
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(shardSyncRetryDelay)
 				continue
@@ -123,7 +127,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			// Fetch the start time from the record we just got, because the tm's tablet can change.
 			primaryAlias, shouldDemote, err := syncShardPrimary(ctx, tm.TopoServer, tablet, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC())
 			if err != nil {
-				log.Error(fmt.Sprintf("Failed to sync shard record: %v", err))
+				log.Error("Failed to sync shard record", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(shardSyncRetryDelay)
 				continue
@@ -133,7 +137,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				// This means that we should end our term, since someone else must have claimed primaryship
 				// and wrote to the shard record
 				if err := tm.endPrimaryTerm(ctx, primaryAlias); err != nil {
-					log.Error(fmt.Sprintf("Failed to end primary term: %v", err))
+					log.Error("Failed to end primary term", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 					// Start retry timer and go back to sleep.
 					retryChan = time.After(shardSyncRetryDelay)
 					continue
@@ -150,7 +154,7 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				continue
 			}
 			if err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
-				log.Error(fmt.Sprintf("Failed to start shard watch: %v", err))
+				log.Error("Failed to start shard watch", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(shardSyncRetryDelay)
 				continue
@@ -195,8 +199,10 @@ func syncShardPrimary(ctx context.Context, ts *topo.Server, tablet *topodatapb.T
 			return topo.NewError(topo.NoUpdateNeeded, si.ShardName())
 		}
 
-		aliasStr := topoproto.TabletAliasString(tablet.Alias)
-		log.Info(fmt.Sprintf("Updating shard record: primary_alias=%v, primary_term_start_time=%v", aliasStr, PrimaryTermStartTime))
+		log.Info("Updating shard record",
+			slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+			slog.Time("primary_term_start_time", PrimaryTermStartTime),
+		)
 		si.PrimaryAlias = tablet.Alias
 		si.PrimaryTermStartTime = protoutil.TimeToProto(PrimaryTermStartTime)
 		return nil
@@ -222,7 +228,11 @@ func syncShardPrimary(ctx context.Context, ts *topo.Server, tablet *topodatapb.T
 // We just directly update our tablet type to REPLICA.
 func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topodatapb.TabletAlias) error {
 	primaryAliasStr := topoproto.TabletAliasString(primaryAlias)
-	log.Warn(fmt.Sprintf("Another tablet (%v) has won primary election. Stepping down to %v.", primaryAliasStr, tm.baseTabletType))
+	steppingDownAttrs := []slog.Attr{slog.String("tablet_type", tm.baseTabletType.String())}
+	if primaryAlias != nil {
+		steppingDownAttrs = append(steppingDownAttrs, slog.String("primary_tablet", primaryAliasStr))
+	}
+	log.Warn("Another tablet has won primary election. Stepping down.", steppingDownAttrs...)
 
 	if mysqlctl.DisableActiveReparents {
 		// Don't touch anything at the MySQL level. Just update tablet state.
@@ -248,7 +258,7 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	}
 	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelSetPrimary()
-	log.Info(fmt.Sprintf("Attempting to reparent self to new primary %v.", primaryAliasStr))
+	log.Info("Attempting to reparent self to new primary.", slog.String("primary_tablet", primaryAliasStr))
 	if primaryAlias == nil {
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err

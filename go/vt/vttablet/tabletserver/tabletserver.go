@@ -370,7 +370,7 @@ func (tsv *TabletServer) Environment() *vtenv.Environment {
 // LogError satisfies tabletenv.Env.
 func (tsv *TabletServer) LogError() {
 	if x := recover(); x != nil {
-		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error("Uncaught panic", slog.Any("panic", x), slog.String("stack", string(tb.Stack(4))))
 		tsv.stats.InternalErrors.Add("Panic", 1)
 	}
 }
@@ -417,9 +417,9 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 		for range sigChan {
 			err := tsv.initACL(tableACLConfigFile)
 			if err != nil {
-				log.Error(fmt.Sprintf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err))
+				log.Error("Error reloading ACL config file in SIGHUP handler", slog.String("path", tableACLConfigFile), slog.Any("error", err))
 			} else {
-				log.Info(fmt.Sprintf("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile))
+				log.Info("Successfully reloaded ACL file in SIGHUP handler", slog.String("path", tableACLConfigFile))
 			}
 		}
 	}()
@@ -645,8 +645,8 @@ func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions)
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil {
-		log.Error(fmt.Sprintf("The value of the %s query directive could not be converted to integer, using the "+
-			"default value %d. Error was: %s", sqlparser.DirectivePriority, priority, err))
+		log.Error("The value of the "+sqlparser.DirectivePriority+" query directive could not be converted to integer, using the default value",
+			slog.Int("default_priority", priority), slog.Any("error", err))
 
 		return priority
 	}
@@ -1280,7 +1280,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	sql, _ = tsv.env.Parser().SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
-		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
+		logComputeRowSerializerKey.Error("failed to get plan for query", tsv.queryLogAttr(sql, bindVariables), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return "", ""
 	}
 
@@ -1300,13 +1300,26 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 
 	where, err := plan.WhereClause.GenerateQuery(bindVariables, nil)
 	if err != nil {
-		logComputeRowSerializerKey.Errorf("failed to substitute bind vars in where clause: %v query: %v bind vars: %v", err, sql, bindVariables)
+		logComputeRowSerializerKey.Error("failed to substitute bind vars in where clause",
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+			tsv.queryLogAttr(sql, bindVariables),
+		)
 		return "", ""
 	}
 
 	// Example: table1 where id = 1 and sub_id = 2
 	key := fmt.Sprintf("%s%s", tableName, where)
 	return key, tableName.String()
+}
+
+// queryLogAttr returns the query attribute as convertAndLogError logs it: bind
+// variables are redacted when SanitizeLogMessages is set. The value is built
+// only if the record is written.
+func (tsv *TabletServer) queryLogAttr(sql string, bindVariables map[string]*querypb.BindVariable) slog.Attr {
+	return slog.Any("query", log.LazyString(func() string {
+		return queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
+	}))
 }
 
 // MessageStream streams messages from the requested table.
@@ -2023,18 +2036,15 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		// the log message is controlled by SanitizeLogMessages.
 		// We are handling an unrecoverable panic, so the cost of the dual message handling is
 		// not a concern.
-		var messagef, logMessage, query, truncatedQuery string
-		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.env.Parser())
+		stack := tb.Stack(4) /* Skip the last 4 boiler-plate frames. */
+		messagef := fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, stack)
+		query := queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.env.Parser())
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, query))
-		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true, tsv.env.Parser())
-			logMessage = fmt.Sprintf(messagef, truncatedQuery)
-		} else {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
-			logMessage = fmt.Sprintf(messagef, truncatedQuery)
-		}
-		log.Error(logMessage)
+		log.Error("Uncaught panic",
+			slog.String("query", queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())),
+			slog.Any("panic", x),
+			slog.String("stack", string(stack)),
+		)
 		tsv.stats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
@@ -2063,18 +2073,8 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		callerID = fmt.Sprintf(" (CallerID: %s)", cid.Username)
 	}
 
-	logMethod := log.Error
-	// Suppress or demote some errors in logs.
-	switch errCode {
-	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
-		logMethod = nil
-	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-		logMethod = func(msg string, _ ...slog.Attr) { logPoolFull.Errorf("%s", msg) }
-	case vtrpcpb.Code_ABORTED:
-		logMethod = log.Warn
-	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
-		logMethod = log.Info
-	}
+	// Suppress some errors in logs. Others are demoted below.
+	logged := errCode != vtrpcpb.Code_FAILED_PRECONDITION && errCode != vtrpcpb.Code_ALREADY_EXISTS
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
 	// keep the error number and sql state.
@@ -2085,31 +2085,49 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	// 1. FAILED_PRECONDITION errors. These are caused when a failover is in progress.
 	// If so, we don't want to suppress the error. This will allow VTGate to
 	// detect and perform buffering during failovers.
-	var message string
+	var attrs []slog.Attr
+	if logged {
+		attrs = make([]slog.Attr, 0, 6)
+	}
 	sqlErr, ok := err.(*sqlerror.SQLError)
 	if ok {
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.env.Parser()))
-			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
-			}
 		} else {
 			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false, tsv.env.Parser()))
-			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
+			if logged {
+				attrs = append(attrs, slog.String("error", sqlErr.Message))
 			}
 		}
-	} else {
-		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
-		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
+		if logged {
+			attrs = append(attrs, slog.Int("errno", int(errnum)), slog.String("sql_state", sqlState))
 		}
+	} else {
+		if logged {
+			attrs = append(attrs, slog.Any("error", err))
+		}
+		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 	}
 
-	if logMethod != nil {
-		logMethod(message)
+	if logged {
+		attrs = append(attrs, slog.String("error_code", errCode.String()))
+		if cid != nil {
+			attrs = append(attrs, slog.String("user", cid.Username))
+		}
+		attrs = append(attrs, slog.String("query", queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())))
+		// Demote some errors in logs.
+		switch errCode {
+		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
+			logPoolFull.Error("Request failed", attrs...)
+		case vtrpcpb.Code_ABORTED:
+			log.Warn("Request failed", attrs...)
+		case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
+			log.Info("Request failed", attrs...)
+		default:
+			log.Error("Request failed", attrs...)
+		}
 	}
 
 	if logStats != nil {

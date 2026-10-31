@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"testing"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 
@@ -2806,8 +2808,16 @@ func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	db.DeleteQuery(readQuery)
 	txID = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
+	logs := logtest.Capture(t, slog.LevelWarn)
 	_, err = qre.Execute()
 	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
+	// the restore error and the error it was undoing are each logged under error
+	closing := logs.Record(t, "closing connection: a failed SET could not be undone by restoring the previous sql_mode")
+	assert.Contains(t, closing["error"], "rejected")
+	cause := logs.Record(t, "the failed SET that could not be undone")
+	assert.Equal(t, "setting the ANSI sql_mode is unsupported", cause["error"])
+	assert.NotEmpty(t, closing["connection_id"])
+	assert.Equal(t, closing["connection_id"], cause["connection_id"])
 	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
 	_, err = qre.Execute()
 	require.Error(t, err)

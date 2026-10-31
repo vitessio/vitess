@@ -17,12 +17,15 @@ limitations under the License.
 package filecustomrule
 
 import (
+	"log/slog"
 	"os"
 	"path"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
@@ -57,4 +60,25 @@ func TestFileCustomRule(t *testing.T) {
 	require.NoError(t, err)
 	qr := qrs.Find("r1")
 	require.NotNilf(t, qr, "Expect custom rule r1 to be found, but got nothing, qrs=%v", qrs)
+}
+
+func TestParseRulesLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	dir := t.TempDir()
+
+	missing := path.Join(dir, "missing.json")
+	_, err := ParseRules(missing)
+	require.Error(t, err)
+	record := logs.Record(t, "Error reading file")
+	assert.Equal(t, missing, record["path"])
+	assert.Equal(t, err.Error(), record["error"])
+
+	invalid := path.Join(dir, "invalid.json")
+	require.NoError(t, os.WriteFile(invalid, []byte("not json"), 0o644))
+	_, err = ParseRules(invalid)
+	require.Error(t, err)
+	record = logs.Record(t, "Error unmarshaling query rules")
+	assert.Equal(t, invalid, record["path"])
+	assert.Equal(t, err.Error(), record["error"])
+	assert.Equal(t, "INVALID_ARGUMENT", record["error_code"])
 }

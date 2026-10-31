@@ -968,7 +968,12 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 		if qre.tsv.qe.strictTableACL {
 			aclState = acl.ACLDenied
 			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, aclGroupsSuffix(callerID), tableName)
-			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
+			qre.tsv.qe.accessCheckerLogger.Info("command denied (ACL check error)",
+				slog.String("plan_type", qre.plan.PlanID.String()),
+				slog.String("user", callerID.Username),
+				slog.String("groups", strings.Join(callerID.Groups, ",")),
+				slog.String("table", tableName),
+			)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
@@ -1014,7 +1019,11 @@ func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateC
 	}
 	aclState = acl.ACLDenied
 	errStr := fmt.Sprintf("%s command denied to user '%s'%s for a table set that cannot be determined (ACL check error)", qre.plan.PlanID.String(), callerID.Username, aclGroupsSuffix(callerID))
-	qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
+	qre.tsv.qe.accessCheckerLogger.Info("command denied for a table set that cannot be determined (ACL check error)",
+		slog.String("plan_type", qre.plan.PlanID.String()),
+		slog.String("user", callerID.Username),
+		slog.String("groups", strings.Join(callerID.Groups, ",")),
+	)
 	return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 }
 
@@ -1104,7 +1113,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			// after every DDL, let them be outdated until the periodic
 			// schema reload fixes it.
 			if err := qre.tsv.se.ReloadAtEx(qre.ctx, replication.Position{}, false); err != nil {
-				log.Error(fmt.Sprintf("failed to reload schema %v", err))
+				log.Error("failed to reload schema", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}()
 	}
@@ -1251,7 +1260,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			// or when an earlier refill's COMMIT applied but returned an error.
 			if lastVal != nextID {
 				if nextID < lastVal {
-					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal))
+					log.Warn("Sequence next ID value is below the currently cached max, updating it to max", slog.Int64("next_value", nextID), slog.Int64("last_value", lastVal))
 					nextID = lastVal
 				}
 				nextVal = nextID
@@ -1380,7 +1389,12 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warn(fmt.Sprintf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser())))
+		log.Warn("row count exceeds warning threshold",
+			slog.String("user", callerID.Username),
+			slog.Int64("row_count", count),
+			slog.Int64("warn_result_size", warnThreshold),
+			slog.String("query", queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser())),
+		)
 	}
 	return nil
 }
@@ -1462,7 +1476,9 @@ func (qre *QueryExecutor) undoSQLModeSet(conn *StatefulConnection, prev sqltypes
 	restore := "set sql_mode = " + sqltypes.EncodeStringSQL(prev.ToString())
 	if _, err := qre.execStatefulConn(conn, restore, false); err != nil {
 		log.Warn("closing connection: a failed SET could not be undone by restoring the previous sql_mode",
-			slog.Any("cause", cause), slog.Any("restoreError", err), slog.Int64("connID", conn.ID()))
+			slog.Any("error", err), slog.Int64("connection_id", conn.ID()))
+		log.Warn("the failed SET that could not be undone",
+			slog.Any("error", cause), slog.Int64("connection_id", conn.ID()))
 		conn.Close()
 	}
 }
