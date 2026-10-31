@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -107,7 +108,14 @@ type Exporter struct {
 }
 
 func init() {
-	HTTPHandle("/debug/vars", expvar.Handler())
+	handler := expvar.Handler()
+	HTTPHandleFunc("/debug/vars", func(w http.ResponseWriter, r *http.Request) {
+		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	})
 }
 
 // NewExporter creates a new Exporter with name as namespace.

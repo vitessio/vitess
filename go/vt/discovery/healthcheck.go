@@ -50,6 +50,7 @@ import (
 	"github.com/google/safehtml/template/uncheckedconversions"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
@@ -1001,7 +1002,11 @@ func (hc *HealthCheckImpl) RegisterStats() {
 }
 
 // ServeHTTP is part of the http.Handler interface. It renders the current state of the discovery gateway tablet cache into json.
-func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
+func (hc *HealthCheckImpl) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	status := hc.CacheStatus()
 	b, err := json.MarshalIndent(status, "", " ")
