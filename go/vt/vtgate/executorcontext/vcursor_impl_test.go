@@ -348,7 +348,7 @@ func (f fakeExecutor) StreamExecuteMulti(ctx context.Context, primitive engine.P
 	panic("implement me")
 }
 
-func (f fakeExecutor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+func (f fakeExecutor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType, multiKeyspace bool) (*sqltypes.Result, error) {
 	// TODO implement me
 	panic("implement me")
 }

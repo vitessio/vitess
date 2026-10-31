@@ -308,7 +308,7 @@ func (t *noopVCursor) FindRoutedTable(sqlparser.TableName) (*vindexes.BaseTable,
 	panic("implement me")
 }
 
-func (t *noopVCursor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+func (t *noopVCursor) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType, multiKeyspace bool) (*sqltypes.Result, error) {
 	panic("implement me")
 }
 

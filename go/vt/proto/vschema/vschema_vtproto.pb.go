@@ -77,6 +77,7 @@ func (m *Keyspace) CloneVT() *Keyspace {
 	r.ForeignKeyMode = m.ForeignKeyMode
 	r.MultiTenantSpec = m.MultiTenantSpec.CloneVT()
 	r.PreventCrossKeyspaceReads = m.PreventCrossKeyspaceReads
+	r.AdvisoryLocks = m.AdvisoryLocks
 	if rhs := m.Vindexes; rhs != nil {
 		tmpContainer := make(map[string]*Vindex, len(rhs))
 		for k, v := range rhs {
@@ -528,6 +529,16 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.AdvisoryLocks {
+		i--
+		if m.AdvisoryLocks {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
 	}
 	if m.PreventCrossKeyspaceReads {
 		i--
@@ -1499,6 +1510,9 @@ func (m *Keyspace) SizeVT() (n int) {
 	if m.PreventCrossKeyspaceReads {
 		n += 2
 	}
+	if m.AdvisoryLocks {
+		n += 2
+	}
 	n += len(m.unknownFields)
 	return n
 }
@@ -2422,6 +2436,26 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.PreventCrossKeyspaceReads = bool(v != 0)
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AdvisoryLocks", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AdvisoryLocks = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])
