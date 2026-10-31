@@ -283,15 +283,18 @@ func (lg *SimpleLoadGenerator) Start() error {
 	}
 	lg.state = LoadGeneratorStateRunning
 	go func() {
+		// Close the shared connection before telling Stop that the run
+		// ended, or a Start right after Stop races the close with its own
+		// queries on the connection. Stop sets the state: writing it here,
+		// after the send, could overwrite the next run's.
 		defer func() {
 			if lg.vtgateConn != nil {
 				lg.vtgateConn.Close()
 				lg.vtgateConn = nil
 			}
-			lg.state = LoadGeneratorStateStopped
 			log.Info("Load generator stopped")
+			lg.ch <- true
 		}()
-		defer func() { lg.ch <- true }()
 		lg.runCtx, lg.runCtxCancel = context.WithCancel(lg.ctx)
 		defer func() {
 			lg.runCtx = nil
