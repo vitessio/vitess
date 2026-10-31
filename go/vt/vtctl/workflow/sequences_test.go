@@ -1137,6 +1137,26 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, drLog.logs, 2)
 	require.Contains(t, drLog.logs[1], "Backing table: seq4, will be created, new value 1")
+
+	// A backing table whose tablespace is missing (ER_TABLESPACE_MISSING,
+	// 1812) still exists, so the dry run fails rather than reporting that it will
+	// be created.
+	sm5 := sequenceMetadata{
+		backingTableName:     "seq5",
+		backingTableKeyspace: "sourceks",
+		backingTableDBName:   "ks1",
+		usingTableName:       "t5",
+		usingTableDBName:     "targetks",
+		usingTableDefinition: &vschema.Table{
+			AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "seq5"},
+		},
+	}
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{
+		query: "/select next_id from `ks1`.`seq5`.*",
+		err:   sqlerror.NewSQLError(sqlerror.ErrorCode(1812), sqlerror.SSUnknownSQLState, "Tablespace is missing for table `ks1`.`seq5`."),
+	})
+	err = dr.initializeTargetSequences(ctx, map[string]*sequenceMetadata{"seq5": &sm5})
+	require.ErrorContains(t, err, "Tablespace is missing for table `ks1`.`seq5`")
 }
 
 // TestDryRunInitializeTargetSequencesDbNameOverride validates that the dry run
