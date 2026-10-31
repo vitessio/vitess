@@ -88,7 +88,11 @@ func waitForVDiff2ToCompleteWithTimeout(t *testing.T, ksWorkflow, cells, uuid st
 				if !completedAtMin.IsZero() {
 					ca := info.CompletedAt
 					completedAt, _ := time.Parse(vdiff2.TimestampFormat, ca)
-					if !completedAt.After(completedAtMin) {
+					// completed_at has a precision of one second, so a VDiff that
+					// completes in the same second as completedAtMin parses to an
+					// instant before it. Callers get completedAtMin before they start
+					// the run, so a completion in that second is from the run.
+					if completedAt.Before(completedAtMin.Truncate(time.Second)) {
 						continue
 					}
 				}
