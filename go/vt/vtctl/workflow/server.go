@@ -103,6 +103,11 @@ const (
 	cannotSwitchHighLag             = "replication lag %ds is higher than allowed lag %ds"
 	cannotSwitchFailedTabletRefresh = "could not refresh all of the tablets involved in the operation:\n%s"
 	cannotSwitchFrozen              = "workflow is frozen"
+	cannotSwitchStopped             = "workflow is stopped"
+
+	// The message that switching writes sets on the target streams it stops for the
+	// cutover.
+	stoppedForCutoverMessage = "stopped for cutover"
 
 	// Number of LOCK TABLES cycles to perform on the sources during SwitchWrites.
 	lockTablesCycles = 2
@@ -3473,6 +3478,9 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	if wf.MaxVReplicationTransactionLag > maxAllowedReplLagSecs {
 		return fmt.Sprintf(cannotSwitchHighLag, wf.MaxVReplicationTransactionLag, maxAllowedReplLagSecs), nil
 	}
+	// Whether the journals exist, which we only check, at most once, if a stream was
+	// stopped for the cutover.
+	var journalsChecked, journalsExist bool
 	for _, stream := range wf.ShardStreams {
 		for _, st := range stream.GetStreams() {
 			if st.Message == Frozen {
@@ -3483,6 +3491,29 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 				return cannotSwitchCopyIncomplete, nil
 			case binlogdatapb.VReplicationWorkflowState_Error.String():
 				return cannotSwitchError, nil
+			case binlogdatapb.VReplicationWorkflowState_Stopped.String():
+				// A stopped stream is not replicating, so the target may be missing
+				// data no matter what the lag says. A stream that never ran reports
+				// its lag as the time since it was created.
+				// We allow a stream that switching writes stopped for the cutover when
+				// the journals exist, which is the case when an earlier attempt at
+				// switching writes passed the point of no return and then failed, so
+				// that this check does not block running SwitchTraffic again to
+				// complete the switch. We check the message as well, as a stopped
+				// stream can also have a journal from a previous run for the same
+				// migration.
+				if st.Message != stoppedForCutoverMessage {
+					return cannotSwitchStopped, nil
+				}
+				if !journalsChecked {
+					if journalsExist, _, err = ts.checkJournals(ctx); err != nil {
+						return "", err
+					}
+					journalsChecked = true
+				}
+				if !journalsExist {
+					return cannotSwitchStopped, nil
+				}
 			}
 		}
 	}

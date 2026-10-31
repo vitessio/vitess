@@ -1082,7 +1082,7 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 			ts.TargetKeyspaceName(), target.GetShard().ShardName(), source.Position, uid)
 		ts.Logger().Infof("After catchup: position for keyspace:shard: %v:%v reached, uid %d",
 			ts.TargetKeyspaceName(), target.GetShard().ShardName(), uid)
-		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
+		if _, err := ts.TabletManagerClient().VReplicationExec(ctx, target.GetPrimary().Tablet, binlogplayer.StopVReplication(uid, stoppedForCutoverMessage)); err != nil {
 			ts.Logger().Infof("Error marking stopped for cutover on %s, uid %d", topoproto.TabletAliasString(target.GetPrimary().GetAlias()), uid)
 			return err
 		}

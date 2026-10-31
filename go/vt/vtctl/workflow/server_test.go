@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -2139,6 +2140,215 @@ func TestMoveTablesSwitchWritesCompletesAfterCancelOnFreeze(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, stateAfter.WritesSwitched, "expected writes to remain switched after the original context was canceled")
 	require.True(t, tsAfter.frozen, "expected the target workflow to be frozen even though the original context was canceled")
+}
+
+// TestCanSwitchStreamNotReplicating confirms that we refuse to switch traffic when a
+// stream is stopped, even though its reported lag is low, unless it was stopped for the
+// cutover and the journals exist.
+func TestCanSwitchStreamNotReplicating(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(cancel)
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+		vrID               = 1
+	)
+
+	testcases := []struct {
+		name    string
+		state   binlogdatapb.VReplicationWorkflowState
+		message string
+		// Whether the journals exist.
+		journalsExist bool
+		want          string
+	}{
+		{
+			name:  "stopped",
+			state: binlogdatapb.VReplicationWorkflowState_Stopped,
+			want:  cannotSwitchStopped,
+		},
+		{
+			// A stopped stream that has a journal from a previous run for the same
+			// migration.
+			name:          "stopped with journals but not for cutover",
+			state:         binlogdatapb.VReplicationWorkflowState_Stopped,
+			journalsExist: true,
+			want:          cannotSwitchStopped,
+		},
+		{
+			name:    "stopped for cutover without journals",
+			state:   binlogdatapb.VReplicationWorkflowState_Stopped,
+			message: stoppedForCutoverMessage,
+			want:    cannotSwitchStopped,
+		},
+		{
+			name:          "stopped for cutover with journals",
+			state:         binlogdatapb.VReplicationWorkflowState_Stopped,
+			message:       stoppedForCutoverMessage,
+			journalsExist: true,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			}, &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"0"},
+			})
+			t.Cleanup(env.close)
+			env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+				tableName: {
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+						Name:   tableName,
+						Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+					}},
+				},
+			}
+
+			ts, _, err := env.ws.getWorkflowState(ctx, targetKeyspaceName, workflowName)
+			require.NoError(t, err)
+
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
+				query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+					vrID, vrID),
+				result: &querypb.QueryResult{},
+			})
+			// We only expect to check the journals for a stream stopped for the cutover,
+			// but we set them up for any stopped stream, so that checking them for other
+			// streams would let the switch through and fail the test.
+			if tc.state == binlogdatapb.VReplicationWorkflowState_Stopped {
+				journalResult := &querypb.QueryResult{}
+				if tc.journalsExist {
+					journalResult = sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""))
+				}
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{
+					query:  "/select val from _vt.resharding_journal.*",
+					result: journalResult,
+				})
+			}
+			now := protoutil.TimeToProto(time.Now())
+			env.tmc.AddVReplicationWorkflowsResponse(env.tmc.GetWorkflowKey(targetKeyspaceName, "0"), &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+				Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{{
+					Workflow:     workflowName,
+					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+						Id:      vrID,
+						State:   tc.state,
+						Message: tc.message,
+						Bls: &binlogdatapb.BinlogSource{
+							Keyspace: sourceKeyspaceName,
+							Shard:    "0",
+							Filter: &binlogdatapb.Filter{
+								Rules: []*binlogdatapb.Rule{{Match: tableName}},
+							},
+						},
+						Pos:           position,
+						TimeUpdated:   now,
+						TimeHeartbeat: now,
+					}},
+				}},
+			})
+
+			reason, err := env.ws.canSwitch(ctx, ts, 30, nil)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, reason)
+		})
+	}
+}
+
+// TestMoveTablesSwitchTrafficRetryAfterJournalsCreated confirms that SwitchTraffic
+// completes a switch whose earlier attempt at switching writes created the journals and
+// then failed, leaving the target streams stopped for the cutover. The streams here
+// report a low lag; the lag check still applies to a real retry.
+func TestMoveTablesSwitchTrafficRetryAfterJournalsCreated(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	const (
+		workflowName       = "wf1"
+		tableName          = "t1"
+		sourceKeyspaceName = "sourceks"
+		targetKeyspaceName = "targetks"
+		vrID               = 1
+	)
+
+	env := newTestEnv(t, ctx, defaultCellName, &testKeyspace{
+		KeyspaceName: sourceKeyspaceName,
+		ShardNames:   []string{"0"},
+	}, &testKeyspace{
+		KeyspaceName: targetKeyspaceName,
+		ShardNames:   []string{"0"},
+	})
+	defer env.close()
+	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
+		tableName: {
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Name:   tableName,
+				Schema: fmt.Sprintf("CREATE TABLE %s (id BIGINT, name VARCHAR(64), PRIMARY KEY (id))", tableName),
+			}},
+		},
+	}
+	// The earlier attempt switched reads before failing to switch writes.
+	env.updateTableRoutingRules(t, ctx, roTabletTypes, []string{tableName},
+		sourceKeyspaceName, targetKeyspaceName, targetKeyspaceName)
+
+	now := protoutil.TimeToProto(time.Now())
+	env.tmc.AddVReplicationWorkflowsResponse(env.tmc.GetWorkflowKey(targetKeyspaceName, "0"), &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
+		Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{{
+			Workflow:     workflowName,
+			WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+				Id:      vrID,
+				State:   binlogdatapb.VReplicationWorkflowState_Stopped,
+				Message: stoppedForCutoverMessage,
+				Bls: &binlogdatapb.BinlogSource{
+					Keyspace: sourceKeyspaceName,
+					Shard:    "0",
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{Match: tableName}},
+					},
+				},
+				Pos:           position,
+				TimeUpdated:   now,
+				TimeHeartbeat: now,
+			}},
+		}},
+	})
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
+		query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
+			vrID, vrID),
+		result: &querypb.QueryResult{},
+	})
+	journalQR := &queryResult{
+		query:  "/select val from _vt.resharding_journal.*",
+		result: sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), "")),
+	}
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR) // canSwitch
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR) // switchReads
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, journalQR) // switchWrites
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
+		query:  fmt.Sprintf("update _vt.vreplication set message = 'FROZEN' where db_name='vt_%s' and workflow='%s'", targetKeyspaceName, workflowName),
+		result: &querypb.QueryResult{},
+	})
+
+	got, err := env.ws.WorkflowSwitchTraffic(ctx, &vtctldatapb.WorkflowSwitchTrafficRequest{
+		Keyspace:    targetKeyspaceName,
+		Workflow:    workflowName,
+		Direction:   int32(DirectionForward),
+		TabletTypes: allTabletTypes,
+	})
+	require.NoError(t, err)
+	require.Equal(t, "All Reads Switched. Writes Switched", got.CurrentState)
+
+	rules, err := topotools.GetRoutingRules(ctx, env.ts)
+	require.NoError(t, err)
+	require.Equal(t, []string{targetKeyspaceName + "." + tableName}, rules[tableName])
 }
 
 func TestWorkflowSwitchTrafficFailsForInvalidMoveTablesSourceKeyspace(t *testing.T) {
