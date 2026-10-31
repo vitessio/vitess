@@ -1646,29 +1646,49 @@ func TestBuildTxnWritesetAliasedFKColumnPlanIsMarkedUnsupported(t *testing.T) {
 }
 
 func TestBuildTxnWritesetMatchingAliasExpressionPlanIsMarkedUnsupported(t *testing.T) {
-	vttablet.InitVReplicationConfigDefaults()
-	vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
-	plan, err := vr.buildReplicatorPlan(
-		getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select lower(email) as email from t1",
-		}}}),
-		map[string][]*ColumnInfo{"t1": {{Name: "email", IsPK: true}}},
-		nil,
-		binlogplayer.NewStats(),
-		collations.MySQL8(),
-		sqlparser.NewTestParser(),
-	)
-	require.NoError(t, err)
+	testCases := []struct {
+		name     string
+		filter   string
+		colInfos []*ColumnInfo
+		fields   []*querypb.Field
+	}{{
+		name:     "function",
+		filter:   "select lower(email) as email from t1",
+		colInfos: []*ColumnInfo{{Name: "email", IsPK: true}},
+		fields:   []*querypb.Field{{Name: "email", Type: querypb.Type_VARCHAR}},
+	}, {
+		// The streamed value is the row's contribution to the target's
+		// total, not the value a unique key on the target enforces.
+		name:     "aggregate",
+		filter:   "select grp, sum(amount) as amount from t1 group by grp",
+		colInfos: []*ColumnInfo{{Name: "grp", IsPK: true}, {Name: "amount"}},
+		fields:   []*querypb.Field{{Name: "grp", Type: querypb.Type_INT64}, {Name: "amount", Type: querypb.Type_INT64}},
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			vttablet.InitVReplicationConfigDefaults()
+			vr := &vreplicator{workflowConfig: vttablet.DefaultVReplicationConfig}
+			plan, err := vr.buildReplicatorPlan(
+				getSource(&binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: tc.filter,
+				}}}),
+				map[string][]*ColumnInfo{"t1": tc.colInfos},
+				nil,
+				binlogplayer.NewStats(),
+				collations.MySQL8(),
+				sqlparser.NewTestParser(),
+			)
+			require.NoError(t, err)
 
-	tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
-		TableName: "t1",
-		Fields: []*querypb.Field{
-			{Name: "email", Type: querypb.Type_VARCHAR},
-		},
-	})
-	require.NoError(t, err)
-	assert.True(t, tplan.HasUnsupportedWritesetMapping)
+			tplan, err := plan.buildExecutionPlan(&binlogdatapb.FieldEvent{
+				TableName: "t1",
+				Fields:    tc.fields,
+			})
+			require.NoError(t, err)
+			assert.True(t, tplan.HasUnsupportedWritesetMapping)
+		})
+	}
 }
 
 func TestBuildTxnWritesetBacktickedDirectColumnPlanStaysSupported(t *testing.T) {

@@ -124,7 +124,9 @@ func hasUnsupportedWritesetMapping(plan *TablePlan, streamedFields []*querypb.Fi
 			return true
 		}
 		cexpr := plan.TablePlanBuilder.colExprs[i]
-		if cexpr == nil || !cexpr.colName.Equal(sqlparser.NewIdentifierCI(field.Name)) {
+		// An aggregate's expr is its argument column (a for sum(a)), but
+		// the streamed value only adds to the target's stored total.
+		if cexpr == nil || cexpr.operation != opExpr || !cexpr.colName.Equal(sqlparser.NewIdentifierCI(field.Name)) {
 			return true
 		}
 		if cexpr.isGenerated {
