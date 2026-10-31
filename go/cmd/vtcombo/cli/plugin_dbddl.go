@@ -51,6 +51,8 @@ func (plugin *DBDDL) CreateDatabase(ctx context.Context, name string) error {
 
 // DropDatabase implements the engine.DBDDLPlugin interface
 func (plugin *DBDDL) DropDatabase(ctx context.Context, name string) error {
+	plugin.mu.Lock()
+	defer plugin.mu.Unlock()
 	return globalDropDb(ctx, name)
 }
 
