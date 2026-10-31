@@ -76,6 +76,7 @@
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
         - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
+        - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
         - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
@@ -881,6 +882,20 @@ Before turning the flag on:
 - MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
 
 See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
+
+#### <a id="vtbackup-stop-at-committed-position"/>`vtbackup` stops catching up at the primary's committed position</a>
+
+On MySQL 8.4 and later, and on MySQL 8.0 with `replica_parallel_workers` set to 0 or 1, `vtbackup` no longer applies binlogged transactions that are still waiting for their semi-sync acknowledgement. An emergency reparent during or after the run can lose such transactions, and a backup that held them would then have errant GTIDs: every replica restored from it, or from a later backup built on it, would fail with `Errant GTID detected`.
+
+It stops catch-up at the primary's committed position, which, with semi-sync's default `AFTER_SYNC` wait point, doesn't include them yet. MySQL 8.0 runs a parallel applier on a single thread until it reaches a stop position, so with more workers (the default is 4 from 8.0.27), `vtbackup` catches up as before, as it does on other versions and MariaDB.
+
+When `vtbackup` stops at the committed position:
+- At startup, it waits while it can't read the shard primary or that tablet's record doesn't say `PRIMARY`, but a shard with no primary still fails the run at once. As with the existing wait for an unreachable primary, only the job's deadline, if it has one, bounds this wait.
+- If replication breaks, it restarts replication only from a primary whose `vttablet` answers and whose tablet record says `PRIMARY`. As before, the run fails once replication has stayed stopped for 60 seconds.
+
+With `--enable-errant-gtid-checks`, whether or not catch-up stops at the committed position, a restart after replication breaks also needs such a primary, and `vtbackup` first checks the data caught up so far for errant GTIDs, failing the run if it finds any.
+
+See [#20676](https://github.com/vitessio/vitess/issues/20676) and [#20679](https://github.com/vitessio/vitess/issues/20679).
 
 #### <a id="backup-shard-tablet-types"/>`BackupShard` can choose the tablet type to back up from</a>
 

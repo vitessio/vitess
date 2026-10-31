@@ -17,6 +17,7 @@ limitations under the License.
 package vtbackuperrantgtids
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,9 +33,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -58,8 +62,9 @@ const (
 
 // TestVtbackupErrantGTIDs runs vtbackup against base backups and data that have
 // GTIDs the shard primary lacks, and checks that it fails each such run without
-// completing a backup. The subtests share one shard and run in order; the last
-// two kill primaries.
+// completing a backup. It also checks that a write waiting for a semi-sync
+// acknowledgement stays out of a backup. The subtests share one shard and run in
+// order; the last two kill primaries.
 func TestVtbackupErrantGTIDs(t *testing.T) {
 	// --enable-errant-gtid-checks is new in v25.
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtbackup")
@@ -73,6 +78,7 @@ func TestVtbackupErrantGTIDs(t *testing.T) {
 
 	require.True(t, t.Run("poisoned base backup", testPoisonedBaseBackup))
 	require.True(t, t.Run("binlogged init SQL", testBinloggedInitSQL))
+	require.True(t, t.Run("write waiting for an acknowledgement", testWriteWaitingForAck))
 	require.True(t, t.Run("ERS with a reachable primary", testERSWithReachablePrimary))
 	require.True(t, t.Run("primary blocked on semi-sync", testPrimaryBlockedOnSemiSync))
 	require.True(t, t.Run("reparent during the upload", testReparentDuringUpload))
@@ -135,6 +141,69 @@ func testBinloggedInitSQL(t *testing.T) {
 	require.ErrorContains(t, err, "the data to back up has errant GTIDs")
 	require.ErrorContains(t, err, "were written by this run's --init-backup-sql-queries")
 	assert.Len(t, listBackups(t), len(backups))
+}
+
+// testWriteWaitingForAck checks, with the errant GTID checks off, that vtbackup
+// stops catching up at the primary's committed position on MySQL 8.4 and
+// later, and on MySQL 8.0 with at most one applier worker. A write that waits
+// for a semi-sync acknowledgement is already in the primary's binlog, so
+// vtbackup receives it, but it must stay out of the backup: an emergency
+// reparent can lose it, and every tablet restored from the backup would then
+// fail with an errant GTID.
+func testWriteWaitingForAck(t *testing.T) {
+	// vtbackup runs the same MySQL binaries, with the same configuration, as the
+	// tablets.
+	version := execOnTablet(t, primary, "select @@global.version").Rows[0][0].ToString()
+	if atLeast, err := capabilities.ServerVersionAtLeast(version, 8, 4); err != nil || !atLeast {
+		workers := execOnTablet(t, primary, "select @@global.slave_parallel_workers").Rows[0][0].ToString()
+		if !strings.HasPrefix(version, "8.0.") || (workers != "0" && workers != "1") {
+			t.Skipf("vtbackup stops at the committed position on MySQL 8.4 and later, and on MySQL 8.0 with at most one applier worker, not on %s with %s applier workers", version, workers)
+		}
+	}
+	const msg = "waiting-for-ack"
+	backups := listBackups(t)
+	// A committed write that the newest backup lacks, so that vtbackup catches up
+	// through it and stops partway through what it receives.
+	execOnTablet(t, primary, "insert into vt_insert_test (msg) values ('committed-before-the-backup')")
+	for _, replica := range []*cluster.Vttablet{replica1, replica2} {
+		execOnTablet(t, replica, "STOP REPLICA IO_THREAD")
+	}
+	writeInBackground(t, primary, msg)
+	require.Eventually(t, func() bool {
+		qr := execOnTablet(t, primary, fmt.Sprintf("select count(*) from information_schema.processlist where state like '%%semi-sync%%' and info like '%%%s%%'", msg))
+		return qr.Rows[0][0].ToString() == "1"
+	}, time.Minute, 250*time.Millisecond, "the write never waited for a semi-sync acknowledgement")
+	// Nothing commits on the primary until a replica acknowledges, so this is the
+	// position that vtbackup reads too.
+	committed, err := replication.DecodePosition("MySQL56/" + execOnTablet(t, primary, "select @@global.gtid_executed").Rows[0][0].ToString())
+	require.NoError(t, err)
+	require.False(t, backupPosition(t, backups[len(backups)-1]).AtLeast(committed), "the newest backup already has the committed position, so the scenario is invalid")
+
+	require.NoError(t, startVtbackup(t, "--enable-errant-gtid-checks=false").wait(t))
+	newBackups := listBackups(t)
+	require.Len(t, newBackups, len(backups)+1)
+	backedUp := backupPosition(t, newBackups[len(newBackups)-1])
+	assert.True(t, committed.AtLeast(backedUp), "the backup at %v has the write that waits for an acknowledgement, which the primary hasn't committed (%v)", backedUp, committed)
+	assert.True(t, backedUp.AtLeast(committed), "the backup at %v didn't catch up to the primary's committed position %v", backedUp, committed)
+
+	// A replica acknowledges the write, so the primary commits it.
+	for _, replica := range []*cluster.Vttablet{replica1, replica2} {
+		execOnTablet(t, replica, "START REPLICA IO_THREAD")
+	}
+	require.Eventually(t, func() bool {
+		qr := execOnTablet(t, primary, fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
+		return qr.Rows[0][0].ToString() == "1"
+	}, time.Minute, 250*time.Millisecond, "the primary never committed %q", msg)
+}
+
+// backupPosition returns the replication position in the backup's MANIFEST.
+func backupPosition(t *testing.T, backup string) replication.Position {
+	t.Helper()
+	data, err := os.ReadFile(path.Join(os.Getenv("VTDATAROOT"), "backups", keyspaceName, shardName, backup, "MANIFEST"))
+	require.NoError(t, err)
+	var manifest mysqlctl.BackupManifest
+	require.NoError(t, json.Unmarshal(data, &manifest))
+	return manifest.Position
 }
 
 // testERSWithReachablePrimary makes an ERS leave a reachable primary out of its

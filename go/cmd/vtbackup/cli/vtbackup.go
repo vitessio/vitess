@@ -81,6 +81,10 @@ const (
 	phaseStatusCatchupReplicationStopped = "Stopped"
 
 	timeoutWaitingForReplicationStatus = 60 * time.Second
+	// restartReadTimeout bounds each read of the shard primary when catch-up
+	// restarts replication, so that a primary that doesn't answer can't use up, in
+	// one read, the time that replication may stay stopped.
+	restartReadTimeout = 10 * time.Second
 )
 
 var (
@@ -613,44 +617,18 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	if err := resetReplication(ctx, restorePos, keepBinlogs, mysqld); err != nil {
 		return fmt.Errorf("error resetting replication: %v", err)
 	}
-	if err := startReplication(ctx, mysqld, topoServer); err != nil {
-		return fmt.Errorf("error starting replication: %v", err)
-	}
 
-	log.Info("get the current primary replication position, and wait until we catch up")
-	// Get the current primary replication position, and wait until we catch up
-	// to that point. We do this instead of looking at ReplicationLag
-	// because that value can
-	// sometimes lie and tell you there's 0 lag when actually replication is
-	// stopped. Also, if replication is making progress but is too slow to ever
-	// catch up to live changes, we'd rather take a backup of something rather
-	// than timing out.
 	tmc := tmclient.NewTabletManagerClient()
-
-	// Keep retrying if we can't contact the primary. The primary might be
-	// changing, moving, or down temporarily.
-	var primaryPos replication.Position
-	err := retryOnError(ctx, func() error {
-		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
-		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
-		defer optCancel()
-
-		pos, err := getPrimaryPosition(opCtx, tmc, topoServer)
-		if err != nil {
-			return fmt.Errorf("can't get the primary replication position: %v", err)
-		}
-
-		primaryPos = pos
-		return nil
-	})
+	stopAtCommitted := stopsAtCommittedPosition(ctx, mysqld)
+	primaryPos, err := startCatchUp(ctx, tmc, topoServer, mysqld, stopAtCommitted)
 	if err != nil {
-		return fmt.Errorf("can't get the primary replication position after all retries: %v", err)
+		return err
 	}
 
 	log.Info("takeBackup: primary position is: " + primaryPos.String())
 
 	// Fail before catching up if the restored base has GTIDs that tablets would
-	// reject. A shard with no primary has already failed in startReplication.
+	// reject. A shard with no primary has already failed in startCatchUp.
 	if errantGTIDChecks {
 		if err := inVerifyErrantGTIDsPhase(func() error {
 			_, err := verifyPosition(ctx, tmc, topoServer, restorePos, positionCheck{what: restoredFrom, restorePos: restorePos})
@@ -660,7 +638,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 		}
 	}
 
-	status, err := catchUpReplicationForBackup(ctx, topoServer, mysqld, restorePos, primaryPos)
+	status, primaryPos, err := catchUpReplicationForBackup(ctx, tmc, topoServer, mysqld, restorePos, primaryPos, stopAtCommitted)
 	if err != nil {
 		return err
 	}
@@ -739,8 +717,14 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 
 // catchUpReplicationForBackup catches a restored mysqld up to the current
 // primary position and returns the final replication status after it stops
-// replication again.
-func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos, primaryPos replication.Position) (replication.ReplicationStatus, error) {
+// replication again, and the goal it caught up to. With stopAtTarget, when
+// replication stops and is restarted, it stops at the goal again if the primary
+// it restarts from has committed all of it, and otherwise at that primary's
+// committed position, which becomes the goal. Without stopAtTarget, replication
+// restarts without a stop position and the goal stays, but with
+// --enable-errant-gtid-checks the restart first reads and checks the primary as
+// it does with stopAtTarget.
+func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManagerClient, topoServer *topo.Server, mysqld mysqlctl.MysqlDaemon, restorePos, primaryPos replication.Position, stopAtTarget bool) (replication.ReplicationStatus, replication.Position, error) {
 	// Wait for replication to catch up.
 	phase.Set(phaseNameCatchupReplication, int64(1))
 	defer phase.Set(phaseNameCatchupReplication, int64(0))
@@ -756,12 +740,12 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 	lastErr := vterrors.NewLastError("replication catch up", timeoutWaitingForReplicationStatus)
 	for {
 		if !lastErr.ShouldRetry() {
-			return replication.ReplicationStatus{}, fmt.Errorf("timeout waiting for replication status after %.0f seconds", timeoutWaitingForReplicationStatus.Seconds())
+			return replication.ReplicationStatus{}, replication.Position{}, fmt.Errorf("timeout waiting for replication status after %.0f seconds", timeoutWaitingForReplicationStatus.Seconds())
 		}
 
 		select {
 		case <-ctx.Done():
-			return replication.ReplicationStatus{}, fmt.Errorf("error in replication catch up: %v", ctx.Err())
+			return replication.ReplicationStatus{}, replication.Position{}, fmt.Errorf("error in replication catch up: %v", ctx.Err())
 		case <-time.After(time.Second):
 		}
 
@@ -795,7 +779,45 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 			lastErr.Record(errors.New(strings.ToLower(errStr)))
 
 			phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 1)
-			if err := startReplication(ctx, mysqld, topoServer); err != nil {
+			if stopAtTarget || errantGTIDChecks {
+				target, err := readRestartTarget(ctx, tmc, topoServer, restorePos, status.Position)
+				if permanent, ok := errors.AsType[permanentError](err); ok {
+					return replication.ReplicationStatus{}, replication.Position{}, permanent.error
+				}
+				switch {
+				case err != nil:
+					// As when a restart fails, replication stays stopped, and the time
+					// counts against how long it may stay stopped. A stop position
+					// stays in force.
+					log.Warn("Can't read the shard primary to restart replication from", slog.Any("error", err))
+				case !stopAtTarget:
+					// Repoint to the primary that the errant GTID check read, without a
+					// stop position, and keep the goal, as before.
+					if err := mysqld.SetReplicationSource(ctx, target.tablet.MysqlHostname, target.tablet.MysqlPort, 0, true, true); err != nil {
+						log.Warn("Failed to restart replication", slog.Any("error", err))
+					}
+				default:
+					// Keep the goal when the primary has committed all of it, so that a
+					// run on a busy shard doesn't keep chasing the primary's position.
+					// Replicating from a primary that lacks part of it, after a reparent
+					// that lost transactions, never reaches it, so the goal becomes
+					// that primary's committed position instead.
+					if target.pos.AtLeast(primaryPos) {
+						target.pos = primaryPos
+					}
+					if err := startReplicationAt(ctx, mysqld, target); err != nil {
+						log.Warn("Failed to restart replication", slog.Any("error", err))
+					} else {
+						if !target.pos.Equal(primaryPos) {
+							log.Info("The primary lacks part of the catch-up goal, so the goal becomes its committed position",
+								slog.String("primary", topoproto.TabletAliasString(target.tablet.Alias)),
+								slog.String("old_goal", primaryPos.String()),
+								slog.String("goal", target.pos.String()))
+						}
+						primaryPos = target.pos
+					}
+				}
+			} else if err := startReplication(ctx, mysqld, topoServer); err != nil {
 				log.Warn(fmt.Sprintf("Failed to restart replication: %v", err))
 			}
 		} else {
@@ -809,24 +831,24 @@ func catchUpReplicationForBackup(ctx context.Context, topoServer *topo.Server, m
 
 	// Stop replication and see where we are.
 	if err := mysqld.StopReplication(ctx, nil); err != nil {
-		return replication.ReplicationStatus{}, fmt.Errorf("can't stop replication: %v", err)
+		return replication.ReplicationStatus{}, replication.Position{}, fmt.Errorf("can't stop replication: %v", err)
 	}
 
 	// Did we make any progress?
 	status, statusErr = mysqld.ReplicationStatus(ctx)
 	if statusErr != nil {
-		return replication.ReplicationStatus{}, fmt.Errorf("can't get replication status: %v", statusErr)
+		return replication.ReplicationStatus{}, replication.Position{}, fmt.Errorf("can't get replication status: %v", statusErr)
 	}
 
 	log.Info(fmt.Sprintf("Replication caught up to %v", status.Position))
 	if !status.Position.AtLeast(primaryPos) && status.Position.Equal(restorePos) {
-		return replication.ReplicationStatus{}, fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
+		return replication.ReplicationStatus{}, replication.Position{}, fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
 
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStalled}, 0)
 	phaseStatus.Set([]string{phaseNameCatchupReplication, phaseStatusCatchupReplicationStopped}, 0)
 
-	return status, nil
+	return status, primaryPos, nil
 }
 
 func resetReplication(ctx context.Context, pos replication.Position, keepBinlogs bool, mysqld mysqlctl.MysqlDaemon) error {
@@ -855,6 +877,61 @@ func resetReplication(ctx context.Context, pos replication.Position, keepBinlogs
 		}
 	}
 	return nil
+}
+
+// startCatchUp starts replication from the shard primary and returns the
+// position to catch up to. With stopAtCommitted, it reads the primary's
+// committed position first and stops replication there. Otherwise it starts
+// replication without a stop position and then reads the primary's position, as
+// vtbackup always did.
+func startCatchUp(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, mysqld mysqlctl.MysqlDaemon, stopAtCommitted bool) (replication.Position, error) {
+	if stopAtCommitted {
+		target, err := readInitialTarget(ctx, tmc, ts)
+		if err != nil {
+			return replication.Position{}, vterrors.Wrap(err, "can't get the primary replication position")
+		}
+		if err := startReplicationAt(ctx, mysqld, target); err != nil {
+			return replication.Position{}, vterrors.Wrap(err, "error starting replication")
+		}
+		log.Info("Started replication from the shard primary, up to its committed position",
+			slog.String("primary", topoproto.TabletAliasString(target.tablet.Alias)),
+		)
+		return target.pos, nil
+	}
+
+	if err := startReplication(ctx, mysqld, ts); err != nil {
+		return replication.Position{}, fmt.Errorf("error starting replication: %v", err)
+	}
+
+	log.Info("get the current primary replication position, and wait until we catch up")
+	// Get the current primary replication position, and wait until we catch up
+	// to that point. We do this instead of looking at ReplicationLag
+	// because that value can
+	// sometimes lie and tell you there's 0 lag when actually replication is
+	// stopped. Also, if replication is making progress but is too slow to ever
+	// catch up to live changes, we'd rather take a backup of something rather
+	// than timing out.
+
+	// Keep retrying if we can't contact the primary. The primary might be
+	// changing, moving, or down temporarily.
+	var primaryPos replication.Position
+	err := retryOnError(ctx, func() error {
+		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
+		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
+		defer optCancel()
+
+		pos, err := getPrimaryPosition(opCtx, tmc, ts)
+		if err != nil {
+			return fmt.Errorf("can't get the primary replication position: %v", err)
+		}
+
+		primaryPos = pos
+		return nil
+	})
+	if err != nil {
+		return replication.Position{}, fmt.Errorf("can't get the primary replication position after all retries: %v", err)
+	}
+	return primaryPos, nil
 }
 
 func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServer *topo.Server) error {
@@ -904,6 +981,185 @@ func getPrimaryPosition(ctx context.Context, tmc tmclient.TabletManagerClient, t
 		return replication.Position{}, fmt.Errorf("can't decode primary replication position %q: %v", posStr, err)
 	}
 	return pos, nil
+}
+
+// primaryTarget is the shard primary that vtbackup replicates from, and the
+// position that the primary had committed when vtbackup read it.
+type primaryTarget struct {
+	tablet *topodatapb.Tablet
+	pos    replication.Position
+	// uuid is the primary's server UUID.
+	uuid string
+}
+
+// noPrimaryError reports that the shard record names no primary.
+type noPrimaryError struct{ error }
+
+// readInitialTarget reads the primary that replication first starts from, and
+// its committed position. It retries while they can't be read, since the
+// primary might be changing, moving, or down temporarily, but fails at once if
+// the shard has no primary, as tablets wait to be reparented but vtbackup is a
+// batch job, or if the primary's position can't be decoded.
+func readInitialTarget(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (primaryTarget, error) {
+	var target primaryTarget
+	err := retryOnError(ctx, func() error {
+		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
+		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+		defer cancel()
+
+		var err error
+		target, err = readPrimaryTarget(opCtx, tmc, ts)
+		if noPrimary, ok := errors.AsType[noPrimaryError](err); ok {
+			// retryOnError then returns the inner error, since noPrimaryError hides its
+			// code from vterrors.Code.
+			return permanentError(noPrimary)
+		}
+		return err
+	})
+	return target, err
+}
+
+// readPrimaryTarget reads the shard primary and its committed position, its
+// gtid_executed: with semi-sync's default AFTER_SYNC wait point, a transaction
+// that is waiting for an acknowledgement is already in the primary's binlog, but
+// not in gtid_executed. As the errant GTID checks do, it then confirms that the
+// primary is still the shard primary in the same term, since a primary that an
+// emergency reparent repointed still answers, with writes that the new primary
+// lacks.
+func readPrimaryTarget(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server) (primaryTarget, error) {
+	si, err := ts.GetShard(ctx, initKeyspace, initShard)
+	if err != nil {
+		return primaryTarget{}, vterrors.Wrap(err, "can't read shard")
+	}
+	if topoproto.TabletAliasIsZero(si.PrimaryAlias) {
+		return primaryTarget{}, noPrimaryError{vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "shard %v/%v has no primary", initKeyspace, initShard)}
+	}
+	primary := topoproto.TabletAliasString(si.PrimaryAlias)
+	ti, err := ts.GetTablet(ctx, si.PrimaryAlias)
+	if err != nil {
+		return primaryTarget{}, vterrors.Wrapf(err, "can't read primary tablet %v", primary)
+	}
+	status, err := tmc.PrimaryStatus(ctx, ti.Tablet)
+	if err != nil {
+		return primaryTarget{}, vterrors.Wrapf(err, "can't get the status of primary %v", primary)
+	}
+	term := primaryTerm{alias: si.PrimaryAlias, termStart: si.PrimaryTermStartTime}
+	if err := confirmPrimary(ctx, ts, term, "the position to catch up to"); err != nil {
+		return primaryTarget{}, err
+	}
+	pos, err := replication.DecodePosition(status.Position)
+	if err != nil {
+		return primaryTarget{}, permanentError{vterrors.Wrapf(err, "can't decode the position %q of primary %v", status.Position, primary)}
+	}
+	return primaryTarget{tablet: ti.Tablet, pos: pos, uuid: status.ServerUuid}, nil
+}
+
+// stopsAtCommittedPosition reports whether catch-up stops at the primary's
+// committed position, which it does when this run's mysqld is MySQL 8.4 or
+// later, or MySQL 8.0 with at most one applier worker. MySQL 8.0 drops a
+// parallel applier to a single thread until it reaches a stop position (MySQL
+// note 1753), which can make catch-up much slower, so with more workers
+// catch-up replicates without one, as before. Other versions keep the old
+// behavior too, and MariaDB positions aren't MySQL56 GTID sets.
+func stopsAtCommittedPosition(ctx context.Context, mysqld mysqlctl.MysqlDaemon) bool {
+	version, err := mysqld.GetVersionString(ctx)
+	if err != nil {
+		log.Warn("Can't read the MySQL version, so catch-up has no stop position", slog.Any("error", err))
+		return false
+	}
+	flavor, ver, err := mysqlctl.ParseVersionString(version)
+	if err != nil {
+		log.Warn("Can't parse the MySQL version, so catch-up has no stop position", slog.String("version", version), slog.Any("error", err))
+		return false
+	}
+	if flavor == mysqlctl.FlavorMariaDB {
+		return false
+	}
+	if ver.Major > 8 || (ver.Major == 8 && ver.Minor >= 4) {
+		return true
+	}
+	if ver.Major != 8 || ver.Minor != 0 {
+		return false
+	}
+	workers, err := applierWorkers(ctx, mysqld, ver)
+	if err != nil {
+		log.Warn("Can't read the number of applier workers, so catch-up has no stop position", slog.Any("error", err))
+		return false
+	}
+	return workers <= 1
+}
+
+// applierWorkers reads the number of applier workers of a MySQL 8.0 mysqld.
+func applierWorkers(ctx context.Context, mysqld mysqlctl.MysqlDaemon, ver mysqlctl.ServerVersion) (int64, error) {
+	// MySQL 8.0.26 renamed slave_parallel_workers.
+	variable := "replica_parallel_workers"
+	if ver.Patch < 26 {
+		variable = "slave_parallel_workers"
+	}
+	qr, err := mysqld.FetchSuperQuery(ctx, "SELECT @@global."+variable)
+	if err != nil {
+		return 0, vterrors.Wrapf(err, "can't read %s", variable)
+	}
+	if len(qr.Rows) != 1 || len(qr.Rows[0]) != 1 {
+		return 0, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected result reading %s: %v", variable, qr.Rows)
+	}
+	workers, err := qr.Rows[0][0].ToCastInt64()
+	if err != nil {
+		return 0, vterrors.Wrapf(err, "can't parse %s", variable)
+	}
+	return workers, nil
+}
+
+// startReplicationAt points replication at target's primary and starts it. With
+// a MySQL56 GTID set, replication stops once it has applied target.pos.
+// vtbackup replicates from the primary without acknowledging semi-sync, so its
+// relay log can hold transactions that are still waiting for an acknowledgement,
+// and an emergency reparent can lose them. Stopping at the committed position
+// keeps them out of the backup.
+func startReplicationAt(ctx context.Context, mysqld mysqlctl.MysqlDaemon, target primaryTarget) error {
+	if _, ok := target.pos.GTIDSet.(replication.Mysql56GTIDSet); !ok {
+		// Replicate without a stop position, as before.
+		if err := mysqld.SetReplicationSource(ctx, target.tablet.MysqlHostname, target.tablet.MysqlPort, 0, true, true); err != nil {
+			return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+		}
+		return nil
+	}
+	// Stop replication, in case we're restarting, and set the source before
+	// replication starts, so that it applies nothing past target.pos.
+	if err := mysqld.SetReplicationSource(ctx, target.tablet.MysqlHostname, target.tablet.MysqlPort, 0, true, false); err != nil {
+		return vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
+	}
+	if err := mysqld.StartReplicationUntilAfter(ctx, target.pos); err != nil {
+		return vterrors.Wrap(err, "can't start replication")
+	}
+	return nil
+}
+
+// readRestartTarget reads, within restartReadTimeout, the shard primary that
+// replication restarts from during a catch-up that stops at the committed
+// position or runs the errant GTID checks, and the primary's committed position.
+// With --enable-errant-gtid-checks, it returns a permanentError if the primary
+// lacks GTIDs in applied, so that vtbackup fails without changing its source,
+// which can't undo them. The applier can still apply transactions after applied
+// was read; the check of the data to back up catches those.
+func readRestartTarget(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, restorePos, applied replication.Position) (primaryTarget, error) {
+	readCtx, cancel := context.WithTimeout(ctx, restartReadTimeout)
+	defer cancel()
+	target, err := readPrimaryTarget(readCtx, tmc, ts)
+	if err != nil {
+		return primaryTarget{}, err
+	}
+	if errantGTIDChecks {
+		primary := topoproto.TabletAliasString(target.tablet.Alias)
+		_, errant, err := compareWithPrimary(applied, target.pos, target.uuid)
+		if err != nil {
+			return primaryTarget{}, permanentError{vterrors.Wrapf(err, "can't parse the server UUID of primary %v", primary)}
+		}
+		if len(errant) > 0 {
+			return primaryTarget{}, permanentError{errantGTIDsError(positionCheck{what: "the data caught up so far", restorePos: restorePos}, errant, primary, target.pos)}
+		}
+	}
+	return target, nil
 }
 
 // positionCheck describes one check that a position has no GTIDs the shard primary lacks.
@@ -1007,7 +1263,8 @@ func inVerifyErrantGTIDsPhase(fn func() error) error {
 	return fn()
 }
 
-// permanentError wraps an error that verifyPosition returns at once instead of retrying.
+// permanentError wraps an error that verifyPosition, retryOnError and catch-up
+// return at once instead of retrying.
 type permanentError struct{ error }
 
 // checkPositionOnce makes one attempt at verifyPosition's check. Errant GTIDs,
@@ -1041,30 +1298,39 @@ func checkPositionOnce(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 		return primaryTerm{}, permanentError{vterrors.Wrapf(err, "can't decode the position %q of primary %v", status.Position, primary)}
 	}
 
-	// Errant GTID detection supports only MySQL56 GTID sets, as on tablets.
-	posSet, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
-	if !ok {
-		return term, nil
-	}
-	primarySet, ok := primaryPos.GTIDSet.(replication.Mysql56GTIDSet)
-	if !ok {
-		return term, nil
-	}
-	primarySID, err := replication.ParseSID(status.ServerUuid)
+	missing, errant, err := compareWithPrimary(pos, primaryPos, status.ServerUuid)
 	if err != nil {
 		return primaryTerm{}, permanentError{vterrors.Wrapf(err, "can't parse the server UUID of primary %v", primary)}
 	}
-
-	missing := posSet.Difference(primarySet)
-	// The tablets' rule, as in replication.ErrantGTIDsOnReplica: GTIDs under the
-	// primary's own UUID are not errant.
-	if errant := missing.RemoveUUID(primarySID); len(errant) > 0 {
+	if len(errant) > 0 {
 		return primaryTerm{}, permanentError{errantGTIDsError(check, errant, primary, primaryPos)}
 	}
 	if check.requireCommitted && len(missing) > 0 {
 		return primaryTerm{}, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "primary %v has not committed %v from %s yet; waiting for a semi-sync acknowledgement or a reparent", primary, missing, check.what)
 	}
 	return term, nil
+}
+
+// compareWithPrimary returns the GTIDs in pos that primaryPos lacks, and those
+// of them that are errant by the tablets' rule, as in
+// replication.ErrantGTIDsOnReplica: GTIDs under the primary's own server UUID
+// are not errant. Errant GTID detection supports only MySQL56 GTID sets, as on
+// tablets, so other positions return no GTIDs.
+func compareWithPrimary(pos, primaryPos replication.Position, primaryUUID string) (missing, errant replication.Mysql56GTIDSet, err error) {
+	posSet, ok := pos.GTIDSet.(replication.Mysql56GTIDSet)
+	if !ok {
+		return nil, nil, nil
+	}
+	primarySet, ok := primaryPos.GTIDSet.(replication.Mysql56GTIDSet)
+	if !ok {
+		return nil, nil, nil
+	}
+	primarySID, err := replication.ParseSID(primaryUUID)
+	if err != nil {
+		return nil, nil, err
+	}
+	missing = posSet.Difference(primarySet)
+	return missing, missing.RemoveUUID(primarySID), nil
 }
 
 // confirmPrimary checks, after a check has read the primary's status, that the
@@ -1187,17 +1453,18 @@ func verifyNewBackup(ctx context.Context, tmc tmclient.TabletManagerClient, ts *
 	return nil
 }
 
-// retryOnError keeps calling the given function until it succeeds, or the given
-// Context is done. It waits an exponentially increasing amount of time between
-// retries to avoid hot-looping. The only time this returns an error is if the
-// Context is cancelled.
+// retryOnError keeps calling the given function until it succeeds, returns a
+// permanentError, or the given Context is done. To avoid hot-looping, it waits
+// between retries, doubling the wait up to operationTimeout. It returns an
+// error only for a permanentError, which it unwraps, and a done Context.
 func retryOnError(ctx context.Context, fn func() error) error {
-	waitTime := 1 * time.Second
-
-	for {
+	for waitTime := time.Second; ; waitTime = min(2*waitTime, operationTimeout) {
 		err := fn()
 		if err == nil {
 			return nil
+		}
+		if permanent, ok := errors.AsType[permanentError](err); ok {
+			return permanent.error
 		}
 		log.Error(fmt.Sprintf("Waiting %v to retry after error: %v", waitTime, err))
 
@@ -1206,7 +1473,6 @@ func retryOnError(ctx context.Context, fn func() error) error {
 			log.Error(fmt.Sprintf("Not retrying after error: %v", ctx.Err()))
 			return ctx.Err()
 		case <-time.After(waitTime):
-			waitTime *= 2
 		}
 	}
 }
