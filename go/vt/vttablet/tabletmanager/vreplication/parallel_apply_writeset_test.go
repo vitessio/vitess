@@ -904,22 +904,17 @@ func TestQueryFKRefsFetchesAllRows(t *testing.T) {
 // the FK check treats as equal gets the same writeset digest. queryFKRefs
 // reads every FK in the database, so none of them may fail it.
 func TestQueryFKRefsFlagsHashIncompatibleFKColumnDefinitions(t *testing.T) {
-	tcases := []struct {
+	type tcase struct {
 		name             string
 		childType        string
 		parentType       string
 		hashIncompatible bool
-	}{
+	}
+	tcases := []tcase{
 		{name: "boolean to tinyint", childType: "tinyint(1)", parentType: "tinyint"},
 		{name: "zerofill", childType: "int unsigned", parentType: "int unsigned zerofill"},
 		{name: "varbinary lengths", childType: "varbinary(16)", parentType: "varbinary(32)"},
-		{name: "varchar lengths", childType: "varchar(16) collate utf8mb4_0900_ai_ci", parentType: "varchar(32) collate utf8mb4_0900_ai_ci"},
 		{name: "char to varchar, pad space", childType: "char(16) collate utf8mb4_general_ci", parentType: "varchar(32) collate utf8mb4_general_ci"},
-		// Under NO PAD the FK check matches a char child 'a' to a varchar
-		// parent 'a ', and a varchar child 'a' plus padding to a char parent
-		// 'a', while the digest keeps trailing spaces.
-		{name: "char to varchar, no pad", childType: "char(16) collate utf8mb4_0900_ai_ci", parentType: "varchar(32) collate utf8mb4_0900_ai_ci", hashIncompatible: true},
-		{name: "varchar to char, no pad", childType: "varchar(32) collate utf8mb4_0900_ai_ci", parentType: "char(16) collate utf8mb4_0900_ai_ci", hashIncompatible: true},
 		{name: "enum same members", childType: "enum('x','y')", parentType: "enum('x','y')"},
 		// The FK check matches child 'y' (index 1) to parent 'x' (index 1).
 		{name: "enum member order", childType: "enum('y','x')", parentType: "enum('x','y')", hashIncompatible: true},
@@ -929,6 +924,17 @@ func TestQueryFKRefsFlagsHashIncompatibleFKColumnDefinitions(t *testing.T) {
 		{name: "datetime precision", childType: "datetime(3)", parentType: "datetime(6)", hashIncompatible: true},
 		{name: "binary to varbinary", childType: "binary(16)", parentType: "varbinary(16)", hashIncompatible: true},
 		{name: "decimal sign", childType: "decimal(10,2)", parentType: "decimal(10,2) unsigned", hashIncompatible: true},
+	}
+	// MySQL 5.7 has no NO PAD collations.
+	if env.DBMajorVersion >= 8 {
+		tcases = append(tcases,
+			tcase{name: "varchar lengths", childType: "varchar(16) collate utf8mb4_0900_ai_ci", parentType: "varchar(32) collate utf8mb4_0900_ai_ci"},
+			// Under NO PAD the FK check matches a char child 'a' to a
+			// varchar parent 'a ', and a varchar child 'a' plus padding to a
+			// char parent 'a', while the digest keeps trailing spaces.
+			tcase{name: "char to varchar, no pad", childType: "char(16) collate utf8mb4_0900_ai_ci", parentType: "varchar(32) collate utf8mb4_0900_ai_ci", hashIncompatible: true},
+			tcase{name: "varchar to char, no pad", childType: "varchar(32) collate utf8mb4_0900_ai_ci", parentType: "char(16) collate utf8mb4_0900_ai_ci", hashIncompatible: true},
+		)
 	}
 	var creates, drops []string
 	for i, tcase := range tcases {
