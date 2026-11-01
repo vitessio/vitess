@@ -67,6 +67,30 @@ func requireKeyspaceQueryThrottlerConfig(t *testing.T, want *querythrottlerpb.Co
 	require.True(t, proto.Equal(want, got), "keyspace query throttler config: want %v, got %v", want, got)
 }
 
+// clearKeyspaceQueryThrottlerConfig removes the query throttler config from the keyspace and its
+// SrvKeyspaces, as before any config was pushed. UpdateQueryThrottlerConfig can only replace a
+// config, so this writes to the topo directly.
+func clearKeyspaceQueryThrottlerConfig(t *testing.T) {
+	t.Helper()
+	ts := clusterInstance.TopoProcess.Server
+	ctx, unlock, err := ts.LockKeyspace(t.Context(), keyspaceName, "clearKeyspaceQueryThrottlerConfig")
+	require.NoError(t, err)
+	var unlockErr error
+	defer func() {
+		unlock(&unlockErr)
+		assert.NoError(t, unlockErr, "unlocking the keyspace")
+	}()
+
+	ki, err := ts.GetKeyspace(ctx, keyspaceName)
+	require.NoError(t, err)
+	ki.QueryThrottlerConfig = nil
+	require.NoError(t, ts.UpdateKeyspace(ctx, ki))
+	_, err = ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, keyspaceName, nil, func(*querythrottlerpb.Config) *querythrottlerpb.Config {
+		return nil
+	})
+	require.NoError(t, err)
+}
+
 // waitForQueryThrottlerStatus polls GetThrottlerStatus via gRPC until
 // the throttler reports the expected enabled state.
 func waitForQueryThrottlerStatus(t *testing.T, tablet *cluster.Vttablet, wantEnabled bool) {
@@ -347,7 +371,10 @@ func primaryLag(ctx context.Context) (float64, error) {
 // throttled, even while the replica lags and the lag throttler, which follows the keyspace's
 // ThrottlerConfig, reports that lag.
 func TestDisabledByDefault(t *testing.T) {
+	// Other tests leave a disabled config behind, so clear it rather than depend on running first.
+	clearKeyspaceQueryThrottlerConfig(t)
 	requireKeyspaceQueryThrottlerConfig(t, nil)
+	waitForQueryThrottlerStatus(t, primaryTablet, false)
 	t.Cleanup(func() {
 		// t.Context() is canceled before cleanups run.
 		ctx := context.WithoutCancel(t.Context())
@@ -623,7 +650,7 @@ func TestConfigUpdateWithoutRestart(t *testing.T) {
 }
 
 // TestPriorityZeroNeverThrottled verifies that queries with priority=0 (highest
-// priority) bypass throttling entirely, while default priority queries are throttled.
+// priority) are never throttled while a rule rejects every default priority query.
 func TestPriorityZeroNeverThrottled(t *testing.T) {
 	restoreAfterTest(t)
 
@@ -647,8 +674,25 @@ func TestPriorityZeroNeverThrottled(t *testing.T) {
 		waitForThrottledQuery(t, "select id from t1 limit 1", "ResourceExhausted")
 	})
 
-	t.Run("priority=0 SELECT bypasses throttling", func(t *testing.T) {
-		waitForUnthrottledQuery(t, "select /*vt+ PRIORITY=0 */ id from t1 limit 1")
+	t.Run("priority=0 SELECTs are never throttled while default priority ones are", func(t *testing.T) {
+		conn, err := mysql.Connect(t.Context(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// Run across several refreshes of the strategy's check, every second here.
+		var queries, rejected int
+		for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); queries++ {
+			_, err := conn.ExecuteFetch("select /*vt+ PRIORITY=0 */ id from t1 limit 1", 1000, true)
+			require.NoError(t, err, "a priority=0 SELECT must not be throttled")
+			if _, err := conn.ExecuteFetch("select id from t1 limit 1", 1000, true); err != nil {
+				require.ErrorContains(t, err, "ResourceExhausted")
+				rejected++
+			}
+		}
+		// The rule rejects every default priority SELECT while lag is above its threshold, so this
+		// shows that the priority=0 SELECTs ran during the breach.
+		require.Positive(t, queries)
+		assert.Equal(t, queries, rejected, "a default priority SELECT succeeded, so the breach ended during the test")
 	})
 
 	t.Run("start replication to restore healthy state", func(t *testing.T) {
