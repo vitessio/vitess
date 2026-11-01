@@ -3235,13 +3235,17 @@ func useNoopTabletManagerClient(t *testing.T) {
 
 // alwaysThrottleStrategy throttles every statement the query throttler evaluates. Its message
 // names the statement type, tablet type, priority and query it was given, so tests can check
-// what each call site passes.
+// what each call site passes. Some plans, such as a savepoint's, have no query.
 type alwaysThrottleStrategy struct{}
 
 func (alwaysThrottleStrategy) Evaluate(_ context.Context, _ *querythrottlerpb.Config, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, _ int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
+	query := "<no query>"
+	if parsedQuery != nil {
+		query = parsedQuery.Query
+	}
 	return registry.ThrottleDecision{
 		Throttle: true,
-		Message:  fmt.Sprintf("always throttle %s on %s with priority %d: %s", statementType, tabletType, attrs.Priority, parsedQuery.Query),
+		Message:  fmt.Sprintf("always throttle %s on %s with priority %d: %s", statementType, tabletType, attrs.Priority, query),
 	}
 }
 func (alwaysThrottleStrategy) Start()                  {}
@@ -3257,9 +3261,15 @@ func (alwaysThrottleFactory) New(registry.Deps) (registry.ThrottlingStrategyHand
 // alwaysThrottleStrategyType is not a real strategy; it only selects alwaysThrottleFactory.
 const alwaysThrottleStrategyType = querythrottlerpb.ThrottlingStrategy(1000)
 
-// enableAlwaysThrottle makes tsv's query throttler throttle every statement it evaluates.
+// enableAlwaysThrottle makes tsv's query throttler throttle every statement it evaluates. The
+// tablet server recovers a panic in a query, and some calls still return no error after one, so
+// the test also fails if a query panics while this strategy is enabled.
 func enableAlwaysThrottle(t *testing.T, tsv *TabletServer) {
 	t.Helper()
+	panics := tsv.stats.InternalErrors.Counts()["Panic"]
+	t.Cleanup(func() {
+		assert.Equal(t, panics, tsv.stats.InternalErrors.Counts()["Panic"], "a query panicked while the always-throttle strategy was enabled")
+	})
 	// The registry is process-wide and Register panics on a duplicate, e.g. with -count=2.
 	if _, ok := registry.Get(alwaysThrottleStrategyType); !ok {
 		registry.Register(alwaysThrottleStrategyType, alwaysThrottleFactory{})
