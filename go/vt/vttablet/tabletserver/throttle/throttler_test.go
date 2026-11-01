@@ -1829,6 +1829,38 @@ func TestCheckWhileEnabling(t *testing.T) {
 	}
 }
 
+// Before its first Operate, a throttler has no rate limiter to tell when it was last checked, and reports itself
+// neither dormant nor recently checked.
+func TestRecentCheckBeforeOperate(t *testing.T) {
+	throttler := newTestThrottler()
+	require.Nil(t, throttler.recentCheckRateLimiter.Load())
+	assert.False(t, throttler.isDormant())
+	assert.False(t, throttler.recentlyChecked())
+}
+
+// Disable doesn't wait for Operate to exit, so after a Disable and an Enable the old Operate can exit after the new
+// one stored its rate limiter. The old Operate must stop its own rate limiter: a stopped one reads as checked just
+// now, forever, so the throttler would report itself recently checked and never go dormant.
+func TestOperateStopsItsOwnRateLimiter(t *testing.T) {
+	throttler := newTestThrottler()
+
+	oldCtx, cancelOld := context.WithCancel(t.Context())
+	oldWG := &sync.WaitGroup{}
+	throttler.Operate(oldCtx, oldWG)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	wg := &sync.WaitGroup{}
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+	throttler.Operate(ctx, wg)
+
+	cancelOld()
+	oldWG.Wait()
+	assert.False(t, throttler.recentlyChecked(), "nothing checked the throttler")
+}
+
 func TestChecks(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
