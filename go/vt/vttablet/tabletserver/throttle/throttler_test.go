@@ -1801,6 +1801,34 @@ func TestDormant(t *testing.T) {
 	})
 }
 
+// Enable marks the throttler enabled before Operate creates the rate limiter that checks mark, and a check from a
+// throttler client or a CheckThrottler RPC can land in between. A check there, or during any later Enable, must
+// neither dereference a nil rate limiter nor race with Operate.
+func TestCheckWhileEnabling(t *testing.T) {
+	for range 20 {
+		throttler := newTestThrottler()
+		throttler.isOpen.Store(true)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		checksDone := make(chan struct{})
+		go func() {
+			defer close(checksDone)
+			for ctx.Err() == nil {
+				throttler.Check(ctx, throttlerapp.TestingName.String(), nil, &CheckFlags{})
+			}
+		}()
+		for range 3 {
+			wg := throttler.Enable()
+			require.NotNil(t, wg)
+			throttler.Disable()
+			wg.Wait()
+		}
+		cancel()
+		<-checksDone
+		throttler.isOpen.Store(false)
+	}
+}
+
 func TestChecks(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)

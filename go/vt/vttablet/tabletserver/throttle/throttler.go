@@ -168,7 +168,9 @@ type Throttler struct {
 	heartbeatWriter  heartbeat.HeartbeatWriter
 	overrideTmClient tmclient.TabletManagerClient
 
-	recentCheckRateLimiter *timer.RateLimiter
+	// recentCheckRateLimiter is nil until the first Operate. Enable marks the throttler enabled before Operate
+	// creates it, so a check can run while it is nil.
+	recentCheckRateLimiter atomic.Pointer[timer.RateLimiter]
 	recentCheckDormantDiff int64
 	recentCheckDiff        int64
 
@@ -772,18 +774,20 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 // Instead of measuring actual time, we use the fact recentCheckRateLimiter ticks every second, and take
 // a logical diff, counting the number of ticks since the last check. This is a good enough approximation.
 func (throttler *Throttler) isDormant() bool {
-	if throttler.recentCheckRateLimiter == nil {
+	rateLimiter := throttler.recentCheckRateLimiter.Load()
+	if rateLimiter == nil {
 		return false
 	}
-	return throttler.recentCheckRateLimiter.Diff() > throttler.recentCheckDormantDiff
+	return rateLimiter.Diff() > throttler.recentCheckDormantDiff
 }
 
 // recentlyChecked returns true when this throttler was checked "just now" (whereabouts of once second or two)
 func (throttler *Throttler) recentlyChecked() bool {
-	if throttler.recentCheckRateLimiter == nil {
+	rateLimiter := throttler.recentCheckRateLimiter.Load()
+	if rateLimiter == nil {
 		return false
 	}
-	return throttler.recentCheckRateLimiter.Diff() <= throttler.recentCheckDiff
+	return rateLimiter.Diff() <= throttler.recentCheckDiff
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
@@ -802,11 +806,13 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	metricsAggregateTicker := addTicker(throttler.metricsAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
 	var lastPrimaryStimulation time.Time
-	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
+	recentCheckRateLimiter := timer.NewRateLimiter(recentCheckRateLimiterInterval)
+	throttler.recentCheckRateLimiter.Store(recentCheckRateLimiter)
 
 	wg.Go(func() {
 		defer func() {
-			throttler.recentCheckRateLimiter.Stop()
+			// Stop this Operate's rate limiter, not the field's, which a later Enable may have replaced.
+			recentCheckRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
 			clear(throttler.inventory.TabletMetrics)
@@ -1573,7 +1579,9 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 
 	if shouldRequestHeartbeats {
 		throttler.requestHeartbeats()
-		throttler.recentCheckRateLimiter.DoEmpty()
+		if rateLimiter := throttler.recentCheckRateLimiter.Load(); rateLimiter != nil {
+			rateLimiter.DoEmpty()
+		}
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
