@@ -875,9 +875,10 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 //     transaction when the fetch was an explicit SELECT NEXT.
 //   - A statement that takes or releases an advisory lock, so that clients can still
 //     release their locks while a rule rejects queries.
-//   - A SELECT that reads no table, which puts no load on the tables that throttling
-//     protects. VTGate sends them to check a SET and to keep a lock session or a temporary
-//     table's connection alive, and /debug/health runs one.
+//   - A SELECT that names no table. VTGate sends them to check a SET and to keep a lock
+//     session or a temporary table's connection alive, and /debug/health runs one. The skip
+//     keys on the tables the statement names, so it also covers a SELECT that names none but
+//     still loads the server, such as one that calls a stored function that reads tables.
 func (qre *QueryExecutor) throttle() error {
 	switch {
 	case qre.plan.PlanID == p.PlanNextval,

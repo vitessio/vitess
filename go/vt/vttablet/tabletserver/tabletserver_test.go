@@ -3327,7 +3327,7 @@ func TestTabletServerQueryThrottlerSkippedStatements(t *testing.T) {
 	_, err = tsv.Execute(ctx, nil, target, "update test_table set name_string = release_lock('a') where pk = 1", nil, 0, 0, options)
 	require.NoError(t, err, "DML that releases an advisory lock must not be throttled")
 	_, err = tsv.Execute(ctx, nil, target, "select @@sql_mode orig, 'STRICT_TRANS_TABLES' new from dual", nil, 0, 0, options)
-	require.NoError(t, err, "a SELECT that reads no table, such as the one vtgate runs to check a SET, must not be throttled")
+	require.NoError(t, err, "a SELECT that names no table, such as the one vtgate runs to check a SET, must not be throttled")
 
 	// Each call site must also pass the statement's type, which alwaysThrottleStrategy names in
 	// its message: Execute, Stream, and Stream's DML path.
@@ -3335,7 +3335,7 @@ func TestTabletServerQueryThrottlerSkippedStatements(t *testing.T) {
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit statement must be throttled")
 	require.ErrorContains(t, err, "always throttle SELECT on PRIMARY with priority 20: "+selectTable)
 	_, err = tsv.Execute(ctx, nil, target, "flush logs", nil, 0, 0, options)
-	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement other than SELECT must be throttled even if it reads no table")
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement other than SELECT must be throttled even if it names no table")
 	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, 0, 0, options, noop)
 	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit streamed statement must be throttled")
 	require.ErrorContains(t, err, "always throttle SELECT")
