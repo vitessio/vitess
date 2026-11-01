@@ -1802,6 +1802,35 @@ func TestDormant(t *testing.T) {
 	})
 }
 
+// Enable marks the throttler enabled before Operate creates the rate limiter that checks mark, and the query
+// throttler's strategy checks the dedicated query throttler on a timer of its own, so its refresh can land in
+// between when the query throttler is first enabled. A check there, or during any later Enable, must neither
+// dereference a nil rate limiter nor race with Operate.
+func TestCheckWhileEnabling(t *testing.T) {
+	for range 20 {
+		throttler := newTestThrottler()
+		throttler.isOpen.Store(true)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		checksDone := make(chan struct{})
+		go func() {
+			defer close(checksDone)
+			for ctx.Err() == nil {
+				throttler.Check(ctx, throttlerapp.TestingName.String(), nil, &CheckFlags{})
+			}
+		}()
+		for range 3 {
+			wg := throttler.Enable()
+			require.NotNil(t, wg)
+			throttler.Disable()
+			wg.Wait()
+		}
+		cancel()
+		<-checksDone
+		throttler.isOpen.Store(false)
+	}
+}
+
 // The query throttler's strategy checks the dedicated query throttler only once per refresh interval, which can
 // outlast an on-demand heartbeat lease. The dedicated query throttler on the primary must therefore keep renewing the
 // lease even when nothing checks it, or the lag read on the next refresh includes the paused heartbeats. It must do
