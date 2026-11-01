@@ -1805,15 +1805,14 @@ func TestDormant(t *testing.T) {
 // The query throttler's strategy checks the dedicated query throttler only once per refresh interval, which can
 // outlast an on-demand heartbeat lease. The dedicated query throttler on the primary must therefore keep renewing the
 // lease even when nothing checks it, or the lag read on the next refresh includes the paused heartbeats. It must do
-// so only while a query throttler rule uses lag, though: heartbeats feed only the lag metric.
+// so whatever metrics the rules use, or a lag rule added later reads the age of the last heartbeat as lag.
 func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
 	tcases := []struct {
-		name         string
-		metrics      []string
-		wantRenewals bool
+		name    string
+		metrics []string
 	}{
-		{name: "lag rule", metrics: []string{"loadavg", "shard/lag"}, wantRenewals: true},
-		{name: "no lag rule", metrics: []string{"loadavg", "threads_running"}, wantRenewals: false},
+		{name: "lag rule", metrics: []string{"loadavg", "shard/lag"}},
+		{name: "no lag rule", metrics: []string{"loadavg", "threads_running"}},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
@@ -1836,45 +1835,10 @@ func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
 
 				// Nothing checks the throttler, so every request from here on renews the lease by itself.
 				requests := heartbeatWriter.Requests()
-				if tcase.wantRenewals {
-					assert.Eventually(t, func() bool {
-						return heartbeatWriter.Requests() >= requests+2
-					}, 30*time.Second, 100*time.Millisecond, "the dedicated query throttler must renew the heartbeat lease without being checked")
-				} else {
-					// The strategy's checks, and a probed replica reporting them, must not request heartbeats either.
-					require.True(t, throttler.IsRunning())
-					assert.Never(t, func() bool {
-						throttler.Check(ctx, throttlerapp.QueryThrottlerName.String(), nil, &CheckFlags{})
-						throttler.requestHeartbeats()
-						return heartbeatWriter.Requests() > requests
-					}, 3*queryThrottlerHeartbeatLeaseInterval, 100*time.Millisecond, "the dedicated query throttler must not request heartbeats without a lag rule")
-				}
+				assert.Eventually(t, func() bool {
+					return heartbeatWriter.Requests() >= requests+2
+				}, 30*time.Second, 100*time.Millisecond, "the dedicated query throttler must renew the heartbeat lease without being checked")
 			})
-		})
-	}
-}
-
-func TestQueryThrottlerChecksLag(t *testing.T) {
-	tcases := []struct {
-		name    string
-		metrics any // nil: the app has no entry
-		want    bool
-	}{
-		{name: "no entry"},
-		{name: "no lag", metrics: base.MetricNames{base.LoadAvgMetricName, base.ThreadsRunningMetricName}},
-		{name: "bare lag", metrics: base.MetricNames{base.LoadAvgMetricName, base.LagMetricName}, want: true},
-		{name: "scoped lag", metrics: base.MetricNames{"shard/lag"}, want: true},
-		{name: "as a slice", metrics: []base.MetricName{"self/lag"}, want: true},
-	}
-	for _, tcase := range tcases {
-		t.Run(tcase.name, func(t *testing.T) {
-			throttler := newTestThrottler()
-			if tcase.metrics != nil {
-				throttler.appCheckedMetrics.Set(throttlerapp.QueryThrottlerName.String(), tcase.metrics, cache.DefaultExpiration)
-			}
-			// Another app's lag must not count.
-			throttler.appCheckedMetrics.Set(throttlerapp.OnlineDDLName.String(), base.MetricNames{base.LagMetricName}, cache.DefaultExpiration)
-			assert.Equal(t, tcase.want, throttler.queryThrottlerChecksLag())
 		})
 	}
 }

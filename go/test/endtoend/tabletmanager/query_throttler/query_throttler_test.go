@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -319,6 +320,27 @@ func waitForUnthrottledQuery(t *testing.T, query string) {
 		}
 		assert.NoError(c, err, "query %q is still throttled", query)
 	}, waitTimeout, 2*time.Second)
+}
+
+// primaryLag returns the shard lag that the primary's dedicated query throttler reports. It checks
+// as the "vitess" app, whose checks don't renew the heartbeat lease.
+func primaryLag(ctx context.Context) (float64, error) {
+	tabletAlias, err := topoproto.ParseTabletAlias(primaryTablet.Alias)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := vtctldClient.CheckThrottler(ctx, &vtctldatapb.CheckThrottlerRequest{
+		TabletAlias:   tabletAlias,
+		ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+	})
+	if err != nil {
+		return 0, err
+	}
+	lagMetric, ok := resp.GetCheck().GetMetrics()["lag"]
+	if !ok {
+		return 0, fmt.Errorf("lag metric missing from check: %v", resp)
+	}
+	return lagMetric.GetValue(), nil
 }
 
 // TestDisabledByDefault validates that with no QueryThrottlerConfig pushed, queries are never
@@ -848,5 +870,83 @@ func TestThrottlePathsUnderLag(t *testing.T) {
 
 	t.Run("start replication to restore healthy state", func(t *testing.T) {
 		startReplication(t)
+	})
+}
+
+// TestAddLagRuleToRunningConfig validates that adding a lag rule to an enabled configuration
+// that had none rejects nothing while replication is healthy. The primary keeps its on-demand
+// heartbeats running for as long as the query throttler is enabled, so the lag that the new rule
+// reads is current, rather than the age of the last heartbeat before the lease lapsed.
+func TestAddLagRuleToRunningConfig(t *testing.T) {
+	restoreAfterTest(t)
+
+	config := func(metricRules map[string]*querythrottlerpb.MetricRule) *querythrottlerpb.Config {
+		return &querythrottlerpb.Config{
+			Enabled:  true,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+					"PRIMARY": {StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+						"SELECT": {MetricRules: metricRules},
+					}},
+				},
+			},
+		}
+	}
+	// A threshold that the test cluster never reaches.
+	threadsRunning := &querythrottlerpb.MetricRule{Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 1000, Throttle: 100}}}
+	const lag5s = 5.0
+	lag := &querythrottlerpb.MetricRule{Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: lag5s, Throttle: 100}}}
+
+	t.Run("push config with only a threads_running rule", func(t *testing.T) {
+		pushQueryThrottlerConfig(t, config(map[string]*querythrottlerpb.MetricRule{"threads_running": threadsRunning}))
+	})
+
+	t.Run("wait for query throttler to be enabled", func(t *testing.T) {
+		waitForQueryThrottlerStatus(t, primaryTablet, true)
+	})
+
+	t.Run("lag stays current for longer than the heartbeat lease", func(t *testing.T) {
+		// TestMain sets a 5s on-demand lease. assert rather than require, so the next step
+		// still shows what a stale lag does to queries.
+		var reads atomic.Int64
+		var firstErr atomic.Value
+		assert.Never(t, func() bool {
+			got, err := primaryLag(t.Context())
+			if err != nil {
+				firstErr.CompareAndSwap(nil, err.Error())
+				return false
+			}
+			reads.Add(1)
+			return got > lag5s
+		}, 15*time.Second, time.Second, "the primary stopped writing heartbeats while the query throttler was enabled")
+		// The condition runs about once a second, so most reads must succeed for the check to mean anything.
+		assert.GreaterOrEqual(t, reads.Load(), int64(10), "too few lag reads; first error: %v", firstErr.Load())
+	})
+
+	t.Run("adding a lag rule rejects no SELECT", func(t *testing.T) {
+		conn, err := mysql.Connect(t.Context(), &vtParams)
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+
+		pushQueryThrottlerConfig(t, config(map[string]*querythrottlerpb.MetricRule{"threads_running": threadsRunning, "lag": lag}))
+		// Run SELECTs back to back across several of the strategy's 1s refreshes.
+		deadline := time.Now().Add(5 * time.Second)
+		for queries := 0; time.Now().Before(deadline); queries++ {
+			_, err := conn.ExecuteFetch("select id from t1 limit 1", 1000, true)
+			require.NoError(t, err, "SELECT %d after adding a lag rule was rejected on a healthy shard", queries)
+		}
+	})
+
+	t.Run("the dedicated throttler checks lag", func(t *testing.T) {
+		// So the previous step ran with the lag rule in effect.
+		tabletAlias, err := topoproto.ParseTabletAlias(primaryTablet.Alias)
+		require.NoError(t, err)
+		resp, err := vtctldClient.GetThrottlerStatus(t.Context(), &vtctldatapb.GetThrottlerStatusRequest{
+			TabletAlias:   tabletAlias,
+			ThrottlerType: tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		})
+		require.NoError(t, err)
+		assert.Contains(t, resp.GetStatus().GetAppCheckedMetrics()[throttlerapp.QueryThrottlerName.String()], "lag")
 	})
 }
