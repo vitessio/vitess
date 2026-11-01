@@ -233,6 +233,13 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 		return nil
 	}
 
+	// Validation refuses rules for the statement types that base.IsQueryThrottlerStatementType
+	// leaves out, such as UNLOCK_TABLES, whose rejection costs more than running them. A config
+	// written straight to topo can still hold one, so no strategy evaluates those statements.
+	if !base.IsQueryThrottlerStatementType(statementType.String()) {
+		return nil
+	}
+
 	// Capture start time for latency measurements only when throttling is enabled
 	startTime := time.Now()
 

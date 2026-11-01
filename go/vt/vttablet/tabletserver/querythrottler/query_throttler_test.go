@@ -455,6 +455,34 @@ func TestQueryThrottler_StatementInTransactionNotThrottled(t *testing.T) {
 	require.Error(t, throttle(0), "the same statement outside a transaction must be throttled")
 }
 
+// Validation refuses rules for MIGRATION, SET and UNLOCK_TABLES, whose rejection costs more
+// than running them. A config written straight to topo can still hold one, so no strategy
+// may evaluate those statements, while it still evaluates the statements rules may name.
+func TestQueryThrottler_RefusedStatementTypesNotThrottled(t *testing.T) {
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	strategy := &mockThrottlingStrategy{
+		decision: registry.ThrottleDecision{Throttle: true, Message: "metric=lag value=20 over threshold"},
+	}
+	iqt := &QueryThrottler{
+		ctx: t.Context(),
+		env: env,
+	}
+	iqt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{Enabled: true},
+		strategy: strategy,
+	})
+
+	for _, stmtType := range []sqlparser.StatementType{sqlparser.StmtMigration, sqlparser.StmtSet, sqlparser.StmtUnlockTables, sqlparser.StmtSelect} {
+		err := iqt.Throttle(t.Context(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "q"}, stmtType, 0, &querypb.ExecuteOptions{Priority: "100"})
+		if stmtType == sqlparser.StmtSelect {
+			require.Error(t, err, "a SELECT must still be throttled")
+		} else {
+			require.NoError(t, err, "a %s statement must not be throttled", stmtType)
+		}
+	}
+	require.Len(t, strategy.getEvaluatedCfgs(), 1, "only the SELECT may reach the strategy")
+}
+
 func TestQueryThrottler_extractWorkloadName(t *testing.T) {
 	tests := []struct {
 		name    string
