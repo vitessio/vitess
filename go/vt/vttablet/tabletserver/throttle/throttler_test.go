@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
@@ -1836,6 +1837,10 @@ func TestCheckWhileEnabling(t *testing.T) {
 // lease even when nothing checks it, or the lag read on the next refresh includes the paused heartbeats. It must do
 // so whatever metrics the rules use, or a lag rule added later reads the age of the last heartbeat as lag.
 func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
+	// A lease lasts at least MinimalOnDemandDuration. Renewing at least twice per shortest lease keeps it from
+	// lapsing even when one renewal comes late.
+	require.LessOrEqual(t, queryThrottlerHeartbeatLeaseInterval, heartbeat.MinimalOnDemandDuration/2)
+
 	tcases := []struct {
 		name    string
 		metrics []string
@@ -2629,10 +2634,70 @@ func TestQueryThrottlerMetricsPrefix(t *testing.T) {
 	assert.NotSame(t, statsThrottlerCheckAnyTotal, queryThrottler.counter(statsThrottlerCheckAnyTotal, "CheckAnyTotal", ""))
 
 	checkAnyTotal := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckAnyTotal", "")
+	checkAnyError := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckAnyError", "")
 	checkSelfLagTotal := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckSelfLagTotal", "")
-	checks, lagChecks := checkAnyTotal.Get(), checkSelfLagTotal.Get()
-	queryThrottler.check.Check(t.Context(), testAppName.String(), base.SelfScope, base.MetricNames{base.LagMetricName}, &CheckFlags{})
+	checkSelfLagError := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckSelfLagError", "")
+	checks, failedChecks := checkAnyTotal.Get(), checkAnyError.Get()
+	lagChecks, failedLagChecks := checkSelfLagTotal.Get(), checkSelfLagError.Get()
+	// The throttler has collected no lag, so the check fails.
+	checkResult := queryThrottler.check.Check(t.Context(), testAppName.String(), base.SelfScope, base.MetricNames{base.LagMetricName}, &CheckFlags{})
+	require.False(t, checkResult.IsOK())
 	assert.Eventually(t, func() bool {
-		return checkAnyTotal.Get() > checks && checkSelfLagTotal.Get() > lagChecks
+		return checkAnyTotal.Get() > checks && checkAnyError.Get() > failedChecks &&
+			checkSelfLagTotal.Get() > lagChecks && checkSelfLagError.Get() > failedLagChecks
 	}, 30*time.Second, 10*time.Millisecond, "a check on the dedicated query throttler must count under its own prefix")
+
+	// localCheck reports how long ago the metric was last healthy. The check fails, so it doesn't mark the
+	// metric healthy again.
+	selfLag := base.LagMetricName.AggregatedName(base.SelfScope)
+	secondsSinceHealthy := stats.GetOrNewGauge("QueryThrottlerDedicatedCheckSelfSecondsSinceHealthy", "")
+	queryThrottler.metricsHealth.Set(selfLag, time.Now().Add(-time.Hour), cache.DefaultExpiration)
+	queryThrottler.check.localCheck(t.Context(), selfLag)
+	assert.Eventually(t, func() bool {
+		return secondsSinceHealthy.Get() >= int64(time.Hour.Seconds())
+	}, 30*time.Second, 10*time.Millisecond, "a local check on the dedicated query throttler must report under its own prefix")
+
+	queryThrottler.check.reportAggregated(selfLag, base.NewSimpleMetricResult(42.5))
+	assert.Equal(t, 42.5, stats.GetOrNewGaugeFloat64("QueryThrottlerDedicatedAggregatedSelfLag", "").Get(),
+		"an aggregated metric of the dedicated query throttler must report under its own prefix")
+}
+
+// recentlyCheckedTMClient answers every probe as a tablet that something checked recently.
+type recentlyCheckedTMClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (recentlyCheckedTMClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return &tabletmanagerdatapb.CheckThrottlerResponse{
+		ResponseCode:    tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+		RecentlyChecked: true,
+	}, nil
+}
+
+// The dedicated query throttler's probes, and the heartbeat requests they make, record their metrics under its own
+// prefix too.
+func TestQueryThrottlerProbeMetricsPrefix(t *testing.T) {
+	throttler := newTestThrottler()
+	throttler.throttlerType = QueryTabletThrottler
+	throttler.isLeader.Store(true)
+
+	probesTotal := stats.GetOrNewCounter("QueryThrottlerDedicatedProbesTotal", "")
+	probeRecentlyChecked := stats.GetOrNewCounter("QueryThrottlerDedicatedProbeRecentlyChecked", "")
+	heartbeatRequests := stats.GetOrNewCounter("QueryThrottlerDedicatedHeartbeatRequests", "")
+
+	selfAlias := throttler.tabletAliasString()
+	throttler.inventory = &base.Inventory{ClustersProbes: base.Probes{selfAlias: {Alias: selfAlias}}}
+	probes := probesTotal.Get()
+	throttler.collectSelfMetrics(t.Context(), recentlyCheckedTMClient{})
+	assert.Eventually(t, func() bool {
+		return probesTotal.Get() > probes
+	}, 30*time.Second, 10*time.Millisecond, "a self probe of the dedicated query throttler must count under its own prefix")
+
+	const replicaAlias = "zone1-0000000101"
+	throttler.inventory = &base.Inventory{ClustersProbes: base.Probes{replicaAlias: {Alias: replicaAlias, Tablet: &topodatapb.Tablet{}}}}
+	probes, recentlyChecked, requests := probesTotal.Get(), probeRecentlyChecked.Get(), heartbeatRequests.Get()
+	throttler.collectShardMetrics(t.Context(), recentlyCheckedTMClient{})
+	assert.Eventually(t, func() bool {
+		return probesTotal.Get() > probes && probeRecentlyChecked.Get() > recentlyChecked && heartbeatRequests.Get() > requests
+	}, 30*time.Second, 10*time.Millisecond, "a shard probe of the dedicated query throttler, and the heartbeat request it makes, must count under its own prefix")
 }
