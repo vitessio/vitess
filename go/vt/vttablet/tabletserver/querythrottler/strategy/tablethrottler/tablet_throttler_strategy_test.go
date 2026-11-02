@@ -732,7 +732,8 @@ func primeGoodCacheState(strategy *TabletThrottlerStrategy) *cacheState {
 
 // When Stop() races an in-flight refresh, refreshCache must keep the prior good state, even
 // if the client still returns a result. Treating only DeadlineExceeded as failure would let
-// Canceled reach the store path.
+// Canceled reach the store path. Stop is not a failed refresh either, so it must not count
+// as one or record a refresh latency.
 func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState(t *testing.T) {
 	overloaded := &throttle.CheckResult{
 		Metrics: map[string]*throttle.MetricResult{
@@ -741,6 +742,8 @@ func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState
 	}
 	strategy := NewTabletThrottlerStrategy(NewFakeThrottleClientWrapper(overloaded, false), createTestTabletConfig())
 	primed := primeGoodCacheState(strategy)
+	failures := cacheRefreshFailures.Get()
+	latencies := cacheLoadLatency.Counts()
 
 	// Stands in for Stop() running while a refresh is still in flight; refreshCache's
 	// derived ctx inherits the cancellation.
@@ -749,6 +752,8 @@ func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState
 
 	require.Same(t, primed, strategy.cachedState.Load(),
 		"canceled refresh must preserve the prior good cache state")
+	require.Equal(t, failures, cacheRefreshFailures.Get(), "a refresh that Stop interrupts must not count as a failure")
+	require.Equal(t, latencies, cacheLoadLatency.Counts(), "a refresh that Stop interrupts must not record a latency")
 }
 
 // A refresh that returns no result must keep the prior good state rather than store a nil

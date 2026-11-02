@@ -244,6 +244,10 @@ func (s *TabletThrottlerStrategy) refreshCache() {
 
 	start := time.Now()
 	checkResult, checkOk := s.throttlerClient.ThrottleCheckOK(ctx, throttlerapp.QueryThrottlerName)
+	if s.ctx.Err() != nil {
+		// Stop interrupted the refresh, which therefore neither failed nor has a result to keep.
+		return
+	}
 
 	status := cacheRefreshStatusSuccess
 	if ctx.Err() != nil || checkResult == nil {
