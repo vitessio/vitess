@@ -159,6 +159,9 @@ otherwise, all examples are confirmed on an unmodified build of `main`, and a sh
      ...`), when vtgate evaluates an expression over the columns of an outer join:
      `SELECT GREATEST(0.2, COALESCE(t0.c0, 0.5)) FROM t0 RIGHT JOIN t1 ON t0.c1 = t1.c0` and
      `SELECT t1.c0 NOT IN (t0.c0 XOR COALESCE(t1.c0, 'x')) FROM t0 LEFT JOIN t1 ON t0.c0`
+   - More panics of the same kind (`index out of range [5] with length 5`, `[4] with length 4`, `[11] with
+     length 11`, and nil pointer dereferences) occur for expressions that vtgate evaluates over outer joins with
+     `ORDER BY ... LIMIT`.
    - `vexplain queries` on a query that hits bug 3 panics in `ExecuteLogger.Log` ("query not able to parse").
 
 ### Wrong results
@@ -196,7 +199,8 @@ otherwise, all examples are confirmed on an unmodified build of `main`, and a sh
    - In a `RIGHT JOIN` that groups by the primary vindex column of the inner side, the `NULL` group is split by
      shard: `SELECT t1.c0, COUNT(*) FROM t1 RIGHT JOIN t0 ON t1.c0 = t0.c0 GROUP BY t1.c0` returns two `NULL`
      groups.
-   - vtgate adds the values of `SUM(DISTINCT float_column)` with float instead of double precision.
+   - vtgate adds the values of `SUM(DISTINCT float_column)` with too little precision, because it receives the
+     distinct `FLOAT` values from the shards as text with 6 significant digits (see bug 6).
 
 6. **More wrong results of sharded queries**, with `t0.c0` holding 1, 2, 3, 4 and `t1.c0` holding 1, 5:
    - **A positional `ORDER BY` on a `UNION` is ignored.**
@@ -235,6 +239,15 @@ otherwise, all examples are confirmed on an unmodified build of `main`, and a sh
      IN (c0)` returns every row instead of the one with `c0 = 1`, because the predicate rewriting simplifies
      `c0 OR c0` to `c0` also where its value is used, not just its truth value. Unsharded keyspaces are not
      affected, because vtgate sends their predicates unchanged.
+   - **`UNION ALL` with a reference table returns the reference rows once per shard.** vtgate merges
+     `SELECT t1.c0 FROM t1 UNION ALL SELECT t0.c0 FROM t0` (with `t1` a reference table holding 10 and 20, and
+     `t0` holding 1, 2, 3) into one scatter route, so a keyspace with 4 shards returns 11 rows instead of 5.
+     `UNION` hides this by removing the duplicates.
+   - **`FLOAT` values lose precision between queries.** MySQL sends `FLOAT` values as text with 6 significant
+     digits, so a stored `1052819264` reaches vtgate as `1052820000`. When vtgate uses such values in another query,
+     they no longer match: `SELECT COUNT(*) FROM f2 WHERE f2.c1 IN (SELECT sq.c1 FROM f2 AS sq)` on a `FLOAT`
+     column `c1` returns 1 instead of 3, because vtgate runs the subquery first and sends its rounded values to
+     the shards. With a `consistent_lookup` vindex on such a column, `WHERE c1 = 1052819264` finds no row.
 
 7. **Outer joins on the sharding key** (sharded), with `t0.c0` holding 1, 2, `t1.c0` holding 1, 2, 3, 4 and
    `t2.c0` holding 2, 3:
