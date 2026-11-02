@@ -101,14 +101,14 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
 ### Crashes and panics
 
 1. **A query can crash vtgate** (sharded). `Concatenate.parallelExec` runs each `UNION` source in a goroutine that
-   does not recover panics, so a panic in a `UNION` kills the whole process. With bug 8 below, this query does:
+   does not recover panics, so a panic in a `UNION` kills the whole process. With bug 9 below, this query does:
    ```sql
    (SELECT t1.c0 AS a0 FROM t1 JOIN t0 ON 5 NOT IN (t1.c0, EXISTS (SELECT 1) < t0.c0)
      WHERE t0.c0 >= (SELECT MAX(sq.c0) FROM t0 AS sq))
    UNION (SELECT EXISTS (SELECT 1 WHERE FALSE) AS a0 FROM t0) ORDER BY 1 ASC
    -- panic: runtime error: index out of range [3] with length 2 (engine/concatenate.go:173)
    ```
-   In a run against a vtgate with local workarounds for bugs 3, 4 and 7, a panic in the compiled `NOT`
+   In a run against a vtgate with local workarounds for bugs 3, 4 and 8, a panic in the compiled `NOT`
    (`interface conversion: evalengine.eval is nil, not *evalengine.evalInt64`) crashed vtgate the same way.
    That one is not yet reproduced on `main`. With a random workload and the generator's avoidances, SQLancer
    still crashed an unmodified vtgate within minutes.
@@ -197,8 +197,20 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
      as 9, 5, 2, 10, 1 (for `c0` values 1, 2, 9, 10). vtgate returns 10, 9, 2, 1, 5.
    - When vtgate groups the rows of a derived table itself, values of a `ZEROFILL` column lose their padding
      (`7` instead of `000000000007`).
+   - **`x OR x` and `x AND x` become `x` inside a predicate.** `SELECT c0 FROM t1 WHERE CAST(c0 OR c0 AS SIGNED)
+     IN (c0)` returns every row instead of the one with `c0 = 1`, because the predicate rewriting simplifies
+     `c0 OR c0` to `c0` also where its value is used, not just its truth value. Unsharded keyspaces are not
+     affected, because vtgate sends their predicates unchanged.
 
-7. **A subquery whose `WHERE` is false empties the whole query** (sharded). These queries return no rows, even
+7. **Outer joins on the sharding key** (sharded), with `t0.c0` holding 1, 2, `t1.c0` holding 1, 2, 3, 4 and
+   `t2.c0` holding 2, 3:
+   - `SELECT t1.c0 FROM t0 LEFT JOIN t1 ON NULL = 'q'` returns no rows instead of the two rows of `t0` with
+     `NULL`. (`ON 1 = 0` works.)
+   - `SELECT t0.c1 FROM t0 JOIN t2 ON t0.c0 = t2.c0 RIGHT JOIN t1 ON t0.c0 = t1.c0` returns 1 row instead of 4.
+   - `SELECT DISTINCT t0.c0 FROM t1 LEFT JOIN t0 ON t1.c0 = t0.c0` returns `NULL` once per shard, and a derived
+     table over it gets a `NULL` group per shard.
+
+8. **A subquery whose `WHERE` is false empties the whole query** (sharded). These queries return no rows, even
    though `t` has rows:
    ```sql
    SELECT c0 FROM t WHERE NOT EXISTS (SELECT 1 WHERE FALSE);
@@ -212,7 +224,7 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
    subquery that filters the outer rows, such as `WHERE EXISTS (...)`. The form `NOT (EXISTS (...))` takes
    another path: it still returns no rows when that case is removed.
 
-8. **A cross-shard join predicate with a subquery goes to the wrong side** (sharded). A predicate that uses
+9. **A cross-shard join predicate with a subquery goes to the wrong side** (sharded). A predicate that uses
    columns of both tables and a subquery is not evaluated where both are available:
    - `SELECT t1.c0, t0.c0 FROM t1 JOIN t0 ON t1.c0 < t0.c0 + EXISTS (SELECT 1)` drops the predicate and
      returns the cross product (9 instead of 6 rows for 3 rows each).
@@ -220,7 +232,7 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
      the route of `t1`, which fails with `Unknown column 't0.c0'`.
    - With a `UNION`, this crashes vtgate (bug 1).
 
-9. **Rows land on the wrong shard** (sharded). vtgate computes the keyspace ID from the value in the statement,
+10. **Rows land on the wrong shard** (sharded). vtgate computes the keyspace ID from the value in the statement,
    before MySQL converts it to the column type. When MySQL stores a different value, for example because
    `INSERT IGNORE` clamps an out-of-range value, the row is on the wrong shard:
    ```sql
@@ -231,18 +243,18 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
    ```
    A unique key on `c0` does not prevent duplicates in this case either.
 
-10. **`PRIMARY KEY UNIQUE` on a column loses the primary key** (unsharded and sharded).
+11. **`PRIMARY KEY UNIQUE` on a column loses the primary key** (unsharded and sharded).
    `CREATE TABLE t (c0 INT PRIMARY KEY UNIQUE)` creates a nullable `c0` with only a `UNIQUE KEY`, because
    `ColumnTypeOptions.KeyOpt` holds only one key option and the last one wins.
 
-11. **A float literal as a bind variable changes `CAST`** (unsharded and sharded). vtgate sends the literal
+12. **A float literal as a bind variable changes `CAST`** (unsharded and sharded). vtgate sends the literal
     `1.7976931348623157E308` as `CAST(:vtg1 AS DOUBLE)`. `SELECT CAST(1.7976931348623157E308 AS SIGNED)`
     returns 9223372036854775807 on MySQL, but fails through vtgate with `BIGINT value is out of range`, and in
     a `WHERE` clause the row disappears.
 
 ### Valid queries that fail
 
-12. **Derived tables and `UNION`s over cross-shard joins** (sharded). vtgate generates invalid SQL or reports an
+13. **Derived tables and `UNION`s over cross-shard joins** (sharded). vtgate generates invalid SQL or reports an
     internal error:
     - `SELECT d.a0, COUNT(*) FROM (SELECT t0.c0 + t1.c0 AS a0 FROM t0, t1) AS d GROUP BY d.a0` fails with
       `missing bind var t0_c0`.
@@ -262,13 +274,13 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
 
 ### Schema problems
 
-13. **The column attribute `STORAGE {DISK|MEMORY}` is not parsed.** vtgate passes such a `CREATE TABLE`
+14. **The column attribute `STORAGE {DISK|MEMORY}` is not parsed.** vtgate passes such a `CREATE TABLE`
     through as partial DDL. The schema tracker cannot parse the `SHOW CREATE TABLE` output
     (`/*!50606 STORAGE MEMORY */`) and skips the table. In a sharded keyspace, `INSERT` without a column list,
     `SELECT *` in a join and similar queries on that table then fail with `VT09004` or
     `VT09015: schema tracking required`.
 
-14. **vtgate rewrites invalid DDL into valid DDL.** MySQL rejects `CREATE INDEX i0 USING HASH ON h (c0, c1 ASC)`
+15. **vtgate rewrites invalid DDL into valid DDL.** MySQL rejects `CREATE INDEX i0 USING HASH ON h (c0, c1 ASC)`
     with `Incorrect usage of spatial/fulltext/hash index and explicit index order`. vtgate drops `USING HASH`
     and creates a B-tree index.
 
