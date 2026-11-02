@@ -21,6 +21,9 @@
 ^VT\d+: unsupported: correlated subquery is only supported for EXISTS
 ^VT\d+: unsupported: unmergable subquery can not be inside complex expression
 ^VT\d+: unsupported: subquery in outer join predicate
+# DML on a reference table without a source (the harness fills reference tables directly on the shards)
+^(VT\d+: )?table '.*' does not have a primary vindex
+^unsupported opcode: Reference
 # Known vtgate bug (see README.md): the formatter drops parentheses around IS/IN/LIKE/REGEXP/BETWEEN operands, so vttablet cannot
 # parse the rewritten query.
 vttablet: rpc error: code = InvalidArgument desc = (syntax error at position|You have an error in your SQL syntax)

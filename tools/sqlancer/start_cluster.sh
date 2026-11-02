@@ -14,8 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Starts a vttestserver with two unsharded (u0, u1) and two sharded (s0, s1) keyspaces for SQLancer, and gives
-# the sharded keyspaces a vschema with the vindexes that run.sh can use. Run it as a non-root user (mysqlctl
+# Starts a vttestserver for SQLancer with these keyspaces:
+#   u0, u1  unsharded
+#   s0, s1  2 shards each
+#   w0, w1  4 shards each
+#   lk      unsharded, for the tables of lookup vindexes (--vitess-lookup-keyspace)
+# and gives the sharded keyspaces a vschema with the vindexes that run.sh can use. Run it as a non-root user (mysqlctl
 # refuses to run as root) with the Vitess binaries in $VTROOT/bin and mysqld on the PATH.
 #
 # The vtgate MySQL port is VTGATE_PORT (default 33573, i.e. --port + 3).
@@ -29,7 +33,7 @@ VTCTLD_GRPC_PORT=$((BASE_PORT + 1))
 : "${VTDATAROOT:?set VTDATAROOT to a scratch directory}"
 
 "$VTROOT/bin/vttestserver" \
-  --keyspaces u0,u1,s0,s1 --num-shards 1,1,2,2 \
+  --keyspaces u0,u1,s0,s1,w0,w1,lk --num-shards 1,1,2,2,4,4,1 \
   --replica-count 1 --rdonly-count 0 \
   --port "$BASE_PORT" --mysql-bind-host 127.0.0.1 \
   --vschema-ddl-authorized-users '%' --initialize-with-vt-dba-tcp &
@@ -41,7 +45,7 @@ until mysql -h127.0.0.1 -P"$VTGATE_PORT" -uroot -e 'select 1' >/dev/null 2>&1; d
   sleep 2
 done
 
-for ks in s0 s1; do
+for ks in s0 s1 w0 w1; do
   "$VTROOT/bin/vtctldclient" --server "127.0.0.1:$VTCTLD_GRPC_PORT" ApplyVSchema \
     --vschema '{"sharded":true,"vindexes":{"hash":{"type":"hash"},"xxhash":{"type":"xxhash"}},"tables":{}}' "$ks" >/dev/null
 done

@@ -36,6 +36,12 @@ The patch therefore adds the oracle `VITESS_DIFF`, which compares vtgate with My
   default `hash`). Every `INSERT` sets `c0`. After `CREATE TABLE`, SQLancer waits until vtgate's schema tracker
   knows the table. `ALTER TABLE` is not generated, because schema tracking is asynchronous.
 - `--vitess-reference-url`: the JDBC URL of the MySQL server for `VITESS_DIFF`.
+- `--vitess-lookup-keyspace=lk`: about half of the tables of a sharded keyspace also get a `consistent_lookup`
+  vindex on `c1`, whose lookup table is in this unsharded keyspace.
+- `--vitess-reference-tables true`, with `--vitess-vtctld` and `--vitess-vtctldclient`: some tables of a sharded
+  keyspace become reference tables. vtgate does not support DML on a reference table without a source, so the
+  harness writes their rows directly to every shard and to the MySQL reference, and SQLancer's own DML on them
+  fails with a known error.
 - `--vitess-ignore-errors-file`: errors matching these regexes count as expected. `known_limitations.txt` lists
   limitations and bugs that are already known, so that the oracles can find new ones.
 
@@ -56,7 +62,8 @@ in sharded keyspaces, and a column with both `PRIMARY KEY` and `UNIQUE`.
    The patched sources also pass SQLancer's `mvn verify` checks (formatter, Checkstyle, PMD and SpotBugs).
    SpotBugs needs JDK 17, because its version cannot read class files of newer JDKs.
 
-2. Start a vttestserver with the keyspaces `u0`, `u1` (unsharded) and `s0`, `s1` (two shards each). This needs
+2. Start a vttestserver with the keyspaces `u0`, `u1` (unsharded), `s0`, `s1` (two shards each), `w0`, `w1`
+   (four shards each) and `lk` (unsharded, for lookup tables). This needs
    the Vitess binaries in `$VTROOT/bin` and `mysqld` on the `PATH`. It must not run as root. The underlying
    mysqld also serves as the reference server, through the user `vt_dba_tcp` on port `BASE_PORT + 2`:
 
@@ -73,6 +80,10 @@ in sharded keyspaces, and a column with both `PRIMARY KEY` and `UNIQUE`.
    tools/sqlancer/run.sh out/unsharded 600 u0,u1 --vitess-reference-url "$REF" --oracle VITESS_DIFF
    tools/sqlancer/run.sh out/sharded   600 s0,s1 --vitess-sharded --vitess-reference-url "$REF" --oracle VITESS_DIFF
    tools/sqlancer/run.sh out/tlp       300 s0,s1 --vitess-sharded --oracle TLP_WHERE
+   # four shards, lookup vindexes and reference tables
+   tools/sqlancer/run.sh out/wide 900 w0,w1 --vitess-sharded --vitess-reference-url "$REF" \
+     --vitess-lookup-keyspace lk --vitess-reference-tables true \
+     --vitess-vtctld 127.0.0.1:33571 --vitess-vtctldclient "$VTROOT/bin/vtctldclient" --oracle VITESS_DIFF
    ```
 
    SQLancer's other MySQL oracles also work: `PQS`, `DQE`, `DQP`, `EET`, `CERT` and `FUZZER`. In a sharded
@@ -93,10 +104,9 @@ Limitations of this setup:
 
 ## Findings (November 2026, `main` at `bf549e2`)
 
-About an hour of runs (more than a million `VITESS_DIFF` queries and 1.5 million statements of SQLancer's own
-oracles) found the following problems. Unless noted otherwise, all examples are confirmed on an unmodified build
-of `main`. Unless noted otherwise, a sharded example uses tables `t0`, `t1`, `t2` with
-columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
+About 2.5 hours of runs (more than 3 million statements and queries) found the following problems. Unless noted
+otherwise, all examples are confirmed on an unmodified build of `main`, and a sharded example uses tables `t0`,
+`t1`, `t2` with columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
 
 ### Crashes and panics
 
@@ -197,6 +207,13 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
      as 9, 5, 2, 10, 1 (for `c0` values 1, 2, 9, 10). vtgate returns 10, 9, 2, 1, 5.
    - When vtgate groups the rows of a derived table itself, values of a `ZEROFILL` column lose their padding
      (`7` instead of `000000000007`).
+   - **A `UNION` clamps values to the type of a decimal literal.** When vtgate combines the branches itself,
+     `(SELECT t0.c0 AS a0 FROM t0 CROSS JOIN t2 WHERE t0.c0 > 1000 OR t0.c0 < -1000) UNION (SELECT 0.19293754110062755 AS a0 FROM t2)`
+     returns `999.99999999999999999` and `-999.99999999999999999` instead of 1605664068 and -1551415994: it converts
+     the integers to the literal's `DECIMAL(18,17)` instead of a type that holds both.
+   - **A `COUNT` subquery that goes to no shard returns `NULL`.** `SELECT (SELECT COUNT(sq.c0) FROM t0 AS sq
+     WHERE sq.c0 = '') FROM t2` returns `NULL` instead of 0, because `''` maps to no shard of the `hash` vindex.
+     In a `WHERE` clause, the comparison with `NULL` then removes every row. The same `COUNT` alone returns 0.
    - **`x OR x` and `x AND x` become `x` inside a predicate.** `SELECT c0 FROM t1 WHERE CAST(c0 OR c0 AS SIGNED)
      IN (c0)` returns every row instead of the one with `c0 = 1`, because the predicate rewriting simplifies
      `c0 OR c0` to `c0` also where its value is used, not just its truth value. Unsharded keyspaces are not
@@ -209,6 +226,10 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
    - `SELECT t0.c1 FROM t0 JOIN t2 ON t0.c0 = t2.c0 RIGHT JOIN t1 ON t0.c0 = t1.c0` returns 1 row instead of 4.
    - `SELECT DISTINCT t0.c0 FROM t1 LEFT JOIN t0 ON t1.c0 = t0.c0` returns `NULL` once per shard, and a derived
      table over it gets a `NULL` group per shard.
+   - **An outer join of a reference table returns its NULL-extended rows once per shard.** With `t1` a reference
+     table holding 1 and 100, and `t0` holding 1 to 6 in a keyspace with 4 shards,
+     `SELECT t1.c0, t0.c0 FROM t1 LEFT JOIN t0 ON t1.c0 = t0.c0` returns 8 rows instead of 2: vtgate runs the
+     whole join on every shard.
 
 8. **A subquery whose `WHERE` is false empties the whole query** (sharded). These queries return no rows, even
    though `t` has rows:
@@ -302,3 +323,6 @@ These are valid MySQL statements that vtgate rejects:
     aggregation function`), and `AVG(DISTINCT ...)`.
   - A correlated subquery other than `EXISTS`, an `EXISTS` subquery that cannot be merged inside an `OR`
     (`unmergable subquery can not be inside complex expression`), and a subquery in an outer join predicate.
+  - DML on a reference table without a source. The errors are inconsistent: `INSERT` fails with
+    `table 'rf' does not have a primary vindex`, `UPDATE` with the same message as `VT09001`, and `DELETE` with
+    `unsupported opcode: Reference`.

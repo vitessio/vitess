@@ -62,10 +62,10 @@ index a34861c..8d9be53 100644
      protected MySQLSchema readSchema() throws SQLException {
          return MySQLSchema.fromConnection(getConnection(), getDatabaseName());
 diff --git a/src/sqlancer/mysql/MySQLOptions.java b/src/sqlancer/mysql/MySQLOptions.java
-index 9219073..21bec69 100644
+index 9219073..a020b2e 100644
 --- a/src/sqlancer/mysql/MySQLOptions.java
 +++ b/src/sqlancer/mysql/MySQLOptions.java
-@@ -17,6 +17,24 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
+@@ -17,6 +17,36 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
      @Parameter(names = "--oracle")
      public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.TLP_WHERE);
  
@@ -83,6 +83,18 @@ index 9219073..21bec69 100644
 +
 +    @Parameter(names = "--vitess-reference-url", description = "JDBC URL of a plain MySQL server; every statement that succeeds on vtgate is also run on a database ref_KEYSPACE there, for the VITESS_DIFF oracle")
 +    public String vitessReferenceUrl;
++
++    @Parameter(names = "--vitess-lookup-keyspace", description = "Unsharded keyspace for the tables of lookup vindexes; with it, about half of the tables of a sharded keyspace get a consistent_lookup vindex on c1")
++    public String vitessLookupKeyspace;
++
++    @Parameter(names = "--vitess-reference-tables", description = "Make some tables of a sharded keyspace reference tables, filled directly on every shard (needs --vitess-vtctld, --vitess-vtctldclient and --vitess-reference-url)", arity = 1)
++    public boolean vitessReferenceTables;
++
++    @Parameter(names = "--vitess-vtctld", description = "host:port of vtctld's gRPC endpoint, for vschema changes that vschema DDL cannot make")
++    public String vitessVtctld;
++
++    @Parameter(names = "--vitess-vtctldclient", description = "Path of the vtctldclient binary")
++    public String vitessVtctldclient;
 +
 +    @Parameter(names = "--vitess-ignore-errors-file", description = "File with one regex per line; errors matching any of them are treated as expected (known Vitess limitations)")
 +    public String vitessIgnoreErrorsFile;
@@ -115,15 +127,16 @@ index 8b37efb..b96ceee 100644
      };
  }
 diff --git a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProvider.java
-index 80a23b9..cc3ef9c 100644
+index 80a23b9..0d5de96 100644
 --- a/src/sqlancer/mysql/MySQLProvider.java
 +++ b/src/sqlancer/mysql/MySQLProvider.java
-@@ -39,10 +39,14 @@ import sqlancer.mysql.gen.tblmaintenance.MySQLCheckTable;
+@@ -39,10 +39,15 @@ import sqlancer.mysql.gen.tblmaintenance.MySQLCheckTable;
  import sqlancer.mysql.gen.tblmaintenance.MySQLChecksum;
  import sqlancer.mysql.gen.tblmaintenance.MySQLOptimize;
  import sqlancer.mysql.gen.tblmaintenance.MySQLRepair;
 +import sqlancer.mysql.vitess.VitessFindings;
 +import sqlancer.mysql.vitess.VitessReference;
++import sqlancer.mysql.vitess.VitessTopology;
  
  @AutoService(DatabaseProvider.class)
  public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOptions> {
@@ -133,7 +146,7 @@ index 80a23b9..cc3ef9c 100644
      public MySQLProvider() {
          super(MySQLGlobalState.class, MySQLOptions.class);
      }
-@@ -117,7 +121,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -117,7 +122,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
              nrPerformed = r.getInteger(0, 2);
              break;
          case ALTER_TABLE:
@@ -144,7 +157,7 @@ index 80a23b9..cc3ef9c 100644
              break;
          case TRUNCATE_TABLE:
              nrPerformed = r.getInteger(0, 2);
-@@ -139,10 +145,14 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -139,10 +146,14 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
  
      @Override
      public void generateDatabase(MySQLGlobalState globalState) throws Exception {
@@ -161,7 +174,7 @@ index 80a23b9..cc3ef9c 100644
          }
  
          StatementExecutor<MySQLGlobalState, Action> se = new StatementExecutor<>(globalState, Action.values(),
-@@ -153,6 +163,20 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -153,6 +164,20 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
                  });
          se.executeStatements();
  
@@ -182,7 +195,7 @@ index 80a23b9..cc3ef9c 100644
          if (globalState.getDbmsSpecificOptions().getTestOracleFactory().stream()
                  .anyMatch((o) -> o == MySQLOracleFactory.CERT)) {
              // Enfore statistic collected for all tables
-@@ -171,6 +195,122 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -171,6 +196,123 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
          }
      }
  
@@ -251,15 +264,16 @@ index 80a23b9..cc3ef9c 100644
 +        if (o.vitessReferenceUrl != null) {
 +            globalState.setVitessReference(VitessReference.create(o.vitessReferenceUrl, keyspace));
 +        }
++        if (o.vitessSharded) {
++            VitessTopology.cleanUp(con, o, keyspace);
++        }
 +        globalState.getState().logStatement("-- Vitess keyspace " + keyspace + (o.vitessSharded ? " (sharded)" : ""));
 +        globalState.getState().logStatement("USE " + keyspace);
 +        return new SQLConnection(con);
 +    }
 +
 +    private static void addVitessVindex(MySQLGlobalState globalState, String tableName) throws Exception {
-+        MySQLOptions o = globalState.getDbmsSpecificOptions();
-+        globalState.executeStatement(
-+                new SQLQueryAdapter("ALTER VSCHEMA ON " + tableName + " ADD VINDEX " + o.vitessVindex + "(c0)", true));
++        VitessTopology.setUpTable(globalState, tableName);
 +        // Wait until vtgate's schema tracker knows the current definition of the table. Star expansion in a
 +        // cross-shard join uses the tracked columns, which may still be those of a dropped table with the same name.
 +        List<String> expected = new java.util.ArrayList<>();
@@ -305,7 +319,7 @@ index 80a23b9..cc3ef9c 100644
      @Override
      public SQLConnection createDatabase(MySQLGlobalState globalState) throws SQLException {
          String username = globalState.getOptions().getUserName();
-@@ -184,6 +324,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -184,6 +326,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
              port = MySQLOptions.DEFAULT_PORT;
          }
          String databaseName = globalState.getDatabaseName();
@@ -736,10 +750,10 @@ index 0000000..73ad357
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessQueryGenerator.java b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
 new file mode 100644
-index 0000000..984125b
+index 0000000..7bd122f
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
-@@ -0,0 +1,311 @@
+@@ -0,0 +1,331 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.util.ArrayList;
@@ -897,6 +911,17 @@ index 0000000..984125b
 +            }
 +            List<MySQLTable> scope = tables.subList(0, i + 1);
 +            String join = Randomly.fromOptions(",", "CROSS JOIN", "JOIN", "LEFT JOIN", "RIGHT JOIN", "STRAIGHT_JOIN");
++            // Known Vitess bug: an outer join of a reference table and a sharded table returns the NULL-extended
++            // rows of the reference table once per shard.
++            if (join.endsWith("LEFT JOIN") || join.endsWith("RIGHT JOIN")) {
++                boolean reference = false;
++                for (MySQLTable s : tables.subList(0, i + 1)) {
++                    reference |= VitessTopology.isReferenceTable(state.getDatabaseName(), s.getName());
++                }
++                if (reference) {
++                    join = "JOIN";
++                }
++            }
 +            sb.append(join.equals(",") ? ", " : " " + join + " ").append(t.getName());
 +            if (!join.equals(",") && !join.equals("CROSS JOIN")) {
 +                sb.append(" ON ").append(joinCondition(tables.subList(0, i), t, scope));
@@ -940,7 +965,11 @@ index 0000000..984125b
 +        MySQLColumn innerColumn = Randomly.fromList(inner.getColumns());
 +        String outerColumn = column(Randomly.fromList(outer));
 +        String innerRef = "sq." + innerColumn.getName();
-+        String innerWhere = Randomly.getBoolean() ? "" : " WHERE " + innerRef + " " + comparison() + " " + constant();
++        // Known Vitess bug: a COUNT subquery that routes to no shard (for example c0 = '') returns NULL instead of 0.
++        String innerConstant = sharded && innerColumn.getName().equals("c0")
++                ? String.valueOf((int) state.getRandomly().getInteger()) : constant();
++        String innerWhere = Randomly.getBoolean() ? ""
++                : " WHERE " + innerRef + " " + comparison() + " " + innerConstant;
 +        // Known Vitess bugs: vtgate evaluates ANY and ALL per shard, and a correlated EXISTS in a UNION makes vtgate
 +        // panic.
 +        int kind;
@@ -1005,6 +1034,11 @@ index 0000000..984125b
 +    }
 +
 +    private String valueExpression(List<MySQLTable> tables) {
++        // Known Vitess bug: when vtgate combines UNION branches itself, it converts the values to the type of a
++        // decimal literal in another branch and clamps them.
++        if (sharded && inUnion) {
++            return column(Randomly.fromList(tables));
++        }
 +        return Randomly.getBoolean() ? column(Randomly.fromList(tables)) : expression(tables);
 +    }
 +
@@ -1193,5 +1227,215 @@ index 0000000..72312e8
 +            CURRENT.remove();
 +        }
 +        con.close();
++    }
++}
+diff --git a/src/sqlancer/mysql/vitess/VitessTopology.java b/src/sqlancer/mysql/vitess/VitessTopology.java
+new file mode 100644
+index 0000000..74163eb
+--- /dev/null
++++ b/src/sqlancer/mysql/vitess/VitessTopology.java
+@@ -0,0 +1,204 @@
++package sqlancer.mysql.vitess;
++
++import java.io.IOException;
++import java.nio.charset.StandardCharsets;
++import java.sql.Connection;
++import java.sql.ResultSet;
++import java.sql.SQLException;
++import java.sql.Statement;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Locale;
++import java.util.concurrent.TimeUnit;
++
++import sqlancer.Randomly;
++import sqlancer.SQLConnection;
++import sqlancer.common.query.SQLQueryAdapter;
++import sqlancer.mysql.MySQLGlobalState;
++import sqlancer.mysql.MySQLOptions;
++import sqlancer.mysql.MySQLVisitor;
++import sqlancer.mysql.gen.MySQLExpressionGenerator;
++
++/**
++ * Sets up the vschema of the tables of a sharded keyspace: a primary vindex on c0, optionally a lookup vindex on c1, or
++ * a reference table.
++ */
++public final class VitessTopology {
++
++    private static final int MAX_REFERENCE_ROWS = 8;
++    private static final java.util.Map<String, java.util.Set<String>> REFERENCE_TABLES = new java.util.concurrent.ConcurrentHashMap<>();
++
++    private VitessTopology() {
++    }
++
++    // Whether the table of the current round of the keyspace is a reference table.
++    public static boolean isReferenceTable(String keyspace, String table) {
++        return REFERENCE_TABLES.getOrDefault(keyspace, java.util.Set.of()).contains(table);
++    }
++
++    // Drops the lookup tables of a keyspace's previous round from the lookup keyspace.
++    public static void cleanUp(Connection vtgate, MySQLOptions o, String keyspace) throws SQLException {
++        REFERENCE_TABLES.remove(keyspace);
++        if (o.vitessLookupKeyspace == null) {
++            return;
++        }
++        List<String> tables = new ArrayList<>();
++        try (Statement s = vtgate.createStatement();
++                ResultSet rs = s.executeQuery("SHOW TABLES FROM " + o.vitessLookupKeyspace)) {
++            while (rs.next()) {
++                if (rs.getString(1).startsWith(lookupTablePrefix(keyspace))) {
++                    tables.add(rs.getString(1));
++                }
++            }
++        }
++        for (String t : tables) {
++            try (Statement s = vtgate.createStatement()) {
++                s.execute("DROP TABLE IF EXISTS " + o.vitessLookupKeyspace + "." + t);
++            }
++        }
++    }
++
++    // Gives a new table its vschema. Returns whether the table is a reference table.
++    public static boolean setUpTable(MySQLGlobalState state, String table) throws Exception {
++        MySQLOptions o = state.getDbmsSpecificOptions();
++        if (o.vitessReferenceTables && Randomly.getBooleanWithRatherLowProbability()) {
++            makeReferenceTable(state, table);
++            REFERENCE_TABLES
++                    .computeIfAbsent(state.getDatabaseName(), k -> java.util.concurrent.ConcurrentHashMap.newKeySet())
++                    .add(table);
++            return true;
++        }
++        state.executeStatement(
++                new SQLQueryAdapter("ALTER VSCHEMA ON " + table + " ADD VINDEX " + o.vitessVindex + "(c0)", true));
++        if (o.vitessLookupKeyspace != null && Randomly.getBoolean()) {
++            addLookupVindex(state, table);
++        }
++        return false;
++    }
++
++    private static String lookupTablePrefix(String keyspace) {
++        return "lk_" + keyspace.replaceAll("[^A-Za-z0-9_]", "_") + "_";
++    }
++
++    // A consistent_lookup vindex on c1, owned by the table, whose lookup table is in the lookup keyspace.
++    private static void addLookupVindex(MySQLGlobalState state, String table) throws Exception {
++        MySQLOptions o = state.getDbmsSpecificOptions();
++        String type = columnType(state.getConnection(), state.getDatabaseName(), table, "c1");
++        if (type == null || !isLookupColumnType(type)) {
++            return;
++        }
++        String lookupTable = lookupTablePrefix(state.getDatabaseName()) + table + "_c1";
++        String create = "CREATE TABLE " + o.vitessLookupKeyspace + "." + lookupTable + " (c1 " + type
++                + ", keyspace_id VARBINARY(128), PRIMARY KEY (c1, keyspace_id))";
++        // Not through executeStatement: the lookup keyspace does not exist on the reference MySQL server.
++        try (Statement s = state.getConnection().createStatement()) {
++            s.execute(create);
++        }
++        state.getState().logStatement(create);
++        state.executeStatement(new SQLQueryAdapter("ALTER VSCHEMA ON " + table + " ADD VINDEX lk_" + table
++                + "_c1(c1) USING consistent_lookup WITH owner=" + table + ", table=" + o.vitessLookupKeyspace + "."
++                + lookupTable + ", from=c1, to=keyspace_id, ignore_nulls=true", true));
++    }
++
++    private static boolean isLookupColumnType(String type) {
++        String t = type.toLowerCase(Locale.ROOT);
++        return t.contains("int") || t.startsWith("decimal") || t.startsWith("double") || t.startsWith("float")
++                || t.startsWith("varchar");
++    }
++
++    private static String columnType(SQLConnection con, String keyspace, String table, String column)
++            throws SQLException {
++        try (Statement s = con.createStatement();
++                ResultSet rs = s
++                        .executeQuery("SELECT column_type FROM information_schema.columns WHERE table_schema = '"
++                                + keyspace + "' AND table_name = '" + table + "' AND column_name = '" + column + "'")) {
++            return rs.next() ? rs.getString(1) : null;
++        }
++    }
++
++    // vtgate does not support DML on a reference table without a source in a sharded keyspace, so the harness
++    // writes the same rows directly to the table on every shard and on the reference MySQL server.
++    private static void makeReferenceTable(MySQLGlobalState state, String table) throws Exception {
++        MySQLOptions o = state.getDbmsSpecificOptions();
++        if (state.getVitessReference() == null) {
++            throw new AssertionError("--vitess-reference-tables needs --vitess-reference-url");
++        }
++        String keyspace = state.getDatabaseName();
++        String vschema = vtctld(o, "GetVSchema", keyspace);
++        int tables = vschema.indexOf("\"tables\": {");
++        if (tables < 0) {
++            throw new AssertionError("unexpected vschema: " + vschema);
++        }
++        int insert = tables + "\"tables\": {".length();
++        boolean empty = vschema.substring(insert).trim().startsWith("}");
++        String entry = "\"" + table + "\": {\"type\": \"reference\"}" + (empty ? "" : ",");
++        vtctld(o, "ApplyVSchema", "--vschema", vschema.substring(0, insert) + entry + vschema.substring(insert),
++                keyspace);
++        state.getState().logStatement("-- vtctldclient ApplyVSchema: " + table + " is a reference table");
++
++        List<String> columns = new ArrayList<>();
++        try (Statement s = state.getConnection().createStatement();
++                ResultSet rs = s
++                        .executeQuery("SELECT column_name FROM information_schema.columns WHERE table_schema = '"
++                                + keyspace + "' AND table_name = '" + table + "' ORDER BY ordinal_position")) {
++            while (rs.next()) {
++                columns.add(rs.getString(1));
++            }
++        }
++        int rows = (int) Randomly.getNotCachedInteger(0, MAX_REFERENCE_ROWS + 1);
++        if (rows == 0) {
++            return;
++        }
++        MySQLExpressionGenerator gen = new MySQLExpressionGenerator(state);
++        StringBuilder values = new StringBuilder();
++        for (int r = 0; r < rows; r++) {
++            values.append(r == 0 ? "(" : ", (");
++            for (int c = 0; c < columns.size(); c++) {
++                values.append(c == 0 ? "" : ", ").append(MySQLVisitor.asString(gen.generateConstant()));
++            }
++            values.append(')');
++        }
++        String into = " (" + String.join(", ", columns) + ") VALUES " + values;
++        Connection mysql = state.getVitessReference().getConnection();
++        for (String shard : shards(state.getConnection(), keyspace)) {
++            try (Statement s = mysql.createStatement()) {
++                s.execute("INSERT IGNORE INTO `vt_" + keyspace + "_" + shard + "`." + table + into);
++            }
++        }
++        try (Statement s = mysql.createStatement()) {
++            s.execute("INSERT IGNORE INTO " + table + into);
++        }
++        state.getState().logStatement("-- directly on every shard and on MySQL: INSERT IGNORE INTO " + table + into);
++    }
++
++    private static List<String> shards(SQLConnection vtgate, String keyspace) throws SQLException {
++        List<String> shards = new ArrayList<>();
++        try (Statement s = vtgate.createStatement(); ResultSet rs = s.executeQuery("SHOW VITESS_SHARDS")) {
++            while (rs.next()) {
++                String name = rs.getString(1);
++                if (name.startsWith(keyspace + "/")) {
++                    shards.add(name.substring(keyspace.length() + 1));
++                }
++            }
++        }
++        return shards;
++    }
++
++    private static String vtctld(MySQLOptions o, String... args) throws IOException, InterruptedException {
++        if (o.vitessVtctld == null || o.vitessVtctldclient == null) {
++            throw new AssertionError("--vitess-reference-tables needs --vitess-vtctld and --vitess-vtctldclient");
++        }
++        List<String> command = new ArrayList<>();
++        command.add(o.vitessVtctldclient);
++        command.add("--server");
++        command.add(o.vitessVtctld);
++        command.addAll(List.of(args));
++        Process p = new ProcessBuilder(command).redirectErrorStream(false).start();
++        String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
++        String err = new String(p.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
++        if (!p.waitFor(60, TimeUnit.SECONDS) || p.exitValue() != 0) {
++            throw new AssertionError("vtctldclient " + String.join(" ", args) + " failed: " + err);
++        }
++        return out;
 +    }
 +}
