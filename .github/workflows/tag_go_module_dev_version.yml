@@ -1,0 +1,68 @@
+# Tags the commit that moved main to a new X.0.0-SNAPSHOT version as
+# v0.X.0-dev. Go builds the pseudo-version of an untagged commit from the
+# highest tag in its history, so without this tag every main commit resolves
+# to v0.10.3-0.<timestamp>-<commit>, based on a 2021 tag, and sorts before
+# every release. With it, main commits resolve to
+# v0.X.0-dev.0.<timestamp>-<commit>, after the v0.(X-1).y releases, so tools
+# that compare versions, such as Dependabot, no longer treat a recent build of
+# main as older than releases with security fixes.
+name: Tag Go module dev version
+
+permissions: read-all
+
+on:
+  push:
+    branches:
+      - main
+
+# A newer push cancels a pending run, which is fine: every run checks the same
+# thing.
+concurrency:
+  group: tag_go_module_dev_version
+
+jobs:
+  tag:
+    name: Tag Go module dev version
+    permissions:
+      # Creates the tag.
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Only vitessio/vitess publishes the vitess.io/vitess module.
+    if: github.repository == 'vitessio/vitess'
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # All history and tags, to find the commit that started this version
+          # and whether it is tagged already.
+          fetch-depth: 0
+          persist-credentials: 'false'
+
+      - name: Tag the commit that started this version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^const versionName = "\(.*\)"$/\1/p' go/vt/servenv/version.go)
+          if [[ ! "${version}" =~ ^([0-9]+)\.0\.0-SNAPSHOT$ ]]; then
+            echo "Unexpected versionName on main: '${version}'"
+            exit 1
+          fi
+          tag="v0.${BASH_REMATCH[1]}.0-dev"
+          if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+            echo "${tag} already exists"
+            exit 0
+          fi
+          sha=$(git log -1 --format=%H -S"\"${version}\"" -- go/vt/servenv/version.go)
+          if [[ -z "${sha}" ]]; then
+            echo "Could not find the commit that set versionName to ${version}"
+            exit 1
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs" -f ref="refs/tags/${tag}" -f sha="${sha}" --silent
+          echo "Tagged ${sha} as ${tag}"

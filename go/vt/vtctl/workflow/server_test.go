@@ -3322,11 +3322,13 @@ func TestWorkflowUpdate(t *testing.T) {
 
 	testcases := []struct {
 		name     string
+		shards   []string
 		response map[uint32]*tabletmanagerdatapb.UpdateVReplicationWorkflowResponse
 		err      map[uint32]error
 
 		// Match the tablet `changed` field from response.
 		expectedResponse    map[uint32]bool
+		expectedUIDs        []uint32
 		expectedErrContains string
 	}{
 		{
@@ -3374,10 +3376,31 @@ func TestWorkflowUpdate(t *testing.T) {
 			},
 			expectedErrContains: "test error from 200",
 		},
+		{
+			name:         "single shard -80",
+			shards:       []string{"-80"},
+			expectedUIDs: []uint32{200},
+		},
+		{
+			name:         "single shard 80-",
+			shards:       []string{"80-"},
+			expectedUIDs: []uint32{210},
+		},
+		{
+			name:         "both shards",
+			shards:       []string{"-80", "80-"},
+			expectedUIDs: []uint32{200, 210},
+		},
+		{
+			name:         "repeated shard",
+			shards:       []string{"-80", "-80"},
+			expectedUIDs: []uint32{200},
+		},
 	}
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			req.TabletRequest.Shards = tc.shards
 			// Add responses
 			for tabletID, resp := range tc.response {
 				te.tmc.AddUpdateVReplicationWorkflowRequestResponse(tabletID, &updateVReplicationWorkflowRequestResponse{
@@ -3400,6 +3423,16 @@ func TestWorkflowUpdate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			if len(tc.expectedUIDs) > 0 {
+				gotUIDs := make([]uint32, 0, len(res.Details))
+				for _, det := range res.Details {
+					gotUIDs = append(gotUIDs, det.Tablet.Uid)
+				}
+				slices.Sort(gotUIDs)
+				wantUIDs := append([]uint32(nil), tc.expectedUIDs...)
+				slices.Sort(wantUIDs)
+				require.Equal(t, wantUIDs, gotUIDs)
+			}
 			for tabletID, changed := range tc.expectedResponse {
 				i := slices.IndexFunc(res.Details, func(det *vtctldatapb.WorkflowUpdateResponse_TabletInfo) bool {
 					return det.Tablet.Uid == tabletID

@@ -22,11 +22,11 @@ env:
   GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
-  # Path filtering runs once here, on a GitHub-hosted runner, so that the
-  # matrix jobs below (many of them on large runners) are not started at all
-  # when nothing relevant changed.
+  # Path filtering runs once here, on a small runner (a CNCF container in
+  # vitess-security), so that the matrix jobs below (many of them on large
+  # runners) are not started at all when nothing relevant changed.
   generate-matrix:
-    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -135,14 +135,17 @@ jobs:
 
     name: Run endtoend tests on Cluster (${{ matrix.shard }})
     # When nothing relevant changed the shards still run (so their required
-    # status checks are reported), but on a GitHub-hosted runner with every
-    # step below skipped. The 'Skip CI' label also gets the small runner, since
-    # the shards then only fail at that step.
-    runs-on: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && contains(matrix.needs, 'larger-runner') && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') }}
+    # status checks are reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the shards then only fail at that step.
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ needs.generate-matrix.outputs.end_to_end == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (contains(matrix.needs, 'larger-runner') && github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04') || github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 

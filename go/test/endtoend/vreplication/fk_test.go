@@ -104,6 +104,16 @@ func TestFKWorkflow(t *testing.T) {
 	targetKs := vc.Cells[cellName].Keyspaces[targetKeyspace]
 	targetTab := targetKs.Shards["0"].Tablets[fmt.Sprintf("%s-%d", cellName, targetTabletId)].Vttablet
 
+	// t1 is created with stats_auto_recalc=0 and only a primary key, so InnoDB never
+	// recalculates its statistics on its own. The copy analyzes it, so the target's
+	// statistics count its rows instead of the empty ones saved at create time.
+	statsQR, statsErr := targetTab.QueryTablet("select n_rows from mysql.innodb_table_stats where database_name = 'vt_"+targetKeyspace+"' and table_name = 't1'", targetKeyspace, false)
+	require.NoError(t, statsErr)
+	require.Len(t, statsQR.Rows, 1)
+	nRows, statsErr := statsQR.Rows[0][0].ToInt64()
+	require.NoError(t, statsErr)
+	require.Positive(t, nRows, "t1 statistics on the target were not updated after the copy")
+
 	// Stop the LoadSimulator while we are testing for workflow error, so that
 	// we don't error out in the LoadSimulator as we will be shutting down source dbServer.
 	if withLoad {

@@ -150,9 +150,10 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.DbName = "vt_" + vttablet.Keyspace
 
-	// The goroutine keeps the channel and the process it was started for: a restart replaces both
-	// fields, and the goroutine of the earlier process must not close the new channel.
-	exit, proc := make(chan error), vttablet.proc
+	// The waiter captures this process and channel: TearDown returns once it
+	// receives the exit result, and a restart then replaces both fields, so
+	// the waiter must not read them again when it closes the channel.
+	proc, exit := vttablet.proc, make(chan error)
 	vttablet.exit = exit
 	go func() {
 		exit <- proc.Wait()

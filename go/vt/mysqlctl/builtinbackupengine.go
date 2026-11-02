@@ -640,16 +640,45 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		backupResult = BackupUsable
 	}
 
+	// alsoFailed returns a new error with the backup's code that reports the
+	// backup's error and then a failure to restore mysqld's state, so that the
+	// backup's error doesn't read as the restore failure's cause.
+	alsoFailed := func(err error) error {
+		return vterrors.Errorf(vterrors.Code(backupErr), "%s; restoring mysqld's state afterwards also failed: %s", backupErr, err)
+	}
+
+	// restoreErr reports a failure to restore mysqld's state after the backup.
+	// If the backup failed too, the restore's failure is reported with its
+	// error, except when ctx is done: the steps below that use it then fail
+	// because of that, so only the backup's error, usually the reason ctx is
+	// done, is returned, and the restore's is logged.
+	restoreErr := func(err error) error {
+		switch {
+		case backupErr == nil:
+			return err
+		case ctx.Err() != nil:
+			params.Logger.Errorf("failed to restore mysqld's state after the backup failed: %v", err)
+			return backupErr
+		default:
+			return alsoFailed(err)
+		}
+	}
+
 	// Try to restart mysqld, use background context in case we timed out the original context
 	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
-		return backupResult, vterrors.Wrap(err, "can't restart mysqld")
+		err = vterrors.Wrap(err, "can't restart mysqld")
+		// The restart doesn't use ctx, so its failure is always reported.
+		if backupErr != nil {
+			return backupResult, alsoFailed(err)
+		}
+		return backupResult, err
 	}
 
 	// Resetting super_read_only back to its original value
 	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
 	if _, err := params.Mysqld.SetSuperReadOnly(ctx, superReadOnly); err != nil {
-		return backupResult, err
+		return backupResult, restoreErr(err)
 	}
 
 	// Restore original mysqld state that we saved above.
@@ -660,18 +689,18 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			semiSyncSource, semiSyncReplica)
 		err := params.Mysqld.SetSemiSyncEnabled(ctx, semiSyncSource, semiSyncReplica)
 		if err != nil {
-			return backupResult, err
+			return backupResult, restoreErr(err)
 		}
 	}
 	if replicaStartRequired {
 		params.Logger.Infof("restarting mysql replication")
 		if err := params.Mysqld.StartReplication(ctx, params.HookExtraEnv); err != nil {
-			return backupResult, vterrors.Wrap(err, "cannot restart replica")
+			return backupResult, restoreErr(vterrors.Wrap(err, "cannot restart replica"))
 		}
 
 		// this should be quick, but we might as well just wait
 		if err := WaitForReplicationStart(ctx, params.Mysqld, replicationStartDeadline); err != nil {
-			return backupResult, vterrors.Wrap(err, "replica is not restarting")
+			return backupResult, restoreErr(vterrors.Wrap(err, "replica is not restarting"))
 		}
 
 		// Wait for a reliable value for ReplicationLagSeconds from ReplicationStatus()
@@ -689,16 +718,16 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
 		// If we are unable to get the primary's position, return error.
 		if err != nil {
-			return backupResult, err
+			return backupResult, restoreErr(err)
 		}
 		if !replicationPosition.Equal(pos) {
 			for {
 				if err := ctx.Err(); err != nil {
-					return backupResult, err
+					return backupResult, restoreErr(err)
 				}
 				status, err := params.Mysqld.ReplicationStatus(ctx)
 				if err != nil {
-					return backupResult, err
+					return backupResult, restoreErr(err)
 				}
 				newPos := status.Position
 				if !newPos.Equal(replicationPosition) {
@@ -824,6 +853,12 @@ func (be *BuiltinBackupEngine) backupFiles(
 	// Backup the MANIFEST file and apply retry logic.
 	var manifestErr error
 	for currentRetry := 0; currentRetry <= maxRetriesPerFile; currentRetry++ {
+		// Verify the position before each attempt makes the backup complete, since a
+		// reparent during a failed attempt can lose GTIDs that the backup holds. A
+		// failed check is not retried.
+		if err := params.verifyPosition(ctx, backupPosition); err != nil {
+			return err
+		}
 		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentRetry)
 		if manifestErr == nil || hasErrorCode(manifestErr, vtrpcpb.Code_FAILED_PRECONDITION) {
 			break

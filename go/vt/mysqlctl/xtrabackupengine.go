@@ -317,6 +317,11 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 		return BackupUnusable, err
 	}
 
+	// Verify the position before the MANIFEST makes the backup complete.
+	if err := params.verifyPosition(ctx, replicationPosition); err != nil {
+		return BackupUnusable, err
+	}
+
 	// open the MANIFEST
 	params.Logger.Infof("Writing backup MANIFEST")
 	mwc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)

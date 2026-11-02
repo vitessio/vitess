@@ -112,6 +112,7 @@ func commandUpdate(cmd *cobra.Command, args []string) error {
 			TabletTypes:               updateOptions.TabletTypes,
 			TabletSelectionPreference: &tsp,
 			ConfigOverrides:           configOverrides,
+			Shards:                    baseOptions.Shards,
 		},
 	}
 

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
 	"strings"
@@ -569,11 +570,14 @@ func buildREPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filte
 func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query, env.Parser())
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("failed to analyze select", slog.Any("error", err))
 		return nil, err
 	}
 	if fromTable.String() != ti.Name {
-		log.Error(fmt.Sprintf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name))
+		log.Error("unsupported: select expression table does not match the table entry name",
+			slog.String("table", ti.Name),
+			slog.String("select_table", sqlparser.String(fromTable)),
+		)
 		return nil, fmt.Errorf("unsupported: select expression table %v does not match the table entry name %s", sqlparser.String(fromTable), ti.Name)
 	}
 
@@ -582,11 +586,11 @@ func buildTablePlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, qu
 		env:   env,
 	}
 	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
-		log.Error(err.Error())
+		log.Error("failed to analyze where clause", slog.Any("error", err))
 		return nil, err
 	}
 	if err := plan.analyzeExprs(vschema, sel.GetColumns()); err != nil {
-		log.Error(err.Error())
+		log.Error("failed to analyze select expressions", slog.Any("error", err))
 		return nil, err
 	}
 
@@ -1066,7 +1070,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			Field:  field,
 		}, nil
 	default:
-		log.Info(fmt.Sprintf("Unsupported expression: %v", inner))
+		log.Info("Unsupported expression", slog.String("expression", sqlparser.String(inner)))
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}
 }

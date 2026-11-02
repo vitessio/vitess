@@ -25,8 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
 )
 
 func TestBackupCommand_InitSQLFlags(t *testing.T) {
@@ -261,4 +264,38 @@ func TestBackupCommand_BuildsCorrectRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+type recordingBackupShardServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
+	requests []*vtctldatapb.BackupShardRequest
+}
+
+func (s *recordingBackupShardServer) BackupShard(req *vtctldatapb.BackupShardRequest, _ vtctlservicepb.Vtctld_BackupShardServer) error {
+	s.requests = append(s.requests, req)
+	return nil
+}
+
+// TestBackupShardTabletTypesFlag checks that --tablet-types reaches the BackupShard request in order.
+func TestBackupShardTabletTypesFlag(t *testing.T) {
+	flag := BackupShard.Flags().Lookup("tablet-types")
+	require.NotNil(t, flag)
+
+	originalProtocol := VtctldClientProtocol
+	VtctldClientProtocol = "local"
+	t.Cleanup(func() {
+		Root.SetArgs(nil)
+		VtctldClientProtocol = originalProtocol
+		backupShardOptions.TabletTypes = nil
+		flag.Changed = false
+	})
+
+	server := &recordingBackupShardServer{}
+	localvtctldclient.SetServer(server)
+
+	Root.SetArgs([]string{"BackupShard", "--tablet-types", "rdonly,replica", "commerce/0"})
+	require.NoError(t, Root.Execute())
+
+	require.Len(t, server.requests, 1)
+	assert.Equal(t, []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA}, server.requests[0].GetTabletTypes())
 }
