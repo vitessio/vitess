@@ -316,7 +316,7 @@ index 80a23b9..cc3ef9c 100644
          globalState.getState().logStatement("CREATE DATABASE " + databaseName);
          globalState.getState().logStatement("USE " + databaseName);
 diff --git a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
-index 0e464de..0990d8e 100644
+index 0e464de..1faaea9 100644
 --- a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
 +++ b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
 @@ -71,6 +71,11 @@ public class MySQLInsertGenerator {
@@ -336,13 +336,13 @@ index 0e464de..0990d8e 100644
                      }
                      constExpr = gen.generateConstant();
 +                    if (vitessSharded && columns.get(c).getName().equals("c0")) {
-+                        constExpr = MySQLConstant.createIntConstant(globalState.getRandomly().getInteger());
++                        constExpr = MySQLConstant.createIntConstant((int) globalState.getRandomly().getInteger());
 +                    }
                      boolean reject = false;
  
                      // Bug workaround: for integer columns, reject values that round to 1
 diff --git a/src/sqlancer/mysql/gen/MySQLTableGenerator.java b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
-index d27d6e6..a920c5e 100644
+index d27d6e6..d390464 100644
 --- a/src/sqlancer/mysql/gen/MySQLTableGenerator.java
 +++ b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
 @@ -262,7 +262,7 @@ public class MySQLTableGenerator {
@@ -370,7 +370,7 @@ index d27d6e6..a920c5e 100644
          if (!columnOptions.contains(ColumnOptions.NULL_OR_NOT_NULL)) {
              tableHasNullableColumn = true;
          }
-@@ -330,9 +339,9 @@ public class MySQLTableGenerator {
+@@ -330,10 +339,17 @@ public class MySQLTableGenerator {
          }
      }
  
@@ -378,10 +378,28 @@ index d27d6e6..a920c5e 100644
 +    private void appendColumnDefinition(boolean vindexColumn) {
          sb.append(" ");
 -        MySQLDataType randomType = MySQLDataType.getRandom(globalState);
+-        appendType(randomType);
 +        MySQLDataType randomType = vindexColumn ? MySQLDataType.INT : MySQLDataType.getRandom(globalState);
-         appendType(randomType);
++        if (vindexColumn) {
++            // Known Vitess bug: vtgate computes the keyspace ID before MySQL converts the value to the column type,
++            // so a value that MySQL clamps or converts puts the row on the wrong shard. A plain INT with values in
++            // range avoids that.
++            sb.append("INT");
++        } else {
++            appendType(randomType);
++        }
          sb.append(" ");
          appendColumnOption(randomType);
+     }
+@@ -374,7 +390,7 @@ public class MySQLTableGenerator {
+             if (Randomly.getBoolean() && !globalState.getDbmsSpecificOptions().getTestOracleFactory().stream()
+                     .anyMatch(o -> o == MySQLOracleFactory.TLP_WHERE || o == MySQLOracleFactory.PQS
+                             || o == MySQLOracleFactory.DQP || o == MySQLOracleFactory.EET
+-                            || o == MySQLOracleFactory.EET_DML)) {
++                            || o == MySQLOracleFactory.EET_DML || o == MySQLOracleFactory.VITESS_DIFF)) {
+                 sb.append(" ZEROFILL");
+             }
+         }
 diff --git a/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java b/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java
 new file mode 100644
 index 0000000..2551bd6
@@ -718,10 +736,10 @@ index 0000000..73ad357
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessQueryGenerator.java b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
 new file mode 100644
-index 0000000..af328b0
+index 0000000..984125b
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
-@@ -0,0 +1,278 @@
+@@ -0,0 +1,311 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.util.ArrayList;
@@ -747,11 +765,17 @@ index 0000000..af328b0
 +
 +    private final MySQLGlobalState state;
 +    private final List<MySQLTable> allTables;
++    // In a sharded keyspace, the generator avoids query shapes that hit known Vitess bugs (see
++    // tools/sqlancer/README.md in the Vitess repository), so that they do not drown new findings.
++    private final boolean sharded;
 +    private boolean ordered;
++    private boolean colocatedOnly;
++    private boolean inUnion;
 +
 +    public VitessQueryGenerator(MySQLGlobalState state) {
 +        this.state = state;
 +        this.allTables = state.getSchema().getDatabaseTables();
++        this.sharded = state.getDbmsSpecificOptions().vitessSharded;
 +    }
 +
 +    // Whether the last generated query orders all its output columns.
@@ -819,7 +843,9 @@ index 0000000..af328b0
 +        for (int i = 0; i < items.size(); i++) {
 +            sb.append(i == 0 ? "" : ", ").append(items.get(i)).append(" AS a").append(i);
 +        }
-+        sb.append(" FROM ").append(from(tables));
++        // Known Vitess bugs: aggregation over a cross-shard join, and derived tables over one, give wrong results or
++        // fail. Joins on the sharding key are pushed down to the shards.
++        sb.append(" FROM ").append(from(tables, sharded && (m != Mode.PLAIN || colocatedOnly)));
 +        String where = where(tables);
 +        if (where != null) {
 +            sb.append(" WHERE ").append(where);
@@ -831,22 +857,28 @@ index 0000000..af328b0
 +                        .append(Randomly.getBoolean() ? aggregate(tables) : constant());
 +            }
 +        }
-+        if (allowOrderBy) {
-+            appendOrderByAndLimit(sb, items.size());
++        // Known Vitess bug: vtgate pushes a LIMIT below a scalar aggregation.
++        if (allowOrderBy && !(sharded && m == Mode.AGGREGATE)) {
++            appendOrderByAndLimit(sb, items.size(), false);
 +        }
 +        return sb.toString();
 +    }
 +
-+    private void appendOrderByAndLimit(StringBuilder sb, int columns) {
++    private void appendOrderByAndLimit(StringBuilder sb, int columns, boolean byAlias) {
++        appendOrderByAndLimit(sb, columns, byAlias, true);
++    }
++
++    private void appendOrderByAndLimit(StringBuilder sb, int columns, boolean byAlias, boolean allowLimit) {
 +        if (Randomly.getBoolean()) {
 +            return;
 +        }
 +        ordered = true;
 +        sb.append(" ORDER BY ");
 +        for (int i = 1; i <= columns; i++) {
-+            sb.append(i == 1 ? "" : ", ").append(i).append(Randomly.getBoolean() ? " ASC" : " DESC");
++            sb.append(i == 1 ? "" : ", ").append(byAlias ? "a" + (i - 1) : String.valueOf(i))
++                    .append(Randomly.getBoolean() ? " ASC" : " DESC");
 +        }
-+        if (Randomly.getBoolean()) {
++        if (allowLimit && Randomly.getBoolean()) {
 +            sb.append(" LIMIT ").append(Randomly.smallNumber() + 1);
 +            if (Randomly.getBooleanWithRatherLowProbability()) {
 +                sb.append(" OFFSET ").append(Randomly.smallNumber());
@@ -854,10 +886,15 @@ index 0000000..af328b0
 +        }
 +    }
 +
-+    private String from(List<MySQLTable> tables) {
++    private String from(List<MySQLTable> tables, boolean colocated) {
 +        StringBuilder sb = new StringBuilder(tables.get(0).getName());
 +        for (int i = 1; i < tables.size(); i++) {
 +            MySQLTable t = tables.get(i);
++            if (colocated) {
++                sb.append(Randomly.fromOptions(" JOIN ", " STRAIGHT_JOIN ")).append(t.getName()).append(" ON ")
++                        .append(tables.get(0).getName()).append(".c0 = ").append(t.getName()).append(".c0");
++                continue;
++            }
 +            List<MySQLTable> scope = tables.subList(0, i + 1);
 +            String join = Randomly.fromOptions(",", "CROSS JOIN", "JOIN", "LEFT JOIN", "RIGHT JOIN", "STRAIGHT_JOIN");
 +            sb.append(join.equals(",") ? ", " : " " + join + " ").append(t.getName());
@@ -890,8 +927,10 @@ index 0000000..af328b0
 +        String where = Randomly.getBoolean() ? expression(tables) : null;
 +        if (Randomly.getBooleanWithRatherLowProbability() || where == null && Randomly.getBoolean()) {
 +            String subquery = subqueryPredicate(tables);
-+            where = where == null ? subquery
-+                    : "(" + where + ") " + Randomly.fromOptions("AND", "OR") + " (" + subquery + ")";
++            // Known Vitess bug: in a cross-shard join, a predicate with a subquery and columns of several tables goes
++            // to the wrong side. AND keeps the subquery predicate separate.
++            String connective = sharded && tables.size() > 1 ? "AND" : Randomly.fromOptions("AND", "OR");
++            where = where == null ? subquery : "(" + where + ") " + connective + " (" + subquery + ")";
 +        }
 +        return where;
 +    }
@@ -902,10 +941,17 @@ index 0000000..af328b0
 +        String outerColumn = column(Randomly.fromList(outer));
 +        String innerRef = "sq." + innerColumn.getName();
 +        String innerWhere = Randomly.getBoolean() ? "" : " WHERE " + innerRef + " " + comparison() + " " + constant();
-+        switch ((int) Randomly.getNotCachedInteger(0, 4)) {
++        // Known Vitess bugs: vtgate evaluates ANY and ALL per shard, and a correlated EXISTS in a UNION makes vtgate
++        // panic.
++        int kind;
++        do {
++            kind = (int) Randomly.getNotCachedInteger(0, sharded ? 3 : 4);
++        } while (sharded && inUnion && kind == 1);
++        switch (kind) {
 +        case 0:
-+            return outerColumn + (Randomly.getBoolean() ? " IN " : " NOT IN ") + "(SELECT " + innerRef + " FROM "
-+                    + inner.getName() + " AS sq" + innerWhere + ")";
++            // Known Vitess bug: vtgate restricts the outer query to the shards of a NOT IN subquery.
++            return outerColumn + (sharded || Randomly.getBoolean() ? " IN " : " NOT IN ") + "(SELECT " + innerRef
++                    + " FROM " + inner.getName() + " AS sq" + innerWhere + ")";
 +        case 1:
 +            return (Randomly.getBoolean() ? "" : "NOT ") + "EXISTS (SELECT 1 FROM " + inner.getName() + " AS sq WHERE "
 +                    + innerRef + " = " + outerColumn + ")";
@@ -920,27 +966,33 @@ index 0000000..af328b0
 +
 +    private String union() {
 +        int width = 1 + Randomly.smallNumber() % 2;
++        inUnion = true;
 +        String sb = "(" + select(Mode.PLAIN, false, width) + ") " + Randomly.fromOptions("UNION", "UNION ALL") + " ("
 +                + select(Mode.PLAIN, false, width) + ")";
++        inUnion = false;
 +        StringBuilder result = new StringBuilder(sb);
-+        appendOrderByAndLimit(result, width);
++        // Known Vitess bugs: in a sharded keyspace, vtgate ignores a positional ORDER BY on a UNION, and pushes the
++        // LIMIT of a UNION into the shards without the ORDER BY.
++        appendOrderByAndLimit(result, width, sharded, !sharded);
 +        return result.toString();
 +    }
 +
 +    private String derived() {
++        colocatedOnly = true;
 +        String inner = select(Randomly.fromOptions(Mode.PLAIN, Mode.GROUP_BY), false, -1);
++        colocatedOnly = false;
 +        switch ((int) Randomly.getNotCachedInteger(0, 3)) {
 +        case 0:
 +            return "SELECT COUNT(*), COUNT(DISTINCT d.a0), MIN(d.a0), MAX(d.a0) FROM (" + inner + ") AS d";
 +        case 1:
 +            StringBuilder sb = new StringBuilder("SELECT d.a0, COUNT(*) FROM (").append(inner)
 +                    .append(") AS d GROUP BY d.a0");
-+            appendOrderByAndLimit(sb, 2);
++            appendOrderByAndLimit(sb, 2, false);
 +            return sb.toString();
 +        default:
 +            StringBuilder all = new StringBuilder("SELECT d.a0 FROM (").append(inner)
 +                    .append(") AS d WHERE d.a0 IS NOT NULL");
-+            appendOrderByAndLimit(all, 1);
++            appendOrderByAndLimit(all, 1, false);
 +            return all.toString();
 +        }
 +    }
@@ -963,10 +1015,9 @@ index 0000000..af328b0
 +    private String expression(List<MySQLTable> tables) {
 +        MySQLExpressionGenerator gen = new MySQLExpressionGenerator(state).setTablesAndColumns(new MySQLTables(tables));
 +        String expression = MySQLVisitor.asString(gen.generateExpression());
-+        // Known Vitess bug: in a cross-shard join, vtgate pushes a predicate that contains a subquery and columns of
-+        // several tables to the wrong side, so that it is dropped, fails, or crashes vtgate.
-+        for (int i = 0; i < 10 && tables.size() > 1 && state.getDbmsSpecificOptions().vitessSharded
-+                && expression.contains("EXISTS (SELECT 1"); i++) {
++        // Known Vitess bugs: in a sharded keyspace, subqueries without a table (EXISTS (SELECT 1 ...)) make vtgate
++        // drop predicates, empty whole queries, ignore DISTINCT and HAVING, panic, or crash.
++        for (int i = 0; i < 10 && sharded && expression.contains("EXISTS (SELECT 1"); i++) {
 +            expression = MySQLVisitor.asString(gen.generateExpression());
 +        }
 +        return expression;
