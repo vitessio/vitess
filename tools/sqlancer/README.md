@@ -110,6 +110,20 @@ otherwise, all examples are confirmed on an unmodified build of `main`, and a sh
 
 ### Crashes and panics
 
+0. **One query corrupts `TRUE` and `FALSE` for the whole vtgate process** (sharded, then everywhere). The compiled
+   `IN` with a list that is not all literals (`In_slow` in `go/vt/vtgate/evalengine/compiler_asm.go`) pushes the
+   shared singletons `evalBoolTrue` and `evalBoolFalse` onto the VM stack (`in.eval()`), and the next `OR`, `AND`,
+   `XOR` or negation writes its result into that value in place. vtgate evaluates this expression itself because it
+   aggregates across shards:
+   ```sql
+   SELECT (MAX(t0.c0) IN (2, MIN(t0.c0))) OR (COUNT(*) > 0) FROM t0;
+   -- From then on, in every session and keyspace, until vtgate restarts:
+   SELECT false;            -- 1
+   SELECT false OR false;   -- 1, also in an unsharded keyspace
+   ```
+   `-(x IN (1, y))` turns `TRUE` into -1 the same way. In SQLancer runs, the corruption also made vtgate drop
+   predicates such as `WHERE NULL IS TRUE`, so that queries returned all rows.
+
 1. **A query can crash vtgate** (sharded). `Concatenate.parallelExec` runs each `UNION` source in a goroutine that
    does not recover panics, so a panic in a `UNION` kills the whole process. With bug 9 below, this query does:
    ```sql
