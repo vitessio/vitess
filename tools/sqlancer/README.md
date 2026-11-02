@@ -28,8 +28,11 @@ SQLancer's MySQL provider needs a few changes to run against Vitess, which `vite
    git clone https://github.com/sqlancer/sqlancer && cd sqlancer
    git apply /path/to/vitess/tools/sqlancer/vitess-mode.patch
    mvn package -DskipTests
-   export SQLANCER_JAR=$PWD/target/sqlancer-*.jar
+   export SQLANCER_JAR=$PWD/target/sqlancer-2.0.0.jar
    ```
+
+   The patched sources also pass SQLancer's `mvn verify` checks (formatter, Checkstyle, PMD and SpotBugs).
+   SpotBugs needs JDK 17, because its version cannot read class files of newer JDKs.
 
 2. Start a vttestserver with the keyspaces `u0`, `u1` (unsharded) and `s0`, `s1` (two shards each). This needs
    the Vitess binaries in `$VTROOT/bin` and `mysqld` on the `PATH`. It must not run as root:

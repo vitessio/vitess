@@ -1,14 +1,18 @@
-diff -ruN a/src/sqlancer/common/query/ExpectedErrors.java b/src/sqlancer/common/query/ExpectedErrors.java
---- a/src/sqlancer/common/query/ExpectedErrors.java	2026-11-02 12:29:01.274348272 +0000
-+++ b/src/sqlancer/common/query/ExpectedErrors.java	2026-11-02 12:29:01.276097908 +0000
-@@ -92,10 +92,18 @@
-      *
-      * @return whether the error message contains any of the substrings specified as expected errors
-      */
+diff --git a/src/sqlancer/common/query/ExpectedErrors.java b/src/sqlancer/common/query/ExpectedErrors.java
+index eb281ef..ac10771 100644
+--- a/src/sqlancer/common/query/ExpectedErrors.java
++++ b/src/sqlancer/common/query/ExpectedErrors.java
+@@ -15,6 +15,9 @@ import java.util.regex.Pattern;
+ public class ExpectedErrors implements Serializable {
+     private static final long serialVersionUID = 1L;
+ 
 +    // Errors expected for every query, e.g. known limitations of the system under test.
 +    public static final java.util.List<Pattern> GLOBAL_REGEXES = new java.util.concurrent.CopyOnWriteArrayList<>();
 +
-     public boolean errorIsExpected(String error) {
+     private final Set<String> errors;
+     private final Set<Pattern> regexes;
+ 
+@@ -96,6 +99,11 @@ public class ExpectedErrors implements Serializable {
          if (error == null) {
              throw new IllegalArgumentException();
          }
@@ -20,10 +24,11 @@ diff -ruN a/src/sqlancer/common/query/ExpectedErrors.java b/src/sqlancer/common/
          for (String s : this.errors) {
              if (error.contains(s)) {
                  return true;
-diff -ruN a/src/sqlancer/mysql/MySQLOptions.java b/src/sqlancer/mysql/MySQLOptions.java
---- a/src/sqlancer/mysql/MySQLOptions.java	2026-11-02 12:29:01.284242480 +0000
-+++ b/src/sqlancer/mysql/MySQLOptions.java	2026-11-02 12:29:01.286558387 +0000
-@@ -17,6 +17,21 @@
+diff --git a/src/sqlancer/mysql/MySQLOptions.java b/src/sqlancer/mysql/MySQLOptions.java
+index 9219073..d5f8ed3 100644
+--- a/src/sqlancer/mysql/MySQLOptions.java
++++ b/src/sqlancer/mysql/MySQLOptions.java
+@@ -17,6 +17,21 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
      @Parameter(names = "--oracle")
      public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.TLP_WHERE);
  
@@ -45,10 +50,20 @@ diff -ruN a/src/sqlancer/mysql/MySQLOptions.java b/src/sqlancer/mysql/MySQLOptio
      @Override
      public List<MySQLOracleFactory> getTestOracleFactory() {
          return oracles;
-diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProvider.java
---- a/src/sqlancer/mysql/MySQLProvider.java	2026-11-02 12:29:01.293049279 +0000
-+++ b/src/sqlancer/mysql/MySQLProvider.java	2026-11-02 12:29:01.294668605 +0000
-@@ -117,7 +117,9 @@
+diff --git a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProvider.java
+index 80a23b9..015c0c7 100644
+--- a/src/sqlancer/mysql/MySQLProvider.java
++++ b/src/sqlancer/mysql/MySQLProvider.java
+@@ -43,6 +43,8 @@ import sqlancer.mysql.gen.tblmaintenance.MySQLRepair;
+ @AutoService(DatabaseProvider.class)
+ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOptions> {
+ 
++    private static final java.util.Map<Thread, String> VITESS_KEYSPACE_BY_THREAD = new java.util.HashMap<>();
++
+     public MySQLProvider() {
+         super(MySQLGlobalState.class, MySQLOptions.class);
+     }
+@@ -117,7 +119,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
              nrPerformed = r.getInteger(0, 2);
              break;
          case ALTER_TABLE:
@@ -59,7 +74,7 @@ diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProv
              break;
          case TRUNCATE_TABLE:
              nrPerformed = r.getInteger(0, 2);
-@@ -142,7 +144,9 @@
+@@ -142,7 +146,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
          while (globalState.getSchema().getDatabaseTables().size() < Randomly.getNotCachedInteger(1, 2)) {
              String tableName = DBMSCommon.createTableName(globalState.getSchema().getDatabaseTables().size());
              SQLQueryAdapter createTable = MySQLTableGenerator.generate(globalState, tableName);
@@ -70,7 +85,7 @@ diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProv
          }
  
          StatementExecutor<MySQLGlobalState, Action> se = new StatementExecutor<>(globalState, Action.values(),
-@@ -171,6 +175,122 @@
+@@ -171,6 +177,119 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
          }
      }
  
@@ -90,8 +105,6 @@ diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProv
 +        }
 +    }
 +
-+    private static final java.util.Map<Thread, String> VITESS_KEYSPACE_BY_THREAD = new java.util.HashMap<>();
-+
 +    // SQLancer creates a new database name for every try; Vitess keyspaces are fixed, so each worker thread gets its
 +    // own keyspace.
 +    private static synchronized String vitessKeyspaceForThread(MySQLOptions o) {
@@ -109,16 +122,16 @@ diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProv
 +
 +    // Vitess cannot CREATE DATABASE without a dbddl plugin, so we reuse an existing keyspace and empty it.
 +    private SQLConnection createVitessDatabase(MySQLGlobalState globalState, String host, int port, String username,
-+            String password, String keyspace) throws SQLException {
++            String password, String databaseName) throws SQLException {
 +        MySQLOptions o = globalState.getDbmsSpecificOptions();
 +        loadVitessIgnoredErrors(o);
++        String keyspace = databaseName;
 +        if (o.vitessKeyspaces != null) {
 +            keyspace = vitessKeyspaceForThread(o);
 +            globalState.setDatabaseName(keyspace);
 +        }
-+        String url = String.format(
-+                "jdbc:mysql://%s:%d/%s?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true", host, port,
-+                keyspace);
++        String url = String.format("jdbc:mysql://%s:%d/%s?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true",
++                host, port, keyspace);
 +        Connection con = DriverManager.getConnection(url, username, password);
 +        List<String> tables = new java.util.ArrayList<>();
 +        try (Statement s = con.createStatement(); java.sql.ResultSet rs = s.executeQuery("SHOW TABLES")) {
@@ -145,15 +158,15 @@ diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProv
 +
 +    private static void addVitessVindex(MySQLGlobalState globalState, String tableName) throws Exception {
 +        MySQLOptions o = globalState.getDbmsSpecificOptions();
-+        globalState.executeStatement(new SQLQueryAdapter(
-+                "ALTER VSCHEMA ON " + tableName + " ADD VINDEX " + o.vitessVindex + "(c0)", true));
++        globalState.executeStatement(
++                new SQLQueryAdapter("ALTER VSCHEMA ON " + tableName + " ADD VINDEX " + o.vitessVindex + "(c0)", true));
 +        // Wait until vtgate's schema tracker knows the current definition of the table. Star expansion in a
 +        // cross-shard join uses the tracked columns, which may still be those of a dropped table with the same name.
 +        List<String> expected = new java.util.ArrayList<>();
 +        try (Statement s = globalState.getConnection().createStatement();
 +                java.sql.ResultSet rs = s.executeQuery("SELECT column_name FROM information_schema.columns"
-+                        + " WHERE table_schema = '" + globalState.getDatabaseName() + "' AND table_name = '"
-+                        + tableName + "' ORDER BY ordinal_position")) {
++                        + " WHERE table_schema = '" + globalState.getDatabaseName() + "' AND table_name = '" + tableName
++                        + "' ORDER BY ordinal_position")) {
 +            while (rs.next()) {
 +                expected.add(rs.getString(1).toLowerCase());
 +            }
@@ -161,9 +174,8 @@ diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProv
 +        long deadline = System.currentTimeMillis() + 90_000;
 +        int attempts = 0;
 +        while (true) {
-+            try (Statement s = globalState.getConnection().createStatement();
-+                    java.sql.ResultSet rs = s.executeQuery(
-+                            "SELECT a.* FROM " + tableName + " AS a, " + tableName + " AS b WHERE 1 != 1")) {
++            try (Statement s = globalState.getConnection().createStatement(); java.sql.ResultSet rs = s
++                    .executeQuery("SELECT a.* FROM " + tableName + " AS a, " + tableName + " AS b WHERE 1 != 1")) {
 +                List<String> actual = new java.util.ArrayList<>();
 +                for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
 +                    actual.add(rs.getMetaData().getColumnLabel(i).toLowerCase());
@@ -193,7 +205,7 @@ diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProv
      @Override
      public SQLConnection createDatabase(MySQLGlobalState globalState) throws SQLException {
          String username = globalState.getOptions().getUserName();
-@@ -184,6 +304,9 @@
+@@ -184,6 +303,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
              port = MySQLOptions.DEFAULT_PORT;
          }
          String databaseName = globalState.getDatabaseName();
@@ -203,10 +215,11 @@ diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProv
          globalState.getState().logStatement("DROP DATABASE IF EXISTS " + databaseName);
          globalState.getState().logStatement("CREATE DATABASE " + databaseName);
          globalState.getState().logStatement("USE " + databaseName);
-diff -ruN a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
---- a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java	2026-11-02 12:29:01.310188445 +0000
-+++ b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java	2026-11-02 12:29:01.311842394 +0000
-@@ -71,6 +71,11 @@
+diff --git a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
+index 0e464de..0990d8e 100644
+--- a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
++++ b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
+@@ -71,6 +71,11 @@ public class MySQLInsertGenerator {
          sb.append(" INTO ");
          sb.append(table.getName());
          List<MySQLColumn> columns = table.getRandomNonEmptyColumnSubset();
@@ -218,7 +231,7 @@ diff -ruN a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java b/src/sqlancer/mysq
          sb.append("(");
          sb.append(columns.stream().map(c -> c.getName()).collect(Collectors.joining(", ")));
          sb.append(") ");
-@@ -101,6 +106,9 @@
+@@ -101,6 +106,9 @@ public class MySQLInsertGenerator {
                                  + " attempts while generating constant for column " + columns.get(c).getName());
                      }
                      constExpr = gen.generateConstant();
@@ -228,10 +241,11 @@ diff -ruN a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java b/src/sqlancer/mysq
                      boolean reject = false;
  
                      // Bug workaround: for integer columns, reject values that round to 1
-diff -ruN a/src/sqlancer/mysql/gen/MySQLTableGenerator.java b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
---- a/src/sqlancer/mysql/gen/MySQLTableGenerator.java	2026-11-02 12:29:01.301178343 +0000
-+++ b/src/sqlancer/mysql/gen/MySQLTableGenerator.java	2026-11-02 12:29:01.303289197 +0000
-@@ -262,7 +262,7 @@
+diff --git a/src/sqlancer/mysql/gen/MySQLTableGenerator.java b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
+index d27d6e6..7a75172 100644
+--- a/src/sqlancer/mysql/gen/MySQLTableGenerator.java
++++ b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
+@@ -262,7 +262,7 @@ public class MySQLTableGenerator {
          String columnName = DBMSCommon.createColumnName(columnId);
          columns.add(columnName);
          sb.append(columnName);
@@ -240,7 +254,7 @@ diff -ruN a/src/sqlancer/mysql/gen/MySQLTableGenerator.java b/src/sqlancer/mysql
      }
  
      private enum ColumnOptions {
-@@ -274,6 +274,11 @@
+@@ -274,6 +274,11 @@ public class MySQLTableGenerator {
          boolean isNull = false;
          boolean columnHasPrimaryKey = false;
          List<ColumnOptions> columnOptions = Randomly.subset(ColumnOptions.values());
@@ -252,7 +266,7 @@ diff -ruN a/src/sqlancer/mysql/gen/MySQLTableGenerator.java b/src/sqlancer/mysql
          if (!columnOptions.contains(ColumnOptions.NULL_OR_NOT_NULL)) {
              tableHasNullableColumn = true;
          }
-@@ -330,9 +335,9 @@
+@@ -330,9 +335,9 @@ public class MySQLTableGenerator {
          }
      }
  
