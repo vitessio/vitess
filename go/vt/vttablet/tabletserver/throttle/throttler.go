@@ -190,6 +190,11 @@ type Throttler struct {
 	// recentCheckRateLimiter is nil until the first Operate. Enable marks the throttler enabled before Operate
 	// creates it, so a check can run while it is nil.
 	recentCheckRateLimiter atomic.Pointer[timer.RateLimiter]
+	// operateDone is closed once the last Operate started has exited. Disable doesn't wait for Operate to exit, so a
+	// Disable and an Enable in quick succession start an Operate while the previous one still runs. The new one waits
+	// for this before it starts its loop: the loops share the throttler's channels and inventory, and the previous
+	// one's cleanup clears inventory.TabletMetrics, a plain map, which the new one writes to.
+	operateDone            atomic.Pointer[chan struct{}]
 	recentCheckDormantDiff int64
 	recentCheckDiff        int64
 
@@ -883,8 +888,16 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	var lastPrimaryStimulation time.Time
 	recentCheckRateLimiter := timer.NewRateLimiter(recentCheckRateLimiterInterval)
 	throttler.recentCheckRateLimiter.Store(recentCheckRateLimiter)
+	done := make(chan struct{})
+	previousDone := throttler.operateDone.Swap(&done)
 
 	wg.Go(func() {
+		defer close(done)
+		if previousDone != nil {
+			// Whoever starts an Operate cancels the previous one first, so it exits promptly. This goroutine holds no
+			// lock, so the previous Operate can still take initMutex on its way out.
+			<-*previousDone
+		}
 		defer func() {
 			// Stop this Operate's rate limiter, not the field's, which a later Enable may have replaced.
 			recentCheckRateLimiter.Stop()
