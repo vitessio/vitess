@@ -979,3 +979,259 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 		})
 	}
 }
+<<<<<<< HEAD
+||||||| parent of a6f9ea4476 (vtgate: preserve IN value lists in complex aggregate projections (#20632))
+
+func TestCopySemanticInfoNonColName(t *testing.T) {
+	t.Run("copies no semantic information when the source has no semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("upper(id)")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.NotContains(t, semTable.ExprTypes, to)
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
+
+	t.Run("copies only the expression type when the source has semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("upper(id)")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.Recursive[from] = tableSet
+		semTable.Direct[from] = tableSet
+		semTable.ExprTypes[from] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.Contains(t, semTable.ExprTypes, to)
+		require.Equal(t, semTable.ExprTypes[from], semTable.ExprTypes[to])
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
+}
+
+func TestCopySemanticInfoIntoColName(t *testing.T) {
+	t.Run("copies all semantic information when the source has semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("derived.id")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.Recursive[from] = tableSet
+		semTable.Direct[from] = tableSet
+		semTable.ExprTypes[from] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.Contains(t, semTable.ExprTypes, to)
+		require.Contains(t, semTable.Recursive, to)
+		require.Contains(t, semTable.Direct, to)
+	})
+
+	t.Run("does not copy semantic information when the source has no semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("derived.id")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.NotContains(t, semTable.ExprTypes, to)
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
+}
+=======
+
+func TestCopySemanticInfoNonColName(t *testing.T) {
+	t.Run("copies no semantic information when the source has no semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("upper(id)")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.NotContains(t, semTable.ExprTypes, to)
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
+
+	t.Run("copies only the expression type when the source has semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("upper(id)")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.Recursive[from] = tableSet
+		semTable.Direct[from] = tableSet
+		semTable.ExprTypes[from] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.Contains(t, semTable.ExprTypes, to)
+		require.Equal(t, semTable.ExprTypes[from], semTable.ExprTypes[to])
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
+}
+
+func TestCopySemanticInfoIntoColName(t *testing.T) {
+	t.Run("copies all semantic information when the source has semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("derived.id")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.Recursive[from] = tableSet
+		semTable.Direct[from] = tableSet
+		semTable.ExprTypes[from] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.Contains(t, semTable.ExprTypes, to)
+		require.Contains(t, semTable.Recursive, to)
+		require.Contains(t, semTable.Direct, to)
+	})
+
+	t.Run("does not copy semantic information when the source has no semantic information", func(t *testing.T) {
+		parser := sqlparser.NewTestParser()
+
+		col, err := parser.ParseExpr("id")
+		require.NoError(t, err)
+
+		from, err := parser.ParseExpr("lower(id)")
+		require.NoError(t, err)
+
+		to, err := parser.ParseExpr("derived.id")
+		require.NoError(t, err)
+
+		semTable := EmptySemTable()
+
+		tableSet := SingleTableSet(0)
+
+		semTable.Recursive[col] = tableSet
+		semTable.Direct[col] = tableSet
+		semTable.ExprTypes[col] = evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)
+
+		semTable.CopySemanticInfo(from, to)
+
+		require.NotContains(t, semTable.ExprTypes, to)
+		require.NotContains(t, semTable.Recursive, to)
+		require.NotContains(t, semTable.Direct, to)
+	})
+}
+
+// TestTypeForExprUnhashable tests that type lookups for expressions of
+// unhashable types, such as the value list of an IN comparison, report no
+// type instead of panicking on the ExprTypes map access, and that a nil
+// expression still reports no type rather than panicking in the guard.
+func TestTypeForExprUnhashable(t *testing.T) {
+	st := EmptySemTable()
+	tuple := sqlparser.ValTuple{sqlparser.NewIntLiteral("1"), sqlparser.NewIntLiteral("2")}
+	typ, found := st.TypeForExpr(tuple)
+	assert.False(t, found)
+	assert.Equal(t, sqltypes.Unknown, typ.Type())
+
+	typ, found = st.TypeForExpr(nil)
+	assert.False(t, found)
+	assert.Equal(t, sqltypes.Unknown, typ.Type())
+}
+>>>>>>> a6f9ea4476 (vtgate: preserve IN value lists in complex aggregate projections (#20632))
