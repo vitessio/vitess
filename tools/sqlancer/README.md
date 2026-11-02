@@ -110,11 +110,11 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
    ```
    In a run against a vtgate with local workarounds for bugs 3, 4 and 7, a panic in the compiled `NOT`
    (`interface conversion: evalengine.eval is nil, not *evalengine.evalInt64`) crashed vtgate the same way.
-   That one, and similar type confusions in the evalengine (`evalengine.eval is *evalengine.evalInt64, not
-   ...`, `evalengine.eval is *evalengine.evalUint64, not *evalengine.evalDecimal`), are not yet reproduced on
-   `main`.
+   That one is not yet reproduced on `main`. With a random workload and the generator's avoidances, SQLancer
+   still crashed an unmodified vtgate within minutes.
 
-2. **Queries that make vtgate panic** (sharded). vtgate recovers these panics, but closes the connection:
+2. **Queries that make vtgate panic** (sharded; tables `t0`, `t1`, `t2` with columns `c0` to `c4`). vtgate
+   recovers these panics, but closes the connection:
    - `unexpected argument type`: `SELECT LEAST(1, CASE WHEN t0.c0 THEN NULL END) AS a0 FROM t0 ORDER BY 1`
    - `index out of range [-1]`:
      `(SELECT DISTINCT IFNULL(EXISTS (SELECT 1), t0.c0) AS a0 FROM t0) UNION ALL (SELECT t0.c0 FROM t0)`
@@ -124,6 +124,14 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
      `SELECT COUNT(*), COUNT(DISTINCT d.a0), MIN(d.a0), MAX(d.a0) FROM (SELECT (((CASE 1901312329 WHEN t1.c0 THEN t0.c0 ELSE t0.c0 END)) && (LEAST(t1.c0, t0.c0))) != ((t1.c0) IS NOT UNKNOWN) AS a0, t0.c0 AS a1, t0.c0 AS a2 FROM t0, t1) AS d`
    - `index out of range [4] with length 3`:
      `SELECT d.a0, COUNT(*) FROM (SELECT CAST(-928735196 AS SIGNED) AS a0, SUM(DISTINCT t1.c0) AS a1 FROM t1, t2 WHERE t2.c0 = (SELECT COUNT(sq.c0) FROM t2 AS sq WHERE sq.c0 >= 1643139141) GROUP BY CAST(-928735196 AS SIGNED)) AS d GROUP BY d.a0 ORDER BY 1 DESC, 2 DESC LIMIT 1`
+   - `invalid memory address or nil pointer dereference`:
+     `SELECT (t0.c1 XOR 5) LIKE ('' NOT IN (t1.c0)) FROM t1 RIGHT JOIN t0 ON t1.c0 = t0.c1`
+   - `index out of range [2] with length 2`:
+     `SELECT (0.5 LIKE t1.c0) AND BIT_COUNT(NULL) FROM t0 JOIN t1 ON t1.c0 RIGHT JOIN t2 ON NULL`
+   - Type confusion in the evalengine (`interface conversion: evalengine.eval is *evalengine.evalInt64, not
+     ...`), when vtgate evaluates an expression over the columns of an outer join:
+     `SELECT GREATEST(0.2, COALESCE(t0.c0, 0.5)) FROM t0 RIGHT JOIN t1 ON t0.c1 = t1.c0` and
+     `SELECT t1.c0 NOT IN (t0.c0 XOR COALESCE(t1.c0, 'x')) FROM t0 LEFT JOIN t1 ON t0.c0`
    - `vexplain queries` on a query that hits bug 3 panics in `ExecuteLogger.Log` ("query not able to parse").
 
 ### Wrong results
