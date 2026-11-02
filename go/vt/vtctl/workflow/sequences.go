@@ -538,26 +538,23 @@ func (ts *trafficSwitcher) registerSequencesInVSchema(ctx context.Context, seque
 	return nil
 }
 
-// findSequenceInVSchema reports whether the keyspace's vschema, whose table
-// names can be escaped, defines the table, and returns an error if it
-// defines it as anything other than a sequence.
+// findSequenceInVSchema reports whether the keyspace's vschema defines the
+// table, under its raw name or else its escaped one, and returns an error if
+// it defines it as anything other than a sequence. Other tables' names are
+// never parsed, as a raw name can contain a backtick.
 func findSequenceInVSchema(kvs *topo.KeyspaceVSchemaInfo, tableName string) (bool, error) {
-	found := false
-	for name, table := range kvs.Tables {
-		unescapedName, err := sqlescape.UnescapeID(name)
-		if err != nil {
-			return false, vterrors.Wrapf(err, "invalid table name %q in sequence keyspace %s", name, kvs.Name)
-		}
-		if unescapedName != tableName {
-			continue
-		}
-		if table.GetType() != vindexes.TypeSequence {
-			return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-				"table %s.%s is not a sequence in vschema; correct the backing table definition or the target auto_increment sequence reference", kvs.Name, tableName)
-		}
-		found = true
+	table, ok := kvs.Tables[tableName]
+	if !ok {
+		table, ok = kvs.Tables[sqlescape.EscapeID(tableName)]
 	}
-	return found, nil
+	if !ok {
+		return false, nil
+	}
+	if table.GetType() != vindexes.TypeSequence {
+		return false, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"table %s.%s is not a sequence in vschema; correct the backing table definition or the target auto_increment sequence reference", kvs.Name, tableName)
+	}
+	return true, nil
 }
 
 // assignMissingSequenceTables puts the backing sequence tables that could not

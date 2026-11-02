@@ -592,6 +592,43 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
+			// VSchema table names are raw, so an unrelated table's name can
+			// contain a backtick.
+			name: "qualified sequence next to a table whose name has a backtick",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1":  {Type: "sequence"},
+					"odd`name": {},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+				},
+			},
+		},
+		{
 			// A sharded keyspace can hold a pinned sequence, which is left as
 			// it is.
 			name: "qualified pinned sequence in a sharded keyspace",
