@@ -152,6 +152,7 @@ type (
 		Open() error
 		MakeNonPrimary()
 		MakePrimary(bool)
+		ReleaseSequenceCaches()
 		Close()
 	}
 
@@ -505,6 +506,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.tableGC.Close()
 	sm.messager.Close()
 	sm.tracker.Close()
+	sm.se.ReleaseSequenceCaches()
 	sm.se.MakeNonPrimary()
 	sm.hs.MakeNonPrimary()
 
@@ -579,7 +581,11 @@ func (sm *stateManager) unserveCommon() {
 	sm.tracker.Close()
 	log.Info("Finished tracker close. Started wait for requests")
 	sm.handleShutdownGracePeriod(&wg)
-	log.Info("Finished handling grace period. Finished execution of unserveCommon")
+	log.Info("Finished handling grace period. Returning unused cached sequence values")
+	// All transactions have completed, and MySQL is still writable: a demotion
+	// only makes it read-only after the query service stops serving.
+	sm.se.ReleaseSequenceCaches()
+	log.Info("Finished execution of unserveCommon")
 }
 
 // handleShutdownGracePeriod checks if we have shutdwonGracePeriod specified.

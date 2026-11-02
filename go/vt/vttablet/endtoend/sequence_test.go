@@ -129,8 +129,9 @@ func TestResetSequence(t *testing.T) {
 	err = client.SetServingType(topodatapb.TabletType_PRIMARY)
 	require.NoError(t, err)
 
-	// Ensure the next value skips previously cached values.
-	want.Rows[0][0] = sqltypes.NewInt64(4)
+	// The tablet returned its unused cached values when it stopped being the
+	// primary, so the next value continues right after the last one handed out.
+	want.Rows[0][0] = sqltypes.NewInt64(2)
 	qr, err = client.Execute("select next value from vitess_reset_seq", nil)
 	require.NoError(t, err)
 	utils.MustMatch(t, &want, qr)
