@@ -1,0 +1,266 @@
+diff -ruN a/src/sqlancer/common/query/ExpectedErrors.java b/src/sqlancer/common/query/ExpectedErrors.java
+--- a/src/sqlancer/common/query/ExpectedErrors.java	2026-11-02 12:29:01.274348272 +0000
++++ b/src/sqlancer/common/query/ExpectedErrors.java	2026-11-02 12:29:01.276097908 +0000
+@@ -92,10 +92,18 @@
+      *
+      * @return whether the error message contains any of the substrings specified as expected errors
+      */
++    // Errors expected for every query, e.g. known limitations of the system under test.
++    public static final java.util.List<Pattern> GLOBAL_REGEXES = new java.util.concurrent.CopyOnWriteArrayList<>();
++
+     public boolean errorIsExpected(String error) {
+         if (error == null) {
+             throw new IllegalArgumentException();
+         }
++        for (Pattern p : GLOBAL_REGEXES) {
++            if (p.matcher(error).find()) {
++                return true;
++            }
++        }
+         for (String s : this.errors) {
+             if (error.contains(s)) {
+                 return true;
+diff -ruN a/src/sqlancer/mysql/MySQLOptions.java b/src/sqlancer/mysql/MySQLOptions.java
+--- a/src/sqlancer/mysql/MySQLOptions.java	2026-11-02 12:29:01.284242480 +0000
++++ b/src/sqlancer/mysql/MySQLOptions.java	2026-11-02 12:29:01.286558387 +0000
+@@ -17,6 +17,21 @@
+     @Parameter(names = "--oracle")
+     public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.TLP_WHERE);
+ 
++    @Parameter(names = "--vitess", description = "Test a Vitess vtgate: use the existing keyspace named like the database instead of CREATE DATABASE")
++    public boolean vitess;
++
++    @Parameter(names = "--vitess-keyspaces", description = "Comma-separated keyspaces to test; each SQLancer thread uses one of them, so provide at least --num-threads keyspaces")
++    public String vitessKeyspaces;
++
++    @Parameter(names = "--vitess-sharded", description = "The Vitess keyspace is sharded: give every table a primary vindex on c0 (an INT column) and wait for schema tracking")
++    public boolean vitessSharded;
++
++    @Parameter(names = "--vitess-vindex", description = "Vindex (already defined in the keyspace vschema) used as primary vindex on c0")
++    public String vitessVindex = "hash";
++
++    @Parameter(names = "--vitess-ignore-errors-file", description = "File with one regex per line; errors matching any of them are treated as expected (known Vitess limitations)")
++    public String vitessIgnoreErrorsFile;
++
+     @Override
+     public List<MySQLOracleFactory> getTestOracleFactory() {
+         return oracles;
+diff -ruN a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProvider.java
+--- a/src/sqlancer/mysql/MySQLProvider.java	2026-11-02 12:29:01.293049279 +0000
++++ b/src/sqlancer/mysql/MySQLProvider.java	2026-11-02 12:29:01.294668605 +0000
+@@ -117,7 +117,9 @@
+             nrPerformed = r.getInteger(0, 2);
+             break;
+         case ALTER_TABLE:
+-            nrPerformed = r.getInteger(0, 5);
++            // In a sharded keyspace, ALTER TABLE could change the vindex column, and vtgate learns about schema
++            // changes only asynchronously.
++            nrPerformed = globalState.getDbmsSpecificOptions().vitessSharded ? 0 : r.getInteger(0, 5);
+             break;
+         case TRUNCATE_TABLE:
+             nrPerformed = r.getInteger(0, 2);
+@@ -142,7 +144,9 @@
+         while (globalState.getSchema().getDatabaseTables().size() < Randomly.getNotCachedInteger(1, 2)) {
+             String tableName = DBMSCommon.createTableName(globalState.getSchema().getDatabaseTables().size());
+             SQLQueryAdapter createTable = MySQLTableGenerator.generate(globalState, tableName);
+-            globalState.executeStatement(createTable);
++            if (globalState.executeStatement(createTable) && globalState.getDbmsSpecificOptions().vitessSharded) {
++                addVitessVindex(globalState, tableName);
++            }
+         }
+ 
+         StatementExecutor<MySQLGlobalState, Action> se = new StatementExecutor<>(globalState, Action.values(),
+@@ -171,6 +175,122 @@
+         }
+     }
+ 
++    private static synchronized void loadVitessIgnoredErrors(MySQLOptions o) {
++        if (o.vitessIgnoreErrorsFile == null || !ExpectedErrors.GLOBAL_REGEXES.isEmpty()) {
++            return;
++        }
++        try {
++            for (String line : java.nio.file.Files.readAllLines(java.nio.file.Paths.get(o.vitessIgnoreErrorsFile))) {
++                line = line.trim();
++                if (!line.isEmpty() && !line.startsWith("#")) {
++                    ExpectedErrors.GLOBAL_REGEXES.add(java.util.regex.Pattern.compile(line));
++                }
++            }
++        } catch (java.io.IOException e) {
++            throw new AssertionError(e);
++        }
++    }
++
++    private static final java.util.Map<Thread, String> VITESS_KEYSPACE_BY_THREAD = new java.util.HashMap<>();
++
++    // SQLancer creates a new database name for every try; Vitess keyspaces are fixed, so each worker thread gets its
++    // own keyspace.
++    private static synchronized String vitessKeyspaceForThread(MySQLOptions o) {
++        String ks = VITESS_KEYSPACE_BY_THREAD.get(Thread.currentThread());
++        if (ks == null) {
++            String[] all = o.vitessKeyspaces.split(",");
++            if (VITESS_KEYSPACE_BY_THREAD.size() >= all.length) {
++                throw new AssertionError("more SQLancer threads than --vitess-keyspaces");
++            }
++            ks = all[VITESS_KEYSPACE_BY_THREAD.size()].trim();
++            VITESS_KEYSPACE_BY_THREAD.put(Thread.currentThread(), ks);
++        }
++        return ks;
++    }
++
++    // Vitess cannot CREATE DATABASE without a dbddl plugin, so we reuse an existing keyspace and empty it.
++    private SQLConnection createVitessDatabase(MySQLGlobalState globalState, String host, int port, String username,
++            String password, String keyspace) throws SQLException {
++        MySQLOptions o = globalState.getDbmsSpecificOptions();
++        loadVitessIgnoredErrors(o);
++        if (o.vitessKeyspaces != null) {
++            keyspace = vitessKeyspaceForThread(o);
++            globalState.setDatabaseName(keyspace);
++        }
++        String url = String.format(
++                "jdbc:mysql://%s:%d/%s?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true", host, port,
++                keyspace);
++        Connection con = DriverManager.getConnection(url, username, password);
++        List<String> tables = new java.util.ArrayList<>();
++        try (Statement s = con.createStatement(); java.sql.ResultSet rs = s.executeQuery("SHOW TABLES")) {
++            while (rs.next()) {
++                tables.add(rs.getString(1));
++            }
++        }
++        for (String t : tables) {
++            try (Statement s = con.createStatement()) {
++                s.execute("DROP TABLE IF EXISTS " + t);
++            }
++            if (o.vitessSharded) {
++                try (Statement s = con.createStatement()) {
++                    s.execute("ALTER VSCHEMA DROP TABLE " + t);
++                } catch (SQLException e) {
++                    // the table might not have had a vschema entry
++                }
++            }
++        }
++        globalState.getState().logStatement("-- Vitess keyspace " + keyspace + (o.vitessSharded ? " (sharded)" : ""));
++        globalState.getState().logStatement("USE " + keyspace);
++        return new SQLConnection(con);
++    }
++
++    private static void addVitessVindex(MySQLGlobalState globalState, String tableName) throws Exception {
++        MySQLOptions o = globalState.getDbmsSpecificOptions();
++        globalState.executeStatement(new SQLQueryAdapter(
++                "ALTER VSCHEMA ON " + tableName + " ADD VINDEX " + o.vitessVindex + "(c0)", true));
++        // Wait until vtgate's schema tracker knows the current definition of the table. Star expansion in a
++        // cross-shard join uses the tracked columns, which may still be those of a dropped table with the same name.
++        List<String> expected = new java.util.ArrayList<>();
++        try (Statement s = globalState.getConnection().createStatement();
++                java.sql.ResultSet rs = s.executeQuery("SELECT column_name FROM information_schema.columns"
++                        + " WHERE table_schema = '" + globalState.getDatabaseName() + "' AND table_name = '"
++                        + tableName + "' ORDER BY ordinal_position")) {
++            while (rs.next()) {
++                expected.add(rs.getString(1).toLowerCase());
++            }
++        }
++        long deadline = System.currentTimeMillis() + 90_000;
++        int attempts = 0;
++        while (true) {
++            try (Statement s = globalState.getConnection().createStatement();
++                    java.sql.ResultSet rs = s.executeQuery(
++                            "SELECT a.* FROM " + tableName + " AS a, " + tableName + " AS b WHERE 1 != 1")) {
++                List<String> actual = new java.util.ArrayList<>();
++                for (int i = 1; i <= rs.getMetaData().getColumnCount(); i++) {
++                    actual.add(rs.getMetaData().getColumnLabel(i).toLowerCase());
++                }
++                if (actual.equals(expected)) {
++                    return;
++                }
++                throw new SQLException("vtgate tracks columns " + actual + ", expected " + expected);
++            } catch (SQLException e) {
++                if (System.currentTimeMillis() > deadline) {
++                    throw new AssertionError("schema tracking did not pick up " + tableName, e);
++                }
++                if (++attempts % 40 == 0) {
++                    // vttestserver runs all tablets on one mysqld, so concurrent schema reloads can deadlock on the
++                    // shared sidecar tables and the change is never signalled; a harmless DDL triggers a new reload.
++                    try (Statement s = globalState.getConnection().createStatement()) {
++                        s.execute("ALTER TABLE " + tableName + " COMMENT 'vitess schema reload'");
++                    } catch (SQLException ignored) {
++                        // retried on the next round
++                    }
++                }
++                Thread.sleep(250);
++            }
++        }
++    }
++
+     @Override
+     public SQLConnection createDatabase(MySQLGlobalState globalState) throws SQLException {
+         String username = globalState.getOptions().getUserName();
+@@ -184,6 +304,9 @@
+             port = MySQLOptions.DEFAULT_PORT;
+         }
+         String databaseName = globalState.getDatabaseName();
++        if (globalState.getDbmsSpecificOptions().vitess) {
++            return createVitessDatabase(globalState, host, port, username, password, databaseName);
++        }
+         globalState.getState().logStatement("DROP DATABASE IF EXISTS " + databaseName);
+         globalState.getState().logStatement("CREATE DATABASE " + databaseName);
+         globalState.getState().logStatement("USE " + databaseName);
+diff -ruN a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
+--- a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java	2026-11-02 12:29:01.310188445 +0000
++++ b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java	2026-11-02 12:29:01.311842394 +0000
+@@ -71,6 +71,11 @@
+         sb.append(" INTO ");
+         sb.append(table.getName());
+         List<MySQLColumn> columns = table.getRandomNonEmptyColumnSubset();
++        boolean vitessSharded = globalState.getDbmsSpecificOptions().vitessSharded;
++        if (vitessSharded && columns.stream().noneMatch(c -> c.getName().equals("c0"))) {
++            columns = new java.util.ArrayList<>(columns);
++            columns.add(0, table.getColumns().stream().filter(c -> c.getName().equals("c0")).findFirst().get());
++        }
+         sb.append("(");
+         sb.append(columns.stream().map(c -> c.getName()).collect(Collectors.joining(", ")));
+         sb.append(") ");
+@@ -101,6 +106,9 @@
+                                 + " attempts while generating constant for column " + columns.get(c).getName());
+                     }
+                     constExpr = gen.generateConstant();
++                    if (vitessSharded && columns.get(c).getName().equals("c0")) {
++                        constExpr = MySQLConstant.createIntConstant(globalState.getRandomly().getInteger());
++                    }
+                     boolean reject = false;
+ 
+                     // Bug workaround: for integer columns, reject values that round to 1
+diff -ruN a/src/sqlancer/mysql/gen/MySQLTableGenerator.java b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
+--- a/src/sqlancer/mysql/gen/MySQLTableGenerator.java	2026-11-02 12:29:01.301178343 +0000
++++ b/src/sqlancer/mysql/gen/MySQLTableGenerator.java	2026-11-02 12:29:01.303289197 +0000
+@@ -262,7 +262,7 @@
+         String columnName = DBMSCommon.createColumnName(columnId);
+         columns.add(columnName);
+         sb.append(columnName);
+-        appendColumnDefinition();
++        appendColumnDefinition(columnId == 0 && globalState.getDbmsSpecificOptions().vitessSharded);
+     }
+ 
+     private enum ColumnOptions {
+@@ -274,6 +274,11 @@
+         boolean isNull = false;
+         boolean columnHasPrimaryKey = false;
+         List<ColumnOptions> columnOptions = Randomly.subset(ColumnOptions.values());
++        if (globalState.getDbmsSpecificOptions().vitessSharded) {
++            // Known Vitess bug: vtgate cannot parse the column attribute STORAGE {DISK|MEMORY}, so the schema tracker
++            // ignores such tables, and they cannot be used in a sharded keyspace.
++            columnOptions.remove(ColumnOptions.STORAGE);
++        }
+         if (!columnOptions.contains(ColumnOptions.NULL_OR_NOT_NULL)) {
+             tableHasNullableColumn = true;
+         }
+@@ -330,9 +335,9 @@
+         }
+     }
+ 
+-    private void appendColumnDefinition() {
++    private void appendColumnDefinition(boolean vindexColumn) {
+         sb.append(" ");
+-        MySQLDataType randomType = MySQLDataType.getRandom(globalState);
++        MySQLDataType randomType = vindexColumn ? MySQLDataType.INT : MySQLDataType.getRandom(globalState);
+         appendType(randomType);
+         sb.append(" ");
+         appendColumnOption(randomType);

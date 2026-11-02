@@ -1,0 +1,18 @@
+# Errors that SQLancer treats as expected, one regex per line: known Vitess limitations and already-reported bugs.
+# Without them, every SQLancer thread stops at the first such error and the oracles never get to deeper bugs.
+# Remove an entry to check whether the problem still exists.
+#
+# vtgate parser gaps (valid MySQL syntax)
+# (the anchors keep the same errors coming back from vttablet visible: those mean vtgate produced invalid SQL)
+^syntax error at position \d+ near '(LOW_PRIORITY|HIGH_PRIORITY|DELAYED|QUICK|IGNORE|INTO|CHECK|CHECKSUM|DROP|UPDATE|sql_buffer_result)'
+^VT03003: unknown table '.*' in MULTI DELETE
+# session variables vtgate does not know or support
+^VT\d+: unknown system variable
+^VT\d+: unsupported: system setting
+# sharded DML limitations
+^VT\d+: unsupported: REPLACE INTO with sharded keyspace
+^VT\d+: unsupported: you cannot UPDATE primary vindex columns
+^VT\d+: unsupported: only values are supported; invalid update on column
+# Known vtgate bug (see README.md): the formatter drops parentheses around IS/IN/LIKE/REGEXP/BETWEEN operands, so vttablet cannot
+# parse the rewritten query.
+vttablet: rpc error: code = InvalidArgument desc = (syntax error at position|You have an error in your SQL syntax)
