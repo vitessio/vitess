@@ -80,7 +80,6 @@ ENV VTDATAROOT=/vt/vtdataroot
 ENV PATH=$VTROOT/bin:$PATH
 
 # Copy artifacts from builder layers.
-COPY --from=go-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=go-builder --chown=vitess:vitess /vt/install /vt
 COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 COPY --from=vtadmin-builder --chown=vitess:vitess /vt/web/vtadmin/build /vt/web/vtadmin/build
