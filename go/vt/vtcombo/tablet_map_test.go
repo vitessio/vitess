@@ -17,6 +17,8 @@ limitations under the License.
 package vtcombo
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -243,6 +245,43 @@ func TestDialer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTabletRegistryConcurrentLifecycle(t *testing.T) {
+	tabletMapMu.Lock()
+	originalTabletMap := tabletMap
+	tabletMap = make(map[uint32]*comboTablet)
+	tabletMapMu.Unlock()
+	t.Cleanup(func() {
+		tabletMapMu.Lock()
+		tabletMap = originalTabletMap
+		tabletMapMu.Unlock()
+	})
+
+	ctx := t.Context()
+	var workers sync.WaitGroup
+	for worker := range 8 {
+		workers.Go(func() {
+			uid := uint32(worker + 1)
+			keyspace := fmt.Sprintf("example_%d", worker)
+			alias := &topodatapb.TabletAlias{Cell: "test", Uid: uid}
+			tablet := &comboTablet{uid: uid, keyspace: keyspace, alias: alias}
+			for range 1000 {
+				registerTablet(tablet)
+				conn, err := dialer(ctx, &topodatapb.Tablet{Alias: alias}, grpcclient.FailFast(false))
+				assert.NoError(t, err, "registered tablet unavailable")
+				assert.NotNil(t, conn, "registered tablet unavailable")
+				// Snapshot iteration must be safe while other workers mutate the map.
+				for _, current := range snapshotTablets() {
+					_, _ = lookupTablet(current.uid)
+				}
+				unregisterTablet(uid)
+				_, ok := lookupTablet(uid)
+				assert.False(t, ok, "detached tablet remains in registry")
+			}
+		})
+	}
+	workers.Wait()
 }
 
 func TestInternalTabletConn_Tablet(t *testing.T) {

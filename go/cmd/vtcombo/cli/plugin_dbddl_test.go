@@ -23,6 +23,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
@@ -42,24 +44,19 @@ func TestDBDDLSerializesCreateAndDrop(t *testing.T) {
 	globalCreateDb = func(context.Context, *vttestpb.Keyspace) error { return operation() }
 	globalDropDb = func(context.Context, string) error { return operation() }
 	plugin := &DBDDL{}
+	ctx := t.Context()
 	start := make(chan struct{})
 	var workers sync.WaitGroup
 	for range 16 {
 		workers.Go(func() {
 			<-start
 			for range 8 {
-				if err := plugin.CreateDatabase(context.Background(), "example"); err != nil {
-					t.Error(err)
-				}
-				if err := plugin.DropDatabase(context.Background(), "example"); err != nil {
-					t.Error(err)
-				}
+				assert.NoError(t, plugin.CreateDatabase(ctx, "example"))
+				assert.NoError(t, plugin.DropDatabase(ctx, "example"))
 			}
 		})
 	}
 	close(start)
 	workers.Wait()
-	if overlapping.Load() {
-		t.Fatal("database lifecycle callbacks ran concurrently")
-	}
+	assert.False(t, overlapping.Load(), "database lifecycle callbacks ran concurrently")
 }
