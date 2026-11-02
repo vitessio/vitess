@@ -1861,6 +1861,49 @@ func TestOperateStopsItsOwnRateLimiter(t *testing.T) {
 	assert.False(t, throttler.recentlyChecked(), "nothing checked the throttler")
 }
 
+// Disable doesn't wait for Operate to exit, so a Disable and an Enable in quick succession start an Operate while the
+// previous one still runs. The new Operate must not run its loop until the previous one has exited: the loops share
+// the throttler's channels and inventory, and the previous one's cleanup clears inventory.TabletMetrics, a plain map,
+// which the new one writes to.
+func TestOperateWaitsForPreviousOperate(t *testing.T) {
+	throttler := newTestThrottler()
+
+	oldCtx, cancelOld := context.WithCancel(t.Context())
+	oldWG := &sync.WaitGroup{}
+	throttler.Operate(oldCtx, oldWG)
+	// Hold the old Operate inside its loop, then cancel it, as Disable does.
+	entered, release := make(chan struct{}), make(chan struct{})
+	throttler.serialFuncChan <- func() {
+		close(entered)
+		<-release
+	}
+	<-entered
+	cancelOld()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	wg := &sync.WaitGroup{}
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+	throttler.Operate(ctx, wg)
+
+	metric := &base.ThrottleMetric{Name: base.LagMetricName, Scope: base.SelfScope, Alias: "cell1-101", Value: 1}
+	sendMetric := func() bool {
+		select {
+		case throttler.throttleMetricChan <- metric:
+			return true
+		default:
+			return false
+		}
+	}
+	assert.Never(t, sendMetric, time.Second, 10*time.Millisecond, "no loop may take a metric while the old Operate still runs")
+
+	close(release)
+	oldWG.Wait()
+	assert.Eventually(t, sendMetric, 30*time.Second, 10*time.Millisecond, "the new Operate must run its loop once the old one has exited")
+}
+
 func TestChecks(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
