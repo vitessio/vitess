@@ -316,9 +316,10 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 	}
 }
 
-// Dry-run logging must be rate-limited, or a 100%-throttle rule spams the logs at query
-// rate. Only the first decision in an interval logs; the counter still records them all.
-func TestQueryThrottler_DryRunLogIsRateLimited(t *testing.T) {
+// A dry-run decision is counted even when the rate limit suppresses its log, so the counter
+// shows how many queries a rule would reject. The rate limit of the logger that
+// NewQueryThrottler builds is checked by TestQueryThrottler_NoNodeWarningAndDryRunLogAreRateLimitedSeparately.
+func TestQueryThrottler_DryRunCountsDecisionsWhoseLogIsSuppressed(t *testing.T) {
 	mockStrategy := &mockThrottlingStrategy{
 		decision: registry.ThrottleDecision{
 			Throttle:           true,
@@ -762,29 +763,6 @@ func TestQueryThrottler_HandleConfigUpdate_ErrorHandling(t *testing.T) {
 			require.Equal(t, tt.expectedResult, result, tt.description)
 		})
 	}
-}
-
-// While a cell has no SrvKeyspace, the watch calls back with NoNode about once a second, on every tablet in the cell
-// whether or not it enables the query throttler. The warning must be rate-limited rather than logged every time.
-func TestQueryThrottler_HandleConfigUpdate_NoNodeWarningIsRateLimited(t *testing.T) {
-	// A large interval guarantees only the first warning is logged; the rest are suppressed.
-	qt := &QueryThrottler{
-		ctx:          t.Context(),
-		keyspace:     "test-keyspace",
-		tabletConfig: &tabletenv.TabletConfig{},
-		noNodeLogger: logutil.NewThrottledLogger("test", time.Hour),
-	}
-	qt.snapshot.Store(&stateSnapshot{cfg: &querythrottlerpb.Config{}, strategy: &registry.NoOpStrategy{}})
-	noNode := topo.NewError(topo.NoNode, "keyspace/test-keyspace")
-
-	require.True(t, qt.HandleConfigUpdate(nil, noNode), "NoNode must keep the watch alive")
-	firstLogTime := qt.noNodeLogger.GetLastLogTime()
-	require.False(t, firstLogTime.IsZero(), "the first NoNode callback must log a warning")
-
-	for range 5 {
-		require.True(t, qt.HandleConfigUpdate(nil, noNode), "NoNode must keep the watch alive")
-	}
-	require.Equal(t, firstLogTime, qt.noNodeLogger.GetLastLogTime(), "NoNode warnings within the interval must be suppressed")
 }
 
 // The NoNode warning and the dry-run decision log are rate-limited separately, so that a

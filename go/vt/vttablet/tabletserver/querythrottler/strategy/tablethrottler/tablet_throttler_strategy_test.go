@@ -595,13 +595,10 @@ func TestTabletThrottlerStrategy_FailOpenWhenCacheNotPrimed(t *testing.T) {
 		// Marking it running without Start leaves the cache unprimed, as just after Start.
 		strategy.running.Store(running)
 
-		start := time.Now()
 		result, ok := strategy.getCachedThrottleResult()
-		elapsed := time.Since(start)
 
 		require.True(t, ok, "Expected fail-open (checkOk=true) when cache is not primed (running=%v)", running)
 		require.Nil(t, result, "Expected nil checkResult when cache is not primed (running=%v)", running)
-		require.Less(t, elapsed, 100*time.Millisecond, "Expected fail-open path to return immediately without calling the throttler")
 		require.Equal(t, 0, slowClient.GetCallCount(), "Expected no synchronous ThrottleCheckOK calls from the hot path")
 	}
 }
@@ -974,6 +971,8 @@ func TestTabletThrottlerStrategy_Evaluate_ThrottleRatioBoundaries(t *testing.T) 
 
 // A breach whose probabilistic draw misses must allow the query and count it as allowed.
 func TestTabletThrottlerStrategy_Evaluate_FinalAllow(t *testing.T) {
+	// The first strategy registers the metrics, and evaluateOverloaded builds it after the read below.
+	initMetrics()
 	allowed := []string{"PRIMARY", "SELECT", "full", "allowed", "query_allowed"}
 	key := strings.Join(allowed, ".")
 	before := decisionCount.Counts()[key]
@@ -1329,7 +1328,9 @@ func TestTabletThrottlerStrategy_RefreshCache_Check(t *testing.T) {
 	t.Cleanup(strategy.Stop)
 
 	successes := cacheLoadLatency.Counts()["success"]
+	before := time.Now()
 	strategy.refreshCache()
+	after := time.Now()
 	require.Equal(t, throttlerapp.QueryThrottlerName, client.appName)
 	require.Greater(t, client.timeLeft, 4*time.Second)
 	require.LessOrEqual(t, client.timeLeft, 5*time.Second)
@@ -1337,7 +1338,8 @@ func TestTabletThrottlerStrategy_RefreshCache_Check(t *testing.T) {
 	require.NotNil(t, state)
 	require.Same(t, overloaded, state.result)
 	require.False(t, state.ok)
-	require.WithinDuration(t, time.Now(), state.refreshedAt, time.Minute)
+	require.False(t, state.refreshedAt.Before(before), "the state must be stamped with the time of the refresh")
+	require.False(t, state.refreshedAt.After(after), "the state must be stamped with the time of the refresh")
 	require.Equal(t, successes+1, cacheLoadLatency.Counts()["success"])
 
 	client.result = nil

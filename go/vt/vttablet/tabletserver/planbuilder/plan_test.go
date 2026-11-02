@@ -249,8 +249,8 @@ func TestBuildStatementType(t *testing.T) {
 }
 
 // Why the statement type comes from the AST: sqlparser.Preview calls a CTE SELECT
-// UNKNOWN, which fails open in the query throttler. Build and BuildStreaming must both
-// say SELECT.
+// UNKNOWN, which fails open in the query throttler. TestBuildStatementType covers Build,
+// and BuildStreaming must say SELECT too.
 func TestBuildStatementType_CTERegression(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	parser := sqlparser.NewTestParser()
@@ -262,10 +262,6 @@ func TestBuildStatementType_CTERegression(t *testing.T) {
 
 	statement, err := parser.Parse(cteSelect)
 	require.NoError(t, err)
-
-	plan, err := Build(vtenv.NewTestEnv(), statement, testSchema, "dbName", false)
-	require.NoError(t, err)
-	require.Equal(t, sqlparser.StmtSelect, plan.StatementType())
 
 	streamPlan, err := BuildStreaming(vtenv.NewTestEnv(), statement, testSchema, "dbName")
 	require.NoError(t, err)

@@ -1002,9 +1002,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
-// TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
-// refill COMMIT leaves the sequence cache unchanged and that the next call
-// refills the cache from the sequence table.
 // VTGate fetches sequence values outside the user's transaction and rolls the transaction
 // back when an explicit fetch is rejected, so the query throttler must not reject them.
 func TestQueryExecutorThrottlerSkipsNextval(t *testing.T) {
@@ -1029,6 +1026,9 @@ func TestQueryExecutorThrottlerSkipsNextval(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
+// refill COMMIT leaves the sequence cache unchanged and that the next call
+// refills the cache from the sequence table.
 func TestQueryExecutorPlanNextvalCommitFailureKeepsCache(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	t.Cleanup(db.Close)
