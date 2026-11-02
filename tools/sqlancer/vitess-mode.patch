@@ -416,10 +416,10 @@ index d27d6e6..d390464 100644
          }
 diff --git a/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java b/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java
 new file mode 100644
-index 0000000..2551bd6
+index 0000000..b5d19bb
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,201 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.sql.Connection;
@@ -453,10 +453,13 @@ index 0000000..2551bd6
 +public class MySQLVitessDiffOracle implements TestOracle<MySQLGlobalState> {
 +
 +    private static final double RELATIVE_TOLERANCE = 1e-9;
++    private static final int CANARY_INTERVAL = 200;
++    private static final String CANARY_QUERY = "SELECT FALSE, TRUE, NULL IS TRUE";
 +
 +    private final MySQLGlobalState state;
 +    private final ExpectedErrors errors;
 +    private String lastQuery;
++    private int checks;
 +
 +    public MySQLVitessDiffOracle(MySQLGlobalState state) {
 +        this.state = state;
@@ -478,6 +481,9 @@ index 0000000..2551bd6
 +        Connection mysqlConnection = reference.getConnection();
 +        Result vtgate = run(vtgateConnection::createStatement, query);
 +        Result mysql = run(mysqlConnection::createStatement, query);
++        if (++checks % CANARY_INTERVAL == 0) {
++            checkCanary(vtgateConnection, query);
++        }
 +
 +        if (vtgate.error != null && mysql.error != null) {
 +            throw new IgnoreMeException();
@@ -527,6 +533,20 @@ index 0000000..2551bd6
 +        }
 +        if (generator.isOrdered() && allNumeric(vtgate.rows) && !vtgate.rows.equals(mysql.rows)) {
 +            VitessFindings.report(state, new VitessFindings.Finding("order", features, query, details));
++        }
++    }
++
++    // A query can corrupt state that vtgate shares between sessions (for example its TRUE and FALSE values), which
++    // would make every later comparison of this vtgate meaningless.
++    private void checkCanary(SQLConnection vtgate, String query) {
++        Result canary = run(vtgate::createStatement, CANARY_QUERY);
++        if (canary.error == null && !canary.rows.equals(List.of(List.of("0", "1", "0")))) {
++            VitessFindings.report(state,
++                    new VitessFindings.Finding("vtgate-corrupted", CANARY_QUERY + " returned " + canary.rows, query,
++                            "vtgate returned " + canary.rows + " for " + CANARY_QUERY + " after the last "
++                                    + CANARY_INTERVAL
++                                    + " queries; this is the last of them. Restart vtgate before further runs."));
++            throw new AssertionError("vtgate state is corrupted: " + CANARY_QUERY + " returned " + canary.rows);
 +        }
 +    }
 +

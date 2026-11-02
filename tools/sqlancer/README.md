@@ -27,6 +27,9 @@ The patch therefore adds the oracle `VITESS_DIFF`, which compares vtgate with My
 - It runs each query on vtgate and on MySQL and compares the results as multisets. Each problem is a line in
   `logs/vitess/findings.jsonl`, and the first ones of each kind get a reproduction file. The run continues after
   a finding.
+- Every 200 queries, it checks that vtgate still evaluates `SELECT FALSE, TRUE, NULL IS TRUE` correctly. Bug 0
+  below corrupts these values for the whole process, which would make every later comparison meaningless, so the
+  thread reports `vtgate-corrupted` with the last query and stops.
 
 ## Patch options
 
