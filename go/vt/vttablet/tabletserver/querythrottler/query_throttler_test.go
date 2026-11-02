@@ -592,6 +592,42 @@ func TestQueryThrottler_metricsLabelCountStableAcrossInstances(t *testing.T) {
 	}, "stats must accept labels from instances regardless of EnablePerWorkloadTableMetrics")
 }
 
+// The query throttler exports its metrics under these names and labels, which the changelog,
+// dashboards and alerts refer to, and a throttled query counts under the metric that
+// throttled it.
+func TestQueryThrottler_MetricNamesAndLabels(t *testing.T) {
+	for name, metric := range map[string]expvar.Var{
+		"QueryThrottlerRequests":          requestsTotal,
+		"QueryThrottlerThrottled":         requestsThrottled,
+		"QueryThrottlerTotalLatencyNs":    totalLatency,
+		"QueryThrottlerEvaluateLatencyNs": evaluateLatency,
+	} {
+		require.Same(t, metric, expvar.Get(name), name)
+	}
+	require.Equal(t, []string{"Strategy", "Workload", "Priority"}, requestsTotal.Labels())
+	require.Equal(t, []string{"Strategy", "Workload", "Priority", "MetricName", "DryRun"}, requestsThrottled.Labels())
+	require.Equal(t, []string{"Strategy", "Workload", "Priority"}, totalLatency.Labels())
+	require.Equal(t, []string{"Strategy", "Workload", "Priority"}, evaluateLatency.Labels())
+
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
+	iqt := &QueryThrottler{ctx: t.Context(), env: env}
+	iqt.snapshot.Store(&stateSnapshot{
+		cfg:      &querythrottlerpb.Config{Enabled: true},
+		strategy: &mockThrottlingStrategy{decision: registry.ThrottleDecision{Throttle: true, Message: "throttled", MetricName: "lag", MetricValue: 20}},
+	})
+
+	const base = "MockStrategy.unknown.50"
+	requests, total, evaluate := requestsTotal.Counts()[base], totalLatency.Counts()[base], evaluateLatency.Counts()[base]
+	throttled := requestsThrottled.Counts()[base+".lag.false"]
+	err := iqt.Throttle(t.Context(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "q"}, sqlparser.StmtSelect, 0, &querypb.ExecuteOptions{Priority: "50"})
+	require.Error(t, err)
+
+	require.Equal(t, requests+1, requestsTotal.Counts()[base], "QueryThrottlerRequests")
+	require.Equal(t, total+1, totalLatency.Counts()[base], "QueryThrottlerTotalLatencyNs")
+	require.Equal(t, evaluate+1, evaluateLatency.Counts()[base], "QueryThrottlerEvaluateLatencyNs")
+	require.Equal(t, throttled+1, requestsThrottled.Counts()[base+".lag.false"], "QueryThrottlerThrottled")
+}
+
 func TestQueryThrottler_extractPriority(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -753,6 +789,7 @@ func TestQueryThrottler_HandleConfigUpdate_NoNodeWarningIsRateLimited(t *testing
 
 // The NoNode warning and the dry-run decision log are rate-limited separately, so that a
 // dry-run configuration logging every few seconds can't hide that a cell lost its SrvKeyspace.
+// The loggers come from NewQueryThrottler, so this also checks that each one is rate-limited.
 func TestQueryThrottler_NoNodeWarningAndDryRunLogAreRateLimitedSeparately(t *testing.T) {
 	env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 	qt := NewQueryThrottler(t.Context(), &throttle.Throttler{}, env, &topodatapb.TabletAlias{Cell: "test-cell", Uid: 123}, srvtopotest.NewPassthroughSrvTopoServer())
@@ -766,10 +803,15 @@ func TestQueryThrottler_NoNodeWarningAndDryRunLogAreRateLimitedSeparately(t *tes
 	dryRunLogTime := qt.throttledLogger.GetLastLogTime()
 	require.False(t, dryRunLogTime.IsZero(), "the dry-run decision must be logged")
 	require.True(t, qt.noNodeLogger.GetLastLogTime().IsZero(), "the dry-run log must not count against the NoNode warning")
+	require.NoError(t, qt.Throttle(t.Context(), topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "select * from t"}, sqlparser.StmtSelect, 0, nil))
+	require.Equal(t, dryRunLogTime, qt.throttledLogger.GetLastLogTime(), "a second dry-run decision right away must not be logged")
 
 	require.True(t, qt.HandleConfigUpdate(nil, topo.NewError(topo.NoNode, "keyspace/test-keyspace")))
-	require.False(t, qt.noNodeLogger.GetLastLogTime().IsZero(), "the NoNode warning must be logged after a dry-run log")
+	noNodeLogTime := qt.noNodeLogger.GetLastLogTime()
+	require.False(t, noNodeLogTime.IsZero(), "the NoNode warning must be logged after a dry-run log")
 	require.Equal(t, dryRunLogTime, qt.throttledLogger.GetLastLogTime(), "the NoNode warning must not count against the dry-run log")
+	require.True(t, qt.HandleConfigUpdate(nil, topo.NewError(topo.NoNode, "keyspace/test-keyspace")))
+	require.Equal(t, noNodeLogTime, qt.noNodeLogger.GetLastLogTime(), "a second NoNode warning right away must not be logged")
 }
 
 // TestQueryThrottler_HandleConfigUpdate__ConfigExtraction verifies config is properly extracted from SrvKeyspace.
