@@ -520,7 +520,10 @@ func restoreDeletedGroupVoters(ctx context.Context, si *topo.ShardInfo) {
 		return
 	}
 	for _, identity := range policy.GroupVoterIdentities(si.Shard) {
-		tablet := identity.GetTablet()
+		tablet := identity.GetTablet().CloneVT()
+		// The published identity holds no key range, and the tablet's is its shard's: without it,
+		// a VTOrc that watches a key range would take the tablet for one of the whole keyspace.
+		tablet.KeyRange = si.GetKeyRange().CloneVT()
 		if !shouldWatchTablet(tablet) {
 			continue
 		}

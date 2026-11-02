@@ -190,6 +190,40 @@ func TestRestoreDeletedGroupVoters(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestRestoreDeletedGroupVotersWatchingKeyRange checks that a VTOrc that watches a key range of a
+// keyspace (--clusters-to-watch ks/-80) restores the deleted voters of the shards it watches: the
+// published identity holds no key range, so the restored tablet takes its shard's.
+func TestRestoreDeletedGroupVotersWatchingKeyRange(t *testing.T) {
+	prevCycle, prevWatch := process.FirstDiscoveryCycleComplete.Load(), shardsToWatch
+	t.Cleanup(func() {
+		process.FirstDiscoveryCycleComplete.Store(prevCycle)
+		shardsToWatch = prevWatch
+	})
+	primary := recoveryTablet("zone1", 101, topodatapb.TabletType_PRIMARY)
+	voter2 := recoveryTablet("zone2", 200, topodatapb.TabletType_REPLICA)
+	voter3 := recoveryTablet("zone3", 300, topodatapb.TabletType_REPLICA)
+	groupReplicationRecoveryTestWithPolicy(t, policy.DurabilityGroupReplicationCrossCell, primary, voter2, voter3)
+	setVoters(t, primary, voter2, voter3)
+	publishIdentities(t, primary, voter2, voter3)
+	require.NoError(t, ts.DeleteTablet(t.Context(), voter3.Alias))
+	forgetInBackend(t, voter3.Alias)
+	si, err := ts.GetShard(t.Context(), "ks", "0")
+	require.NoError(t, err)
+	// The shard covers -80, which is what this VTOrc watches.
+	firstHalf := &topodatapb.KeyRange{End: []byte{0x80}}
+	si.KeyRange = firstHalf
+	shardsToWatch = map[string][]*topodatapb.KeyRange{"ks": {firstHalf}}
+	process.FirstDiscoveryCycleComplete.Store(true)
+
+	restoreDeletedGroupVoters(t.Context(), si)
+	restored, err := inst.ReadTablet(voter3.Alias)
+	require.NoError(t, err, "the deleted voter of a watched shard is restored")
+	assert.True(t, proto.Equal(firstHalf, restored.KeyRange), "key range %v", restored.KeyRange)
+	deleted, err := inst.ReadDeletedGroupVoters()
+	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{"zone3-0000000300": true}, deleted)
+}
+
 // TestUpdateGroupReplicationVotersWithConcurrentIdentityWrite checks that a voter's vttablet, which
 // publishes its identity in the shard record without the shard lock, never makes VTOrc's change of the
 // voters fail or lose either write, wherever its write lands: between VTOrc's read of the shard, on
