@@ -15,6 +15,12 @@
 ^VT\d+: unsupported: REPLACE INTO with sharded keyspace
 ^VT\d+: unsupported: you cannot UPDATE primary vindex columns
 ^VT\d+: unsupported: only values are supported; invalid update on column
+# sharded query limitations
+^VT\d+: unsupported: in scatter query: aggregation function
+^VT\d+: unsupported: AVG\(distinct
+^VT\d+: unsupported: correlated subquery is only supported for EXISTS
+^VT\d+: unsupported: unmergable subquery can not be inside complex expression
+^VT\d+: unsupported: subquery in outer join predicate
 # Known vtgate bug (see README.md): the formatter drops parentheses around IS/IN/LIKE/REGEXP/BETWEEN operands, so vttablet cannot
 # parse the rewritten query.
 vttablet: rpc error: code = InvalidArgument desc = (syntax error at position|You have an error in your SQL syntax)

@@ -110,7 +110,9 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
    ```
    In a run against a vtgate with local workarounds for bugs 3, 4 and 7, a panic in the compiled `NOT`
    (`interface conversion: evalengine.eval is nil, not *evalengine.evalInt64`) crashed vtgate the same way.
-   That one is not yet reproduced on `main`.
+   That one, and similar type confusions in the evalengine (`evalengine.eval is *evalengine.evalInt64, not
+   ...`, `evalengine.eval is *evalengine.evalUint64, not *evalengine.evalDecimal`), are not yet reproduced on
+   `main`.
 
 2. **Queries that make vtgate panic** (sharded). vtgate recovers these panics, but closes the connection:
    - `unexpected argument type`: `SELECT LEAST(1, CASE WHEN t0.c0 THEN NULL END) AS a0 FROM t0 ORDER BY 1`
@@ -182,6 +184,9 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
    - **A `LIMIT` is pushed below a scalar aggregation.** `SELECT SUM(DISTINCT c1) FROM t0 ORDER BY 1 LIMIT 1`
      sums only the first value (10 instead of 60), because the shards run
      `select c1 from t0 group by c1 order by c1 asc limit :__upper_limit`.
+   - **A `UNION` of numbers and strings is sorted as numbers.** The column type of
+     `(SELECT c0 AS a0 FROM t0) UNION (SELECT '5' AS a0 FROM t0)` is a string, so MySQL sorts `ORDER BY a0 DESC`
+     as 9, 5, 2, 10, 1 (for `c0` values 1, 2, 9, 10). vtgate returns 10, 9, 2, 1, 5.
    - When vtgate groups the rows of a derived table itself, values of a `ZEROFILL` column lose their padding
      (`7` instead of `000000000007`).
 
@@ -241,6 +246,11 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
     - `(SELECT DISTINCT EXISTS (SELECT 1) AS a0 FROM t0) UNION ALL (SELECT t0.c0 FROM t0)` fails with
       `VT13001: [BUG] argument offsets did not line up for UNION`.
     - `SELECT SUM(DISTINCT 5) FROM t0` fails with `Unknown column`.
+    - `SELECT d.a0, COUNT(*) FROM (SELECT t1.c2 AS a0, AVG(t1.c0) AS a1 FROM t0 JOIN t1 ON t0.c0 = t1.c0 GROUP BY t1.c2) AS d GROUP BY d.a0`
+      fails with `VT13001: [BUG] did not expect to add group by here: c2`, although the join is on the sharding
+      key.
+    - `SELECT d.a0, COUNT(*) FROM (SELECT 1 AS a0, t0.c0 AS a1 FROM t0 WHERE t0.c0 = (SELECT COUNT(sq.c0) FROM t0 AS sq)) AS d GROUP BY d.a0`
+      fails with `Unknown column 't0.c0' in 'where clause'`.
 
 ### Schema problems
 
@@ -265,5 +275,10 @@ These are valid MySQL statements that vtgate rejects:
 - Session variables that vtgate does not know (for example `histogram_generation_max_mem_size` and
   `internal_tmp_mem_storage_engine`) or does not support as a system setting (for example
   `max_sp_recursion_depth`, `rbr_exec_mode`, `myisam_sort_buffer_size` and `sql_log_off`).
-- Sharded keyspaces: `REPLACE INTO`, `UPDATE` of a primary vindex column with the `hash` vindex,
-  `UPDATE ... SET vindex_col = DEFAULT`, and a subquery in an outer join predicate.
+- Sharded keyspaces:
+  - `REPLACE INTO`, `UPDATE` of a primary vindex column with the `hash` vindex, and
+    `UPDATE ... SET vindex_col = DEFAULT`.
+  - `BIT_AND`, `BIT_OR` and `BIT_XOR` in any scatter query (`VT12001: unsupported: in scatter query:
+    aggregation function`), and `AVG(DISTINCT ...)`.
+  - A correlated subquery other than `EXISTS`, an `EXISTS` subquery that cannot be merged inside an `OR`
+    (`unmergable subquery can not be inside complex expression`), and a subquery in an outer join predicate.
