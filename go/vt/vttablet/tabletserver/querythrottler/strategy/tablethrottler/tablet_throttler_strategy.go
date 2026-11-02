@@ -69,7 +69,7 @@ func initMetrics() {
 		cacheStaleRefreshes = stats.NewCounter(_metricsPrefix+"CacheStaleRefreshes", "background refresh ticks that observed the cache already older than the staleness threshold (queries are silently failing open against stale state)")
 		cacheStaleConsumption = stats.NewCounter(_metricsPrefix+"CacheStaleConsumption", "hot-path cache reads that discarded a state older than the staleness threshold and failed open (prevents indefinite throttling during a metrics outage)")
 		decisionCount = stats.NewCountersWithMultiLabels(_metricsPrefix+"DecisionCount", "tablet throttler decisions by outcome and reason", []string{"TabletType", "StmtType", "Path", "Outcome", "Reason"})
-		fastDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyNs", "fast-path tablet throttler decision latency (nanoseconds)", []string{"TabletType", "Outcome"})
+		fastDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FastDecisionLatencyNs", "fast-path tablet throttler decision latency (nanoseconds), sampled for one fast decision in ten", []string{"TabletType", "Outcome"})
 		fullDecisionLatency = stats.NewMultiTimings(_metricsPrefix+"FullDecisionLatencyNs", "full-path tablet throttler decision latency (nanoseconds)", []string{"TabletType", "StmtType", "Outcome"})
 		cacheLoadLatency = stats.NewMultiTimings(_metricsPrefix+"CacheLoadLatencyNs", "tablet throttler cache load latency (nanoseconds)", []string{"Status"})
 	})

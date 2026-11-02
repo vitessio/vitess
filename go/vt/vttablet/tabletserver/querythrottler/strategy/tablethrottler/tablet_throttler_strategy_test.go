@@ -18,6 +18,7 @@ package tabletthrottler
 
 import (
 	"context"
+	"expvar"
 	"fmt"
 	"strconv"
 	"strings"
@@ -915,7 +916,10 @@ func evaluateOverloaded(t *testing.T, priority string, ratioPercent float64, ran
 	}
 	strategy := newTestStrategyWithRandom(NewFakeThrottleClientWrapper(overloaded, false), testRandomFuncs{
 		randFloat64: func() float64 { return randFloat64 },
-		randIntN:    func(n int) int { return randIntN },
+		randIntN: func(n int) int {
+			require.Equal(t, 100, n, "the priority draw must be from [0, 100)")
+			return randIntN
+		},
 	})
 	strategy.running.Store(true)
 	strategy.cachedState.Store(&cacheState{ok: false, result: overloaded, refreshedAt: time.Now()})
@@ -970,7 +974,7 @@ func TestTabletThrottlerStrategy_Evaluate_ThrottleRatioBoundaries(t *testing.T) 
 
 // A breach whose probabilistic draw misses must allow the query and count it as allowed.
 func TestTabletThrottlerStrategy_Evaluate_FinalAllow(t *testing.T) {
-	allowed := []string{"PRIMARY", "SELECT", decisionPathFull, decisionOutcomeAllowed, decisionReasonQueryAllowed}
+	allowed := []string{"PRIMARY", "SELECT", "full", "allowed", "query_allowed"}
 	key := strings.Join(allowed, ".")
 	before := decisionCount.Counts()[key]
 
@@ -1090,23 +1094,25 @@ func TestTabletThrottlerStrategy_Evaluate_IgnoresMetricsWithinThrottlerThreshold
 // A cached state goes stale cacheStalenessMultiplier refresh intervals after it was
 // refreshed, and then fails open. A non-positive interval falls back to the default.
 func TestTabletThrottlerStrategy_CacheStaleness(t *testing.T) {
-	require.Equal(t, defaultCacheUpdateInterval, resolveCacheUpdateInterval(nil))
-	require.Equal(t, defaultCacheUpdateInterval, resolveCacheUpdateInterval(&tabletenv.TabletConfig{}))
-	require.Equal(t, defaultCacheUpdateInterval, resolveCacheUpdateInterval(&tabletenv.TabletConfig{QueryThrottlerCacheUpdateInterval: -time.Second}))
+	// Without a positive interval the strategy uses 10s, the flag's documented default.
+	require.Equal(t, 10*time.Second, resolveCacheUpdateInterval(nil))
+	require.Equal(t, 10*time.Second, resolveCacheUpdateInterval(&tabletenv.TabletConfig{}))
+	require.Equal(t, 10*time.Second, resolveCacheUpdateInterval(&tabletenv.TabletConfig{QueryThrottlerCacheUpdateInterval: -time.Second}))
 
-	strategy := NewTabletThrottlerStrategy(NewFakeThrottleClientWrapper(nil, true), &tabletenv.TabletConfig{QueryThrottlerCacheUpdateInterval: 10 * time.Second})
+	// The threshold is six of the configured intervals, not of the default.
+	strategy := NewTabletThrottlerStrategy(NewFakeThrottleClientWrapper(nil, true), &tabletenv.TabletConfig{QueryThrottlerCacheUpdateInterval: 2 * time.Second})
 	t.Cleanup(strategy.Stop)
-	require.Equal(t, 60*time.Second, strategy.cacheStalenessThreshold)
+	require.Equal(t, 12*time.Second, strategy.cacheStalenessThreshold)
 
 	require.False(t, strategy.isStale(nil))
 	require.False(t, strategy.isStale(&cacheState{}), "a state that was never refreshed is a miss, not stale")
-	require.False(t, strategy.isStale(&cacheState{refreshedAt: time.Now().Add(-59 * time.Second)}))
-	require.True(t, strategy.isStale(&cacheState{refreshedAt: time.Now().Add(-61 * time.Second)}))
+	require.False(t, strategy.isStale(&cacheState{refreshedAt: time.Now().Add(-11 * time.Second)}))
+	require.True(t, strategy.isStale(&cacheState{refreshedAt: time.Now().Add(-13 * time.Second)}))
 
 	// Even a state that last recorded an overload. Running is set without Start, so it is
 	// cleared again before the Stop cleanup, which would otherwise wait for an updater.
 	strategy.running.Store(true)
-	strategy.cachedState.Store(&cacheState{ok: false, result: &throttle.CheckResult{}, refreshedAt: time.Now().Add(-61 * time.Second)})
+	strategy.cachedState.Store(&cacheState{ok: false, result: &throttle.CheckResult{}, refreshedAt: time.Now().Add(-13 * time.Second)})
 	result, ok := strategy.getCachedThrottleResult()
 	strategy.running.Store(false)
 	require.True(t, ok)
@@ -1130,7 +1136,10 @@ func TestTabletThrottlerStrategy_RefreshCache_CountsStaleRefreshes(t *testing.T)
 }
 
 // Each decision counts once in DecisionCount, under its tablet type, statement type, path,
-// outcome and reason, and its cache read counts as a hit or a miss.
+// outcome and reason, and its cache read counts as a hit or a miss. Its latency is recorded
+// in FastDecisionLatencyNs or FullDecisionLatencyNs, under its tablet type, outcome and,
+// on the full path, statement type. The labels are spelled out because dashboards and
+// alerts depend on them.
 func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 	overloaded := &throttle.CheckResult{Metrics: map[string]*throttle.MetricResult{"lag": breachedMetric(20)}}
 	overloadedState := &cacheState{ok: false, result: overloaded, refreshedAt: time.Now()}
@@ -1156,7 +1165,7 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			tabletType: topodatapb.TabletType_PRIMARY,
 			stmtType:   sqlparser.StmtSelect,
 			priority:   "100",
-			wantLabels: []string{"PRIMARY", stmtTypeNotAvailable, decisionPathFast, decisionOutcomeAllowed, decisionReasonBypassFast},
+			wantLabels: []string{"PRIMARY", "NA", "fast", "allowed", "bypass_fast"},
 		},
 		{
 			name:       "priority bypass",
@@ -1165,7 +1174,7 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			tabletType: topodatapb.TabletType_PRIMARY,
 			stmtType:   sqlparser.StmtSelect,
 			priority:   "0",
-			wantLabels: []string{"PRIMARY", "SELECT", decisionPathFull, decisionOutcomeAllowed, decisionReasonBypassPrior},
+			wantLabels: []string{"PRIMARY", "SELECT", "full", "allowed", "bypass_priority"},
 		},
 		{
 			name:       "no rule for tablet type",
@@ -1174,7 +1183,7 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			tabletType: topodatapb.TabletType_REPLICA,
 			stmtType:   sqlparser.StmtSelect,
 			priority:   "100",
-			wantLabels: []string{"REPLICA", "SELECT", decisionPathFull, decisionOutcomeAllowed, decisionReasonNoRuleForTabletType},
+			wantLabels: []string{"REPLICA", "SELECT", "full", "allowed", "no_rule_for_tablet_type"},
 		},
 		{
 			name:       "no rule for statement type",
@@ -1183,7 +1192,7 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			tabletType: topodatapb.TabletType_PRIMARY,
 			stmtType:   sqlparser.StmtInsert,
 			priority:   "100",
-			wantLabels: []string{"PRIMARY", "INSERT", decisionPathFull, decisionOutcomeAllowed, decisionReasonNoRuleForStmtType},
+			wantLabels: []string{"PRIMARY", "INSERT", "full", "allowed", "no_rule_for_stmt_type"},
 		},
 		{
 			name:       "cache miss while not running",
@@ -1192,7 +1201,18 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			tabletType: topodatapb.TabletType_PRIMARY,
 			stmtType:   sqlparser.StmtSelect,
 			priority:   "100",
-			wantLabels: []string{"PRIMARY", "SELECT", decisionPathFull, decisionOutcomeAllowed, decisionReasonNoMetricBreach},
+			wantLabels: []string{"PRIMARY", "SELECT", "full", "allowed", "no_metric_breach"},
+			wantMisses: 1,
+		},
+		{
+			// A healthy state left over from before Stop must not take the fast path.
+			name:       "no fast path while not running",
+			running:    false,
+			state:      &cacheState{ok: true, result: &throttle.CheckResult{}, refreshedAt: time.Now()},
+			tabletType: topodatapb.TabletType_PRIMARY,
+			stmtType:   sqlparser.StmtSelect,
+			priority:   "100",
+			wantLabels: []string{"PRIMARY", "SELECT", "full", "allowed", "no_metric_breach"},
 			wantMisses: 1,
 		},
 		{
@@ -1203,7 +1223,7 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			stmtType:    sqlparser.StmtSelect,
 			priority:    "100",
 			randFloat64: 0.4,
-			wantLabels:  []string{"PRIMARY", "SELECT", decisionPathFull, decisionOutcomeThrottled, decisionReasonMetricBreach},
+			wantLabels:  []string{"PRIMARY", "SELECT", "full", "throttled", "metric_breach"},
 			wantHits:    1,
 		},
 		{
@@ -1216,7 +1236,7 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			priority:    "100",
 			randFloat64: 0.4,
 			dryRun:      true,
-			wantLabels:  []string{"PRIMARY", "SELECT", decisionPathFull, decisionOutcomeWouldThrottle, decisionReasonMetricBreach},
+			wantLabels:  []string{"PRIMARY", "SELECT", "full", "would_throttle", "metric_breach"},
 			wantHits:    1,
 		},
 		{
@@ -1227,7 +1247,7 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			stmtType:    sqlparser.StmtSelect,
 			priority:    "100",
 			randFloat64: 0.6,
-			wantLabels:  []string{"PRIMARY", "SELECT", decisionPathFull, decisionOutcomeAllowed, decisionReasonQueryAllowed},
+			wantLabels:  []string{"PRIMARY", "SELECT", "full", "allowed", "query_allowed"},
 			wantHits:    1,
 		},
 	}
@@ -1240,14 +1260,147 @@ func TestTabletThrottlerStrategy_Evaluate_RecordsDecisions(t *testing.T) {
 			cfg := createTestQueryThrottlerConfig(rules)
 			cfg.DryRun = tt.dryRun
 
+			// The fast path's draw of 0 samples its latency.
+			latency, latencyKey := fullDecisionLatency, strings.Join([]string{tt.wantLabels[0], tt.wantLabels[1], tt.wantLabels[3]}, ".")
+			if tt.wantLabels[2] == "fast" {
+				latency, latencyKey = fastDecisionLatency, strings.Join([]string{tt.wantLabels[0], tt.wantLabels[3]}, ".")
+			}
+
 			key := strings.Join(tt.wantLabels, ".")
 			decisions, hits, misses := decisionCount.Counts()[key], cacheHits.Get(), cacheMisses.Get()
+			latencies := latency.Counts()[latencyKey]
 			strategy.Evaluate(t.Context(), cfg, tt.tabletType, &sqlparser.ParsedQuery{Query: "SELECT 1"},
 				tt.stmtType, 0, toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: tt.priority}))
 
 			require.Equal(t, decisions+1, decisionCount.Counts()[key], "DecisionCount for %s", key)
+			require.Equal(t, latencies+1, latency.Counts()[latencyKey], "%s for %s", latency.Help(), latencyKey)
 			require.Equal(t, hits+tt.wantHits, cacheHits.Get(), "CacheHits")
 			require.Equal(t, misses+tt.wantMisses, cacheMisses.Get(), "CacheMisses")
 		})
 	}
+}
+
+// The strategy exports its metrics under these names and labels, which the changelog,
+// dashboards and alerts refer to.
+func TestTabletThrottlerStrategy_MetricNames(t *testing.T) {
+	initMetrics()
+	for name, metric := range map[string]expvar.Var{
+		"QueryThrottlerTabletStrategyCacheMisses":           cacheMisses,
+		"QueryThrottlerTabletStrategyCacheHits":             cacheHits,
+		"QueryThrottlerTabletStrategyCacheRefreshFailures":  cacheRefreshFailures,
+		"QueryThrottlerTabletStrategyCacheStaleRefreshes":   cacheStaleRefreshes,
+		"QueryThrottlerTabletStrategyCacheStaleConsumption": cacheStaleConsumption,
+		"QueryThrottlerTabletStrategyDecisionCount":         decisionCount,
+		"QueryThrottlerTabletStrategyFastDecisionLatencyNs": fastDecisionLatency,
+		"QueryThrottlerTabletStrategyFullDecisionLatencyNs": fullDecisionLatency,
+		"QueryThrottlerTabletStrategyCacheLoadLatencyNs":    cacheLoadLatency,
+	} {
+		require.Same(t, metric, expvar.Get(name), name)
+	}
+	require.Equal(t, []string{"TabletType", "StmtType", "Path", "Outcome", "Reason"}, decisionCount.Labels())
+	require.Equal(t, []string{"TabletType", "Outcome"}, fastDecisionLatency.Labels())
+	require.Equal(t, []string{"TabletType", "StmtType", "Outcome"}, fullDecisionLatency.Labels())
+	require.Equal(t, []string{"Status"}, cacheLoadLatency.Labels())
+}
+
+// recordingThrottleClient records the app name and the time left before the deadline of
+// the last check it was given.
+type recordingThrottleClient struct {
+	result   *throttle.CheckResult
+	appName  throttlerapp.Name
+	timeLeft time.Duration
+}
+
+func (c *recordingThrottleClient) ThrottleCheckOK(ctx context.Context, appName throttlerapp.Name) (*throttle.CheckResult, bool) {
+	c.appName = appName
+	if deadline, ok := ctx.Deadline(); ok {
+		c.timeLeft = time.Until(deadline)
+	}
+	return c.result, false
+}
+
+// A refresh checks the throttler as the query throttler app and gives up on the check after
+// 5 seconds. It stamps the state it stores with the time of the refresh, so the state can go
+// stale, and records its latency under the success or timeout status.
+func TestTabletThrottlerStrategy_RefreshCache_Check(t *testing.T) {
+	overloaded := &throttle.CheckResult{Metrics: map[string]*throttle.MetricResult{"lag": breachedMetric(20)}}
+	client := &recordingThrottleClient{result: overloaded}
+	strategy := NewTabletThrottlerStrategy(client, createTestTabletConfig())
+	t.Cleanup(strategy.Stop)
+
+	successes := cacheLoadLatency.Counts()["success"]
+	strategy.refreshCache()
+	require.Equal(t, throttlerapp.QueryThrottlerName, client.appName)
+	require.Greater(t, client.timeLeft, 4*time.Second)
+	require.LessOrEqual(t, client.timeLeft, 5*time.Second)
+	state := strategy.cachedState.Load()
+	require.NotNil(t, state)
+	require.Same(t, overloaded, state.result)
+	require.False(t, state.ok)
+	require.WithinDuration(t, time.Now(), state.refreshedAt, time.Minute)
+	require.Equal(t, successes+1, cacheLoadLatency.Counts()["success"])
+
+	client.result = nil
+	timeouts := cacheLoadLatency.Counts()["timeout"]
+	strategy.refreshCache()
+	require.Equal(t, timeouts+1, cacheLoadLatency.Counts()["timeout"])
+}
+
+// FastDecisionLatencyNs records one fast decision in ten, chosen by a draw from [0, 1).
+func TestTabletThrottlerStrategy_FastPathLatencySampling(t *testing.T) {
+	tests := []struct {
+		draw       float64
+		wantSample bool
+	}{
+		{draw: 0, wantSample: true},
+		{draw: 0.09, wantSample: true},
+		{draw: 0.1, wantSample: false},
+		{draw: 0.5, wantSample: false},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("draw=%v", tt.draw), func(t *testing.T) {
+			strategy := newTestStrategyWithRandom(NewFakeThrottleClientWrapper(nil, true), testRandomFuncs{
+				randFloat64: func() float64 { return tt.draw },
+			})
+			strategy.running.Store(true)
+			primeGoodCacheState(strategy)
+
+			before := fastDecisionLatency.Counts()["PRIMARY.allowed"]
+			decision := strategy.Evaluate(t.Context(), nil, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"},
+				sqlparser.StmtSelect, 0, toQueryAttributesForTest(nil))
+			require.Equal(t, "System healthy, fast-path bypass", decision.Message)
+
+			want := before
+			if tt.wantSample {
+				want++
+			}
+			require.Equal(t, want, fastDecisionLatency.Counts()["PRIMARY.allowed"])
+		})
+	}
+}
+
+// Start primes the cache at once rather than one interval later, and the updater then
+// refreshes it every configured interval rather than every default one.
+func TestTabletThrottlerStrategy_UpdaterUsesConfiguredInterval(t *testing.T) {
+	t.Run("primes the cache at Start", func(t *testing.T) {
+		client := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+		strategy := NewTabletThrottlerStrategy(client, &tabletenv.TabletConfig{QueryThrottlerCacheUpdateInterval: time.Hour})
+		t.Cleanup(strategy.Stop)
+
+		strategy.Start()
+		require.Eventually(t, func() bool {
+			return strategy.cachedState.Load() != nil
+		}, 30*time.Second, 10*time.Millisecond, "the first refresh must not wait for the hourly tick")
+	})
+	t.Run("refreshes every configured interval", func(t *testing.T) {
+		client := NewFakeThrottleClientWrapper(&throttle.CheckResult{}, true)
+		strategy := NewTabletThrottlerStrategy(client, &tabletenv.TabletConfig{QueryThrottlerCacheUpdateInterval: 10 * time.Millisecond})
+		t.Cleanup(strategy.Stop)
+
+		// At the 10s default, the fifth refresh would come 40 seconds after Start.
+		strategy.Start()
+		require.Eventually(t, func() bool {
+			return client.GetCallCount() >= 5
+		}, 30*time.Second, 10*time.Millisecond)
+	})
 }
