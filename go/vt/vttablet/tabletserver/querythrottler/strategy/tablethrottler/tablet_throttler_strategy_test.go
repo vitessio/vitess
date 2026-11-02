@@ -731,8 +731,7 @@ func primeGoodCacheState(strategy *TabletThrottlerStrategy) *cacheState {
 }
 
 // When Stop() races an in-flight refresh, refreshCache must keep the prior good state, even
-// if the client still returns a result. Treating only DeadlineExceeded as failure would let
-// Canceled reach the store path. Stop is not a failed refresh either, so it must not count
+// if the client still returns a result. Stop is not a failed refresh, so it must not count
 // as one or record a refresh latency.
 func TestTabletThrottlerStrategy_RefreshCache_CanceledContextPreservesPriorState(t *testing.T) {
 	overloaded := &throttle.CheckResult{
@@ -769,6 +768,36 @@ func TestTabletThrottlerStrategy_RefreshCache_NilResultPreservesPriorState(t *te
 	require.Same(t, primed, strategy.cachedState.Load(),
 		"a refresh with a nil result must preserve the prior good cache state")
 	require.Equal(t, failures+1, cacheRefreshFailures.Get(), "a nil result must count as a refresh failure")
+}
+
+// lateResultThrottleClient answers only once the refresh's deadline has passed, and still returns
+// a result.
+type lateResultThrottleClient struct {
+	result *throttle.CheckResult
+}
+
+func (c lateResultThrottleClient) ThrottleCheckOK(ctx context.Context, _ throttlerapp.Name) (*throttle.CheckResult, bool) {
+	<-ctx.Done()
+	return c.result, false
+}
+
+// A refresh that times out must keep the prior state and count as a failure, even if the client
+// returns a result once the deadline has passed, so a throttler that answers too late can't set
+// the cached state. It waits out the refresh's 5-second timeout.
+func TestTabletThrottlerStrategy_RefreshCache_TimeoutPreservesPriorState(t *testing.T) {
+	overloaded := &throttle.CheckResult{Metrics: map[string]*throttle.MetricResult{"lag": breachedMetric(20)}}
+	strategy := NewTabletThrottlerStrategy(lateResultThrottleClient{result: overloaded}, createTestTabletConfig())
+	t.Cleanup(strategy.Stop)
+	primed := primeGoodCacheState(strategy)
+	failures := cacheRefreshFailures.Get()
+	timeouts := cacheLoadLatency.Counts()[cacheRefreshStatusTimeout]
+
+	strategy.refreshCache()
+
+	require.NoError(t, strategy.ctx.Err(), "the strategy must still be running, so only the timeout is under test")
+	require.Same(t, primed, strategy.cachedState.Load(), "a refresh that times out must preserve the prior cache state")
+	require.Equal(t, failures+1, cacheRefreshFailures.Get(), "a refresh that times out must count as a failure")
+	require.Equal(t, timeouts+1, cacheLoadLatency.Counts()[cacheRefreshStatusTimeout], "a refresh that times out must record its latency as a timeout")
 }
 
 // Defense-in-depth: should a future change let refreshCache store a nil result, Evaluate

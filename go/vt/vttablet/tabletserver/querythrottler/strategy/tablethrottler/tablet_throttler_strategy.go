@@ -233,11 +233,11 @@ func (s *TabletThrottlerStrategy) runCacheUpdater(interval time.Duration) {
 
 // refreshCache updates the cached throttle check result.
 //
-// A refresh fails on a ctx error (DeadlineExceeded from our timeout, or Canceled from a
-// racing Stop) or a nil checkResult — storing nil would later panic in Evaluate's metric
-// loop. A failed refresh keeps the previous state and bumps CacheRefreshFailures, plus
-// CacheStaleRefreshes if that state has already aged out. getCachedThrottleResult is what
-// eventually discards it.
+// A refresh fails when it times out or gets a nil checkResult — storing nil would later
+// panic in Evaluate's metric loop. A failed refresh keeps the previous state and bumps
+// CacheRefreshFailures, plus CacheStaleRefreshes if that state has already aged out.
+// getCachedThrottleResult is what eventually discards it. A refresh that Stop interrupts
+// returns without recording anything, so shutting down doesn't count as a failure.
 func (s *TabletThrottlerStrategy) refreshCache() {
 	ctx, cancel := context.WithTimeout(s.ctx, throttleCheckTimeout)
 	defer cancel()
