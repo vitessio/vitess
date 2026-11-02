@@ -60,12 +60,29 @@ ENV VTROOT /vt
 ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 
+<<<<<<< HEAD
 # Copy artifacts from builder layer.
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=builder --chown=vitess:vitess /vt/install /vt
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
 COPY --from=builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
+||||||| parent of 04469a8526 (docker: stop overwriting the lite CA bundle with the Go builder's copy (#21842))
+# Copy artifacts from builder layers.
+COPY --from=go-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=go-builder --chown=vitess:vitess /vt/install /vt
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
+COPY --from=vtadmin-builder --chown=vitess:vitess /vt/web/vtadmin/build /vt/web/vtadmin/build
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
+=======
+# Copy artifacts from builder layers.
+COPY --from=go-builder --chown=vitess:vitess /vt/install /vt
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
+COPY --from=vtadmin-builder --chown=vitess:vitess /vt/web/vtadmin/build /vt/web/vtadmin/build
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/init_db.sql /vt/config/
+COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/config/mycnf /vt/config/
+>>>>>>> 04469a8526 (docker: stop overwriting the lite CA bundle with the Go builder's copy (#21842))
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
