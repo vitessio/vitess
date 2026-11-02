@@ -913,6 +913,9 @@ func (tmc *testTMClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Ta
 }
 
 func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	expect := tmc.updateSequenceTablesRequests[tablet.Alias.Uid]
 	if expect == nil {
 		return nil, nil
@@ -932,6 +935,10 @@ func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topod
 }
 
 func (tmc *testTMClient) GetMaxValueForSequences(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	// The targets are asked concurrently, and share the request.
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	expect := tmc.getMaxValueForSequencesRequests[tablet.Alias.Uid]
 	if expect == nil {
 		return &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
