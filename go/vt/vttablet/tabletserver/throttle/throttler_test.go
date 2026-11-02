@@ -1922,6 +1922,56 @@ func TestQueryThrottlerLeaderCheckInterval(t *testing.T) {
 	assert.Equal(t, time.Second, queryThrottler.leaderCheckInterval)
 }
 
+// notRunningTMClient answers a throttler check as a tablet manager does when the throttler isn't running, for example
+// on a tablet that isn't serving: OK, with only the "default" metric.
+type notRunningTMClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (notRunningTMClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return &tabletmanagerdatapb.CheckThrottlerResponse{
+		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+		Metrics: map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric{
+			base.DefaultMetricName.String(): {ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK},
+		},
+	}, nil
+}
+
+// The dedicated query throttler on a primary leaves a replica whose own dedicated query throttler isn't running out of
+// shard metrics, as it does a replica that it can't probe. Otherwise every shard metric reads as not collected yet,
+// which the query throttler can't throttle on, so one replica that isn't serving would turn off every shard rule. The
+// lag throttler still reads the replica's metrics as not collected yet.
+func TestQueryThrottlerLeavesOutTabletsWhoseThrottlerIsNotRunning(t *testing.T) {
+	probe := &base.Probe{
+		Alias:  "cell1-101",
+		Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 101}},
+	}
+	shardLag := func(t *testing.T, throttlerType ThrottlerType) base.MetricResult {
+		throttler := newTestThrottler()
+		throttler.throttlerType = throttlerType
+		notRunning := base.NewMetricResultMap()
+		for name, metric := range throttler.generateTabletProbeFunction(base.ShardScope, probe)(t.Context(), notRunningTMClient{}) {
+			notRunning[name] = metric
+		}
+		lagging := base.NewMetricResultMap()
+		for _, name := range base.KnownMetricNames {
+			lagging[name] = &base.ThrottleMetric{Name: name, Scope: base.ShardScope, Alias: "cell1-102", Value: 30}
+		}
+		throttler.inventory.TabletMetrics = base.TabletResultMap{"cell1-101": notRunning, "cell1-102": lagging}
+		require.NoError(t, throttler.aggregateMetrics())
+		return throttler.getAggregatedMetric(base.LagMetricName.AggregatedName(base.ShardScope))
+	}
+
+	t.Run("dedicated query throttler", func(t *testing.T) {
+		lag, err := shardLag(t, QueryTabletThrottler).Get()
+		require.NoError(t, err)
+		assert.Equal(t, 30.0, lag, "the lagging replica's lag, without the replica whose throttler isn't running")
+	})
+	t.Run("lag throttler", func(t *testing.T) {
+		assert.Equal(t, base.NoMetricResultYet, shardLag(t, DefaultTabletThrottler))
+	})
+}
+
 func TestChecks(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)

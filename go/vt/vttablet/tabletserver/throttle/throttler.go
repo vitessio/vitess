@@ -78,6 +78,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -1079,6 +1080,22 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 			// Backwards compatibility to v20. v20 does not report multi metrics.
 			throttleMetric.Name = throttler.metricNameUsedAsDefault()
 			metrics[throttleMetric.Name] = throttleMetric
+		}
+		if throttler.throttlerType == QueryTabletThrottler {
+			// The "vitess" app checks every known metric, so a tablet leaves metrics out when its throttler isn't
+			// running, for example while the tablet isn't serving: it then answers OK with only the "default" metric.
+			// Unset, they would make every shard metric read as not collected yet, which the query throttler can't
+			// throttle on. As errors, they leave the tablet out, like a tablet that can't be probed.
+			for _, metricName := range base.KnownMetricNames {
+				if _, ok := metrics[metricName]; !ok {
+					metrics[metricName] = &base.ThrottleMetric{
+						Name:  metricName,
+						Scope: scope,
+						Alias: probe.Alias,
+						Err:   vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tablet %v did not report %v", probe.Alias, metricName),
+					}
+				}
+			}
 		}
 
 		return metrics
