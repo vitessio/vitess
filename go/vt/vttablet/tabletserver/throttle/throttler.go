@@ -96,6 +96,11 @@ const (
 	// queryThrottlerHeartbeatLeaseInterval is how often the dedicated query throttler renews the heartbeat lease:
 	// half of the shortest lease, as for the tablets that the primary does not probe.
 	queryThrottlerHeartbeatLeaseInterval = heartbeat.MinimalOnDemandDuration / 2
+	// queryThrottlerLeaderCheckInterval is how often the dedicated query throttler checks whether its tablet is the
+	// primary. A promoted tablet's throttler is already open, so it learns of the promotion from this check alone, and
+	// only then renews the heartbeat lease. With the default heartbeat flags, the primary writes heartbeats only while a
+	// throttler renews the lease, so until then the lag that every tablet in the shard reads can keep growing.
+	queryThrottlerLeaderCheckInterval = time.Second
 
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour
@@ -289,6 +294,9 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.check = NewThrottlerCheck(throttler)
 
 	throttler.leaderCheckInterval = leaderCheckInterval
+	if throttlerType == QueryTabletThrottler {
+		throttler.leaderCheckInterval = queryThrottlerLeaderCheckInterval
+	}
 	throttler.activeCollectInterval = activeCollectInterval
 	throttler.dormantCollectInterval = dormantCollectInterval
 	throttler.inventoryRefreshInterval = inventoryRefreshInterval

@@ -1909,6 +1909,19 @@ func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
 	}
 }
 
+// A promoted tablet's dedicated query throttler is already open, so it learns that its tablet is the primary only from
+// its leader check, and renews the heartbeat lease only from then on. With the default heartbeat flags, the primary
+// writes heartbeats only while a throttler renews the lease, so the dedicated query throttler checks every second,
+// rather than every 5 seconds as the lag throttler still does, to keep the lag that a lag rule reads after a reparent
+// short.
+func TestQueryThrottlerLeaderCheckInterval(t *testing.T) {
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "LeaderCheckTest")
+	lagThrottler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{}, nil, nil, DefaultTabletThrottler)
+	assert.Equal(t, 5*time.Second, lagThrottler.leaderCheckInterval)
+	queryThrottler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{}, nil, nil, QueryTabletThrottler)
+	assert.Equal(t, time.Second, queryThrottler.leaderCheckInterval)
+}
+
 func TestChecks(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
