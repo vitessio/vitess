@@ -16199,8 +16199,10 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 		wantConfig *querythrottler.Config
 		// failSrvKeyspaceUpdate makes every SrvKeyspace write fail after the Keyspace write.
 		failSrvKeyspaceUpdate bool
-		wantCode              vtrpc.Code
-		wantErrContains       string
+		// failCellListRead makes reading the list of cells time out after the Keyspace write.
+		failCellListRead bool
+		wantCode         vtrpc.Code
+		wantErrContains  string
 	}{
 		{
 			name:  "successfully update query throttler config",
@@ -16398,6 +16400,21 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 			wantCode:              vtrpc.Code_UNAVAILABLE,
 			wantErrContains:       "re-run the command",
 		},
+		{
+			name:  "reading the cells times out after the keyspace update",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace:             "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{Enabled: false},
+			},
+			failCellListRead: true,
+			wantCode:         vtrpc.Code_DEADLINE_EXCEEDED,
+			wantErrContains:  "re-run the command",
+		},
 	}
 
 	for _, tt := range tests {
@@ -16423,6 +16440,9 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 			if tt.failSrvKeyspaceUpdate {
 				factory.AddOperationError(memorytopo.Update, "SrvKeyspace$", errors.New("cell unreachable"))
 			}
+			if tt.failCellListRead {
+				factory.AddOperationError(memorytopo.ListDir, "cells$", topo.NewError(topo.Timeout, "cells"))
+			}
 
 			// Call the RPC
 			resp, err := vtctld.UpdateQueryThrottlerConfig(ctx, tt.req)
@@ -16431,7 +16451,7 @@ func TestUpdateQueryThrottlerConfig(t *testing.T) {
 				require.Error(t, err)
 				assert.Equal(t, tt.wantCode, vterrors.Code(err), "error: %v", err)
 				assert.ErrorContains(t, err, tt.wantErrContains)
-				if tt.failSrvKeyspaceUpdate {
+				if tt.failSrvKeyspaceUpdate || tt.failCellListRead {
 					// The Keyspace is written before the SrvKeyspaces, so it already holds the config.
 					ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
 					require.NoError(t, err)

@@ -6144,8 +6144,9 @@ func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtct
 	_, err = s.ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, req.Keyspace, nil, update)
 	if err != nil {
 		// The Keyspace already holds the new config, and rewriting it is idempotent,
-		// so re-running the command is how to reach the cells that failed.
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "updated keyspace %s, but failed to update its SrvKeyspace in some cells; re-run the command to update them: %v", req.Keyspace, err)
+		// so re-running the command is how to reach the cells that failed. Cells that
+		// fail make a PartialResult, which topoErrorf reports as UNAVAILABLE.
+		return nil, topoErrorf(err, "updated keyspace %s, but not all of its SrvKeyspaces; re-run the command to update the rest", req.Keyspace)
 	}
 
 	return &vtctldatapb.UpdateQueryThrottlerConfigResponse{}, nil
