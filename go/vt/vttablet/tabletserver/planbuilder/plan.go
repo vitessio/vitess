@@ -414,9 +414,9 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 // ACL is enforced, not in a dry run: without enforcement there is nothing for
 // it to protect, and a vtgate from before the value was sent still sends a
 // targeted session's SET expression as written, which would break for nothing.
-func rejectSettingSubqueries(set *sqlparser.Set, setting string) error {
+func rejectSettingSubqueries(set *sqlparser.Set) error {
 	if hasSubquery(set) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting must not contain a subquery: %s", setting)
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting must not contain a subquery")
 	}
 	return nil
 }

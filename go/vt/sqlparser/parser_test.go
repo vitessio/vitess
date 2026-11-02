@@ -17,8 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
-	"bytes"
-	"log/slog"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -191,22 +190,22 @@ func TestSplitStatementToPieces(t *testing.T) {
 	}
 }
 
-// parserLogBuffer synchronizes writes from the process-wide logger.
+// parserLogBuffer records the messages of the process-wide logger.
 type parserLogBuffer struct {
-	mu sync.Mutex
-	bytes.Buffer
+	mu   sync.Mutex
+	logs []string
 }
 
-func (b *parserLogBuffer) Write(p []byte) (int, error) {
+func (b *parserLogBuffer) record(format string, args ...any) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.Buffer.Write(p)
+	b.logs = append(b.logs, fmt.Sprintf(format, args...))
 }
 
-func (b *parserLogBuffer) contents() string {
+func (b *parserLogBuffer) contents() []string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.String()
+	return append([]string(nil), b.logs...)
 }
 
 func TestPartialDDLDoesNotLogSensitiveInput(t *testing.T) {
@@ -227,8 +226,9 @@ func TestPartialDDLDoesNotLogSensitiveInput(t *testing.T) {
 			for _, method := range []string{"Parse", "Parse2"} {
 				t.Run(method, func(t *testing.T) {
 					var logs parserLogBuffer
-					saved := log.SwapLogger(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
-					t.Cleanup(func() { log.SwapLogger(saved) })
+					savedInfof, savedWarningf, savedErrorf := log.Infof, log.Warningf, log.Errorf
+					log.Infof, log.Warningf, log.Errorf = logs.record, logs.record, logs.record
+					t.Cleanup(func() { log.Infof, log.Warningf, log.Errorf = savedInfof, savedWarningf, savedErrorf })
 
 					var stmt Statement
 					var err error
