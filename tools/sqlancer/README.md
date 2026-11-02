@@ -101,14 +101,14 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
 ### Crashes and panics
 
 1. **A query can crash vtgate** (sharded). `Concatenate.parallelExec` runs each `UNION` source in a goroutine that
-   does not recover panics, so a panic in a `UNION` kills the whole process. With bug 7 below, this query does:
+   does not recover panics, so a panic in a `UNION` kills the whole process. With bug 8 below, this query does:
    ```sql
    (SELECT t1.c0 AS a0 FROM t1 JOIN t0 ON 5 NOT IN (t1.c0, EXISTS (SELECT 1) < t0.c0)
      WHERE t0.c0 >= (SELECT MAX(sq.c0) FROM t0 AS sq))
    UNION (SELECT EXISTS (SELECT 1 WHERE FALSE) AS a0 FROM t0) ORDER BY 1 ASC
    -- panic: runtime error: index out of range [3] with length 2 (engine/concatenate.go:173)
    ```
-   In a run against a vtgate with local workarounds for bugs 3, 4 and 6, a panic in the compiled `NOT`
+   In a run against a vtgate with local workarounds for bugs 3, 4 and 7, a panic in the compiled `NOT`
    (`interface conversion: evalengine.eval is nil, not *evalengine.evalInt64`) crashed vtgate the same way.
    That one is not yet reproduced on `main`.
 
@@ -151,23 +151,55 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
    30, 40 in `c0`, and an empty `t2`:
    - `DISTINCT` is ignored: `SELECT COUNT(DISTINCT t0.c0) FROM t1, t0` returns 12 instead of 3, and
      `SELECT SUM(DISTINCT t0.c0) FROM t1, t0` returns 24 instead of 6.
-   - An empty join is not empty: `SELECT SUM(t0.c0) FROM t2 CROSS JOIN t0` returns 0 instead of `NULL`, and
-     `SELECT COUNT(t0.c0), MAX(t0.c0) FROM t2 CROSS JOIN t0` returns 0 and 3 instead of 0 and `NULL`.
+   - When the side without aggregates contributes no rows, vtgate still aggregates the other side:
+     `SELECT SUM(t0.c0) FROM t2 CROSS JOIN t0` returns 0 instead of `NULL`,
+     `SELECT SUM(t0.c0), MAX(t0.c0) FROM t1, t0 WHERE t1.c1 > 1000` returns 0 and 4 instead of `NULL` and `NULL`,
+     and with `GROUP BY t0.c1` it returns a group with `COUNT(*) = 0` for every value of `t0.c1`, where MySQL
+     returns no rows.
+   - In a `RIGHT JOIN` that groups by the primary vindex column of the inner side, the `NULL` group is split by
+     shard: `SELECT t1.c0, COUNT(*) FROM t1 RIGHT JOIN t0 ON t1.c0 = t0.c0 GROUP BY t1.c0` returns two `NULL`
+     groups.
    - vtgate adds the values of `SUM(DISTINCT float_column)` with float instead of double precision.
 
-6. **A subquery whose `WHERE` is false empties the whole query** (sharded). These queries return no rows, even
+6. **More wrong results of sharded queries**, with `t0.c0` holding 1, 2, 3, 4 and `t1.c0` holding 1, 5:
+   - **A positional `ORDER BY` on a `UNION` is ignored.**
+     `(SELECT t1.c0 FROM t1) UNION (SELECT t0.c0 FROM t0) ORDER BY 1 DESC` returns the rows unordered, and with
+     `LIMIT 1` it returns 4 instead of 5: vtgate sends `select ... union select ... limit :__upper_limit`
+     without an `ORDER BY` to the shards. `ORDER BY c0` works without a `LIMIT`.
+   - **A `LIMIT` on a `UNION` is pushed to the shards without its `ORDER BY`.**
+     `(SELECT t0.c0 FROM t0) UNION (SELECT t1.c0 FROM t1) ORDER BY c0 DESC LIMIT 3` returns 4, 3, 2 instead of
+     5, 4, 3. `UNION ALL` is not affected.
+   - **`NOT IN` restricts the outer query to the shards of the subquery.**
+     `SELECT COUNT(*) FROM t0 WHERE c0 NOT IN (SELECT sq.c0 FROM t0 AS sq WHERE sq.c0 = 3)` returns 2 instead
+     of 3: vtgate merges the subquery, which goes to one shard, and the outer query into one route.
+   - **Subqueries without a table lose `DISTINCT` and `HAVING`.**
+     `SELECT d.a0 FROM (SELECT DISTINCT EXISTS (SELECT 1) AS a0 FROM t0) AS d` returns one row per shard, and
+     `SELECT NULL, AVG(c0) FROM t0 GROUP BY NULL HAVING SUM(EXISTS (SELECT 1)) <= NULL` returns a row, where
+     MySQL returns none.
+   - **`ANY` and `ALL` are evaluated per shard.** vtgate sends `c0 > ALL (SELECT c0 FROM t1)` unchanged to each
+     shard, so each shard compares with its own rows only. `SELECT c0 FROM t0 WHERE c0 = ALL (SELECT c0 FROM t0)`
+     returns 4 instead of no row, and `c0 > ANY (SELECT c0 FROM t1)` misses 4.
+   - **A `LIMIT` is pushed below a scalar aggregation.** `SELECT SUM(DISTINCT c1) FROM t0 ORDER BY 1 LIMIT 1`
+     sums only the first value (10 instead of 60), because the shards run
+     `select c1 from t0 group by c1 order by c1 asc limit :__upper_limit`.
+   - When vtgate groups the rows of a derived table itself, values of a `ZEROFILL` column lose their padding
+     (`7` instead of `000000000007`).
+
+7. **A subquery whose `WHERE` is false empties the whole query** (sharded). These queries return no rows, even
    though `t` has rows:
    ```sql
    SELECT c0 FROM t WHERE NOT EXISTS (SELECT 1 WHERE FALSE);
+   SELECT c0 FROM t WHERE NOT (EXISTS (SELECT 1 WHERE FALSE));
    SELECT c0, EXISTS (SELECT 1 WHERE FALSE) FROM t;
    SELECT c0 FROM t ORDER BY EXISTS (SELECT 1 WHERE FALSE);
    ```
    The plan is a `Route` with variant `None`. The cause is in `mergeSubqueryInputs`
    (`go/vt/vtgate/planbuilder/operators/subquery_planning.go`): the case `inner == none && sameKeyspace`
    merges the subquery into the outer route with the inner's `NoneRouting`. That is correct only for a
-   subquery that filters the outer rows, such as `WHERE EXISTS (...)`.
+   subquery that filters the outer rows, such as `WHERE EXISTS (...)`. The form `NOT (EXISTS (...))` takes
+   another path: it still returns no rows when that case is removed.
 
-7. **A cross-shard join predicate with a subquery goes to the wrong side** (sharded). A predicate that uses
+8. **A cross-shard join predicate with a subquery goes to the wrong side** (sharded). A predicate that uses
    columns of both tables and a subquery is not evaluated where both are available:
    - `SELECT t1.c0, t0.c0 FROM t1 JOIN t0 ON t1.c0 < t0.c0 + EXISTS (SELECT 1)` drops the predicate and
      returns the cross product (9 instead of 6 rows for 3 rows each).
@@ -175,7 +207,7 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
      the route of `t1`, which fails with `Unknown column 't0.c0'`.
    - With a `UNION`, this crashes vtgate (bug 1).
 
-8. **Rows land on the wrong shard** (sharded). vtgate computes the keyspace ID from the value in the statement,
+9. **Rows land on the wrong shard** (sharded). vtgate computes the keyspace ID from the value in the statement,
    before MySQL converts it to the column type. When MySQL stores a different value, for example because
    `INSERT IGNORE` clamps an out-of-range value, the row is on the wrong shard:
    ```sql
@@ -186,18 +218,18 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
    ```
    A unique key on `c0` does not prevent duplicates in this case either.
 
-9. **`PRIMARY KEY UNIQUE` on a column loses the primary key** (unsharded and sharded).
+10. **`PRIMARY KEY UNIQUE` on a column loses the primary key** (unsharded and sharded).
    `CREATE TABLE t (c0 INT PRIMARY KEY UNIQUE)` creates a nullable `c0` with only a `UNIQUE KEY`, because
    `ColumnTypeOptions.KeyOpt` holds only one key option and the last one wins.
 
-10. **A float literal as a bind variable changes `CAST`** (unsharded and sharded). vtgate sends the literal
+11. **A float literal as a bind variable changes `CAST`** (unsharded and sharded). vtgate sends the literal
     `1.7976931348623157E308` as `CAST(:vtg1 AS DOUBLE)`. `SELECT CAST(1.7976931348623157E308 AS SIGNED)`
     returns 9223372036854775807 on MySQL, but fails through vtgate with `BIGINT value is out of range`, and in
     a `WHERE` clause the row disappears.
 
 ### Valid queries that fail
 
-11. **Derived tables and `UNION`s over cross-shard joins** (sharded). vtgate generates invalid SQL or reports an
+12. **Derived tables and `UNION`s over cross-shard joins** (sharded). vtgate generates invalid SQL or reports an
     internal error:
     - `SELECT d.a0, COUNT(*) FROM (SELECT t0.c0 + t1.c0 AS a0 FROM t0, t1) AS d GROUP BY d.a0` fails with
       `missing bind var t0_c0`.
@@ -208,16 +240,17 @@ columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
       fail with `The used SELECT statements have a different number of columns`.
     - `(SELECT DISTINCT EXISTS (SELECT 1) AS a0 FROM t0) UNION ALL (SELECT t0.c0 FROM t0)` fails with
       `VT13001: [BUG] argument offsets did not line up for UNION`.
+    - `SELECT SUM(DISTINCT 5) FROM t0` fails with `Unknown column`.
 
 ### Schema problems
 
-12. **The column attribute `STORAGE {DISK|MEMORY}` is not parsed.** vtgate passes such a `CREATE TABLE`
+13. **The column attribute `STORAGE {DISK|MEMORY}` is not parsed.** vtgate passes such a `CREATE TABLE`
     through as partial DDL. The schema tracker cannot parse the `SHOW CREATE TABLE` output
     (`/*!50606 STORAGE MEMORY */`) and skips the table. In a sharded keyspace, `INSERT` without a column list,
     `SELECT *` in a join and similar queries on that table then fail with `VT09004` or
     `VT09015: schema tracking required`.
 
-13. **vtgate rewrites invalid DDL into valid DDL.** MySQL rejects `CREATE INDEX i0 USING HASH ON h (c0, c1 ASC)`
+14. **vtgate rewrites invalid DDL into valid DDL.** MySQL rejects `CREATE INDEX i0 USING HASH ON h (c0, c1 ASC)`
     with `Incorrect usage of spatial/fulltext/hash index and explicit index order`. vtgate drops `USING HASH`
     and creates a B-tree index.
 
