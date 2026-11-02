@@ -341,10 +341,13 @@ func ShouldRestore(ctx context.Context, logger logutil.Logger, cnf *Mycnf, mysql
 	return checkNoDB(ctx, mysqld, dbName)
 }
 
-// ensureRestoredGTIDPurgedMatchesManifest sees the following: when you restore a full backup, you want the MySQL server to have
-// @@gtid_purged == <gtid-of-backup>. This then also implies that @@gtid_executed equals same value. This is because we restore without
-// any binary logs, unless the backup includes them: then gtid_executed is only checked.
-func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *BackupManifest, params *RestoreParams) error {
+// ensureRestoredGTIDsMatchManifest makes @@gtid_executed and @@gtid_purged equal
+// the backup's GTID position. Both usually match already, because a full backup
+// is restored without binary logs, but Xtrabackup 2.4 restores @@gtid_purged as
+// of the backup. If the backup includes binary logs, it only checks them and
+// @@gtid_executed. This runs before the restore state file is removed, so a restore
+// interrupted while resetting GTIDs is started again.
+func ensureRestoredGTIDsMatchManifest(ctx context.Context, manifest *BackupManifest, params *RestoreParams) error {
 	if manifest == nil {
 		return nil
 	}
@@ -356,24 +359,19 @@ func ensureRestoredGTIDPurgedMatchesManifest(ctx context.Context, manifest *Back
 	if manifest.Position.GTIDSet == nil {
 		return nil
 	}
-	gtid := manifest.Position.GTIDSet.String()
-	if gtid == "" {
-		return nil
-	}
-	// Xtrabackup 2.4's restore seems to set @@gtid_purged to be the @@gtid_purged at the time of backup. But this is not
-	// the desired value. We want to set @@gtid_purged to be the @@gtid_executed of the backup.
-	// As reminder, when restoring from a full backup, setting @@gtid_purged also sets @@gtid_executed.
-	restoredGTIDPurgedPos, err := params.Mysqld.GetGTIDPurged(ctx)
+	purged, err := params.Mysqld.GetGTIDPurged(ctx)
 	if err != nil {
 		return vterrors.Wrapf(err, "failed to read gtid_purged after restore")
 	}
-	if restoredGTIDPurgedPos.Equal(manifest.Position) {
+	executed, err := params.Mysqld.PrimaryPosition(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read gtid_executed after restore")
+	}
+	if purged.Equal(manifest.Position) && executed.Equal(manifest.Position) {
 		return nil
 	}
-	params.Logger.Infof("Restore: @@gtid_purged does not equal manifest's GTID position. Setting @@gtid_purged to %v", gtid)
-	// This is not good. We want to apply a new @@gtid_purged value.
-	err = params.Mysqld.SetReplicationPosition(ctx, manifest.Position)
-	if err != nil {
+	params.Logger.Infof("Restore: GTIDs (executed %v, purged %v) do not equal manifest's GTID position. Setting them to %v", executed, purged, manifest.Position)
+	if err := params.Mysqld.SetReplicationPosition(ctx, manifest.Position); err != nil {
 		return vterrors.Wrap(err, "error setting replication position")
 	}
 	return nil
@@ -495,7 +493,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	if err := params.Mysqld.Start(context.Background(), params.Cnf); err != nil {
 		return backupManifest, err
 	}
-	if err = ensureRestoredGTIDPurgedMatchesManifest(ctx, manifest, &params); err != nil {
+	if err = ensureRestoredGTIDsMatchManifest(ctx, manifest, &params); err != nil {
 		return backupManifest, err
 	}
 

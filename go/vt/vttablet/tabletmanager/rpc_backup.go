@@ -157,6 +157,13 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
 				return
 			}
+			// The deferred initialization chooses the source under the shard
+			// lock, which this does not hold. No deferral can start while the
+			// backup holds the action lock.
+			if tm.tmState.replicationInitPending() {
+				l.Infof("Leaving replication to the deferred replication initialization")
+				return
+			}
 
 			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
 			if err != nil {
@@ -179,7 +186,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
 				return
 			}
-			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
+			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, 0, "", false, semiSyncAction, 0); err != nil {
 				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()

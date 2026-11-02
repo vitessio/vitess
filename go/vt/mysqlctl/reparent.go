@@ -96,7 +96,7 @@ func (mysqld *Mysqld) Promote(ctx context.Context, hookExtraEnv map[string]strin
 	if err != nil {
 		return replication.Position{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	// Since we handle replication, just stop it.
 	cmds := []string{

@@ -241,6 +241,8 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	// no return. Instead, we should leave partial results and retry the rest
 	// later.
 	log.Info("Active reparents are enabled; converting MySQL to replica.")
+	// A source that a request chooses during the demotion is newer than this one.
+	sourceTicket := tm.tmState.requestReplicationSource(primaryAlias)
 	demotePrimaryCtx, cancelDemotePrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelDemotePrimary()
 	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */, true /* force */); err != nil {
@@ -254,7 +256,7 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 			return err
 		}
 	} else {
-		if err := tm.setReplicationSourceSemiSyncNoAction(setPrimaryCtx, primaryAlias, 0, "", true); err != nil {
+		if err := tm.setReplicationSourceSemiSyncNoAction(setPrimaryCtx, primaryAlias, sourceTicket, 0, "", true); err != nil {
 			return vterrors.Wrap(err, "failed to reparent self to new primary")
 		}
 	}

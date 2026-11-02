@@ -17,13 +17,47 @@ limitations under the License.
 package topo_test
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
+
+func TestShardLockAcquireTimeout(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	t.Cleanup(cancel)
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+	_, unlock, err := ts.LockShard(t.Context(), "ks", "0", "holder")
+	require.NoError(t, err)
+	t.Cleanup(func() { var unlockErr error; unlock(&unlockErr); require.NoError(t, unlockErr) })
+
+	_, _, err = ts.LockShard(ctx, "ks", "0", "contender", topo.WithType(topo.NonBlocking), topo.WithAcquireTimeout(time.Millisecond))
+	require.True(t, topo.IsErrType(err, topo.Timeout), "expected acquisition timeout, got %v", err)
+	require.NoError(t, ctx.Err(), "acquisition timeout must not cancel the caller")
+}
+
+func TestShardLockAcquireTimeoutDoesNotLimitLockedContext(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	t.Cleanup(ts.Close)
+	_, err := ts.GetOrCreateShard(ctx, "ks", "0")
+	require.NoError(t, err)
+	lockedCtx, unlock, err := ts.LockShard(ctx, "ks", "0", "initialize", topo.WithAcquireTimeout(time.Second))
+	require.NoError(t, err)
+	t.Cleanup(func() { var unlockErr error; unlock(&unlockErr); require.NoError(t, unlockErr) })
+	parentDeadline, parentHasDeadline := ctx.Deadline()
+	lockedDeadline, lockedHasDeadline := lockedCtx.Deadline()
+	require.Equal(t, parentHasDeadline, lockedHasDeadline)
+	require.Equal(t, parentDeadline, lockedDeadline)
+	require.NoError(t, topo.CheckShardLocked(lockedCtx, "ks", "0"))
+}
 
 // TestTopoShardLock tests shard lock operations.
 func TestTopoShardLock(t *testing.T) {

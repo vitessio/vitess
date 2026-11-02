@@ -67,6 +67,7 @@ type MysqlDaemon interface {
 	GetGTIDPurged(ctx context.Context) (replication.Position, error)
 	SetSemiSyncEnabled(ctx context.Context, source, replica bool) error
 	SemiSyncEnabled(ctx context.Context) (source, replica bool)
+	ReadSemiSyncEnabled(ctx context.Context) (source, replica bool, err error)
 	SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSyncType, error)
 	SemiSyncStatus(ctx context.Context) (source, replica bool)
 	SemiSyncReplicationStatus(ctx context.Context) (bool, error)

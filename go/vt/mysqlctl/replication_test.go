@@ -3686,6 +3686,45 @@ func TestSemiSyncEnabled(t *testing.T) {
 	assert.True(t, r)
 }
 
+func TestReadSemiSyncEnabled(t *testing.T) {
+	fields := sqltypes.MakeTestFields("field1|field2", "varchar|varchar")
+	for _, tc := range []struct {
+		name            string
+		result          *sqltypes.Result
+		err             error
+		source, replica bool
+	}{
+		{name: "source plugin", result: sqltypes.MakeTestResult(fields, "rpl_semi_sync_source_enabled|ON", "rpl_semi_sync_replica_enabled|OFF"), source: true},
+		{name: "master plugin", result: sqltypes.MakeTestResult(fields, "rpl_semi_sync_master_enabled|OFF", "rpl_semi_sync_slave_enabled|ON"), replica: true},
+		{name: "no plugin", result: sqltypes.MakeTestResult(fields)},
+		{name: "query fails", err: errors.New("lost connection")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			defer db.Close()
+			cp := *db.ConnParams()
+			db.AddQuery("SELECT 1", &sqltypes.Result{})
+			query := "SHOW VARIABLES LIKE 'rpl_semi_sync_%_enabled'"
+			if tc.err != nil {
+				db.AddRejectedQuery(query, tc.err)
+			} else {
+				db.AddQuery(query, tc.result)
+			}
+			testMysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			defer testMysqld.Close()
+
+			source, replica, err := testMysqld.ReadSemiSyncEnabled(t.Context())
+			if tc.err != nil {
+				require.ErrorContains(t, err, "lost connection")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.source, source)
+			assert.Equal(t, tc.replica, replica)
+		})
+	}
+}
+
 func TestSemiSyncStatus(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
