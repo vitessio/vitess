@@ -1133,55 +1133,91 @@ func TestDryRunInitializeTargetSequences(t *testing.T) {
 		ts:    ts,
 	}
 
-	sm1 := sequenceMetadata{
-		backingTableName:     "seq1",
-		backingTableKeyspace: "sourceks",
-		backingTableDBName:   "ks1",
-		usingTableName:       "t1",
-		usingTableDBName:     "targetks",
-		usingTableDefinition: &vschema.Table{
-			AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: "seq1"},
-		},
+	// The metadata is keyed by backing table, as getTargetSequenceMetadata
+	// keys it. seq1 is in the source keyspace, seq2 in another keyspace, and
+	// seq3 is created in a global keyspace and added to its vschema. Each
+	// keyspace's primary reads its own sequence.
+	otherKeyspaceName := "other-ks"
+	globalKeyspaceName := "global-ks"
+	env.addTablet(t, ctx, 300, otherKeyspaceName, "0", topodatapb.TabletType_PRIMARY, true)
+	env.addTablet(t, ctx, 400, globalKeyspaceName, "0", topodatapb.TabletType_PRIMARY, true)
+	newSequence := func(backingTable, backingKeyspace, usingTable string) *sequenceMetadata {
+		return &sequenceMetadata{
+			backingTableName:     backingTable,
+			backingTableKeyspace: backingKeyspace,
+			backingTableDBName:   "vt_" + backingKeyspace,
+			usingTableName:       usingTable,
+			usingTableDBName:     "vt_" + targetKeyspaceName,
+			usingTableDefinition: &vschema.Table{
+				AutoIncrement: &vschema.AutoIncrement{Column: "id", Sequence: backingTable},
+			},
+		}
 	}
-	sm2 := sm1
-	sm2.backingTableName = "seq2"
-	sm2.usingTableName = "t2"
-	sm2.usingTableDefinition.AutoIncrement.Sequence = "seq2"
-
-	sm3 := sm1
-	sm3.backingTableName = "seq3"
-	sm3.usingTableName = "t3"
-	sm3.usingTableDefinition.AutoIncrement.Sequence = "seq3"
-	sm3.registerInVSchema = true
-	sm3.createBackingTable = true
-
+	backingTables := []string{"seq1", "seq2", "seq3"}
 	tables := map[string]*sequenceMetadata{
-		"t1": &sm1,
-		"t2": &sm2,
-		"t3": &sm3,
+		"seq1": newSequence("seq1", sourceKeyspaceName, "t1"),
+		"seq2": newSequence("seq2", otherKeyspaceName, "t2"),
+		"seq3": newSequence("seq3", globalKeyspaceName, "t3"),
 	}
-	vschemaBefore, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
-	require.NoError(t, err)
+	tables["seq3"].registerInVSchema = true
+	tables["seq3"].createBackingTable = true
+	vschemasBefore := make(map[string]*vschema.Keyspace)
+	for _, keyspace := range []string{sourceKeyspaceName, otherKeyspaceName, globalKeyspaceName} {
+		kvs, err := env.ts.GetVSchema(ctx, keyspace)
+		require.NoError(t, err)
+		vschemasBefore[keyspace] = kvs.Keyspace
+	}
 
-	for range tables {
-		env.tmc.expectVRQuery(200, "/select max.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("maxval", "int64"), "10"))
-		env.tmc.expectVRQuery(100, "/select next_id.*.*", sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "1"))
+	// The target reports a different maximum for each sequence. seq1 is at
+	// 4, seq2 at 6, and seq3 doesn't exist yet.
+	maxValues := map[string]int64{"seq1": 10, "seq2": 20, "seq3": 30}
+	var requested []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata
+	for _, backingTable := range backingTables {
+		requested = append(requested, &tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{
+			BackingTableName:        backingTable,
+			UsingColEscaped:         "`id`",
+			UsingTableNameEscaped:   fmt.Sprintf("`%s`", tables[backingTable].usingTableName),
+			UsingTableDbNameEscaped: fmt.Sprintf("`vt_%s`", targetKeyspaceName),
+		})
 	}
+	env.tmc.expectGetMaxValueForSequencesRequest(startingTargetTabletUID, &getMaxValueForSequencesRequestResponse{
+		req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{Sequences: requested},
+		res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{MaxValuesBySequenceTable: maxValues},
+	})
+	env.tmc.expectVRQuery(startingSourceTabletUID, "select next_id from `vt_sourceks`.`seq1` where id = 0",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "4"))
+	env.tmc.expectVRQuery(300, "select next_id from `vt_other-ks`.`seq2` where id = 0",
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("next_id", "int64"), "6"))
+	env.tmc.expectVRQueryResultOnKeyspaceTablets(globalKeyspaceName, &queryResult{
+		query: "select next_id from `vt_global-ks`.`seq3` where id = 0",
+		err:   sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownTable, "Table 'vt_global-ks.seq3' doesn't exist"),
+	})
 
 	err = dr.prepareTargetSequences(ctx, tables)
 	require.NoError(t, err)
 	err = dr.initializeTargetSequences(ctx, tables)
 	require.NoError(t, err)
-	require.Len(t, drLog.logs, 6)
-	require.Contains(t, drLog.logs[0], "Sequence backing tables [sourceks.seq3] will be created")
-	require.Contains(t, drLog.logs[1], "Sequence backing tables [sourceks.seq3] will be added to the vschema of their keyspace")
-	require.Contains(t, drLog.logs[2], "The following sequence backing tables used by tables being moved will be initialized:")
-	for i, sm := range []sequenceMetadata{sm1, sm2, sm3} {
-		require.Contains(t, drLog.logs[i+3], fmt.Sprintf("Backing table: %s, current value 0, new value 1", sm.usingTableName))
+	require.Equal(t, []string{
+		"Sequence backing tables [global-ks.seq3] will be created",
+		"Sequence backing tables [global-ks.seq3] will be added to the vschema of their keyspace",
+		"The following sequence backing tables used by tables being moved will be initialized:",
+		"\tBacking table: seq1, current value 4, new value 11",
+		"\tBacking table: seq2, current value 6, new value 21",
+		"\tBacking table: seq3, will be created, new value 31",
+	}, drLog.GetLogs())
+	func() {
+		env.tmc.mu.Lock()
+		defer env.tmc.mu.Unlock()
+		assert.Empty(t, env.tmc.getMaxValueForSequencesRequests, "the maxima weren't read")
+		for tabletID, queries := range env.tmc.vrQueries {
+			assert.Empty(t, queries, "queries not run on tablet %d", tabletID)
+		}
+	}()
+	for keyspace, before := range vschemasBefore {
+		kvs, err := env.ts.GetVSchema(ctx, keyspace)
+		require.NoError(t, err)
+		assert.Equal(t, before, kvs.Keyspace, "a dry run changed the vschema of %s", keyspace)
 	}
-	vschemaAfter, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
-	require.NoError(t, err)
-	assert.Equal(t, vschemaBefore.Keyspace, vschemaAfter.Keyspace)
 
 	// A backing table that doesn't exist yet, as on a dry run nothing
 	// creates it, is reported as one that initializing the sequences
