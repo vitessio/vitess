@@ -105,6 +105,8 @@ type fakeGRCluster struct {
 	t        *testing.T
 	ts       *topo.Server
 	keyspace string
+	// topoFactory is the memorytopo factory of ts, with which a test makes topology reads fail.
+	topoFactory *memorytopo.Factory
 
 	mu           sync.Mutex
 	tablets      map[string]*fakeGRTablet
@@ -656,19 +658,20 @@ func (c *fakeGRCluster) addTabletOfOtherShard(t *testing.T, cell string, uid uin
 // Without a PRIMARY tablet, the shard never had a primary and no tablet replicates.
 func newFakeGRCluster(t *testing.T, durability string, specs ...fakeGRTabletSpec) (*fakeGRCluster, *topo.Server) {
 	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
+	ts, topoFactory := memorytopo.NewServerAndFactory(ctx, "zone1", "zone2", "zone3")
 	t.Cleanup(ts.Close)
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: durability}))
 	d, err := policy.GetDurabilityPolicy(durability)
 	require.NoError(t, err)
 
 	c := &fakeGRCluster{
-		t:          t,
-		ts:         ts,
-		keyspace:   "ks",
-		tablets:    make(map[string]*fakeGRTablet),
-		tabletRecs: make(map[string]*topodatapb.Tablet),
-		failOnce:   make(map[string]bool),
+		t:           t,
+		ts:          ts,
+		topoFactory: topoFactory,
+		keyspace:    "ks",
+		tablets:     make(map[string]*fakeGRTablet),
+		tabletRecs:  make(map[string]*topodatapb.Tablet),
+		failOnce:    make(map[string]bool),
 		// The incarnation of a group that the test makes active without a bootstrap.
 		incarnation: "1790000000",
 	}

@@ -285,6 +285,18 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		return err
 	}
 
+	// A group replication shard elects its primary through the group, not through
+	// replication positions. It has its own path; see reparentShardLockedGroupReplication.
+	// That path only needs the previous primary's alias, for its cell, and does not read its
+	// tablet record: the record lives in the topology server of that cell, which may be the
+	// cell that was lost.
+	if policy.IsGroupReplication(opts.durability) {
+		if shardInfo.PrimaryAlias != nil {
+			prevPrimary = &topodatapb.Tablet{Alias: shardInfo.PrimaryAlias.CloneVT()}
+		}
+		return erp.reparentShardLockedGroupReplication(ctx, ev, keyspace, shard, prevPrimary, opts)
+	}
+
 	// get the previous primary according to the topology server,
 	// we use this information to choose the best candidate in the same cell
 	// and to undo promotion in case of failure
@@ -294,12 +306,6 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return err
 		}
 		prevPrimary = prevPrimaryInfo.Tablet
-	}
-
-	// A group replication shard elects its primary through the group, not through
-	// replication positions. It has its own path; see reparentShardLockedGroupReplication.
-	if policy.IsGroupReplication(opts.durability) {
-		return erp.reparentShardLockedGroupReplication(ctx, ev, keyspace, shard, prevPrimary, opts)
 	}
 	if opts.GroupReplicationForceNewGroup {
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT,

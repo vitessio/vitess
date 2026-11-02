@@ -17,6 +17,7 @@ limitations under the License.
 package reparentutil
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
@@ -156,6 +158,39 @@ func TestEmergencyReparentGroupReplicationRequiredPosition(t *testing.T) {
 			assert.Equal(t, []string{"PromoteReplica(" + alias200 + ")"}, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"))
 		})
 	}
+}
+
+// TestEmergencyReparentGroupReplicationWithLostPrimaryCell checks that ERS on a group replication
+// shard works when the topology server of the failed primary's cell does not answer, which is often
+// why ERS runs: it does not read the previous primary's tablet record, which lives in that cell, and
+// leaves out the tablets it cannot read. The previous primary's cell, from its alias, still applies
+// to PreventCrossCellPromotion.
+func TestEmergencyReparentGroupReplicationWithLostPrimaryCell(t *testing.T) {
+	lostCell := func(c *fakeGRCluster) {
+		c.topoFactory.AddOperationError(memorytopo.Get, "tablets/"+aliasP+"/", errors.New("cell zone1 does not answer"))
+	}
+
+	t.Run("follows the group", func(t *testing.T) {
+		c, ts := newFailedGroupShard(t)
+		lostCell(c)
+		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
+		ev, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{WaitReplicasTimeout: 30 * time.Second})
+		require.NoError(t, err)
+		assert.Equal(t, alias200, topoproto.TabletAliasString(ev.NewPrimary.Alias))
+		assert.Equal(t, []string{"PromoteReplica(" + alias200 + ")"}, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"))
+	})
+
+	t.Run("prevents cross-cell promotion", func(t *testing.T) {
+		c, ts := newFailedGroupShard(t)
+		lostCell(c)
+		erp := NewEmergencyReparenter(ts, c, logutil.NewMemoryLogger())
+		_, err := erp.ReparentShard(t.Context(), "ks", "-", EmergencyReparentOptions{
+			PreventCrossCellPromotion: true,
+			WaitReplicasTimeout:       30 * time.Second,
+		})
+		require.Error(t, err)
+		assert.Empty(t, callsWithPrefix(c.mutatingCalls(), "PromoteReplica"))
+	})
 }
 
 // TestEmergencyReparentGroupReplicationPreventCrossCell checks PreventCrossCellPromotion: with one

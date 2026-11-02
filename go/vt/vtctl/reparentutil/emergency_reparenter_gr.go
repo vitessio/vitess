@@ -249,10 +249,16 @@ func (erp *EmergencyReparenter) reparentShardLockedGroupReplication(ctx context.
 			"--allow-split-brain-promotion does not apply to group replication: the members of a group cannot diverge")
 	}
 
+	// The tablets of a cell whose topology server does not answer are left out, as tablets that do
+	// not answer: an emergency reparent is often run because a cell was lost. Each cell gets its own
+	// deadline, so that a cut-off cell does not use up the whole reparent's.
 	event.DispatchUpdate(ev, "reading all tablets")
-	tabletMap, err := erp.ts.GetTabletMapForShard(ctx, keyspace, shard)
+	tabletMap, err := erp.ts.GetTabletMapForShardWithCellTimeout(ctx, keyspace, shard, groupReplicationReplicaTimeout(opts))
 	if err != nil {
-		return vterrors.Wrapf(err, "failed to get tablet map for %v/%v", keyspace, shard)
+		if !topo.IsErrType(err, topo.PartialResult) {
+			return vterrors.Wrapf(err, "failed to get tablet map for %v/%v", keyspace, shard)
+		}
+		erp.logger.Warningf("some tablets of %v/%v could not be read, they are left out of the emergency reparent: %v", keyspace, shard, err)
 	}
 
 	tablets := make([]*topodatapb.Tablet, 0, len(tabletMap))
