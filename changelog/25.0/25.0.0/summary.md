@@ -78,6 +78,7 @@
         - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
         - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
         - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
+        - [Draining backups restore the tablet's type and a primary's semi-sync](#backup-draining-restores-type-and-semi-sync)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -914,6 +915,20 @@ Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tab
 | unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
 
 `--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
+
+#### <a id="backup-draining-restores-type-and-semi-sync"/>Draining backups restore the tablet's type and a primary's semi-sync</a>
+
+A backup that drains its tablet attempts to restore the tablet's original type even when the change to `BACKUP` fails after publishing it.
+
+A type change returns an error when the replication status read fails for any reason other than the tablet not being a replica, including a read cut short by its context, instead of treating the tablet as having no replication. The requested type is published before the error is returned.
+
+A draining backup of a primary (`--allow-primary`) is refused before the tablet changes type if the keyspace's durability policy can't be read. Before the tablet serves as `PRIMARY` again, it turns source-side semi-sync back on as that policy required when the backup started; VTOrc reconciles subsequent policy changes under its usual recovery conditions; without VTOrc, operator action is required. If turning semi-sync back on fails, the tablet stays in `BACKUP` without serving, and the backup returns that error unless an earlier error explains the failure. A completed backup stays finalized.
+
+For a primary left in `BACKUP`:
+
+- VTOrc sees no `PRIMARY` tablet in the shard, and can attempt `EmergencyReparentShard` when its recovery and quorum conditions allow it. The old tablet stays in `BACKUP`; once the cause is fixed, restarting its vttablet brings it back as a `REPLICA`.
+- Without a reparent, and provided the shard still names this tablet as its primary, fix the cause, set source-side semi-sync on its MySQL as the policy requires, and then restart vttablet, which resumes it as `PRIMARY`. Under `semi_sync`, that is `SET GLOBAL rpl_semi_sync_source_enabled = ON`, or `SET GLOBAL rpl_semi_sync_master_enabled = ON` when the `semisync_master` plugin is loaded, and on MariaDB.
+- Restarting vttablet without that step resumes it as a serving `PRIMARY` with semi-sync off, until VTOrc turns semi-sync on.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

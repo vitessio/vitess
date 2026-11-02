@@ -1653,3 +1653,39 @@ func TestShardPeerHealthSnapshot(t *testing.T) {
 	require.Len(t, snap, 1)
 	assert.Equal(t, int64(1), snap[0].ConsecutivePingFailures)
 }
+
+// TestChangeTypeReportsReplicationStatusError checks that a type change reports
+// a replication status read that fails for a reason other than the tablet not
+// being a replica, including one cut short by its context, after publishing the
+// requested type.
+func TestChangeTypeReportsReplicationStatusError(t *testing.T) {
+	for _, tc := range []struct {
+		tabletType topodatapb.TabletType
+		statusErr  error
+	}{
+		{tabletType: topodatapb.TabletType_REPLICA, statusErr: errors.New("injected replication status failure")},
+		{tabletType: topodatapb.TabletType_RDONLY, statusErr: errors.New("injected replication status failure")},
+		{tabletType: topodatapb.TabletType_REPLICA, statusErr: context.DeadlineExceeded},
+		{tabletType: topodatapb.TabletType_REPLICA, statusErr: context.Canceled},
+	} {
+		t.Run(fmt.Sprintf("%v/%v", tc.tabletType, tc.statusErr), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(cancel)
+			ts := memorytopo.NewServer(ctx, "cell1")
+			tm := newTestTM(t, ts, 1, "ks", "0", nil)
+			t.Cleanup(tm.Stop)
+			fake := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+			fake.DB().SetNeverFail(true)
+			require.NoError(t, tm.ChangeType(ctx, topodatapb.TabletType_SPARE, false))
+			fake.ReplicationStatusError = tc.statusErr
+
+			err := tm.ChangeType(ctx, tc.tabletType, true)
+			require.ErrorContains(t, err, tc.statusErr.Error())
+			require.ErrorContains(t, err, "failed to read replication status")
+			assert.Equal(t, tc.tabletType, tm.Tablet().Type)
+			ti, err := ts.GetTablet(ctx, tm.Tablet().Alias)
+			require.NoError(t, err)
+			assert.Equal(t, tc.tabletType, ti.Type)
+		})
+	}
+}
