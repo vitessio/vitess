@@ -1265,8 +1265,7 @@ func (tsv *TabletServer) beginWaitForSameRangeTransactions(ctx context.Context, 
 			}
 
 			return waitErr
-		},
-	)
+		})
 	return txDone, err
 }
 
