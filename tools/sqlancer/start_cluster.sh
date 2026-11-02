@@ -32,7 +32,7 @@ VTCTLD_GRPC_PORT=$((BASE_PORT + 1))
   --keyspaces u0,u1,s0,s1 --num-shards 1,1,2,2 \
   --replica-count 1 --rdonly-count 0 \
   --port "$BASE_PORT" --mysql-bind-host 127.0.0.1 \
-  --vschema-ddl-authorized-users '%' &
+  --vschema-ddl-authorized-users '%' --initialize-with-vt-dba-tcp &
 pid=$!
 trap 'kill $pid' INT TERM
 

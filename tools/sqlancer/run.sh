@@ -20,13 +20,16 @@
 #   run.sh out/unsharded 300 u0,u1 --oracle TLP_WHERE
 #   run.sh out/sharded   300 s0,s1 --vitess-sharded --oracle TLP_WHERE
 #
-# One SQLancer thread runs per keyspace. Errors matching known_limitations.txt are treated as expected.
+# One SQLancer thread runs per keyspace. Errors matching known_limitations.txt (or the file in KNOWN_LIMITATIONS)
+# are treated as expected. SQLANCER_OPTS holds additional general SQLancer options, such as --num-queries.
 
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 : "${SQLANCER_JAR:?set SQLANCER_JAR to the sqlancer-*.jar built with vitess-mode.patch}"
 VTGATE_PORT=${VTGATE_PORT:-33573}
+KNOWN_LIMITATIONS=${KNOWN_LIMITATIONS:-$here/known_limitations.txt}
+read -r -a sqlancer_opts <<<"${SQLANCER_OPTS:-}"
 out=$1 secs=$2 keyspaces=$3
 shift 3
 threads=$(tr ',' '\n' <<<"$keyspaces" | wc -l)
@@ -39,4 +42,4 @@ java -jar "$SQLANCER_JAR" \
   --num-threads "$threads" --num-tries 100 --timeout-seconds "$secs" --print-progress-summary true \
   mysql --vitess --vitess-keyspaces "$keyspaces" --vitess-ignore-errors-file "$here/known_limitations.txt" "$@" \
   >sqlancer.out 2>&1 || true
-python3 "$here/summarize.py" logs/mysql
+python3 "$here/summarize.py" logs

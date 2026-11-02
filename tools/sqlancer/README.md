@@ -1,24 +1,46 @@
 # Testing vtgate with SQLancer
 
-[SQLancer](https://github.com/sqlancer/sqlancer) generates random schemas, data and queries, and finds logic bugs
-without a reference database. Its *oracles* compare queries that must return the same result. For example,
-TLP_WHERE checks that `SELECT ... FROM t` returns the same rows as the `UNION ALL` of the same query with
-`WHERE p`, `WHERE NOT p` and `WHERE p IS NULL`. Running SQLancer through vtgate therefore finds three kinds
-of problems:
+[SQLancer](https://github.com/sqlancer/sqlancer) generates random schemas, data and queries. `vitess-mode.patch`
+lets its MySQL provider run against vtgate, in unsharded and sharded keyspaces, and adds a comparison oracle.
+Together they find four kinds of problems:
 
 - MySQL syntax that vtgate does not parse or does not support, especially in sharded keyspaces.
 - SQL that vtgate rewrites into invalid SQL, which vttablet or MySQL then rejects.
-- Wrong results, when vtgate's planning or rewriting changes the meaning of a query.
+- Wrong results, when vtgate's planning, rewriting or evaluation changes the meaning of a query.
+- Queries that make vtgate panic, which closes the connection, or crash.
 
-SQLancer's MySQL provider needs a few changes to run against Vitess, which `vitess-mode.patch` adds:
+## Oracles
+
+SQLancer's own oracles find logic bugs without a reference database. They compare queries that must return the
+same result. For example, TLP_WHERE checks that `SELECT ... FROM t` returns the same rows as the `UNION ALL` of
+the same query with `WHERE p`, `WHERE NOT p` and `WHERE p IS NULL`. These oracles miss bugs where vtgate is wrong
+in the same way on both sides. Also, SQLancer's MySQL query generator produces neither joins nor aggregates.
+
+The patch therefore adds the oracle `VITESS_DIFF`, which compares vtgate with MySQL:
+
+- Every statement that succeeds on vtgate also runs on a database `ref_KEYSPACE` on a plain MySQL server
+  (`--vitess-reference-url`). After each round of DDL and DML, SQLancer compares the schemas and the data of both,
+  and in a sharded keyspace also whether every row is on the shard that its vindex value maps to.
+- Its queries join up to three tables (inner, outer, cross and `STRAIGHT_JOIN`, often on the sharding key), and
+  use aggregates, `GROUP BY`, `HAVING`, `DISTINCT`, `ORDER BY` with `LIMIT`, subqueries (`IN`, `EXISTS`, scalar,
+  `ANY`/`ALL`), `UNION` and derived tables.
+- It runs each query on vtgate and on MySQL and compares the results as multisets. Each problem is a line in
+  `logs/vitess/findings.jsonl`, and the first ones of each kind get a reproduction file. The run continues after
+  a finding.
+
+## Patch options
 
 - `--vitess` and `--vitess-keyspaces=ks1,ks2`: vtgate cannot `CREATE DATABASE` without a dbddl plugin, so each
   SQLancer thread reuses one existing keyspace and drops its tables before each round.
-- `--vitess-sharded`: column `c0` of every table is an `INT` and the primary vindex (`--vitess-vindex`, default
-  `hash`). Every `INSERT` sets `c0`. After `CREATE TABLE`, SQLancer waits until vtgate's schema tracker knows
-  the table. `ALTER TABLE` is not generated, because schema tracking is asynchronous.
+- `--vitess-sharded`: column `c0` of every table is an integer column and the primary vindex (`--vitess-vindex`,
+  default `hash`). Every `INSERT` sets `c0`. After `CREATE TABLE`, SQLancer waits until vtgate's schema tracker
+  knows the table. `ALTER TABLE` is not generated, because schema tracking is asynchronous.
+- `--vitess-reference-url`: the JDBC URL of the MySQL server for `VITESS_DIFF`.
 - `--vitess-ignore-errors-file`: errors matching these regexes count as expected. `known_limitations.txt` lists
   limitations and bugs that are already known, so that the oracles can find new ones.
+
+The patch also avoids two known bugs when it generates tables (see the findings): the column attribute `STORAGE`
+in sharded keyspaces, and a column with both `PRIMARY KEY` and `UNIQUE`.
 
 ## Running
 
@@ -35,23 +57,30 @@ SQLancer's MySQL provider needs a few changes to run against Vitess, which `vite
    SpotBugs needs JDK 17, because its version cannot read class files of newer JDKs.
 
 2. Start a vttestserver with the keyspaces `u0`, `u1` (unsharded) and `s0`, `s1` (two shards each). This needs
-   the Vitess binaries in `$VTROOT/bin` and `mysqld` on the `PATH`. It must not run as root:
+   the Vitess binaries in `$VTROOT/bin` and `mysqld` on the `PATH`. It must not run as root. The underlying
+   mysqld also serves as the reference server, through the user `vt_dba_tcp` on port `BASE_PORT + 2`:
 
    ```sh
    VTROOT=... VTDATAROOT=/tmp/vtdataroot tools/sqlancer/start_cluster.sh
    ```
 
-3. Run SQLancer. Each run prints the failures grouped by root error. The full reproduction logs are in
-   `<out-dir>/logs/mysql/`:
+3. Run SQLancer. Each run prints the problems grouped by root error; the reproductions are in
+   `<out-dir>/logs/`:
 
    ```sh
-   tools/sqlancer/run.sh out/unsharded 300 u0,u1 --oracle TLP_WHERE
-   tools/sqlancer/run.sh out/sharded   300 s0,s1 --vitess-sharded --oracle TLP_WHERE
+   REF='jdbc:mysql://127.0.0.1:33572/?user=vt_dba_tcp&useSSL=false&serverTimezone=UTC'
+   export SQLANCER_OPTS='--num-queries 500'   # more database states per run
+   tools/sqlancer/run.sh out/unsharded 600 u0,u1 --vitess-reference-url "$REF" --oracle VITESS_DIFF
+   tools/sqlancer/run.sh out/sharded   600 s0,s1 --vitess-sharded --vitess-reference-url "$REF" --oracle VITESS_DIFF
+   tools/sqlancer/run.sh out/tlp       300 s0,s1 --vitess-sharded --oracle TLP_WHERE
    ```
 
-   The other MySQL oracles also work: `PQS`, `DQE`, `DQP`, `EET`, `CERT` and `FUZZER`. In a sharded keyspace,
-   `DQE` adds columns with `ALTER TABLE` and then queries them right away. vtgate does not track that schema
-   change yet, so it reports `column not found`.
+   SQLancer's other MySQL oracles also work: `PQS`, `DQE`, `DQP`, `EET`, `CERT` and `FUZZER`. In a sharded
+   keyspace, `DQE` adds columns with `ALTER TABLE` and then queries them right away. vtgate does not track that
+   schema change yet, so it reports `column not found`.
+
+   Known bugs that occur often drown everything else. To look past them, patch them locally in the vtgate under
+   test, and point `KNOWN_LIMITATIONS` at a copy of `known_limitations.txt` without their entries.
 
 Limitations of this setup:
 
@@ -59,14 +88,45 @@ Limitations of this setup:
   `_vt` sidecar tables and vtgate misses a schema change. The patch re-triggers the reload in that case.
 - A failing `CREATE INDEX` can leave the index on only some shards, because DDL is not atomic across shards.
   A later `DROP INDEX` then fails on the other shards.
+- A unique key that does not contain the sharding key is only unique per shard. `VITESS_DIFF` reports the
+  resulting differences as `divergence: ... Duplicate entry` and skips that round.
 
 ## Findings (November 2026, `main` at `bf549e2`)
 
-About 25 minutes of runs (more than 1.5 million statements) found these problems.
+About an hour of runs (more than a million `VITESS_DIFF` queries and 1.5 million statements of SQLancer's own
+oracles) found the following problems. Unless noted otherwise, all examples are confirmed on an unmodified build
+of `main`. Unless noted otherwise, a sharded example uses tables `t0`, `t1`, `t2` with
+columns `c0` (the `hash` primary vindex) and `c1`, and a few rows each.
+
+### Crashes and panics
+
+1. **A query can crash vtgate** (sharded). `Concatenate.parallelExec` runs each `UNION` source in a goroutine that
+   does not recover panics, so a panic in a `UNION` kills the whole process. With bug 7 below, this query does:
+   ```sql
+   (SELECT t1.c0 AS a0 FROM t1 JOIN t0 ON 5 NOT IN (t1.c0, EXISTS (SELECT 1) < t0.c0)
+     WHERE t0.c0 >= (SELECT MAX(sq.c0) FROM t0 AS sq))
+   UNION (SELECT EXISTS (SELECT 1 WHERE FALSE) AS a0 FROM t0) ORDER BY 1 ASC
+   -- panic: runtime error: index out of range [3] with length 2 (engine/concatenate.go:173)
+   ```
+   In a run against a vtgate with local workarounds for bugs 3, 4 and 6, a panic in the compiled `NOT`
+   (`interface conversion: evalengine.eval is nil, not *evalengine.evalInt64`) crashed vtgate the same way.
+   That one is not yet reproduced on `main`.
+
+2. **Queries that make vtgate panic** (sharded). vtgate recovers these panics, but closes the connection:
+   - `unexpected argument type`: `SELECT LEAST(1, CASE WHEN t0.c0 THEN NULL END) AS a0 FROM t0 ORDER BY 1`
+   - `index out of range [-1]`:
+     `(SELECT DISTINCT IFNULL(EXISTS (SELECT 1), t0.c0) AS a0 FROM t0) UNION ALL (SELECT t0.c0 FROM t0)`
+   - `index out of range [1] with length 1`:
+     `(SELECT t0.c1 + 1 AS a0 FROM t0 WHERE EXISTS (SELECT 1 FROM t0 AS sq WHERE sq.c0 = t0.c1)) UNION ALL (SELECT t0.c0 FROM t0)`
+   - `alias already used`:
+     `SELECT COUNT(*), COUNT(DISTINCT d.a0), MIN(d.a0), MAX(d.a0) FROM (SELECT (((CASE 1901312329 WHEN t1.c0 THEN t0.c0 ELSE t0.c0 END)) && (LEAST(t1.c0, t0.c0))) != ((t1.c0) IS NOT UNKNOWN) AS a0, t0.c0 AS a1, t0.c0 AS a2 FROM t0, t1) AS d`
+   - `index out of range [4] with length 3`:
+     `SELECT d.a0, COUNT(*) FROM (SELECT CAST(-928735196 AS SIGNED) AS a0, SUM(DISTINCT t1.c0) AS a1 FROM t1, t2 WHERE t2.c0 = (SELECT COUNT(sq.c0) FROM t2 AS sq WHERE sq.c0 >= 1643139141) GROUP BY CAST(-928735196 AS SIGNED)) AS d GROUP BY d.a0 ORDER BY 1 DESC, 2 DESC LIMIT 1`
+   - `vexplain queries` on a query that hits bug 3 panics in `ExecuteLogger.Log` ("query not able to parse").
 
 ### Wrong results
 
-1. **The formatter drops parentheses that MySQL needs** (unsharded and sharded). `precedenceFor` gives every
+3. **The formatter drops parentheses that MySQL needs** (unsharded and sharded). `precedenceFor` gives every
    `ComparisonExpr` (`=`, `<`, `IN`, `LIKE`, `REGEXP`, ...) and `IsExpr` the same precedence (`P11`). The
    formatter treats them as left-associative and omits the parentheses around a left operand. In MySQL's
    grammar, however, the left operand of `IN`, `LIKE`, `REGEXP` and `BETWEEN` is a `bit_expr`. Depending on
@@ -81,11 +141,22 @@ About 25 minutes of runs (more than 1.5 million statements) found these problems
    - SQL that Vitess's own parser rejects, so vttablet fails with `syntax error`. Examples:
      `(a IN (1)) IN (1)`, `(a LIKE 'x') LIKE 'y'`, `(a IS NULL) NOT IN (1)`, `(a IS NOT FALSE) >= b`,
      `(a IN (1)) BETWEEN 1 AND 2`.
-     `vexplain queries` with such a query panics in `ExecuteLogger.Log` ("query not able to parse"), and
-     vtgate closes the connection.
 
-2. **A subquery whose `WHERE` is false empties the whole query** (sharded only). In a sharded keyspace, these
-   queries return no rows, even though `t` has rows:
+4. **`NOT NOT x` becomes `x`** (unsharded and sharded). `rewriteNotExpr` in `go/vt/sqlparser/normalizer.go`
+   removes a double negation everywhere, but `NOT NOT x` is `0` or `1`. `SELECT NOT NOT a FROM t` returns `5`
+   for `a = 5`, where MySQL returns `1`. The simplification is only valid where just the truth value matters,
+   as in `WHERE`.
+
+5. **Aggregates over a cross-shard join** (sharded), with `t0` and `t1` holding the values 1, 2, 3 and 10, 20,
+   30, 40 in `c0`, and an empty `t2`:
+   - `DISTINCT` is ignored: `SELECT COUNT(DISTINCT t0.c0) FROM t1, t0` returns 12 instead of 3, and
+     `SELECT SUM(DISTINCT t0.c0) FROM t1, t0` returns 24 instead of 6.
+   - An empty join is not empty: `SELECT SUM(t0.c0) FROM t2 CROSS JOIN t0` returns 0 instead of `NULL`, and
+     `SELECT COUNT(t0.c0), MAX(t0.c0) FROM t2 CROSS JOIN t0` returns 0 and 3 instead of 0 and `NULL`.
+   - vtgate adds the values of `SUM(DISTINCT float_column)` with float instead of double precision.
+
+6. **A subquery whose `WHERE` is false empties the whole query** (sharded). These queries return no rows, even
+   though `t` has rows:
    ```sql
    SELECT c0 FROM t WHERE NOT EXISTS (SELECT 1 WHERE FALSE);
    SELECT c0, EXISTS (SELECT 1 WHERE FALSE) FROM t;
@@ -96,27 +167,70 @@ About 25 minutes of runs (more than 1.5 million statements) found these problems
    merges the subquery into the outer route with the inner's `NoneRouting`. That is correct only for a
    subquery that filters the outer rows, such as `WHERE EXISTS (...)`.
 
-3. **`PRIMARY KEY UNIQUE` on a column loses the primary key** (unsharded and sharded).
+7. **A cross-shard join predicate with a subquery goes to the wrong side** (sharded). A predicate that uses
+   columns of both tables and a subquery is not evaluated where both are available:
+   - `SELECT t1.c0, t0.c0 FROM t1 JOIN t0 ON t1.c0 < t0.c0 + EXISTS (SELECT 1)` drops the predicate and
+     returns the cross product (9 instead of 6 rows for 3 rows each).
+   - `SELECT COUNT(*) FROM t1, t0 WHERE t1.c0 < t0.c0 + (SELECT MAX(c0) FROM t0 AS sq)` sends the predicate to
+     the route of `t1`, which fails with `Unknown column 't0.c0'`.
+   - With a `UNION`, this crashes vtgate (bug 1).
+
+8. **Rows land on the wrong shard** (sharded). vtgate computes the keyspace ID from the value in the statement,
+   before MySQL converts it to the column type. When MySQL stores a different value, for example because
+   `INSERT IGNORE` clamps an out-of-range value, the row is on the wrong shard:
+   ```sql
+   CREATE TABLE z (c0 INT UNSIGNED, c1 INT);  -- primary vindex hash(c0)
+   INSERT IGNORE INTO z (c0, c1) VALUES (-1,1),(-2,2),(-3,3),(-4,4),(-5,5),(-6,6),(-7,7),(-8,8),(0,0);
+   SELECT COUNT(*) FROM z WHERE c0 = 0;         -- 7 instead of 9
+   SELECT c0, COUNT(*) FROM z GROUP BY c0;      -- two groups for 0
+   ```
+   A unique key on `c0` does not prevent duplicates in this case either.
+
+9. **`PRIMARY KEY UNIQUE` on a column loses the primary key** (unsharded and sharded).
    `CREATE TABLE t (c0 INT PRIMARY KEY UNIQUE)` creates a nullable `c0` with only a `UNIQUE KEY`, because
    `ColumnTypeOptions.KeyOpt` holds only one key option and the last one wins.
 
-### Tables that schema tracking cannot handle
+10. **A float literal as a bind variable changes `CAST`** (unsharded and sharded). vtgate sends the literal
+    `1.7976931348623157E308` as `CAST(:vtg1 AS DOUBLE)`. `SELECT CAST(1.7976931348623157E308 AS SIGNED)`
+    returns 9223372036854775807 on MySQL, but fails through vtgate with `BIGINT value is out of range`, and in
+    a `WHERE` clause the row disappears.
 
-4. **The column attribute `STORAGE {DISK|MEMORY}` is not parsed.** vtgate passes such a `CREATE TABLE` through
-   as partial DDL. The schema tracker cannot parse the `SHOW CREATE TABLE` output (`/*!50606 STORAGE MEMORY */`)
-   and skips the table. In a sharded keyspace, `INSERT` without a column list, `SELECT *` in a join and similar
-   queries on that table then fail with `VT09004` or `VT09015: schema tracking required`.
+### Valid queries that fail
+
+11. **Derived tables and `UNION`s over cross-shard joins** (sharded). vtgate generates invalid SQL or reports an
+    internal error:
+    - `SELECT d.a0, COUNT(*) FROM (SELECT t0.c0 + t1.c0 AS a0 FROM t0, t1) AS d GROUP BY d.a0` fails with
+      `missing bind var t0_c0`.
+    - `SELECT MIN(d.a0) FROM (SELECT t1.c0 AS a0, t0.c0 AS a1, t0.c0 AS a2 FROM t0, t1) AS d` fails with
+      `Unknown column 't0.c0'`.
+    - `(SELECT t0.c1 FROM t0 WHERE EXISTS (SELECT 1 FROM t0 AS sq WHERE sq.c1 = t0.c0)) UNION ALL (SELECT t0.c0 FROM t0)`
+      and `(SELECT t1.c0 AS a0 FROM t1 JOIN t0 ON t1.c0 + t0.c0 > 0 WHERE t0.c0 >= (SELECT MAX(sq.c0) FROM t0 AS sq)) UNION (SELECT 1 FROM t0)`
+      fail with `The used SELECT statements have a different number of columns`.
+    - `(SELECT DISTINCT EXISTS (SELECT 1) AS a0 FROM t0) UNION ALL (SELECT t0.c0 FROM t0)` fails with
+      `VT13001: [BUG] argument offsets did not line up for UNION`.
+
+### Schema problems
+
+12. **The column attribute `STORAGE {DISK|MEMORY}` is not parsed.** vtgate passes such a `CREATE TABLE`
+    through as partial DDL. The schema tracker cannot parse the `SHOW CREATE TABLE` output
+    (`/*!50606 STORAGE MEMORY */`) and skips the table. In a sharded keyspace, `INSERT` without a column list,
+    `SELECT *` in a join and similar queries on that table then fail with `VT09004` or
+    `VT09015: schema tracking required`.
+
+13. **vtgate rewrites invalid DDL into valid DDL.** MySQL rejects `CREATE INDEX i0 USING HASH ON h (c0, c1 ASC)`
+    with `Incorrect usage of spatial/fulltext/hash index and explicit index order`. vtgate drops `USING HASH`
+    and creates a B-tree index.
 
 ### Unsupported syntax and features
 
 These are valid MySQL statements that vtgate rejects:
 
 - Parser: `INSERT {LOW_PRIORITY|HIGH_PRIORITY|DELAYED}`, `REPLACE {LOW_PRIORITY|DELAYED}`,
-  `DELETE LOW_PRIORITY`, `DELETE QUICK IGNORE`, `CHECK TABLE`, `CHECKSUM TABLE`,
-  `ANALYZE TABLE ... {UPDATE|DROP} HISTOGRAM`, `SET SESSION sql_buffer_result = ...`.
+  `DELETE LOW_PRIORITY`, `DELETE QUICK IGNORE`, `CHECK TABLE`, `CHECKSUM TABLE`, `ANALYZE TABLE` with several
+  tables, `ANALYZE TABLE ... {UPDATE|DROP} HISTOGRAM`, `SET SESSION sql_buffer_result = ...`.
 - `DELETE QUICK FROM t` fails with `VT03003: unknown table 'QUICK' in MULTI DELETE`.
 - Session variables that vtgate does not know (for example `histogram_generation_max_mem_size` and
   `internal_tmp_mem_storage_engine`) or does not support as a system setting (for example
   `max_sp_recursion_depth`, `rbr_exec_mode`, `myisam_sort_buffer_size` and `sql_log_off`).
-- Sharded keyspaces: `REPLACE INTO`, `UPDATE` of a primary vindex column with the `hash` vindex, and
-  `UPDATE ... SET vindex_col = DEFAULT`.
+- Sharded keyspaces: `REPLACE INTO`, `UPDATE` of a primary vindex column with the `hash` vindex,
+  `UPDATE ... SET vindex_col = DEFAULT`, and a subquery in an outer join predicate.

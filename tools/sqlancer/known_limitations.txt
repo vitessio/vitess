@@ -6,6 +6,8 @@
 # (the anchors keep the same errors coming back from vttablet visible: those mean vtgate produced invalid SQL)
 ^syntax error at position \d+ near '(LOW_PRIORITY|HIGH_PRIORITY|DELAYED|QUICK|IGNORE|INTO|CHECK|CHECKSUM|DROP|UPDATE|sql_buffer_result)'
 ^VT03003: unknown table '.*' in MULTI DELETE
+# ANALYZE TABLE with several tables (the error has no "near" part)
+^syntax error at position \d+$
 # session variables vtgate does not know or support
 ^VT\d+: unknown system variable
 ^VT\d+: unsupported: system setting

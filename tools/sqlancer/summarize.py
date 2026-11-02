@@ -12,15 +12,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Groups SQLancer failure logs by their root error, so that each distinct problem is listed once."""
+"""Groups SQLancer's failures and the findings of the VITESS_DIFF oracle, so that each distinct problem is listed once.
+
+usage: summarize.py <sqlancer-logs-dir>
+"""
 
 import collections
+import json
 import os
 import re
 import sys
 
 
-def main(log_dir):
+def main(logs):
+    failures(os.path.join(logs, "mysql"))
+    findings(os.path.join(logs, "vitess", "findings.jsonl"))
+
+
+def failures(log_dir):
+    """Failures that stopped a SQLancer thread: unexpected errors and mismatches of SQLancer's own oracles."""
+    if not os.path.isdir(log_dir):
+        return
     groups = collections.defaultdict(list)
     for name in sorted(os.listdir(log_dir)):
         if not name.endswith(".log") or name.endswith("-cur.log"):
@@ -41,10 +53,30 @@ def main(log_dir):
             statement = mismatch.group(1) if mismatch else failure.group(1)
         key = re.sub(r"'[^']*'", "'?'", re.sub(r"\d+", "N", cause))[:160]
         groups[key].append((name, statement))
-    for key, failures in sorted(groups.items(), key=lambda kv: -len(kv[1])):
-        print(f"[{len(failures)}x] {key}")
-        for name, statement in failures[:3]:
+    if groups:
+        print("== Failures that stopped a SQLancer thread (logs/mysql)")
+    for key, entries in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+        print(f"[{len(entries)}x] {key}")
+        for name, statement in entries[:3]:
             print(f"    {name}: {statement[:300]}")
+
+
+def findings(path):
+    """Findings of the VITESS_DIFF oracle, which records problems without stopping."""
+    if not os.path.exists(path):
+        return
+    groups = collections.defaultdict(list)
+    with open(path, errors="replace") as f:
+        for line in f:
+            finding = json.loads(line)
+            groups[(finding["category"], finding["signature"])].append(finding)
+    print("== VITESS_DIFF findings (logs/vitess); reproductions are in the listed .sql files")
+    for (category, signature), entries in sorted(groups.items(), key=lambda kv: (kv[0][0], -len(kv[1]))):
+        print(f"[{len(entries)}x] {category}: {signature}")
+        for finding in entries[:2]:
+            query = finding["query"] or finding["details"].split("\n")[0]
+            repro = f" ({finding['repro']})" if finding["repro"] else ""
+            print(f"    {query[:300]}{repro}")
 
 
 if __name__ == "__main__":
