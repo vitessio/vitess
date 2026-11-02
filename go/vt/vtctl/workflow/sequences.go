@@ -464,8 +464,9 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 
 // checkQualifiedSequenceVSchema checks the vschema entries of the backing
 // tables that qualified sequence references name, without searching other
-// keyspaces. A backing table must be a sequence in an unsharded keyspace, or
-// be missing from its vschema, in which case it is marked to be added by
+// keyspaces. A backing table must be defined as a sequence, which a sharded
+// keyspace allows when it's pinned, or be missing from the vschema of an
+// unsharded keyspace, in which case it is marked to be added by
 // prepareTargetSequences. It changes nothing, as it also runs on dry runs.
 func (ts *trafficSwitcher) checkQualifiedSequenceVSchema(ctx context.Context, sequences map[string]*sequenceMetadata) error {
 	keyspaces := make(map[string]*topo.KeyspaceVSchemaInfo)
@@ -481,15 +482,16 @@ func (ts *trafficSwitcher) checkQualifiedSequenceVSchema(ctx context.Context, se
 			if err != nil {
 				return vterrors.Wrapf(err, "failed to get vschema for sequence keyspace %s", keyspace)
 			}
-			if kvs.Sharded {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
-					"sequence keyspace %s must be unsharded; update the target auto_increment sequence reference to an unsharded keyspace", keyspace)
-			}
 			keyspaces[keyspace] = kvs
 		}
 		found, err := findSequenceInVSchema(kvs, sm.backingTableName)
 		if err != nil {
 			return err
+		}
+		if !found && kvs.Sharded {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"sharded keyspace %s doesn't define sequence %s in its vschema; define it there as a pinned sequence, or update the target auto_increment sequence reference to an unsharded keyspace",
+				keyspace, sm.backingTableName)
 		}
 		sm.registerInVSchema = !found
 	}

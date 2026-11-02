@@ -588,8 +588,40 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			err:     "sequence keyspace targetks must be unsharded; update the target auto_increment sequence reference to an unsharded keyspace",
+			err:     "sharded keyspace targetks doesn't define sequence my-seq1 in its vschema; define it there as a pinned sequence, or update the target auto_increment sequence reference to an unsharded keyspace",
 			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// A sharded keyspace can hold a pinned sequence, which is left as
+			// it is.
+			name: "qualified pinned sequence in a sharded keyspace",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence", Pinned: "00"},
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", targetKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: targetKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + targetKeyspace.KeyspaceName,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: targetKeyspace.KeyspaceName + ".my-seq1",
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "auto_increment replaced with sequence",
