@@ -170,3 +170,69 @@ func typeForOffset(i int) evalengine.Type {
 		panic(i)
 	}
 }
+
+// TestHashJoinJSONKeys checks that a hash join on JSON columns matches rows by
+// value. The probe table hands back every row in a bucket without comparing the
+// keys, so documents that share a shape but not a value must not share a bucket.
+func TestHashJoinJSONKeys(t *testing.T) {
+	lhs := func() Primitive {
+		return &fakePrimitive{
+			results: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("col1", "json"),
+					`[1]`,
+					`[2]`,
+					`{"a":1}`,
+				),
+			},
+		}
+	}
+	rhs := func() Primitive {
+		return &fakePrimitive{
+			results: []*sqltypes.Result{
+				sqltypes.MakeTestResult(
+					sqltypes.MakeTestFields("col2", "json"),
+					`[1]`,
+					`{"a":1}`,
+					`{"b":2}`,
+				),
+			},
+		}
+	}
+
+	jsonType := evalengine.NewType(sqltypes.TypeJSON, collations.CollationBinaryID)
+	typ, err := evalengine.CoerceTypes(jsonType, jsonType, collations.MySQL8())
+	require.NoError(t, err)
+
+	jn := &HashJoin{
+		Opcode:         InnerJoin,
+		Cols:           []int{-1, 1},
+		LHSKey:         0,
+		RHSKey:         0,
+		Collation:      typ.Collation(),
+		ComparisonType: typ.Type(),
+		CollationEnv:   collations.MySQL8(),
+	}
+
+	expected := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("col1|col2", "json|json"),
+		`[1]|[1]`,
+		`{"a":1}|{"a":1}`,
+	)
+
+	t.Run("Execute", func(t *testing.T) {
+		jn.Left = lhs()
+		jn.Right = rhs()
+		r, err := jn.TryExecute(t.Context(), &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+		require.NoError(t, err)
+		expectResultAnyOrder(t, r, expected)
+	})
+
+	t.Run("StreamExecute", func(t *testing.T) {
+		jn.Left = lhs()
+		jn.Right = rhs()
+		r, err := wrapStreamExecute(jn, &noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+		require.NoError(t, err)
+		expectResultAnyOrder(t, r, expected)
+	})
+}

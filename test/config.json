@@ -227,6 +227,23 @@
       ],
       "Needs": []
     },
+    "vtbackup_errant_gtids": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/backup/vtbackup_errant_gtids"
+      ],
+      "Args": [
+        "-timeout",
+        "20m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "vtbackup_errant_gtids",
+      "Tags": [
+        "upgrade_downgrade_backups"
+      ],
+      "Needs": []
+    },
     "backup_xtrabackup": {
       "File": "unused.go",
       "Packages": [
@@ -337,6 +354,7 @@
     "clustertest": {
       "File": "unused.go",
       "Packages": [
+        "vitess.io/vitess/go/test/endtoend/cluster",
         "vitess.io/vitess/go/test/endtoend/clustertest"
       ],
       "Args": [],
@@ -627,6 +645,23 @@
       "Tags": [
         ""
       ],
+      "Needs": [
+        "limit-resources"
+      ]
+    },
+    "reparent_utils": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/reparent/utils"
+      ],
+      "Args": [
+        "-timeout",
+        "5m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "ers_prs_newfeatures_heavy",
+      "Tags": [],
       "Needs": [
         "limit-resources"
       ]

@@ -963,10 +963,14 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 					return res.Rows[0][0].ToString()
 				}
 				vc := newVCopier(vr)
-				require.NoError(t, vc.runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName, true, "resumable copy done"))
+				var doneLogged int
+				logDone := func() { doneLogged++ }
+				require.NoError(t, vc.runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName, true, logDone))
 				assert.Equal(t, "1", copyStateRows())
-				require.NoError(t, vc.runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName, false, "atomic copy done"))
+				assert.Zero(t, doneLogged)
+				require.NoError(t, vc.runPostCopyActionsAndDeleteCopyState(t.Context(), stopCtx, tableName, false, logDone))
 				assert.Equal(t, "0", copyStateRows())
+				assert.Equal(t, 1, doneLogged)
 				return
 			}
 

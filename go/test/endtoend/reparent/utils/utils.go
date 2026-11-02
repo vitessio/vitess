@@ -26,6 +26,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -160,6 +161,19 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	var tablets []*cluster.Vttablet
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
+	// A failed setup returns no cluster for the caller to tear down, so stop
+	// the processes it started here.
+	var mysqlCtlProcessList []*exec.Cmd
+	setupDone := false
+	t.Cleanup(func() {
+		if setupDone {
+			return
+		}
+		clusterInstance.Teardown()
+		stopMySQLInits(mysqlCtlProcessList)
+		// Teardown has already run; this removes the data directory on CI.
+		TeardownCluster(clusterInstance)
+	})
 
 	// Start topo server
 	err := clusterInstance.StartTopo()
@@ -204,11 +218,13 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	require.NoError(t, err, "Cannot launch cluster")
 
 	// Start MySql
-	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			log.Info(fmt.Sprintf("Starting MySql for tablet %v", tablet.Alias))
-			proc, err := tablet.MysqlctlProcess.StartProcess()
+			// Group only this start; later restarts use the tablet's own MysqlctlProcess.
+			mysqlctl := tablet.MysqlctlProcess
+			mysqlctl.ProcessGroup = true
+			proc, err := mysqlctl.StartProcess()
 			require.NoError(t, err, "Error starting start mysql")
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 		}
@@ -226,7 +242,27 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	require.NoError(t, err, out)
 
 	setupShard(ctx, t, clusterInstance, shardName, tablets)
+	setupDone = true
 	return clusterInstance
+}
+
+// stopMySQLInits kills the process groups of the mysqlctl inits in procs and
+// reaps any init not yet waited on. procs must have been started with
+// MysqlctlProcess.ProcessGroup set. Call it after Teardown: if a mysqld is
+// killed first, Teardown's graceful shutdown of it cannot complete and blocks
+// until its 30s timeout expires.
+func stopMySQLInits(procs []*exec.Cmd) {
+	for _, proc := range procs {
+		// Teardown finds mysqld by its pid file, which a running or failed init may
+		// not have written. The init's group holds the mysqld_safe and mysqld it
+		// started, and outlives it.
+		_ = syscall.Kill(-proc.Process.Pid, syscall.SIGKILL)
+		if proc.ProcessState == nil {
+			// The group kill misses an init started without ProcessGroup; kill it so that Wait returns.
+			_ = proc.Process.Kill()
+			_ = proc.Wait()
+		}
+	}
 }
 
 func setupShard(ctx context.Context, t *testing.T, clusterInstance *cluster.LocalProcessCluster, shardName string, tablets []*cluster.Vttablet) {
