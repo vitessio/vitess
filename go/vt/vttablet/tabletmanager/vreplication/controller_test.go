@@ -910,3 +910,13 @@ func TestTerminalVReplicationError(t *testing.T) {
 	require.True(t, strings.HasPrefix(err.Error(), RetriesExhaustedIndicator+":"))
 	require.False(t, strings.HasPrefix(err.Error(), TerminalErrorIndicator))
 }
+
+func TestControllerSetMessageDoesNotOverwriteParkedState(t *testing.T) {
+	dbClient := binlogplayer.NewMockDBClient(t)
+	blpStats := binlogplayer.NewStats()
+	defer blpStats.Stop()
+	ct := &controller{id: 1, blpStats: blpStats}
+	dbClient.ExpectRequest("update _vt.vreplication set message='Picked source tablet: zone1-0000000100' where id=1 and state not in ('Stopped', 'Error')", testDMLResponse, nil)
+	require.NoError(t, ct.setMessage(dbClient, "Picked source tablet: zone1-0000000100"))
+	dbClient.Wait()
+}
