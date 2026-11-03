@@ -671,7 +671,11 @@ func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.VarBinary {
 		return nil
 	}
+	// A NULL key skips the conversion and stays NULL, so that JSON_OBJECT
+	// rejects it the way it rejects a NULL string key.
+	skip := c.compileNullCheck1(key)
 	c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+	c.asm.jumpDestination(skip)
 	return nil
 }
 
