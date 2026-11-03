@@ -62,10 +62,10 @@ index a34861c..8d9be53 100644
      protected MySQLSchema readSchema() throws SQLException {
          return MySQLSchema.fromConnection(getConnection(), getDatabaseName());
 diff --git a/src/sqlancer/mysql/MySQLOptions.java b/src/sqlancer/mysql/MySQLOptions.java
-index 9219073..cabd50d 100644
+index 9219073..1151707 100644
 --- a/src/sqlancer/mysql/MySQLOptions.java
 +++ b/src/sqlancer/mysql/MySQLOptions.java
-@@ -17,6 +17,42 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
+@@ -17,9 +17,61 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
      @Parameter(names = "--oracle")
      public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.TLP_WHERE);
  
@@ -102,12 +102,31 @@ index 9219073..cabd50d 100644
 +    @Parameter(names = "--vitess-workload", description = "vtgate workload for the session (oltp or olap); olap makes vtgate stream results")
 +    public String vitessWorkload;
 +
++    @Parameter(names = "--vitess-typed-columns", description = "Give every table the extra columns td DATE, tt DATETIME(2), tj JSON and ts VARCHAR (with a random collation), and use them in VITESS_DIFF queries", arity = 1)
++    public boolean vitessTypedColumns;
++
++    @Parameter(names = "--vitess-string-key", description = "With --vitess-sharded: use the VARCHAR column ts (NOT NULL) as the primary vindex column, with the vindex --vitess-string-vindex; implies --vitess-typed-columns", arity = 1)
++    public boolean vitessStringKey;
++
++    @Parameter(names = "--vitess-string-vindex", description = "Vindex type for --vitess-string-key")
++    public String vitessStringVindex = "unicode_loose_xxhash";
++
 +    @Parameter(names = "--vitess-prepared", description = "VITESS_DIFF runs its queries on vtgate and MySQL as server-side prepared statements, with the literals as typed parameters", arity = 1)
 +    public boolean vitessPrepared;
 +
      @Override
      public List<MySQLOracleFactory> getTestOracleFactory() {
          return oracles;
+     }
+ 
++    public boolean vitessTypedColumns() {
++        return vitessTypedColumns || vitessStringKey;
++    }
++
++    public String vitessKeyColumn() {
++        return vitessStringKey ? "ts" : "c0";
++    }
+ }
 diff --git a/src/sqlancer/mysql/MySQLOracleFactory.java b/src/sqlancer/mysql/MySQLOracleFactory.java
 index 8b37efb..b96ceee 100644
 --- a/src/sqlancer/mysql/MySQLOracleFactory.java
@@ -133,7 +152,7 @@ index 8b37efb..b96ceee 100644
      };
  }
 diff --git a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProvider.java
-index 80a23b9..1dde769 100644
+index 80a23b9..92b9829 100644
 --- a/src/sqlancer/mysql/MySQLProvider.java
 +++ b/src/sqlancer/mysql/MySQLProvider.java
 @@ -39,10 +39,15 @@ import sqlancer.mysql.gen.tblmaintenance.MySQLCheckTable;
@@ -180,7 +199,7 @@ index 80a23b9..1dde769 100644
          }
  
          StatementExecutor<MySQLGlobalState, Action> se = new StatementExecutor<>(globalState, Action.values(),
-@@ -153,6 +164,20 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -153,6 +164,21 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
                  });
          se.executeStatements();
  
@@ -189,7 +208,8 @@ index 80a23b9..1dde769 100644
 +            List<String> tables = globalState.getSchema().getDatabaseTables().stream().map(MySQLTable::getName)
 +                    .collect(Collectors.toList());
 +            String divergence = reference.findDivergence(globalState.getConnection(), tables,
-+                    globalState.getDbmsSpecificOptions().vitessSharded);
++                    globalState.getDbmsSpecificOptions().vitessSharded,
++                    globalState.getDbmsSpecificOptions().vitessKeyColumn());
 +            if (divergence != null) {
 +                // The comparison is only meaningful while both databases contain the same data.
 +                VitessFindings.report(globalState, new VitessFindings.Finding("divergence",
@@ -201,7 +221,7 @@ index 80a23b9..1dde769 100644
          if (globalState.getDbmsSpecificOptions().getTestOracleFactory().stream()
                  .anyMatch((o) -> o == MySQLOracleFactory.CERT)) {
              // Enfore statistic collected for all tables
-@@ -171,6 +196,130 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -171,6 +197,130 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
          }
      }
  
@@ -332,7 +352,7 @@ index 80a23b9..1dde769 100644
      @Override
      public SQLConnection createDatabase(MySQLGlobalState globalState) throws SQLException {
          String username = globalState.getOptions().getUserName();
-@@ -184,6 +333,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -184,6 +334,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
              port = MySQLOptions.DEFAULT_PORT;
          }
          String databaseName = globalState.getDatabaseName();
@@ -342,11 +362,26 @@ index 80a23b9..1dde769 100644
          globalState.getState().logStatement("DROP DATABASE IF EXISTS " + databaseName);
          globalState.getState().logStatement("CREATE DATABASE " + databaseName);
          globalState.getState().logStatement("USE " + databaseName);
+diff --git a/src/sqlancer/mysql/MySQLSchema.java b/src/sqlancer/mysql/MySQLSchema.java
+index ab0ba45..6bc92e7 100644
+--- a/src/sqlancer/mysql/MySQLSchema.java
++++ b/src/sqlancer/mysql/MySQLSchema.java
+@@ -280,6 +280,10 @@ public class MySQLSchema extends AbstractSchema<MySQLGlobalState, MySQLTable> {
+                     + databaseName + "' AND TABLE_NAME='" + tableName + "'")) {
+                 while (rs.next()) {
+                     String columnName = rs.getString("COLUMN_NAME");
++                    if (sqlancer.mysql.vitess.VitessTypedColumns.isTypedColumn(columnName)) {
++                        // Generated and used only by the Vitess mode (--vitess-typed-columns).
++                        continue;
++                    }
+                     String dataType = rs.getString("DATA_TYPE");
+                     int precision = rs.getInt("NUMERIC_PRECISION");
+                     int scale = rs.getInt("NUMERIC_SCALE");
 diff --git a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
-index 0e464de..1faaea9 100644
+index 0e464de..37b3911 100644
 --- a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
 +++ b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
-@@ -71,6 +71,11 @@ public class MySQLInsertGenerator {
+@@ -71,8 +71,17 @@ public class MySQLInsertGenerator {
          sb.append(" INTO ");
          sb.append(table.getName());
          List<MySQLColumn> columns = table.getRandomNonEmptyColumnSubset();
@@ -357,8 +392,14 @@ index 0e464de..1faaea9 100644
 +        }
          sb.append("(");
          sb.append(columns.stream().map(c -> c.getName()).collect(Collectors.joining(", ")));
++        boolean typed = globalState.getDbmsSpecificOptions().vitessTypedColumns();
++        if (typed) {
++            sb.append(", ").append(sqlancer.mysql.vitess.VitessTypedColumns.NAMES);
++        }
          sb.append(") ");
-@@ -101,6 +106,9 @@ public class MySQLInsertGenerator {
+         sb.append("VALUES");
+         MySQLExpressionGenerator gen = new MySQLExpressionGenerator(globalState);
+@@ -101,6 +110,9 @@ public class MySQLInsertGenerator {
                                  + " attempts while generating constant for column " + columns.get(c).getName());
                      }
                      constExpr = gen.generateConstant();
@@ -368,11 +409,56 @@ index 0e464de..1faaea9 100644
                      boolean reject = false;
  
                      // Bug workaround: for integer columns, reject values that round to 1
+@@ -145,6 +157,10 @@ public class MySQLInsertGenerator {
+                 }
+                 sb.append(MySQLVisitor.asString(constExpr));
+             }
++            if (typed) {
++                sb.append(", ").append(sqlancer.mysql.vitess.VitessTypedColumns
++                        .randomValues(globalState.getDbmsSpecificOptions().vitessStringKey));
++            }
+             sb.append(")");
+         }
+         MySQLErrors.addInsertUpdateErrors(errors);
 diff --git a/src/sqlancer/mysql/gen/MySQLTableGenerator.java b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
-index d27d6e6..d390464 100644
+index d27d6e6..79b63da 100644
 --- a/src/sqlancer/mysql/gen/MySQLTableGenerator.java
 +++ b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
-@@ -262,7 +262,7 @@ public class MySQLTableGenerator {
+@@ -66,6 +66,10 @@ public class MySQLTableGenerator {
+                 }
+                 appendColumn(i);
+             }
++            if (globalState.getDbmsSpecificOptions().vitessTypedColumns()) {
++                sb.append(", ").append(sqlancer.mysql.vitess.VitessTypedColumns
++                        .columnDefinitions(globalState.getDbmsSpecificOptions().vitessStringKey));
++            }
+             sb.append(")");
+             sb.append(" ");
+             appendTableOptions();
+@@ -170,7 +174,9 @@ public class MySQLTableGenerator {
+         // is only emitted when randomly chosen; otherwise the table would inherit the server's default engine, which is
+         // not guaranteed transactional. Force the option to always be present so the engine is never left to the
+         // server default.
+-        if (globalState.usesEETDML() && !tableOptions.contains(TableOptions.ENGINE)) {
++        // The typed columns of the Vitess mode (JSON) need InnoDB too.
++        boolean innoDBOnly = globalState.usesEETDML() || globalState.getDbmsSpecificOptions().vitessTypedColumns();
++        if (innoDBOnly && !tableOptions.contains(TableOptions.ENGINE)) {
+             tableOptions.add(TableOptions.ENGINE);
+         }
+         int i = 0;
+@@ -208,8 +214,9 @@ public class MySQLTableGenerator {
+                 // "MERGE": java.sql.SQLException: Table 't0' is read only
+                 // The EET DML oracle rolls back each statement to compare database states, which requires a
+                 // transactional engine, so only InnoDB is used while it is active.
+-                String fromOptions = globalState.usesEETDML() ? "InnoDB"
+-                        : Randomly.fromOptions("InnoDB", "MyISAM", "MEMORY", "HEAP", "CSV", "ARCHIVE");
++                String fromOptions = globalState.usesEETDML()
++                        || globalState.getDbmsSpecificOptions().vitessTypedColumns() ? "InnoDB"
++                                : Randomly.fromOptions("InnoDB", "MyISAM", "MEMORY", "HEAP", "CSV", "ARCHIVE");
+                 this.engine = MySQLEngine.get(fromOptions);
+                 sb.append("ENGINE = ");
+                 sb.append(fromOptions);
+@@ -262,7 +269,7 @@ public class MySQLTableGenerator {
          String columnName = DBMSCommon.createColumnName(columnId);
          columns.add(columnName);
          sb.append(columnName);
@@ -381,7 +467,7 @@ index d27d6e6..d390464 100644
      }
  
      private enum ColumnOptions {
-@@ -274,6 +274,15 @@ public class MySQLTableGenerator {
+@@ -274,6 +281,15 @@ public class MySQLTableGenerator {
          boolean isNull = false;
          boolean columnHasPrimaryKey = false;
          List<ColumnOptions> columnOptions = Randomly.subset(ColumnOptions.values());
@@ -397,7 +483,7 @@ index d27d6e6..d390464 100644
          if (!columnOptions.contains(ColumnOptions.NULL_OR_NOT_NULL)) {
              tableHasNullableColumn = true;
          }
-@@ -330,10 +339,17 @@ public class MySQLTableGenerator {
+@@ -330,10 +346,17 @@ public class MySQLTableGenerator {
          }
      }
  
@@ -418,7 +504,7 @@ index d27d6e6..d390464 100644
          sb.append(" ");
          appendColumnOption(randomType);
      }
-@@ -374,7 +390,7 @@ public class MySQLTableGenerator {
+@@ -374,7 +397,7 @@ public class MySQLTableGenerator {
              if (Randomly.getBoolean() && !globalState.getDbmsSpecificOptions().getTestOracleFactory().stream()
                      .anyMatch(o -> o == MySQLOracleFactory.TLP_WHERE || o == MySQLOracleFactory.PQS
                              || o == MySQLOracleFactory.DQP || o == MySQLOracleFactory.EET
@@ -429,10 +515,10 @@ index d27d6e6..d390464 100644
          }
 diff --git a/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java b/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java
 new file mode 100644
-index 0000000..9c5a410
+index 0000000..5f6e45f
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java
-@@ -0,0 +1,242 @@
+@@ -0,0 +1,259 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.sql.Connection;
@@ -557,8 +643,11 @@ index 0000000..9c5a410
 +            for (int i = 0; close && i < v.size(); i++) {
 +                close = approximatelyEqual(v.get(i), m.get(i));
 +            }
-+            VitessFindings.report(state,
-+                    new VitessFindings.Finding(close ? "precision" : "mismatch", features, query, details));
++            // With a case- or accent-insensitive or PAD SPACE collation, DISTINCT, GROUP BY and UNION may return
++            // any of the values that compare equal, so MySQL and vtgate can legitimately pick different ones.
++            String category = close ? "precision"
++                    : sorted(fold(vtgate.rows)).equals(sorted(fold(mysql.rows))) ? "representative" : "mismatch";
++            VitessFindings.report(state, new VitessFindings.Finding(category, features, query, details));
 +            return;
 +        }
 +        if (generator.isOrdered() && allNumeric(vtgate.rows) && !vtgate.rows.equals(mysql.rows)) {
@@ -630,6 +719,20 @@ index 0000000..9c5a410
 +            r.error = e.getMessage() == null ? e.toString() : e.getMessage();
 +        }
 +        return r;
++    }
++
++    private static List<List<String>> fold(List<List<String>> rows) {
++        List<List<String>> folded = new ArrayList<>(rows.size());
++        for (List<String> row : rows) {
++            List<String> f = new ArrayList<>(row.size());
++            for (String value : row) {
++                f.add(value == null ? null
++                        : java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "")
++                                .replace("ß", "ss").toLowerCase(java.util.Locale.ROOT).stripTrailing());
++            }
++            folded.add(f);
++        }
++        return folded;
 +    }
 +
 +    private static List<List<String>> sorted(List<List<String>> rows) {
@@ -1148,10 +1251,10 @@ index 0000000..89fe978
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessQueryGenerator.java b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
 new file mode 100644
-index 0000000..801f73d
+index 0000000..e3bd567
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
-@@ -0,0 +1,332 @@
+@@ -0,0 +1,352 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.util.ArrayList;
@@ -1180,6 +1283,9 @@ index 0000000..801f73d
 +    // In a sharded keyspace, the generator avoids query shapes that hit known Vitess bugs (see
 +    // tools/sqlancer/README.md in the Vitess repository), so that they do not drown new findings.
 +    private final boolean sharded;
++    private final boolean typed;
++    // The primary vindex column of the tables in a sharded keyspace.
++    private final String key;
 +    private boolean ordered;
 +    private boolean colocatedOnly;
 +    private boolean inUnion;
@@ -1188,6 +1294,8 @@ index 0000000..801f73d
 +        this.state = state;
 +        this.allTables = state.getSchema().getDatabaseTables();
 +        this.sharded = state.getDbmsSpecificOptions().vitessSharded;
++        this.typed = state.getDbmsSpecificOptions().vitessTypedColumns();
++        this.key = state.getDbmsSpecificOptions().vitessKeyColumn();
 +    }
 +
 +    // Whether the last generated query orders all its output columns.
@@ -1305,7 +1413,8 @@ index 0000000..801f73d
 +            MySQLTable t = tables.get(i);
 +            if (colocated) {
 +                sb.append(Randomly.fromOptions(" JOIN ", " STRAIGHT_JOIN ")).append(t.getName()).append(" ON ")
-+                        .append(tables.get(0).getName()).append(".c0 = ").append(t.getName()).append(".c0");
++                        .append(tables.get(0).getName()).append(".").append(key).append(" = ").append(t.getName())
++                        .append(".").append(key);
 +                continue;
 +            }
 +            List<MySQLTable> scope = tables.subList(0, i + 1);
@@ -1335,7 +1444,7 @@ index 0000000..801f73d
 +        int kind = (int) Randomly.getNotCachedInteger(0, 10);
 +        if (kind < 4) {
 +            // On the sharding key: in a sharded keyspace, vtgate can push such a join down to the shards.
-+            condition = other.getName() + ".c0 = " + right.getName() + ".c0";
++            condition = other.getName() + "." + key + " = " + right.getName() + "." + key;
 +        } else if (kind < 7) {
 +            condition = column(other) + " = " + column(right);
 +        } else {
@@ -1349,6 +1458,17 @@ index 0000000..801f73d
 +
 +    private String where(List<MySQLTable> tables) {
 +        String where = Randomly.getBoolean() ? expression(tables) : null;
++        if (typed && Randomly.getBoolean()) {
++            // A predicate on a typed column; in a sharded keyspace with --vitess-string-key, an equality on ts lets
++            // vtgate route the query by the vindex.
++            MySQLTable t = Randomly.fromList(tables);
++            String column = Randomly.fromOptions("td", "tt", "tj", "ts", "ts", "ts");
++            String predicate = Randomly.getBoolean()
++                    ? t.getName() + "." + column + " " + comparison() + " " + VitessTypedColumns.constant(column)
++                    : t.getName() + "." + column + " IN (" + VitessTypedColumns.constant(column) + ", "
++                            + VitessTypedColumns.constant(column) + ")";
++            where = where == null ? predicate : "(" + where + ") AND " + predicate;
++        }
 +        if (Randomly.getBooleanWithRatherLowProbability() || where == null && Randomly.getBoolean()) {
 +            String subquery = subqueryPredicate(tables);
 +            // Known Vitess bug: in a cross-shard join, a predicate with a subquery and columns of several tables goes
@@ -1441,7 +1561,10 @@ index 0000000..801f73d
 +        return Randomly.getBoolean() ? column(Randomly.fromList(tables)) : expression(tables);
 +    }
 +
-+    private static String column(MySQLTable table) {
++    private String column(MySQLTable table) {
++        if (typed && Randomly.getNotCachedInteger(0, 3) == 0) {
++            return VitessTypedColumns.expression(table.getName());
++        }
 +        return table.getName() + "." + Randomly.fromList(table.getColumns()).getName();
 +    }
 +
@@ -1486,10 +1609,10 @@ index 0000000..801f73d
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessReference.java b/src/sqlancer/mysql/vitess/VitessReference.java
 new file mode 100644
-index 0000000..1cd0578
+index 0000000..4a6d896
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessReference.java
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,143 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.sql.Connection;
@@ -1563,7 +1686,8 @@ index 0000000..1cd0578
 +    }
 +
 +    // Returns why vtgate and MySQL differ after the statements so far, or null if they do not.
-+    public String findDivergence(SQLConnection vtgate, List<String> tables, boolean sharded) throws SQLException {
++    public String findDivergence(SQLConnection vtgate, List<String> tables, boolean sharded, String keyColumn)
++            throws SQLException {
 +        if (divergence != null) {
 +            return divergence;
 +        }
@@ -1582,7 +1706,7 @@ index 0000000..1cd0578
 +            if (sharded) {
 +                // vtgate groups by the primary vindex column on each shard, so rows that are on the wrong shard
 +                // show up as several groups.
-+                String query = "SELECT c0, COUNT(*) FROM " + table + " GROUP BY c0";
++                String query = "SELECT " + keyColumn + ", COUNT(*) FROM " + table + " GROUP BY " + keyColumn;
 +                List<String> vtgateGroups = sortedRows(vtgate::createStatement, query);
 +                List<String> mysqlGroups = sortedRows(con::createStatement, query);
 +                if (!vtgateGroups.equals(mysqlGroups)) {
@@ -1634,10 +1758,10 @@ index 0000000..1cd0578
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessTopology.java b/src/sqlancer/mysql/vitess/VitessTopology.java
 new file mode 100644
-index 0000000..74163eb
+index 0000000..a1389de
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessTopology.java
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,226 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.io.IOException;
@@ -1708,12 +1832,34 @@ index 0000000..74163eb
 +                    .add(table);
 +            return true;
 +        }
-+        state.executeStatement(
-+                new SQLQueryAdapter("ALTER VSCHEMA ON " + table + " ADD VINDEX " + o.vitessVindex + "(c0)", true));
++        if (o.vitessStringKey) {
++            addStringVindex(state, table);
++        } else {
++            state.executeStatement(
++                    new SQLQueryAdapter("ALTER VSCHEMA ON " + table + " ADD VINDEX " + o.vitessVindex + "(c0)", true));
++        }
 +        if (o.vitessLookupKeyspace != null && Randomly.getBoolean()) {
 +            addLookupVindex(state, table);
 +        }
 +        return false;
++    }
++
++    // The primary vindex on ts, of type --vitess-string-vindex. The first table of a keyspace creates the vindex; the
++    // others refer to it by name.
++    private static void addStringVindex(MySQLGlobalState state, String table) throws Exception {
++        MySQLOptions o = state.getDbmsSpecificOptions();
++        String name = "sk_" + o.vitessStringVindex;
++        boolean created;
++        try {
++            created = state.executeStatement(new SQLQueryAdapter(
++                    "ALTER VSCHEMA ON " + table + " ADD VINDEX " + name + "(ts) USING " + o.vitessStringVindex, true));
++        } catch (Exception e) {
++            created = false;
++        }
++        if (!created) {
++            state.executeStatement(
++                    new SQLQueryAdapter("ALTER VSCHEMA ON " + table + " ADD VINDEX " + name + "(ts)", true));
++        }
 +    }
 +
 +    private static String lookupTablePrefix(String keyspace) {
@@ -1840,5 +1986,120 @@ index 0000000..74163eb
 +            throw new AssertionError("vtctldclient " + String.join(" ", args) + " failed: " + err);
 +        }
 +        return out;
++    }
++}
+diff --git a/src/sqlancer/mysql/vitess/VitessTypedColumns.java b/src/sqlancer/mysql/vitess/VitessTypedColumns.java
+new file mode 100644
+index 0000000..50f1083
+--- /dev/null
++++ b/src/sqlancer/mysql/vitess/VitessTypedColumns.java
+@@ -0,0 +1,109 @@
++package sqlancer.mysql.vitess;
++
++import java.util.List;
++import java.util.Set;
++
++import sqlancer.Randomly;
++
++/**
++ * The extra columns of --vitess-typed-columns: types that SQLancer's MySQL generators do not know. SQLancer's schema
++ * leaves them out, so only the Vitess mode writes and reads them.
++ */
++public final class VitessTypedColumns {
++
++    public static final String NAMES = "td, tt, tj, ts";
++
++    private static final Set<String> COLUMNS = Set.of("td", "tt", "tj", "ts");
++
++    private static final List<String> STRING_TYPES = List.of("VARCHAR(12) COLLATE utf8mb4_0900_ai_ci",
++            "VARCHAR(12) COLLATE utf8mb4_0900_as_cs", "VARCHAR(12) COLLATE utf8mb4_general_ci",
++            "VARCHAR(12) COLLATE utf8mb4_bin", "VARCHAR(12) CHARACTER SET latin1 COLLATE latin1_swedish_ci",
++            "VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin", "VARBINARY(12)");
++
++    static final List<String> DATES = List.of("'2020-02-29'", "'1999-12-31'", "'2000-01-01'", "'2024-03-10'",
++            "'1970-01-01'", "'2038-01-19'", "'2021-07-04'", "'1000-01-01'", "'9999-12-31'");
++
++    static final List<String> DATETIMES = List.of("'2020-02-29 23:59:59.99'", "'2000-01-01 00:00:00'",
++            "'2024-03-10 02:30:00.5'", "'1999-12-31 12:00:00.01'", "'2038-01-19 03:14:07'", "'2020-02-29 00:00:00'",
++            "'1970-01-01 00:00:01'", "'9999-12-31 23:59:59.99'");
++
++    static final List<String> JSONS = List.of("'{\"a\": 1, \"b\": \"x\"}'", "'[1, 2, \"3\"]'", "'null'", "'1.5'",
++            "'\"str\"'", "'{\"a\": {\"b\": [1, 2]}}'", "'{\"a\": 1.0E+2}'", "'true'", "'[]'", "'{}'",
++            "'{\"b\": null, \"a\": \"1\"}'", "'-0'", "'18446744073709551615'", "'\"2020-02-29\"'");
++
++    // Values that collations compare differently: case, accents, trailing and leading spaces, expansions.
++    static final List<String> STRINGS = List.of("'a'", "'A'", "'a '", "' a'", "'á'", "'Á'", "'b'", "'B '", "'ß'",
++            "'ss'", "''", "'ä'", "'ae'", "'z'", "'Z'", "'1'", "'10'", "'9'", "'aa'", "'Aa'", "'a\\t'");
++
++    private VitessTypedColumns() {
++    }
++
++    public static boolean isTypedColumn(String name) {
++        return COLUMNS.contains(name);
++    }
++
++    public static String columnDefinitions(boolean stringKey) {
++        return "td DATE, tt DATETIME(2), tj JSON, ts " + Randomly.fromList(STRING_TYPES)
++                + (stringKey ? " NOT NULL" : "");
++    }
++
++    public static String randomValues(boolean stringKey) {
++        return orNull(DATES) + ", " + orNull(DATETIMES) + ", " + orNull(JSONS) + ", "
++                + (stringKey ? Randomly.fromList(STRINGS) : orNull(STRINGS));
++    }
++
++    private static String orNull(List<String> values) {
++        return Randomly.getBooleanWithRatherLowProbability() ? "NULL" : Randomly.fromList(values);
++    }
++
++    // A value of the given column's type, for comparisons.
++    static String constant(String column) {
++        switch (column) {
++        case "td":
++            return Randomly.fromList(DATES);
++        case "tt":
++            return Randomly.fromList(DATETIMES);
++        case "tj":
++            return "CAST(" + Randomly.fromList(JSONS) + " AS JSON)";
++        default:
++            return Randomly.fromList(STRINGS);
++        }
++    }
++
++    // An expression over the typed columns of table t.
++    static String expression(String t) {
++        String d = Randomly.fromList(DATES);
++        String dt = Randomly.fromList(DATETIMES);
++        String s = Randomly.fromList(STRINGS);
++        List<String> options = List.of(
++                // dates and times
++                t + ".td", t + ".tt", "DATE_ADD(" + t + ".td, INTERVAL " + Randomly.smallNumber() + " DAY)",
++                "DATEDIFF(" + t + ".td, " + d + ")", "YEAR(" + t + ".td)", "MONTH(" + t + ".tt)",
++                "DAYOFWEEK(" + t + ".td)", "LAST_DAY(" + t + ".td)", t + ".td + 0", t + ".tt + 0",
++                "DATE_FORMAT(" + t + ".tt, '%Y-%m-%d %H')", "CAST(" + t + ".tt AS DATE)",
++                "CAST(" + t + ".td AS DATETIME)", "TIMESTAMPDIFF(MINUTE, " + t + ".td, " + t + ".tt)",
++                t + ".tt + INTERVAL 1 SECOND", "TIME(" + t + ".tt)", "HOUR(" + t + ".tt)", "MICROSECOND(" + t + ".tt)",
++                "DATE(" + t + ".tt)", t + ".td < " + d, t + ".tt BETWEEN " + d + " AND " + dt,
++                "GREATEST(" + t + ".td, " + t + ".tt)", "COALESCE(" + t + ".td, " + t + ".tt)",
++                "IFNULL(" + t + ".td, " + d + ")", "CAST(" + t + ".td AS CHAR)", "WEEK(" + t + ".td)",
++                "QUARTER(" + t + ".td)", "TO_DAYS(" + t + ".td)", "FROM_DAYS(TO_DAYS(" + t + ".td) + 1)",
++                t + ".tt = " + t + ".td", "ADDTIME(" + t + ".tt, '01:00:00')", "EXTRACT(YEAR_MONTH FROM " + t + ".tt)",
++                "LEAST(" + t + ".td, " + dt + ")", t + ".td IN (" + d + ", " + Randomly.fromList(DATES) + ")",
++                // JSON
++                t + ".tj", t + ".tj->'$.a'", t + ".tj->>'$.a'", "JSON_EXTRACT(" + t + ".tj, '$[0]')",
++                "JSON_LENGTH(" + t + ".tj)", "JSON_TYPE(" + t + ".tj)",
++                "JSON_UNQUOTE(JSON_EXTRACT(" + t + ".tj, '$.b'))", "JSON_CONTAINS(" + t + ".tj, '1')",
++                "JSON_OBJECT('k', " + t + ".ts)", t + ".tj = CAST(" + Randomly.fromList(JSONS) + " AS JSON)",
++                "CAST(" + t + ".tj AS CHAR)", "JSON_KEYS(" + t + ".tj)", "JSON_VALID(" + t + ".ts)",
++                "JSON_QUOTE(" + t + ".ts)", t + ".tj->'$.a' = 1", "JSON_ARRAY(" + t + ".td, " + t + ".ts)",
++                // strings and collations
++                t + ".ts", "UPPER(" + t + ".ts)", "LOWER(" + t + ".ts)", "CONCAT(" + t + ".ts, '|')",
++                "LENGTH(" + t + ".ts)", "CHAR_LENGTH(" + t + ".ts)", "TRIM(" + t + ".ts)", t + ".ts = " + s,
++                t + ".ts LIKE 'a%'", t + ".ts < " + s, "SUBSTRING(" + t + ".ts, 1, 1)", "HEX(" + t + ".ts)",
++                "REVERSE(" + t + ".ts)", "LPAD(" + t + ".ts, 3, '.')", "STRCMP(" + t + ".ts, " + s + ")",
++                "INSTR(" + t + ".ts, 'a')", "ASCII(" + t + ".ts)",
++                t + ".ts IN (" + s + ", " + Randomly.fromList(STRINGS) + ")", "CONCAT(" + t + ".ts, " + t + ".td)",
++                "CAST(" + t + ".ts AS BINARY)");
++        return Randomly.fromList(options);
 +    }
 +}

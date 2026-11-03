@@ -26,7 +26,8 @@ The patch therefore adds the oracle `VITESS_DIFF`, which compares vtgate with My
   `ANY`/`ALL`), `UNION` and derived tables.
 - It runs each query on vtgate and on MySQL and compares the results as multisets. Each problem is a line in
   `logs/vitess/findings.jsonl`, and the first ones of each kind get a reproduction file. The run continues after
-  a finding.
+  a finding. Differences that are only rounding (`precision`) or only the choice among strings that a
+  case- or accent-insensitive or `PAD SPACE` collation treats as equal (`representative`) get their own categories.
 - Every 200 queries, it checks that vtgate still evaluates `SELECT FALSE, TRUE, NULL IS TRUE` correctly. Bug 0
   below corrupts these values for the whole process, which would make every later comparison meaningless, so the
   thread reports `vtgate-corrupted` with the last query and stops.
@@ -49,6 +50,13 @@ The patch therefore adds the oracle `VITESS_DIFF`, which compares vtgate with My
   limitations and bugs that are already known, so that the oracles can find new ones.
 - `--vitess-workload olap`: runs the session with `SET workload = 'olap'`, so that vtgate streams the results of
   every statement. `UNION`s are not generated in this mode for now.
+- `--vitess-typed-columns true`: every table gets the columns `td DATE`, `tt DATETIME(2)`, `tj JSON` and `ts`, a
+  `VARCHAR` with a random collation and character set (or `VARBINARY`), filled from pools of edge values (leap days,
+  fractional seconds, nested JSON, case, accent and trailing-space variants of strings). SQLancer's own generators do
+  not know these types, so only the Vitess generators use them. Tables use InnoDB in this mode.
+- `--vitess-string-key true`: in a sharded keyspace, the primary vindex is on `ts` (`NOT NULL`) with the vindex type
+  `--vitess-string-vindex` (default `unicode_loose_xxhash`), and joins on the sharding key use `ts`. Implies
+  `--vitess-typed-columns`.
 - `--vitess-prepared true`: `VITESS_DIFF` runs each query on vtgate as a server-side prepared statement, with the
   literals of the query as typed parameters (`long`, `BigDecimal`, `double` or `String`, after the type MySQL gives
   the literal). vtgate executes a prepared statement by putting the parameter values back into the query, so the
