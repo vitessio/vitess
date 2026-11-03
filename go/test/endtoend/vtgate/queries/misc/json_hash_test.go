@@ -33,7 +33,7 @@ import (
 func TestJSONHashEquality(t *testing.T) {
 	// An older vtgate hashes JSON by kind and cardinality; the upgrade/downgrade
 	// CI runs this suite against an N-1 vtgate.
-	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 24, "vtgate")
 
 	mcmp, closer := start(t)
 	defer closer()
