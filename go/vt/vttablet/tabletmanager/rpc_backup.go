@@ -149,10 +149,9 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 					retErr = err
 				}
 			}
-			// Each restore step gets its own budget, independent of the RPC's
-			// context: a canceled backup still restores the tablet, and the step's
-			// MySQL queries and topo update end at the deadline rather than
-			// holding the action lock while mysqld or the topo doesn't answer.
+			// Each restore step gets a fresh context independent of the RPC. This
+			// bounds semi-sync restoration and the primary topology update;
+			// subsystem startup and subsequent cleanup may outlive those deadlines.
 			withBudget := func(step func(context.Context) error) error {
 				ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 				defer cancel()
