@@ -1667,6 +1667,7 @@ func TestChangeTypeReportsReplicationStatusError(t *testing.T) {
 		{tabletType: topodatapb.TabletType_RDONLY, statusErr: errors.New("injected replication status failure")},
 		{tabletType: topodatapb.TabletType_REPLICA, statusErr: context.DeadlineExceeded},
 		{tabletType: topodatapb.TabletType_REPLICA, statusErr: context.Canceled},
+		{tabletType: topodatapb.TabletType_REPLICA, statusErr: mysql.ErrNotReplica},
 	} {
 		t.Run(fmt.Sprintf("%v/%v", tc.tabletType, tc.statusErr), func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -1680,8 +1681,12 @@ func TestChangeTypeReportsReplicationStatusError(t *testing.T) {
 			fake.ReplicationStatusError = tc.statusErr
 
 			err := tm.ChangeType(ctx, tc.tabletType, true)
-			require.ErrorContains(t, err, tc.statusErr.Error())
-			require.ErrorContains(t, err, "failed to read replication status")
+			if errors.Is(tc.statusErr, mysql.ErrNotReplica) {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.statusErr.Error())
+				require.ErrorContains(t, err, "failed to read replication status")
+			}
 			assert.Equal(t, tc.tabletType, tm.Tablet().Type)
 			ti, err := ts.GetTablet(ctx, tm.Tablet().Alias)
 			require.NoError(t, err)

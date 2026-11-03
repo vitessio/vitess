@@ -78,7 +78,6 @@
         - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
         - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
         - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
-        - [Draining backups restore the tablet's type and a primary's semi-sync](#backup-draining-restores-type-and-semi-sync)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -915,14 +914,6 @@ Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tab
 | unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
 
 `--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
-
-#### <a id="backup-draining-restores-type-and-semi-sync"/>Draining backups restore the tablet's type and a primary's semi-sync</a>
-
-A type change now fails when the replication status read fails, unless the tablet isn't a replica.
-
-A draining backup restores the tablet's original type even if the change to `BACKUP` fails. For a primary (`--allow-primary`), the backup is refused if the keyspace's durability policy can't be read, and source-side semi-sync is turned back on before the tablet serves as `PRIMARY` again. Turning semi-sync back on and the primary's topo update are each bounded by `--remote-operation-timeout`, plus up to 15 s to kill a MySQL query. Subsystem startup during the type change, such as the serving state change and opening VReplication, and the cleanup after it have no deadline.
-
-If turning semi-sync back on fails, or the primary's topo update can't be confirmed, the backup returns the error and the tablet stays in `BACKUP` without serving. A failure later in the type change is also returned, but the tablet may already be `PRIMARY` locally. VTOrc may then run `EmergencyReparentShard`; after it does, restarting the old tablet's vttablet brings it back as a `REPLICA`. To recover without a reparent, fix the cause, run `SET GLOBAL rpl_semi_sync_source_enabled = ON` (`rpl_semi_sync_master_enabled` with the `semisync_master` plugin and on MariaDB), then restart vttablet. Restarting without the `SET` resumes it as `PRIMARY` with semi-sync off until VTOrc turns it on.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

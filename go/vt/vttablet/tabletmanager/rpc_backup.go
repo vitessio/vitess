@@ -144,10 +144,11 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		defer func() {
 			// An earlier error explains why the backup failed; keep it.
 			fail := func(err error) {
-				l.Errorf("%v", err)
 				if retErr == nil {
+					err = vterrors.Wrap(err, "backup completed, but tablet restoration failed")
 					retErr = err
 				}
+				l.Errorf("%s", err)
 			}
 			// Each restore step gets a fresh context independent of the RPC. This
 			// bounds semi-sync restoration and the primary topology update;
@@ -159,7 +160,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 			// Entering BACKUP turned off semi-sync. A primary turns it back on as
 			// its policy required when the backup started, before it serves again.
-			if originalType == topodatapb.TabletType_PRIMARY {
+			if originalType == topodatapb.TabletType_PRIMARY && primarySemiSync == SemiSyncActionSet {
 				if err := withBudget(func(ctx context.Context) error {
 					return tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, primarySemiSync)
 				}); err != nil {
@@ -169,14 +170,13 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 			// Change our type back to the original value.
 			// Original type could be primary so pass in a real value for PrimaryTermStartTime
-			if err := withBudget(func(ctx context.Context) error {
-				return tm.changeTypeLocked(ctx, originalType, DBActionNone, SemiSyncActionNone)
+			bgCtx := context.Background()
+			if err := withBudget(func(topoCtx context.Context) error {
+				return tm.changeTypeLockedWithTopoContext(bgCtx, topoCtx, originalType, DBActionNone, SemiSyncActionNone)
 			}); err != nil {
 				fail(vterrors.Wrapf(err, "failed to change tablet type from %v to %v", topodatapb.TabletType_BACKUP, originalType))
 				return
 			}
-
-			bgCtx := context.Background()
 
 			// Find the correct primary tablet and set the replication source,
 			// since the primary could have changed while we executed the backup which can

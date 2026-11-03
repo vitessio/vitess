@@ -136,12 +136,18 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 
 // changeTypeLocked changes the tablet type under a lock
 func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
+	return tm.changeTypeLockedWithTopoContext(ctx, ctx, tabletType, action, semiSync)
+}
+
+// changeTypeLockedWithTopoContext is changeTypeLocked with a separate context,
+// topoCtx, for a primary's topo write and its confirmation.
+func (tm *TabletManager) changeTypeLockedWithTopoContext(ctx, topoCtx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
 	// We don't want to allow multiple callers to claim a tablet as drained.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
 	}
 
-	if err := tm.tmState.ChangeTabletType(ctx, tabletType, action); err != nil {
+	if err := tm.tmState.changeTabletType(ctx, topoCtx, tabletType, action); err != nil {
 		return err
 	}
 

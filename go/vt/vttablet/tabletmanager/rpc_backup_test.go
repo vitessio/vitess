@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -151,9 +152,11 @@ func TestBackupKeepsPrimaryDrainedWhenSemiSyncRestoreFails(t *testing.T) {
 			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 			require.ErrorContains(t, err, tt.wantErr)
 			if tt.backedUp {
+				require.ErrorContains(t, err, "backup completed, but")
 				assert.Len(t, handle.EndBackupCalls, 1)
 				assert.Empty(t, handle.AbortBackupCalls)
 			} else {
+				assert.NotContains(t, err.Error(), "backup completed")
 				require.NotErrorIs(t, err, restoreErr)
 			}
 			assert.Equal(t, topodatapb.TabletType_BACKUP, tm.Tablet().Type)
@@ -219,10 +222,10 @@ func newBackupTest(t *testing.T, tabletType topodatapb.TabletType) (context.Cont
 	return ctx, tm, fake, qsc, factory
 }
 
-// TestBackupRefusesPrimaryWhoseDurabilityPolicyCannotBeRead checks that a
-// primary backup that cannot read or resolve the durability policy is refused
+// TestBackupRefusesPrimaryWithInvalidDurabilityConfiguration checks that a
+// primary backup that cannot resolve or apply its durability policy is refused
 // before the tablet changes type.
-func TestBackupRefusesPrimaryWhoseDurabilityPolicyCannotBeRead(t *testing.T) {
+func TestBackupRefusesPrimaryWithInvalidDurabilityConfiguration(t *testing.T) {
 	topoErr := errors.New("injected keyspace read failure")
 	for _, tc := range []struct {
 		name    string
@@ -243,10 +246,27 @@ func TestBackupRefusesPrimaryWhoseDurabilityPolicyCannotBeRead(t *testing.T) {
 			},
 			wantErr: "unknown-policy",
 		},
+		{
+			name: "semi-sync plugin check fails",
+			fail: func(t *testing.T, ctx context.Context, tm *TabletManager, factory *memorytopo.Factory) {
+				tm.MysqlDaemon = &backupPluginCheckDaemon{FakeMysqlDaemon: tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon), err: errors.New("injected plugin check failure")}
+			},
+			wantErr: "injected plugin check failure",
+		},
+		{
+			name: "required semi-sync plugin is absent",
+			fail: func(t *testing.T, ctx context.Context, tm *TabletManager, factory *memorytopo.Factory) {
+				fake := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+				require.NoError(t, fake.SetSemiSyncEnabled(ctx, false, false))
+				tm.MysqlDaemon = &backupPluginCheckDaemon{FakeMysqlDaemon: fake, plugin: mysql.SemiSyncTypeOff}
+			},
+			wantErr: "VT09013",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, tm, fake, qsc, factory := newBackupTest(t, topodatapb.TabletType_PRIMARY)
 			tc.fail(t, ctx, tm, factory)
+			wasSemiSync := fake.SemiSyncPrimaryEnabled
 			engine := mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine)
 
 			err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
@@ -257,7 +277,7 @@ func TestBackupRefusesPrimaryWhoseDurabilityPolicyCannotBeRead(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 			assert.True(t, qsc.IsServing())
-			assert.True(t, fake.SemiSyncPrimaryEnabled)
+			assert.Equal(t, wasSemiSync, fake.SemiSyncPrimaryEnabled)
 		})
 	}
 }
@@ -462,6 +482,7 @@ func TestBackupReleasesActionLockWhenPrimaryRestoreHangs(t *testing.T) {
 				}
 			}, 30*time.Second, 10*time.Millisecond, "Backup did not return")
 			require.ErrorContains(t, err, tc.wantErr)
+			require.ErrorContains(t, err, "backup completed, but")
 			assert.Len(t, handle.EndBackupCalls, 1)
 			assert.Equal(t, topodatapb.TabletType_BACKUP, tm.Tablet().Type)
 			assert.False(t, qsc.IsServing())
@@ -493,4 +514,122 @@ func TestBackupRestoresPrimaryTypeWithItsOwnBudget(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 	assert.True(t, qsc.IsServing())
 	assert.True(t, fake.SemiSyncPrimaryEnabled)
+}
+
+// delayedBackupSchemaDaemon answers schema reads after 300ms, longer than the
+// shortened restore budget.
+type delayedBackupSchemaDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+}
+
+func (d *delayedBackupSchemaDaemon) GetSchema(ctx context.Context, dbName string, req *tabletmanagerdatapb.GetSchemaRequest) (*tabletmanagerdatapb.SchemaDefinition, error) {
+	ready, cancel := context.WithTimeout(context.WithoutCancel(ctx), 300*time.Millisecond)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-ready.Done():
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return d.FakeMysqlDaemon.GetSchema(ctx, dbName, req)
+}
+
+// TestBackupRestoresDeniedTablesAfterSlowSchemaRead checks that a tablet with
+// denied tables serves again with their rule after a backup, even if reading
+// the schema takes longer than the restore budget. Entering BACKUP clears the
+// rule.
+func TestBackupRestoresDeniedTablesAfterSlowSchemaRead(t *testing.T) {
+	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA} {
+		t.Run(tabletType.String(), func(t *testing.T) {
+			useShortRemoteOperationTimeout(t)
+			ctx, tm, fake, qsc, _ := newBackupTest(t, tabletType)
+			handle := useFakeBackupStorage(t)
+			fake.Schema = &tabletmanagerdatapb.SchemaDefinition{TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{Name: "customer"}}}
+			tm.tmState.mu.Lock()
+			tm.tmState.deniedTables[tabletType] = []string{"customer"}
+			err := tm.tmState.applyDenyList(ctx)
+			tm.tmState.mu.Unlock()
+			require.NoError(t, err)
+			require.NotNil(t, qsc.GetQueryRules(denyListQueryList).Find("denied_table"))
+			mysqlctl.BackupRestoreEngineMap[primaryDrainEngine] = &duringBackupEngine{
+				FakeBackupEngine: mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine),
+				during: func() {
+					require.False(t, qsc.IsServing())
+					require.Nil(t, qsc.GetQueryRules(denyListQueryList).Find("denied_table"), "BACKUP must clear the original type's rule")
+					tm.MysqlDaemon = &delayedBackupSchemaDaemon{FakeMysqlDaemon: fake}
+				},
+			}
+
+			err = tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: tabletType == topodatapb.TabletType_PRIMARY, BackupEngine: new(primaryDrainEngine)})
+			require.NoError(t, err)
+			assert.True(t, qsc.IsServing())
+			assert.NotNil(t, qsc.GetQueryRules(denyListQueryList).Find("denied_table"), "serving without the routing fence")
+			assert.Len(t, handle.EndBackupCalls, 1)
+			ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
+			require.NoError(t, err)
+			assert.Equal(t, tabletType, ti.Type)
+			require.NoError(t, tm.lock(ctx))
+			tm.unlock()
+		})
+	}
+}
+
+// TestBackupWithoutSemiSyncDoesNotRepeatDisable checks that a primary whose
+// durability policy doesn't require semi-sync doesn't turn it off again after a
+// backup, so a failure there can't keep it in BACKUP.
+func TestBackupWithoutSemiSyncDoesNotRepeatDisable(t *testing.T) {
+	ctx, tm, fake, qsc, _ := newBackupTest(t, topodatapb.TabletType_PRIMARY)
+	reparenttestutil.SetKeyspaceDurability(ctx, t, tm.TopoServer, "ks", policy.DurabilityNone)
+	handle := useFakeBackupStorage(t)
+	var disables int
+	fake.SetSemiSyncEnabledFunc = func(primary, replica bool) error {
+		if !primary && !replica {
+			disables++
+			if disables > 1 {
+				return errors.New("redundant semi-sync disable failed")
+			}
+		}
+		return nil
+	}
+
+	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	require.NoError(t, err)
+	assert.Equal(t, 1, disables)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	assert.True(t, qsc.IsServing())
+	assert.False(t, fake.SemiSyncPrimaryEnabled)
+	assert.Len(t, handle.EndBackupCalls, 1)
+}
+
+// backupPluginCheckDaemon returns a fixed result from the semi-sync plugin
+// check.
+type backupPluginCheckDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	plugin mysql.SemiSyncType
+	err    error
+}
+
+func (d *backupPluginCheckDaemon) SemiSyncExtensionLoaded(context.Context) (mysql.SemiSyncType, error) {
+	return d.plugin, d.err
+}
+
+// TestBackupPrimaryWithoutReplicationConfiguration checks that a primary
+// without replication configured, whose status read returns ErrNotReplica, is
+// backed up and restored.
+func TestBackupPrimaryWithoutReplicationConfiguration(t *testing.T) {
+	ctx, tm, fake, qsc, _ := newBackupTest(t, topodatapb.TabletType_PRIMARY)
+	fake.ReplicationStatusError = mysql.ErrNotReplica
+	handle := useFakeBackupStorage(t)
+
+	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	assert.True(t, qsc.IsServing())
+	assert.True(t, fake.SemiSyncPrimaryEnabled)
+	assert.Len(t, handle.EndBackupCalls, 1)
 }
