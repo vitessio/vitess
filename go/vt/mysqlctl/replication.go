@@ -1055,11 +1055,16 @@ func (mysqld *Mysqld) PrimaryStatus(ctx context.Context) (replication.PrimarySta
 	}
 	defer recycle(ctx, conn)
 
-	primaryStatus, err := conn.Conn.ShowPrimaryStatus()
-	if err != nil {
-		return replication.PrimaryStatus{}, err
-	}
-	primaryStatus.ServerUUID, err = conn.Conn.GetServerUUID()
+	var primaryStatus replication.PrimaryStatus
+	err = mysqld.executeWithContext(ctx, conn, "primary status", func() error {
+		var err error
+		primaryStatus, err = conn.Conn.ShowPrimaryStatus()
+		if err != nil {
+			return err
+		}
+		primaryStatus.ServerUUID, err = conn.Conn.GetServerUUID()
+		return err
+	})
 	if err != nil {
 		return replication.PrimaryStatus{}, err
 	}

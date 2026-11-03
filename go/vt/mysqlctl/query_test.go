@@ -214,6 +214,7 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 		name  string
 		query string
 		call  func(context.Context, *Mysqld) error
+		setup func(*fakesqldb.DB)
 	}{{
 		name:  "semi-sync enable",
 		query: "SET GLOBAL rpl_semi_sync_source_enabled = 1, GLOBAL rpl_semi_sync_replica_enabled = 1",
@@ -247,6 +248,32 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 		query: "SELECT @@global.gtid_executed",
 		call: func(ctx context.Context, mysqld *Mysqld) error {
 			_, err := mysqld.PrimaryPosition(ctx)
+			return err
+		},
+	}, {
+		name:  "primary status",
+		query: "SHOW BINARY LOG STATUS",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.PrimaryStatus(ctx)
+			return err
+		},
+	}, {
+		name:  "primary status UUID",
+		query: "SELECT @@global.server_uuid",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.PrimaryStatus(ctx)
+			return err
+		},
+		setup: func(db *fakesqldb.DB) {
+			// The first read must succeed so cancellation reaches the UUID read.
+			status := sqltypes.MakeTestResult(sqltypes.MakeTestFields("File|Position|Binlog_Do_DB|Binlog_Ignore_DB|Executed_Gtid_Set", "varchar|uint64|varchar|varchar|varchar"), "mysql-bin.000001|123|||")
+			db.AddQuery("SHOW BINARY LOG STATUS", status)
+		},
+	}, {
+		name:  "read-only check",
+		query: "SHOW VARIABLES LIKE 'read_only'",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.IsReadOnly(ctx)
 			return err
 		},
 	}, {
@@ -300,6 +327,9 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			db := fakesqldb.New(t)
 			t.Cleanup(db.Close)
 			db.AddQueryPattern(".*", &sqltypes.Result{})
+			if tc.setup != nil {
+				tc.setup(db)
+			}
 			// The fake server does not answer the query until the test ends.
 			release := make(chan struct{})
 			started := make(chan struct{})
