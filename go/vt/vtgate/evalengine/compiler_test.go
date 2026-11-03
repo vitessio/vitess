@@ -1628,3 +1628,63 @@ func TestJSONColumnDecimals(t *testing.T) {
 		})
 	}
 }
+
+// TestCompareTimeWithSessionDate verifies that a TIME compared with a date or
+// datetime is placed on the session's current date, as in MySQL, not on the
+// current date in VTGate's own time zone.
+func TestCompareTimeWithSessionDate(t *testing.T) {
+	// At 22:00 UTC on 2023-10-24 it is already 2023-10-25 at +14:00.
+	tz := time.FixedZone("+14:00", 14*60*60)
+	now := time.Date(2023, 10, 24, 22, 0, 0, 0, time.UTC)
+
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`column0 = column1`, `INT64(1)`},
+		{`column0 <=> column1`, `INT64(1)`},
+		{`column0 = column2`, `INT64(0)`},
+		{`column0 > column2`, `INT64(1)`},
+		{`column0 IN (column2, column1)`, `INT64(1)`},
+		{`(column0, 1) = (column1, 1)`, `INT64(1)`},
+		{`column3 = column4`, `INT64(1)`},
+	}
+
+	values := []sqltypes.Value{
+		sqltypes.NewTime("12:00:00"),
+		sqltypes.NewDatetime("2023-10-25 12:00:00"),
+		sqltypes.NewDatetime("2023-10-24 12:00:00"),
+		sqltypes.NewTime("00:00:00"),
+		sqltypes.NewDate("2023-10-25"),
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			fields := evalengine.FieldResolver(makeFields(values))
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				ResolveType:   fields.Type,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			}
+			converted, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, tz))
+			env.SetTime(now)
+			env.Row = values
+
+			interpreted, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, interpreted.String())
+
+			compiled, err := env.Evaluate(converted)
+			require.NoError(t, err)
+			require.Equal(t, tc.result, compiled.String())
+		})
+	}
+}

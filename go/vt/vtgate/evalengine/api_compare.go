@@ -22,6 +22,7 @@ import (
 	"math/bits"
 	"slices"
 	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -130,7 +131,10 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 		return 0, err
 	}
 
-	out, err := evalCompare(v1eval, v2eval, collationEnv)
+	// There's no session here. The two values come from the same column, so a
+	// TIME is never compared with a DATE, DATETIME or TIMESTAMP, which is the
+	// only comparison that reads the current date.
+	out, err := evalCompare(v1eval, v2eval, collationEnv, time.Now())
 	if err != nil {
 		return 0, err
 	}

@@ -743,7 +743,7 @@ func (asm *assembler) CmpTuple(collationEnv *collations.Environment, fullEqualit
 		l := env.vm.stack[env.vm.sp-2].(*evalTuple)
 		r := env.vm.stack[env.vm.sp-1].(*evalTuple)
 		env.vm.sp -= 2
-		env.vm.flags.cmp, env.vm.flags.null, env.vm.err = evalCompareMany(l.t, r.t, fullEquality, collationEnv)
+		env.vm.flags.cmp, env.vm.flags.null, env.vm.err = evalCompareMany(l.t, r.t, fullEquality, collationEnv, env.now)
 		return 1
 	}, "CMP TUPLE(SP-2), TUPLE(SP-1)")
 }
@@ -755,7 +755,7 @@ func (asm *assembler) CmpTupleNullsafe(collationsEnv *collations.Environment) {
 		r := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 		var equals int
-		equals, env.vm.err = evalCompareTuplesNullSafe(l.t, r.t, collationsEnv)
+		equals, env.vm.err = evalCompareTuplesNullSafe(l.t, r.t, collationsEnv, env.now)
 
 		env.vm.stack[env.vm.sp-2] = env.vm.arena.newEvalBool(equals == 0)
 		env.vm.sp -= 1
@@ -782,7 +782,7 @@ func (asm *assembler) CmpDates() {
 		l := env.vm.stack[env.vm.sp-2].(*evalTemporal)
 		r := env.vm.stack[env.vm.sp-1].(*evalTemporal)
 		env.vm.sp -= 2
-		env.vm.flags.cmp = compareDates(l, r)
+		env.vm.flags.cmp = compareDates(l, r, env.now)
 		return 1
 	}, "CMP DATE(SP-2), DATE(SP-1)")
 }
@@ -3240,7 +3240,7 @@ func (asm *assembler) In_slow(collationsEnv *collations.Environment, not bool) {
 			rhs := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 			var in boolean
-			in, env.vm.err = evalInExpr(collationsEnv, lhs, rhs)
+			in, env.vm.err = evalInExpr(collationsEnv, env.now, lhs, rhs)
 
 			env.vm.stack[env.vm.sp-2] = in.not().eval()
 			env.vm.sp -= 1
@@ -3252,7 +3252,7 @@ func (asm *assembler) In_slow(collationsEnv *collations.Environment, not bool) {
 			rhs := env.vm.stack[env.vm.sp-1].(*evalTuple)
 
 			var in boolean
-			in, env.vm.err = evalInExpr(collationsEnv, lhs, rhs)
+			in, env.vm.err = evalInExpr(collationsEnv, env.now, lhs, rhs)
 
 			env.vm.stack[env.vm.sp-2] = in.eval()
 			env.vm.sp -= 1

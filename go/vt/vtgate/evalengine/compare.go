@@ -123,12 +123,12 @@ func compareNumeric(left, right eval) (int, error) {
 	return 1, nil
 }
 
-func compareDates(l, r *evalTemporal) int {
-	// MySQL compares a TIME with a DATE, DATETIME or TIMESTAMP by first
-	// placing the TIME on the current date.
+// compareDates compares two temporal values. now is the statement's time in
+// the session's time zone: MySQL compares a TIME with a DATE, DATETIME or
+// TIMESTAMP by first placing the TIME on the session's current date.
+func compareDates(l, r *evalTemporal, now time.Time) int {
 	ltime, rtime := l.SQLType() == sqltypes.Time, r.SQLType() == sqltypes.Time
 	if ltime != rtime {
-		now := time.Now()
 		ldt, rdt := l.dt, r.dt
 		if ltime {
 			ldt = l.dt.Time.ToDateTime(now)
