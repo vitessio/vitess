@@ -230,7 +230,7 @@ func (mysqld *Mysqld) RestartReplicationReceiver(ctx context.Context, hookExtraE
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	stop, start := conn.Conn.StopIOThreadCommand(), conn.Conn.StartIOThreadCommand()
 	if !replicationThreadCommandAvailable(stop) || !replicationThreadCommandAvailable(start) {

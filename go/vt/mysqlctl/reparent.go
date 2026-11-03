@@ -146,7 +146,7 @@ func (mysqld *Mysqld) Promote(ctx context.Context, hookExtraEnv map[string]strin
 	if err != nil {
 		return replication.Position{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	if err := mysqld.applyReceivedTransactions(ctx, conn); err != nil {
 		return replication.Position{}, err
