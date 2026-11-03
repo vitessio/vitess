@@ -71,6 +71,7 @@ var Cases = []TestCase{
 	{Run: LogicalStatement},
 	{Run: TupleComparisons},
 	{Run: Comparisons},
+	{Run: TemporalComparisons},
 	{Run: InStatement},
 	{Run: FnField},
 	{Run: FnElt},
@@ -1523,6 +1524,44 @@ func Comparisons(yield Query) {
 				yield(fmt.Sprintf("%s %s %s", l, op, r), nil, false)
 			}
 		}
+	}
+}
+
+// TemporalComparisons compares dates, datetimes and times with each other. A
+// zero date orders before 0001-01-01, and a TIME compared with a date or
+// datetime is first placed on the current date. Every pair here gives the same
+// result whatever the current date is.
+func TemporalComparisons(yield Query) {
+	elements := []string{
+		`DATE'0000-00-00'`,
+		`DATE'0001-01-01'`,
+		`DATE'2020-01-01'`,
+		`TIMESTAMP'0000-00-00 00:00:00'`,
+		`TIMESTAMP'0001-01-01 00:00:00'`,
+		`TIMESTAMP'2020-01-01 10:00:00'`,
+		`TIME'00:00:00'`,
+		`TIME'10:00:00'`,
+		`TIME'-01:00:00'`,
+		`TIME'838:59:59'`,
+		`'0000-00-00 00:00:00'`,
+		`'0001-01-01'`,
+	}
+	operators := []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
+	for _, op := range operators {
+		for _, l := range elements {
+			for _, r := range elements {
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil, false)
+			}
+		}
+	}
+
+	for _, fn := range []string{"GREATEST", "LEAST"} {
+		yield(fn+"(TIMESTAMP'0000-00-00 00:00:00', TIMESTAMP'0001-01-01 00:00:00')", nil, false)
+		yield(fn+"(DATE'0000-00-00', DATE'0001-01-01')", nil, false)
+	}
+
+	for _, op := range []string{"=", "<", ">"} {
+		yield(fmt.Sprintf("CAST(TIMESTAMP'0000-00-00 00:00:00' AS JSON) %s CAST(TIMESTAMP'0001-01-01 00:00:00' AS JSON)", op), nil, false)
 	}
 }
 

@@ -881,7 +881,10 @@ func TestDateTimeCompare(t *testing.T) {
 	}{
 		{DateTime{Date: Date{2024, 0o3, 12}}, DateTime{Date: Date{2024, 0o2, 12}}, 1},
 		{DateTime{Time: Time{12, 30, 20, 0}}, DateTime{Time: Time{12, 30, 20, 23}}, -1},
-		{DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 0}}, DateTime{Time: Time{12, 30, 20, 23}}, -1},
+		// A zero date is the earliest date.
+		{DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 0}}, DateTime{Time: Time{12, 30, 20, 23}}, 1},
+		{DateTime{}, DateTime{Date: Date{1, 1, 1}}, -1},
+		{DateTime{Date: Date{1, 1, 1}}, DateTime{}, 1},
 		{DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 0}}, DateTime{Date: Date{2024, 0o3, 12}, Time: Time{12, 30, 20, 0}}, 0},
 	}
 
