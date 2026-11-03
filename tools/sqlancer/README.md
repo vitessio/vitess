@@ -57,6 +57,11 @@ The patch therefore adds the oracle `VITESS_DIFF`, which compares vtgate with My
 - `--vitess-string-key true`: in a sharded keyspace, the primary vindex is on `ts` (`NOT NULL`) with the vindex type
   `--vitess-string-vindex` (default `unicode_loose_xxhash`), and joins on the sharding key use `ts`. Implies
   `--vitess-typed-columns`.
+- `--vitess-extended true`: `VITESS_DIFF` also generates window functions (with a window order over all columns, and
+  in a sharded keyspace limited to one shard), CTEs (chained and recursive), `WITH ROLLUP` (unsharded only),
+  `GROUP_CONCAT` with `ORDER BY` and `DISTINCT`, `STD` and `VARIANCE`, and SQLancer also runs `INSERT ... SELECT`,
+  `REPLACE ... SELECT`, `INSERT ... ON DUPLICATE KEY UPDATE`, `UPDATE`/`DELETE ... ORDER BY ... LIMIT`, multi-table
+  `UPDATE`/`DELETE` and `UPDATE`s with subqueries.
 - `--vitess-prepared true`: `VITESS_DIFF` runs each query on vtgate as a server-side prepared statement, with the
   literals of the query as typed parameters (`long`, `BigDecimal`, `double` or `String`, after the type MySQL gives
   the literal). vtgate executes a prepared statement by putting the parameter values back into the query, so the

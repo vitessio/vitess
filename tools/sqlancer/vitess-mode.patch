@@ -62,10 +62,10 @@ index a34861c..8d9be53 100644
      protected MySQLSchema readSchema() throws SQLException {
          return MySQLSchema.fromConnection(getConnection(), getDatabaseName());
 diff --git a/src/sqlancer/mysql/MySQLOptions.java b/src/sqlancer/mysql/MySQLOptions.java
-index 9219073..1151707 100644
+index 9219073..4216b0e 100644
 --- a/src/sqlancer/mysql/MySQLOptions.java
 +++ b/src/sqlancer/mysql/MySQLOptions.java
-@@ -17,9 +17,61 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
+@@ -17,9 +17,64 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
      @Parameter(names = "--oracle")
      public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.TLP_WHERE);
  
@@ -111,6 +111,9 @@ index 9219073..1151707 100644
 +    @Parameter(names = "--vitess-string-vindex", description = "Vindex type for --vitess-string-key")
 +    public String vitessStringVindex = "unicode_loose_xxhash";
 +
++    @Parameter(names = "--vitess-extended", description = "VITESS_DIFF also generates window functions, CTEs, WITH ROLLUP and more aggregates, and SQLancer also runs INSERT ... SELECT, ON DUPLICATE KEY UPDATE, UPDATE/DELETE with ORDER BY and LIMIT, multi-table UPDATE/DELETE and UPDATEs with subqueries", arity = 1)
++    public boolean vitessExtended;
++
 +    @Parameter(names = "--vitess-prepared", description = "VITESS_DIFF runs its queries on vtgate and MySQL as server-side prepared statements, with the literals as typed parameters", arity = 1)
 +    public boolean vitessPrepared;
 +
@@ -152,7 +155,7 @@ index 8b37efb..b96ceee 100644
      };
  }
 diff --git a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProvider.java
-index 80a23b9..92b9829 100644
+index 80a23b9..090b048 100644
 --- a/src/sqlancer/mysql/MySQLProvider.java
 +++ b/src/sqlancer/mysql/MySQLProvider.java
 @@ -39,10 +39,15 @@ import sqlancer.mysql.gen.tblmaintenance.MySQLCheckTable;
@@ -171,7 +174,17 @@ index 80a23b9..92b9829 100644
      public MySQLProvider() {
          super(MySQLGlobalState.class, MySQLOptions.class);
      }
-@@ -117,7 +122,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -64,7 +69,8 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+                         + "'")), //
+         UPDATE(MySQLUpdateGenerator::create), //
+         DELETE(MySQLDeleteGenerator::delete), //
+-        DROP_INDEX(MySQLDropIndex::generate);
++        DROP_INDEX(MySQLDropIndex::generate), //
++        VITESS_DML(sqlancer.mysql.vitess.VitessDmlGenerator::generate);
+ 
+         private final SQLQueryProvider<MySQLGlobalState> sqlQueryProvider;
+ 
+@@ -117,7 +123,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
              nrPerformed = r.getInteger(0, 2);
              break;
          case ALTER_TABLE:
@@ -182,7 +195,17 @@ index 80a23b9..92b9829 100644
              break;
          case TRUNCATE_TABLE:
              nrPerformed = r.getInteger(0, 2);
-@@ -139,10 +146,14 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -131,6 +139,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+         case DELETE:
+             nrPerformed = r.getInteger(0, 10);
+             break;
++        case VITESS_DML:
++            nrPerformed = globalState.getDbmsSpecificOptions().vitessExtended ? r.getInteger(0, 8) : 0;
++            break;
+         default:
+             throw new AssertionError(a);
+         }
+@@ -139,10 +150,14 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
  
      @Override
      public void generateDatabase(MySQLGlobalState globalState) throws Exception {
@@ -199,7 +222,7 @@ index 80a23b9..92b9829 100644
          }
  
          StatementExecutor<MySQLGlobalState, Action> se = new StatementExecutor<>(globalState, Action.values(),
-@@ -153,6 +164,21 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -153,6 +168,21 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
                  });
          se.executeStatements();
  
@@ -221,7 +244,7 @@ index 80a23b9..92b9829 100644
          if (globalState.getDbmsSpecificOptions().getTestOracleFactory().stream()
                  .anyMatch((o) -> o == MySQLOracleFactory.CERT)) {
              // Enfore statistic collected for all tables
-@@ -171,6 +197,130 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -171,6 +201,130 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
          }
      }
  
@@ -352,7 +375,7 @@ index 80a23b9..92b9829 100644
      @Override
      public SQLConnection createDatabase(MySQLGlobalState globalState) throws SQLException {
          String username = globalState.getOptions().getUserName();
-@@ -184,6 +334,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -184,6 +338,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
              port = MySQLOptions.DEFAULT_PORT;
          }
          String databaseName = globalState.getDatabaseName();
@@ -378,7 +401,7 @@ index ab0ba45..6bc92e7 100644
                      int precision = rs.getInt("NUMERIC_PRECISION");
                      int scale = rs.getInt("NUMERIC_SCALE");
 diff --git a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
-index 0e464de..37b3911 100644
+index 0e464de..c32fe71 100644
 --- a/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
 +++ b/src/sqlancer/mysql/gen/MySQLInsertGenerator.java
 @@ -71,8 +71,17 @@ public class MySQLInsertGenerator {
@@ -409,7 +432,7 @@ index 0e464de..37b3911 100644
                      boolean reject = false;
  
                      // Bug workaround: for integer columns, reject values that round to 1
-@@ -145,6 +157,10 @@ public class MySQLInsertGenerator {
+@@ -145,9 +157,17 @@ public class MySQLInsertGenerator {
                  }
                  sb.append(MySQLVisitor.asString(constExpr));
              }
@@ -420,6 +443,13 @@ index 0e464de..37b3911 100644
              sb.append(")");
          }
          MySQLErrors.addInsertUpdateErrors(errors);
++        if (typed) {
++            // Values of the typed columns that the column's character set cannot store, as in MySQL.
++            errors.add("Incorrect string value");
++        }
+         return new SQLQueryAdapter(sb.toString(), errors);
+     }
+ 
 diff --git a/src/sqlancer/mysql/gen/MySQLTableGenerator.java b/src/sqlancer/mysql/gen/MySQLTableGenerator.java
 index d27d6e6..79b63da 100644
 --- a/src/sqlancer/mysql/gen/MySQLTableGenerator.java
@@ -776,6 +806,214 @@ index 0000000..5f6e45f
 +            }
 +        }
 +        return true;
++    }
++}
+diff --git a/src/sqlancer/mysql/vitess/VitessDmlGenerator.java b/src/sqlancer/mysql/vitess/VitessDmlGenerator.java
+new file mode 100644
+index 0000000..88dab9d
+--- /dev/null
++++ b/src/sqlancer/mysql/vitess/VitessDmlGenerator.java
+@@ -0,0 +1,202 @@
++package sqlancer.mysql.vitess;
++
++import java.util.ArrayList;
++import java.util.LinkedHashSet;
++import java.util.List;
++import java.util.Set;
++
++import sqlancer.Randomly;
++import sqlancer.common.query.ExpectedErrors;
++import sqlancer.common.query.SQLQueryAdapter;
++import sqlancer.mysql.MySQLErrors;
++import sqlancer.mysql.MySQLGlobalState;
++import sqlancer.mysql.MySQLOptions;
++import sqlancer.mysql.MySQLSchema.MySQLColumn;
++import sqlancer.mysql.MySQLSchema.MySQLTable;
++import sqlancer.mysql.MySQLSchema.MySQLTables;
++import sqlancer.mysql.MySQLVisitor;
++import sqlancer.mysql.gen.MySQLExpressionGenerator;
++
++/**
++ * DML that SQLancer's MySQL generators do not produce (--vitess-extended): INSERT ... SELECT, ON DUPLICATE KEY UPDATE,
++ * REPLACE ... SELECT, UPDATE and DELETE with ORDER BY and LIMIT, multi-table UPDATE and DELETE, and UPDATEs with
++ * subqueries. The statements run on vtgate and on the reference MySQL database, whose data VITESS_DIFF compares after
++ * each round.
++ */
++public final class VitessDmlGenerator {
++
++    private VitessDmlGenerator() {
++    }
++
++    public static SQLQueryAdapter generate(MySQLGlobalState state) {
++        MySQLOptions o = state.getDbmsSpecificOptions();
++        List<MySQLTable> tables = state.getSchema().getDatabaseTables();
++        MySQLTable t = Randomly.fromList(tables);
++        MySQLTable u = Randomly.fromList(tables);
++        String key = o.vitessKeyColumn();
++        ExpectedErrors errors = ExpectedErrors.newErrors().with(MySQLErrors.getExpressionErrors())
++                .withRegex(MySQLErrors.getExpressionRegexErrors()).build();
++        MySQLErrors.addInsertUpdateErrors(errors);
++        errors.add("You can't specify target table");
++        errors.add("Subquery returns more than 1 row");
++        // Values of the typed columns that the column's character set cannot store, as in MySQL.
++        errors.add("Incorrect string value");
++        String sql;
++        switch ((int) Randomly.getNotCachedInteger(0, o.vitessTypedColumns() ? 9 : 8)) {
++        case 0:
++        case 1:
++            sql = insertSelect(state, t, u, Randomly.getBoolean() ? "INSERT" : "INSERT IGNORE");
++            break;
++        case 2:
++            sql = insertOnDuplicateKeyUpdate(state, t);
++            break;
++        case 3:
++            sql = "UPDATE " + t.getName() + " SET " + set(state, t, t, key) + where(state, t) + orderByLimit(t);
++            break;
++        case 4:
++            sql = "DELETE FROM " + t.getName() + where(state, t) + orderByLimit(t);
++            break;
++        case 5:
++            if (t == u) {
++                sql = "UPDATE " + t.getName() + " SET " + set(state, t, t, key) + where(state, t);
++            } else {
++                sql = "UPDATE " + t.getName() + " JOIN " + u.getName() + " ON " + t.getName() + "." + key + " = "
++                        + u.getName() + "." + Randomly.fromOptions(key, column(u)) + " SET " + set(state, t, u, key)
++                        + where(state, t);
++            }
++            break;
++        case 6:
++            if (t == u) {
++                sql = "DELETE FROM " + t.getName() + where(state, t);
++            } else {
++                sql = "DELETE " + t.getName() + " FROM " + t.getName() + " JOIN " + u.getName() + " ON " + t.getName()
++                        + "." + column(t) + " = " + u.getName() + "." + column(u) + where(state, t);
++            }
++            break;
++        case 7:
++            if (t == u) {
++                sql = insertSelect(state, t, u, "REPLACE");
++            } else {
++                MySQLColumn target = settable(t, key);
++                sql = target == null ? insertSelect(state, t, u, "INSERT")
++                        : "UPDATE " + t.getName() + " SET " + target.getName() + " = (SELECT "
++                                + Randomly.fromOptions("MAX", "MIN", "COUNT") + "(" + u.getName() + "." + column(u)
++                                + ") FROM " + u.getName() + ") WHERE " + t.getName() + "." + column(t) + " IN (SELECT "
++                                + u.getName() + "." + column(u) + " FROM " + u.getName() + ")";
++            }
++            break;
++        default:
++            sql = "UPDATE " + t.getName() + " SET td = DATE_ADD(td, INTERVAL " + Randomly.smallNumber()
++                    + " DAY), tt = tt + INTERVAL 1 SECOND, tj = JSON_SET(COALESCE(tj, '{}'), '$.a', "
++                    + Randomly.smallNumber() + ")" + where(state, t) + orderByLimit(t);
++            break;
++        }
++        return new SQLQueryAdapter(sql, errors);
++    }
++
++    private static String column(MySQLTable t) {
++        return Randomly.fromList(t.getColumns()).getName();
++    }
++
++    // A column that may be updated: not the primary vindex column.
++    private static MySQLColumn settable(MySQLTable t, String key) {
++        List<MySQLColumn> columns = new ArrayList<>();
++        for (MySQLColumn c : t.getColumns()) {
++            if (!c.getName().equals(key)) {
++                columns.add(c);
++            }
++        }
++        return columns.isEmpty() ? null : Randomly.fromList(columns);
++    }
++
++    private static String set(MySQLGlobalState state, MySQLTable t, MySQLTable source, String key) {
++        MySQLColumn target = settable(t, key);
++        if (target == null) {
++            return t.getName() + "." + key + " = " + t.getName() + "." + key;
++        }
++        String value = Randomly.getBoolean() ? source.getName() + "." + column(source) : constant(state);
++        return t.getName() + "." + target.getName() + " = " + value;
++    }
++
++    private static String where(MySQLGlobalState state, MySQLTable t) {
++        if (Randomly.getBooleanWithRatherLowProbability()) {
++            return "";
++        }
++        MySQLExpressionGenerator gen = new MySQLExpressionGenerator(state)
++                .setTablesAndColumns(new MySQLTables(List.of(t)));
++        return " WHERE " + MySQLVisitor.asString(gen.generateExpression());
++    }
++
++    // ORDER BY all columns, so that the rows that LIMIT picks do not depend on the order of the shards.
++    private static String orderByLimit(MySQLTable t) {
++        if (Randomly.getBoolean()) {
++            return "";
++        }
++        List<String> columns = new ArrayList<>();
++        for (MySQLColumn c : t.getColumns()) {
++            columns.add(t.getName() + "." + c.getName() + Randomly.fromOptions("", " DESC"));
++        }
++        return " ORDER BY " + String.join(", ", columns) + " LIMIT " + (1 + Randomly.smallNumber());
++    }
++
++    private static String constant(MySQLGlobalState state) {
++        return MySQLVisitor.asString(new MySQLExpressionGenerator(state).generateConstant());
++    }
++
++    private static List<String> commonColumns(MySQLGlobalState state, MySQLTable t, MySQLTable u) {
++        Set<String> names = new LinkedHashSet<>();
++        for (MySQLColumn c : t.getColumns()) {
++            for (MySQLColumn d : u.getColumns()) {
++                if (c.getName().equals(d.getName())) {
++                    names.add(c.getName());
++                }
++            }
++        }
++        if (state.getDbmsSpecificOptions().vitessTypedColumns()) {
++            for (String c : VitessTypedColumns.NAMES.split(", ")) {
++                names.add(c);
++            }
++        }
++        return new ArrayList<>(names);
++    }
++
++    private static String insertSelect(MySQLGlobalState state, MySQLTable t, MySQLTable u, String verb) {
++        List<String> columns = commonColumns(state, t, u);
++        List<String> values = new ArrayList<>();
++        for (String c : columns) {
++            String v = u.getName() + "." + c;
++            if (c.equals("c0") && Randomly.getBoolean()) {
++                // New values for the sharding key, so that rows move to other shards.
++                v = v + " + " + Randomly.smallNumber();
++            }
++            values.add(v);
++        }
++        return verb + " INTO " + t.getName() + " (" + String.join(", ", columns) + ") SELECT "
++                + String.join(", ", values) + " FROM " + u.getName() + where(state, u) + orderByLimit(u);
++    }
++
++    private static String insertOnDuplicateKeyUpdate(MySQLGlobalState state, MySQLTable t) {
++        MySQLOptions o = state.getDbmsSpecificOptions();
++        List<String> columns = new ArrayList<>();
++        List<String> values = new ArrayList<>();
++        for (MySQLColumn c : t.getColumns()) {
++            columns.add(c.getName());
++            values.add(c.getName().equals("c0") ? String.valueOf((int) state.getRandomly().getInteger())
++                    : constant(state));
++        }
++        if (o.vitessTypedColumns()) {
++            columns.add(VitessTypedColumns.NAMES);
++            values.add(VitessTypedColumns.randomValues(o.vitessStringKey));
++        }
++        MySQLColumn target = settable(t, o.vitessKeyColumn());
++        if (target == null) {
++            // Only the vindex column, which vtgate does not let DML change.
++            return "INSERT IGNORE INTO " + t.getName() + " (" + String.join(", ", columns) + ") VALUES ("
++                    + String.join(", ", values) + ")";
++        }
++        String update = target.getName() + " = "
++                + Randomly.fromOptions("VALUES(" + target.getName() + ")", target.getName() + " + 1", constant(state));
++        return "INSERT INTO " + t.getName() + " (" + String.join(", ", columns) + ") VALUES ("
++                + String.join(", ", values) + ") ON DUPLICATE KEY UPDATE " + update;
 +    }
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessFindings.java b/src/sqlancer/mysql/vitess/VitessFindings.java
@@ -1251,10 +1489,10 @@ index 0000000..89fe978
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessQueryGenerator.java b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
 new file mode 100644
-index 0000000..e3bd567
+index 0000000..75b326f
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
-@@ -0,0 +1,352 @@
+@@ -0,0 +1,485 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.util.ArrayList;
@@ -1284,6 +1522,7 @@ index 0000000..e3bd567
 +    // tools/sqlancer/README.md in the Vitess repository), so that they do not drown new findings.
 +    private final boolean sharded;
 +    private final boolean typed;
++    private final boolean extended;
 +    // The primary vindex column of the tables in a sharded keyspace.
 +    private final String key;
 +    private boolean ordered;
@@ -1295,6 +1534,7 @@ index 0000000..e3bd567
 +        this.allTables = state.getSchema().getDatabaseTables();
 +        this.sharded = state.getDbmsSpecificOptions().vitessSharded;
 +        this.typed = state.getDbmsSpecificOptions().vitessTypedColumns();
++        this.extended = state.getDbmsSpecificOptions().vitessExtended;
 +        this.key = state.getDbmsSpecificOptions().vitessKeyColumn();
 +    }
 +
@@ -1312,6 +1552,12 @@ index 0000000..e3bd567
 +        }
 +        if (kind == 1) {
 +            return derived();
++        }
++        if (extended && kind == 2) {
++            return window();
++        }
++        if (extended && kind == 3) {
++            return cte();
 +        }
 +        return select(Randomly.fromOptions(Mode.values()), true, -1);
 +    }
@@ -1373,6 +1619,10 @@ index 0000000..e3bd567
 +        }
 +        if (!groupBy.isEmpty()) {
 +            sb.append(" GROUP BY ").append(String.join(", ", groupBy));
++            // vtgate does not support WITH ROLLUP in sharded queries.
++            if (extended && !sharded && Randomly.getBooleanWithRatherLowProbability()) {
++                sb.append(" WITH ROLLUP");
++            }
 +            if (Randomly.getBoolean()) {
 +                sb.append(" HAVING ").append(aggregate(tables)).append(' ').append(comparison()).append(' ')
 +                        .append(Randomly.getBoolean() ? aggregate(tables) : constant());
@@ -1547,9 +1797,130 @@ index 0000000..e3bd567
 +
 +    private String aggregate(List<MySQLTable> tables) {
 +        String arg = Randomly.getBoolean() ? column(Randomly.fromList(tables)) : expression(tables);
++        if (extended && Randomly.getBooleanWithRatherLowProbability()) {
++            String other = column(Randomly.fromList(tables));
++            if (sharded) {
++                // vtgate does not support COUNT(DISTINCT a, b) and JSON_ARRAYAGG in sharded queries.
++                return Randomly.fromOptions("GROUP_CONCAT(" + arg + " ORDER BY " + arg + " SEPARATOR ',')",
++                        "GROUP_CONCAT(DISTINCT " + arg + " ORDER BY " + arg + " DESC)", "STD(" + arg + ")",
++                        "VARIANCE(" + arg + ")", "MAX(" + arg + ") - MIN(" + arg + ")");
++            }
++            return Randomly.fromOptions("GROUP_CONCAT(" + arg + " ORDER BY " + arg + " SEPARATOR ',')",
++                    "GROUP_CONCAT(DISTINCT " + arg + " ORDER BY " + arg + " DESC)",
++                    "COUNT(DISTINCT " + arg + ", " + other + ")", "STD(" + arg + ")", "VARIANCE(" + arg + ")",
++                    "JSON_LENGTH(JSON_ARRAYAGG(" + arg + "))", "MAX(" + arg + ") - MIN(" + arg + ")");
++        }
 +        return Randomly.fromOptions("COUNT(*)", "COUNT(" + arg + ")", "COUNT(DISTINCT " + arg + ")", "SUM(" + arg + ")",
 +                "SUM(DISTINCT " + arg + ")", "MIN(" + arg + ")", "MAX(" + arg + ")", "AVG(" + arg + ")",
 +                "AVG(DISTINCT " + arg + ")", "BIT_AND(" + arg + ")", "BIT_OR(" + arg + ")", "BIT_XOR(" + arg + ")");
++    }
++
++    // A window function over one table. The window orders by all columns, so that ties are identical rows and the
++    // result does not depend on the order in which the rows arrive.
++    private String window() {
++        MySQLTable t = Randomly.fromList(allTables);
++        String n = t.getName();
++        List<String> columns = new ArrayList<>();
++        for (MySQLColumn c : t.getColumns()) {
++            columns.add(n + "." + c.getName());
++        }
++        if (typed) {
++            for (String c : VitessTypedColumns.NAMES.split(", ")) {
++                columns.add(n + "." + c);
++            }
++        }
++        String order = String.join(", ", columns);
++        String arg = column(t);
++        String function = Randomly.fromOptions("ROW_NUMBER()", "RANK()", "DENSE_RANK()", "COUNT(*)", "SUM(" + arg + ")",
++                "MIN(" + arg + ")", "MAX(" + arg + ")", "AVG(" + arg + ")", "LAG(" + arg + ")", "LEAD(" + arg + ", 2)",
++                "FIRST_VALUE(" + arg + ")", "LAST_VALUE(" + arg + ")", "NTILE(3)", "CUME_DIST()", "PERCENT_RANK()",
++                "NTH_VALUE(" + arg + ", 2)", "LAG(" + arg + ", 1, " + constant() + ")");
++        StringBuilder over = new StringBuilder("(");
++        if (Randomly.getBoolean()) {
++            // Partitioning by the sharding key lets vtgate push the window function down to the shards.
++            over.append("PARTITION BY ").append(sharded && Randomly.getBoolean() ? n + "." + key : column(t))
++                    .append(' ');
++        }
++        if (Randomly.getNotCachedInteger(0, 4) != 0) {
++            over.append("ORDER BY ").append(order);
++            if (!function.endsWith("()") && !function.startsWith("LAG") && !function.startsWith("LEAD")
++                    && Randomly.getBoolean()) {
++                over.append(Randomly.fromOptions(" ROWS BETWEEN 1 PRECEDING AND CURRENT ROW",
++                        " ROWS BETWEEN UNBOUNDED PRECEDING AND 1 FOLLOWING",
++                        " ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING"));
++            }
++        }
++        over.append(')');
++        StringBuilder sb = new StringBuilder("SELECT ").append(order).append(", ").append(function).append(" OVER ")
++                .append(over).append(" AS w FROM ").append(n);
++        String where = where(List.of(t));
++        if (sharded) {
++            // vtgate supports window functions only in single-shard queries.
++            String value = existingKeyValue(t);
++            if (value != null) {
++                String single = n + "." + key + " = " + value;
++                where = where == null ? single : "(" + where + ") AND " + single;
++            }
++        }
++        if (where != null) {
++            sb.append(" WHERE ").append(where);
++        }
++        if (Randomly.getBoolean()) {
++            return "SELECT d.w, COUNT(*) FROM (" + sb + ") AS d GROUP BY d.w";
++        }
++        return sb.toString();
++    }
++
++    // A value of the sharding key that exists in the table, as a literal, or null.
++    private String existingKeyValue(MySQLTable t) {
++        try (java.sql.Statement s = state.getConnection().createStatement(); java.sql.ResultSet rs = s.executeQuery(
++                "SELECT " + key + " FROM " + t.getName() + " WHERE " + key + " IS NOT NULL ORDER BY RAND() LIMIT 1")) {
++            if (!rs.next()) {
++                return null;
++            }
++            String v = rs.getString(1);
++            return key.equals("c0") ? v : "'" + v.replace("\\", "\\\\").replace("'", "''") + "'";
++        } catch (java.sql.SQLException e) {
++            return null;
++        }
++    }
++
++    // A common table expression: the same inner queries as derived tables, a chain of two CTEs, or a recursive CTE.
++    private String cte() {
++        MySQLTable t = Randomly.fromList(allTables);
++        String column = t.getName() + "." + Randomly.fromList(t.getColumns()).getName();
++        switch ((int) Randomly.getNotCachedInteger(0, 6)) {
++        case 0:
++            return "WITH RECURSIVE r (n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM r WHERE n < "
++                    + (1 + Randomly.smallNumber()) + ") SELECT r.n, COUNT(" + column + ") FROM r LEFT JOIN "
++                    + t.getName() + " ON " + column + " = r.n GROUP BY r.n";
++        case 1:
++            String where = where(List.of(t));
++            return "WITH RECURSIVE r AS (SELECT " + column + " AS v, 1 AS d FROM " + t.getName()
++                    + (where == null ? "" : " WHERE " + where)
++                    + " UNION ALL SELECT r.v, r.d + 1 FROM r WHERE r.d < 3) SELECT r.d, COUNT(*), COUNT(DISTINCT r.v) "
++                    + "FROM r GROUP BY r.d";
++        default:
++            break;
++        }
++        colocatedOnly = true;
++        String inner = select(Randomly.fromOptions(Mode.PLAIN, Mode.GROUP_BY), false, -1);
++        colocatedOnly = false;
++        switch ((int) Randomly.getNotCachedInteger(0, 4)) {
++        case 0:
++            StringBuilder sb = new StringBuilder("WITH d AS (").append(inner)
++                    .append(") SELECT d.a0, COUNT(*) FROM d GROUP BY d.a0");
++            appendOrderByAndLimit(sb, 2, false);
++            return sb.toString();
++        case 1:
++            return "WITH d AS (" + inner + "), e AS (SELECT d.a0 FROM d WHERE d.a0 IS NOT NULL) "
++                    + "SELECT COUNT(*), COUNT(DISTINCT e.a0), MIN(e.a0), MAX(e.a0) FROM e";
++        case 2:
++            return "WITH d AS (" + inner + ") SELECT d.a0, " + column + " FROM d JOIN " + t.getName() + " ON d.a0 = "
++                    + column;
++        default:
++            return "WITH d AS (" + inner + ") SELECT COUNT(*) FROM d AS x JOIN d AS y ON x.a0 = y.a0";
++        }
 +    }
 +
 +    private String valueExpression(List<MySQLTable> tables) {
@@ -1609,10 +1980,10 @@ index 0000000..e3bd567
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessReference.java b/src/sqlancer/mysql/vitess/VitessReference.java
 new file mode 100644
-index 0000000..4a6d896
+index 0000000..4fc69ae
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessReference.java
-@@ -0,0 +1,143 @@
+@@ -0,0 +1,144 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.sql.Connection;
@@ -1727,8 +2098,9 @@ index 0000000..4a6d896
 +    private static String showCreateTable(StatementFactory c, String table) throws SQLException {
 +        try (Statement s = c.create(); ResultSet rs = s.executeQuery("SHOW CREATE TABLE " + table)) {
 +            rs.next();
-+            // The AUTO_INCREMENT counter depends on the shard.
-+            return rs.getString(2).replaceAll(" AUTO_INCREMENT=\\d+", "");
++            // The AUTO_INCREMENT counter depends on the shard. The table comment differs too: the harness changes it on
++            // vtgate to make the tablets reload the schema.
++            return rs.getString(2).replaceAll(" AUTO_INCREMENT=\\d+", "").replaceAll(" COMMENT='(?:[^']|'')*'$", "");
 +        }
 +    }
 +
