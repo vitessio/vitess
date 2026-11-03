@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -141,26 +142,42 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		// Restore the original type even if the change to BACKUP fails after
 		// publishing it.
 		defer func() {
-			bgCtx := context.Background()
+			// An earlier error explains why the backup failed; keep it.
+			fail := func(err error) {
+				l.Errorf("%v", err)
+				if retErr == nil {
+					retErr = err
+				}
+			}
+			// Each restore step gets its own budget, independent of the RPC's
+			// context: a canceled backup still restores the tablet, and the step's
+			// MySQL queries and topo update end at the deadline rather than
+			// holding the action lock while mysqld or the topo doesn't answer.
+			withBudget := func(step func(context.Context) error) error {
+				ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+				defer cancel()
+				return step(ctx)
+			}
 			// Entering BACKUP turned off semi-sync. A primary turns it back on as
 			// its policy required when the backup started, before it serves again.
 			if originalType == topodatapb.TabletType_PRIMARY {
-				if err := tm.fixSemiSync(bgCtx, topodatapb.TabletType_PRIMARY, primarySemiSync); err != nil {
-					err = vterrors.Wrapf(err, "failed to restore primary semi-sync, keeping tablet type %v", topodatapb.TabletType_BACKUP)
-					l.Errorf("%v", err)
-					// An earlier error explains why the backup failed; keep it.
-					if retErr == nil {
-						retErr = err
-					}
+				if err := withBudget(func(ctx context.Context) error {
+					return tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, primarySemiSync)
+				}); err != nil {
+					fail(vterrors.Wrapf(err, "failed to restore primary semi-sync, keeping tablet type %v", topodatapb.TabletType_BACKUP))
 					return
 				}
 			}
 			// Change our type back to the original value.
 			// Original type could be primary so pass in a real value for PrimaryTermStartTime
-			if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
-				l.Errorf("Failed to change tablet type from %v to %v, error: %v", topodatapb.TabletType_BACKUP, originalType, err)
+			if err := withBudget(func(ctx context.Context) error {
+				return tm.changeTypeLocked(ctx, originalType, DBActionNone, SemiSyncActionNone)
+			}); err != nil {
+				fail(vterrors.Wrapf(err, "failed to change tablet type from %v to %v", topodatapb.TabletType_BACKUP, originalType))
 				return
 			}
+
+			bgCtx := context.Background()
 
 			// Find the correct primary tablet and set the replication source,
 			// since the primary could have changed while we executed the backup which can

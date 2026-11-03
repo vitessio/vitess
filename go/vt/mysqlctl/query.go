@@ -40,6 +40,26 @@ type execError struct {
 func (e *execError) Error() string { return e.msg }
 func (e *execError) Unwrap() error { return e.cause }
 
+// recycle returns conn to its pool. For a closed connection, the pool opens a
+// replacement before Recycle returns, with no deadline, so this waits for it
+// only until ctx ends: a timed-out query closes its connection, and a server
+// that does not answer must not keep the caller waiting on the replacement.
+func recycle(ctx context.Context, conn *dbconnpool.PooledDBConnection) {
+	if !conn.Conn.IsClosed() {
+		conn.Recycle()
+		return
+	}
+	recycled := make(chan struct{})
+	go func() {
+		conn.Recycle()
+		close(recycled)
+	}()
+	select {
+	case <-recycled:
+	case <-ctx.Done():
+	}
+}
+
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // the connection is lost.
 func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
@@ -47,17 +67,32 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 	if err != nil {
 		return conn, err
 	}
-	// Run a test query to see if this connection is still good.
-	if _, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
+	// Run a test query to see if this connection is still good. A server that
+	// does not answer it would hold the caller indefinitely, so close the
+	// connection when ctx ends first.
+	checked := make(chan error, 1)
+	go func() {
+		_, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false)
+		checked <- err
+	}()
+	select {
+	case err = <-checked:
+	case <-ctx.Done():
+		conn.Close()
+		<-checked
+		recycle(ctx, conn)
+		return nil, ctx.Err()
+	}
+	if err != nil {
 		// If we get a connection error, try to reconnect.
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.CRServerGone || sqlErr.Number() == sqlerror.CRServerLost) {
 			if err := conn.Conn.Reconnect(ctx); err != nil {
-				conn.Recycle()
+				recycle(ctx, conn)
 				return nil, err
 			}
 			return conn, nil
 		}
-		conn.Recycle()
+		recycle(ctx, conn)
 		return nil, err
 	}
 	return conn, nil
@@ -74,7 +109,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }

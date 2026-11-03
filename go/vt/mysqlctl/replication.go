@@ -1330,9 +1330,15 @@ func (mysqld *Mysqld) SemiSyncExtensionLoaded(ctx context.Context) (mysql.SemiSy
 	if connErr != nil {
 		return mysql.SemiSyncTypeUnknown, connErr
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
-	return conn.Conn.SemiSyncExtensionLoaded()
+	semiSyncType := mysql.SemiSyncTypeUnknown
+	err := mysqld.executeWithContext(ctx, conn, "semi-sync plugin check", func() error {
+		var err error
+		semiSyncType, err = conn.Conn.SemiSyncExtensionLoaded()
+		return err
+	})
+	return semiSyncType, err
 }
 
 func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {

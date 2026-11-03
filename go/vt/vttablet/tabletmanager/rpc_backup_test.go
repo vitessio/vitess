@@ -31,6 +31,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
@@ -369,6 +370,122 @@ func TestBackupRestoresPrimarySemiSyncWhenCanceled(t *testing.T) {
 
 	err := tm.Backup(backupCtx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 	// The fake engine completes the backup despite the cancellation.
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
+	assert.True(t, qsc.IsServing())
+	assert.True(t, fake.SemiSyncPrimaryEnabled)
+}
+
+// stalledSemiSyncMysqlDaemon doesn't answer a primary's semi-sync enable until
+// its context ends, like a mysqld that stopped answering. With completes set,
+// the enable then succeeds, like a query that completes while it is killed.
+type stalledSemiSyncMysqlDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	completes bool
+}
+
+func (d *stalledSemiSyncMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
+	if primary {
+		if _, ok := ctx.Deadline(); !ok {
+			return errors.New("semi-sync enable without a deadline would never return")
+		}
+		<-ctx.Done()
+		if !d.completes {
+			return ctx.Err()
+		}
+	}
+	return d.FakeMysqlDaemon.SetSemiSyncEnabled(context.WithoutCancel(ctx), primary, replica)
+}
+
+// useShortRemoteOperationTimeout shortens the restore budget. Call it before
+// the tablet starts, so the budget is reset after the tablet stops.
+func useShortRemoteOperationTimeout(t *testing.T) {
+	previous := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { topo.RemoteOperationTimeout = previous })
+}
+
+// TestBackupReleasesActionLockWhenPrimaryRestoreHangs checks that a primary
+// whose restore after a backup doesn't complete stays in BACKUP without
+// serving, reports the failure, and releases the action lock.
+func TestBackupReleasesActionLockWhenPrimaryRestoreHangs(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		// hang makes a restore step stop answering, once the backup runs.
+		hang         func(tm *TabletManager, fake *mysqlctl.FakeMysqlDaemon, factory *memorytopo.Factory)
+		wantErr      string
+		wantSemiSync bool
+	}{
+		{
+			name: "semi-sync enable",
+			hang: func(tm *TabletManager, fake *mysqlctl.FakeMysqlDaemon, factory *memorytopo.Factory) {
+				tm.MysqlDaemon = &stalledSemiSyncMysqlDaemon{FakeMysqlDaemon: fake}
+			},
+			wantErr: context.DeadlineExceeded.Error(),
+		},
+		{
+			// The topo fails every call, so the PRIMARY write never commits; this
+			// doesn't cover a write that committed but couldn't be confirmed.
+			name: "type change after semi-sync enable",
+			hang: func(tm *TabletManager, fake *mysqlctl.FakeMysqlDaemon, factory *memorytopo.Factory) {
+				factory.SetError(errors.New("injected topo failure"))
+			},
+			wantErr:      "updating tablet_type",
+			wantSemiSync: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			useShortRemoteOperationTimeout(t)
+			ctx, tm, fake, qsc, factory := newBackupTest(t, topodatapb.TabletType_PRIMARY)
+			// Lets a restore that never gives up finish, so the tablet can stop.
+			t.Cleanup(func() { factory.SetError(nil) })
+			handle := useFakeBackupStorage(t)
+			mysqlctl.BackupRestoreEngineMap[primaryDrainEngine] = &duringBackupEngine{
+				FakeBackupEngine: mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine),
+				during:           func() { tc.hang(tm, fake, factory) },
+			}
+
+			returned := make(chan error, 1)
+			go func() {
+				returned <- tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+			}()
+			var err error
+			require.Eventually(t, func() bool {
+				select {
+				case err = <-returned:
+					return true
+				default:
+					return false
+				}
+			}, 30*time.Second, 10*time.Millisecond, "Backup did not return")
+			require.ErrorContains(t, err, tc.wantErr)
+			assert.Len(t, handle.EndBackupCalls, 1)
+			assert.Equal(t, topodatapb.TabletType_BACKUP, tm.Tablet().Type)
+			assert.False(t, qsc.IsServing())
+			assert.Equal(t, tc.wantSemiSync, fake.SemiSyncPrimaryEnabled)
+			require.NoError(t, tm.lock(ctx))
+			tm.unlock()
+			factory.SetError(nil)
+			ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
+			require.NoError(t, err)
+			assert.Equal(t, topodatapb.TabletType_BACKUP, ti.Type)
+		})
+	}
+}
+
+// TestBackupRestoresPrimaryTypeWithItsOwnBudget checks that a primary whose
+// semi-sync enable succeeds just as its budget ends still gets a budget of its
+// own to change back to PRIMARY.
+func TestBackupRestoresPrimaryTypeWithItsOwnBudget(t *testing.T) {
+	useShortRemoteOperationTimeout(t)
+	ctx, tm, fake, qsc, _ := newBackupTest(t, topodatapb.TabletType_PRIMARY)
+	useFakeBackupStorage(t)
+	tm.MysqlDaemon = &stalledSemiSyncMysqlDaemon{FakeMysqlDaemon: fake, completes: true}
+
+	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 	require.NoError(t, err)
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 	ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
