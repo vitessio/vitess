@@ -38,14 +38,12 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"maps"
 	"net/http"
 	"os"
 	"runtime/pprof"
 	"sort"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/safehtml/template"
@@ -282,10 +280,6 @@ func (k healthyKey) kst() KeyspaceShardTabletType {
 	return KeyspaceShardTabletType(k.keyspace + "." + k.shard + "." + topoproto.TabletTypeLString(k.tabletType))
 }
 
-// healthyIndex points each target at an immutable healthy list; writers publish
-// a new slice instead of mutating the current one, so readers need no lock.
-type healthyIndex map[healthyKey]*atomic.Pointer[[]*TabletHealth]
-
 // HealthCheckImpl performs health checking and stores the results.
 // The goal of this object is to maintain a StreamHealth RPC
 // to a lot of tablets. Tablets are added / removed by calling the
@@ -313,10 +307,10 @@ type HealthCheckImpl struct {
 	// contains a map of TabletHealth keyed by tablet alias for each tablet relevant to the keyspace.shard.tabletType
 	// has to be kept in sync with healthByAlias
 	healthData map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth
-	// healthy holds the sorted healthy list per keyspace/shard/tabletType. It is
+	// healthy maps each healthyKey to its sorted, immutable []*TabletHealth. It is
 	// read without hc.mu by GetHealthyTabletStats; writers must hold hc.mu and
-	// go through setHealthyLocked. The map itself is copy-on-write on new keys.
-	healthy atomic.Pointer[healthyIndex]
+	// publish a new slice through setHealthyLocked instead of mutating one.
+	healthy sync.Map
 	// connsWG keeps track of all launched Go routines that monitor tablet connections.
 	connsWG sync.WaitGroup
 	// topology watchers that inform healthcheck of tablets being added and deleted
@@ -399,7 +393,6 @@ func NewHealthCheck(
 		loadTabletsTrigger: make(chan topo.KeyspaceShard, 1024),
 		options:            withOptions(opts...),
 	}
-	hc.healthy.Store(&healthyIndex{})
 
 	hc.logger().Infof("loading tablets for cells: %v", cellsToWatch)
 
@@ -529,7 +522,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 					}
 				} else {
 					// Simply recompute the list of healthy tablets for all other tablet types.
-					hc.recomputeHealthy(hk)
+					hc.recomputeHealthy(hk, key)
 				}
 			}
 		}
@@ -560,12 +553,13 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 
 	targetKey := KeyFromTarget(th.Target)
 	targetChanged := prevTarget.TabletType != th.Target.TabletType || prevTarget.Keyspace != th.Target.Keyspace || prevTarget.Shard != th.Target.Shard
+	var oldTargetKey KeyspaceShardTabletType
 	if targetChanged {
 		// Error counter has to be set here in case we get a new tablet type for the first time in a stream response
 		hcErrorCounters.Add([]string{th.Target.Keyspace, th.Target.Shard, topoproto.TabletTypeLString(th.Target.TabletType)}, 0)
 		// keyspace and shard are not expected to change, but just in case ...
 		// move this tabletHealthCheck to the correct map
-		oldTargetKey := KeyFromTarget(prevTarget)
+		oldTargetKey = KeyFromTarget(prevTarget)
 		delete(hc.healthData[oldTargetKey], tabletAlias)
 		_, ok := hc.healthData[targetKey]
 		if !ok {
@@ -631,10 +625,10 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 		// Tablets from other cells for non-primary targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
 		if th.Target.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
-			hc.recomputeHealthy(targetHealthyKey)
+			hc.recomputeHealthy(targetHealthyKey, targetKey)
 		}
 		if targetChanged && prevTarget.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
-			hc.recomputeHealthy(healthyKeyFromTarget(prevTarget))
+			hc.recomputeHealthy(healthyKeyFromTarget(prevTarget), oldTargetKey)
 		}
 	}
 
@@ -655,8 +649,8 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 // if configured to do so.
 //
 // This should not be called for primary tablets.
-func (hc *HealthCheckImpl) recomputeHealthy(key healthyKey) {
-	all := hc.healthData[key.kst()]
+func (hc *HealthCheckImpl) recomputeHealthy(hk healthyKey, key KeyspaceShardTabletType) {
+	all := hc.healthData[key]
 	allArray := make([]*TabletHealth, 0, len(all))
 	for _, s := range all {
 		// Only tablets in same cell / cellAlias are included in healthy list.
@@ -664,33 +658,21 @@ func (hc *HealthCheckImpl) recomputeHealthy(key healthyKey) {
 			allArray = append(allArray, s)
 		}
 	}
-	hc.setHealthyLocked(key, FilterStatsByReplicationLag(allArray))
+	hc.setHealthyLocked(hk, FilterStatsByReplicationLag(allArray))
 }
 
 // loadHealthy returns the published healthy list for key. The result must not
 // be modified.
 func (hc *HealthCheckImpl) loadHealthy(key healthyKey) []*TabletHealth {
-	entry := (*hc.healthy.Load())[key]
-	if entry == nil {
-		return nil
-	}
-	return *entry.Load()
+	v, _ := hc.healthy.Load(key)
+	ths, _ := v.([]*TabletHealth)
+	return ths
 }
 
 // setHealthyLocked publishes ths as the healthy list for key. ths must not be
 // modified afterwards. hc.mu must be held.
 func (hc *HealthCheckImpl) setHealthyLocked(key healthyKey, ths []*TabletHealth) {
-	idx := *hc.healthy.Load()
-	if entry := idx[key]; entry != nil {
-		entry.Store(&ths)
-		return
-	}
-	entry := &atomic.Pointer[[]*TabletHealth]{}
-	entry.Store(&ths)
-	next := make(healthyIndex, len(idx)+1)
-	maps.Copy(next, idx)
-	next[key] = entry
-	hc.healthy.Store(&next)
+	hc.healthy.Store(key, ths)
 }
 
 // Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
@@ -771,11 +753,12 @@ func (hc *HealthCheckImpl) CacheStatusMap() map[string]*TabletsCacheStatus {
 
 func (hc *HealthCheckImpl) HealthyStatusMap() map[string]*TabletsCacheStatus {
 	tcsMap := make(map[string]*TabletsCacheStatus)
-	for _, entry := range *hc.healthy.Load() {
-		for _, th := range *entry.Load() {
+	hc.healthy.Range(func(_, v any) bool {
+		for _, th := range v.([]*TabletHealth) {
 			tabletHealthToTabletCacheStatus(th, tcsMap)
 		}
-	}
+		return true
+	})
 	return tcsMap
 }
 

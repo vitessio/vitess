@@ -2072,3 +2072,36 @@ func TestGetHealthyTabletStatsDoesNotBlockOnHealthCheckLock(t *testing.T) {
 	require.Len(t, ths, 1)
 	assert.True(t, topoproto.TabletAliasEqual(tablet.Alias, ths[0].Tablet.Alias))
 }
+
+// TestGetHealthyTabletStatsDuringHealthUpdates runs lock-free readers against the
+// primary replacement and replica recompute publish paths, so -race covers them.
+func TestGetHealthyTabletStatsDuringHealthUpdates(t *testing.T) {
+	bhc := newBenchHealthCheck(t, 3)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	var empty atomic.Int64
+	var wg sync.WaitGroup
+	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA} {
+		target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: tabletType}
+		for range 4 {
+			wg.Go(func() {
+				for ctx.Err() == nil {
+					ths := bhc.hc.GetHealthyTabletStats(target)
+					if len(ths) == 0 {
+						empty.Add(1)
+					}
+					for _, th := range ths {
+						_ = th.Stats.ReplicationLagSeconds
+					}
+				}
+			})
+		}
+	}
+	for n := range uint32(2000) {
+		require.True(t, bhc.send(ctx, int(n)%len(bhc.tablets), n%5))
+	}
+	cancel()
+	wg.Wait()
+	assert.Zero(t, empty.Load(), "a reader saw an empty healthy list")
+}

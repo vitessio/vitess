@@ -19,7 +19,6 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"maps"
 	"math/rand/v2"
 	"net/http"
 	"os"
@@ -106,11 +105,11 @@ type TabletGateway struct {
 	retryCount           int
 	defaultConnCollation atomic.Uint32
 
-	// mu serializes creation of new statusAggregators entries.
+	// mu serializes creation of new statusAggregators entries, since
+	// NewTabletStatusAggregator registers the aggregator globally.
 	mu sync.Mutex
-	// statusAggregators is a copy-on-write map so the per-query lookup in
-	// getStatsAggregator does not need mu.
-	statusAggregators atomic.Pointer[map[statsAggregatorKey]*TabletStatusAggregator]
+	// statusAggregators maps statsAggregatorKey to *TabletStatusAggregator.
+	statusAggregators sync.Map
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
@@ -152,7 +151,6 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		localCell:     localCell,
 		retryCount:    retryCount,
 	}
-	gw.statusAggregators.Store(&map[statsAggregatorKey]*TabletStatusAggregator{})
 	gw.setupBuffering(ctx)
 	gw.setupBalancer()
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
@@ -319,11 +317,11 @@ func (gw *TabletGateway) Close(_ context.Context) error {
 // CacheStatus returns a list of TabletCacheStatus per
 // keyspace/shard/tablet_type.
 func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
-	aggrs := *gw.statusAggregators.Load()
-	res := make(TabletCacheStatusList, 0, len(aggrs))
-	for _, aggr := range aggrs {
-		res = append(res, aggr.GetCacheStatus())
-	}
+	var res TabletCacheStatusList
+	gw.statusAggregators.Range(func(_, v any) bool {
+		res = append(res, v.(*TabletStatusAggregator).GetCacheStatus())
+		return true
+	})
 	sort.Sort(res)
 	return res
 }
@@ -520,22 +518,18 @@ func (gw *TabletGateway) updateStats(target *querypb.Target, startTime time.Time
 
 func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatusAggregator {
 	key := statsAggregatorKey{keyspace: target.Keyspace, shard: target.Shard, tabletType: target.TabletType}
-	if aggr, ok := (*gw.statusAggregators.Load())[key]; ok {
-		return aggr
+	if aggr, ok := gw.statusAggregators.Load(key); ok {
+		return aggr.(*TabletStatusAggregator)
 	}
 
 	gw.mu.Lock()
 	defer gw.mu.Unlock()
-	aggrs := *gw.statusAggregators.Load()
-	if aggr, ok := aggrs[key]; ok {
-		return aggr
+	if aggr, ok := gw.statusAggregators.Load(key); ok {
+		return aggr.(*TabletStatusAggregator)
 	}
 	name := target.Keyspace + "/" + target.Shard + "/" + target.TabletType.String()
 	aggr := NewTabletStatusAggregator(target.Keyspace, target.Shard, target.TabletType, name)
-	next := make(map[statsAggregatorKey]*TabletStatusAggregator, len(aggrs)+1)
-	maps.Copy(next, aggrs)
-	next[key] = aggr
-	gw.statusAggregators.Store(&next)
+	gw.statusAggregators.Store(key, aggr)
 	return aggr
 }
 
