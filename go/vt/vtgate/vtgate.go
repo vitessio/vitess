@@ -68,10 +68,11 @@ import (
 )
 
 var (
-	normalizeQueries    = true
-	streamBufferSize    = 32 * 1024
-	schemaTrackerHcName = "SchemaTracker"
-	txResolverHcName    = "TxResolver"
+	normalizeQueries       = true
+	stripPriorityDirective bool
+	streamBufferSize       = 32 * 1024
+	schemaTrackerHcName    = "SchemaTracker"
+	txResolverHcName       = "TxResolver"
 
 	terseErrors      bool
 	truncateErrorLen int
@@ -194,6 +195,7 @@ var (
 func registerFlags(fs *pflag.FlagSet) {
 	fs.String("transaction-mode", "MULTI", "SINGLE: disallow multi-db transactions, MULTI: allow multi-db transactions with best effort commit, TWOPC: allow multi-db transactions with 2pc commit")
 	utils.SetFlagBoolVar(fs, &normalizeQueries, "normalize-queries", normalizeQueries, "Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars.")
+	utils.SetFlagBoolVar(fs, &stripPriorityDirective, "gate-query-cache-strip-priority", stripPriorityDirective, "Strip the PRIORITY directive from non-prepared queries before planning and from SQL sent to vttablet.")
 	fs.BoolVar(&terseErrors, "vtgate-config-terse-errors", terseErrors, "prevent bind vars from escaping in returned errors")
 	fs.IntVar(&truncateErrorLen, "truncate-error-len", truncateErrorLen, "truncate errors sent to client if they are longer than this value (0 means do not truncate)")
 	utils.SetFlagIntVar(fs, &streamBufferSize, "stream-buffer-size", streamBufferSize, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
@@ -419,6 +421,7 @@ func Init(
 
 	eConfig := ExecutorConfig{
 		Normalize:                 normalizeQueries,
+		StripPriorityDirective:    stripPriorityDirective,
 		StreamSize:                streamBufferSize,
 		AllowScatter:              !noScatter,
 		PreventCrossKeyspaceReads: preventCrossKeyspaceReads,

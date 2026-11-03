@@ -113,9 +113,10 @@ func init() {
 // the abilities of the underlying vttablets.
 type (
 	ExecutorConfig struct {
-		Name       string
-		Normalize  bool
-		StreamSize int
+		Name                   string
+		Normalize              bool
+		StripPriorityDirective bool
+		StreamSize             int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
 		AllowScatter bool
 		// PreventCrossKeyspaceReads will fail planning if set to true and a plan contains any cross-keyspace joins or UNIONs.
@@ -1438,7 +1439,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		return nil, false, nil, "", err
 	}
 	priority = qh.Priority
-	if priority != "" && !preparedPlan {
+	if e.config.StripPriorityDirective && priority != "" && !preparedPlan {
 		commented := stmt.(sqlparser.Commented)
 		strippedQuery, strippedComments, removed := e.env.Parser().RemoveDirective(query, commented.GetParsedComments(), sqlparser.DirectivePriority)
 		if removed {

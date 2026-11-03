@@ -1865,7 +1865,9 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestGetPlanPriority(t *testing.T) {
-	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	config := createExecutorConfigWithNormalizer()
+	config.StripPriorityDirective = true
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, config)
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
 
 	var cachedPlan *engine.Plan
@@ -1903,8 +1905,38 @@ func TestGetPlanPriority(t *testing.T) {
 	assert.ErrorIs(t, err, sqlparser.ErrInvalidPriority)
 }
 
-func TestGetPlanPriorityPreservesSiblingDirectives(t *testing.T) {
+func TestGetPlanPriorityStrippingDisabled(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
+	queries := []struct {
+		sql      string
+		priority string
+	}{
+		{sql: "select /*vt+ PRIORITY=50 */ * from music_user_map", priority: "50"},
+		{sql: "select /*vt+ PRIORITY=49 */ * from music_user_map", priority: "49"},
+	}
+
+	var plans []*engine.Plan
+	for _, query := range queries {
+		logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
+		plan, _, _, err := r.fetchOrCreatePlan(ctx, session, query.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+		require.NoError(t, err)
+		assert.Equal(t, query.sql, plan.Original)
+		assert.Equal(t, query.priority, plan.QueryHints.Priority)
+		assert.Equal(t, query.priority, session.Options.Priority)
+		planJSON, err := json.Marshal(plan)
+		require.NoError(t, err)
+		assert.Contains(t, string(planJSON), sqlparser.DirectivePriority)
+		plans = append(plans, plan)
+	}
+	assert.NotSame(t, plans[0], plans[1])
+	assertCacheSize(t, r.plans, 2)
+}
+
+func TestGetPlanPriorityPreservesSiblingDirectives(t *testing.T) {
+	config := createExecutorConfigWithNormalizer()
+	config.StripPriorityDirective = true
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, config)
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
 	query := "select /*vt+ WORKLOAD_NAME=online */ /*vt+ PRIORITY=50 */ /*vt+ QUERY_TIMEOUT_MS=100 */ * from music_user_map"
 	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
