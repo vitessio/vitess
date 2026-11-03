@@ -614,6 +614,23 @@
         "limit-resources"
       ]
     },
+    "reparent_failover": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/reparent/failover"
+      ],
+      "Args": [
+        "-timeout",
+        "20m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "ers_prs_newfeatures_heavy",
+      "Tags": [],
+      "Needs": [
+        "limit-resources"
+      ]
+    },
     "plannedreparent": {
       "File": "unused.go",
       "Packages": [
