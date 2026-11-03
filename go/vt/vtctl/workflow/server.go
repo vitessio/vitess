@@ -103,7 +103,7 @@ const (
 	cannotSwitchHighLag             = "replication lag %ds is higher than allowed lag %ds"
 	cannotSwitchFailedTabletRefresh = "could not refresh all of the tablets involved in the operation:\n%s"
 	cannotSwitchFrozen              = "workflow is frozen"
-	cannotSwitchStopped             = "workflow is stopped"
+	cannotSwitchStopped             = "workflow is stopped, start it before switching traffic"
 
 	// The message that switching writes sets on the target streams it stops for the
 	// cutover.
@@ -3507,7 +3507,7 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 				}
 				if !journalsChecked {
 					if journalsExist, _, err = ts.checkJournals(ctx); err != nil {
-						return "", err
+						return "", vterrors.Wrapf(err, "failed to read journal in the %s keyspace", ts.SourceKeyspaceName())
 					}
 					journalsChecked = true
 				}

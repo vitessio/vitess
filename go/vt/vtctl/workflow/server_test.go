@@ -2154,41 +2154,60 @@ func TestCanSwitchStreamNotReplicating(t *testing.T) {
 		tableName          = "t1"
 		sourceKeyspaceName = "sourceks"
 		targetKeyspaceName = "targetks"
-		vrID               = 1
 	)
+
+	type stream struct {
+		state   binlogdatapb.VReplicationWorkflowState
+		message string
+	}
+	stopped := stream{state: binlogdatapb.VReplicationWorkflowState_Stopped}
+	stoppedForCutover := stream{state: binlogdatapb.VReplicationWorkflowState_Stopped, message: stoppedForCutoverMessage}
 
 	testcases := []struct {
 		name    string
-		state   binlogdatapb.VReplicationWorkflowState
-		message string
+		streams []stream
 		// Whether the journals exist.
 		journalsExist bool
-		want          string
+		// The error that checking the journals returns, if any.
+		journalErr error
+		want       string
+		wantErr    string
 	}{
 		{
-			name:  "stopped",
-			state: binlogdatapb.VReplicationWorkflowState_Stopped,
-			want:  cannotSwitchStopped,
+			name:    "stopped",
+			streams: []stream{stopped},
+			want:    cannotSwitchStopped,
 		},
 		{
 			// A stopped stream that has a journal from a previous run for the same
 			// migration.
 			name:          "stopped with journals but not for cutover",
-			state:         binlogdatapb.VReplicationWorkflowState_Stopped,
+			streams:       []stream{stopped},
 			journalsExist: true,
 			want:          cannotSwitchStopped,
 		},
 		{
 			name:    "stopped for cutover without journals",
-			state:   binlogdatapb.VReplicationWorkflowState_Stopped,
-			message: stoppedForCutoverMessage,
+			streams: []stream{stoppedForCutover},
 			want:    cannotSwitchStopped,
 		},
 		{
 			name:          "stopped for cutover with journals",
-			state:         binlogdatapb.VReplicationWorkflowState_Stopped,
-			message:       stoppedForCutoverMessage,
+			streams:       []stream{stoppedForCutover},
 			journalsExist: true,
+		},
+		{
+			// Only the second stream was not stopped for the cutover.
+			name:          "stopped for cutover with journals and another stream stopped",
+			streams:       []stream{stoppedForCutover, stopped},
+			journalsExist: true,
+			want:          cannotSwitchStopped,
+		},
+		{
+			name:       "stopped for cutover and failing to read the journals",
+			streams:    []stream{stoppedForCutover},
+			journalErr: errors.New("journal read error"),
+			wantErr:    "failed to read journal in the sourceks keyspace: journal read error",
 		},
 	}
 
@@ -2215,47 +2234,54 @@ func TestCanSwitchStreamNotReplicating(t *testing.T) {
 			require.NoError(t, err)
 
 			env.tmc.expectVRQueryResultOnKeyspaceTablets(targetKeyspaceName, &queryResult{
-				query: fmt.Sprintf("select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in (%d) and id in (select max(id) from _vt.copy_state where vrepl_id in (%d) group by vrepl_id, table_name)",
-					vrID, vrID),
+				query:  "/select vrepl_id, table_name, lastpk from _vt.copy_state where vrepl_id in .*",
 				result: &querypb.QueryResult{},
 			})
-			// We only expect to check the journals for a stream stopped for the cutover,
-			// but we set them up for any stopped stream, so that checking them for other
-			// streams would let the switch through and fail the test.
-			if tc.state == binlogdatapb.VReplicationWorkflowState_Stopped {
-				journalResult := &querypb.QueryResult{}
-				if tc.journalsExist {
-					journalResult = sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""))
-				}
-				env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{
-					query:  "/select val from _vt.resharding_journal.*",
-					result: journalResult,
+			// We only expect to check the journals, at most once, for a stream stopped
+			// for the cutover, but we set them up for any stopped stream, so that
+			// checking them for other streams would let the switch through and fail
+			// the test.
+			journalResult := &querypb.QueryResult{}
+			if tc.journalsExist {
+				journalResult = sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""))
+			}
+			env.tmc.expectVRQueryResultOnKeyspaceTablets(sourceKeyspaceName, &queryResult{
+				query:  "/select val from _vt.resharding_journal.*",
+				result: journalResult,
+				err:    tc.journalErr,
+			})
+			now := protoutil.TimeToProto(time.Now())
+			var streams []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream
+			for i, st := range tc.streams {
+				streams = append(streams, &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
+					Id:      int32(i + 1),
+					State:   st.state,
+					Message: st.message,
+					Bls: &binlogdatapb.BinlogSource{
+						Keyspace: sourceKeyspaceName,
+						Shard:    "0",
+						Filter: &binlogdatapb.Filter{
+							Rules: []*binlogdatapb.Rule{{Match: tableName}},
+						},
+					},
+					Pos:           position,
+					TimeUpdated:   now,
+					TimeHeartbeat: now,
 				})
 			}
-			now := protoutil.TimeToProto(time.Now())
 			env.tmc.AddVReplicationWorkflowsResponse(env.tmc.GetWorkflowKey(targetKeyspaceName, "0"), &tabletmanagerdatapb.ReadVReplicationWorkflowsResponse{
 				Workflows: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse{{
 					Workflow:     workflowName,
 					WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
-					Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
-						Id:      vrID,
-						State:   tc.state,
-						Message: tc.message,
-						Bls: &binlogdatapb.BinlogSource{
-							Keyspace: sourceKeyspaceName,
-							Shard:    "0",
-							Filter: &binlogdatapb.Filter{
-								Rules: []*binlogdatapb.Rule{{Match: tableName}},
-							},
-						},
-						Pos:           position,
-						TimeUpdated:   now,
-						TimeHeartbeat: now,
-					}},
+					Streams:      streams,
 				}},
 			})
 
 			reason, err := env.ws.canSwitch(ctx, ts, 30, nil)
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
 			require.NoError(t, err)
 			require.Equal(t, tc.want, reason)
 		})

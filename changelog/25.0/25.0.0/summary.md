@@ -32,6 +32,7 @@
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
         - [Copied tables whose statistics aren't recalculated automatically are analyzed](#vreplication-analyze-stats-auto-recalc)
+        - [`SwitchTraffic` and `ReverseTraffic` refuse stopped workflows](#vreplication-switch-traffic-stopped-workflows)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -346,6 +347,16 @@ At the end of each copy cycle of a workflow or Online DDL migration, the target 
 - Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
 
 See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
+
+#### <a id="vreplication-switch-traffic-stopped-workflows"/>`SwitchTraffic` and `ReverseTraffic` refuse stopped workflows</a>
+
+`SwitchTraffic` and `ReverseTraffic` now refuse to switch traffic while any stream of the workflow is stopped, with the error `workflow is stopped, start it before switching traffic`. Previously a workflow that had never been started could pass the lag check, as a stream that never ran reports its lag as the time since it was created, and its replica and rdonly reads were then switched to a target without data.
+
+The exception is a stream that switching writes stopped for the cutover, when the resharding journals exist, which is the case after an earlier attempt passed the point of no return and then failed. This check does not block running `SwitchTraffic` again to complete that switch.
+
+**Impact**: Start a stopped workflow with `Workflow start` before switching its traffic. This includes a workflow whose streams a failed cutover stopped without restarting them, for example because it lost its locks, which previous versions let you retry directly.
+
+See [#21562](https://github.com/vitessio/vitess/pull/21562) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
