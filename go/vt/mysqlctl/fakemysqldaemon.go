@@ -225,6 +225,8 @@ type FakeMysqlDaemon struct {
 	SemiSyncPrimaryEnabled bool
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
+	// RestartReplicationReceiverError is used by RestartReplicationReceiver.
+	RestartReplicationReceiverError error
 
 	// SetSemiSyncEnabledFunc, if set, is called by SetSemiSyncEnabled, which
 	// returns its error without changing the settings.
@@ -574,6 +576,17 @@ func (fmd *FakeMysqlDaemon) StopReplication(ctx context.Context, hookExtraEnv ma
 func (fmd *FakeMysqlDaemon) StopIOThread(ctx context.Context) error {
 	return fmd.ExecuteSuperQueryList(ctx, []string{
 		"STOP REPLICA IO_THREAD",
+	})
+}
+
+// RestartReplicationReceiver is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) RestartReplicationReceiver(ctx context.Context, hookExtraEnv map[string]string) error {
+	if fmd.RestartReplicationReceiverError != nil {
+		return fmd.RestartReplicationReceiverError
+	}
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"STOP REPLICA IO_THREAD",
+		"START REPLICA IO_THREAD",
 	})
 }
 

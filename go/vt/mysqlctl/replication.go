@@ -218,6 +218,38 @@ func (mysqld *Mysqld) StopReplication(ctx context.Context, hookExtraEnv map[stri
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopReplicationCommand()})
 }
 
+// ErrReceiverRestartUnsupported is returned by RestartReplicationReceiver when
+// the flavor cannot stop and start the replication receiver on its own.
+var ErrReceiverRestartUnsupported = errors.New("the flavor cannot restart the replication receiver on its own")
+
+// RestartReplicationReceiver stops and starts the replication receiver (IO
+// thread), leaving the applier as it is. It runs the optional hooks that
+// StopReplication and StartReplication run.
+func (mysqld *Mysqld) RestartReplicationReceiver(ctx context.Context, hookExtraEnv map[string]string) error {
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	stop, start := conn.Conn.StopIOThreadCommand(), conn.Conn.StartIOThreadCommand()
+	if !replicationThreadCommandAvailable(stop) || !replicationThreadCommandAvailable(start) {
+		return ErrReceiverRestartUnsupported
+	}
+
+	h := hook.NewSimpleHook("preflight_stop_slave")
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
+		return err
+	}
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{stop, start}); err != nil {
+		return err
+	}
+	h = hook.NewSimpleHook("postflight_start_slave")
+	h.ExtraEnv = hookExtraEnv
+	return h.ExecuteOptional()
+}
+
 // StopIOThread stops a replica's IO thread only.
 func (mysqld *Mysqld) StopIOThread(ctx context.Context) error {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
