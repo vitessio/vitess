@@ -206,9 +206,8 @@ func TestExecuteSuperQueryListTaintedDiscardsConnection(t *testing.T) {
 // TestSuperQueriesHonorContext checks that DBA-pool calls return when their
 // context ends while mysqld isn't answering their query, even if the handshake
 // of the connection that replaces the one closed on cancellation never
-// completes. A drained backup restores a primary's semi-sync with these calls
-// while holding the tablet's action lock, which a hung mysqld must not keep
-// held.
+// completes. Callers make these calls while holding the tablet's action lock,
+// which a hung mysqld must not keep held.
 func TestSuperQueriesHonorContext(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
@@ -236,10 +235,38 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			return err
 		},
 	}, {
+		name:  "replication status",
+		query: "SHOW REPLICA STATUS",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.ReplicationStatus(ctx)
+			return err
+		},
+	}, {
+		name:  "executed position",
+		query: "SELECT @@global.gtid_executed",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.PrimaryPosition(ctx)
+			return err
+		},
+	}, {
+		name:  "promotion position",
+		query: "SELECT @@global.gtid_executed",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.Promote(ctx, nil)
+			return err
+		},
+	}, {
 		name:  "receiver restart",
 		query: "STOP REPLICA IO_THREAD",
 		call: func(ctx context.Context, mysqld *Mysqld) error {
 			return mysqld.RestartReplicationReceiver(ctx, nil)
+		},
+	}, {
+		name:  "semi-sync blocked check",
+		query: "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.IsSemiSyncBlocked(ctx)
+			return err
 		},
 	}, {
 		name:  "connection check",

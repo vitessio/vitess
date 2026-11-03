@@ -1035,9 +1035,15 @@ func (mysqld *Mysqld) ReplicationStatus(ctx context.Context) (replication.Replic
 	if err != nil {
 		return replication.ReplicationStatus{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
-	return conn.Conn.ShowReplicationStatus()
+	var status replication.ReplicationStatus
+	err = mysqld.executeWithContext(ctx, conn, "replication status", func() error {
+		var err error
+		status, err = conn.Conn.ShowReplicationStatus()
+		return err
+	})
+	return status, err
 }
 
 // PrimaryStatus returns the primary replication statuses
@@ -1076,9 +1082,15 @@ func (mysqld *Mysqld) PrimaryPosition(ctx context.Context) (replication.Position
 	if err != nil {
 		return replication.Position{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
-	return conn.Conn.PrimaryPosition()
+	var pos replication.Position
+	err = mysqld.executeWithContext(ctx, conn, "executed position", func() error {
+		var err error
+		pos, err = conn.Conn.PrimaryPosition()
+		return err
+	})
+	return pos, err
 }
 
 // SetReplicationPosition sets the replication position at which the replica will resume
@@ -1378,11 +1390,11 @@ func (mysqld *Mysqld) IsSemiSyncBlocked(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	// Execute the query to check if the primary is blocked on semi-sync.
 	semiSyncWaitSessionsRead := "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')"
-	res, err := conn.Conn.ExecuteFetch(semiSyncWaitSessionsRead, 1, false)
+	res, err := mysqld.executeFetchContext(ctx, conn, semiSyncWaitSessionsRead, 1, false)
 	if err != nil {
 		return false, err
 	}
