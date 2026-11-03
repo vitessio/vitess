@@ -815,11 +815,18 @@ func (p *Parser) RemoveDirective(query string, c *ParsedComments, key string) (s
 		}
 
 		start := tokenizer.Pos - len(comment)
-		if replacement == "" && start > last && query[start-1] == ' ' {
-			start--
+		queryReplacement := replacement
+		if replacement == "" && start > last && tokenizer.Pos < len(query) {
+			leftSpace := IsSQLSpace(query[start-1])
+			rightSpace := IsSQLSpace(query[tokenizer.Pos])
+			if query[start-1] == ' ' && rightSpace {
+				start--
+			} else if !leftSpace && !rightSpace {
+				queryReplacement = " "
+			}
 		}
 		rewritten.WriteString(query[last:start])
-		rewritten.WriteString(replacement)
+		rewritten.WriteString(queryReplacement)
 		last = tokenizer.Pos
 		commentIndex++
 	}

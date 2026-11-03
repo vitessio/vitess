@@ -827,6 +827,16 @@ func TestRemoveDirective(t *testing.T) {
 		wantQuery:   "select * from t",
 		wantRemoved: true,
 	}, {
+		name:        "directive separates tokens",
+		query:       "create /*vt+ PRIORITY=50 */table t (id int)",
+		wantQuery:   "create table t (id int)",
+		wantRemoved: true,
+	}, {
+		name:        "directive is the only token separator",
+		query:       "create/*vt+ PRIORITY=50 */table t (id int)",
+		wantQuery:   "create table t (id int)",
+		wantRemoved: true,
+	}, {
 		name:         "mixed directives",
 		query:        "select /*vt+ WORKLOAD_NAME=online PRIORITY=50 QUERY_TIMEOUT_MS=100 */ * from t",
 		wantQuery:    "select /*vt+ WORKLOAD_NAME=online QUERY_TIMEOUT_MS=100 */ * from t",
