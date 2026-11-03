@@ -88,6 +88,16 @@ type Controller interface {
 	// BroadcastHealth sends the current health to all listeners
 	BroadcastHealth()
 
+	// SetGroupReplicationVerdict records whether the tablet's MySQL is ONLINE in the shard's
+	// legitimate replication group, with a majority of the shard's voters ONLINE in its view
+	// viewID. Replication lag polling needs it on a Group Replication member.
+	SetGroupReplicationVerdict(healthy bool, viewID string)
+
+	// SetHeartbeatWritesSuppressed keeps a PRIMARY tablet from writing heartbeats while suppressed
+	// is set, whatever its serving state. The tablet manager sets it while a Group Replication
+	// primary does not serve because its MySQL must not commit anything.
+	SetHeartbeatWritesSuppressed(suppressed bool)
+
 	// TopoServer returns the topo server.
 	TopoServer() *topo.Server
 

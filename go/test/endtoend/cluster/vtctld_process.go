@@ -97,10 +97,13 @@ func (vtctld *VtctldProcess) Setup(extraArgs ...string) (err error) {
 		return
 	}
 
-	vtctld.exit = make(chan error)
+	// The goroutine keeps the channel and the process it was started for: a restart replaces both
+	// fields, and the goroutine of the earlier process must not close the new channel.
+	exit, proc := make(chan error), vtctld.proc
+	vtctld.exit = exit
 	go func() {
-		vtctld.exit <- vtctld.proc.Wait()
-		close(vtctld.exit)
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)

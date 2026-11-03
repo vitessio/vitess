@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -44,6 +45,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var publishRetryInterval = 30 * time.Second
@@ -55,6 +57,17 @@ func registerStateFlags(fs *pflag.FlagSet) {
 func init() {
 	servenv.OnParseFor("vtcombo", registerStateFlags)
 	servenv.OnParseFor("vttablet", registerStateFlags)
+}
+
+// groupReplicationNotServingState is the reason why a PRIMARY tablet must not serve for its
+// replication group, empty if it may, and the generation of the not-serving decisions: every reason
+// set counts as a new one. A caller that decided, from a status of MySQL, that the tablet may serve
+// again captures the generation before it reads that status, and the reason is only cleared if
+// none was set since (ClearGroupReplicationNotServing): a decision made on an older status never
+// undoes a newer one.
+type groupReplicationNotServingState struct {
+	reason string
+	gen    uint64
 }
 
 // tmState manages the state of the TabletManager.
@@ -82,6 +95,18 @@ type tmState struct {
 	deniedTables    map[topodatapb.TabletType][]string
 	tablet          *topodatapb.Tablet
 	isPublishing    bool
+	// publishKick wakes up a retryPublish that waits for its next attempt, when the state changed
+	// while it waited: the change is published right away rather than after publishRetryInterval.
+	publishKick chan struct{}
+	// groupReplicationNotServing is why a PRIMARY tablet must not serve for its replication group
+	// (see groupReplicationNotServingState). It is read and cleared without mu: mu is held while the
+	// tablet record is published to a topology server that may not answer (retryPublish), and the
+	// RPCs that decide whether the tablet serves hold the action lock meanwhile.
+	groupReplicationNotServing atomic.Pointer[groupReplicationNotServingState]
+	// servingPause is why a PRIMARY tablet pauses for a planned change of its MySQL's replication
+	// (see TabletManager.pauseServingLocked), empty if it does not. Like groupReplicationNotServing,
+	// it is read without mu.
+	servingPause atomic.Pointer[string]
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -99,9 +124,10 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 		displayState: displayState{
 			tablet: tablet.CloneVT(),
 		},
-		tablet: tablet,
-		ctx:    ctx,
-		cancel: cancel,
+		tablet:      tablet,
+		ctx:         ctx,
+		cancel:      cancel,
+		publishKick: make(chan struct{}, 1),
 	}
 }
 
@@ -216,6 +242,11 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 
 		// Update the tablet record first.
 		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, primaryTermStartTime)
+		if topo.IsErrType(err, topo.NoNode) {
+			// The tablet record was deleted: the write failed for good, and the tablet must not
+			// become PRIMARY. Retrying would only hold the action lock until the caller gives up.
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "the tablet record of %s does not exist: the tablet does not become PRIMARY", topoproto.TabletAliasString(ts.tm.tabletAlias))
+		}
 		if err != nil {
 			log.Error(fmt.Sprintf("Error changing type in topo record for tablet %s :- %v\nWill keep trying to read from the toposerver", topoproto.TabletAliasString(ts.tm.tabletAlias), err))
 			// In case of a topo error, we aren't sure if the data has been written or not.
@@ -240,12 +271,37 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		}
 	}
 
-	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action)
+	err := ts.updateTypeAndPublish(ctx, tabletType, primaryTermStartTime, action, 0)
 	return err
 }
 
+// ChangeTabletTypeWithPublishTimeout changes the tablet type to a type other than PRIMARY, like
+// ChangeTabletType, but waits at most publishTimeout for the topology server to store the tablet
+// record. If it does not answer in time, the record is published in the background
+// (retryPublish), like after any other failed publish, and the change is complete otherwise: the
+// tablet runs with the new type, and the query service follows it.
+//
+// A tablet that changes its type on its own, because its MySQL is no longer the primary of its
+// replication group, uses it under the action lock. The topology server of a cell that is cut off
+// does not answer until the caller gives up, and the wait held the action lock: in the G12 chaos
+// scenario, the write issued while the cell was cut off only returned 7-11s after the partition
+// healed, and the RPC with which VTOrc bootstrapped the shard's group on that tablet waited for it.
+//
+// PRIMARY is refused: a tablet writes its record before it becomes PRIMARY (ChangeTabletType).
+func (ts *tmState) ChangeTabletTypeWithPublishTimeout(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, publishTimeout time.Duration) error {
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "the tablet record of %s must be written before the tablet becomes PRIMARY", topoproto.TabletAliasString(ts.tm.tabletAlias))
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	log.Info(fmt.Sprintf("Changing Tablet Type: %v for %s, waiting at most %v for the topology", tabletType, ts.tablet.Alias.String(), publishTimeout))
+	return ts.updateTypeAndPublish(ctx, tabletType, nil, action, publishTimeout)
+}
+
 // updateTypeAndPublish updates the tablet type in the internal state, and publishes the changes.
-func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction) error {
+// A positive publishTimeout bounds the wait for the topology server; the record is then published
+// in the background if it did not answer in time.
+func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodatapb.TabletType, primaryTermStartTime *vttime.Time, action DBAction, publishTimeout time.Duration) error {
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		if action == DBActionSetReadWrite {
 			// We need to redo the prepared transactions in read only mode using the dba user to ensure we don't lose them.
@@ -269,7 +325,13 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 
 	err := ts.updateLocked(ctx)
 	// No need to short circuit. Apply all steps and return error in the end.
-	ts.publishStateLocked(ctx)
+	publishCtx := ctx
+	if publishTimeout > 0 {
+		var cancel context.CancelFunc
+		publishCtx, cancel = context.WithTimeout(ctx, publishTimeout)
+		defer cancel()
+	}
+	ts.publishStateLocked(publishCtx)
 	ts.tm.notifyShardSync()
 	return err
 }
@@ -311,6 +373,12 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	}
 
 	ptsTime := protoutil.TimeFromProto(ts.tablet.PrimaryTermStartTime).UTC()
+
+	// A PRIMARY tablet that does not serve because its replication group lacks a majority of its
+	// voters, or because its MySQL is about to bootstrap a group, must not write heartbeats
+	// either: MySQL is writable then, and a heartbeat would be committed on a single voter. The
+	// query service keeps writing them on a primary that does not serve for another reason.
+	ts.tm.QueryServiceControl.SetHeartbeatWritesSuppressed(ts.tablet.Type == topodatapb.TabletType_PRIMARY && ts.grNotServing().reason != "")
 
 	// Disable TabletServer first so the nonserving state gets advertised
 	// before other services are shutdown.
@@ -392,7 +460,145 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
 		return "primary tablet with filtered replication on"
 	}
+	if reason := ts.primaryNotServingReason(); tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+		return reason
+	}
 	return ""
+}
+
+// primaryNotServingReason returns why a PRIMARY tablet must not serve for its replication group: a
+// planned pause first, then the group replication not-serving reason. It is empty if it may serve.
+func (ts *tmState) primaryNotServingReason() string {
+	if reason := ts.servingPause.Load(); reason != nil && *reason != "" {
+		return *reason
+	}
+	return ts.grNotServing().reason
+}
+
+// setServingPause records that a PRIMARY tablet pauses for the given reason. The caller stops the
+// query service itself.
+func (ts *tmState) setServingPause(reason string) {
+	ts.servingPause.Store(&reason)
+}
+
+// servingPaused returns whether a PRIMARY tablet pauses for a planned change of its replication.
+func (ts *tmState) servingPaused() bool {
+	reason := ts.servingPause.Load()
+	return reason != nil && *reason != ""
+}
+
+// clearServingPause records that the planned pause of a PRIMARY tablet ended. The caller makes the
+// query service serve again.
+func (ts *tmState) clearServingPause() {
+	ts.servingPause.Store(nil)
+}
+
+// grNotServing returns the current group replication not-serving state.
+func (ts *tmState) grNotServing() groupReplicationNotServingState {
+	if state := ts.groupReplicationNotServing.Load(); state != nil {
+		return *state
+	}
+	return groupReplicationNotServingState{}
+}
+
+// SetGroupReplicationNotServing makes a PRIMARY tablet stop serving with the given reason, which
+// must not be empty. The tablet keeps its type, so that vtgate buffers writes instead of failing
+// them. Every call counts as a new decision (see ClearGroupReplicationNotServing); the query service
+// only changes when the reason changed, or when it serves although it must not. A tablet that is
+// not PRIMARY keeps the reason without any other change: it applies once the tablet is PRIMARY.
+func (ts *tmState) SetGroupReplicationNotServing(ctx context.Context, reason string) error {
+	if reason == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "a group replication not-serving reason must not be empty")
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	var previous string
+	for {
+		old := ts.groupReplicationNotServing.Load()
+		var state groupReplicationNotServingState
+		if old != nil {
+			state = *old
+		}
+		previous = state.reason
+		if ts.groupReplicationNotServing.CompareAndSwap(old, &groupReplicationNotServingState{reason: reason, gen: state.gen + 1}) {
+			break
+		}
+	}
+	if ts.tablet.Type != topodatapb.TabletType_PRIMARY || (previous == reason && !ts.tm.QueryServiceControl.IsServing()) {
+		return nil
+	}
+	return ts.updateLocked(ctx)
+}
+
+// ClearGroupReplicationNotServing lets a PRIMARY tablet serve again, if no not-serving reason was set
+// since the caller captured gen (GroupReplicationNotServingState). The caller decided from a status of
+// MySQL that it read after it captured gen, under the action lock, that the tablet may serve; a
+// reason set since, for example by a bootstrap that is about to make MySQL the primary of a group
+// of one, was decided on a newer state and stands. It returns whether no reason is set anymore.
+func (ts *tmState) ClearGroupReplicationNotServing(ctx context.Context, gen uint64) (bool, error) {
+	cleared, changed := ts.clearGroupReplicationNotServing(gen)
+	if !cleared || !changed {
+		return cleared, nil
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.tablet.Type != topodatapb.TabletType_PRIMARY {
+		return true, nil
+	}
+	return true, ts.updateLocked(ctx)
+}
+
+// ClearGroupReplicationNotServingBeforeChange is ClearGroupReplicationNotServing, but it leaves the
+// query service as it is: the caller applies the change right after, with the change of the tablet
+// type that it is about to make (ChangeTabletType) or by serving again
+// (SetServingUnlessGroupReplicationNotServing), once MySQL is ready.
+func (ts *tmState) ClearGroupReplicationNotServingBeforeChange(gen uint64) bool {
+	cleared, _ := ts.clearGroupReplicationNotServing(gen)
+	return cleared
+}
+
+// clearGroupReplicationNotServing clears the reason unless one was set since gen. It returns
+// whether no reason is set anymore, and whether it cleared one.
+func (ts *tmState) clearGroupReplicationNotServing(gen uint64) (cleared, changed bool) {
+	for {
+		old := ts.groupReplicationNotServing.Load()
+		if old == nil || old.reason == "" {
+			return true, false
+		}
+		if old.gen != gen {
+			return false, false
+		}
+		if ts.groupReplicationNotServing.CompareAndSwap(old, &groupReplicationNotServingState{gen: old.gen}) {
+			return true, true
+		}
+	}
+}
+
+// GroupReplicationNotServingState returns the reason for which a PRIMARY tablet does not serve for
+// its replication group, empty if there is none, and the generation of the not-serving decisions.
+func (ts *tmState) GroupReplicationNotServingState() (string, uint64) {
+	state := ts.grNotServing()
+	return state.reason, state.gen
+}
+
+// SetServingUnlessGroupReplicationNotServing makes the query service serve as the given type again,
+// after an RPC stopped it directly (DemotePrimary's revert, UndoDemotePrimary, a primary that left
+// its group), unless the tablet is PRIMARY and must not serve for its replication group, or pauses
+// for it (see TabletManager.pauseServingLocked): the query service then stays not serving, with
+// that reason. Without Group Replication, no reason is ever set, and the query service serves as
+// before. It does not wait for mu: a reason set concurrently either is seen by the check after
+// serving, or makes its setter stop serving after it.
+func (ts *tmState) SetServingUnlessGroupReplicationNotServing(tabletType topodatapb.TabletType, primaryTermStartTime time.Time) error {
+	if reason := ts.primaryNotServingReason(); tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+		return ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, false, reason)
+	}
+	if err := ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, true, ""); err != nil {
+		return err
+	}
+	if reason := ts.primaryNotServingReason(); tabletType == topodatapb.TabletType_PRIMARY && reason != "" {
+		return ts.tm.QueryServiceControl.SetServingType(tabletType, primaryTermStartTime, false, reason)
+	}
+	return nil
 }
 
 func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
@@ -437,8 +643,12 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 
 func (ts *tmState) publishStateLocked(ctx context.Context) {
 	log.Info(fmt.Sprintf("Publishing state: %v", ts.tablet))
-	// If retry is in progress, there's nothing to do.
+	// If retry is in progress, it publishes the current state: make it try now.
 	if ts.isPublishing {
+		select {
+		case ts.publishKick <- struct{}{}:
+		default:
+		}
 		return
 	}
 	// Fast path: publish immediately.
@@ -494,8 +704,18 @@ func (ts *tmState) retryPublish() {
 			}
 			log.Error(fmt.Sprintf("Unable to publish state to topo, will keep retrying: %v", err))
 			ts.mu.Unlock()
-			time.Sleep(publishRetryInterval)
+			select {
+			case <-time.After(publishRetryInterval):
+			case <-ts.publishKick:
+				// The state changed meanwhile, for example a promotion wrote the record: the
+				// topology may answer again.
+			case <-ts.ctx.Done():
+			}
 			ts.mu.Lock()
+			if ts.ctx.Err() != nil {
+				// The tablet manager is shutting down: no attempt can succeed anymore.
+				return
+			}
 			continue
 		}
 		log.Info(fmt.Sprintf("Published state: %v", ts.tablet))

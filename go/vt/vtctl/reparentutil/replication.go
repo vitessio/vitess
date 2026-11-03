@@ -333,7 +333,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 		return nil
 	}
 
-	durabilityName, err := ts.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	durabilityName, err := ts.GetShardDurability(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return err
 	}

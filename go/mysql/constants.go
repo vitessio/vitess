@@ -295,4 +295,7 @@ func IsNum(typ uint8) bool {
 
 const (
 	readReplicationConnectionConfiguration = "SELECT * FROM performance_schema.replication_connection_configuration"
+	// readDefaultChannelConnectionConfiguration reads only the default channel, so that the
+	// channels created by other replication mechanisms, such as Group Replication, are ignored.
+	readDefaultChannelConnectionConfiguration = readReplicationConnectionConfiguration + " WHERE CHANNEL_NAME = ''"
 )

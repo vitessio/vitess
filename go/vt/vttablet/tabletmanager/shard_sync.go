@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -89,6 +90,11 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 			log.Info("Change in shard record")
 
 			if event != nil {
+				if event.Err == nil && event.Value != nil {
+					// The fence check decides on the voters and the incarnation that the tablet read
+					// last: a primary that the voter list dropped is fenced right away.
+					tm.noteShardFromWatch(event.Value)
+				}
 				if event.Err != nil {
 					// The watch failed. Stop it so we start a new one if needed.
 					log.Error(fmt.Sprintf("Shard watch failed: %v", event.Err))
@@ -149,11 +155,16 @@ func (tm *TabletManager) shardSyncLoop(ctx context.Context, notifyChan <-chan st
 				// We already have an active watch. Nothing to do.
 				continue
 			}
-			if err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard); err != nil {
+			current, err := shardWatch.start(tm.TopoServer, tablet.Keyspace, tablet.Shard)
+			if err != nil {
 				log.Error(fmt.Sprintf("Failed to start shard watch: %v", err))
 				// Start retry timer and go back to sleep.
 				retryChan = time.After(shardSyncRetryDelay)
 				continue
+			}
+			if current != nil && current.Value != nil {
+				// The record as the watch started: the voter list may have changed before.
+				tm.noteShardFromWatch(current.Value)
 			}
 		default:
 			// If we're not primary, stop watching the shard record,
@@ -216,7 +227,9 @@ func syncShardPrimary(ctx context.Context, ts *topo.Server, tablet *topodatapb.T
 // new primary started advertising itself.
 //
 // If active reparents are enabled, we demote our own MySQL to a replica and
-// update our tablet type to REPLICA.
+// update our tablet type to REPLICA. On a tablet whose shard uses a group
+// replication policy, MySQL is a group member: the tablet does not make it
+// replicate from the new primary, and it rejoins its group on its own (see leavesReplicationToGroup).
 //
 // If active reparents are disabled, we don't touch our MySQL.
 // We just directly update our tablet type to REPLICA.
@@ -235,6 +248,22 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 		return nil
 	}
 
+	// On an active group replication member, the group already moved the primary role and made
+	// MySQL read-only. Only the tablet type needs to follow.
+	groupStatus, err := tm.groupReplicationStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if mysql.IsGroupMemberActive(groupStatus) {
+		log.Info("MySQL is an active group replication member; updating tablet state only.")
+		changeTypeCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancel()
+		if err := tm.tmState.ChangeTabletType(changeTypeCtx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+			return vterrors.Wrapf(err, "failed to change type to %v", topodatapb.TabletType_REPLICA)
+		}
+		return nil
+	}
+
 	// Do a full demotion to convert MySQL into a replica.
 	// We do not revert on partial failure here because this code path only
 	// triggers after a new primary has taken over, so we are past the point of
@@ -245,6 +274,20 @@ func (tm *TabletManager) endPrimaryTerm(ctx context.Context, primaryAlias *topod
 	defer cancelDemotePrimary()
 	if _, err := tm.demotePrimary(demotePrimaryCtx, false /* revertPartialFailure */, true /* force */); err != nil {
 		return vterrors.Wrap(err, "failed to demote primary")
+	}
+	if tm.leavesReplicationToGroup(ctx) {
+		// A member of the shard's replication group, whose MySQL is not an active member now: it
+		// must not replicate from the new primary on the default channel. It rejoins its group
+		// through the sync loop, or VTOrc's recovery, as a REPLICA.
+		log.Info("The tablet is a member of the shard's replication group; changing the type to REPLICA without configuring replication.")
+		changeTypeCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		defer cancel()
+		if err := tm.tmState.ChangeTabletType(changeTypeCtx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
+			return vterrors.Wrapf(err, "failed to change type to %v", topodatapb.TabletType_REPLICA)
+		}
+		// A new type ends the demotion (see groupReplicationDemoted).
+		tm.groupReplicationDemoted.Store(false)
+		return nil
 	}
 	setPrimaryCtx, cancelSetPrimary := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancelSetPrimary()

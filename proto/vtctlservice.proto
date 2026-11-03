@@ -211,6 +211,11 @@ service Vtctld {
   // external cluster into Vitess.
   rpc MigrateCreate(vtctldata.MigrateCreateRequest) returns (vtctldata.WorkflowStatusResponse) {};
 
+  // MigrateReplicationMode converts the shards of a keyspace between asynchronous
+  // (semi-sync) replication and MySQL Group Replication, online and one tablet at a
+  // time, and updates the keyspace durability policy.
+  rpc MigrateReplicationMode(vtctldata.MigrateReplicationModeRequest) returns (vtctldata.MigrateReplicationModeResponse) {};
+
   // MountRegister registers a new external Vitess cluster.
   rpc MountRegister(vtctldata.MountRegisterRequest) returns (vtctldata.MountRegisterResponse) {};
   // MountUnregister unregisters an external Vitess cluster.

@@ -387,7 +387,7 @@ func TestFullStatusCollectsEveryField(t *testing.T) {
 		),
 	)
 
-	db.AddQuery("SHOW REPLICA STATUS", sqltypes.MakeTestResult(
+	db.AddQuery("SHOW REPLICA STATUS FOR CHANNEL ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("Last_SQL_Error|Last_IO_Error", "varchar|varchar"),
 		"|",
 	))
@@ -396,9 +396,13 @@ func TestFullStatusCollectsEveryField(t *testing.T) {
 		"binlog.000001|154|||8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
 	))
 	db.AddQuery("SELECT @@global.gtid_purged", sqltypes.MakeTestResult(sqltypes.MakeTestFields("gtid_purged", "varchar"), "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-5"))
-	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
+	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration WHERE CHANNEL_NAME = ''", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("HEARTBEAT_INTERVAL", "float64"),
 		"4.5",
+	))
+	// The group replication plugin is not loaded.
+	db.AddQuery("SELECT PLUGIN_STATUS FROM information_schema.PLUGINS WHERE PLUGIN_NAME = 'group_replication'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("PLUGIN_STATUS", "varchar"),
 	))
 
 	tablet := newTestTablet(t, 100, "ks", "0", nil)

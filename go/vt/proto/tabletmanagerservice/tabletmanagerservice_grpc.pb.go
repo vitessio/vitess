@@ -99,6 +99,8 @@ const (
 	TabletManager_UndoDemotePrimary_FullMethodName               = "/tabletmanagerservice.TabletManager/UndoDemotePrimary"
 	TabletManager_ReplicaWasPromoted_FullMethodName              = "/tabletmanagerservice.TabletManager/ReplicaWasPromoted"
 	TabletManager_ResetReplicationParameters_FullMethodName      = "/tabletmanagerservice.TabletManager/ResetReplicationParameters"
+	TabletManager_StartGroupReplication_FullMethodName           = "/tabletmanagerservice.TabletManager/StartGroupReplication"
+	TabletManager_StopGroupReplication_FullMethodName            = "/tabletmanagerservice.TabletManager/StopGroupReplication"
 	TabletManager_FullStatus_FullMethodName                      = "/tabletmanagerservice.TabletManager/FullStatus"
 	TabletManager_SetReplicationSource_FullMethodName            = "/tabletmanagerservice.TabletManager/SetReplicationSource"
 	TabletManager_ReplicaWasRestarted_FullMethodName             = "/tabletmanagerservice.TabletManager/ReplicaWasRestarted"
@@ -210,6 +212,11 @@ type TabletManagerClient interface {
 	ReplicaWasPromoted(ctx context.Context, in *tabletmanagerdata.ReplicaWasPromotedRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// ResetReplicationParameters resets the replica replication parameters
 	ResetReplicationParameters(ctx context.Context, in *tabletmanagerdata.ResetReplicationParametersRequest, opts ...grpc.CallOption) (*tabletmanagerdata.ResetReplicationParametersResponse, error)
+	// StartGroupReplication makes the tablet's MySQL join its shard's MySQL Group Replication
+	// group, or bootstrap a new group. It stops asynchronous replication first.
+	StartGroupReplication(ctx context.Context, in *tabletmanagerdata.StartGroupReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartGroupReplicationResponse, error)
+	// StopGroupReplication makes the tablet's MySQL leave its shard's MySQL Group Replication group.
+	StopGroupReplication(ctx context.Context, in *tabletmanagerdata.StopGroupReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopGroupReplicationResponse, error)
 	// FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 	FullStatus(ctx context.Context, in *tabletmanagerdata.FullStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.FullStatusResponse, error)
 	// SetReplicationSource tells the replica to reparent
@@ -848,6 +855,26 @@ func (c *tabletManagerClient) ResetReplicationParameters(ctx context.Context, in
 	return out, nil
 }
 
+func (c *tabletManagerClient) StartGroupReplication(ctx context.Context, in *tabletmanagerdata.StartGroupReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StartGroupReplicationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(tabletmanagerdata.StartGroupReplicationResponse)
+	err := c.cc.Invoke(ctx, TabletManager_StartGroupReplication_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *tabletManagerClient) StopGroupReplication(ctx context.Context, in *tabletmanagerdata.StopGroupReplicationRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopGroupReplicationResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(tabletmanagerdata.StopGroupReplicationResponse)
+	err := c.cc.Invoke(ctx, TabletManager_StopGroupReplication_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *tabletManagerClient) FullStatus(ctx context.Context, in *tabletmanagerdata.FullStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.FullStatusResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(tabletmanagerdata.FullStatusResponse)
@@ -1056,6 +1083,11 @@ type TabletManagerServer interface {
 	ReplicaWasPromoted(context.Context, *tabletmanagerdata.ReplicaWasPromotedRequest) (*tabletmanagerdata.ReplicaWasPromotedResponse, error)
 	// ResetReplicationParameters resets the replica replication parameters
 	ResetReplicationParameters(context.Context, *tabletmanagerdata.ResetReplicationParametersRequest) (*tabletmanagerdata.ResetReplicationParametersResponse, error)
+	// StartGroupReplication makes the tablet's MySQL join its shard's MySQL Group Replication
+	// group, or bootstrap a new group. It stops asynchronous replication first.
+	StartGroupReplication(context.Context, *tabletmanagerdata.StartGroupReplicationRequest) (*tabletmanagerdata.StartGroupReplicationResponse, error)
+	// StopGroupReplication makes the tablet's MySQL leave its shard's MySQL Group Replication group.
+	StopGroupReplication(context.Context, *tabletmanagerdata.StopGroupReplicationRequest) (*tabletmanagerdata.StopGroupReplicationResponse, error)
 	// FullStatus collects and returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
 	FullStatus(context.Context, *tabletmanagerdata.FullStatusRequest) (*tabletmanagerdata.FullStatusResponse, error)
 	// SetReplicationSource tells the replica to reparent
@@ -1266,6 +1298,12 @@ func (UnimplementedTabletManagerServer) ReplicaWasPromoted(context.Context, *tab
 }
 func (UnimplementedTabletManagerServer) ResetReplicationParameters(context.Context, *tabletmanagerdata.ResetReplicationParametersRequest) (*tabletmanagerdata.ResetReplicationParametersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResetReplicationParameters not implemented")
+}
+func (UnimplementedTabletManagerServer) StartGroupReplication(context.Context, *tabletmanagerdata.StartGroupReplicationRequest) (*tabletmanagerdata.StartGroupReplicationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartGroupReplication not implemented")
+}
+func (UnimplementedTabletManagerServer) StopGroupReplication(context.Context, *tabletmanagerdata.StopGroupReplicationRequest) (*tabletmanagerdata.StopGroupReplicationResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopGroupReplication not implemented")
 }
 func (UnimplementedTabletManagerServer) FullStatus(context.Context, *tabletmanagerdata.FullStatusRequest) (*tabletmanagerdata.FullStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FullStatus not implemented")
@@ -2413,6 +2451,42 @@ func _TabletManager_ResetReplicationParameters_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TabletManager_StartGroupReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StartGroupReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StartGroupReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TabletManager_StartGroupReplication_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StartGroupReplication(ctx, req.(*tabletmanagerdata.StartGroupReplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TabletManager_StopGroupReplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(tabletmanagerdata.StopGroupReplicationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TabletManagerServer).StopGroupReplication(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TabletManager_StopGroupReplication_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TabletManagerServer).StopGroupReplication(ctx, req.(*tabletmanagerdata.StopGroupReplicationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TabletManager_FullStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(tabletmanagerdata.FullStatusRequest)
 	if err := dec(in); err != nil {
@@ -2811,6 +2885,14 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ResetReplicationParameters",
 			Handler:    _TabletManager_ResetReplicationParameters_Handler,
+		},
+		{
+			MethodName: "StartGroupReplication",
+			Handler:    _TabletManager_StartGroupReplication_Handler,
+		},
+		{
+			MethodName: "StopGroupReplication",
+			Handler:    _TabletManager_StopGroupReplication_Handler,
 		},
 		{
 			MethodName: "FullStatus",

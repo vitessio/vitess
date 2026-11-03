@@ -19,6 +19,8 @@ package tabletservermock
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -93,6 +95,15 @@ type Controller struct {
 	// queryRulesMap has the latest query rules.
 	queryRulesMap map[string]*rules.Rules
 
+	// groupReplicationVerdict is the last verdict passed to SetGroupReplicationVerdict.
+	groupReplicationVerdict *GroupReplicationVerdict
+
+	// servingEvents is what ServingEvents returns.
+	servingEvents []string
+
+	// heartbeatWritesSuppressed is the last value passed to SetHeartbeatWritesSuppressed.
+	heartbeatWritesSuppressed bool
+
 	MethodCalled map[string]bool
 }
 
@@ -146,6 +157,7 @@ func (tqsc *Controller) SetServingType(tabletType topodatapb.TabletType, ptsTime
 		Serving:    serving,
 		TabletType: tabletType,
 	}
+	tqsc.servingEvents = append(tqsc.servingEvents, fmt.Sprintf("serving=%v", serving))
 	tqsc.isInLameduck = false
 	return tqsc.SetServingTypeError
 }
@@ -205,13 +217,52 @@ func (tqsc *Controller) SchemaEngine() *schema.Engine {
 	return nil
 }
 
+// GroupReplicationVerdict is a verdict passed to SetGroupReplicationVerdict.
+type GroupReplicationVerdict struct {
+	Healthy bool
+	ViewID  string
+}
+
+// SetGroupReplicationVerdict is part of the tabletserver.Controller interface
+func (tqsc *Controller) SetGroupReplicationVerdict(healthy bool, viewID string) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.groupReplicationVerdict = &GroupReplicationVerdict{Healthy: healthy, ViewID: viewID}
+}
+
+// LastGroupReplicationVerdict returns the last verdict passed to SetGroupReplicationVerdict, or
+// nil if there was none.
+func (tqsc *Controller) LastGroupReplicationVerdict() *GroupReplicationVerdict {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return tqsc.groupReplicationVerdict
+}
+
+// SetHeartbeatWritesSuppressed is part of the tabletserver.Controller interface
+func (tqsc *Controller) SetHeartbeatWritesSuppressed(suppressed bool) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.heartbeatWritesSuppressed = suppressed
+}
+
+// HeartbeatWritesSuppressed returns the last value passed to SetHeartbeatWritesSuppressed.
+func (tqsc *Controller) HeartbeatWritesSuppressed() bool {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return tqsc.heartbeatWritesSuppressed
+}
+
 // BroadcastHealth is part of the tabletserver.Controller interface
 func (tqsc *Controller) BroadcastHealth() {
 	tqsc.mu.Lock()
 	defer tqsc.mu.Unlock()
 
-	tqsc.BroadcastData <- &BroadcastData{
-		Serving: tqsc.queryServiceEnabled && (!tqsc.isInLameduck),
+	serving := tqsc.queryServiceEnabled && (!tqsc.isInLameduck)
+	tqsc.servingEvents = append(tqsc.servingEvents, fmt.Sprintf("broadcast serving=%v", serving))
+	// A test that does not read the broadcasts must not block the tablet manager.
+	select {
+	case tqsc.BroadcastData <- &BroadcastData{Serving: serving}:
+	default:
 	}
 }
 
@@ -231,7 +282,9 @@ func (tqsc *Controller) GetThrottlerStatus(ctx context.Context) *throttle.Thrott
 }
 
 // RedoPreparedTransactions is part of the tabletserver.Controller interface
-func (tqsc *Controller) RedoPreparedTransactions() {}
+func (tqsc *Controller) RedoPreparedTransactions() {
+	tqsc.MethodCalled["RedoPreparedTransactions"] = true
+}
 
 // SetTwoPCAllowed sets whether TwoPC is allowed or not. It also takes the reason of why it is being set.
 // The reason should be an enum value defined in the tabletserver.
@@ -291,6 +344,24 @@ func (tqsc *Controller) EnterLameduck() {
 	defer tqsc.mu.Unlock()
 
 	tqsc.isInLameduck = true
+	tqsc.servingEvents = append(tqsc.servingEvents, "lameduck")
+}
+
+// RecordServingEvent appends an event of the test to the events that ServingEvents returns, for
+// example a change of MySQL, so that the test can check its order against the serving state.
+func (tqsc *Controller) RecordServingEvent(event string) {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	tqsc.servingEvents = append(tqsc.servingEvents, event)
+}
+
+// ServingEvents returns, in order, the calls that changed or reported the serving state
+// ("serving=<bool>" for SetServingType, "lameduck", "broadcast serving=<bool>"), and the events
+// recorded by RecordServingEvent.
+func (tqsc *Controller) ServingEvents() []string {
+	tqsc.mu.Lock()
+	defer tqsc.mu.Unlock()
+	return slices.Clone(tqsc.servingEvents)
 }
 
 // SetQueryServiceEnabledForTests can set queryServiceEnabled in tests.

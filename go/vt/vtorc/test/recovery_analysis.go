@@ -29,15 +29,18 @@ import (
 )
 
 type InfoForRecoveryAnalysis struct {
-	TabletInfo                                *topodatapb.Tablet
-	PrimaryTabletInfo                         *topodatapb.Tablet
-	PrimaryTimestamp                          *time.Time
-	Cell                                      string
-	Keyspace                                  string
-	Shard                                     string
-	ShardPrimaryTermTimestamp                 string
-	KeyspaceType                              int
-	DurabilityPolicy                          string
+	TabletInfo                *topodatapb.Tablet
+	PrimaryTabletInfo         *topodatapb.Tablet
+	PrimaryTimestamp          *time.Time
+	Cell                      string
+	Keyspace                  string
+	Shard                     string
+	ShardPrimaryTermTimestamp string
+	KeyspaceType              int
+	DurabilityPolicy          string
+	// KeyspaceMigrationSourceDurabilityPolicy is the keyspace's migration source policy
+	// (Keyspace.migration_source_durability_policy).
+	KeyspaceMigrationSourceDurabilityPolicy   string
 	IsInvalid                                 int
 	IsPrimary                                 int
 	IsCoPrimary                               int
@@ -83,6 +86,23 @@ type InfoForRecoveryAnalysis struct {
 	MaxReplicaGTIDErrant                      string
 	ReadOnly                                  uint
 	IsStalledDisk                             uint
+	ServerUUID                                string
+	GroupPluginActive                         int
+	GroupMemberState                          string
+	GroupMemberRole                           string
+	GroupPrimaryUUID                          string
+	GroupHasQuorum                            int
+	GroupOnlineMembers                        uint
+	GroupActiveMemberUUIDs                    string
+	ShardGroupReplicationVoters               string
+	ShardGroupReplicationVoterUUIDs           string
+	GroupOnlineMemberUUIDs                    string
+	GroupViewID                               string
+	ShardGroupReplicationIncarnation          string
+	ShardGroupReplicationBootstrapTarget      string
+	GroupStartInProgress                      int
+	IsDeletedGroupVoter                       int
+	ShardDurabilityPolicy                     string
 }
 
 func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
@@ -111,6 +131,7 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["downtime_end_timestamp"] = sqlutils.CellData{String: info.DowntimeEndTimestamp, Valid: true}
 	rowMap["downtime_remaining_seconds"] = sqlutils.CellData{String: strconv.Itoa(info.DowntimeRemainingSeconds), Valid: true}
 	rowMap["durability_policy"] = sqlutils.CellData{String: info.DurabilityPolicy, Valid: true}
+	rowMap["keyspace_migration_source_durability_policy"] = sqlutils.CellData{String: info.KeyspaceMigrationSourceDurabilityPolicy, Valid: true}
 	rowMap["gtid_errant"] = sqlutils.CellData{String: info.ErrantGTID, Valid: true}
 	rowMap["gtid_mode"] = sqlutils.CellData{String: info.GTIDMode, Valid: true}
 	rowMap["hostname"] = sqlutils.CellData{String: info.Hostname, Valid: true}
@@ -151,6 +172,23 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap["current_tablet_type"] = sqlutils.CellData{String: strconv.Itoa(currentType), Valid: true}
 	rowMap["tablet_info"] = sqlutils.CellData{String: string(res), Valid: true}
 	rowMap["is_disk_stalled"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.IsStalledDisk), 10), Valid: true}
+	rowMap["analyzed_server_uuid"] = sqlutils.CellData{String: info.ServerUUID, Valid: true}
+	rowMap["gr_plugin_active"] = sqlutils.CellData{String: strconv.Itoa(info.GroupPluginActive), Valid: true}
+	rowMap["gr_member_state"] = sqlutils.CellData{String: info.GroupMemberState, Valid: true}
+	rowMap["gr_member_role"] = sqlutils.CellData{String: info.GroupMemberRole, Valid: true}
+	rowMap["gr_primary_uuid"] = sqlutils.CellData{String: info.GroupPrimaryUUID, Valid: true}
+	rowMap["gr_has_quorum"] = sqlutils.CellData{String: strconv.Itoa(info.GroupHasQuorum), Valid: true}
+	rowMap["gr_online_members"] = sqlutils.CellData{String: strconv.FormatUint(uint64(info.GroupOnlineMembers), 10), Valid: true}
+	rowMap["gr_active_member_uuids"] = sqlutils.CellData{String: info.GroupActiveMemberUUIDs, Valid: true}
+	rowMap["shard_group_replication_voters"] = sqlutils.CellData{String: info.ShardGroupReplicationVoters, Valid: true}
+	rowMap["shard_group_replication_voter_uuids"] = sqlutils.CellData{String: info.ShardGroupReplicationVoterUUIDs, Valid: true}
+	rowMap["gr_online_member_uuids"] = sqlutils.CellData{String: info.GroupOnlineMemberUUIDs, Valid: true}
+	rowMap["gr_view_id"] = sqlutils.CellData{String: info.GroupViewID, Valid: true}
+	rowMap["shard_group_replication_incarnation"] = sqlutils.CellData{String: info.ShardGroupReplicationIncarnation, Valid: true}
+	rowMap["shard_group_replication_bootstrap_target"] = sqlutils.CellData{String: info.ShardGroupReplicationBootstrapTarget, Valid: true}
+	rowMap["gr_start_in_progress"] = sqlutils.CellData{String: strconv.Itoa(info.GroupStartInProgress), Valid: true}
+	rowMap["is_deleted_group_voter"] = sqlutils.CellData{String: strconv.Itoa(info.IsDeletedGroupVoter), Valid: true}
+	rowMap["shard_durability_policy"] = sqlutils.CellData{String: info.ShardDurabilityPolicy, Valid: true}
 	return rowMap
 }
 

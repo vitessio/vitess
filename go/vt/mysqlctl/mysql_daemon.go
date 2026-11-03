@@ -71,6 +71,42 @@ type MysqlDaemon interface {
 	SemiSyncStatus(ctx context.Context) (source, replica bool)
 	SemiSyncReplicationStatus(ctx context.Context) (bool, error)
 	IsSemiSyncBlocked(ctx context.Context) (bool, error)
+
+	// Group Replication related methods
+	GroupReplicationStatus(ctx context.Context) (*replicationdatapb.GroupReplicationStatus, error)
+	// GroupReplicationApplierStatus returns the member's own state and how far its applier is
+	// behind its group, with a single query, for replication lag tracking.
+	GroupReplicationApplierStatus(ctx context.Context) (*mysql.GroupReplicationApplierStatus, error)
+	// GroupReplicationFenceStatus returns the member's state, view and super_read_only, with a
+	// single query, for the tablet's fast check of whether its MySQL must be fenced. The view id is
+	// only read if withView is set: MySQL can hold it back for about a second while a START
+	// GROUP_REPLICATION forms or joins a group.
+	GroupReplicationFenceStatus(ctx context.Context, withView bool) (*mysql.GroupReplicationFenceStatus, error)
+	// ConfigureGroupReplication applies cfg to a member that is not in a group, and disables the
+	// member action mysql_disable_super_read_only_if_primary in its own configuration.
+	ConfigureGroupReplication(ctx context.Context, cfg mysql.GroupReplicationConfig) error
+	// GroupReplicationMemberActions returns the member actions configuration of the member: its
+	// group's while it is in a group.
+	GroupReplicationMemberActions(ctx context.Context) (*mysql.GroupReplicationMemberActions, error)
+	// DisableGroupReplicationSuperReadOnlyAction disables mysql_disable_super_read_only_if_primary in
+	// the configuration of the member's group; only the writable primary of the group may.
+	DisableGroupReplicationSuperReadOnlyAction(ctx context.Context) error
+	// SetGroupReplicationMemberWeight sets the member's group_replication_member_weight, which a
+	// member of a group uses in the group's next primary election.
+	SetGroupReplicationMemberWeight(ctx context.Context, weight int) error
+	StartGroupReplication(ctx context.Context, bootstrap bool) error
+	// ApplyGroupReplicationRelayLog applies, on a member that is not in a group, the transactions
+	// that it received from its last group and had not applied when it left, until its executed
+	// GTID set contains until or ctx ends. It then stops the applier again.
+	ApplyGroupReplicationRelayLog(ctx context.Context, until replication.GTIDSet) error
+	StopGroupReplication(ctx context.Context) error
+	SetGroupReplicationPrimary(ctx context.Context, memberUUID string) error
+	// IsOfflineMode returns whether offline_mode is ON. Group Replication's OFFLINE_MODE exit
+	// state action sets it when a member leaves its group involuntarily.
+	IsOfflineMode(ctx context.Context) (bool, error)
+	// SetOfflineMode sets offline_mode. While it is ON, MySQL refuses the connections of users
+	// without CONNECTION_ADMIN or SUPER, which are vttablet's app, allprivs and repl users.
+	SetOfflineMode(ctx context.Context, on bool) error
 	ResetReplicationParameters(ctx context.Context) error
 	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
 	FlushBinaryLogs(ctx context.Context) (err error)

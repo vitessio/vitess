@@ -1026,3 +1026,44 @@ func (te *testTableGC) Close() {
 	te.order = order.Add(1)
 	te.state = testStateClosed
 }
+
+// TestPrimaryAnnouncesNotServingBeforeResuming checks that a PRIMARY which stopped serving, and
+// serves again with the same primary term, broadcasts a not-serving health check right before the
+// serving one. vtgate ends a buffering that started after it saw the primary stop serving only for a
+// primary with a newer term, or after a not-serving health check that follows the start of the
+// buffering (see announceNotServingBeforeResuming).
+func TestPrimaryAnnouncesNotServingBeforeResuming(t *testing.T) {
+	sm := newTestStateManager()
+	t.Cleanup(sm.StopService)
+	require.NoError(t, sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, ""))
+
+	ch, _ := sm.hs.register()
+	next := func() *querypb.StreamHealthResponse {
+		t.Helper()
+		select {
+		case shr := <-ch:
+			return shr
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "no health broadcast")
+			return nil
+		}
+	}
+
+	require.NoError(t, sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateNotServing, "paused"))
+	// The transition broadcasts asynchronously. Once its not-serving health check arrived, nothing
+	// else broadcasts until the next transition.
+	for next().Serving {
+	}
+	for len(ch) > 0 {
+		<-ch
+	}
+
+	require.NoError(t, sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, ""))
+	first := next()
+	assert.False(t, first.Serving, "the primary announces that it does not serve before it serves again")
+	assert.Equal(t, testNow.Unix(), first.PrimaryTermStartTimestamp)
+	for shr := first; !shr.Serving; shr = next() {
+		assert.Equal(t, testNow.Unix(), shr.PrimaryTermStartTimestamp)
+	}
+	assert.True(t, sm.IsServing())
+}

@@ -465,6 +465,11 @@ func (client *localVtctldClient) MigrateCreate(ctx context.Context, in *vtctldat
 	return client.s.MigrateCreate(ctx, in)
 }
 
+// MigrateReplicationMode is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) MigrateReplicationMode(ctx context.Context, in *vtctldatapb.MigrateReplicationModeRequest, opts ...grpc.CallOption) (*vtctldatapb.MigrateReplicationModeResponse, error) {
+	return client.s.MigrateReplicationMode(ctx, in)
+}
+
 // MountList is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) MountList(ctx context.Context, in *vtctldatapb.MountListRequest, opts ...grpc.CallOption) (*vtctldatapb.MountListResponse, error) {
 	return client.s.MountList(ctx, in)

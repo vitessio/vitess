@@ -217,6 +217,7 @@ const (
 	Vtctld_MaterializeCreate_FullMethodName           = "/vtctlservice.Vtctld/MaterializeCreate"
 	Vtctld_WorkflowAddTables_FullMethodName           = "/vtctlservice.Vtctld/WorkflowAddTables"
 	Vtctld_MigrateCreate_FullMethodName               = "/vtctlservice.Vtctld/MigrateCreate"
+	Vtctld_MigrateReplicationMode_FullMethodName      = "/vtctlservice.Vtctld/MigrateReplicationMode"
 	Vtctld_MountRegister_FullMethodName               = "/vtctlservice.Vtctld/MountRegister"
 	Vtctld_MountUnregister_FullMethodName             = "/vtctlservice.Vtctld/MountUnregister"
 	Vtctld_MountShow_FullMethodName                   = "/vtctlservice.Vtctld/MountShow"
@@ -459,6 +460,10 @@ type VtctldClient interface {
 	// MigrateCreate creates a workflow which migrates one or more tables from an
 	// external cluster into Vitess.
 	MigrateCreate(ctx context.Context, in *vtctldata.MigrateCreateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
+	// MigrateReplicationMode converts the shards of a keyspace between asynchronous
+	// (semi-sync) replication and MySQL Group Replication, online and one tablet at a
+	// time, and updates the keyspace durability policy.
+	MigrateReplicationMode(ctx context.Context, in *vtctldata.MigrateReplicationModeRequest, opts ...grpc.CallOption) (*vtctldata.MigrateReplicationModeResponse, error)
 	// MountRegister registers a new external Vitess cluster.
 	MountRegister(ctx context.Context, in *vtctldata.MountRegisterRequest, opts ...grpc.CallOption) (*vtctldata.MountRegisterResponse, error)
 	// MountUnregister unregisters an external Vitess cluster.
@@ -1361,6 +1366,16 @@ func (c *vtctldClient) MigrateCreate(ctx context.Context, in *vtctldata.MigrateC
 	return out, nil
 }
 
+func (c *vtctldClient) MigrateReplicationMode(ctx context.Context, in *vtctldata.MigrateReplicationModeRequest, opts ...grpc.CallOption) (*vtctldata.MigrateReplicationModeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(vtctldata.MigrateReplicationModeResponse)
+	err := c.cc.Invoke(ctx, Vtctld_MigrateReplicationMode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) MountRegister(ctx context.Context, in *vtctldata.MountRegisterRequest, opts ...grpc.CallOption) (*vtctldata.MountRegisterResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(vtctldata.MountRegisterResponse)
@@ -2141,6 +2156,10 @@ type VtctldServer interface {
 	// MigrateCreate creates a workflow which migrates one or more tables from an
 	// external cluster into Vitess.
 	MigrateCreate(context.Context, *vtctldata.MigrateCreateRequest) (*vtctldata.WorkflowStatusResponse, error)
+	// MigrateReplicationMode converts the shards of a keyspace between asynchronous
+	// (semi-sync) replication and MySQL Group Replication, online and one tablet at a
+	// time, and updates the keyspace durability policy.
+	MigrateReplicationMode(context.Context, *vtctldata.MigrateReplicationModeRequest) (*vtctldata.MigrateReplicationModeResponse, error)
 	// MountRegister registers a new external Vitess cluster.
 	MountRegister(context.Context, *vtctldata.MountRegisterRequest) (*vtctldata.MountRegisterResponse, error)
 	// MountUnregister unregisters an external Vitess cluster.
@@ -2534,6 +2553,9 @@ func (UnimplementedVtctldServer) WorkflowAddTables(context.Context, *vtctldata.W
 }
 func (UnimplementedVtctldServer) MigrateCreate(context.Context, *vtctldata.MigrateCreateRequest) (*vtctldata.WorkflowStatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MigrateCreate not implemented")
+}
+func (UnimplementedVtctldServer) MigrateReplicationMode(context.Context, *vtctldata.MigrateReplicationModeRequest) (*vtctldata.MigrateReplicationModeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MigrateReplicationMode not implemented")
 }
 func (UnimplementedVtctldServer) MountRegister(context.Context, *vtctldata.MountRegisterRequest) (*vtctldata.MountRegisterResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method MountRegister not implemented")
@@ -3979,6 +4001,24 @@ func _Vtctld_MigrateCreate_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_MigrateReplicationMode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.MigrateReplicationModeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).MigrateReplicationMode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Vtctld_MigrateReplicationMode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).MigrateReplicationMode(ctx, req.(*vtctldata.MigrateReplicationModeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_MountRegister_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.MountRegisterRequest)
 	if err := dec(in); err != nil {
@@ -5312,6 +5352,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "MigrateCreate",
 			Handler:    _Vtctld_MigrateCreate_Handler,
+		},
+		{
+			MethodName: "MigrateReplicationMode",
+			Handler:    _Vtctld_MigrateReplicationMode_Handler,
 		},
 		{
 			MethodName: "MountRegister",
