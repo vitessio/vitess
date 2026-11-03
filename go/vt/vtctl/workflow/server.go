@@ -105,8 +105,6 @@ const (
 	cannotSwitchFrozen              = "workflow is frozen"
 	cannotSwitchStopped             = "workflow is stopped, start it before switching traffic"
 
-	// The message that switching writes sets on the target streams it stops for the
-	// cutover.
 	stoppedForCutoverMessage = "stopped for cutover"
 
 	// Number of LOCK TABLES cycles to perform on the sources during SwitchWrites.
