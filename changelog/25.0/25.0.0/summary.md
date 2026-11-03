@@ -47,6 +47,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
+        - [`PRIORITY` directive can be excluded from plan cache keys](#vtgate-query-cache-strip-priority)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -547,6 +548,16 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 `VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
 
 The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
+#### <a id="vtgate-query-cache-strip-priority"/>`PRIORITY` directive can be excluded from plan cache keys</a>
+
+The `PRIORITY` comment directive doesn't change how a query is planned, but VTGate treats two queries that differ only in their priority as different queries. Each priority value gets its own entry in the VTGate and VTTablet plan caches, which lowers cache hit rates and uses more memory. The VTTablet consolidator also doesn't combine those queries.
+
+The new VTGate flag `--gate-query-cache-strip-priority` removes the `PRIORITY` directive from a query before VTGate normalizes it and looks up its plan. The directive is also removed from the SQL that VTGate sends to VTTablet. Queries that differ only in priority then share plan cache entries and can be consolidated. Each request keeps its own priority, because VTGate passes the priority to VTTablet in the request's execute options rather than in the SQL text. Prepared statements keep the directive.
+
+The flag is off by default. Before you enable it, check your VTTablet query rules. Rules that match on query text no longer see the `PRIORITY` directive, so a rule that matches it stops applying.
+
+See [#21858](https://github.com/vitessio/vitess/pull/21858) for details.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 
