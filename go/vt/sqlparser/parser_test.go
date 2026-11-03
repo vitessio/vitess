@@ -17,10 +17,14 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 func TestEmptyErrorAndComments(t *testing.T) {
@@ -182,6 +186,75 @@ func TestSplitStatementToPieces(t *testing.T) {
 			}
 			out := strings.Join(stmtPieces, ";")
 			require.Equal(t, tcase.output, out)
+		})
+	}
+}
+
+// parserLogBuffer records the messages of the process-wide logger.
+type parserLogBuffer struct {
+	mu   sync.Mutex
+	logs []string
+}
+
+func (b *parserLogBuffer) record(format string, args ...any) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.logs = append(b.logs, fmt.Sprintf(format, args...))
+}
+
+func (b *parserLogBuffer) contents() []string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return append([]string(nil), b.logs...)
+}
+
+func TestPartialDDLDoesNotLogSensitiveInput(t *testing.T) {
+	const secret = "fake_secret_21253"
+	parser := NewTestParser()
+	for _, sql := range []string{
+		"create table t " + secret,
+		"create database d " + secret,
+		"create table t (id int default :value) " + secret,
+	} {
+		t.Run(sql, func(t *testing.T) {
+			// The first unexpected token is sensitive too: logging only LastError
+			// would still expose it even if the full SQL were removed.
+			tokenizer := parser.NewStringTokenizer(sql)
+			require.NotZero(t, yyParsePooled(tokenizer))
+			require.ErrorContains(t, tokenizer.LastError, secret)
+
+			for _, method := range []string{"Parse", "Parse2"} {
+				t.Run(method, func(t *testing.T) {
+					var logs parserLogBuffer
+					savedInfof, savedWarningf, savedErrorf := log.Infof, log.Warningf, log.Errorf
+					log.Infof, log.Warningf, log.Errorf = logs.record, logs.record, logs.record
+					t.Cleanup(func() { log.Infof, log.Warningf, log.Errorf = savedInfof, savedWarningf, savedErrorf })
+
+					var stmt Statement
+					var err error
+					if method == "Parse" {
+						stmt, err = parser.Parse(sql)
+					} else {
+						var bindVars BindVars
+						stmt, bindVars, err = parser.Parse2(sql)
+						if strings.Contains(sql, ":value") {
+							require.Contains(t, bindVars, "value")
+						} else {
+							require.Empty(t, bindVars)
+						}
+					}
+					require.NoError(t, err)
+					switch ddl := stmt.(type) {
+					case DDLStatement:
+						require.False(t, ddl.IsFullyParsed())
+					case DBDDLStatement:
+						require.False(t, ddl.IsFullyParsed())
+					default:
+						t.Fatalf("expected partial DDL, got %T", stmt)
+					}
+					require.Empty(t, logs.contents(), "partial DDL must not emit SQL or parser-token diagnostics")
+				})
+			}
 		})
 	}
 }

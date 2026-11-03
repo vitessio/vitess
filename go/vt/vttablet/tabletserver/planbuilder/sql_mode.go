@@ -54,17 +54,18 @@ import (
 // judged upfront is rejected rather than applied unchecked. Settings that change the
 // connection's character set are rejected too (see rejectSettingCharsetExprs).
 func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) error {
-	for _, setting := range settings {
+	for i, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			return vterrors.Wrapf(err, "failed to parse connection setting: %s", setting)
+			// Parser errors can include the token near the failure, so do not wrap them.
+			return vterrors.NewErrorf(vterrors.Code(err), vterrors.ErrState(err), "failed to parse connection setting at position %d", i+1)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting is not a SET statement: %s", setting)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "connection setting at position %d is not a SET statement", i+1)
 		}
 		if rejectSubqueries {
-			if err := rejectSettingSubqueries(set, setting); err != nil {
+			if err := rejectSettingSubqueries(set); err != nil {
 				return err
 			}
 		}
@@ -84,10 +85,15 @@ func ValidateSettingsSQLMode(settings []string, parser *sqlparser.Parser, reject
 func validateConstantSetExprsSQLMode(exprs sqlparser.SetExprs) error {
 	verify, err := validateSetExprsSQLMode(exprs)
 	if err != nil {
+		// Invalid sql_mode values are echoed by the shared validator. Keep the
+		// error code and MySQL error state without exposing the setting value.
+		if vterrors.ErrState(err) == vterrors.WrongValueForVar {
+			return vterrors.NewError(vterrors.Code(err), vterrors.ErrState(err), "invalid sql_mode value in connection settings")
+		}
 		return err
 	}
 	if verify {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "non-constant sql_mode value in connection settings: %s", sqlparser.String(&sqlparser.Set{Exprs: exprs}))
+		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "non-constant sql_mode value in connection settings")
 	}
 	return nil
 }
