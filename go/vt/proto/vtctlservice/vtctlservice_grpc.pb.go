@@ -270,6 +270,7 @@ const (
 	Vtctld_VDiffResume_FullMethodName                 = "/vtctlservice.Vtctld/VDiffResume"
 	Vtctld_VDiffShow_FullMethodName                   = "/vtctlservice.Vtctld/VDiffShow"
 	Vtctld_VDiffStop_FullMethodName                   = "/vtctlservice.Vtctld/VDiffStop"
+	Vtctld_VDiffUpdate_FullMethodName                 = "/vtctlservice.Vtctld/VDiffUpdate"
 	Vtctld_WorkflowDelete_FullMethodName              = "/vtctlservice.Vtctld/WorkflowDelete"
 	Vtctld_WorkflowStatus_FullMethodName              = "/vtctlservice.Vtctld/WorkflowStatus"
 	Vtctld_WorkflowSwitchTraffic_FullMethodName       = "/vtctlservice.Vtctld/WorkflowSwitchTraffic"
@@ -623,6 +624,13 @@ type VtctldClient interface {
 	VDiffResume(ctx context.Context, in *vtctldata.VDiffResumeRequest, opts ...grpc.CallOption) (*vtctldata.VDiffResumeResponse, error)
 	VDiffShow(ctx context.Context, in *vtctldata.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(ctx context.Context, in *vtctldata.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldata.VDiffStopResponse, error)
+	// VDiffUpdate merges picker options (tablet types and cells) into an
+	// existing VDiff. If the VDiff is running on an affected shard
+	// (pending/started, or a live controller exists), the update is
+	// rejected and the operator must VDiff stop first. Otherwise the
+	// stored options are updated in place; the new options take effect
+	// on VDiff resume (or retry).
+	VDiffUpdate(ctx context.Context, in *vtctldata.VDiffUpdateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffUpdateResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(ctx context.Context, in *vtctldata.WorkflowStatusRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowStatusResponse, error)
@@ -1900,6 +1908,16 @@ func (c *vtctldClient) VDiffStop(ctx context.Context, in *vtctldata.VDiffStopReq
 	return out, nil
 }
 
+func (c *vtctldClient) VDiffUpdate(ctx context.Context, in *vtctldata.VDiffUpdateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffUpdateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(vtctldata.VDiffUpdateResponse)
+	err := c.cc.Invoke(ctx, Vtctld_VDiffUpdate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(vtctldata.WorkflowDeleteResponse)
@@ -2305,6 +2323,13 @@ type VtctldServer interface {
 	VDiffResume(context.Context, *vtctldata.VDiffResumeRequest) (*vtctldata.VDiffResumeResponse, error)
 	VDiffShow(context.Context, *vtctldata.VDiffShowRequest) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error)
+	// VDiffUpdate merges picker options (tablet types and cells) into an
+	// existing VDiff. If the VDiff is running on an affected shard
+	// (pending/started, or a live controller exists), the update is
+	// rejected and the operator must VDiff stop first. Otherwise the
+	// stored options are updated in place; the new options take effect
+	// on VDiff resume (or retry).
+	VDiffUpdate(context.Context, *vtctldata.VDiffUpdateRequest) (*vtctldata.VDiffUpdateResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)
 	WorkflowStatus(context.Context, *vtctldata.WorkflowStatusRequest) (*vtctldata.WorkflowStatusResponse, error)
@@ -2693,6 +2718,9 @@ func (UnimplementedVtctldServer) VDiffShow(context.Context, *vtctldata.VDiffShow
 }
 func (UnimplementedVtctldServer) VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method VDiffStop not implemented")
+}
+func (UnimplementedVtctldServer) VDiffUpdate(context.Context, *vtctldata.VDiffUpdateRequest) (*vtctldata.VDiffUpdateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method VDiffUpdate not implemented")
 }
 func (UnimplementedVtctldServer) WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method WorkflowDelete not implemented")
@@ -4926,6 +4954,24 @@ func _Vtctld_VDiffStop_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_VDiffUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.VDiffUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).VDiffUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Vtctld_VDiffUpdate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).VDiffUpdate(ctx, req.(*vtctldata.VDiffUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_WorkflowDelete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.WorkflowDeleteRequest)
 	if err := dec(in); err != nil {
@@ -5520,6 +5566,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "VDiffStop",
 			Handler:    _Vtctld_VDiffStop_Handler,
+		},
+		{
+			MethodName: "VDiffUpdate",
+			Handler:    _Vtctld_VDiffUpdate_Handler,
 		},
 		{
 			MethodName: "WorkflowDelete",

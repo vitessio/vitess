@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
@@ -638,4 +639,145 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 	}
 
 	return &vtctldatapb.VDiffStopResponse{}, nil
+}
+
+// VDiffUpdate is part of the vtctlservicepb.VtctldServer interface.
+// It merges picker options (tablet types and cells) into the stored
+// _vt.vdiff.options JSON on each target shard primary. Other options
+// are left unchanged. If the VDiff is running on an affected shard
+// (pending/started, or a live controller exists), that shard rejects
+// the update and the operator must VDiff stop first. Otherwise the
+// stored options are updated in place; lastpk/progress are untouched
+// and the new options take effect on VDiff resume (or retry).
+func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRequest) (*vtctldatapb.VDiffUpdateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffUpdate")
+	defer span.Finish()
+
+	targetShards := req.GetTargetShards()
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+	span.Annotate("target_shards", targetShards)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("source_cells", req.SourceCells)
+	span.Annotate("target_cells", req.TargetCells)
+	span.Annotate("clear_source_cells", req.ClearSourceCells)
+	span.Annotate("clear_target_cells", req.ClearTargetCells)
+
+	if err := uuid.Validate(req.Uuid); err != nil {
+		return nil, vterrors.Wrapf(err, "invalid UUID provided: %s", req.Uuid)
+	}
+	if req.ClearSourceCells && len(req.SourceCells) > 0 {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both source_cells and clear_source_cells")
+	}
+	if req.ClearTargetCells && len(req.TargetCells) > 0 {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both target_cells and clear_target_cells")
+	}
+
+	picker := &tabletmanagerdatapb.VDiffPickerOptions{}
+	if len(req.TabletTypes) > 0 {
+		picker.TabletTypes = discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
+	}
+	if req.ClearSourceCells {
+		cells, err := allTopoCells(ctx, s.ts)
+		if err != nil {
+			return nil, err
+		}
+		picker.SourceCell = cells
+	} else if len(req.SourceCells) > 0 {
+		picker.SourceCell = strings.Join(req.SourceCells, ",")
+	}
+	if req.ClearTargetCells {
+		cells, err := allTopoCells(ctx, s.ts)
+		if err != nil {
+			return nil, err
+		}
+		picker.TargetCell = cells
+	} else if len(req.TargetCells) > 0 {
+		picker.TargetCell = strings.Join(req.TargetCells, ",")
+	}
+	if picker.TabletTypes == "" && picker.SourceCell == "" && picker.TargetCell == "" {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update")
+	}
+
+	tabletreq := &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  req.TargetKeyspace,
+		Workflow:  req.Workflow,
+		Action:    string(vdiff.UpdateAction),
+		VdiffUuid: req.Uuid,
+		Options: &tabletmanagerdatapb.VDiffOptions{
+			PickerOptions: picker,
+		},
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(targetShards) > 0 {
+		if err := applyTargetShards(ts, targetShards); err != nil {
+			return nil, err
+		}
+	}
+
+	output := &vdiffOutput{
+		responses: make(map[string]*tabletmanagerdatapb.VDiffResponse, len(ts.targets)),
+	}
+	output.err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		resp, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
+		output.mu.Lock()
+		defer output.mu.Unlock()
+		output.responses[target.GetShard().ShardName()] = resp
+		return err
+	})
+	if output.err != nil {
+		s.Logger().Errorf("Error executing vdiff update action: %v", output.err)
+		return nil, output.err
+	}
+
+	shards := make([]string, 0, len(output.responses))
+	for shard := range output.responses {
+		shards = append(shards, shard)
+	}
+	sort.Strings(shards)
+
+	results := make([]*vtctldatapb.VDiffUpdateResponse_ShardResult, 0, len(shards))
+	for _, shard := range shards {
+		results = append(results, shardResultFromVDiffResponse(shard, output.responses[shard]))
+	}
+	return &vtctldatapb.VDiffUpdateResponse{Results: results}, nil
+}
+
+// allTopoCells returns every cell in the topology as a comma-separated
+// string, matching vdiff create's default for source_cell/target_cell.
+func allTopoCells(ctx context.Context, ts *topo.Server) (string, error) {
+	cells, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return "", vterrors.Wrap(err, "failed to list cells")
+	}
+	if len(cells) == 0 {
+		return "", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "there are no cells in the topo")
+	}
+	sort.Strings(cells)
+	return strings.Join(cells, ","), nil
+}
+
+func shardResultFromVDiffResponse(shard string, resp *tabletmanagerdatapb.VDiffResponse) *vtctldatapb.VDiffUpdateResponse_ShardResult {
+	result := &vtctldatapb.VDiffUpdateResponse_ShardResult{
+		Shard:   shard,
+		Updated: resp != nil,
+	}
+	if resp == nil || resp.Output == nil {
+		return result
+	}
+	qr := sqltypes.Proto3ToResult(resp.Output)
+	if row := qr.Named().Row(); row != nil {
+		result.State = strings.ToLower(row.AsString("state", ""))
+		if updated, err := row.ToBool("updated"); err == nil {
+			result.Updated = updated
+		}
+	}
+	return result
 }

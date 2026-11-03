@@ -46,6 +46,7 @@ const (
 	StopAction    VDiffAction = "stop"
 	ResumeAction  VDiffAction = "resume"
 	DeleteAction  VDiffAction = "delete"
+	UpdateAction  VDiffAction = "update"
 	AllActionArg              = "all"
 	LastActionArg             = "last"
 
@@ -53,7 +54,7 @@ const (
 )
 
 var (
-	Actions    = []VDiffAction{CreateAction, ShowAction, StopAction, ResumeAction, DeleteAction}
+	Actions    = []VDiffAction{CreateAction, ShowAction, StopAction, ResumeAction, DeleteAction, UpdateAction}
 	ActionArgs = []string{AllActionArg, LastActionArg}
 
 	// The real zero value has nested nil pointers.
@@ -107,6 +108,10 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		}
 	case DeleteAction:
 		if err := vde.handleDeleteAction(ctx, dbClient, req, resp); err != nil {
+			return nil, err
+		}
+	case UpdateAction:
+		if err := vde.handleUpdateAction(ctx, dbClient, req, resp); err != nil {
 			return nil, err
 		}
 	default:
@@ -473,4 +478,163 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 	}
 
 	return nil
+}
+
+// handleUpdateAction merges picker options into an existing VDiff record.
+// If the VDiff is running on this tablet (pending/started, or a live
+// controller exists), the update is rejected so the operator can
+// `VDiff stop` first. Otherwise the merged options are persisted and
+// lastpk/progress are left untouched. The new options take effect on
+// `VDiff resume` (or retry).
+func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer.DBClient, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
+	if req.VdiffUuid == "" {
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "vdiff UUID is required")
+	}
+	updates := req.GetOptions().GetPickerOptions()
+	if !pickerHasUpdates(updates) {
+		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update")
+	}
+
+	idQuery, err := sqlparser.ParseAndBind(sqlGetVDiffID,
+		sqltypes.StringBindVariable(req.VdiffUuid),
+		sqltypes.StringBindVariable(vde.dbName),
+	)
+	if err != nil {
+		return err
+	}
+	qr, err := dbClient.ExecuteFetch(idQuery, 1)
+	if err != nil {
+		return err
+	}
+	if len(qr.Rows) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s on tablet %s",
+			req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias))
+	}
+	id, err := qr.Named().Row().ToInt64("id")
+	if err != nil {
+		return fmt.Errorf("vdiff found with invalid id on tablet %s: %w",
+			topoproto.TabletAliasString(vde.thisTablet.Alias), err)
+	}
+
+	qr, err = vde.getVDiffByID(ctx, dbClient, id)
+	if err != nil {
+		return err
+	}
+	row := qr.Named().Row()
+	if row == nil {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID %s on tablet %s",
+			req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias))
+	}
+
+	state := strings.ToLower(row.AsString("state", ""))
+	if err := vde.rejectIfVDiffRunning(id, req.VdiffUuid, state); err != nil {
+		return err
+	}
+
+	options := &tabletmanagerdatapb.VDiffOptions{
+		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
+		CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
+	}
+	if err := protojson.Unmarshal(row.AsBytes("options", []byte("{}")), options); err != nil {
+		return vterrors.Wrapf(err, "failed to unmarshal existing vdiff options for UUID %s", req.VdiffUuid)
+	}
+	if options.PickerOptions == nil {
+		options.PickerOptions = &tabletmanagerdatapb.VDiffPickerOptions{}
+	}
+	mergePickerOptions(options.PickerOptions, updates)
+
+	optionsJSON, err := json.Marshal(options)
+	if err != nil {
+		return err
+	}
+	updateQuery, err := sqlparser.ParseAndBind(sqlUpdateVDiffOptions,
+		sqltypes.StringBindVariable(string(optionsJSON)),
+		sqltypes.Int64BindVariable(id),
+		sqltypes.StringBindVariable(vde.dbName),
+	)
+	if err != nil {
+		return err
+	}
+	if _, err := dbClient.ExecuteFetch(updateQuery, 1); err != nil {
+		return err
+	}
+
+	insertVDiffLog(ctx, dbClient, id, fmt.Sprintf("Updated picker options: tablet_types=%s source_cell=%s target_cell=%s",
+		options.PickerOptions.TabletTypes, options.PickerOptions.SourceCell, options.PickerOptions.TargetCell))
+
+	resp.Id = id
+	resp.VdiffUuid = req.VdiffUuid
+	resp.Output = sqltypes.ResultToProto3(&sqltypes.Result{
+		Fields: []*query.Field{
+			{Name: "state", Type: sqltypes.VarBinary},
+			{Name: "updated", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewVarBinary(state),
+			sqltypes.NewInt64(1),
+		}},
+	})
+	return nil
+}
+
+// rejectIfVDiffRunning returns a FAILED_PRECONDITION error when the
+// VDiff is pending/started or a live controller exists, telling the
+// operator to `VDiff stop` first.
+func (vde *Engine) rejectIfVDiffRunning(id int64, uuid, state string) error {
+	tablet := topoproto.TabletAliasString(vde.thisTablet.Alias)
+	if state == string(PendingState) || state == string(StartedState) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vdiff %s is %s on tablet %s; run VDiff stop first, then update, then VDiff resume",
+			uuid, state, tablet)
+	}
+	if vde.hasLiveController(id) {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vdiff %s has a live controller on tablet %s (state %s); run VDiff stop first, then update, then VDiff resume",
+			uuid, tablet, state)
+	}
+	return nil
+}
+
+// hasLiveController reports whether a controller for id is currently
+// running (present in the map and its done channel is not closed).
+// Leftover completed/stopped controllers remain in the map after
+// their goroutine exits; those are not live.
+func (vde *Engine) hasLiveController(id int64) bool {
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
+	ct := vde.controllers[id]
+	if ct == nil {
+		return false
+	}
+	select {
+	case <-ct.done:
+		return false
+	default:
+		return true
+	}
+}
+
+func pickerHasUpdates(updates *tabletmanagerdatapb.VDiffPickerOptions) bool {
+	if updates == nil {
+		return false
+	}
+	return updates.TabletTypes != "" || updates.SourceCell != "" || updates.TargetCell != ""
+}
+
+// mergePickerOptions copies non-empty fields from updates into existing.
+// Other picker fields and all core/report options are left unchanged.
+func mergePickerOptions(existing, updates *tabletmanagerdatapb.VDiffPickerOptions) {
+	if existing == nil || updates == nil {
+		return
+	}
+	if updates.TabletTypes != "" {
+		existing.TabletTypes = updates.TabletTypes
+	}
+	if updates.SourceCell != "" {
+		existing.SourceCell = updates.SourceCell
+	}
+	if updates.TargetCell != "" {
+		existing.TargetCell = updates.TargetCell
+	}
 }

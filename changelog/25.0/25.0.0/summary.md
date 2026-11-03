@@ -28,6 +28,7 @@
     - **[VReplication](#minor-changes-vreplication)**
         - [Default data protection for `_reverse` workflow cancel/complete](#vreplication-reverse-workflow-data-protection)
         - [`vdiff show --no-samples` strips the per-table row-sample report](#vreplication-vdiff-no-samples)
+        - [`vdiff update` changes picker options on an existing VDiff](#vreplication-vdiff-update)
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
@@ -309,6 +310,12 @@ See [#19906](https://github.com/vitessio/vitess/pull/19906) for details.
 `vdiff create --wait` also uses `no_samples` for its internal progress polls. Text output is unchanged; with `--format json`, the per-interval progress output no longer includes the row samples (they remain available via `vdiff show --verbose` once the diff completes).
 
 See [#20870](https://github.com/vitessio/vitess/pull/20870) for details.
+
+#### <a id="vreplication-vdiff-update"/>`vdiff update` changes picker options on an existing VDiff</a>
+
+`vtctldclient vdiff ... update <uuid>` merges tablet types (`PRIMARY`, `REPLICA`, `RDONLY`) and cells into the stored `_vt.vdiff.options` picker options on each target shard primary, without changing lastpk/progress or core/report options. If the VDiff is running on an affected shard (pending/started, or a live controller exists), the update is rejected; stop it with `VDiff stop`, update, then `VDiff resume` so the new options take effect. `--clear-source-cells` and `--clear-target-cells` reset cells to every topology cell (the same default as create) and are mutually exclusive with `--source-cells` / `--target-cells`. Optional `--target-shards` limits the fan-out. The RPC is `VDiffUpdate` on vtctld; there is no legacy vtctl command.
+
+See [#21853](https://github.com/vitessio/vitess/issues/21853) for details.
 
 #### <a id="vreplication-materialize-cancel-data-protection"/>Preserve Materialize target data on cancel by default</a>
 

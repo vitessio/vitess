@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -26,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -378,6 +380,41 @@ func TestPerformVDiffAction(t *testing.T) {
 				{query: boundSummaryQuery(true), result: noResults},
 			},
 		},
+		{
+			name: "update without picker options",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(UpdateAction),
+				VdiffUuid: uuid,
+				Options:   &tabletmanagerdatapb.VDiffOptions{},
+			},
+			wantErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update"),
+		},
+		{
+			name: "update missing uuid",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action: string(UpdateAction),
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
+				},
+			},
+			wantErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "vdiff UUID is required"),
+		},
+		{
+			name: "update vdiff not found",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(UpdateAction),
+				VdiffUuid: uuid,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
+				},
+			},
+			expectQueries: []queryAndResult{
+				{
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
+				},
+			},
+			wantErr: vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID "+uuid+" on tablet cell1-0000000100"),
+		},
 	}
 
 	errCount := int64(0)
@@ -419,4 +456,211 @@ func TestPerformVDiffAction(t *testing.T) {
 		})
 		require.Equal(t, errCount, globalStats.ErrorCount.Get(), "expected error count %d, got %d", errCount, globalStats.ErrorCount.Get())
 	}
+}
+
+func TestMergePickerOptions(t *testing.T) {
+	existing := &tabletmanagerdatapb.VDiffPickerOptions{
+		TabletTypes: "replica,rdonly,primary",
+		SourceCell:  "zone1",
+		TargetCell:  "zone2",
+	}
+
+	t.Run("nil updates", func(t *testing.T) {
+		got := protoClonePicker(existing)
+		mergePickerOptions(got, nil)
+		require.Equal(t, existing, got)
+	})
+
+	t.Run("tablet types only", func(t *testing.T) {
+		got := protoClonePicker(existing)
+		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"})
+		require.Equal(t, "in_order:primary", got.TabletTypes)
+		require.Equal(t, "zone1", got.SourceCell)
+		require.Equal(t, "zone2", got.TargetCell)
+	})
+
+	t.Run("cells only", func(t *testing.T) {
+		got := protoClonePicker(existing)
+		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{SourceCell: "zone3", TargetCell: "zone4"})
+		require.Equal(t, "replica,rdonly,primary", got.TabletTypes)
+		require.Equal(t, "zone3", got.SourceCell)
+		require.Equal(t, "zone4", got.TargetCell)
+	})
+
+	t.Run("empty fields do not clobber", func(t *testing.T) {
+		got := protoClonePicker(existing)
+		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{})
+		require.Equal(t, existing, got)
+	})
+}
+
+func protoClonePicker(in *tabletmanagerdatapb.VDiffPickerOptions) *tabletmanagerdatapb.VDiffPickerOptions {
+	return &tabletmanagerdatapb.VDiffPickerOptions{
+		TabletTypes: in.TabletTypes,
+		SourceCell:  in.SourceCell,
+		TargetCell:  in.TargetCell,
+	}
+}
+
+func TestHandleUpdateAction(t *testing.T) {
+	existingJSON := `{"picker_options":{"tablet_types":"replica,rdonly,primary","source_cell":"zone1","target_cell":"zone1"},"core_options":{"auto_retry":true,"max_rows":100},"report_options":{"only_pks":true}}`
+
+	tests := []struct {
+		name            string
+		state           string
+		liveController  bool
+		leftoverDone    bool
+		wantErr         string
+		wantState       string
+		wantControllers int
+	}{
+		{
+			name:      "merges picker options on stopped",
+			state:     "stopped",
+			wantState: "stopped",
+		},
+		{
+			name:      "merges picker options on error",
+			state:     "error",
+			wantState: "error",
+		},
+		{
+			name:            "merges picker options on completed leftover controller",
+			state:           "completed",
+			leftoverDone:    true,
+			wantState:       "completed",
+			wantControllers: 1,
+		},
+		{
+			name:    "rejects pending",
+			state:   "pending",
+			wantErr: "run VDiff stop first",
+		},
+		{
+			name:    "rejects started",
+			state:   "started",
+			wantErr: "run VDiff stop first",
+		},
+		{
+			name:            "rejects live controller even if stopped",
+			state:           "stopped",
+			liveController:  true,
+			wantErr:         "run VDiff stop first",
+			wantControllers: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			vdiffenv := newTestVDiffEnv(t)
+			defer vdiffenv.close()
+
+			vduuid := uuid.New().String()
+			options := &tabletmanagerdatapb.VDiffOptions{
+				PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
+				CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
+			}
+			require.NoError(t, protojson.Unmarshal([]byte(existingJSON), options))
+			mergePickerOptions(options.PickerOptions, &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"})
+			wantJSON, err := json.Marshal(options)
+			require.NoError(t, err)
+
+			var leftover *controller
+			if tt.liveController || tt.leftoverDone {
+				done := make(chan struct{})
+				if tt.leftoverDone {
+					close(done)
+				}
+				leftover = &controller{
+					id:     1,
+					uuid:   vduuid,
+					vde:    vdiffenv.vde,
+					cancel: func() {},
+					done:   done,
+				}
+				vdiffenv.vde.mu.Lock()
+				vdiffenv.vde.controllers[1] = leftover
+				vdiffenv.vde.mu.Unlock()
+				t.Cleanup(func() {
+					vdiffenv.vde.mu.Lock()
+					delete(vdiffenv.vde.controllers, 1)
+					vdiffenv.vde.mu.Unlock()
+				})
+			}
+
+			if tt.wantErr == "" {
+				expectUpdateOptionsQueries(t, vdiffenv, vduuid, existingJSON, tt.state, string(wantJSON), "in_order:primary", "zone1", "zone1")
+			} else {
+				expectUpdateLookupQueries(t, vdiffenv, vduuid, existingJSON, tt.state)
+			}
+
+			got, err := vdiffenv.vde.PerformVDiffAction(ctx, &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(UpdateAction),
+				VdiffUuid: vduuid,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
+				},
+			})
+			vdiffenv.dbClient.Wait()
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				require.Contains(t, err.Error(), "VDiff stop")
+				require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, int64(1), got.Id)
+				require.Equal(t, vduuid, got.VdiffUuid)
+				require.Equal(t, tt.wantState, sqltypes.Proto3ToResult(got.Output).Named().Row().AsString("state", ""))
+				updated, uerr := sqltypes.Proto3ToResult(got.Output).Named().Row().ToBool("updated")
+				require.NoError(t, uerr)
+				require.True(t, updated)
+			}
+
+			vdiffenv.vde.mu.Lock()
+			defer vdiffenv.vde.mu.Unlock()
+			require.Len(t, vdiffenv.vde.controllers, tt.wantControllers)
+			if leftover != nil {
+				require.Same(t, leftover, vdiffenv.vde.controllers[1], "update must not replace an existing controller")
+			}
+		})
+	}
+}
+
+func expectUpdateLookupQueries(t *testing.T, vdiffenv *testVDiffEnv, vduuid, existingJSON, state string) {
+	t.Helper()
+	vdiffenv.dbClient.ExpectRequest(
+		"select id as id from _vt.vdiff where vdiff_uuid = "+encodeString(vduuid)+" and db_name = "+encodeString(vdiffDBName),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		nil,
+	)
+	vdiffenv.dbClient.ExpectRequest(
+		"select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName),
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(vdiffTestCols, vdiffTestColTypes),
+			fmt.Sprintf("1|%s|wf|ks|0|%s|%s|%s|", vduuid, vdiffDBName, state, existingJSON),
+		),
+		nil,
+	)
+}
+
+func expectUpdateOptionsQueries(t *testing.T, vdiffenv *testVDiffEnv, vduuid, existingJSON, state, wantJSON, tabletTypes, sourceCell, targetCell string) {
+	t.Helper()
+	expectUpdateLookupQueries(t, vdiffenv, vduuid, existingJSON, state)
+	updateQuery, err := sqlparser.ParseAndBind(sqlUpdateVDiffOptions,
+		sqltypes.StringBindVariable(wantJSON),
+		sqltypes.Int64BindVariable(1),
+		sqltypes.StringBindVariable(vdiffDBName),
+	)
+	require.NoError(t, err)
+	vdiffenv.dbClient.ExpectRequest(updateQuery, singleRowAffected, nil)
+	vdiffenv.dbClient.ExpectRequest(
+		fmt.Sprintf("insert into _vt.vdiff_log(vdiff_id, message) values (1, %s)",
+			encodeString(fmt.Sprintf("Updated picker options: tablet_types=%s source_cell=%s target_cell=%s", tabletTypes, sourceCell, targetCell))),
+		singleRowAffected,
+		nil,
+	)
 }

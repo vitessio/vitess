@@ -741,6 +741,11 @@ func (client *localVtctldClient) VDiffStop(ctx context.Context, in *vtctldatapb.
 	return client.s.VDiffStop(ctx, in)
 }
 
+// VDiffUpdate is part of the vtctlservicepb.VtctldClient interface.
+func (client *localVtctldClient) VDiffUpdate(ctx context.Context, in *vtctldatapb.VDiffUpdateRequest, opts ...grpc.CallOption) (*vtctldatapb.VDiffUpdateResponse, error) {
+	return client.s.VDiffUpdate(ctx, in)
+}
+
 // Validate is part of the vtctlservicepb.VtctldClient interface.
 func (client *localVtctldClient) Validate(ctx context.Context, in *vtctldatapb.ValidateRequest, opts ...grpc.CallOption) (*vtctldatapb.ValidateResponse, error) {
 	return client.s.Validate(ctx, in)
