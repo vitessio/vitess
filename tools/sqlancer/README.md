@@ -47,6 +47,13 @@ The patch therefore adds the oracle `VITESS_DIFF`, which compares vtgate with My
   fails with a known error.
 - `--vitess-ignore-errors-file`: errors matching these regexes count as expected. `known_limitations.txt` lists
   limitations and bugs that are already known, so that the oracles can find new ones.
+- `--vitess-workload olap`: runs the session with `SET workload = 'olap'`, so that vtgate streams the results of
+  every statement. `UNION`s are not generated in this mode for now.
+- `--vitess-prepared true`: `VITESS_DIFF` runs each query on vtgate as a server-side prepared statement, with the
+  literals of the query as typed parameters (`long`, `BigDecimal`, `double` or `String`, after the type MySQL gives
+  the literal). vtgate executes a prepared statement by putting the parameter values back into the query, so the
+  reference is the result of the original query on MySQL, not that of a MySQL prepared statement: MySQL derives a
+  type for each parameter from its context, which gives other result types than the literals.
 
 The patch also avoids two known bugs when it generates tables (see the findings): the column attribute `STORAGE`
 in sharded keyspaces, and a column with both `PRIMARY KEY` and `UNIQUE`.

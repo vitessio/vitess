@@ -40,6 +40,6 @@ java -jar "$SQLANCER_JAR" \
   --host 127.0.0.1 --port "$VTGATE_PORT" --username root --password "" \
   --use-connection-test false --database-prefix try \
   --num-threads "$threads" --num-tries 100 --timeout-seconds "$secs" --print-progress-summary true \
-  mysql --vitess --vitess-keyspaces "$keyspaces" --vitess-ignore-errors-file "$here/known_limitations.txt" "$@" \
+  mysql --vitess --vitess-keyspaces "$keyspaces" --vitess-ignore-errors-file "$KNOWN_LIMITATIONS" "$@" \
   >sqlancer.out 2>&1 || true
 python3 "$here/summarize.py" logs

@@ -62,10 +62,10 @@ index a34861c..8d9be53 100644
      protected MySQLSchema readSchema() throws SQLException {
          return MySQLSchema.fromConnection(getConnection(), getDatabaseName());
 diff --git a/src/sqlancer/mysql/MySQLOptions.java b/src/sqlancer/mysql/MySQLOptions.java
-index 9219073..a020b2e 100644
+index 9219073..cabd50d 100644
 --- a/src/sqlancer/mysql/MySQLOptions.java
 +++ b/src/sqlancer/mysql/MySQLOptions.java
-@@ -17,6 +17,36 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
+@@ -17,6 +17,42 @@ public class MySQLOptions implements DBMSSpecificOptions<MySQLOracleFactory> {
      @Parameter(names = "--oracle")
      public List<MySQLOracleFactory> oracles = Arrays.asList(MySQLOracleFactory.TLP_WHERE);
  
@@ -99,6 +99,12 @@ index 9219073..a020b2e 100644
 +    @Parameter(names = "--vitess-ignore-errors-file", description = "File with one regex per line; errors matching any of them are treated as expected (known Vitess limitations)")
 +    public String vitessIgnoreErrorsFile;
 +
++    @Parameter(names = "--vitess-workload", description = "vtgate workload for the session (oltp or olap); olap makes vtgate stream results")
++    public String vitessWorkload;
++
++    @Parameter(names = "--vitess-prepared", description = "VITESS_DIFF runs its queries on vtgate and MySQL as server-side prepared statements, with the literals as typed parameters", arity = 1)
++    public boolean vitessPrepared;
++
      @Override
      public List<MySQLOracleFactory> getTestOracleFactory() {
          return oracles;
@@ -127,7 +133,7 @@ index 8b37efb..b96ceee 100644
      };
  }
 diff --git a/src/sqlancer/mysql/MySQLProvider.java b/src/sqlancer/mysql/MySQLProvider.java
-index 80a23b9..0d5de96 100644
+index 80a23b9..1dde769 100644
 --- a/src/sqlancer/mysql/MySQLProvider.java
 +++ b/src/sqlancer/mysql/MySQLProvider.java
 @@ -39,10 +39,15 @@ import sqlancer.mysql.gen.tblmaintenance.MySQLCheckTable;
@@ -195,7 +201,7 @@ index 80a23b9..0d5de96 100644
          if (globalState.getDbmsSpecificOptions().getTestOracleFactory().stream()
                  .anyMatch((o) -> o == MySQLOracleFactory.CERT)) {
              // Enfore statistic collected for all tables
-@@ -171,6 +196,123 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -171,6 +196,130 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
          }
      }
  
@@ -240,9 +246,16 @@ index 80a23b9..0d5de96 100644
 +            keyspace = vitessKeyspaceForThread(o);
 +            globalState.setDatabaseName(keyspace);
 +        }
-+        String url = String.format("jdbc:mysql://%s:%d/%s?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true",
-+                host, port, keyspace);
++        // The socket timeout turns a query that hangs in vtgate into an error instead of a stuck thread.
++        String url = String.format(
++                "jdbc:mysql://%s:%d/%s?serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&socketTimeout=60000",
++                host, port, keyspace) + (o.vitessPrepared ? "&" + VitessReference.PREPARED_PARAMS : "");
 +        Connection con = DriverManager.getConnection(url, username, password);
++        if (o.vitessWorkload != null) {
++            try (Statement s = con.createStatement()) {
++                s.execute("SET workload = '" + o.vitessWorkload + "'");
++            }
++        }
 +        List<String> tables = new java.util.ArrayList<>();
 +        try (Statement s = con.createStatement(); java.sql.ResultSet rs = s.executeQuery("SHOW TABLES")) {
 +            while (rs.next()) {
@@ -319,7 +332,7 @@ index 80a23b9..0d5de96 100644
      @Override
      public SQLConnection createDatabase(MySQLGlobalState globalState) throws SQLException {
          String username = globalState.getOptions().getUserName();
-@@ -184,6 +326,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
+@@ -184,6 +333,9 @@ public class MySQLProvider extends SQLProviderAdapter<MySQLGlobalState, MySQLOpt
              port = MySQLOptions.DEFAULT_PORT;
          }
          String databaseName = globalState.getDatabaseName();
@@ -416,13 +429,14 @@ index d27d6e6..d390464 100644
          }
 diff --git a/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java b/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java
 new file mode 100644
-index 0000000..b5d19bb
+index 0000000..9c5a410
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/MySQLVitessDiffOracle.java
-@@ -0,0 +1,201 @@
+@@ -0,0 +1,242 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.sql.Connection;
++import java.sql.PreparedStatement;
 +import java.sql.ResultSet;
 +import java.sql.SQLException;
 +import java.sql.Statement;
@@ -479,8 +493,23 @@ index 0000000..b5d19bb
 +        state.getState().getLocalState().log(query);
 +        SQLConnection vtgateConnection = state.getConnection();
 +        Connection mysqlConnection = reference.getConnection();
-+        Result vtgate = run(vtgateConnection::createStatement, query);
-+        Result mysql = run(mysqlConnection::createStatement, query);
++        Result vtgate;
++        Result mysql;
++        if (state.getDbmsSpecificOptions().vitessPrepared) {
++            // vtgate runs the query as a server-side prepared statement, with its literals as typed parameters.
++            // vtgate executes a prepared statement by putting the parameter values back into the query, so the result
++            // must be that of the query with the literals. MySQL's own prepared statements are not the reference:
++            // MySQL derives a type for each parameter from its context (for example DOUBLE for "-?"), which gives
++            // other result types than the literals.
++            VitessParameters prepared = VitessParameters.parameterize(query);
++            mysql = run(mysqlConnection::createStatement, query);
++            query = prepared.toString();
++            lastQuery = query;
++            vtgate = runPrepared(sql -> (PreparedStatement) vtgateConnection.prepareStatement(sql), prepared);
++        } else {
++            vtgate = run(vtgateConnection::createStatement, query);
++            mysql = run(mysqlConnection::createStatement, query);
++        }
 +        if (++checks % CANARY_INTERVAL == 0) {
 +            checkCanary(vtgateConnection, query);
 +        }
@@ -513,7 +542,8 @@ index 0000000..b5d19bb
 +            }
 +            throw new IgnoreMeException();
 +        }
-+        String features = VitessQueryGenerator.describe(query);
++        String features = VitessQueryGenerator.describe(query)
++                + (state.getDbmsSpecificOptions().vitessPrepared ? ",prepared" : "");
 +        String details = "vtgate: " + vtgate.rows + "\nMySQL:  " + mysql.rows;
 +        if (vtgate.columns != mysql.columns) {
 +            VitessFindings.report(state,
@@ -571,6 +601,30 @@ index 0000000..b5d19bb
 +                    row.add(rs.getString(i));
 +                }
 +                r.rows.add(row);
++            }
++        } catch (SQLException e) {
++            r.error = e.getMessage() == null ? e.toString() : e.getMessage();
++        }
++        return r;
++    }
++
++    private interface Preparer {
++        PreparedStatement prepare(String sql) throws SQLException;
++    }
++
++    private static Result runPrepared(Preparer preparer, VitessParameters prepared) {
++        Result r = new Result();
++        try (PreparedStatement s = preparer.prepare(prepared.getSql())) {
++            prepared.bind(s);
++            try (ResultSet rs = s.executeQuery()) {
++                r.columns = rs.getMetaData().getColumnCount();
++                while (rs.next()) {
++                    List<String> row = new ArrayList<>(r.columns);
++                    for (int i = 1; i <= r.columns; i++) {
++                        row.add(rs.getString(i));
++                    }
++                    r.rows.add(row);
++                }
 +            }
 +        } catch (SQLException e) {
 +            r.error = e.getMessage() == null ? e.toString() : e.getMessage();
@@ -768,12 +822,336 @@ index 0000000..73ad357
 +        return sb.append('"').toString();
 +    }
 +}
+diff --git a/src/sqlancer/mysql/vitess/VitessParameters.java b/src/sqlancer/mysql/vitess/VitessParameters.java
+new file mode 100644
+index 0000000..89fe978
+--- /dev/null
++++ b/src/sqlancer/mysql/vitess/VitessParameters.java
+@@ -0,0 +1,318 @@
++package sqlancer.mysql.vitess;
++
++import java.math.BigDecimal;
++import java.sql.PreparedStatement;
++import java.sql.SQLException;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Locale;
++import java.util.Set;
++
++/**
++ * Turns the literals of a query into parameters of a prepared statement, so that vtgate receives them as typed values
++ * through the binary protocol instead of as SQL text.
++ *
++ * <p>
++ * Each parameter gets the type that MySQL gives the literal: an integer that fits into a {@code BIGINT} becomes a
++ * {@code long}, an exact decimal (or a larger integer) a {@link BigDecimal}, a literal with an exponent a
++ * {@code double}, and a quoted string a {@code String}. Literals that cannot be parameters stay as they are: column
++ * positions in {@code ORDER BY} and {@code GROUP BY}, the length and precision of a type, and strings with a character
++ * set introducer.
++ */
++public final class VitessParameters {
++
++    private static final Set<String> TYPES = Set.of("DECIMAL", "CHAR", "BINARY", "VARCHAR", "FLOAT", "DOUBLE",
++            "DATETIME", "TIME", "TIMESTAMP", "NUMERIC", "DEC");
++
++    private final String sql;
++    private final List<Parameter> parameters;
++    private boolean groupByParameter;
++
++    public enum Kind {
++        LONG, DECIMAL, DOUBLE, STRING
++    }
++
++    public static final class Parameter {
++        private final Kind kind;
++        private final String literal;
++        private final Object value;
++
++        Parameter(Kind kind, String literal, Object value) {
++            this.kind = kind;
++            this.literal = literal;
++            this.value = value;
++        }
++
++        public Kind getKind() {
++            return kind;
++        }
++
++        public Object getValue() {
++            return value;
++        }
++
++        @Override
++        public String toString() {
++            return kind.name().toLowerCase(Locale.ROOT) + " " + literal;
++        }
++    }
++
++    private VitessParameters(String sql, List<Parameter> parameters) {
++        this.sql = sql;
++        this.parameters = parameters;
++    }
++
++    public String getSql() {
++        return sql;
++    }
++
++    public List<Parameter> getParameters() {
++        return parameters;
++    }
++
++    public void bind(PreparedStatement s) throws SQLException {
++        for (int i = 0; i < parameters.size(); i++) {
++            Parameter p = parameters.get(i);
++            switch (p.kind) {
++            case LONG:
++                s.setLong(i + 1, (Long) p.value);
++                break;
++            case DECIMAL:
++                s.setBigDecimal(i + 1, (BigDecimal) p.value);
++                break;
++            case DOUBLE:
++                s.setDouble(i + 1, (Double) p.value);
++                break;
++            default:
++                s.setString(i + 1, (String) p.value);
++                break;
++            }
++        }
++    }
++
++    @Override
++    public String toString() {
++        return sql + "\n-- parameters: " + parameters;
++    }
++
++    public static VitessParameters parameterize(String query) {
++        // MySQL does not match "f(?)" in the select list with "f(?)" in GROUP BY, so when a GROUP BY expression has a
++        // literal, the literals of select lists and GROUP BY clauses stay as they are.
++        VitessParameters all = parameterize(query, false);
++        return all.groupByParameter ? parameterize(query, true) : all;
++    }
++
++    private static String effective(List<String> clause) {
++        for (int i = clause.size() - 1; i >= 0; i--) {
++            if (!clause.get(i).isEmpty()) {
++                return clause.get(i);
++            }
++        }
++        return "";
++    }
++
++    private static VitessParameters parameterize(String query, boolean keepGrouped) {
++        boolean groupByParameter = false;
++        StringBuilder out = new StringBuilder();
++        List<Parameter> params = new ArrayList<>();
++        // The previous two significant tokens (upper case), and the keyword clause we are in per parenthesis depth.
++        String prev = "";
++        String prev2 = "";
++        List<String> clause = new ArrayList<>();
++        clause.add("");
++        List<Boolean> typeArgs = new ArrayList<>();
++        typeArgs.add(false);
++        int i = 0;
++        int n = query.length();
++        while (i < n) {
++            char c = query.charAt(i);
++            if (Character.isWhitespace(c)) {
++                out.append(c);
++                i++;
++                continue;
++            }
++            if (c == '\'' || c == '"') {
++                int end = endOfString(query, i);
++                String literal = query.substring(i, end);
++                String eff = effective(clause);
++                if (prev.startsWith("_") || prev.equals("ESCAPE") || typeArgs.get(typeArgs.size() - 1)
++                        || keepGrouped && (eff.equals("SELECT") || eff.equals("GROUP BY"))) {
++                    out.append(literal);
++                } else {
++                    params.add(new Parameter(Kind.STRING, literal, unquote(literal)));
++                    out.append('?');
++                    groupByParameter |= eff.equals("GROUP BY");
++                }
++                prev2 = prev;
++                prev = "'";
++                i = end;
++                continue;
++            }
++            if (Character.isDigit(c) || c == '.' && i + 1 < n && Character.isDigit(query.charAt(i + 1))) {
++                int end = i;
++                boolean exponent = false;
++                boolean point = false;
++                while (end < n) {
++                    char d = query.charAt(end);
++                    if (Character.isDigit(d)) {
++                        end++;
++                    } else if (d == '.' && !point && !exponent) {
++                        point = true;
++                        end++;
++                    } else if ((d == 'e' || d == 'E') && !exponent && end + 1 < n
++                            && (Character.isDigit(query.charAt(end + 1))
++                                    || (query.charAt(end + 1) == '-' || query.charAt(end + 1) == '+') && end + 2 < n
++                                            && Character.isDigit(query.charAt(end + 2)))) {
++                        exponent = true;
++                        end += 2;
++                    } else {
++                        break;
++                    }
++                }
++                if (end < n && (Character.isLetter(query.charAt(end)) || query.charAt(end) == '_')) {
++                    // Part of an identifier or a hexadecimal literal.
++                    while (end < n && (Character.isLetterOrDigit(query.charAt(end)) || query.charAt(end) == '_')) {
++                        end++;
++                    }
++                    out.append(query, i, end);
++                    prev2 = prev;
++                    prev = query.substring(i, end).toUpperCase(Locale.ROOT);
++                    i = end;
++                    continue;
++                }
++                String literal = query.substring(i, end);
++                String cl = clause.get(clause.size() - 1);
++                boolean position = (cl.equals("ORDER BY") || cl.equals("GROUP BY"))
++                        && (prev.equals("BY") || prev.equals(",")) && !exponent && !point;
++                String eff = effective(clause);
++                if (position || typeArgs.get(typeArgs.size() - 1)
++                        || keepGrouped && (eff.equals("SELECT") || eff.equals("GROUP BY"))) {
++                    out.append(literal);
++                } else {
++                    params.add(number(literal, exponent, point));
++                    out.append('?');
++                    groupByParameter |= eff.equals("GROUP BY");
++                }
++                prev2 = prev;
++                prev = "0";
++                i = end;
++                continue;
++            }
++            if (Character.isLetter(c) || c == '_' || c == '`' || c == '@') {
++                int end = i + 1;
++                if (c == '`') {
++                    end = query.indexOf('`', i + 1) + 1;
++                } else {
++                    while (end < n && (Character.isLetterOrDigit(query.charAt(end)) || query.charAt(end) == '_'
++                            || query.charAt(end) == '@')) {
++                        end++;
++                    }
++                }
++                String word = query.substring(i, end).toUpperCase(Locale.ROOT);
++                out.append(query, i, end);
++                if (word.equals("BY") && (prev.equals("ORDER") || prev.equals("GROUP"))) {
++                    clause.set(clause.size() - 1, prev + " BY");
++                } else if (Set.of("SELECT", "FROM", "WHERE", "HAVING", "LIMIT", "UNION", "ON", "OFFSET")
++                        .contains(word)) {
++                    clause.set(clause.size() - 1, word);
++                }
++                prev2 = prev;
++                prev = word;
++                i = end;
++                continue;
++            }
++            out.append(c);
++            if (c == '(') {
++                clause.add("");
++                typeArgs.add(TYPES.contains(prev) && prev2.equals("AS") || TYPES.contains(prev) && prev2.equals(","));
++            } else if (c == ')' && clause.size() > 1) {
++                clause.remove(clause.size() - 1);
++                typeArgs.remove(typeArgs.size() - 1);
++            }
++            prev2 = prev;
++            prev = String.valueOf(c);
++            i++;
++        }
++        VitessParameters result = new VitessParameters(out.toString(), params);
++        result.groupByParameter = groupByParameter;
++        return result;
++    }
++
++    private static Parameter number(String literal, boolean exponent, boolean point) {
++        if (exponent) {
++            return new Parameter(Kind.DOUBLE, literal, Double.parseDouble(literal));
++        }
++        if (!point) {
++            try {
++                return new Parameter(Kind.LONG, literal, Long.parseLong(literal));
++            } catch (NumberFormatException e) {
++                // larger than a BIGINT: MySQL treats it as a DECIMAL
++            }
++        }
++        return new Parameter(Kind.DECIMAL, literal, new BigDecimal(literal));
++    }
++
++    private static int endOfString(String s, int start) {
++        char quote = s.charAt(start);
++        int i = start + 1;
++        while (i < s.length()) {
++            char c = s.charAt(i);
++            if (c == '\\') {
++                i += 2;
++            } else if (c == quote) {
++                if (i + 1 < s.length() && s.charAt(i + 1) == quote) {
++                    i += 2;
++                } else {
++                    return i + 1;
++                }
++            } else {
++                i++;
++            }
++        }
++        return s.length();
++    }
++
++    private static String unquote(String literal) {
++        char quote = literal.charAt(0);
++        StringBuilder sb = new StringBuilder();
++        for (int i = 1; i < literal.length() - 1; i++) {
++            char c = literal.charAt(i);
++            if (c == '\\' && i + 1 < literal.length() - 1) {
++                char e = literal.charAt(++i);
++                switch (e) {
++                case 'n':
++                    sb.append('\n');
++                    break;
++                case 't':
++                    sb.append('\t');
++                    break;
++                case 'r':
++                    sb.append('\r');
++                    break;
++                case '0':
++                    sb.append('\0');
++                    break;
++                case 'b':
++                    sb.append('\b');
++                    break;
++                case 'Z':
++                    sb.append('\032');
++                    break;
++                default:
++                    // \%, \_ keep the backslash in MySQL
++                    if (e == '%' || e == '_') {
++                        sb.append('\\');
++                    }
++                    sb.append(e);
++                    break;
++                }
++            } else if (c == quote && i + 1 < literal.length() - 1 && literal.charAt(i + 1) == quote) {
++                sb.append(quote);
++                i++;
++            } else {
++                sb.append(c);
++            }
++        }
++        return sb.toString();
++    }
++}
 diff --git a/src/sqlancer/mysql/vitess/VitessQueryGenerator.java b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
 new file mode 100644
-index 0000000..7bd122f
+index 0000000..801f73d
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessQueryGenerator.java
-@@ -0,0 +1,331 @@
+@@ -0,0 +1,332 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.util.ArrayList;
@@ -820,7 +1198,8 @@ index 0000000..7bd122f
 +    public String generate() {
 +        ordered = false;
 +        int kind = (int) Randomly.getNotCachedInteger(0, 10);
-+        if (kind == 0) {
++        // UNIONs are left out with the OLAP workload for now.
++        if (kind == 0 && !"olap".equalsIgnoreCase(state.getDbmsSpecificOptions().vitessWorkload)) {
 +            return union();
 +        }
 +        if (kind == 1) {
@@ -1107,10 +1486,10 @@ index 0000000..7bd122f
 +}
 diff --git a/src/sqlancer/mysql/vitess/VitessReference.java b/src/sqlancer/mysql/vitess/VitessReference.java
 new file mode 100644
-index 0000000..72312e8
+index 0000000..1cd0578
 --- /dev/null
 +++ b/src/sqlancer/mysql/vitess/VitessReference.java
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,142 @@
 +package sqlancer.mysql.vitess;
 +
 +import java.sql.Connection;
@@ -1130,6 +1509,10 @@ index 0000000..72312e8
 + * compared with those of MySQL.
 + */
 +public final class VitessReference implements AutoCloseable {
++
++    // JDBC options for --vitess-prepared: prepare on the server, and fail instead of falling back to client-side
++    // prepared statements when the server cannot prepare a statement.
++    public static final String PREPARED_PARAMS = "useServerPrepStmts=true&emulateUnsupportedPstmts=false";
 +
 +    private static final ThreadLocal<VitessReference> CURRENT = new ThreadLocal<>();
 +
