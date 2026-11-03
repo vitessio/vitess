@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -269,6 +270,19 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			return err
 		},
 	}, {
+		name:  "super_read_only",
+		query: "SET GLOBAL super_read_only = 'ON'",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.SetSuperReadOnly(ctx, true, WithLockWaitTimeout(time.Second))
+			return err
+		},
+	}, {
+		name:  "global read lock",
+		query: "FLUSH TABLES WITH READ LOCK",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			return mysqld.AcquireGlobalReadLock(ctx)
+		},
+	}, {
 		name:  "connection check",
 		query: "SELECT 1",
 		call: func(ctx context.Context, mysqld *Mysqld) error {
@@ -347,4 +361,66 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			assert.Eventually(t, func() bool { return connects.Load() > 1 }, 30*time.Second, 10*time.Millisecond)
 		})
 	}
+}
+
+// TestReleaseGlobalReadLockHonorsContext checks that ReleaseGlobalReadLock
+// returns when its context ends, even if UNLOCK TABLES succeeds while the
+// timed-out query is being killed, which closes the connection, and the
+// replacement's handshake never completes.
+func TestReleaseGlobalReadLockHonorsContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	params := *db.ConnParams()
+	dbcfgs := dbconfigs.NewTestDBConfigs(params, params, "fakesqldb")
+	mysqld := NewMysqld(dbcfgs)
+	t.Cleanup(mysqld.Close)
+	// Only the first pool connection completes its handshake.
+	mysqld.dbaPool.Close()
+	mysqld.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", nil, dbaPoolSize, DbaIdleTimeout, 0, 0)
+	var connects atomic.Int32
+	mysqld.dbaPool.ConnPool.Open(func(ctx context.Context) (*dbconnpool.DBConnection, error) {
+		if connects.Add(1) == 1 {
+			return dbconnpool.NewDBConnection(ctx, dbcfgs.DbaWithDB())
+		}
+		<-ctx.Done()
+		return nil, errors.New("handshake did not complete")
+	}, nil)
+	require.NoError(t, mysqld.AcquireGlobalReadLock(t.Context()))
+
+	// UNLOCK TABLES succeeds once the kill of the timed-out query starts.
+	unlocking := make(chan struct{})
+	killed := make(chan struct{})
+	db.AddQuery("UNLOCK TABLES", &sqltypes.Result{})
+	db.SetBeforeFunc("UNLOCK TABLES", func() {
+		close(unlocking)
+		<-killed
+	})
+	kill := fmt.Sprintf("kill %d", mysqld.lockConn.Conn.ID())
+	db.AddQuery(kill, &sqltypes.Result{})
+	db.SetBeforeFunc(kill, func() { close(killed) })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	returned := make(chan error, 1)
+	go func() { returned <- mysqld.ReleaseGlobalReadLock(ctx) }()
+	require.Eventually(t, func() bool {
+		select {
+		case <-unlocking:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "UNLOCK TABLES did not run")
+	cancel()
+	var err error
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-returned:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "ReleaseGlobalReadLock did not return after its context ended")
+	require.NoError(t, err)
 }
