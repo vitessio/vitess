@@ -170,7 +170,7 @@ func MarshalSQLValue(buf []byte) (*sqltypes.Value, error) {
 		buf = sqltypes.NullBytes
 	}
 
-	jsonVal, err := parser.ParseBytes(buf)
+	jsonVal, err := parser.ParseStored(buf)
 	if err != nil {
 		return nil, err
 	}
