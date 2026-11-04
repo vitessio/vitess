@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	maps0 "maps"
 	"reflect"
 	"slices"
@@ -345,7 +346,11 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (*[]string, error) {
 		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: %v", message, err)
-		wr.Logger().Error(werr)
+		wr.Logger().Error("failed to switch reads",
+			slog.String("workflow", workflowName),
+			slog.String("keyspace", targetKeyspace),
+			slog.Any("error", werr),
+			slog.String("error_code", vterrors.Code(werr).String()))
 		return nil, werr
 	}
 
@@ -489,7 +494,11 @@ func (wr *Wrangler) SwitchWrites(ctx context.Context, targetKeyspace, workflowNa
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) (int64, *[]string, error) {
 		werr := vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s: %v", message, err)
-		wr.Logger().Error(werr)
+		wr.Logger().Error("failed to switch writes",
+			slog.String("workflow", workflowName),
+			slog.String("keyspace", targetKeyspace),
+			slog.Any("error", werr),
+			slog.String("error_code", vterrors.Code(werr).String()))
 		return 0, nil, werr
 	}
 

@@ -18,6 +18,8 @@ package logutil
 
 import (
 	"fmt"
+	stdlog "log"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,7 +28,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
+
+// TestStdlibLog checks that a line written through the standard library's
+// log package is logged at INFO with the constant message
+// "standard library log", and the line, without the "log: " prefix or the
+// newline, under "message".
+func TestStdlibLog(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	stdlog.Printf("zk: connected to %s", "127.0.0.1:2181")
+
+	r := logs.Record(t, "standard library log")
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, "zk: connected to 127.0.0.1:2181", r["message"])
+	assert.NotContains(t, logs.String(), "log: ")
+}
 
 func TestParsing(t *testing.T) {
 	path := []string{

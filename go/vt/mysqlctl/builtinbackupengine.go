@@ -26,6 +26,7 @@ import (
 	"hash"
 	"hash/crc32"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"path"
@@ -1141,7 +1142,11 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		closeDestAt := time.Now()
 		if rerr := closeWithRetry(ctx, params.Logger, dest, fe.Name); rerr != nil {
 			rerr = vterrors.Wrapf(rerr, "failed to close destination file (%v) %v", name, fe.Name)
-			params.Logger.Error(rerr)
+			params.Logger.Error("failed to close destination file",
+				slog.String("file_name", name),
+				slog.String("file", fe.Name),
+				slog.Any("error", rerr),
+				slog.String("error_code", vterrors.Code(rerr).String()))
 			finalErr = errors.Join(finalErr, rerr)
 			return
 		}
@@ -1187,7 +1192,10 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				closeCompressorAt := time.Now()
 				if cerr := closeWithRetry(ctx, params.Logger, closer, "compressor"); cerr != nil {
 					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", label)
-					params.Logger.Error(cerr)
+					params.Logger.Error("failed to close compressor",
+						slog.String("file", label),
+						slog.Any("error", cerr),
+						slog.String("error_code", vterrors.Code(cerr).String()))
 					createAndCopyErr = errors.Join(createAndCopyErr, cerr)
 					return
 				}
@@ -1700,7 +1708,10 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 		cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor")
 		if cerr != nil {
 			cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
-			params.Logger.Error(cerr)
+			params.Logger.Error("failed to close decompressor",
+				slog.String("file", name),
+				slog.Any("error", cerr),
+				slog.String("error_code", vterrors.Code(cerr).String()))
 		}
 		params.Stats.Scope(stats.Operation("Decompressor:Close")).TimedIncrement(time.Since(closeAt))
 		return cerr

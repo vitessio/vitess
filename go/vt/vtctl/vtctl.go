@@ -85,6 +85,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"sort"
@@ -2466,7 +2467,11 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 				wr.Logger().Printf("Check the status using the 'Workflow %s show' client command for details.\n", ksWorkflow)
 				return errors.New("timed out waiting for workflow to start")
 			case err := <-errCh:
-				wr.Logger().Error(err)
+				wr.Logger().Error("failed to get the workflow's stream count",
+					slog.String("workflow", workflowName),
+					slog.String("keyspace", target),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()))
 				return err
 			case wfErrs := <-wfErrCh:
 				wr.Logger().Printf("Found problems with the streams created for this workflow:\n")
