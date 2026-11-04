@@ -142,6 +142,7 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 		errShouldContainAll    []string
 		wantSplitBrainOverride int64
 		wantNewPrimary         *topodatapb.TabletAlias
+		wantLogs               []logEvent
 	}{
 		{
 			name:       "success with matching expected primary",
@@ -256,6 +257,11 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			shard:     "-",
 			cells:     []string{"zone1"},
 			shouldErr: false,
+			wantLogs: []logEvent{
+				{logutilpb.Level_INFO, "will initiate emergency reparent shard keyspace=testkeyspace shard=-"},
+				{logutilpb.Level_INFO, "excluding candidates strictly behind the most-advanced received relay log position from the relay-log-apply wait (still repointed after promotion) excluded_count=2 excluded_tablets=\"[zone1-0000000100 zone1-0000000101]\" waiting_tablets=[zone1-0000000102]"},
+				{logutilpb.Level_INFO, "intermediate source selected tablet=zone1-0000000102"},
+			},
 		},
 		{
 			name:                 "success - 1 replica and 1 rdonly failure",
@@ -1797,6 +1803,9 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			keyspace:  "testkeyspace",
 			shard:     "-",
 			cells:     []string{"zone1"},
+			wantLogs: []logEvent{
+				{logutilpb.Level_INFO, "waiting for tablet to catch up to source tablet=zone1-0000000101 source_tablet=zone1-0000000100"},
+			},
 		},
 		{
 			// zone1-0000000100 leads on received position only because of an errant GTID
@@ -4771,12 +4780,31 @@ func TestEmergencyReparenter_reparentShardLocked(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			assertLogEvents(t, logger, tt.wantLogs)
 			assert.Equal(t, tt.wantSplitBrainOverride, ersSplitBrainOverrides.Counts()[tt.keyspace+"."+tt.shard])
 			if tt.wantNewPrimary != nil {
 				require.NotNil(t, ev.NewPrimary)
 				assert.True(t, topoproto.TabletAliasEqual(tt.wantNewPrimary, ev.NewPrimary.Alias), "want new primary %v, got %v", tt.wantNewPrimary, ev.NewPrimary.Alias)
 			}
 		})
+	}
+}
+
+// logEvent is a line a reparent sends to its logger: its level and its text.
+type logEvent struct {
+	level logutilpb.Level
+	value string
+}
+
+// assertLogEvents checks that logger received each line in want.
+func assertLogEvents(t *testing.T, logger *logutil.MemoryLogger, want []logEvent) {
+	t.Helper()
+	var got []logEvent
+	for _, e := range logger.LogEvents() {
+		got = append(got, logEvent{e.Level, e.Value})
+	}
+	for _, w := range want {
+		assert.Contains(t, got, w)
 	}
 }
 
@@ -4958,8 +4986,9 @@ func TestERSSplitBrainPromotionEligibility(t *testing.T) {
 			require.NoError(t, err)
 			defer unlock(&err)
 
+			logs := logtest.Capture(t, slog.LevelWarn)
 			ev := &events.Reparent{}
-			erp := NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger())
+			erp := NewEmergencyReparenter(ts, tmc, logutil.NewConsoleLogger())
 			err = erp.reparentShardLocked(lockCtx, ev, "testkeyspace", "-", EmergencyReparentOptions{
 				NewPrimaryAlias:          tt.newPrimary,
 				AllowSplitBrainPromotion: true,
@@ -4971,6 +5000,12 @@ func TestERSSplitBrainPromotionEligibility(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, ev.NewPrimary)
 				assert.True(t, topoproto.TabletAliasEqual(tt.wantPrimary, ev.NewPrimary.Alias))
+				r := logs.Record(t, "EmergencyReparentShard attempting split-brain promotion; the divergent branches of the other leading candidates will be discarded and those tablets may require rebuilding from the new primary")
+				assert.Equal(t, "WARN", r["level"])
+				assert.Equal(t, []any{
+					"zone1-0000000100=" + strings.TrimPrefix(posA, "MySQL56/"),
+					"zone1-0000000101=" + strings.TrimPrefix(posB, "MySQL56/"),
+				}, r["leading_positions"])
 			}
 			assert.Equal(t, tt.wantOverrideCount, ersSplitBrainOverrides.Counts()["testkeyspace.-"])
 		})
@@ -5115,8 +5150,8 @@ func TestERSDivergentTabletsDoNotCountAsSemiSyncAckers(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(ts, tmc, logger)
 			err = erp.reparentShardLocked(lockCtx, ev, "testkeyspace", "-", opts)
-			assert.Contains(t, logger.String(), "zone1-0000000101 has GTIDs that the intermediate source zone1-0000000100 lacks")
-			assert.NotContains(t, logger.String(), "zone1-0000000102 has GTIDs")
+			assert.Contains(t, logger.String(), "doesn't count as a semi-sync acker tablet=zone1-0000000101 intermediate_source=zone1-0000000100")
+			assert.NotContains(t, logger.String(), "doesn't count as a semi-sync acker tablet=zone1-0000000102")
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 			} else {
@@ -7885,6 +7920,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 		shouldErr             bool
 		errShouldContain      string
 		remoteOpTimeout       time.Duration
+		wantLogs              []logEvent
 	}{
 		{
 			name:                 "success",
@@ -8041,6 +8077,10 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			shard:            "-",
 			shouldErr:        true,
 			errShouldContain: "failed to PopulateReparentJournal on primary",
+			wantLogs: []logEvent{{
+				logutilpb.Level_ERROR,
+				`failed to promote tablet to primary tablet=zone1-0000000100 error="assert.AnError general error for testing\nfailed to PopulateReparentJournal on primary" error_code=UNKNOWN`,
+			}},
 		},
 		{
 			name:                 "all replicas failing to SetReplicationSource does fail the promotion",
@@ -8383,6 +8423,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 
 			erp := NewEmergencyReparenter(ts, tt.tmc, logger)
 			_, err := erp.reparentReplicas(ctx, ev, tabletInfo.Tablet, tt.tabletMap, tt.statusMap, tt.emergencyReparentOps, nil /* nonAckers */, false /* splitBrainOverrideActive */, false /* intermediateReparent */)
+			assertLogEvents(t, logger, tt.wantLogs)
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.errShouldContain)

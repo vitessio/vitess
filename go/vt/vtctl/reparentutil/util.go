@@ -151,10 +151,10 @@ func ElectNewPrimary(
 							v = parsed
 							f = flavor
 						} else {
-							logger.Warningf("failed to parse MySQL version %q for tablet %v: %v", serverVersion, topoproto.TabletAliasString(tb.Alias), parseErr)
+							logger.Warn("failed to parse MySQL version for tablet", slog.String("tablet", topoproto.TabletAliasString(tb.Alias)), slog.String("mysql_version", serverVersion), slog.Any("error", parseErr))
 						}
 					} else {
-						logger.Warningf("could not determine MySQL version for tablet %v; it will not be preferred by version-aware election", topoproto.TabletAliasString(tb.Alias))
+						logger.Warn("could not determine MySQL version for tablet; it will not be preferred by version-aware election", slog.String("tablet", topoproto.TabletAliasString(tb.Alias)))
 					}
 					mysqlVersions = append(mysqlVersions, v)
 					mysqlFlavors = append(mysqlFlavors, f)
@@ -198,7 +198,7 @@ func ElectNewPrimary(
 	// families (e.g. MariaDB alongside MySQL/Percona), where version comparison
 	// is meaningless. Falls through to the position/promotion ordering.
 	if usableMySQLVersions(mysqlVersions, mysqlFlavors) == nil {
-		logger.Warningf("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
+		logger.Warn("reparent candidates span multiple MySQL flavor families; skipping version-aware election")
 		mysqlVersions = nil
 	}
 
@@ -238,7 +238,9 @@ func ElectNewPrimary(
 				continue
 			}
 			if electedVersion.CompareForReplication(v) > 0 {
-				logger.Warningf("PlannedReparentShard could not honor version-correct election: elected tablet %v (MySQL %d.%d.%d) is a higher version than another candidate, because it is more advanced in replication position and this path promotes without catching up. Run PlannedReparentShard again once the shard is healthy to move to a lower-version primary if desired.", topoproto.TabletAliasString(elected.Alias), electedVersion.Major, electedVersion.Minor, electedVersion.Patch)
+				logger.Warn("PlannedReparentShard could not honor version-correct election: elected tablet is a higher version than another candidate, because it is more advanced in replication position and this path promotes without catching up. Run PlannedReparentShard again once the shard is healthy to move to a lower-version primary if desired.",
+					slog.String("tablet", topoproto.TabletAliasString(elected.Alias)),
+					slog.String("mysql_version", fmt.Sprintf("%d.%d.%d", electedVersion.Major, electedVersion.Minor, electedVersion.Patch)))
 				break
 			}
 		}
@@ -252,7 +254,7 @@ func ElectNewPrimary(
 func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.Tablet, logger logutil.Logger, tmc tmclient.TabletManagerClient, waitTimeout time.Duration) (*RelayLogPositions, time.Duration, bool, bool, string, error) {
 	rlp := &RelayLogPositions{}
 
-	logger.Infof("getting replication position from %v", topoproto.TabletAliasString(tablet.Alias))
+	logger.Info("getting replication position", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))
 
 	ctx, cancel := context.WithTimeout(ctx, waitTimeout)
 	defer cancel()
@@ -261,7 +263,7 @@ func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.T
 	if err != nil {
 		sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == sqlerror.ERNotReplica {
-			logger.Warningf("no replication status from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
+			logger.Warn("no replication status, using empty gtid set", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)))
 			// The tablet is not replicating (e.g. an uninitialized shard, where every
 			// candidate hits this path). Its position is legitimately empty, but we still
 			// want its MySQL version for version-aware election — otherwise every
@@ -273,23 +275,23 @@ func findTabletPositionLagBackupStatus(ctx context.Context, tablet *topodatapb.T
 			if primaryStatus, psErr := tmc.PrimaryStatus(ctx, tablet); psErr == nil {
 				serverVersion = primaryStatus.ServerVersion
 			} else {
-				logger.Warningf("could not get MySQL version from %v via PrimaryStatus: %v", topoproto.TabletAliasString(tablet.Alias), psErr)
+				logger.Warn("could not get MySQL version via PrimaryStatus", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)), slog.Any("error", psErr), slog.String("error_code", vterrors.Code(psErr).String()))
 			}
 			return rlp, 0, false, false, serverVersion, nil
 		}
-		logger.Warningf("failed to get replication status from %v, ignoring tablet: %v", topoproto.TabletAliasString(tablet.Alias), err)
+		logger.Warn("failed to get replication status, ignoring tablet", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return rlp, 0, false, false, "", err
 	}
 
 	rlp.Executed, err = replication.DecodePosition(status.Position)
 	if err != nil {
-		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.Position, topoproto.TabletAliasString(tablet.Alias), err)
+		logger.Warn("cannot decode replica position, ignoring tablet", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)), slog.String("position", status.Position), slog.Any("error", err))
 		return rlp, 0, status.BackupRunning, false, "", err
 	}
 
 	rlp.Combined, err = replication.DecodePosition(status.RelayLogPosition)
 	if err != nil {
-		logger.Warningf("cannot decode replica position %v for tablet %v, ignoring tablet: %v", status.RelayLogPosition, topoproto.TabletAliasString(tablet.Alias), err)
+		logger.Warn("cannot decode replica relay log position, ignoring tablet", slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)), slog.String("relay_log_position", status.RelayLogPosition), slog.Any("error", err))
 		return rlp, 0, status.BackupRunning, false, "", err
 	}
 
@@ -344,10 +346,9 @@ func FindCurrentPrimary(tabletMap map[string]*topo.TabletInfo, logger logutil.Lo
 		// violated (e.g. some vttablets have not been upgraded) or if we get really
 		// unlucky. Either way, we need to be safe and not assume we know who the true
 		// primary is.
-		logger.Warningf(
-			"Multiple primaries (%v and %v) are tied for the latest PrimaryTermStartTime; can't determine the true primary.",
-			topoproto.TabletAliasString(currentPrimary.Alias),
-			topoproto.TabletAliasString(tiedWith.Alias),
+		logger.Warn("Multiple primaries are tied for the latest PrimaryTermStartTime; can't determine the true primary.",
+			slog.String("tablet", topoproto.TabletAliasString(currentPrimary.Alias)),
+			slog.String("tied_tablet", topoproto.TabletAliasString(tiedWith.Alias)),
 		)
 
 		return nil
@@ -561,7 +562,7 @@ func waitForCatchUp(
 	source *topodatapb.Tablet,
 	waitTime time.Duration,
 ) error {
-	logger.Infof("waiting for %v to catch up to %v", newPrimary.Alias, source.Alias)
+	logger.Info("waiting for tablet to catch up to source", slog.String("tablet", topoproto.TabletAliasString(newPrimary.Alias)), slog.String("source_tablet", topoproto.TabletAliasString(source.Alias)))
 	// Find the primary position of the previous primary
 	pos, err := tmc.PrimaryPosition(ctx, source)
 	if err != nil {
