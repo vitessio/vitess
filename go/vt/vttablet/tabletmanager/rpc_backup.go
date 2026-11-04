@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -200,15 +202,6 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
-			// A deferred replication initialization leaves replication to
-			// VTOrc, a reparent or an operator, which choose the source under the
-			// shard lock. This does not hold it. No deferral starts while the
-			// backup holds the action lock.
-			if tm.tmState.replicationInitPending() {
-				l.Infof("Leaving replication to the recovery of the deferred replication initialization")
-				return
-			}
-
 			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
 			if err != nil {
 				return
@@ -228,6 +221,29 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
 			if err != nil {
 				l.Error("Failed to convert bool to semisync action", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+				return
+			}
+			// A deferred replication initialization leaves the source to VTOrc,
+			// a reparent or an operator, which choose it under the shard lock.
+			// This does not hold it, so it only restores the semi-sync role that
+			// entering BACKUP turned off, which can restart a running receiver
+			// from its configured source. It leaves semi-sync off on a receiver
+			// that runs from a source other than the shard primary, which may be
+			// the primary a reparent replaces. No deferral starts while the
+			// backup holds the action lock.
+			if tm.tmState.replicationInitPending() {
+				status, err := tm.MysqlDaemon.ReplicationStatus(bgCtx)
+				if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
+					l.Errorf("Leaving semi-sync off: cannot read the replication status: %v", err)
+					return
+				}
+				if err == nil && status.IOHealthy() && (status.SourceHost != shardPrimary.MysqlHostname || status.SourcePort != shardPrimary.MysqlPort) {
+					l.Infof("Leaving semi-sync off: replication runs from %v, not from the shard primary", netutil.JoinHostPort(status.SourceHost, status.SourcePort))
+					return
+				}
+				if err := tm.fixSemiSyncAndReplication(bgCtx, tabletInfo.Type, semiSyncAction); err != nil {
+					l.Errorf("Failed to restore semi-sync, error: %v", err)
+				}
 				return
 			}
 			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
