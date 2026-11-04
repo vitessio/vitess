@@ -232,11 +232,10 @@ func (e *DuplicateKeyNameError) Error() string {
 
 type MultipleAutoIncrementColumnsError struct {
 	Table string
-	Count int
 }
 
 func (e *MultipleAutoIncrementColumnsError) Error() string {
-	return fmt.Sprintf("table %s has %d AUTO_INCREMENT columns, only one is allowed", sqlescape.EscapeID(e.Table), e.Count)
+	return fmt.Sprintf("table %s has multiple AUTO_INCREMENT columns, only one is allowed", sqlescape.EscapeID(e.Table))
 }
 
 func (e *InvalidColumnInKeyError) Error() string {
