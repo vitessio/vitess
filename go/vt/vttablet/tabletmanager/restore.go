@@ -443,7 +443,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, logger logutil.Lo
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	primaryPosStr, err := tm.initializeReplicationUnlessShardLocked(ctx, logger, tabletType)
+	primaryPosStr, err := tm.initializeReplicationUnlessShardLocked(ctx, logger, tabletType, &pos)
 	// If we ran into an error while initializing replication, then there is no point in waiting for catch-up.
 	// Also, if there is no primary tablet in the shard, we don't need to proceed further.
 	if err != nil || primaryPosStr == "" {
@@ -610,7 +610,7 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 			return vterrors.Wrap(err, "failed to disable replication")
 		}
 	case replicationActionInitialize:
-		if _, err := rt.tm.initializeReplicationUnlessShardLocked(ctx, rt.logger, rt.prevTabletType); err != nil {
+		if _, err := rt.tm.initializeReplicationUnlessShardLocked(ctx, rt.logger, rt.prevTabletType, nil); err != nil {
 			return vterrors.Wrap(err, "failed to initialize replication")
 		}
 	case replicationActionStart:
