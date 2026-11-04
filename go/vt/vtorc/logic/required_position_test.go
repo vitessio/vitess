@@ -17,6 +17,7 @@ limitations under the License.
 package logic
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -150,6 +152,8 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 		name    string
 		setup   func(t *testing.T) *topodatapb.TabletAlias
 		wantErr string
+		// The line ERS's logger forwards to VTOrc's log, without time and source.
+		wantRecord map[string]any
 	}{
 		{
 			name: "durability read error",
@@ -160,6 +164,10 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 				return alias
 			},
 			wantErr: "cannot read the durability policy of keyspace ks",
+			wantRecord: map[string]any{
+				"msg": "test: required position: cannot read the durability policy, aborting ERS", "level": "ERROR",
+				"reparent": "ERS", "keyspace": "ks", "error": "keyspace not found",
+			},
 		},
 		{
 			name: "stored set read error",
@@ -172,6 +180,10 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 				return tablet.Alias
 			},
 			wantErr: "cannot read the stored GTID set of zone1-0000000100",
+			wantRecord: map[string]any{
+				"msg": "test: required position: aborting ERS", "level": "ERROR",
+				"reparent": "ERS", "tablet": "zone1-0000000100", "error_code": "UNKNOWN",
+			},
 		},
 	}
 
@@ -186,9 +198,15 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 			entry := &inst.DetectionAnalysis{AnalyzedInstanceAlias: alias, Analysis: inst.DeadPrimary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
 			require.NoError(t, InsertRecoveryDetection(entry))
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			recoveryAttempted, _, err := runEmergencyReparentOp(t.Context(), entry, "RecoverDeadPrimary", false, log.NewPrefixedLogger("test"))
 			require.ErrorContains(t, err, tt.wantErr)
 			assert.True(t, recoveryAttempted)
+
+			record := logs.Record(t, tt.wantRecord["msg"].(string))
+			for key, value := range tt.wantRecord {
+				assert.Equal(t, value, record[key], key)
+			}
 		})
 	}
 }

@@ -288,6 +288,14 @@ func AuditTopologyRecovery(topologyRecovery *TopologyRecovery, message string) e
 	return writeTopologyRecoveryStep(recoveryStep)
 }
 
+// auditEvent returns a callback that audits each event's text as a step in
+// topologyRecovery.
+func auditEvent(topologyRecovery *TopologyRecovery) func(*logutilpb.Event) {
+	return func(event *logutilpb.Event) {
+		_ = AuditTopologyRecovery(topologyRecovery, event.GetValue())
+	}
+}
+
 func resolveRecovery(topologyRecovery *TopologyRecovery, successorInstance *inst.Instance) error {
 	if successorInstance != nil {
 		topologyRecovery.SuccessorAlias = successorInstance.InstanceAlias
@@ -374,20 +382,9 @@ func runEmergencyReparentOp(ctx context.Context, analysisEntry *inst.DetectionAn
 		}
 	}()
 
-	ersLogger := logutil.NewCallbackLogger(func(event *logutilpb.Event) {
-		level := event.GetLevel()
-		value := event.GetValue()
-		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
-		switch level {
-		case logutilpb.Level_WARNING:
-			logger.Warn("ERS - " + value)
-		case logutilpb.Level_ERROR:
-			logger.Error("ERS - " + value)
-		default:
-			logger.Info("ERS - " + value)
-		}
-		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})
+	ersLogger := logutil.NewTeeLogger(
+		logutil.NewStructuredLogger(logger, slog.LevelInfo, slog.String("reparent", "ERS")),
+		logutil.NewCallbackLogger(auditEvent(topologyRecovery)))
 
 	requiredPosition, err := requiredPositionForRecovery(tablet, ersLogger)
 	if err != nil {
@@ -1439,18 +1436,11 @@ func runPlannedReparentOp(ctx context.Context, analysisEntry *inst.DetectionAnal
 	}
 	_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("starting PlannedReparentShard for %s.", operationName))
 
-	ev, err := reparentutil.NewPlannedReparenter(ts, tmc, logutil.NewCallbackLogger(func(event *logutilpb.Event) {
-		level := event.GetLevel()
-		value := event.GetValue()
-		// we only log the warnings and errors explicitly, everything gets logged as an information message anyways in auditing topology recovery
-		switch level {
-		case logutilpb.Level_WARNING:
-			logger.Warn("PRS - " + value)
-		case logutilpb.Level_ERROR:
-			logger.Error("PRS - " + value)
-		}
-		_ = AuditTopologyRecovery(topologyRecovery, value)
-	})).ReparentShard(ctx,
+	// Only PRS's warnings and errors are logged; the recovery audit, which logs
+	// too, has every line.
+	ev, err := reparentutil.NewPlannedReparenter(ts, tmc, logutil.NewTeeLogger(
+		logutil.NewStructuredLogger(logger, slog.LevelWarn, slog.String("reparent", "PRS")),
+		logutil.NewCallbackLogger(auditEvent(topologyRecovery)))).ReparentShard(ctx,
 		analyzedTablet.Keyspace,
 		analyzedTablet.Shard,
 		reparentutil.PlannedReparentOptions{
