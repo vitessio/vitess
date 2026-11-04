@@ -1284,10 +1284,18 @@ func (tm *TabletManager) watchReplicationInit(ctx context.Context, id uint64) {
 		if ended {
 			return
 		}
-		if err == nil || err.Error() == lastErr {
+		if err == nil {
 			continue
 		}
-		lastErr = err.Error()
+		key := err.Error()
+		if errant, ok := errors.AsType[*errantGTIDsError](err); ok {
+			// The positions in the message change with every transaction.
+			key = errant.errant
+		}
+		if key == lastErr {
+			continue
+		}
+		lastErr = key
 		tm.tmState.setReplicationInitError(ctx, id, err)
 		log.Info(fmt.Sprintf("Deferred replication initialization is waiting: %v", err))
 	}
@@ -1337,6 +1345,10 @@ func (tm *TabletManager) admitDeferredReplicationInit(ctx context.Context, id ui
 	if status.SourceHost != primary.MysqlHostname || status.SourcePort != primary.MysqlPort {
 		return false, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "replication runs from %s, not from the shard primary %s (%s)",
 			netutil.JoinHostPort(status.SourceHost, status.SourcePort), topoproto.TabletAliasString(primary.Alias), netutil.JoinHostPort(primary.MysqlHostname, primary.MysqlPort))
+	}
+	// Initialization would also have refused errant GTIDs.
+	if _, err := tm.checkNoErrantGTIDs(ctx, primary.Tablet); err != nil {
+		return false, err
 	}
 	// This ends only this deferral, and not while a restore or a backup that
 	// started after the checks above runs.
@@ -1394,10 +1406,22 @@ func (tm *TabletManager) checkNoErrantGTIDs(ctx context.Context, primary *topoda
 		return nil, err
 	}
 	if errantGtid != "" {
-		return nil, vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
+		return nil, &errantGTIDsError{
+			errant: errantGtid,
+			error:  vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String())),
+		}
 	}
 	return primaryStatus, nil
 }
+
+// errantGTIDsError reports GTIDs that this tablet has executed and the primary
+// lacks.
+type errantGTIDsError struct {
+	errant string
+	error
+}
+
+func (e *errantGTIDsError) Cause() error { return e.error }
 
 // fenceRevertTimeout bounds fenceFormerPrimary's revert after a failure, which
 // runs after the caller's deadline when that deadline caused the failure.
