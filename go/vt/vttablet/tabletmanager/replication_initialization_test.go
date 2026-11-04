@@ -19,6 +19,8 @@ package tabletmanager
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -767,6 +769,48 @@ func TestBackupLeavesDeferredReplicationAlone(t *testing.T) {
 	}
 }
 
+// advancingPrimaryTMC reports a primary position that advances with every call,
+// as on a primary taking writes.
+type advancingPrimaryTMC struct {
+	*fakeTMClient
+	calls atomic.Int32
+}
+
+func (c *advancingPrimaryTMC) PrimaryStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	pos := fmt.Sprintf("%s/%s:1-%d", gtidFlavor, serverUUID, 220+c.calls.Add(1))
+	return &replicationdatapb.PrimaryStatus{Position: pos, FilePosition: pos, ServerUuid: serverUUID}, nil
+}
+
+// TestDeferredReplicationWatcherReportsErrantGTIDsOnce covers a deferred replica
+// with an errant GTID on a primary taking writes. The error message includes
+// the primary's position, which changes on every check; the watcher must report
+// the same errant GTIDs once instead of on every check.
+func TestDeferredReplicationWatcherReportsErrantGTIDsOnce(t *testing.T) {
+	tm, md, _, id := newReplicatingPendingTM(t)
+	md.ExpectedExecuteSuperQueryList = nil
+	tmc := &advancingPrimaryTMC{fakeTMClient: newFakeTMClient()}
+	tm.tmc = tmc
+	errant, err := replication.ParsePosition(gtidFlavor, gtidPosition+",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+	require.NoError(t, err)
+	md.SetPrimaryPositionLocked(errant)
+
+	// The watcher updates the reason concurrently.
+	reason := func() string {
+		tm.tmState.mu.Lock()
+		defer tm.tmState.mu.Unlock()
+		return tm.tmState.canServe(topodatapb.TabletType_REPLICA)
+	}
+	go tm.watchReplicationInit(tm.tmState.ctx, id)
+	var first string
+	require.Eventually(t, func() bool {
+		first = reason()
+		return strings.Contains(first, "Errant GTID detected")
+	}, 30*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return tmc.calls.Load() >= 4 }, 30*time.Second, 10*time.Millisecond)
+	assert.Equal(t, first, reason(), "the watcher reported the same errant GTIDs again")
+	assert.True(t, tm.tmState.isPendingReplicationInit(id))
+}
+
 func newFormerPrimaryTM(t *testing.T, commitGTID string) (*TabletManager, *blockedCommitDaemon) {
 	t.Helper()
 	tm, md, _, _ := newReplicationInitializationTM(t)
@@ -908,6 +952,14 @@ func TestDeferredReplicaIsNotAdmittedWithoutReplicationFromShardPrimary(t *testi
 			require.NoError(t, err)
 		},
 		err: "no primary",
+	}, {
+		name: "errant GTID",
+		setup: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon, ts *topo.Server) {
+			errant, err := replication.ParsePosition(gtidFlavor, gtidPosition+",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+			require.NoError(t, err)
+			md.SetPrimaryPositionLocked(errant)
+		},
+		err: "Errant GTID detected",
 	}, {
 		name: "status unreadable",
 		setup: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon, ts *topo.Server) {
