@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -27,8 +28,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/test/utils"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/servenv/testutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -977,4 +980,27 @@ func TestBinlogDumpGTID(t *testing.T) {
 		}, noopSend)
 		require.NoError(t, err)
 	})
+}
+
+func TestDebugBalancerHandler(t *testing.T) {
+	vtg, _, _ := createVtgateEnv(t)
+	vtg.registerDebugBalancerHandler()
+
+	server := testutils.HTTPTestServer()
+	defer server.Close()
+
+	// 1. Allowed with default policy
+	resp, err := http.Get(server.URL + "/debug/balancer")
+	require.NoError(t, err)
+	defer resp.Body.Close()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// 2. Denied with deny-all policy
+	cleanup := acl.SetPolicyForTest("deny-all")
+	defer cleanup()
+
+	respDeny, err := http.Get(server.URL + "/debug/balancer")
+	require.NoError(t, err)
+	defer respDeny.Body.Close()
+	require.Equal(t, http.StatusForbidden, respDeny.StatusCode)
 }
