@@ -28,12 +28,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -705,6 +707,62 @@ func TestFailedFenceFailsDeferredInitialization(t *testing.T) {
 				assert.True(t, md.released, "the fence disabled source-side semi-sync before failing")
 			}
 			require.NoError(t, md.CheckSuperQueryList(), "replication must not change")
+		})
+	}
+}
+
+// TestBackupLeavesDeferredReplicationAlone covers an offline backup of a replica
+// whose replication initialization is deferred. Its cleanup, which does not hold
+// the shard lock, must leave replication to the deferral's recovery, whether
+// replication is configured or not and whether the backup succeeds or not.
+func TestBackupLeavesDeferredReplicationAlone(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		unconfigured bool
+		backupErr    error
+	}{
+		{name: "unconfigured, backup succeeds", unconfigured: true},
+		{name: "unconfigured, backup fails", unconfigured: true, backupErr: errors.New("backup failed")},
+		{name: "configured and stopped, backup succeeds"},
+		{name: "configured and stopped, backup fails", backupErr: errors.New("backup failed")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, ts, _, _ := newPendingReplicationTM(t)
+			tm.Cnf = &mysqlctl.Mycnf{}
+			md.DB().SetNeverFail(true)
+			md.Replicating, md.IOThreadRunning = false, false
+			if tc.unconfigured {
+				md.ReplicationStatusError = mysql.ErrNotReplica
+			}
+			md.ExpectedExecuteSuperQueryList = nil
+			var repointed atomic.Bool
+			md.SetReplicationSourceFunc = func(context.Context, string, int32, float64, bool, bool) error {
+				repointed.Store(true)
+				return nil
+			}
+			useFakeBackupStorage(t)
+			const engine = "deferred-replica-drain"
+			res := mysqlctl.BackupUsable
+			if tc.backupErr != nil {
+				res = mysqlctl.BackupUnusable
+			}
+			mysqlctl.BackupRestoreEngineMap[engine] = &mysqlctl.FakeBackupEngine{
+				ShouldDrainForBackupReturn: true,
+				ExecuteBackupReturn:        mysqlctl.FakeBackupEngineExecuteBackupReturn{Res: res, Err: tc.backupErr},
+			}
+			t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, engine) })
+			holdInitializationShardLock(t, ts)
+
+			err := tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)})
+			if tc.backupErr != nil {
+				require.ErrorContains(t, err, "backup failed")
+			} else {
+				require.NoError(t, err)
+			}
+			assert.False(t, repointed.Load(), "backup cleanup set the replication source under another operation's shard lock")
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.False(t, md.Replicating)
+			assert.True(t, tm.tmState.replicationInitPending())
 		})
 	}
 }
