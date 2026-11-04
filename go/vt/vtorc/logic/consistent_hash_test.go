@@ -121,18 +121,35 @@ func TestIsInRingSegment_NoShardOrphaned(t *testing.T) {
 // once m >= watchersPerShard the shared set can be empty, which is why the ring
 // must be resized in increments of at most watchersPerShard-1.
 func TestIsInRingSegment_ResizePreservesCoverage(t *testing.T) {
-	const watchersPerShard = 3
-	for before := watchersPerShard; before < 40; before++ {
-		for after := watchersPerShard; after < 40; after++ {
+	const (
+		watchersPerShard = 3
+		maxRingSize      = 40
+		numKeyspaces     = 200
+	)
+	keyspaces := make([]string, numKeyspaces)
+	for i := range keyspaces {
+		keyspaces[i] = fmt.Sprintf("keyspace%d", i)
+	}
+	// A shard's watcher set depends only on the ring size, so compute each size's
+	// sets once instead of once per (before, after) pair.
+	watchers := make([][]map[int]bool, maxRingSize)
+	for ringSize := watchersPerShard; ringSize < maxRingSize; ringSize++ {
+		watchers[ringSize] = make([]map[int]bool, numKeyspaces)
+		for i, ks := range keyspaces {
+			watchers[ringSize][i] = watchersFor(ks, "0", ringSize, watchersPerShard)
+		}
+	}
+
+	for before := watchersPerShard; before < maxRingSize; before++ {
+		for after := watchersPerShard; after < maxRingSize; after++ {
 			m := after - before
 			if m < 0 {
 				m = -m
 			}
 			wantShared := max(0, watchersPerShard-m)
-			for i := range 200 {
-				ks := fmt.Sprintf("keyspace%d", i)
-				beforeSet := watchersFor(ks, "0", before, watchersPerShard)
-				afterSet := watchersFor(ks, "0", after, watchersPerShard)
+			for i, ks := range keyspaces {
+				beforeSet := watchers[before][i]
+				afterSet := watchers[after][i]
 
 				shared := 0
 				for idx := range beforeSet {
