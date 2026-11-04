@@ -85,8 +85,9 @@ func TestExecuteSuperQueryListMulti(t *testing.T) {
 	// the second half a server that answers nothing holds the caller for as long
 	// as it likes.
 	t.Run("a stuck exchange is interrupted", func(t *testing.T) {
+		previousGrace := killGraceTimeout
 		killGraceTimeout = 100 * time.Millisecond
-		t.Cleanup(func() { killGraceTimeout = 5 * time.Second })
+		t.Cleanup(func() { killGraceTimeout = previousGrace })
 
 		conn, err := getPoolReconnect(t.Context(), testMysqld.dbaPool)
 		require.NoError(t, err)
@@ -239,8 +240,9 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
+			previousGrace := killGraceTimeout
 			killGraceTimeout = 100 * time.Millisecond
-			t.Cleanup(func() { killGraceTimeout = 5 * time.Second })
+			t.Cleanup(func() { killGraceTimeout = previousGrace })
 			db := fakesqldb.New(t)
 			t.Cleanup(db.Close)
 			db.AddQueryPattern(".*", &sqltypes.Result{})
@@ -277,7 +279,7 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			}, nil)
 
 			ctx, cancel := context.WithCancel(t.Context())
-			defer cancel()
+			t.Cleanup(cancel)
 			returned := make(chan error, 1)
 			go func() { returned <- tc.call(ctx, mysqld) }()
 			require.Eventually(t, func() bool {

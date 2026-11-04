@@ -229,7 +229,7 @@ func (ts *tmState) changeTabletType(ctx, topoCtx context.Context, tabletType top
 			// The only way to guarantee safety is to keep retrying read until we succeed
 			for {
 				if topoCtx.Err() != nil {
-					return fmt.Errorf("context canceled updating tablet_type for %s in the topo, please retry", ts.tm.tabletAlias)
+					return vterrors.Wrapf(topoCtx.Err(), "cannot confirm updating tablet_type for %s in the topo, which may have been committed; please retry", ts.tm.tabletAlias)
 				}
 				ti, errInReading := ts.tm.TopoServer.GetTablet(topoCtx, ts.tm.tabletAlias)
 				if errInReading != nil {

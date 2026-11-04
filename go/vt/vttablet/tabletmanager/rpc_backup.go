@@ -160,9 +160,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 			// Entering BACKUP turned off semi-sync. A primary turns it back on as
 			// its policy required when the backup started, before it serves again.
-			if originalType == topodatapb.TabletType_PRIMARY && primarySemiSync == SemiSyncActionSet {
+			restoreSemiSync := originalType == topodatapb.TabletType_PRIMARY && primarySemiSync == SemiSyncActionSet
+			if restoreSemiSync {
 				if err := withBudget(func(ctx context.Context) error {
-					return tm.fixSemiSync(ctx, topodatapb.TabletType_PRIMARY, primarySemiSync)
+					return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, true, true)
 				}); err != nil {
 					fail(vterrors.Wrapf(err, "failed to restore primary semi-sync, keeping tablet type %v", topodatapb.TabletType_BACKUP))
 					return
@@ -171,9 +172,15 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			// Change our type back to the original value.
 			// Original type could be primary so pass in a real value for PrimaryTermStartTime
 			bgCtx := context.Background()
-			if err := withBudget(func(topoCtx context.Context) error {
+			err := withBudget(func(topoCtx context.Context) error {
 				return tm.changeTypeLockedWithTopoContext(bgCtx, topoCtx, originalType, DBActionNone, SemiSyncActionNone)
-			}); err != nil {
+			})
+			// The semi-sync monitor runs only on a primary, so it starts once the
+			// tablet is PRIMARY locally, even if a later step of the change failed.
+			if restoreSemiSync && tm.SemiSyncMonitor != nil && tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+				tm.SemiSyncMonitor.Open()
+			}
+			if err != nil {
 				fail(vterrors.Wrapf(err, "failed to change tablet type from %v to %v", topodatapb.TabletType_BACKUP, originalType))
 				return
 			}

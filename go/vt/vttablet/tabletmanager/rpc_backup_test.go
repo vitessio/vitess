@@ -31,11 +31,13 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 )
 
@@ -165,6 +167,7 @@ func TestBackupKeepsPrimaryDrainedWhenSemiSyncRestoreFails(t *testing.T) {
 			assert.Equal(t, topodatapb.TabletType_BACKUP, ti.Type)
 			assert.False(t, qsc.IsServing())
 			assert.False(t, fake.SemiSyncPrimaryEnabled)
+			assert.False(t, tm.SemiSyncMonitor.IsOpen())
 		})
 	}
 }
@@ -211,6 +214,10 @@ func newBackupTest(t *testing.T, tabletType topodatapb.TabletType) (context.Cont
 	}
 	require.Equal(t, tabletType, tm.Tablet().Type)
 	require.NoError(t, fake.SetSemiSyncEnabled(ctx, tabletType == topodatapb.TabletType_PRIMARY, true))
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		tm.SemiSyncMonitor.Open()
+	}
+	t.Cleanup(tm.SemiSyncMonitor.Close)
 	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
 	require.True(t, qsc.IsServing())
 
@@ -323,6 +330,7 @@ func TestBackupRestoresPrimarySemiSyncFromPolicyAtStart(t *testing.T) {
 			assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 			assert.True(t, qsc.IsServing())
 			assert.Equal(t, tc.wantSemiSync, fake.SemiSyncPrimaryEnabled)
+			assert.Equal(t, tc.wantSemiSync, tm.SemiSyncMonitor.IsOpen())
 		})
 	}
 }
@@ -483,10 +491,12 @@ func TestBackupReleasesActionLockWhenPrimaryRestoreHangs(t *testing.T) {
 			}, 30*time.Second, 10*time.Millisecond, "Backup did not return")
 			require.ErrorContains(t, err, tc.wantErr)
 			require.ErrorContains(t, err, "backup completed, but")
+			assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 			assert.Len(t, handle.EndBackupCalls, 1)
 			assert.Equal(t, topodatapb.TabletType_BACKUP, tm.Tablet().Type)
 			assert.False(t, qsc.IsServing())
 			assert.Equal(t, tc.wantSemiSync, fake.SemiSyncPrimaryEnabled)
+			assert.False(t, tm.SemiSyncMonitor.IsOpen())
 			require.NoError(t, tm.lock(ctx))
 			tm.unlock()
 			factory.SetError(nil)
@@ -514,6 +524,27 @@ func TestBackupRestoresPrimaryTypeWithItsOwnBudget(t *testing.T) {
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, ti.Type)
 	assert.True(t, qsc.IsServing())
 	assert.True(t, fake.SemiSyncPrimaryEnabled)
+}
+
+// TestBackupStartsMonitorWhenPrimaryRestoreFailsAfterPublishing checks that a
+// primary whose type change fails after it is PRIMARY locally runs the semi-sync
+// monitor, and that Backup reports the failure.
+func TestBackupStartsMonitorWhenPrimaryRestoreFailsAfterPublishing(t *testing.T) {
+	ctx, tm, fake, qsc, _ := newBackupTest(t, topodatapb.TabletType_PRIMARY)
+	handle := useFakeBackupStorage(t)
+	servingErr := errors.New("injected serving type failure")
+	mysqlctl.BackupRestoreEngineMap[primaryDrainEngine] = &duringBackupEngine{
+		FakeBackupEngine: mysqlctl.BackupRestoreEngineMap[primaryDrainEngine].(*mysqlctl.FakeBackupEngine),
+		during:           func() { qsc.SetServingTypeError = servingErr },
+	}
+
+	err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+	require.ErrorContains(t, err, servingErr.Error())
+	require.ErrorContains(t, err, "backup completed, but")
+	assert.Len(t, handle.EndBackupCalls, 1)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
+	assert.True(t, fake.SemiSyncPrimaryEnabled)
+	assert.True(t, tm.SemiSyncMonitor.IsOpen())
 }
 
 // delayedBackupSchemaDaemon answers schema reads after 300ms, longer than the

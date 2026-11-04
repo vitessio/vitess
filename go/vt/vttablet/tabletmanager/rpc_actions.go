@@ -153,7 +153,7 @@ func (tm *TabletManager) changeTypeLockedWithTopoContext(ctx, topoCtx context.Co
 
 	// Let's see if we need to fix semi-sync acking.
 	if err := tm.fixSemiSyncAndReplication(ctx, tm.Tablet().Type, semiSync); err != nil {
-		return vterrors.Wrap(err, "fixSemiSyncAndReplication failed, may not ack correctly")
+		return vterrors.Wrapf(err, "tablet type changed to %v, but semi-sync and replication setup failed, so it may not ack correctly", tm.Tablet().Type)
 	}
 	return nil
 }

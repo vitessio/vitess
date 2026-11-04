@@ -236,6 +236,11 @@ func (m *Monitor) isSemiSyncBlocked() (bool, error) {
 	return true, nil
 }
 
+// IsOpen returns whether the monitor is open.
+func (m *Monitor) IsOpen() bool {
+	return !m.isClosed()
+}
+
 // isClosed returns if the monitor is currently closed or not.
 func (m *Monitor) isClosed() bool {
 	m.mu.Lock()
