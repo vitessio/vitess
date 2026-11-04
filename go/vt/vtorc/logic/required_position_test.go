@@ -111,12 +111,12 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 		audit string
 	}{
 		{name: "flag off", flag: false, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid},
-		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, position: "MySQL56/" + requiredGtid, level: logutilpb.Level_INFO, audit: "required position: " + requiredGtid},
+		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, position: "MySQL56/" + requiredGtid, level: logutilpb.Level_INFO, audit: "required position position=MySQL56/" + requiredGtid},
 		{name: "no semi-sync", flag: true, durability: policy.DurabilityNone, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, level: logutilpb.Level_INFO, audit: "required position: none, the durability policy has no semi-sync"},
-		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid, level: logutilpb.Level_WARNING, audit: "required position: none, the analyzed tablet zone1-0000000100 is not the primary"},
+		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid, level: logutilpb.Level_WARNING, audit: "is not the primary and VTOrc has no stored GTID set for the failed primary, ERS runs without the requirement tablet=zone1-0000000100"},
 		{name: "no stored set", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "", level: logutilpb.Level_WARNING, audit: "required position: none, VTOrc has no stored GTID set"},
-		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100", level: logutilpb.Level_WARNING, audit: "required position: none, the stored GTID set is not a MySQL GTID set"},
-		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567", level: logutilpb.Level_WARNING, audit: "required position: none, the stored GTID set is not a MySQL GTID set"},
+		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100", level: logutilpb.Level_WARNING, audit: `required position: none, ERS runs without the requirement tablet=zone1-0000000100 error="the stored GTID set is not a MySQL GTID set`},
+		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567", level: logutilpb.Level_WARNING, audit: `required position: none, ERS runs without the requirement tablet=zone1-0000000100 error="the stored GTID set is not a MySQL GTID set`},
 	}
 
 	for _, tt := range tests {
