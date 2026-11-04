@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"log/slog"
 	"math"
 	"os"
 	"path"
@@ -43,6 +44,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/os2"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
@@ -55,6 +57,37 @@ import (
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+// TestReportProgressLogs checks the progress lines of a file copy: the bytes
+// written, the total and the percentage, the file and its attempt, and the
+// line when the copy completes.
+func TestReportProgressLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	bp := newBackupWriter("vt_ks/t1.ibd", 16, 2048, io.Discard)
+	_, err := bp.Write(make([]byte, 512))
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		bp.ReportProgress(t.Context(), 10*time.Millisecond, logutil.NewConsoleLogger(), false, attemptAttrs(1))
+	}()
+	r := logs.Wait(t, "backing up file progress")
+	require.NoError(t, bp.Close(true))
+	<-done
+
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, "vt_ks/t1.ibd", r["file"])
+	assert.EqualValues(t, 2, r["attempt"])
+	assert.EqualValues(t, maxRetriesPerFile+1, r["max_attempts"])
+	assert.EqualValues(t, 512, r["written_bytes"])
+	assert.EqualValues(t, 2048, r["total_bytes"])
+	assert.EqualValues(t, 25, r["percent"])
+
+	r = logs.Record(t, "Completed backing up file")
+	assert.Equal(t, "vt_ks/t1.ibd", r["file"])
+	assert.EqualValues(t, 2, r["attempt"])
+}
 
 func TestGetIncrementalFromPosGTIDSet(t *testing.T) {
 	tcases := []struct {

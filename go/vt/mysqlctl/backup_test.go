@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"sort"
@@ -41,11 +42,13 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -618,6 +621,33 @@ func TestFindBackupToRestoreSkipVersionCheck(t *testing.T) {
 	}
 }
 
+// TestFindBackupToRestoreUnreadableManifest checks the line for a backup
+// whose MANIFEST can't be read: the backup and the error are attributes, and
+// the error's code is under "error_code".
+func TestFindBackupToRestoreUnreadableManifest(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	env := createFakeBackupRestoreEnv(t)
+	env.restoreParams.Logger = logutil.NewConsoleLogger()
+	bhs := []backupstorage.BackupHandle{
+		&FakeBackupHandle{
+			NameV: "2026-11-04.000000.zone1-0000000101",
+			ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+				return nil, vterrors.New(vtrpcpb.Code_NOT_FOUND, "no MANIFEST")
+			},
+		},
+	}
+
+	_, err := FindBackupToRestore(env.ctx, env.restoreParams, bhs)
+	require.ErrorIs(t, err, ErrNoCompleteBackup)
+
+	r := logs.Record(t, "Possibly incomplete backup on BackupStorage: can't read MANIFEST")
+	assert.Equal(t, "WARN", r["level"])
+	assert.Equal(t, "2026-11-04.000000.zone1-0000000101", r["backup_name"])
+	assert.Equal(t, GetBackupDir(env.restoreParams.Keyspace, env.restoreParams.Shard), r["dir"])
+	assert.Equal(t, "can't read MANIFEST: no MANIFEST", r["error"])
+	assert.Equal(t, "NOT_FOUND", r["error_code"])
+}
+
 // TestMySQLShellEngineShouldSkipVersionCheck verifies that the mysql-shell engine
 // wires ShouldSkipVersionCheck() to the --mysql-shell-restore-skip-version-check flag.
 func TestMySQLShellEngineShouldSkipVersionCheck(t *testing.T) {
@@ -828,7 +858,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go scanLinesToLogger("test", reader, logger, wg.Done)
+	go scanLinesToLogger("test", "stdout", reader, logger, wg.Done)
 
 	for i := range 100 {
 		_, err := fmt.Fprintf(writer, "foobar %d\n", i)
@@ -841,7 +871,63 @@ func TestScanLinesToLogger(t *testing.T) {
 	require.Len(t, logger.Events, 100)
 
 	for i, event := range logger.Events {
-		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)
+		require.Equal(t, fmt.Sprintf(`command stdout command=test stdout="foobar %d"`, i), event.Value)
+	}
+
+	// A stderr line goes under "stderr".
+	logger.Clear()
+	wg.Add(1)
+	scanLinesToLogger("xbstream", "stderr", strings.NewReader("can't open file\n"), logger, wg.Done)
+	require.Len(t, logger.Events, 1)
+	assert.Equal(t, logutilpb.Level_INFO, logger.Events[0].Level)
+	assert.Equal(t, `command stderr command=xbstream stderr="can't open file"`, logger.Events[0].Value)
+}
+
+// TestExecuteBackupInitSQLLogs checks the init SQL lines through a logger
+// like the one Backup gets from vttablet: the server log has constant
+// messages with the list of queries under "queries", and the
+// caller's stream gets the same lines rendered as text.
+func TestExecuteBackupInitSQLLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	stream := logutil.NewMemoryLogger()
+	const sentinel = "init_sql_sentinel_7f3a"
+	queries := []string{"INSERT INTO t VALUES ('" + sentinel + "')", "OPTIMIZE LOCAL TABLE t"}
+
+	sqldb := fakesqldb.New(t)
+	t.Cleanup(sqldb.Close)
+	mysqld := NewFakeMysqlDaemon(sqldb)
+	t.Cleanup(mysqld.Close)
+	mysqld.ExpectedExecuteSuperQueryList = []string{"DIFFERENT QUERY"}
+
+	err := ExecuteBackupInitSQL(t.Context(), &BackupParams{
+		TabletType: topodatapb.TabletType_PRIMARY,
+		Mysqld:     mysqld,
+		InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
+			Queries:     queries,
+			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+			Timeout:     protoutil.DurationToProto(30 * time.Second),
+		},
+		Logger: logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream),
+	})
+	require.NoError(t, err)
+
+	r := logs.Record(t, "Executing init SQL queries")
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, []any{queries[0], queries[1]}, r["queries"])
+	assert.EqualValues(t, 30*time.Second, r["timeout"])
+	assert.Equal(t, false, r["fail_on_error"])
+
+	r = logs.Record(t, "Failed to execute init SQL queries")
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, []any{queries[0], queries[1]}, r["queries"])
+	assert.NotEmpty(t, r["error"])
+
+	records := logs.Records(t)
+	require.Len(t, stream.Events, len(records))
+	for i, record := range records {
+		assert.NotContains(t, record["msg"], sentinel)
+		assert.True(t, strings.HasPrefix(stream.Events[i].Value, record["msg"].(string)+" ") || stream.Events[i].Value == record["msg"],
+			"stream line %q doesn't start with %q", stream.Events[i].Value, record["msg"])
 	}
 }
 
@@ -891,7 +977,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				Logger: logutil.NewMemoryLogger(),
 			},
 			wantErr:    false,
-			wantLogMsg: "Skipping backup init SQL queries",
+			wantLogMsg: `Skipping backup init SQL queries as the backup tablet type is not in the provided list queries="[OPTIMIZE TABLE foo]" tablet_type=PRIMARY tablet_types="[replica rdonly]"`,
 		},
 		{
 			name: "missing timeout",
@@ -926,7 +1012,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				}
 			},
 			wantErr:    false,
-			wantLogMsg: "Successfully completed init SQL queries: \"OPTIMIZE LOCAL TABLE foo\"",
+			wantLogMsg: `Successfully completed init SQL queries queries="[OPTIMIZE LOCAL TABLE foo]"`,
 		},
 		{
 			name: "successful execution with multiple queries in order",
@@ -1175,7 +1261,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 		// Check that the appropriate log message was generated.
 		found := false
 		for _, event := range logger.Events {
-			if strings.Contains(event.Value, "Canceling init SQL work due to hitting the configured timeout") {
+			if event.Value == "Canceling init SQL work due to hitting the configured timeout or the backup itself having been canceled timeout=30s" {
 				found = true
 				break
 			}
@@ -1223,6 +1309,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 					for _, event := range memLogger.Events {
 						if strings.Contains(event.Value, tc.wantLogMsg) {
 							found = true
+							assert.Equal(t, logutilpb.Level_INFO, event.Level)
 							break
 						}
 					}

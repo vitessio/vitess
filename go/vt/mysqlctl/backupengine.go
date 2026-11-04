@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -492,7 +493,10 @@ func findLatestSuccessfulBackup(ctx context.Context, logger logutil.Logger, bhs 
 		// Check that the backup MANIFEST exists and can be successfully decoded.
 		bm, err := GetBackupManifest(ctx, bh)
 		if err != nil {
-			logger.Warningf("Possibly incomplete backup %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), err)
+			logger.Warn("Possibly incomplete backup on BackupStorage: can't read MANIFEST",
+				slog.String("backup_name", bh.Name()),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 		return bh, bm, nil
@@ -569,13 +573,19 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 		// Check that the backup MANIFEST exists and can be successfully decoded.
 		bm, err := GetBackupManifest(ctx, bh)
 		if err != nil {
-			params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
+			params.Logger.Warn("Possibly incomplete backup on BackupStorage: can't read MANIFEST",
+				slog.String("backup_name", bh.Name()),
+				slog.String("dir", backupDir),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 
 		// if allowed backup engine is not empty, we only try to restore from backups taken with the specified backup engines
 		if len(params.AllowedBackupEngines) > 0 && !slices.Contains(params.AllowedBackupEngines, bm.BackupMethod) {
-			params.Logger.Warningf("Ignoring backup %v because it is using %q backup engine", bh.Name(), bm.BackupMethod)
+			params.Logger.Warn("Ignoring backup because it is using a backup engine that is not allowed",
+				slog.String("backup_name", bh.Name()),
+				slog.String("backup_engine", bm.BackupMethod))
 			continue
 		}
 
@@ -612,7 +622,12 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				}
 				if bm.MySQLVersion != "" && !skipVersionCheck {
 					if err := validateMySQLVersionUpgradeCompatible(mysqlVersion, bm.MySQLVersion, bm.UpgradeSafe); err != nil {
-						params.Logger.Warningf("Skipping backup %v/%v with incompatible MySQL version %v (upgrade safe: %v): %v", backupDir, bh.Name(), bm.MySQLVersion, bm.UpgradeSafe, err)
+						params.Logger.Warn("Skipping backup with incompatible MySQL version",
+							slog.String("dir", backupDir),
+							slog.String("backup_name", bh.Name()),
+							slog.String("backup_mysql_version", bm.MySQLVersion),
+							slog.Bool("upgrade_safe", bm.UpgradeSafe),
+							slog.Any("error", err))
 						continue
 					}
 				}
@@ -621,17 +636,24 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				case checkBackupTime:
 					backupTime, err := ParseRFC3339(bm.BackupTime)
 					if err != nil {
-						params.Logger.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", backupDir, bh.Name(), bm.BackupTime, err)
+						params.Logger.Warn("Restore: skipping backup with invalid time",
+							slog.String("dir", backupDir),
+							slog.String("backup_name", bh.Name()),
+							slog.String("manifest_backup_time", bm.BackupTime),
+							slog.Any("error", err))
 						continue
 					}
 					// restore to specific time
 					if backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
-						params.Logger.Infof("Restore: found backup %v %v to restore using the specified timestamp of '%v'", bh.Directory(), bh.Name(), params.StartTime.Format(BackupTimestampFormat))
+						params.Logger.Info("Restore: found backup to restore using the specified timestamp",
+							slog.String("dir", bh.Directory()),
+							slog.String("backup_name", bh.Name()),
+							slog.String("backup_timestamp", params.StartTime.Format(BackupTimestampFormat)))
 						return index
 					}
 				default:
 					// restore latest full backup
-					params.Logger.Infof("Restore: found latest backup %v %v to restore", bh.Directory(), bh.Name())
+					params.Logger.Info("Restore: found latest backup to restore", slog.String("dir", bh.Directory()), slog.String("backup_name", bh.Name()))
 					return index
 				}
 			}
@@ -639,7 +661,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 		}()
 		if fullBackupIndex < 0 {
 			if checkBackupTime {
-				params.Logger.Errorf("No valid backup found before time %v", params.StartTime.Format(BackupTimestampFormat))
+				params.Logger.Error("No valid backup found before time", slog.String("backup_timestamp", params.StartTime.Format(BackupTimestampFormat)))
 			}
 			// There is at least one attempted backup, but none could be read.
 			// This implies there is data we ought to have, so it's not safe to start
@@ -756,17 +778,17 @@ func validateMySQLVersionUpgradeCompatible(to string, from string, upgradeSafe b
 
 func prepareToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, mysqlShutdownTimeout time.Duration) error {
 	// shutdown mysqld if it is running
-	logger.Infof("Restore: shutdown mysqld")
+	logger.Info("Restore: shutdown mysqld")
 	if err := mysqld.Shutdown(ctx, cnf, true, mysqlShutdownTimeout); err != nil {
 		return err
 	}
 
-	logger.Infof("Restore: deleting existing files")
+	logger.Info("Restore: deleting existing files")
 	if err := removeExistingFiles(cnf); err != nil {
 		return err
 	}
 
-	logger.Infof("Restore: reinit config file")
+	logger.Info("Restore: reinit config file")
 	if err := mysqld.ReinitConfig(ctx, cnf); err != nil {
 		return err
 	}

@@ -336,8 +336,18 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
 // The function returns a BackupResult that indicates the usability of the backup, and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
-	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
-		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
+	attrs := []slog.Attr{
+		slog.Time("backup_time", params.BackupTime),
+		slog.String("keyspace", params.Keyspace),
+		slog.String("shard", params.Shard),
+		slog.String("tablet", params.TabletAlias),
+		slog.Int("concurrency", params.Concurrency),
+		slog.Bool("compress", backupStorageCompress),
+	}
+	if params.IncrementalFromPos != "" {
+		attrs = append(attrs, slog.String("incremental_from_pos", params.IncrementalFromPos))
+	}
+	params.Logger.Info("Executing Backup", attrs...)
 
 	if backupFileChunkThreshold > 0 && backupFileChunkSize < minBackupFileChunkSize {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be >= %d", minBackupFileChunkSize)
@@ -386,14 +396,14 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 	var fromBackupName string
 	if params.IncrementalFromPos == AutoIncrementalFromPos {
 		// User has supplied "auto".
-		params.Logger.Infof("auto evaluating incremental_from_pos")
+		params.Logger.Info("auto evaluating incremental_from_pos")
 		backupName, pos, err := findLatestSuccessfulBackupPosition(ctx, params, bh.Name())
 		if err != nil {
 			return BackupUnusable, err
 		}
 		fromBackupName = backupName
 		params.IncrementalFromPos = replication.EncodePosition(pos)
-		params.Logger.Infof("auto evaluated incremental_from_pos: %s", params.IncrementalFromPos)
+		params.Logger.Info("auto evaluated incremental_from_pos", slog.String("incremental_from_pos", params.IncrementalFromPos))
 	}
 
 	if _, _, err := replication.DecodePositionMySQL56(params.IncrementalFromPos); err != nil {
@@ -405,7 +415,7 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 		}
 		fromBackupName = backupName
 		params.IncrementalFromPos = replication.EncodePosition(pos)
-		params.Logger.Infof("evaluated incremental_from_pos using backup name %q: %s", backupName, params.IncrementalFromPos)
+		params.Logger.Info("evaluated incremental_from_pos using backup name", slog.String("backup_name", backupName), slog.String("incremental_from_pos", params.IncrementalFromPos))
 	}
 
 	// params.IncrementalFromPos is a string. We want to turn that into a MySQL GTID
@@ -539,7 +549,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled(ctx)
 
 	// See if we need to restart replication after backup.
-	params.Logger.Infof("getting current replication status")
+	params.Logger.Info("getting current replication status")
 	replicaStatus, err := params.Mysqld.ReplicationStatus(ctx)
 	switch err {
 	case nil:
@@ -572,13 +582,13 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	if sourceIsPrimary {
 		// No need to set read_only because super_read_only will implicitly set read_only to true as well.
 		if !superReadOnly {
-			params.Logger.Infof("Enabling super_read_only on primary prior to backup")
+			params.Logger.Info("Enabling super_read_only on primary prior to backup")
 			if _, err = params.Mysqld.SetSuperReadOnly(ctx, true); err != nil {
 				return BackupUnusable, vterrors.Wrap(err, "failed to enable super_read_only")
 			}
 			defer func() {
 				// Resetting super_read_only back to its original value
-				params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+				params.Logger.Info("resetting mysqld super_read_only", slog.Bool("super_read_only", superReadOnly))
 				if _, err := params.Mysqld.SetSuperReadOnly(ctx, false); err != nil {
 					log.Error("Failed to set super_read_only back to its original value")
 				}
@@ -599,7 +609,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		}
 		replicationPosition = replicaStatus.Position
 	}
-	params.Logger.Infof("using replication position: %v", replicationPosition)
+	params.Logger.Info("using replication position", slog.String("position", replication.EncodePosition(replicationPosition)))
 
 	gtidPurgedPosition, err := params.Mysqld.GetGTIDPurged(ctx)
 	if err != nil {
@@ -658,7 +668,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		case backupErr == nil:
 			return err
 		case ctx.Err() != nil:
-			params.Logger.Errorf("failed to restore mysqld's state after the backup failed: %v", err)
+			params.Logger.Error("failed to restore mysqld's state after the backup failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return backupErr
 		default:
 			return alsoFailed(err)
@@ -677,7 +687,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Resetting super_read_only back to its original value
-	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+	params.Logger.Info("resetting mysqld super_read_only", slog.Bool("super_read_only", superReadOnly))
 	if _, err := params.Mysqld.SetSuperReadOnly(ctx, superReadOnly); err != nil {
 		return backupResult, restoreErr(err)
 	}
@@ -686,15 +696,16 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	if semiSyncSource || semiSyncReplica {
 		// Only do this if one of them was on, since both being off could mean
 		// the plugin isn't even loaded, and the server variables don't exist.
-		params.Logger.Infof("restoring semi-sync settings from before backup: primary=%v, replica=%v",
-			semiSyncSource, semiSyncReplica)
+		params.Logger.Info("restoring semi-sync settings from before backup",
+			slog.Bool("semi_sync_primary", semiSyncSource),
+			slog.Bool("semi_sync_replica", semiSyncReplica))
 		err := params.Mysqld.SetSemiSyncEnabled(ctx, semiSyncSource, semiSyncReplica)
 		if err != nil {
 			return backupResult, restoreErr(err)
 		}
 	}
 	if replicaStartRequired {
-		params.Logger.Infof("restarting mysql replication")
+		params.Logger.Info("restarting mysql replication")
 		if err := params.Mysqld.StartReplication(ctx, params.HookExtraEnv); err != nil {
 			return backupResult, restoreErr(vterrors.Wrap(err, "cannot restart replica"))
 		}
@@ -779,7 +790,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	if err != nil {
 		return vterrors.Wrap(err, "can't find files to backup")
 	}
-	params.Logger.Infof("found %v files to backup", len(fes))
+	params.Logger.Info("found files to backup", slog.Int("file_count", len(fes)))
 
 	// Build a flat work list. For large files that exceed the chunk threshold,
 	// we split them into chunks that participate as individual work items in the
@@ -925,7 +936,7 @@ func (be *BuiltinBackupEngine) backupWorkItems(ctx context.Context, workItems []
 			select {
 			// Skip work if the context has been cancelled (e.g. another goroutine failed).
 			case <-ctxCancel.Done():
-				params.Logger.Errorf("Context canceled or timed out during %q backup", fe.Name)
+				params.Logger.Error("Context canceled or timed out during backup", slog.String("file", fe.Name))
 				bh.RecordError(wi.name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
@@ -1032,31 +1043,66 @@ func (bp *backupPipe) HashString() string {
 	return hex.EncodeToString(bp.crc32.Sum(nil))
 }
 
-func (bp *backupPipe) ReportProgress(ctx context.Context, period time.Duration, logger logutil.Logger, restore bool, retryStr string) {
-	messageStr := "restoring"
-	if !restore {
-		messageStr = "backing up"
+// attemptAttrs returns the attempt number, counting from 1, and the maximum
+// number of attempts, for a file that has been retried retry times.
+func attemptAttrs(retry int) []slog.Attr {
+	return []slog.Attr{slog.Int("attempt", retry+1), slog.Int("max_attempts", maxRetriesPerFile+1)}
+}
+
+// fileAttrs returns file, then attrs, then the attempt attributes for retry.
+func fileAttrs(file string, retry int, attrs ...slog.Attr) []slog.Attr {
+	all := make([]slog.Attr, 0, len(attrs)+3)
+	all = append(all, slog.String("file", file))
+	all = append(all, attrs...)
+	return append(all, attemptAttrs(retry)...)
+}
+
+// ReportProgress logs the progress of the copy every period, and its outcome
+// when it ends. attempt holds the attempt attributes, if the copy has any.
+func (bp *backupPipe) ReportProgress(ctx context.Context, period time.Duration, logger logutil.Logger, restore bool, attempt []slog.Attr) {
+	attrs := func(more ...slog.Attr) []slog.Attr {
+		all := make([]slog.Attr, 0, 1+len(attempt)+len(more))
+		all = append(all, slog.String("file", bp.filename))
+		all = append(all, attempt...)
+		return append(all, more...)
 	}
 	tick := time.NewTicker(period)
 	defer tick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Infof("Canceled %s of %q file %s", messageStr, bp.filename, retryStr)
+			if restore {
+				logger.Info("Canceled restoring file", attrs()...)
+			} else {
+				logger.Info("Canceled backing up file", attrs()...)
+			}
 			return
 		case <-bp.done:
-			logger.Infof("Completed %s %q %s", messageStr, bp.filename, retryStr)
+			if restore {
+				logger.Info("Completed restoring file", attrs()...)
+			} else {
+				logger.Info("Completed backing up file", attrs()...)
+			}
 			return
 		case <-bp.failed:
-			logger.Infof("Failed %s %q %s", messageStr, bp.filename, retryStr)
+			if restore {
+				logger.Info("Failed restoring file", attrs()...)
+			} else {
+				logger.Info("Failed backing up file", attrs()...)
+			}
 			return
 		case <-tick.C:
-			written := float64(atomic.LoadInt64(&bp.nn))
-			if bp.maxSize == 0 {
-				logger.Infof("%s %q %s: %.02fkb", messageStr, bp.filename, retryStr, written/1024.0)
+			written := atomic.LoadInt64(&bp.nn)
+			progress := []slog.Attr{slog.Int64("written_bytes", written)}
+			if bp.maxSize != 0 {
+				progress = append(progress,
+					slog.Int64("total_bytes", bp.maxSize),
+					slog.Float64("percent", 100.0*float64(written)/float64(bp.maxSize)))
+			}
+			if restore {
+				logger.Info("restoring file progress", attrs(progress...)...)
 			} else {
-				maxSize := float64(bp.maxSize)
-				logger.Infof("%s %q %s: %.02f%% (%.02f/%.02fkb)", messageStr, bp.filename, retryStr, 100.0*written/maxSize, written/1024.0, maxSize/1024.0)
+				logger.Info("backing up file progress", attrs(progress...)...)
 			}
 		}
 	}
@@ -1086,7 +1132,10 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	defer func() {
 		closeSourceAt := time.Now()
 		if err := closeWithRetry(ctx, params.Logger, source, fe.Name); err != nil {
-			params.Logger.Infof("Failed to close %s source file during backup: %v", fe.Name, err)
+			params.Logger.Info("Failed to close source file during backup",
+				slog.String("file", fe.Name),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
@@ -1121,15 +1170,17 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		dataSize = fi.Size()
 	}
 
-	retryStr := retryToString(fe.RetryCount)
 	br := newBackupReader(label, dataSize, sourceReader)
-	go br.ReportProgress(cancelableCtx, builtinBackupProgress, params.Logger, false /*restore*/, retryStr)
+	go br.ReportProgress(cancelableCtx, builtinBackupProgress, params.Logger, false /*restore*/, attemptAttrs(fe.RetryCount))
 
 	// Open the destination file for writing, and a buffer.
 	if chunkIndex >= 0 {
-		params.Logger.Infof("Backing up chunk %d of file %v (offset=%d, size=%d) %s", chunkIndex, fe.Name, fe.Chunks[chunkIndex].Offset, fe.Chunks[chunkIndex].Size, retryStr)
+		params.Logger.Info("Backing up chunk of file", fileAttrs(fe.Name, fe.RetryCount,
+			slog.Int("chunk", chunkIndex),
+			slog.Int64("offset", fe.Chunks[chunkIndex].Offset),
+			slog.Int64("size", fe.Chunks[chunkIndex].Size))...)
 	} else {
-		params.Logger.Infof("Backing up file: %v %s", fe.Name, retryStr)
+		params.Logger.Info("Backing up file", fileAttrs(fe.Name, fe.RetryCount)...)
 	}
 	openDestAt := time.Now()
 	dest, err := bh.AddFile(ctx, name, dataSize)
@@ -1188,7 +1239,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 			closer := ioutil.NewTimeoutCloser(cancelableCtx, compressor, closeTimeout)
 			defer func() {
-				params.Logger.Infof("Closing compressor for file: %s %s", label, retryStr)
+				params.Logger.Info("Closing compressor for file", fileAttrs(label, fe.RetryCount)...)
 				closeCompressorAt := time.Now()
 				if cerr := closeWithRetry(ctx, params.Logger, closer, "compressor"); cerr != nil {
 					cerr = vterrors.Wrapf(cerr, "failed to close compressor %v", label)
@@ -1242,13 +1293,13 @@ func (be *BuiltinBackupEngine) backupManifest(
 	currentAttempt int,
 ) (finalErr error) {
 	retryStr := retryToString(currentAttempt)
-	params.Logger.Infof("Backing up file %s %s", backupManifestFileName, retryStr)
+	params.Logger.Info("Backing up file", fileAttrs(backupManifestFileName, currentAttempt)...)
 	defer func() {
-		state := "Completed"
 		if finalErr != nil {
-			state = "Failed"
+			params.Logger.Info("Failed backing up file", fileAttrs(backupManifestFileName, currentAttempt)...)
+		} else {
+			params.Logger.Info("Completed backing up file", fileAttrs(backupManifestFileName, currentAttempt)...)
 		}
-		params.Logger.Infof("%s backing up %s %s", state, backupManifestFileName, retryStr)
 	}()
 
 	// Creating this function allows us to ensure we always close the writer no matter what,
@@ -1332,7 +1383,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 		return err
 	}
 
-	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
+	params.Logger.Info("Restore: copying files", slog.Int("file_count", len(bm.FileEntries)))
 
 	if _, err := be.restoreFiles(ctx, params, bh, bm); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
@@ -1346,7 +1397,7 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 // that fall within params.RestoreToPos.GTIDSet. The rest (typically a suffix of the last binary log) are discarded.
 // The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
-	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
+	params.Logger.Info("Restoring incremental backup to position", slog.String("position", replication.EncodePosition(bm.Position)))
 	createdDir, err := be.restoreFiles(ctx, params, bh, bm)
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
@@ -1370,13 +1421,13 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 			return vterrors.Wrapf(err, "failed to apply binlog file %v", binlogFile)
 		}
 		defer os.Remove(binlogFile)
-		params.Logger.Infof("Applied binlog file: %v", binlogFile)
+		params.Logger.Info("Applied binlog file", slog.String("path", binlogFile))
 	}
 	if err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
 		return vterrors.Wrap(err, "failed to restore files")
 	}
-	params.Logger.Infof("Restored incremental backup files to: %v", createdDir)
+	params.Logger.Info("Restored incremental backup files", slog.String("dir", createdDir))
 
 	return nil
 }
@@ -1411,26 +1462,26 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	if err != nil {
 		return nil, err
 	}
-	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
+	params.Logger.Info("Restore: returning replication position", slog.String("position", replication.EncodePosition(bm.Position)))
 	return &bm.BackupManifest, nil
 }
 
 func (be *BuiltinBackupEngine) restoreManifest(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (bm builtinBackupManifest, finalErr error) {
 	var retryCount int
 	defer func() {
-		state := "Completed"
 		if finalErr != nil {
-			state = "Failed"
+			params.Logger.Info("Failed restoring file", fileAttrs(backupManifestFileName, retryCount)...)
+		} else {
+			params.Logger.Info("Completed restoring file", fileAttrs(backupManifestFileName, retryCount)...)
 		}
-		params.Logger.Infof("%s restoring %s %s", state, backupManifestFileName, retryToString(retryCount))
 	}()
 
 	for ; retryCount <= maxRetriesPerFile; retryCount++ {
-		params.Logger.Infof("Restoring file %s %s", backupManifestFileName, retryToString(retryCount))
+		params.Logger.Info("Restoring file", fileAttrs(backupManifestFileName, retryCount)...)
 		if finalErr = getBackupManifestInto(ctx, bh, &bm); finalErr == nil || vterrors.Code(finalErr) == vtrpcpb.Code_FAILED_PRECONDITION {
 			break
 		}
-		params.Logger.Infof("Failed restoring %s %s", backupManifestFileName, retryToString(retryCount))
+		params.Logger.Info("Failed restoring file", fileAttrs(backupManifestFileName, retryCount)...)
 	}
 	return
 }
@@ -1441,7 +1492,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 	// For optimization, we are replacing pargzip with pgzip, so newBuiltinDecompressor doesn't have to compare and print warning for every file
 	// since newBuiltinDecompressor is helper method and does not hold any state, it was hard to do it in that method itself.
 	if bm.CompressionEngine == PargzipCompressor {
-		params.Logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
+		params.Logger.Warn(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
 		bm.CompressionEngine = PgzipCompressor
 		defer func() {
 			bm.CompressionEngine = PargzipCompressor
@@ -1632,7 +1683,7 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 		g.Go(func() error {
 			select {
 			case <-ctx.Done():
-				params.Logger.Errorf("Context canceled or timed out during %q restore", wi.fe.Name)
+				params.Logger.Error("Context canceled or timed out during restore", slog.String("file", wi.fe.Name))
 				bh.RecordError(wi.name, vterrors.Errorf(vtrpcpb.Code_CANCELED, "context canceled"))
 				return nil
 			default:
@@ -1640,10 +1691,14 @@ func (be *BuiltinBackupEngine) restoreFileEntries(ctx context.Context, fes []Fil
 
 			var err error
 			if wi.chunk != nil {
-				params.Logger.Infof("Restoring chunk %s of file %v (offset=%d, size=%d)", wi.name, wi.fe.Name, wi.chunk.Offset, wi.chunk.Size)
+				params.Logger.Info("Restoring chunk of file",
+					slog.String("file_name", wi.name),
+					slog.String("file", wi.fe.Name),
+					slog.Int64("offset", wi.chunk.Offset),
+					slog.Int64("size", wi.chunk.Size))
 				err = be.restoreFileChunk(ctx, params, bh, wi.chunk, bm, wi.destPath)
 			} else {
-				params.Logger.Infof("Copying file %v: %v %s", wi.name, wi.fe.Name, retryToString(wi.fe.RetryCount))
+				params.Logger.Info("Copying file", fileAttrs(wi.fe.Name, wi.fe.RetryCount, slog.String("file_name", wi.name))...)
 				err = be.restoreFile(ctx, params, bh, wi.fe, bm, wi.name)
 			}
 
@@ -1703,13 +1758,13 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 	wrappedReader := ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
 	cleanup := func() error {
-		params.Logger.Infof("closing decompressor for %s", name)
+		params.Logger.Info("closing decompressor", slog.String("file_name", name))
 		closeAt := time.Now()
 		cerr := closeWithRetry(ctx, params.Logger, closer, "decompressor")
 		if cerr != nil {
 			cerr = vterrors.Wrapf(cerr, "failed to close decompressor %v", name)
 			params.Logger.Error("failed to close decompressor",
-				slog.String("file", name),
+				slog.String("file_name", name),
 				slog.Any("error", cerr),
 				slog.String("error_code", vterrors.Code(cerr).String()))
 		}
@@ -1738,15 +1793,17 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	defer func() {
 		closeSourceAt := time.Now()
 		if err := closeWithRetry(ctx, params.Logger, source, fe.Name); err != nil {
-			params.Logger.Errorf("Failed to close source file %s during restore: %v", name, err)
+			params.Logger.Error("Failed to close source file during restore",
+				slog.String("file_name", name),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
-	retryStr := retryToString(fe.RetryCount)
 	br := newBackupReader(fe.Name, 0, timedSource)
-	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true, retryStr)
+	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true, attemptAttrs(fe.RetryCount))
 	defer func() {
 		if err := br.Close(finalErr == nil); err != nil {
 			finalErr = vterrors.Wrap(finalErr, "failed to close the source reader")
@@ -1766,7 +1823,10 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		closeDestAt := time.Now()
 		if cerr := closeWithRetry(ctx, params.Logger, dest, fe.Name); cerr != nil {
 			finalErr = errors.Join(finalErr, vterrors.Wrap(cerr, "failed to close destination file"))
-			params.Logger.Errorf("Failed to close destination file %s during restore: %v", dest.Name(), cerr)
+			params.Logger.Error("Failed to close destination file during restore",
+				slog.String("path", dest.Name()),
+				slog.Any("error", cerr),
+				slog.String("error_code", vterrors.Code(cerr).String()))
 			return
 		}
 		params.Stats.Scope(stats.Operation("Destination:Close")).TimedIncrement(time.Since(closeDestAt))
@@ -1835,7 +1895,10 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 		closeDestAt := time.Now()
 		if cerr := closeWithRetry(ctx, params.Logger, dest, chunk.StorageName); cerr != nil {
 			if finalErr != nil {
-				params.Logger.Errorf("Chunk %s had prior error before close failure: %v", chunk.StorageName, finalErr)
+				params.Logger.Error("Chunk had prior error before close failure",
+					slog.String("file_name", chunk.StorageName),
+					slog.Any("error", finalErr),
+					slog.String("error_code", vterrors.Code(finalErr).String()))
 			}
 			// Overwrite (not join) so that closeWithRetry's FAILED_PRECONDITION code
 			// propagates through the dispatch's vterrors.Code() check, ensuring the
@@ -1859,14 +1922,17 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 	defer func() {
 		closeSourceAt := time.Now()
 		if err := closeWithRetry(ctx, params.Logger, source, chunk.StorageName); err != nil {
-			params.Logger.Errorf("Failed to close source chunk %s during restore: %v", chunk.StorageName, err)
+			params.Logger.Error("Failed to close source chunk during restore",
+				slog.String("file_name", chunk.StorageName),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 		params.Stats.Scope(stats.Operation("Source:Close")).TimedIncrement(time.Since(closeSourceAt))
 	}()
 
 	br := newBackupReader(chunk.StorageName, 0, timedSource)
-	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true, "")
+	go br.ReportProgress(ctx, builtinBackupProgress, params.Logger, true, nil)
 	defer func() {
 		if err := br.Close(finalErr == nil); err != nil {
 			finalErr = errors.Join(finalErr, vterrors.Wrap(err, "failed to close source reader"))
@@ -1988,7 +2054,11 @@ func closeWithRetry(ctx context.Context, logger logutil.Logger, file io.Closer, 
 			// providers so we consider it permanent at this point. We return a
 			// FAILED_PRECONDITION code which tells the upper layers not to retry as we
 			// now cannot be sure that this backup would be usable when it finishes.
-			logger.Errorf("Failed to close %s file %s after %d attempts, giving up: %v", fileType, name, maxFileCloseRetries, err)
+			logger.Error("Failed to close file after the maximum number of attempts, giving up",
+				slog.String("file_type", fileType),
+				slog.String("file", name),
+				slog.Int("max_retries", maxFileCloseRetries),
+				slog.Any("error", err))
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "failed to close the %s file after %d attempts, giving up", fileType, maxFileCloseRetries)
 		}
 		select {
@@ -2002,6 +2072,12 @@ func closeWithRetry(ctx context.Context, logger logutil.Logger, file io.Closer, 
 			}
 		}
 		retries++
-		logger.Errorf("Failed to close %s file %s, will perform retry %d of %d in %v: %v", fileType, name, retries, maxFileCloseRetries, backoff, err)
+		logger.Error("Failed to close file, will retry",
+			slog.String("file_type", fileType),
+			slog.String("file", name),
+			slog.Int("retry", retries),
+			slog.Int("max_retries", maxFileCloseRetries),
+			slog.Duration("retry_delay", backoff),
+			slog.Any("error", err))
 	}
 }
