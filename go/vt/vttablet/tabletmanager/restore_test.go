@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -172,4 +175,62 @@ func TestStartReplicationKeepsRestoredBinlogs(t *testing.T) {
 	fake.ExpectedExecuteSuperQueryCurrent = 0
 	require.NoError(t, tm.startReplication(t.Context(), pos, topodatapb.TabletType_REPLICA, false))
 	assert.Equal(t, len(fake.ExpectedExecuteSuperQueryList), fake.ExpectedExecuteSuperQueryCurrent)
+}
+
+// TestRestoreManifestAttrs checks that "Restore: got a restore manifest" logs
+// the manifest's fields as attributes instead of printing the struct, leaves
+// out empty positions and a nil error, and logs the error and its code when
+// there is one.
+func TestRestoreManifestAttrs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	pos, err := replication.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-23")
+	require.NoError(t, err)
+	m := &mysqlctl.BackupManifest{
+		BackupName:      "2026-11-04.150000.zone1-0000000101",
+		BackupMethod:    "builtin",
+		Position:        pos,
+		BackupTime:      "2026-11-04T15:00:00Z",
+		FinishedTime:    "2026-11-04T15:01:00Z",
+		ServerUUID:      "3e11fa47-71ca-11e1-9e33-c80aa9429562",
+		TabletAlias:     "zone1-0000000101",
+		Hostname:        "host1",
+		Keyspace:        "ks",
+		Shard:           "-80",
+		MySQLVersion:    "8.4.0",
+		UpgradeSafe:     true,
+		IncludesBinlogs: true,
+		IncrementalDetails: &mysqlctl.IncrementalBackupDetails{
+			FirstTimestamp: "2026-11-04T14:00:00Z",
+		},
+	}
+
+	logutil.NewConsoleLogger().Info("Restore: got a restore manifest", restoreManifestAttrs(m, nil, time.Minute)...)
+	r := logs.Record(t, "Restore: got a restore manifest")
+	assert.Equal(t, map[string]any{
+		"time":                   r["time"],
+		"level":                  "INFO",
+		"msg":                    "Restore: got a restore manifest",
+		"backup_name":            "2026-11-04.150000.zone1-0000000101",
+		"backup_engine":          "builtin",
+		"position":               "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-23",
+		"incremental":            false,
+		"manifest_backup_time":   "2026-11-04T15:00:00Z",
+		"manifest_finished_time": "2026-11-04T15:01:00Z",
+		"server_uuid":            "3e11fa47-71ca-11e1-9e33-c80aa9429562",
+		"backup_tablet":          "zone1-0000000101",
+		"hostname":               "host1",
+		"keyspace":               "ks",
+		"shard":                  "-80",
+		"backup_mysql_version":   "8.4.0",
+		"upgrade_safe":           true,
+		"includes_binlogs":       true,
+		"retry_delay":            float64(time.Minute),
+	}, r)
+
+	logs.Reset()
+	logutil.NewConsoleLogger().Info("Restore: got a restore manifest", restoreManifestAttrs(nil, mysqlctl.ErrNoBackup, 0)...)
+	r = logs.Record(t, "Restore: got a restore manifest")
+	assert.Equal(t, mysqlctl.ErrNoBackup.Error(), r["error"])
+	assert.Equal(t, "UNKNOWN", r["error_code"])
+	assert.NotContains(t, r, "backup_name")
 }

@@ -19,6 +19,8 @@ package tabletmanager
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -26,9 +28,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -663,4 +667,25 @@ func TestBackupPrimaryWithoutReplicationConfiguration(t *testing.T) {
 	assert.True(t, qsc.IsServing())
 	assert.True(t, fake.SemiSyncPrimaryEnabled)
 	assert.Len(t, handle.EndBackupCalls, 1)
+}
+
+// TestShutdownTimeoutLogs checks a Backup line through the logger Backup
+// builds: the server log gets the structured record and the caller's stream
+// gets the line rendered as text, both at ERROR.
+func TestShutdownTimeoutLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	stream := logutil.NewMemoryLogger()
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream)
+
+	timeout := shutdownTimeout(l, &vttime.Duration{Seconds: 1, Nanos: -1})
+	assert.Equal(t, mysqlShutdownTimeout, timeout)
+
+	r := logs.Record(t, "failed to parse mysql shutdown timeout, falling back to default")
+	assert.Equal(t, "ERROR", r["level"])
+	errText, _ := r["error"].(string)
+	assert.NotEmpty(t, errText)
+
+	require.Len(t, stream.Events, 1)
+	assert.Equal(t, logutilpb.Level_ERROR, stream.Events[0].Level)
+	assert.Equal(t, fmt.Sprintf("failed to parse mysql shutdown timeout, falling back to default error=%q", errText), stream.Events[0].Value)
 }
