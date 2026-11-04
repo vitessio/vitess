@@ -18,19 +18,12 @@ package topo
 
 import (
 	"context"
-	"fmt"
-	"path"
-	"sort"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -42,6 +35,15 @@ type cellReader interface {
 	List(ctx context.Context, filePathPrefix string) ([]KVInfo, error)
 	ListDir(ctx context.Context, dirPath string, full bool) ([]DirEntry, error)
 	Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error)
+}
+
+// cellReaderFunc returns a cellReader for a cell. Server.connReaderForCell and Server.cellReaderFor are the two
+// implementations; the read functions shared by the Server and its StaleTolerantView take one as a parameter.
+type cellReaderFunc func(ctx context.Context, cell string) (cellReader, error)
+
+// connReaderForCell is ConnForCell as a cellReaderFunc.
+func (ts *Server) connReaderForCell(ctx context.Context, cell string) (cellReader, error) {
+	return ts.ConnForCell(ctx, cell)
 }
 
 // StaleTolerantView reads cell-local records through a connection chosen from a CellInfo up to
@@ -60,31 +62,11 @@ func (ts *Server) StaleTolerantView() *StaleTolerantView {
 
 // GetTablet is Server.GetTablet, reading the tablet's cell location from the CellInfo cache.
 func (v *StaleTolerantView) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) (*TabletInfo, error) {
-	conn, err := v.ts.cellReaderFor(ctx, alias.Cell)
-	if err != nil {
-		log.Error(fmt.Sprintf("unable to get connection for cell %q: %v", alias.Cell, err))
-		return nil, err
-	}
-
 	span, ctx := trace.NewSpan(ctx, "TopoServer.StaleTolerantView.GetTablet")
 	span.Annotate("tablet", topoproto.TabletAliasString(alias))
 	defer span.Finish()
 
-	tabletPath := path.Join(TabletsPath, topoproto.TabletAliasString(alias), TabletFile)
-	data, version, err := conn.Get(ctx, tabletPath)
-	if err != nil {
-		log.Error(fmt.Sprintf("unable to connect to tablet %q: %v", alias, err))
-		return nil, err
-	}
-	tablet := &topodatapb.Tablet{}
-	if err := tablet.UnmarshalVT(data); err != nil {
-		return nil, err
-	}
-
-	return &TabletInfo{
-		version: version,
-		Tablet:  tablet,
-	}, nil
+	return getTablet(ctx, alias, v.ts.cellReaderFor)
 }
 
 // FindAllTabletAliasesInShard is Server.FindAllTabletAliasesInShard, reading each cell's location from the
@@ -95,79 +77,7 @@ func (v *StaleTolerantView) FindAllTabletAliasesInShard(ctx context.Context, key
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	cells, err := v.ts.GetCellInfoNames(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// read the shard information to find the cells
-	si, err := v.ts.GetShard(ctx, keyspace, shard)
-	if err != nil {
-		return nil, err
-	}
-
-	resultAsMap := make(map[string]*topodatapb.TabletAlias)
-	if si.HasPrimary() {
-		if InCellList(si.PrimaryAlias.Cell, cells) {
-			resultAsMap[topoproto.TabletAliasString(si.PrimaryAlias)] = si.PrimaryAlias
-		}
-	}
-
-	// read the replication graph in each cell and add all found tablets
-	wg := sync.WaitGroup{}
-	mutex := sync.Mutex{}
-	rec := concurrency.AllErrorRecorder{}
-	for _, cell := range cells {
-		wg.Go(func() {
-			sri, err := v.getShardReplication(ctx, cell, keyspace, shard)
-			switch {
-			case err == nil:
-				mutex.Lock()
-				for _, node := range sri.Nodes {
-					resultAsMap[topoproto.TabletAliasString(node.TabletAlias)] = node.TabletAlias
-				}
-				mutex.Unlock()
-			case IsErrType(err, NoNode):
-				// There is no shard replication for this shard in this cell. NOOP
-			default:
-				rec.RecordError(vterrors.Wrapf(err, "GetShardReplication(%v, %v, %v) failed.", cell, keyspace, shard))
-			}
-		})
-	}
-	wg.Wait()
-	err = nil
-	if rec.HasErrors() {
-		log.Warn(fmt.Sprintf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error()))
-		err = NewError(PartialResult, shard)
-	}
-
-	result := make([]*topodatapb.TabletAlias, 0, len(resultAsMap))
-	for _, a := range resultAsMap {
-		result = append(result, a.CloneVT())
-	}
-	sort.Sort(topoproto.TabletAliasList(result))
-	return result, err
-}
-
-// getShardReplication is Server.GetShardReplication, reading the cell's location from the CellInfo cache.
-func (v *StaleTolerantView) getShardReplication(ctx context.Context, cell, keyspace, shard string) (*ShardReplicationInfo, error) {
-	conn, err := v.ts.cellReaderFor(ctx, cell)
-	if err != nil {
-		return nil, err
-	}
-
-	nodePath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardReplicationFile)
-	data, _, err := conn.Get(ctx, nodePath)
-	if err != nil {
-		return nil, err
-	}
-
-	sr := &topodatapb.ShardReplication{}
-	if err = sr.UnmarshalVT(data); err != nil {
-		return nil, vterrors.Wrap(err, "bad ShardReplication data")
-	}
-
-	return NewShardReplicationInfo(sr, cell, keyspace, shard), nil
+	return v.ts.findAllTabletAliasesInShardByCell(ctx, keyspace, shard, nil, v.ts.cellReaderFor)
 }
 
 // cellReaderFor returns a cellReader for the cell, from a CellInfo read within the cache TTL if there is one.

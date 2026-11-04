@@ -130,9 +130,9 @@ type throttlerTopoService interface {
 }
 
 // throttlerTopoServer is the throttlerTopoService of a topo.Server. It reads tablet records through the
-// server's StaleTolerantView: the tablets they list only decide which tablets the throttler probes, and
-// --topo-cell-info-cache-ttl then saves a global CellInfo read per cell and per tablet on each inventory
-// refresh.
+// server's StaleTolerantView: the tablets they list only decide which tablets the throttler probes or, on a
+// replica, which tablet it stimulates as the primary, and --topo-cell-info-cache-ttl then saves a global
+// CellInfo read per cell and per tablet on each inventory refresh and one per stimulation.
 type throttlerTopoServer struct {
 	*topo.Server
 	view *topo.StaleTolerantView
