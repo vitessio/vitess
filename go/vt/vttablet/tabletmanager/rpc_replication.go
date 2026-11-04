@@ -1114,7 +1114,10 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 	before.SemiSyncPrimaryStatus, before.SemiSyncReplicaStatus = tm.MysqlDaemon.SemiSyncStatus(ctx)
 
 	if stopReplicationMode == replicationdatapb.StopReplicationMode_IOTHREADONLY {
-		if !rs.IOHealthy() {
+		// A replica can retain an unapplied relay log across a mysqld restart
+		// while both threads stay stopped. ERS's relay-log wait is passive,
+		// so start its idle applier without restarting the receiver.
+		if !rs.IOHealthy() && !tm.startIdleApplierLocked(ctx) {
 			before.ServerVersion = tm.getMySQLVersionStringBounded(ctx)
 			return StopReplicationAndGetStatusResponse{
 				Status: &replicationdatapb.StopReplicationStatus{
@@ -1123,12 +1126,15 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 				},
 			}, nil
 		}
-		if err := tm.stopIOThreadLocked(ctx); err != nil {
-			return StopReplicationAndGetStatusResponse{
-				Status: &replicationdatapb.StopReplicationStatus{
-					Before: before,
-				},
-			}, vterrors.Wrap(err, "stop io thread failed")
+		if rs.IOHealthy() {
+			if err := tm.stopIOThreadLocked(ctx); err != nil {
+				return StopReplicationAndGetStatusResponse{
+					Status: &replicationdatapb.StopReplicationStatus{
+						Before: before,
+					},
+				}, vterrors.Wrap(err, "stop io thread failed")
+			}
+			tm.startIdleApplierLocked(ctx)
 		}
 	} else {
 		if !rs.Healthy() {
@@ -1176,6 +1182,41 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 			After:  after,
 		},
 	}, nil
+}
+
+// startIdleApplierLocked starts the replica's applier when it is stopped without an error while
+// its relay log holds transactions that it has not applied, and reports whether it did.
+//
+// ERS stops only the receivers, then waits for each candidate to apply its relay log, and that
+// wait does not start the applier. A replica whose applier is stopped, as it is after a mysqld
+// restart with skip_replica_start or after STOP REPLICA, could only time out, so a replica that
+// kept acknowledged transactions in its relay log (relay_log_recovery=0) could not be promoted,
+// nor could any other candidate that has to wait for it. The receiver stays stopped, so the
+// replica neither fetches from nor acknowledges the old primary. An applier stopped by an error
+// stays stopped.
+func (tm *TabletManager) startIdleApplierLocked(ctx context.Context) bool {
+	if tm.IsBackupRunning() {
+		return false
+	}
+	rs, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+	if err != nil || rs.IOState != replication.ReplicationStateStopped || rs.SQLState != replication.ReplicationStateStopped || rs.LastSQLError != "" || !hasUnappliedRelayLog(rs) {
+		return false
+	}
+	log.Info("starting the stopped replication applier to apply the relay log")
+	if err := tm.MysqlDaemon.StartSQLThread(ctx); err != nil {
+		log.Warn("failed to start the replication applier", slog.Any("error", err))
+		return false
+	}
+	return true
+}
+
+// hasUnappliedRelayLog reports whether the replica's relay log holds transactions that its
+// applier has not executed yet.
+func hasUnappliedRelayLog(rs replication.ReplicationStatus) bool {
+	if !rs.RelayLogPosition.IsZero() {
+		return !rs.Position.AtLeast(rs.RelayLogPosition)
+	}
+	return !rs.RelayLogSourceBinlogEquivalentPosition.IsZero() && !rs.FilePosition.AtLeast(rs.RelayLogSourceBinlogEquivalentPosition)
 }
 
 // StopReplicationAndGetStatusResponse holds the original hybrid Status struct, as well as a new Status field, which
