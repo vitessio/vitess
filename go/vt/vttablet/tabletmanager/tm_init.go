@@ -1188,12 +1188,28 @@ func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (con
 const replicationInitWatchInterval = time.Second
 
 // initializeReplicationUnlessShardLocked initializes replication unless the
-// shard lock is unavailable. In that case replication is left unchanged, and
-// non-primary types do not serve queries until replication runs from the shard
-// primary: VTOrc, a reparent or an operator starts it.
+// shard lock is unavailable. In that case replication is left unchanged, a
+// former primary is fenced, and non-primary types do not serve queries until
+// replication runs from the shard primary: VTOrc, a reparent or an operator
+// starts it.
 func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Context, logger logutil.Logger, tabletType topodatapb.TabletType) (string, error) {
 	primaryPos, err := tm.initializeReplication(ctx, tabletType)
 	if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
+		// A commit waiting for semi-sync acknowledgements would keep a former
+		// primary writable, and VTOrc's repair would hold the shard lock behind
+		// it. The fence releases the commit, which recovery's errant GTID check
+		// then rejects, and makes the tablet reject writes. A failed fence fails
+		// initialization, as under the lock: that check misses a commit that a
+		// later repoint releases.
+		fenceCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		fenced, fenceErr := tm.fenceFormerPrimary(fenceCtx)
+		cancel()
+		if fenceErr != nil {
+			return "", vterrors.Wrapf(fenceErr, "cannot fence a former primary before deferring replication initialization (%v)", err)
+		}
+		if fenced {
+			logger.Infof("fenced a former primary before deferring replication initialization")
+		}
 		logger.Warningf("deferring replication initialization, staying out of rotation until replication runs from the shard primary: %v", err)
 		id := tm.tmState.deferReplicationInit(ctx, err)
 		go tm.watchReplicationInit(tm.tmState.ctx, id)

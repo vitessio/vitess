@@ -655,6 +655,60 @@ func TestFailedFenceIsRepeatedByTheNextAttempt(t *testing.T) {
 	}
 }
 
+// TestFormerPrimaryIsFencedWhenDeferring covers a former primary that restarts
+// under a held shard lock with a commit waiting for semi-sync acknowledgements.
+// It must release the commit and reject writes before it defers, without
+// changing replication.
+func TestFormerPrimaryIsFencedWhenDeferring(t *testing.T) {
+	tm, md := newFormerPrimaryTM(t, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+	holdInitializationShardLock(t, tm.TopoServer)
+	md.ExpectedExecuteSuperQueryList = nil
+
+	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.True(t, tm.tmState.replicationInitPending())
+	assert.False(t, md.SemiSyncPrimaryEnabled, "the waiting commit must be released")
+	assert.True(t, md.SuperReadOnly.Load(), "a deferred former primary must not accept writes")
+	assert.Equal(t, md.committed, md.CurrentPrimaryPosition, "the released commit must finish")
+	require.NoError(t, md.CheckSuperQueryList(), "replication must not change")
+}
+
+// TestFailedFenceFailsDeferredInitialization covers a former primary that
+// restarts under a held shard lock and fails to fence. Initialization must fail
+// instead of deferring: a later repoint's errant GTID check would miss the
+// commit that the repoint releases.
+func TestFailedFenceFailsDeferredInitialization(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		setup    func(*blockedCommitDaemon)
+		err      string
+		reverted bool
+	}{
+		{name: "reading semi-sync fails", setup: func(d *blockedCommitDaemon) { d.ReadSemiSyncEnabledError = errors.New("variables unreadable") }, err: "variables unreadable"},
+		{name: "disabling semi-sync fails", setup: func(d *blockedCommitDaemon) { d.disableErr = errors.New("connection lost") }, err: "connection lost", reverted: true},
+		{name: "super_read_only times out", setup: func(d *blockedCommitDaemon) { d.stuck = true }, err: "deadline exceeded", reverted: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md := newFormerPrimaryTM(t, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+			holdInitializationShardLock(t, tm.TopoServer)
+			md.ExpectedExecuteSuperQueryList = nil
+			tc.setup(md)
+
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+			_, err := tm.initializeReplicationUnlessShardLocked(ctx, logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
+			require.ErrorContains(t, err, "cannot fence a former primary before deferring replication initialization")
+			require.ErrorContains(t, err, tc.err)
+			assert.False(t, tm.tmState.replicationInitPending(), "a tablet that failed to fence must not defer")
+			assert.True(t, md.SemiSyncPrimaryEnabled, "the next attempt must find the former primary unfenced")
+			if tc.reverted {
+				assert.True(t, md.released, "the fence disabled source-side semi-sync before failing")
+			}
+			require.NoError(t, md.CheckSuperQueryList(), "replication must not change")
+		})
+	}
+}
+
 func newFormerPrimaryTM(t *testing.T, commitGTID string) (*TabletManager, *blockedCommitDaemon) {
 	t.Helper()
 	tm, md, _, _ := newReplicationInitializationTM(t)
