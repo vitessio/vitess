@@ -715,8 +715,9 @@ func TestFailedFenceFailsDeferredInitialization(t *testing.T) {
 
 // TestBackupLeavesDeferredReplicationAlone covers an offline backup of a replica
 // whose replication initialization is deferred. Its cleanup, which does not hold
-// the shard lock, must leave replication to the deferral's recovery, whether
-// replication is configured or not and whether the backup succeeds or not.
+// the shard lock, must leave replication to the deferral's recovery, but restore
+// the semi-sync role that entering BACKUP turned off, whether replication is
+// configured or not and whether the backup succeeds or not.
 func TestBackupLeavesDeferredReplicationAlone(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
@@ -762,9 +763,79 @@ func TestBackupLeavesDeferredReplicationAlone(t *testing.T) {
 				require.NoError(t, err)
 			}
 			assert.False(t, repointed.Load(), "backup cleanup set the replication source under another operation's shard lock")
+			assert.True(t, md.SemiSyncReplicaEnabled, "backup cleanup did not restore replica-side semi-sync")
 			require.NoError(t, md.CheckSuperQueryList())
 			assert.False(t, md.Replicating)
 			assert.True(t, tm.tmState.replicationInitPending())
+		})
+	}
+}
+
+// statusErrorAfterBackupDaemon, when err is set, fails the second replication
+// status read of a backup: the first is entering BACKUP, the second is the
+// cleanup's. Later reads succeed.
+type statusErrorAfterBackupDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	err   error
+	reads atomic.Int32
+}
+
+func (d *statusErrorAfterBackupDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	if d.reads.Add(1) == 2 && d.err != nil {
+		return replication.ReplicationStatus{}, d.err
+	}
+	return d.FakeMysqlDaemon.ReplicationStatus(ctx)
+}
+
+// TestBackupOfRunningDeferredReplica covers an offline backup of a deferred
+// replica that replicates again after the backup. Entering BACKUP turns off
+// semi-sync. While initialization is deferred, the backup's cleanup must turn
+// the replica's semi-sync role back on without setting the source, but only if
+// replication runs from the shard primary: a replica that replicates from
+// another source, such as a primary a reparent replaces, or whose status cannot
+// be read, must not acknowledge.
+func TestBackupOfRunningDeferredReplica(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		source    string
+		statusErr error
+		semiSync  bool
+	}{
+		{name: "from the shard primary", source: "old-primary", semiSync: true},
+		{name: "from another source", source: "stale-primary"},
+		{name: "status unreadable", source: "stale-primary", statusErr: errors.New("status read failed")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, qsc, id := newReplicatingPendingTM(t)
+			md.CurrentSourceHost = tc.source
+			tm.Cnf = &mysqlctl.Mycnf{}
+			md.DB().SetNeverFail(true)
+			md.ExpectedExecuteSuperQueryList = nil
+			var repointed atomic.Bool
+			md.SetReplicationSourceFunc = func(context.Context, string, int32, float64, bool, bool) error {
+				repointed.Store(true)
+				return nil
+			}
+			useFakeBackupStorage(t)
+			const engine = "running-deferred-replica-drain"
+			mysqlctl.BackupRestoreEngineMap[engine] = &mysqlctl.FakeBackupEngine{
+				ShouldDrainForBackupReturn: true,
+				ExecuteBackupReturn:        mysqlctl.FakeBackupEngineExecuteBackupReturn{Res: mysqlctl.BackupUsable},
+			}
+			t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, engine) })
+			holdInitializationShardLock(t, tm.TopoServer)
+
+			// A status read that fails at cleanup, and succeeds again later.
+			daemon := &statusErrorAfterBackupDaemon{FakeMysqlDaemon: md, err: tc.statusErr}
+			tm.MysqlDaemon = daemon
+			require.NoError(t, tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)}))
+			assert.False(t, repointed.Load(), "backup cleanup set the replication source under another operation's shard lock")
+			require.NoError(t, md.CheckSuperQueryList(), "backup cleanup restarted replication")
+			assert.Equal(t, tc.semiSync, md.SemiSyncReplicaEnabled)
+			assert.True(t, md.Replicating)
+			assert.Equal(t, tc.source, md.CurrentSourceHost)
+			assert.True(t, tm.tmState.isPendingReplicationInit(id))
+			assert.False(t, qsc.IsServing())
 		})
 	}
 }
