@@ -2060,17 +2060,36 @@ func TestGetHealthyTabletStatsDoesNotBlockOnHealthCheckLock(t *testing.T) {
 	result := make(chan []*TabletHealth, 1)
 	go func() { result <- hc.GetHealthyTabletStats(target) }()
 	var ths []*TabletHealth
-	blocked := false
-	select {
-	case ths = <-result:
-	case <-time.After(5 * time.Second):
-		blocked = true
-	}
+	// assert, not require: a failure must still reach Unlock, or hc.Close deadlocks.
+	returned := assert.Eventually(t, func() bool {
+		select {
+		case ths = <-result:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond, "GetHealthyTabletStats blocked while hc.mu was held")
 	hc.mu.Unlock()
 
-	require.False(t, blocked, "GetHealthyTabletStats blocked while hc.mu was held")
+	require.True(t, returned)
 	require.Len(t, ths, 1)
 	assert.True(t, topoproto.TabletAliasEqual(tablet.Alias, ths[0].Tablet.Alias))
+}
+
+// TestGetHealthyTabletStatsReturnsCopy pins that callers own the result. The
+// published list is shared by lock-free readers, and the gateway shuffles the
+// result and runs slices.DeleteFunc on it.
+func TestGetHealthyTabletStatsReturnsCopy(t *testing.T) {
+	bhc := newBenchHealthCheck(t, 3)
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+
+	clear(bhc.hc.GetHealthyTabletStats(target))
+
+	ths := bhc.hc.GetHealthyTabletStats(target)
+	require.Len(t, ths, 3)
+	for _, th := range ths {
+		require.NotNil(t, th)
+	}
 }
 
 // TestGetHealthyTabletStatsDuringHealthUpdates runs lock-free readers against the

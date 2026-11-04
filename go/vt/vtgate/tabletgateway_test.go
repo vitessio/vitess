@@ -415,15 +415,18 @@ func TestGetStatsAggregatorDoesNotBlockOnGatewayLock(t *testing.T) {
 	result := make(chan *TabletStatusAggregator, 1)
 	go func() { result <- tg.getStatsAggregator(target) }()
 	var got *TabletStatusAggregator
-	blocked := false
-	select {
-	case got = <-result:
-	case <-time.After(5 * time.Second):
-		blocked = true
-	}
+	// assert, not require: a failure must still reach Unlock below.
+	returned := assert.Eventually(t, func() bool {
+		select {
+		case got = <-result:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond, "getStatsAggregator blocked while gw.mu was held")
 	tg.mu.Unlock()
 
-	require.False(t, blocked, "getStatsAggregator blocked while gw.mu was held")
+	require.True(t, returned)
 	assert.Same(t, aggr, got)
 	assert.Equal(t, "ks/-80/REPLICA", got.Name)
 }
