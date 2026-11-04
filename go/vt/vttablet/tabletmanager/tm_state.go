@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
@@ -89,6 +90,9 @@ type tmState struct {
 	// replicationInitError is why the pending deferred replication
 	// initialization has not completed yet.
 	replicationInitError string
+	// replicationInitRestored is the position a restore restored before it
+	// deferred replication initialization, or nil.
+	replicationInitRestored *replication.Position
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -300,13 +304,26 @@ func (ts *tmState) ChangeTabletTags(ctx context.Context, tabletTags map[string]s
 
 // deferReplicationInit records a new deferred replication initialization,
 // deferred because of cause, and returns its ID. It supersedes any earlier one.
-// Non-primary tablet types do not serve queries until it ends.
-func (ts *tmState) deferReplicationInit(ctx context.Context, cause error) uint64 {
+// Non-primary tablet types do not serve queries until it ends. restored is the
+// position a restore restored, or nil.
+func (ts *tmState) deferReplicationInit(ctx context.Context, cause error, restored *replication.Position) uint64 {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	ts.lastReplicationInit++
+	ts.replicationInitRestored = restored
 	ts.setPendingReplicationInitLocked(ctx, ts.lastReplicationInit, cause)
 	return ts.lastReplicationInit
+}
+
+// replicationInitRestoredPosition returns the position that the restore of the
+// deferred replication initialization id restored, or nil.
+func (ts *tmState) replicationInitRestoredPosition(id uint64) *replication.Position {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.pendingReplicationInit != id {
+		return nil
+	}
+	return ts.replicationInitRestored
 }
 
 // setReplicationInitError records why the deferred replication initialization

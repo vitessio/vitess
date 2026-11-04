@@ -565,7 +565,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	// We should be re-read the tablet from tabletManager and use the type specified there.
 	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
 	// earlier in tm.checkPrimaryShip code.
-	_, err = tm.initializeReplicationUnlessShardLocked(ctx, logutil.NewConsoleLogger(), tm.Tablet().Type)
+	_, err = tm.initializeReplicationUnlessShardLocked(ctx, logutil.NewConsoleLogger(), tm.Tablet().Type, nil)
 	if err != nil {
 		return err
 	}
@@ -1191,8 +1191,10 @@ const replicationInitWatchInterval = time.Second
 // shard lock is unavailable. In that case replication is left unchanged, a
 // former primary is fenced, and non-primary types do not serve queries until
 // replication runs from the shard primary: VTOrc, a reparent or an operator
-// starts it.
-func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Context, logger logutil.Logger, tabletType topodatapb.TabletType) (string, error) {
+// starts it. After a restore, restored is the restored position, otherwise nil:
+// the replica then serves only once replication applies past it, as a restore
+// that initializes replication waits for.
+func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Context, logger logutil.Logger, tabletType topodatapb.TabletType, restored *replication.Position) (string, error) {
 	primaryPos, err := tm.initializeReplication(ctx, tabletType)
 	if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
 		// A commit waiting for semi-sync acknowledgements would keep a former
@@ -1211,7 +1213,7 @@ func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Cont
 			logger.Infof("fenced a former primary before deferring replication initialization")
 		}
 		logger.Warningf("deferring replication initialization, staying out of rotation until replication runs from the shard primary: %v", err)
-		id := tm.tmState.deferReplicationInit(ctx, err)
+		id := tm.tmState.deferReplicationInit(ctx, err, restored)
 		go tm.watchReplicationInit(tm.tmState.ctx, id)
 		return "", nil
 	}
@@ -1295,8 +1297,20 @@ func (tm *TabletManager) admitDeferredReplicationInit(ctx context.Context, id ui
 			netutil.JoinHostPort(status.SourceHost, status.SourcePort), topoproto.TabletAliasString(primary.Alias), netutil.JoinHostPort(primary.MysqlHostname, primary.MysqlPort))
 	}
 	// Initialization would also have refused errant GTIDs.
-	if _, err := tm.checkNoErrantGTIDs(ctx, primary.Tablet); err != nil {
+	primaryStatus, err := tm.checkNoErrantGTIDs(ctx, primary.Tablet)
+	if err != nil {
 		return false, err
+	}
+	// A restore that initializes replication waits until replication applies
+	// past the restored position, unless the primary is still there.
+	if restored := tm.tmState.replicationInitRestoredPosition(id); restored != nil && status.Position.Equal(*restored) {
+		primaryPos, err := replication.DecodePosition(primaryStatus.Position)
+		if err != nil {
+			return false, err
+		}
+		if !primaryPos.Equal(*restored) {
+			return false, vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for replication to apply past the restored position")
+		}
 	}
 	// This ends only this deferral, and not while a restore or a backup that
 	// started after the checks above runs.

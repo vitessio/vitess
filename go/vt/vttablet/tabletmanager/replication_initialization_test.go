@@ -447,7 +447,7 @@ func newPendingReplicationTM(t *testing.T) (*TabletManager, *mysqlctl.FakeMysqlD
 	require.NoError(t, qsc.InitDBConfig(&querypb.Target{Keyspace: "ks", Shard: "0"}, nil, md))
 	tm.QueryServiceControl = qsc
 	tm.tmState.Open()
-	id := tm.tmState.deferReplicationInit(t.Context(), nil)
+	id := tm.tmState.deferReplicationInit(t.Context(), nil, nil)
 	require.False(t, qsc.IsServing())
 	return tm, md, ts, qsc, id
 }
@@ -456,7 +456,7 @@ func TestPendingReplicationReasonShowsLatestError(t *testing.T) {
 	tm, md, ts, _ := newReplicationInitializationTM(t)
 	holdInitializationShardLock(t, ts)
 	md.ExpectedExecuteSuperQueryList = nil
-	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
+	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA, nil)
 	require.NoError(t, err)
 	// Stop the watcher, so that only this test changes the reason.
 	tm.tmState.cancel()
@@ -668,7 +668,7 @@ func TestFormerPrimaryIsFencedWhenDeferring(t *testing.T) {
 	holdInitializationShardLock(t, tm.TopoServer)
 	md.ExpectedExecuteSuperQueryList = nil
 
-	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
+	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA, nil)
 	require.NoError(t, err)
 	assert.True(t, tm.tmState.replicationInitPending())
 	assert.False(t, md.SemiSyncPrimaryEnabled, "the waiting commit must be released")
@@ -700,7 +700,7 @@ func TestFailedFenceFailsDeferredInitialization(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
-			_, err := tm.initializeReplicationUnlessShardLocked(ctx, logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA)
+			_, err := tm.initializeReplicationUnlessShardLocked(ctx, logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA, nil)
 			require.ErrorContains(t, err, "cannot fence a former primary before deferring replication initialization")
 			require.ErrorContains(t, err, tc.err)
 			assert.False(t, tm.tmState.replicationInitPending(), "a tablet that failed to fence must not defer")
@@ -809,6 +809,79 @@ func TestDeferredReplicationWatcherReportsErrantGTIDsOnce(t *testing.T) {
 	require.Eventually(t, func() bool { return tmc.calls.Load() >= 4 }, 30*time.Second, 10*time.Millisecond)
 	assert.Equal(t, first, reason(), "the watcher reported the same errant GTIDs again")
 	assert.True(t, tm.tmState.isPendingReplicationInit(id))
+}
+
+// TestDeferredRestoreWaitsForReplicationPastRestoredPosition covers a restore
+// that deferred replication initialization. As a restore that initializes
+// replication does, the replica serves only once replication applies past the
+// restored position, unless the primary is still at that position.
+func TestDeferredRestoreWaitsForReplicationPastRestoredPosition(t *testing.T) {
+	position := func(t *testing.T, gtids string) replication.Position {
+		pos, err := replication.ParsePosition(gtidFlavor, gtids)
+		require.NoError(t, err)
+		return pos
+	}
+	t.Run("behind the primary", func(t *testing.T) {
+		tm, md, qsc, _ := newReplicatingPendingTM(t)
+		md.ExpectedExecuteSuperQueryList = nil
+		restored := position(t, serverUUID+":1-200")
+		md.SetPrimaryPositionLocked(restored)
+		id := tm.tmState.deferReplicationInit(t.Context(), nil, &restored)
+
+		ended, err := tm.admitDeferredReplicationInit(t.Context(), id)
+		require.ErrorContains(t, err, "waiting for replication to apply past the restored position")
+		assert.False(t, ended)
+		assert.False(t, qsc.IsServing())
+
+		md.SetPrimaryPositionLocked(position(t, serverUUID+":1-210"))
+		ended, err = tm.admitDeferredReplicationInit(t.Context(), id)
+		require.NoError(t, err)
+		assert.True(t, ended)
+		assert.True(t, qsc.IsServing())
+	})
+	t.Run("empty restored position", func(t *testing.T) {
+		tm, md, qsc, _ := newReplicatingPendingTM(t)
+		md.ExpectedExecuteSuperQueryList = nil
+		var restored replication.Position
+		md.SetPrimaryPositionLocked(restored)
+		id := tm.tmState.deferReplicationInit(t.Context(), nil, &restored)
+
+		ended, err := tm.admitDeferredReplicationInit(t.Context(), id)
+		require.ErrorContains(t, err, "waiting for replication to apply past the restored position")
+		assert.False(t, ended)
+		assert.False(t, qsc.IsServing())
+	})
+	t.Run("primary at the restored position", func(t *testing.T) {
+		tm, md, qsc, _ := newReplicatingPendingTM(t)
+		md.ExpectedExecuteSuperQueryList = nil
+		restored := position(t, gtidPosition)
+		id := tm.tmState.deferReplicationInit(t.Context(), nil, &restored)
+
+		ended, err := tm.admitDeferredReplicationInit(t.Context(), id)
+		require.NoError(t, err)
+		assert.True(t, ended)
+		assert.True(t, qsc.IsServing())
+	})
+}
+
+// TestDeferredRestoreRecordsRestoredPosition covers a restore whose replication
+// initialization defers: the deferral must record the restored position, which
+// the watcher then waits for replication to move past.
+func TestDeferredRestoreRecordsRestoredPosition(t *testing.T) {
+	tm, md, ts, _ := newReplicationInitializationTM(t)
+	holdInitializationShardLock(t, ts)
+	md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL"}
+	restored, err := replication.ParsePosition(gtidFlavor, serverUUID+":1-200")
+	require.NoError(t, err)
+
+	require.NoError(t, tm.startReplication(t.Context(), logutil.NewMemoryLogger(), restored, topodatapb.TabletType_REPLICA))
+	require.NoError(t, md.CheckSuperQueryList())
+	tm.tmState.mu.Lock()
+	id := tm.tmState.pendingReplicationInit
+	tm.tmState.mu.Unlock()
+	got := tm.tmState.replicationInitRestoredPosition(id)
+	require.NotNil(t, got, "the deferral did not record the restored position")
+	assert.True(t, got.Equal(restored))
 }
 
 func newFormerPrimaryTM(t *testing.T, commitGTID string) (*TabletManager, *blockedCommitDaemon) {
@@ -1045,7 +1118,7 @@ func TestStaleWatcherDoesNotEndNewerDeferral(t *testing.T) {
 		name: "restore deferred again",
 		during: func(t *testing.T, tm *TabletManager) {
 			tm.tmState.cancelReplicationInit(t.Context())
-			tm.tmState.deferReplicationInit(t.Context(), nil)
+			tm.tmState.deferReplicationInit(t.Context(), nil, nil)
 		},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1062,7 +1135,7 @@ func TestStaleWatcherDoesNotEndNewerDeferral(t *testing.T) {
 	t.Run("superseded before the read", func(t *testing.T) {
 		tm, md, qsc, id := newReplicatingPendingTM(t)
 		md.ExpectedExecuteSuperQueryList = nil
-		tm.tmState.deferReplicationInit(t.Context(), nil)
+		tm.tmState.deferReplicationInit(t.Context(), nil, nil)
 
 		ended, err := tm.admitDeferredReplicationInit(t.Context(), id)
 		require.NoError(t, err)
@@ -1191,7 +1264,7 @@ func TestDeferredReplicationWatcher(t *testing.T) {
 	tm.MysqlDaemon = daemon
 
 	logger := logutil.NewMemoryLogger()
-	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logger, topodatapb.TabletType_REPLICA)
+	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logger, topodatapb.TabletType_REPLICA, nil)
 	require.NoError(t, err)
 	assert.Contains(t, logger.String(), "deferring replication initialization")
 	assert.False(t, qsc.IsServing(), "a replica must not serve before replication is initialized")
