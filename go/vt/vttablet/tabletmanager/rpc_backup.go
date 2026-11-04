@@ -200,6 +200,15 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
+			// A deferred replication initialization leaves replication to
+			// VTOrc, a reparent or an operator, which choose the source under the
+			// shard lock. This does not hold it. No deferral starts while the
+			// backup holds the action lock.
+			if tm.tmState.replicationInitPending() {
+				l.Infof("Leaving replication to the recovery of the deferred replication initialization")
+				return
+			}
+
 			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
 			if err != nil {
 				return
