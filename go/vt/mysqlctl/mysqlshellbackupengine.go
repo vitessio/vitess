@@ -214,6 +214,11 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 		return BackupUnusable, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
 
+	// Verify the position before the MANIFEST makes the backup complete.
+	if err := params.verifyPosition(ctx, posBeforeBackup); err != nil {
+		return BackupUnusable, err
+	}
+
 	// open the MANIFEST
 	params.Logger.Infof("Writing backup MANIFEST")
 	mwc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)

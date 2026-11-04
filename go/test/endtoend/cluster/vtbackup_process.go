@@ -48,7 +48,9 @@ type VtbackupProcess struct {
 	TabletAlias string
 	Server      string
 
-	ExtraArgs     []string
+	ExtraArgs []string
+	// StderrFile, if set, also receives vtbackup's stderr, so a test can follow a run's log while it runs.
+	StderrFile    string
 	initialBackup bool
 	initDBfile    string
 
@@ -89,7 +91,16 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 	// Keep the end of stderr so a failed run's error says why it failed.
 	var stderr bytes.Buffer
-	vtbackup.proc.Stderr = io.MultiWriter(os.Stderr, &stderr)
+	stderrWriters := []io.Writer{os.Stderr, &stderr}
+	if vtbackup.StderrFile != "" {
+		f, err := os.Create(vtbackup.StderrFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		stderrWriters = append(stderrWriters, f)
+	}
+	vtbackup.proc.Stderr = io.MultiWriter(stderrWriters...)
 	vtbackup.proc.Stdout = os.Stdout
 
 	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)

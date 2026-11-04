@@ -182588,6 +182588,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {vttime.Duration.$Properties|null} [mysql_shutdown_timeout] BackupShardRequest mysql_shutdown_timeout
          * @property {tabletmanagerdata.BackupRequest.InitSQL.$Properties|null} [init_sql] BackupShardRequest init_sql
          * @property {boolean|null} [include_binlogs] BackupShardRequest include_binlogs
+         * @property {Array.<topodata.TabletType>|null} [tablet_types] BackupShardRequest tablet_types
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -182613,6 +182614,7 @@ export const vtctldata = $root.vtctldata = (() => {
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
         const BackupShardRequest = function (properties) {
+            this.tablet_types = [];
             if (properties)
                 for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
@@ -182692,6 +182694,14 @@ export const vtctldata = $root.vtctldata = (() => {
         BackupShardRequest.prototype.include_binlogs = false;
 
         /**
+         * BackupShardRequest tablet_types.
+         * @member {Array.<topodata.TabletType>} tablet_types
+         * @memberof vtctldata.BackupShardRequest
+         * @instance
+         */
+        BackupShardRequest.prototype.tablet_types = $util.emptyArray;
+
+        /**
          * Creates a new BackupShardRequest instance using the specified properties.
          * @function create
          * @memberof vtctldata.BackupShardRequest
@@ -182741,6 +182751,8 @@ export const vtctldata = $root.vtctldata = (() => {
                 $root.tabletmanagerdata.BackupRequest.InitSQL.encode(message.init_sql, writer.uint32(/* id 8, wireType 2 =*/66).fork(), _depth + 1).ldelim();
             if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs") && message.include_binlogs !== false)
                 writer.uint32(/* id 9, wireType 0 =*/72).bool(message.include_binlogs);
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 10, wireType 2 =*/82).int32s(message.tablet_types);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -182873,6 +182885,20 @@ export const vtctldata = $root.vtctldata = (() => {
                             delete message.include_binlogs;
                         continue;
                     }
+                case 10: {
+                        if (wireType === 2) {
+                            if (!(message.tablet_types && message.tablet_types.length))
+                                message.tablet_types = [];
+                            reader.int32s(message.tablet_types);
+                            continue;
+                        }
+                        if (wireType !== 0)
+                            break;
+                        if (!(message.tablet_types && message.tablet_types.length))
+                            message.tablet_types = [];
+                        message.tablet_types.push(reader.int32());
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -182952,6 +182978,13 @@ export const vtctldata = $root.vtctldata = (() => {
             if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
                 if (typeof message.include_binlogs !== "boolean")
                     return "include_binlogs: boolean expected";
+            if (message.tablet_types != null && $Object.hasOwnProperty.call(message, "tablet_types")) {
+                if (!$Array.isArray(message.tablet_types))
+                    return "tablet_types: array expected";
+                for (let i = 0; i < message.tablet_types.length; ++i)
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
+                        return "tablet_types: enum value[] expected";
+            }
             return null;
         };
 
@@ -183004,6 +183037,61 @@ export const vtctldata = $root.vtctldata = (() => {
             if (object.include_binlogs != null)
                 if (object.include_binlogs)
                     message.include_binlogs = $Boolean(object.include_binlogs);
+            if (object.tablet_types) {
+                if (!$Array.isArray(object.tablet_types))
+                    throw $TypeError(".vtctldata.BackupShardRequest.tablet_types: array expected");
+                message.tablet_types = [];
+                for (let i = 0; i < object.tablet_types.length; ++i)
+                    switch (object.tablet_types[i]) {
+                    case "UNKNOWN":
+                    case 0:
+                        message.tablet_types[message.tablet_types.length] = 0;
+                        break;
+                    case "PRIMARY":
+                    case 1:
+                        message.tablet_types[message.tablet_types.length] = 1;
+                        break;
+                    case "MASTER":
+                    case 1:
+                        message.tablet_types[message.tablet_types.length] = 1;
+                        break;
+                    case "REPLICA":
+                    case 2:
+                        message.tablet_types[message.tablet_types.length] = 2;
+                        break;
+                    case "RDONLY":
+                    case 3:
+                        message.tablet_types[message.tablet_types.length] = 3;
+                        break;
+                    case "BATCH":
+                    case 3:
+                        message.tablet_types[message.tablet_types.length] = 3;
+                        break;
+                    case "SPARE":
+                    case 4:
+                        message.tablet_types[message.tablet_types.length] = 4;
+                        break;
+                    case "EXPERIMENTAL":
+                    case 5:
+                        message.tablet_types[message.tablet_types.length] = 5;
+                        break;
+                    case "BACKUP":
+                    case 6:
+                        message.tablet_types[message.tablet_types.length] = 6;
+                        break;
+                    case "RESTORE":
+                    case 7:
+                        message.tablet_types[message.tablet_types.length] = 7;
+                        break;
+                    case "DRAINED":
+                    case 8:
+                        message.tablet_types[message.tablet_types.length] = 8;
+                        break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
+                    }
+            }
             return message;
         };
 
@@ -183024,6 +183112,8 @@ export const vtctldata = $root.vtctldata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
+            if (options.arrays || options.defaults)
+                object.tablet_types = [];
             if (options.defaults) {
                 object.keyspace = "";
                 object.shard = "";
@@ -183053,6 +183143,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 object.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.toObject(message.init_sql, options, _depth + 1);
             if (message.include_binlogs != null && $Object.hasOwnProperty.call(message, "include_binlogs"))
                 object.include_binlogs = message.include_binlogs;
+            if (message.tablet_types && message.tablet_types.length) {
+                object.tablet_types = $Array(message.tablet_types.length);
+                for (let j = 0; j < message.tablet_types.length; ++j)
+                    object.tablet_types[j] = options.enums === $String ? $root.topodata.TabletType[message.tablet_types[j]] === $undefined ? message.tablet_types[j] : $root.topodata.TabletType[message.tablet_types[j]] : message.tablet_types[j];
+            }
             return object;
         };
 

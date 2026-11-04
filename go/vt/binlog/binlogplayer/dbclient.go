@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -99,7 +100,7 @@ func (dc *dbClientImpl) Connect() error {
 func (dc *dbClientImpl) Begin() error {
 	_, err := dc.dbConn.ExecuteFetch("begin", 1, false)
 	if err != nil {
-		LogError("BEGIN failed w/ error", err)
+		log.Error("BEGIN failed w/ error", slog.String("error", MessageTruncate(err.Error())))
 		dc.handleError(err)
 	}
 	return err
@@ -108,7 +109,7 @@ func (dc *dbClientImpl) Begin() error {
 func (dc *dbClientImpl) Commit() error {
 	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
 	if err != nil {
-		LogError("COMMIT failed w/ error", err)
+		log.Error("COMMIT failed w/ error", slog.String("error", MessageTruncate(err.Error())))
 		dc.dbConn.Close()
 	}
 	return err
@@ -117,7 +118,7 @@ func (dc *dbClientImpl) Commit() error {
 func (dc *dbClientImpl) Rollback() error {
 	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
 	if err != nil {
-		LogError("ROLLBACK failed w/ error", err)
+		log.Error("ROLLBACK failed w/ error", slog.String("error", MessageTruncate(err.Error())))
 		dc.dbConn.Close()
 	}
 	return err
@@ -152,11 +153,6 @@ func (dc *dbClientImpl) SetMultiStatements(on bool) error {
 		return err
 	}
 	return nil
-}
-
-// LogError logs a message after truncating it to avoid spamming logs
-func LogError(msg string, err error) {
-	log.Error(fmt.Sprintf("%s: %s", msg, MessageTruncate(err.Error())))
 }
 
 // LimitString truncates string to specified size

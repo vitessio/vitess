@@ -5120,5 +5120,359 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "row comparison with a value subquery that can't be merged binds each column of the row",
+    "query": "select id from user where id = 1 and (col, name) < (select col, name from user where id in (2, 3) limit 1)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where id = 1 and (col, name) < (select col, name from user where id in (2, 3) limit 1)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1_0",
+          "__sq1_1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, `name` from `user` where 1 != 1",
+                "Query": "select col, `name` from `user` where id in ::__vals limit 1",
+                "Values": [
+                  "(2, 3)"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where id = 1 and (col, `name`) < (:__sq1_0, :__sq1_1)",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "row IN subquery that can't be merged routes on the tuple column and binds each row as a tuple",
+    "query": "select id from user where (id, col) in (select id, col from user where name = 'x')",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id, col) in (select id, col from user where name = 'x')",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "RowColumns": 2,
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "VindexLookup",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              "'x'"
+            ],
+            "Vindex": "name_user_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "IN",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                "Values": [
+                  "::name"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id, col from `user` where 1 != 1",
+                "Query": "select id, col from `user` where `name` = 'x'"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "MultiEqual",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where :__sq_has_values and (id, col) in ::__sq1",
+            "Values": [
+              "__sq1:0"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "row comparison with a value subquery in HAVING is evaluated with an argument per column",
+    "query": "select col, count(*) from user group by col having (col, count(*)) <=> (select col, id from user where id = 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col, count(*) from user group by col having (col, count(*)) <=> (select col, id from user where id = 5)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1_0",
+          "__sq1_1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, id from `user` where 1 != 1",
+            "Query": "select col, id from `user` where id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Filter",
+            "Predicate": "(`user`.col, count(*)) <=> (:__sq1_0, :__sq1_1)",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum_count_star(1) AS count(*)",
+                "GroupBy": "0",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+                    "OrderBy": "0 ASC",
+                    "Query": "select col, count(*) from `user` group by col order by col asc"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "row arguments of a UNION subquery are untyped, since its first arm doesn't give the types of the row it returns",
+    "query": "select col, count(*) from user group by col having (col, count(*)) <=> (select null, null from user where id = 99 union all select col, id from user where id = 5)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col, count(*) from user group by col having (col, count(*)) <=> (select null, null from user where id = 99 union all select col, id from user where id = 5)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1_0",
+          "__sq1_1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select null, null from `user` where 1 != 1",
+                "Query": "select null, null from `user` where id = 99",
+                "Values": [
+                  "99"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col, id from `user` where 1 != 1",
+                "Query": "select col, id from `user` where id = 5",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Filter",
+            "Predicate": "(`user`.col, count(*)) <=> (:__sq1_0, :__sq1_1)",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum_count_star(1) AS count(*)",
+                "GroupBy": "0",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col, count(*) from `user` where 1 != 1 group by col",
+                    "OrderBy": "0 ASC",
+                    "Query": "select col, count(*) from `user` group by col order by col asc"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a row comparison and a scalar comparison with subqueries that can't be merged, in separate AND-ed predicates, each get their own arguments",
+    "query": "select id from user where (col, name) < (select user_id, col from music where user_id = 3) and col > (select user_id from music where user_id = 8)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where (col, name) < (select user_id, col from music where user_id = 3) and col > (select user_id from music where user_id = 8)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq2"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id from music where 1 != 1",
+            "Query": "select user_id from music where user_id = 8",
+            "Values": [
+              "8"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1_0",
+              "__sq1_1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select user_id, col from music where 1 != 1",
+                "Query": "select user_id, col from music where user_id = 3",
+                "Values": [
+                  "3"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from `user` where 1 != 1",
+                "Query": "select id from `user` where (col, `name`) < (:__sq1_0, :__sq1_1) and col > :__sq2"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]

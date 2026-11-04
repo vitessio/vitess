@@ -18,6 +18,8 @@ package evalengine
 
 import (
 	"bytes"
+	"cmp"
+	"math"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -209,17 +211,26 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 	case json.TypeNull:
 		return 0, nil
 	case json.TypeNumber:
-		ld, ok := lj.Decimal()
-		if !ok {
-			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
+		if n, ok := compareJSONNumbersNative(lj, rj); ok {
+			return n, nil
 		}
-		rd, ok := rj.Decimal()
+		ld, ok := lj.NumericValue()
 		if !ok {
-			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
+			return 0, errJSONNumberOutOfRange(lj)
+		}
+		rd, ok := rj.NumericValue()
+		if !ok {
+			return 0, errJSONNumberOutOfRange(rj)
 		}
 		return ld.Cmp(rd), nil
 	case json.TypeString:
-		return colldata.Lookup(collationJSON.Collation).Collate(lj.ToRawBytes(), rj.ToRawBytes(), false), nil
+		// MySQL compares the strings' UTF-8 bytes, which orders them by code
+		// point as utf8mb4_bin does and never pads; the escaped JSON text
+		// would order "\n" after " " because the backslash sorts above a
+		// space. These are the bytes the hash fingerprints too.
+		ls, _ := lj.StringBytes()
+		rs, _ := rj.StringBytes()
+		return bytes.Compare(ls, rs), nil
 	case json.TypeBlob, json.TypeBit, json.TypeOpaque:
 		return bytes.Compare(lj.ToUnencodedBytes(), rj.ToUnencodedBytes()), nil
 	case json.TypeBoolean:
@@ -292,4 +303,42 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 	}
 
 	return cmp, nil
+}
+
+// errJSONNumberOutOfRange reports a number with no finite value to compare
+// by, naming the form it is stored in as the conversion to JSON does.
+func errJSONNumberOutOfRange(v *json.Value) error {
+	if v.NumberType() == json.NumberTypeFloat {
+		return errDoubleOutOfRange
+	}
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
+}
+
+// compareJSONNumbersNative compares two numbers of the same kind without a
+// decimal: two integers of one signedness, or two finite doubles, compare
+// exactly as themselves. Any other pairing, and a double with no finite value,
+// is left to NumericValue.
+func compareJSONNumbersNative(lj, rj *json.Value) (int, bool) {
+	lt, rt := lj.NumberType(), rj.NumberType()
+	if lt != rt {
+		return 0, false
+	}
+	switch lt {
+	case json.NumberTypeSigned:
+		l, lok := lj.Int64()
+		r, rok := rj.Int64()
+		return cmp.Compare(l, r), lok && rok
+	case json.NumberTypeUnsigned:
+		l, lok := lj.Uint64()
+		r, rok := rj.Uint64()
+		return cmp.Compare(l, r), lok && rok
+	case json.NumberTypeFloat:
+		l, lok := lj.Float64()
+		r, rok := rj.Float64()
+		if !lok || !rok || math.IsNaN(l) || math.IsNaN(r) || math.IsInf(l, 0) || math.IsInf(r, 0) {
+			return 0, false
+		}
+		return cmp.Compare(l, r), true
+	}
+	return 0, false
 }

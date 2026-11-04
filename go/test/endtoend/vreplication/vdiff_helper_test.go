@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
@@ -61,76 +60,65 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 }
 
 func waitForVDiff2ToCompleteWithTimeout(t *testing.T, ksWorkflow, cells, uuid string, completedAtMin time.Time, timeout time.Duration) *vdiffInfo {
-	var info *vdiffInfo
 	var jsonStr string
 	first := true
 	previousProgress := vdiff2.ProgressReport{}
-	ch := make(chan bool, 1)
-	// performVDiff2Action waits for the workflow to be Running internally using
-	// the error-returning waitForWorkflowState, so it is safe to call from this
-	// goroutine (go-require).
-	go func() {
-		defer func() { ch <- true }()
-		for i := 0; ; i++ {
-			if i > 0 {
-				time.Sleep(vdiffStatusCheckInterval)
+	// Poll from the test's goroutine, so that the polling stops when the test
+	// fails. A polling goroutine outlives the test once the wait times out, and
+	// failing the test after it has completed panics the whole test binary.
+	deadline := time.Now().Add(timeout)
+	for i := 0; ; i++ {
+		if i > 0 {
+			if time.Now().After(deadline) {
+				log.Error(fmt.Sprintf("VDiff never completed for UUID %s. Latest output: %s", uuid, jsonStr))
+				require.FailNow(t, "VDiff never completed for UUID "+uuid)
 			}
-			var err error
-			_, jsonStr, err = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
-			if !assert.NoError(t, err) {
-				return
-			}
-			info = getVDiffInfo(jsonStr)
-			if !assert.NotNil(t, info) {
-				return
-			}
-			if info.State == "completed" {
-				if !completedAtMin.IsZero() {
-					ca := info.CompletedAt
-					completedAt, _ := time.Parse(vdiff2.TimestampFormat, ca)
-					if !completedAt.After(completedAtMin) {
-						continue
-					}
-				}
-				return
-			} else if info.State == "started" { // Test the progress report
-				// The ETA should always be in the future -- when we're able to estimate
-				// it -- and the progress percentage should only increase.
-				// The timestamp format allows us to compare them lexicographically.
-				// We don't test that the ETA always increases as it can decrease based on how
-				// quickly we're doing work.
-
-				// Commenting out this check for now as it is quite flaky in Github CI: we sometimes get a difference of
-				// more than 1s between the ETA and the current time, empirically seen 2s when it has failed,
-				// but presumably it can be higher. Keeping the code here for now in case we want to re-enable it.
-
-				/*
-					if info.Progress.ETA != "" {
-						// If we're operating at the second boundary then the ETA can be up
-						// to 1 second in the past due to using second based precision.
-						loc, _ := time.LoadLocation("UTC")
-						require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Add(-time.Second).In(loc).Format(vdiff2.TimestampFormat))
-					}
-				*/
-
-				if !first {
-					if !assert.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage) {
-						return
-					}
-				}
-				previousProgress.Percentage = info.Progress.Percentage
-				first = false
-			}
+			time.Sleep(vdiffStatusCheckInterval)
 		}
-	}()
+		var err error
+		_, jsonStr, err = performVDiff2Action(t, ksWorkflow, cells, "show", uuid, false)
+		require.NoError(t, err)
+		info := getVDiffInfo(jsonStr)
+		require.NotNil(t, info)
+		if info.State == "completed" {
+			if !completedAtMin.IsZero() {
+				ca := info.CompletedAt
+				completedAt, _ := time.Parse(vdiff2.TimestampFormat, ca)
+				// completed_at has a precision of one second, so a VDiff that
+				// completes in the same second as completedAtMin parses to an
+				// instant before it. Callers get completedAtMin before they start
+				// the run, so a completion in that second is from the run.
+				if completedAt.Before(completedAtMin.Truncate(time.Second)) {
+					continue
+				}
+			}
+			return info
+		} else if info.State == "started" { // Test the progress report
+			// The ETA should always be in the future -- when we're able to estimate
+			// it -- and the progress percentage should only increase.
+			// The timestamp format allows us to compare them lexicographically.
+			// We don't test that the ETA always increases as it can decrease based on how
+			// quickly we're doing work.
 
-	select {
-	case <-ch:
-		return info
-	case <-time.After(timeout):
-		log.Error(fmt.Sprintf("VDiff never completed for UUID %s. Latest output: %s", uuid, jsonStr))
-		require.FailNow(t, "VDiff never completed for UUID "+uuid)
-		return nil
+			// Commenting out this check for now as it is quite flaky in Github CI: we sometimes get a difference of
+			// more than 1s between the ETA and the current time, empirically seen 2s when it has failed,
+			// but presumably it can be higher. Keeping the code here for now in case we want to re-enable it.
+
+			/*
+				if info.Progress.ETA != "" {
+					// If we're operating at the second boundary then the ETA can be up
+					// to 1 second in the past due to using second based precision.
+					loc, _ := time.LoadLocation("UTC")
+					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Add(-time.Second).In(loc).Format(vdiff2.TimestampFormat))
+				}
+			*/
+
+			if !first {
+				require.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage)
+			}
+			previousProgress.Percentage = info.Progress.Percentage
+			first = false
+		}
 	}
 }
 

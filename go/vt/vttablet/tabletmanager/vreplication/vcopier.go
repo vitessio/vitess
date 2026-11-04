@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"slices"
 	"strconv"
@@ -383,7 +384,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	defer vc.vr.stats.PhaseTimings.Record("copy", time.Now())
 	defer vc.vr.stats.CopyLoopCount.Add(1)
 
-	log.Info(fmt.Sprintf("Copying table %s, lastpk: %v", tableName, copyState[tableName]))
+	log.Info("Copying table",
+		vc.vr.logAttrs(
+			slog.String("table", tableName),
+			slog.String("last_pk", fmt.Sprint(copyState[tableName])),
+		)...)
 
 	plan, err := vc.vr.buildReplicatorPlan(vc.vr.source, vc.vr.colInfoMap, nil, vc.vr.stats, vc.vr.vre.env.CollationEnv(), vc.vr.vre.env.Parser())
 	if err != nil {
@@ -457,17 +462,25 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				// This helps to ensure that the table does not grow too large and the
 				// number of rows does not have a big impact on the queries used for
 				// the workflow.
+				// The goroutine can outlive this callback, and loadSettings
+				// writes the workflow name, so take the attributes here.
+				gcLogAttrs := vc.vr.logAttrs()
 				go func() {
 					gcQuery := fmt.Sprintf("delete from _vt.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from _vt.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
 						vc.vr.id, encodeString(tableName), vc.vr.id, encodeString(tableName))
 					dbClient := vc.vr.vre.getDBClient(false)
 					if err := dbClient.Connect(); err != nil {
-						log.Error(fmt.Sprintf("Error while garbage collecting older copy_state rows, could not connect to database: %v", err))
+						log.Error("Error while garbage collecting older copy_state rows, could not connect to database",
+							append(gcLogAttrs, slog.Any("error", err))...)
 						return
 					}
 					defer dbClient.Close()
 					if _, err := dbClient.ExecuteFetch(gcQuery, -1); err != nil {
-						log.Error(fmt.Sprintf("Error while garbage collecting older copy_state rows with query %q: %v", gcQuery, err))
+						log.Error("Error while garbage collecting older copy_state rows",
+							append(gcLogAttrs,
+								slog.String("query", gcQuery),
+								slog.Any("error", err),
+							)...)
 					}
 				}()
 			case <-ctx.Done():
@@ -577,7 +590,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		})
 
 		if err := copyWorkQueue.enqueue(ctx, currT); err != nil {
-			log.Warn(fmt.Sprintf("failed to enqueue task in workflow %s: %s", vc.vr.WorkflowName, err.Error()))
+			log.Warn("failed to enqueue task in workflow", vc.vr.logAttrs(slog.Any("error", err))...)
 			return err
 		}
 
@@ -600,7 +613,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			}
 			switch result.state {
 			case vcopierCopyTaskCancel:
-				log.Warn(fmt.Sprintf("task was canceled in workflow %s: %v", vc.vr.WorkflowName, result.err))
+				log.Warn("task was canceled in workflow",
+					vc.vr.logAttrs(
+						slog.Any("error", result.err),
+						slog.String("error_code", vterrors.Code(result.err).String()),
+					)...)
 				return io.EOF
 			case vcopierCopyTaskFail:
 				// Defer the report to the post-VStreamRows drain so
@@ -653,7 +670,11 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		}
 	}
 	if terr := formatTaskError(terrs); terr != nil {
-		log.Warn(fmt.Sprintf("task error in workflow %s: %v", vc.vr.WorkflowName, terr))
+		log.Warn("task error in workflow",
+			vc.vr.logAttrs(
+				slog.Any("error", terr),
+				slog.String("error_code", vterrors.Code(terr).String()),
+			)...)
 		return terr
 	}
 
@@ -677,7 +698,26 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	// of a copy phase.
 	select {
 	case <-ctx.Done():
-		log.Info(fmt.Sprintf("Copy of %v stopped at lastpk: %v", tableName, lastpkbv))
+		log.Info("Copy of the table stopped",
+			vc.vr.logAttrs(
+				slog.String("table", tableName),
+				slog.String("last_pk", fmt.Sprint(lastpkbv)),
+			)...)
+		// Refresh the statistics of what this cycle copied, as the table is
+		// caught up and replicated before the next cycle. If the controller
+		// is stopping, the next cycle analyzes the table. First roll back any
+		// batch that the cancellation left uncommitted on the shared
+		// connection, which the deferred rollback would only discard after
+		// the ANALYZE TABLE: InnoDB's sampled statistics count uncommitted
+		// rows, so they would include rows that the rollback then removes.
+		if err := vc.vr.dbClient.Rollback(); err != nil {
+			log.Warn("Unable to roll back the copy transaction before analyzing the table",
+				vc.vr.logAttrs(
+					slog.String("table", tableName),
+					slog.Any("error", err),
+				)...)
+		}
+		vc.vr.analyzeTableIfStatsAutoRecalcDisabled(stopCtx, tableName)
 		return nil
 	default:
 	}
@@ -685,23 +725,13 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return serr
 	}
 
-	// Perform any post copy actions
-	if err := vc.vr.execPostCopyActions(ctx, stopCtx, tableName); err != nil {
-		return vterrors.Wrapf(err, "failed to execute post copy actions for table %q", tableName)
-	}
-
-	log.Info(fmt.Sprintf("Copy of %v finished at lastpk: %v", tableName, lastpkbv))
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf(
-		"delete cs, pca from _vt.%s as cs left join _vt.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
-		copyStateTableName, postCopyActionTableName,
-		vc.vr.id, encodeString(tableName),
-	)
-	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
-		return err
-	}
-
-	return nil
+	return vc.runPostCopyActionsAndDeleteCopyState(ctx, stopCtx, tableName, true, func() {
+		log.Info("Copy of the table finished",
+			vc.vr.logAttrs(
+				slog.String("table", tableName),
+				slog.String("last_pk", fmt.Sprint(lastpkbv)),
+			)...)
+	})
 }
 
 // updatePos is called after the last table is copied in an atomic copy, to set the gtid so that the replicating phase
@@ -1014,7 +1044,10 @@ func (vrh *vcopierCopyTaskResultHooks) sendTo(ch chan<- *vcopierCopyTaskResult) 
 		defer func() {
 			// This recover prevents panics when sending to a potentially closed channel.
 			if err := recover(); err != nil {
-				log.Error(fmt.Sprintf("uncaught panic, vcopier copy task result: %v, error: %+v", result, err))
+				log.Error("uncaught panic, vcopier copy task result",
+					slog.String("task_result", fmt.Sprint(result)),
+					slog.Any("panic", err),
+				)
 			}
 		}()
 		select {

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
@@ -117,7 +118,7 @@ func newUVStreamer(ctx context.Context, vse *Engine, cp dbconfigs.Connector, se 
 		}
 		err := send(evs)
 		if err != nil {
-			log.Info(fmt.Sprintf("uvstreamer replicate send() returned with err %v", err))
+			log.Info("uvstreamer replicate send() returned error", slog.Any("error", err))
 		}
 		return err
 	}
@@ -340,20 +341,20 @@ func (uvs *uvstreamer) send2(evs []*binlogdatapb.VEvent) error {
 	}
 	err := uvs.send(evs2)
 	if err != nil && err != io.EOF {
-		log.Info(fmt.Sprintf("uvstreamer catchup/fastforward send() returning with send error %v", err))
+		log.Info("uvstreamer catchup/fastforward send() returning with send error", slog.Any("error", err))
 		return err
 	}
 	for _, ev := range evs2 {
 		if ev.Type == binlogdatapb.VEventType_GTID {
 			uvs.pos, _ = replication.DecodePosition(ev.Gtid)
 			if !uvs.stopPos.IsZero() && uvs.pos.AtLeast(uvs.stopPos) {
-				log.Info(fmt.Sprintf("Reached stop position %v, returning io.EOF", uvs.stopPos))
+				log.Info("Reached stop position, returning io.EOF", slog.String("stop_position", replication.EncodePosition(uvs.stopPos)))
 				err = io.EOF
 			}
 		}
 	}
 	if err != nil {
-		log.Info(fmt.Sprintf("uvstreamer catchup/fastforward returning with EOF error %v", err))
+		log.Info("uvstreamer catchup/fastforward returning with EOF error", slog.Any("error", err))
 		uvs.vse.errorCounts.Add("Send", 1)
 	}
 	return err
@@ -449,9 +450,9 @@ func (uvs *uvstreamer) Stream() error {
 		return err
 	}
 	if len(uvs.plans) > 0 {
-		log.Info("TablePKs is not nil: starting vs.copy()")
+		log.Info("TablePKs is not nil: starting copy")
 		if err := uvs.copy(uvs.ctx); err != nil {
-			log.Info(fmt.Sprintf("uvstreamer.Stream() copy returned with err %s", err))
+			log.Info("uvstreamer.Stream() copy returned error", slog.Any("error", err))
 			uvs.vse.errorCounts.Add("Copy", 1)
 			return err
 		}

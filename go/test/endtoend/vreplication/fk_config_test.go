@@ -23,7 +23,7 @@ var (
 create table parent(id int, name varchar(128), primary key(id), key(name)) engine=innodb;
 create table child(id int, parent_id int, name varchar(128), primary key(id), foreign key(parent_id) references parent(id) on delete cascade) engine=innodb;
 create view vparent as select * from parent;
-create table t1(id int, name varchar(128), primary key(id)) engine=innodb;
+create table t1(id int, name varchar(128), primary key(id)) engine=innodb stats_auto_recalc=0;
 create table t2(id int, t1id int, name varchar(128), primary key(id), foreign key(t1id) references t1(id) on delete cascade) engine=innodb;
 create table t11 (id int primary key, i int);
 create table t12 (id int primary key, i int);

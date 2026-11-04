@@ -258,7 +258,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		require.Equal(t, "completed", previous.State)
 		previousCompletedAt, err := time.Parse(vdiff2.TimestampFormat, previous.CompletedAt)
 		require.NoError(t, err)
-		completedAtMin := previousCompletedAt.Add(-time.Nanosecond)
+		completedAtMin := previousCompletedAt
 		lastIndex = insertRows(lastIndex, sourceKeyspace)
 		_, _, err = performVDiff2Action(t, ksWorkflow, defaultCellName, "resume", uuid, false)
 		require.NoError(t, err)
@@ -266,7 +266,7 @@ func TestMultiTenantSimple(t *testing.T) {
 		require.NotNil(t, info)
 		require.False(t, info.HasMismatch)
 
-		resumedQuery := regexp.MustCompile(`Streaming rows for query: select .* from t1 where \(tenant_id = 1\) and \(\(id = \d+ and tenant_id > \d+\) or \(id > \d+\)\) order by id, tenant_id`)
+		resumedQuery := regexp.MustCompile(`row streamer executing query query="select .* from t1 where \(tenant_id = 1\) and \(\(id = \d+ and tenant_id > \d+\) or \(id > \d+\)\) order by id, tenant_id"`)
 		found := false
 		for _, tablet := range vc.Cells["zone1"].Keyspaces[sourceKeyspace].Shards["0"].Tablets {
 			logBytes, err := os.ReadFile(path.Join(tablet.Vttablet.LogDir, tablet.Vttablet.TabletPath+"-vttablet-stderr.txt"))
