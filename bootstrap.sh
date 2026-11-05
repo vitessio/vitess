@@ -186,8 +186,8 @@ install_zookeeper() {
 	local zk="zookeeper-$version"
 	local file="apache-${zk}-bin.tar.gz"
 
-	# SHA512 checksum for Zookeeper 3.9.6 from Apache archives.
-	local sha512="e999626df06de30dc8bb53bb51da9bb786b1658406adafc6b92f104d72ca25e869f70a57c83a726f8b9558cc0fb519fc20f201aa5d6da09884bc4be5fe6dd3b0"
+	# SHA512 checksum for Zookeeper 3.9.7 from Apache archives.
+	local sha512="69ce6bf0b6df9a9ecdf080bdc15758eef97ef176a88f1408214f2327fe6e5349fedf738031977e6fc2f52cb636b45779653389a6bfda75be9c82dd3e72f24f25"
 
 	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
 	# Tries must be bounded: wget-retry retries a 404 forever by default and the fallback would never run.
