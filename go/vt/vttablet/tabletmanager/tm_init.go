@@ -1066,42 +1066,9 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 	// Restore in the background
 	go func() {
 		logger := logutil.NewConsoleLogger()
-
-		switch {
-		case restoreFromBackup:
-			// Zero date will cause us to use the latest, which is the default
-			backupTime := time.Time{}
-			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
-			if restoreFromBackupTsStr != "" {
-				var err error
-				backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
-				if err != nil {
-					log.Error("RestoreFromBackup failed: unable to parse the backup timestamp value provided", slog.String("backup_timestamp", restoreFromBackupTsStr))
-					os.Exit(1)
-				}
-			}
-
-			restoreToTimestamp := time.Time{}
-			if restoreToTimestampStr != "" {
-				var err error
-				restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
-				if err != nil {
-					log.Error("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided", slog.String("restore_to_timestamp", restoreToTimestampStr), slog.Any("error", err))
-					os.Exit(1)
-				}
-			}
-
-			// restoreFromBackup will just be a regular action
-			// (same as if it was triggered remotely)
-			if err := tm.RestoreBackup(ctx, logger, waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
-				log.Error("RestoreFromBackup failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
-				os.Exit(1)
-			}
-		case restoreWithClone:
-			if err := tm.restoreFromClone(ctx, logger, false /*deleteBeforeRestore*/); err != nil {
-				log.Error("restoreFromClone failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
-				os.Exit(1)
-			}
+		if err := tm.restoreAtStartup(ctx, logger); err != nil {
+			log.Error("Restore at startup failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+			os.Exit(1)
 		}
 
 		// Make sure we have the correct privileges for the DBA user before we start the state manager.
@@ -1233,6 +1200,62 @@ func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (con
 		return nil, nil, &shardLockUnavailableError{vterrors.Wrap(err, msg)}
 	}
 	return lockedCtx, unlock, nil
+}
+
+// restoreAtStartup restores as --restore-from-backup or --restore-with-clone
+// asks. A vttablet that restarts after a restore finds data and does not
+// restore again: it then initializes replication as an ordinary start does,
+// since a restore that deferred replication initialization left replication
+// reset. A point-in-time restore keeps the replication it set up.
+func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Logger) error {
+	if restoreToPos == "" && restoreToTimestampStr == "" {
+		restore, err := mysqlctl.ShouldRestore(ctx, logger, tm.Cnf, tm.MysqlDaemon, topoproto.TabletDbName(tm.Tablet()), false)
+		if err == nil && !restore {
+			// Start has returned, so the tablet may serve RPCs already: hold
+			// the action lock, as a restore does.
+			if err := tm.lock(ctx); err != nil {
+				return err
+			}
+			defer tm.unlock()
+			if _, err := tm.initializeReplicationUnlessShardLocked(ctx, logger, tm.Tablet().Type, nil); err != nil {
+				return vterrors.Wrap(err, "failed to initialize replication")
+			}
+			return nil
+		}
+	}
+	switch {
+	case restoreFromBackup:
+		// Zero date will cause us to use the latest, which is the default
+		backupTime := time.Time{}
+		// Or if a backup timestamp was specified then we use the last backup taken at or before that time
+		if restoreFromBackupTsStr != "" {
+			var err error
+			backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
+			if err != nil {
+				return fmt.Errorf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr)
+			}
+		}
+
+		restoreToTimestamp := time.Time{}
+		if restoreToTimestampStr != "" {
+			var err error
+			restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
+			if err != nil {
+				return fmt.Errorf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err)
+			}
+		}
+
+		// restoreFromBackup will just be a regular action
+		// (same as if it was triggered remotely)
+		if err := tm.RestoreBackup(ctx, logger, waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
+			return fmt.Errorf("RestoreFromBackup failed: %v", err)
+		}
+	case restoreWithClone:
+		if err := tm.restoreFromClone(ctx, logger, false /*deleteBeforeRestore*/); err != nil {
+			return fmt.Errorf("restoreFromClone failed: %v", err)
+		}
+	}
+	return nil
 }
 
 // replicationInitWatchInterval is the wait between checks of a deferred

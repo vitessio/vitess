@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -953,6 +954,71 @@ func TestDeferredRestoreRecordsRestoredPosition(t *testing.T) {
 	got := tm.tmState.replicationInitRestoredPosition(id)
 	require.NotNil(t, got, "the deferral did not record the restored position")
 	assert.True(t, got.Equal(restored))
+}
+
+// TestRestartAfterRestoreInitializesReplication covers a vttablet with a
+// restore flag that restarts after a restore, finding data. It does not
+// restore again, and must initialize replication as an ordinary start does: a
+// restore that deferred replication initialization left replication reset. A
+// point-in-time restore keeps the replication it set up.
+func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		locked      bool
+		pointInTime bool
+	}{
+		{name: "shard lock free"},
+		{name: "shard lock held", locked: true},
+		{name: "point-in-time restore", pointInTime: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md, ts, _ := newReplicationInitializationTM(t)
+			tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
+			if tc.locked {
+				holdInitializationShardLock(t, ts)
+			}
+			if tc.locked || tc.pointInTime {
+				md.ExpectedExecuteSuperQueryList = nil
+			}
+			if tc.pointInTime {
+				previous := restoreToPos
+				restoreToPos = "MySQL56/" + gtidPosition
+				t.Cleanup(func() { restoreToPos = previous })
+			}
+
+			require.NoError(t, tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger()))
+			require.NoError(t, md.CheckSuperQueryList())
+			assert.Equal(t, !tc.locked && !tc.pointInTime, md.Replicating)
+			assert.Equal(t, tc.locked, tm.tmState.replicationInitPending())
+		})
+	}
+}
+
+// TestRestartAfterRestoreTakesTheActionLock covers the restart case of
+// TestRestartAfterRestoreInitializesReplication, which runs once the tablet may
+// serve RPCs: it must not change replication while an action holds the lock.
+func TestRestartAfterRestoreTakesTheActionLock(t *testing.T) {
+	tm, md, _, _ := newReplicationInitializationTM(t)
+	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
+	require.NoError(t, tm.lock(t.Context()))
+	returned := make(chan error, 1)
+	go func() { returned <- tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger()) }()
+
+	assert.Never(t, func() bool { return md.ExpectedExecuteSuperQueryCurrent > 0 || len(returned) > 0 }, time.Second, 10*time.Millisecond,
+		"replication changed while an action held the lock")
+	tm.unlock()
+	var err error
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-returned:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "initialization did not finish after the action released the lock")
+	require.NoError(t, err)
+	require.NoError(t, md.CheckSuperQueryList())
+	assert.True(t, md.Replicating)
 }
 
 func newFormerPrimaryTM(t *testing.T, commitGTID string) (*TabletManager, *blockedCommitDaemon) {
