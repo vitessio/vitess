@@ -45,11 +45,13 @@ func rowsPacket(n, bigSlot, bigBytes int) *binlogdatapb.VStreamRowsResponse {
 	return resp
 }
 
-// TestVStreamRowsTrimRowPool drives one pooled response through the
-// VStreamRows receive loop (UnmarshalVT, trim, ResetVT) with the real
-// generated code, checking that uniform packets reuse the pool without
-// growing it and that a large row moving between slots is not retained in
-// every slot it visited.
+// TestVStreamRowsTrimRowPool drives one pooled response through the steps of
+// the VStreamRows receive loop (UnmarshalVT, trim, ResetVT) with the real
+// generated code, checking that the tracker's incremental accounting matches
+// the pool's real capacities, that uniform packets and heartbeats reuse the
+// pool without growing or dropping it, and that a large row moving between
+// slots is not retained in every slot it visited. The receive loop itself is
+// covered by the tabletconntest suite (testVStreamRows).
 func TestVStreamRowsTrimRowPool(t *testing.T) {
 	r := binlogdatapb.VStreamRowsResponseFromVTPool()
 	defer func() {
@@ -61,6 +63,8 @@ func TestVStreamRowsTrimRowPool(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, r.UnmarshalVT(data))
 	}
+	var pool rowPoolTracker
+	heartbeat := &binlogdatapb.VStreamRowsResponse{Heartbeat: true}
 
 	// Steady state: the slots are filled once and then reused as they are.
 	uniform := rowsPacket(1000, -1, 0)
@@ -68,16 +72,24 @@ func TestVStreamRowsTrimRowPool(t *testing.T) {
 	for i := range 20 {
 		recv(uniform)
 		require.Len(t, r.Rows, 1000)
-		r.Rows = trimRowPool(r.Rows)
+		r.Rows = pool.trim(r.Rows)
 		require.NotNil(t, r.Rows, "packet %d: pool dropped under uniform rows", i)
 		r.ResetVT()
 		retained := sqltypes.RowPoolRetained(r.Rows)
 		require.Positive(t, retained)
+		require.Equal(t, retained, pool.total, "packet %d: incremental accounting drifted", i)
 		if i == 0 {
 			warm = retained
 			continue
 		}
 		require.Equal(t, warm, retained, "packet %d: pool grew under uniform rows", i)
+
+		// A heartbeat has no rows to judge the pool by and leaves it alone.
+		recv(heartbeat)
+		require.Empty(t, r.Rows)
+		r.Rows = pool.trim(r.Rows)
+		require.NotNil(t, r.Rows, "packet %d: a heartbeat dropped the pool", i)
+		r.ResetVT()
 	}
 
 	// Bounded: a 4 MiB row visits a different slot on every other packet.
@@ -92,11 +104,12 @@ func TestVStreamRowsTrimRowPool(t *testing.T) {
 		} {
 			recv(p)
 			budget := sqltypes.RowPoolPacketBudget(r.Rows)
-			r.Rows = trimRowPool(r.Rows)
+			r.Rows = pool.trim(r.Rows)
 			if r.Rows == nil {
 				drops++
 			}
 			require.LessOrEqual(t, sqltypes.RowPoolRetained(r.Rows), budget, "packet %d", i)
+			require.Equal(t, sqltypes.RowPoolRetained(r.Rows), pool.total, "packet %d: incremental accounting drifted", i)
 			r.ResetVT()
 		}
 	}

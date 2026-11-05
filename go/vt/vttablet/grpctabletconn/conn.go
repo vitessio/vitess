@@ -761,6 +761,7 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 		r.Rows = nil
 		r.ReturnToVTPool()
 	}()
+	var pool rowPoolTracker
 	for {
 		err := stream.RecvMsg(r)
 		if err != nil {
@@ -772,27 +773,52 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 		if err := send(r); err != nil {
 			return err
 		}
-		// Only a packet that carried rows can judge the pool: a heartbeat or throttled response has none,
-		// so its budget would be the floor and a healthy pool over 1 MiB would be dropped every 10s.
-		if len(r.Rows) > 0 {
-			r.Rows = trimRowPool(r.Rows)
-		}
+		r.Rows = pool.trim(r.Rows)
 		r.ResetVT()
 	}
 }
 
-// trimRowPool bounds what a pooled response's reused rows retain across a
+// rowPoolTracker bounds what a pooled response's reused rows retain across a
 // stream. RecvMsg decodes every packet into the same *Row slots, and the
 // generated Row.UnmarshalVT appends into Values[:0] and Lengths[:0], so each
 // slot grows to the largest row it has ever held and a long stream retains
-// the sum of those high-water marks (vitessio/vitess#20954). Once that
+// the sum of those high-water marks (vitessio/vitess#20954). The tracker
+// keeps that sum incrementally: a packet only re-measures the slots it wrote,
+// so the cost per packet is its row count, not the pool's size. Once the sum
 // exceeds the budget for the packet the slots just carried, the slice is
 // dropped: an O(1) reset after which the next packet reallocates only what
-// it needs. Call it after send and before ResetVT.
-func trimRowPool(rows []*querypb.Row) []*querypb.Row {
-	if sqltypes.RowPoolRetained(rows) <= sqltypes.RowPoolPacketBudget(rows) {
+// it needs.
+type rowPoolTracker struct {
+	// caps[i] is the capacity (Values plus Lengths) last measured in slot i.
+	caps []int
+	// total is the sum of caps: what the pool retains.
+	total int
+}
+
+// trim is called after send and before ResetVT with the packet's rows. It
+// returns the rows to keep, or nil when the pool is dropped. A packet without
+// rows (a heartbeat or a throttled response) can't judge the pool and leaves
+// it alone.
+func (t *rowPoolTracker) trim(rows []*querypb.Row) []*querypb.Row {
+	if len(rows) == 0 {
 		return rows
 	}
+
+	for i, r := range rows {
+		if i >= len(t.caps) {
+			t.caps = append(t.caps, 0)
+		}
+		c := cap(r.Values) + cap(r.Lengths)*8
+		t.total += c - t.caps[i]
+		t.caps[i] = c
+	}
+
+	if t.total <= sqltypes.RowPoolPacketBudget(rows) {
+		return rows
+	}
+
+	t.caps = t.caps[:0]
+	t.total = 0
 	return nil
 }
 
@@ -827,6 +853,7 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 		r.Rows = nil // see VStreamRows
 		r.ReturnToVTPool()
 	}()
+	var pool rowPoolTracker
 	for {
 		err := stream.RecvMsg(r)
 		if err != nil {
@@ -838,9 +865,7 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 		if err := send(r); err != nil {
 			return err
 		}
-		if len(r.Rows) > 0 { // see VStreamRows
-			r.Rows = trimRowPool(r.Rows)
-		}
+		r.Rows = pool.trim(r.Rows)
 		r.ResetVT()
 	}
 }
