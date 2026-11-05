@@ -996,16 +996,21 @@ func TestDeferredRestoreRecordsRestoredPosition(t *testing.T) {
 // restore flag that restarts after a restore, finding data. It does not
 // restore again, and must initialize replication as an ordinary start does: a
 // restore that deferred replication initialization left replication reset. A
-// point-in-time restore keeps the replication it set up.
+// point-in-time restore keeps the replication it disabled, also when this start
+// has no point-in-time flag.
 func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		locked      bool
 		pointInTime bool
+		disabled    bool
+		statusErr   error
 	}{
 		{name: "shard lock free"},
 		{name: "shard lock held", locked: true},
 		{name: "point-in-time restore", pointInTime: true},
+		{name: "replication disabled by a point-in-time restore", disabled: true},
+		{name: "replication status unreadable", statusErr: errors.New("status read failed")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tm, md, ts, _ := newReplicationInitializationTM(t)
@@ -1013,8 +1018,12 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 			if tc.locked {
 				holdInitializationShardLock(t, ts)
 			}
-			if tc.locked || tc.pointInTime {
+			if tc.locked || tc.pointInTime || tc.disabled || tc.statusErr != nil {
 				md.ExpectedExecuteSuperQueryList = nil
+			}
+			if tc.disabled {
+				md.Replicating, md.IOThreadRunning = false, false
+				md.CurrentSourceHost, md.CurrentSourcePort = "//", 0
 			}
 			if tc.pointInTime {
 				previous := restoreToPos
@@ -1022,9 +1031,16 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 				t.Cleanup(func() { restoreToPos = previous })
 			}
 
-			require.NoError(t, tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger()))
+			md.ReplicationStatusError = tc.statusErr
+			err := tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger())
+			if tc.statusErr != nil {
+				// It may be disabled by a point-in-time restore.
+				require.ErrorContains(t, err, "status read failed")
+			} else {
+				require.NoError(t, err)
+			}
 			require.NoError(t, md.CheckSuperQueryList())
-			assert.Equal(t, !tc.locked && !tc.pointInTime, md.Replicating)
+			assert.Equal(t, !tc.locked && !tc.pointInTime && !tc.disabled && tc.statusErr == nil, md.Replicating)
 			assert.Equal(t, tc.locked, tm.tmState.replicationInitPending())
 		})
 	}

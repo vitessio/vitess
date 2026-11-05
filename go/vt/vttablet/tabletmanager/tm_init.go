@@ -1154,7 +1154,8 @@ func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (con
 // asks. A vttablet that restarts after a restore finds data and does not
 // restore again: it then initializes replication as an ordinary start does,
 // since a restore that deferred replication initialization left replication
-// reset. A point-in-time restore keeps the replication it set up.
+// reset. A point-in-time restore keeps the replication it set up, which it
+// disabled.
 func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Logger) error {
 	if restoreToPos == "" && restoreToTimestampStr == "" {
 		restore, err := mysqlctl.ShouldRestore(ctx, logger, tm.Cnf, tm.MysqlDaemon, topoproto.TabletDbName(tm.Tablet()), false)
@@ -1165,6 +1166,17 @@ func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Lo
 				return err
 			}
 			defer tm.unlock()
+			// A point-in-time restore disabled replication, whatever the
+			// flags of this start: keep it disabled. Without the status, it
+			// may be: do not initialize.
+			status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+			if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
+				return vterrors.Wrap(err, "cannot read the replication status")
+			}
+			if err == nil && status.SourceHost == disabledReplicationSourceHost {
+				logger.Infof("Replication was disabled by a point-in-time restore, leaving it disabled")
+				return nil
+			}
 			if _, err := tm.initializeReplicationUnlessShardLocked(ctx, logger, tm.Tablet().Type, nil); err != nil {
 				return vterrors.Wrap(err, "failed to initialize replication")
 			}
