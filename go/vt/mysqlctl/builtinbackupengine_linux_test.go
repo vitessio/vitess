@@ -68,7 +68,6 @@ func TestDirectIOWriter(t *testing.T) {
 
 				f, err := openForDirectWrite(p)
 				require.NoError(t, err)
-				defer f.Close()
 				require.True(t, directIOEnabled(t, f))
 
 				w := newDirectIOWriter(f, &offsetWriter{f: f, offset: tt.offset}, bufSize)
@@ -107,7 +106,7 @@ func TestDirectIOWriterDisablesDirectIOOnlyForUnalignedTail(t *testing.T) {
 
 	f, err := openForDirectWrite(p)
 	require.NoError(t, err)
-	defer f.Close()
+	t.Cleanup(func() { assert.NoError(t, f.Close()) })
 
 	w := newDirectIOWriter(f, &offsetWriter{f: f}, directIOAlignment)
 	_, err = w.Write(make([]byte, directIOAlignment))
@@ -398,7 +397,7 @@ func requireDirectIO(t *testing.T, dir string) {
 	t.Helper()
 	p := path.Join(dir, "direct-io-probe")
 	require.NoError(t, os.WriteFile(p, nil, 0o644))
-	defer os.Remove(p)
+	t.Cleanup(func() { assert.NoError(t, os.Remove(p)) })
 
 	f, err := openForDirectWrite(p)
 	if vterrors.Code(err) == vtrpcpb.Code_UNIMPLEMENTED {
@@ -413,8 +412,10 @@ func requireFallocate(t *testing.T, dir string) {
 	t.Helper()
 	f, err := os.CreateTemp(dir, "fallocate-probe")
 	require.NoError(t, err)
-	defer os.Remove(f.Name())
-	defer f.Close()
+	t.Cleanup(func() {
+		assert.NoError(t, f.Close())
+		assert.NoError(t, os.Remove(f.Name()))
+	})
 
 	err = fallocateFile(f, directIOAlignment)
 	if vterrors.Code(err) == vtrpcpb.Code_UNIMPLEMENTED {
