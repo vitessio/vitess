@@ -1521,6 +1521,10 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 	// Set primary and start replication.
 	if currentPrimary.MysqlHostname == "" {
 		log.Warn("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
+		// A former primary still stops accepting writes.
+		if _, err := tm.fenceFormerPrimary(ctx); err != nil {
+			return "", err
+		}
 		return "", nil
 	}
 
