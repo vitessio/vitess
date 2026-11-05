@@ -229,6 +229,19 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			return err
 		},
 	}, {
+		name:  "promotion status read",
+		query: "SHOW REPLICA STATUS",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.Promote(ctx, nil)
+			return err
+		},
+	}, {
+		name:  "receiver restart",
+		query: "STOP REPLICA IO_THREAD",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			return mysqld.RestartReplicationReceiver(ctx, nil)
+		},
+	}, {
 		name:  "connection check",
 		query: "SELECT 1",
 		call: func(ctx context.Context, mysqld *Mysqld) error {
