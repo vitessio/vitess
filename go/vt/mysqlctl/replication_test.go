@@ -3917,13 +3917,15 @@ func TestRestartReplicationReceiver(t *testing.T) {
 // killed when the caller's context ends, and which statements ran by then.
 func TestReplicationHooksUseCallerContext(t *testing.T) {
 	for _, tc := range []struct {
-		name, hook     string
-		start, restart bool
+		name, hook               string
+		start, restart, receiver bool
 	}{
 		{name: "StopReplication preflight", hook: "preflight_stop_slave"},
 		{name: "RestartReplication preflight", hook: "preflight_stop_slave", restart: true},
+		{name: "RestartReplicationReceiver preflight", hook: "preflight_stop_slave", receiver: true},
 		{name: "StartReplication postflight", hook: "postflight_start_slave", start: true},
 		{name: "RestartReplication postflight", hook: "postflight_start_slave", start: true, restart: true},
+		{name: "RestartReplicationReceiver postflight", hook: "postflight_start_slave", start: true, receiver: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -3944,7 +3946,7 @@ func TestReplicationHooksUseCallerContext(t *testing.T) {
 			cp := *db.ConnParams()
 			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
 			t.Cleanup(mysqld.Close)
-			for _, query := range []string{"SELECT 1", "STOP REPLICA", "RESET REPLICA", "START REPLICA"} {
+			for _, query := range []string{"SELECT 1", "STOP REPLICA", "RESET REPLICA", "START REPLICA", "STOP REPLICA IO_THREAD", "START REPLICA IO_THREAD"} {
 				db.AddQuery(query, &sqltypes.Result{})
 			}
 
@@ -3953,6 +3955,8 @@ func TestReplicationHooksUseCallerContext(t *testing.T) {
 			returned := make(chan error, 1)
 			go func() {
 				switch {
+				case tc.receiver:
+					returned <- mysqld.RestartReplicationReceiver(ctx, nil)
 				case tc.restart:
 					returned <- mysqld.RestartReplication(ctx, nil)
 				case tc.start:
@@ -3972,12 +3976,16 @@ func TestReplicationHooksUseCallerContext(t *testing.T) {
 			case <-time.After(30 * time.Second):
 				require.FailNow(t, "the replication hook ignored the caller's context")
 			}
+			stop, start := "STOP REPLICA", "START REPLICA"
+			if tc.receiver {
+				stop, start = "STOP REPLICA IO_THREAD", "START REPLICA IO_THREAD"
+			}
 			if tc.start {
 				// The postflight hook runs after replication started.
-				require.Equal(t, 1, db.GetQueryCalledNum("START REPLICA"))
+				require.Equal(t, 1, db.GetQueryCalledNum(start))
 			} else {
-				require.Zero(t, db.GetQueryCalledNum("STOP REPLICA"))
-				require.Zero(t, db.GetQueryCalledNum("START REPLICA"))
+				require.Zero(t, db.GetQueryCalledNum(stop))
+				require.Zero(t, db.GetQueryCalledNum(start))
 			}
 		})
 	}

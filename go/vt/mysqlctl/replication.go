@@ -239,7 +239,7 @@ func (mysqld *Mysqld) RestartReplicationReceiver(ctx context.Context, hookExtraE
 
 	h := hook.NewSimpleHook("preflight_stop_slave")
 	h.ExtraEnv = hookExtraEnv
-	if err := h.ExecuteOptional(); err != nil {
+	if err := h.ExecuteOptionalContext(ctx); err != nil {
 		return err
 	}
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{stop, start}); err != nil {
@@ -247,7 +247,7 @@ func (mysqld *Mysqld) RestartReplicationReceiver(ctx context.Context, hookExtraE
 	}
 	h = hook.NewSimpleHook("postflight_start_slave")
 	h.ExtraEnv = hookExtraEnv
-	return h.ExecuteOptional()
+	return h.ExecuteOptionalContext(ctx)
 }
 
 // StopIOThread stops a replica's IO thread only.
