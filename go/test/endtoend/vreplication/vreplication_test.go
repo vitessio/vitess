@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -1065,13 +1066,69 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			switchReads(t, workflowType, cellNames, ksWorkflow, true)
 			printShardPositions(vc, ksShards)
 
-			// A ReverseTraffic that fails, here because the reverse workflow
-			// cannot catch up, must leave the workflow in place.
+			// ReverseTraffic refuses a stopped reverse workflow, before it
+			// stops writes.
 			reverseWorkflow := workflow + "_reverse"
 			err = vc.VtctldClient.ExecuteCommand("Workflow", "--keyspace", defaultSourceKs, "stop", "--workflow", reverseWorkflow)
 			require.NoError(t, err)
 			out, err := vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", defaultTargetKs,
 				"ReverseTraffic", "--tablet-types=primary", "--timeout=10s")
+			require.Error(t, err)
+			require.Contains(t, out, "workflow is stopped")
+			err = vc.VtctldClient.ExecuteCommand("Workflow", "--keyspace", defaultSourceKs, "start", "--workflow", reverseWorkflow)
+			require.NoError(t, err)
+			require.NoError(t, waitForWorkflowState(vc, defaultSourceKs+"."+reverseWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+			// A ReverseTraffic that fails, here because the reverse workflow
+			// cannot catch up, must leave the workflow in place. We lock the
+			// customer table on the source primary, which the reverse workflow
+			// replicates into, and write a row to the target so that it cannot
+			// apply it. The reverse workflow is blocked on the table lock, so we
+			// run ReverseTraffic in a goroutine. --timeout only starts in the
+			// catch-up wait, after the steps before it, so we keep the table
+			// locked until vtctld logs that it is canceling the switch, which it
+			// does once that wait has timed out.
+			productConn, err := productTab.TabletConn(defaultSourceKs, true)
+			require.NoError(t, err)
+			defer productConn.Close()
+			execQuery(t, productConn, "lock table customer read")
+			unlockTable := sync.OnceFunc(func() {
+				execQuery(t, productConn, "unlock tables")
+			})
+			defer unlockTable()
+			_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "insert into customer(cid, name) values(2000, 'reverseCatchupCustomer')")
+			require.NoError(t, err)
+			vtctldLog, err := os.ReadFile(vc.Vtctld.ErrorLog)
+			require.NoError(t, err)
+			vtctldLogOffset := len(vtctldLog)
+			cancelStarted := fmt.Sprintf("cancelMigration (%s): starting", reverseWorkflow)
+			reverseTimeout := 10 * time.Second
+			reverseDone := make(chan struct{})
+			go func() {
+				defer close(reverseDone)
+				out, err = vc.VtctldClient.ExecuteCommandWithOutput(workflowType, "--workflow", workflow, "--target-keyspace", defaultTargetKs,
+					"ReverseTraffic", "--tablet-types=primary", "--timeout", reverseTimeout.String())
+			}()
+			canceling := false
+			waitDeadline := time.After(reverseTimeout + defaultTimeout)
+		waitForCancel:
+			for {
+				select {
+				case <-reverseDone:
+					break waitForCancel
+				case <-waitDeadline:
+					break waitForCancel
+				case <-time.After(100 * time.Millisecond):
+					if vtctldLog, rerr := os.ReadFile(vc.Vtctld.ErrorLog); rerr == nil && len(vtctldLog) > vtctldLogOffset &&
+						strings.Contains(string(vtctldLog[vtctldLogOffset:]), cancelStarted) {
+						canceling = true
+						break waitForCancel
+					}
+				}
+			}
+			unlockTable()
+			<-reverseDone
+			require.True(t, canceling, "ReverseTraffic did not cancel the switch after its catch-up wait timed out: %s", out)
 			require.Error(t, err)
 			require.Contains(t, out, "failed to sync up replication between the source and target")
 			out, err = vc.VtctldClient.ExecuteCommandWithOutput("Workflow", "--keyspace", defaultTargetKs, "show", "--workflow", workflow)
@@ -1085,6 +1142,9 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			}
 			// Canceling the switch restarted the reverse workflow.
 			require.NoError(t, waitForWorkflowState(vc, defaultSourceKs+"."+reverseWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+			// Remove the row we wrote, as later checks count the customer rows.
+			_, err = execVtgateQuery(vtgateConn, defaultTargetKs, "delete from customer where cid = 2000")
+			require.NoError(t, err)
 
 			switchWrites(t, workflowType, ksWorkflow, true)
 
