@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -977,6 +978,7 @@ func TestSuite(ctx context.Context, t *testing.T, protocol string, tablet *topod
 		testMessageStream,
 		testMessageAck,
 		testReserveStreamExecute,
+		testVStreamRows,
 
 		// error test cases
 		testBeginError,
@@ -1091,4 +1093,99 @@ func SetProtocol(name string, protocol string) {
 		msg := "failed to set flag %q to %q: %v"
 		log.Error(fmt.Sprintf(msg, tabletProtocolFlagName, protocol, err))
 	}
+}
+
+// vstreamRowsPacket builds a VStreamRows packet of n two-column rows whose values are valBytes long; the
+// row at bigSlot, if any, carries a value of bigBytes instead.
+func vstreamRowsPacket(n, valBytes, bigSlot, bigBytes int) *binlogdatapb.VStreamRowsResponse {
+	resp := &binlogdatapb.VStreamRowsResponse{Rows: make([]*querypb.Row, n)}
+	for i := range resp.Rows {
+		size := valBytes
+		if i == bigSlot {
+			size = bigBytes
+		}
+		val := make([]byte, size)
+		for j := range val {
+			val[j] = 'v'
+		}
+		resp.Rows[i] = &querypb.Row{
+			Lengths: []int64{1, int64(len(val))},
+			Values:  append([]byte("1"), val...),
+		}
+	}
+	return resp
+}
+
+// testVStreamRows pushes crafted packets through the real VStreamRows receive loop and checks what the
+// reused response retains across them (vitessio/vitess#20954): uniform packets, with heartbeats between
+// them, reuse the same rows without growing or dropping the pool; a large row moving between slots is
+// not kept in every slot it visited.
+func testVStreamRows(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testVStreamRows")
+
+	const (
+		uniformPackets = 20
+		uniformRows    = 1000
+		// uniformBytes makes the uniform packets retain more than the 1 MiB budget floor, so a heartbeat
+		// judged on its own (no rows, floor budget) would drop the pool.
+		uniformBytes = 1100
+		bigPackets   = 20
+		bigRows      = 200
+		bigBytes     = 1 << 20
+	)
+
+	uniform := vstreamRowsPacket(uniformRows, uniformBytes, -1, 0)
+	heartbeat := &binlogdatapb.VStreamRowsResponse{Heartbeat: true}
+
+	packets := make([]*binlogdatapb.VStreamRowsResponse, 0, 1+2*uniformPackets+2*bigPackets)
+	packets = append(packets, &binlogdatapb.VStreamRowsResponse{Fields: []*querypb.Field{{Name: "id"}, {Name: "val"}}})
+	for range uniformPackets {
+		packets = append(packets, uniform, heartbeat)
+	}
+	for i := range bigPackets {
+		packets = append(packets, vstreamRowsPacket(bigRows, 1, (i*37)%bigRows, bigBytes), vstreamRowsPacket(bigRows, 1, -1, 0))
+	}
+	f.VStreamRowsResponses = packets
+	defer func() { f.VStreamRowsResponses = nil }()
+
+	type seen struct {
+		rows     int
+		retained int
+		first    *querypb.Row // the first slot's *Row, the same object while the pool is reused
+	}
+	var got []seen
+
+	ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
+	err := conn.VStreamRows(ctx, &binlogdatapb.VStreamRowsRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamRowsResponse) error {
+		if len(resp.Rows) == 0 {
+			return nil
+		}
+		got = append(got, seen{rows: len(resp.Rows), retained: sqltypes.RowPoolRetained(resp.Rows), first: resp.Rows[0]})
+		return nil
+	})
+	require.NoError(t, err)
+	require.Len(t, got, uniformPackets+2*bigPackets)
+
+	// Uniform phase: the pool is filled once and then reused as it is, heartbeats or not.
+	warm := got[0]
+	require.Greater(t, warm.retained, sqltypes.RowPoolMinBytes, "the uniform pool must exceed the budget floor for the heartbeat check to mean anything")
+	for i := 1; i < uniformPackets; i++ {
+		assert.Equal(t, uniformRows, got[i].rows)
+		assert.Equal(t, warm.retained, got[i].retained, "packet %d: pool grew under uniform rows", i)
+		assert.Same(t, warm.first, got[i].first, "packet %d: pool was dropped under uniform rows (a heartbeat must not trim it)", i)
+	}
+
+	// Bounded phase: the large value visits a different slot in every other packet. Each packet sees at
+	// most the previous packet's budget plus its own rows; without the trim the pool would end up holding
+	// every slot's high-water mark, about bigPackets MiB.
+	drops := 0
+	for i := uniformPackets; i < len(got); i++ {
+		assert.Less(t, got[i].retained, 3*bigBytes, "packet %d retains too much", i)
+		if got[i].first != got[i-1].first {
+			drops++
+		}
+	}
+	assert.Positive(t, drops, "the small-row packets never dropped the pool holding the large slot")
+	assert.LessOrEqual(t, got[len(got)-1].retained, sqltypes.RowPoolMinBytes+bigRows*(2*8+64)+2*bigRows,
+		"after a small-row packet the pool is back to the floor")
 }

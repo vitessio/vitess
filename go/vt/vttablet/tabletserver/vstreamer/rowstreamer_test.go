@@ -893,3 +893,70 @@ func TestRowPoolBoundsRetention(t *testing.T) {
 		require.False(t, dropped, "packet %d: pool dropped with a stable large row", packetNo)
 	}
 }
+
+// TestStreamRowsBoundsRowPoolRetention streams a table whose one large value lands in a new slot of the
+// reused row pool in every packet, and checks in the send callback what the pool retains
+// (rows[:cap(rows)]): without the trim after each packet, every slot would keep its high-water mark and
+// the pool would grow to about packets × the large value by the end of the stream
+// (vitessio/vitess#20954).
+func TestStreamRowsBoundsRowPoolRetention(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	const (
+		packets  = 100
+		bigBytes = 64 << 10
+	)
+
+	execStatements(t, []string{
+		"create table t1(id int, val longblob, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+
+	// Packet k holds k small rows followed by the large one, so the large value sits in slot k of that
+	// packet; with a fixed packet size of bigBytes the packet closes right after it.
+	var stmts []string
+	id := 0
+	for k := range packets {
+		var values []string
+		for range k {
+			id++
+			values = append(values, fmt.Sprintf("(%d, 's')", id))
+		}
+		id++
+		values = append(values, fmt.Sprintf("(%d, repeat('b', %d))", id, bigBytes))
+		stmts = append(stmts, "insert into t1 values "+strings.Join(values, ","))
+	}
+	execStatements(t, stmts)
+
+	var options binlogdatapb.VStreamOptions
+	options.ConfigOverrides = map[string]string{
+		"vstream-dynamic-packet-size": "false",
+		"vstream-packet-size":         strconv.Itoa(bigBytes),
+	}
+
+	sent, maxRetained, lastRetained := 0, 0, 0
+	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if len(rows.Rows) == 0 {
+			return nil
+		}
+		sent++
+		retained := sqltypes.RowPoolRetained(rows.Rows)
+		maxRetained = max(maxRetained, retained)
+		lastRetained = retained
+		return nil
+	}, &options)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, sent, packets, "every large row should have closed a packet")
+
+	// The send callback sees the pool after the packet's rows were written into it and before the trim, so
+	// it holds at most the previous packet's budget (the 1 MiB floor here, as the packets are small) plus
+	// this packet's growth. Untrimmed, the last packet would retain about packets × bigBytes.
+	bound := sqltypes.RowPoolMinBytes + 2*bigBytes + packets*(2*8+64)
+	assert.LessOrEqual(t, maxRetained, bound, "the pool retained %d bytes at some packet, untrimmed it would reach %d", maxRetained, packets*bigBytes)
+	assert.LessOrEqual(t, lastRetained, bound)
+	assert.Less(t, lastRetained, packets*bigBytes/4, "the pool kept most high-water marks: %d bytes", lastRetained)
+}

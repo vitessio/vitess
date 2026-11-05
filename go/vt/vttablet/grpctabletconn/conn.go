@@ -772,7 +772,11 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 		if err := send(r); err != nil {
 			return err
 		}
-		r.Rows = trimRowPool(r.Rows)
+		// Only a packet that carried rows can judge the pool: a heartbeat or throttled response has none,
+		// so its budget would be the floor and a healthy pool over 1 MiB would be dropped every 10s.
+		if len(r.Rows) > 0 {
+			r.Rows = trimRowPool(r.Rows)
+		}
 		r.ResetVT()
 	}
 }
@@ -834,7 +838,9 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 		if err := send(r); err != nil {
 			return err
 		}
-		r.Rows = trimRowPool(r.Rows)
+		if len(r.Rows) > 0 { // see VStreamRows
+			r.Rows = trimRowPool(r.Rows)
+		}
 		r.ResetVT()
 	}
 }
