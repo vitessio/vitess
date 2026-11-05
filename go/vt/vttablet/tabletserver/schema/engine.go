@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	maps0 "maps"
 	"net/http"
 	"strings"
@@ -59,6 +60,9 @@ import (
 )
 
 type notifier func(full map[string]*Table, created, altered, dropped []*Table, udfsChanged bool)
+
+// slowDDLCommitWait is how long a wait for MySQL to commit a DDL can take before it is logged.
+const slowDDLCommitWait = time.Second
 
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
@@ -404,6 +408,79 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 		return err
 	}
 	se.reloadAtPos = pos
+	return nil
+}
+
+// ReloadAtDDL reloads the schema at pos, the position of a DDL that the caller has read from the
+// binlog, once MySQL has committed that DDL, whose GTID is ddl. MySQL sends a transaction's binlog
+// events to the binlog dump threads once the binlog is synced, before the transaction commits, and
+// with semi-sync AFTER_SYNC the commit then waits for a replica's acknowledgement. A reload in that
+// window doesn't see the DDL, yet records pos as reloaded, and the schema tracker then saves the
+// schema from before the DDL as the DDL's version.
+//
+// It waits only for a MySQL GTID, which @@gtid_executed includes once its transaction has
+// committed. The file position and MariaDB waits follow a replica's SQL thread, which doesn't
+// advance on a primary, so a DDL with any other kind of GTID is reloaded at right away.
+func (se *Engine) ReloadAtDDL(
+	ctx context.Context, pos replication.Position, ddl replication.GTID,
+) error {
+	if err := se.waitForDDLCommit(ctx, pos, ddl); err != nil {
+		return err
+	}
+	return se.ReloadAt(ctx, pos)
+}
+
+// waitForDDLCommit waits until MySQL has committed the DDL whose GTID is ddl, for up to the
+// reload timeout. It waits only for the DDL's own GTID: the rest of pos can include GTIDs that
+// this server will never execute, such as errant ones in the position a stream started from.
+func (se *Engine) waitForDDLCommit(
+	ctx context.Context, pos replication.Position, ddl replication.GTID,
+) error {
+	mysqlGTID, ok := ddl.(replication.Mysql56GTID)
+	if !ok {
+		return nil
+	}
+	se.mu.Lock()
+	isOpen := se.isOpen
+	reloaded := se.reloadAtPos.AtLeast(pos)
+	se.mu.Unlock()
+	if !isOpen {
+		return nil
+	}
+	if reloaded {
+		// That reload, at a position at least as recent, ran after its own DDL committed. With
+		// binlog_order_commits on, MySQL's default, transactions commit in binlog order, so this
+		// earlier DDL had committed too.
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, se.reloadTimeout)
+	defer cancel()
+	conn, err := se.cp.Connect(ctx)
+	if err != nil {
+		return vterrors.Wrapf(err,
+			"failed to connect to wait for the DDL with GTID %v to commit", mysqlGTID)
+	}
+	defer conn.Close()
+	// The wait query doesn't watch its context, so closing the connection is what ends the wait
+	// when the context does: when a vstream closes, or if MySQL stops answering.
+	stop := context.AfterFunc(ctx, conn.Close)
+	defer stop()
+
+	start := time.Now()
+	ddlPos := replication.Position{GTIDSet: mysqlGTID.GTIDSet()}
+	if err := conn.WaitUntilPosition(ctx, ddlPos); err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			err = ctxErr
+		}
+		return vterrors.Wrapf(err,
+			"failed to wait up to %v for the DDL with GTID %v to commit before reloading the "+
+				"schema", se.reloadTimeout, mysqlGTID)
+	}
+	if waited := time.Since(start); waited > slowDDLCommitWait {
+		log.Warn("Waited for MySQL to commit a DDL before reloading the schema",
+			slog.String("gtid", mysqlGTID.String()), slog.Duration("waited", waited))
+	}
 	return nil
 }
 

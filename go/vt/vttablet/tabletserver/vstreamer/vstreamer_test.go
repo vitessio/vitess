@@ -815,11 +815,124 @@ func TestHistorianStartupRefreshOuterStreamRefreshesOnce(t *testing.T) {
 	require.Equal(t, 1, db.GetQueryCalledNum(refreshQuery))
 }
 
+// TestSchemaReloadWaitsForDDLCommit checks that the schema tracker saves the schema that a DDL
+// produces even when its vstream reads the DDL from the binlog before the DDL commits (#21883).
+// MySQL sends a transaction's binlog events to the binlog dump threads once the binlog is
+// synced, and semi-sync with no replica connected then holds the commit for the semi-sync
+// timeout, which makes that window seconds long. The DDL is an Online DDL style cutover: a
+// RENAME that swaps a shadow table, created later, over the original.
+func TestSchemaReloadWaitsForDDLCommit(t *testing.T) {
+	ctx := t.Context()
+	qr, err := env.Mysqld.FetchSuperQuery(ctx,
+		"select variable_name from performance_schema.global_variables where variable_name in "+
+			"('rpl_semi_sync_source_timeout', 'rpl_semi_sync_master_timeout')")
+	require.NoError(t, err)
+	if len(qr.Rows) == 0 {
+		t.Skip("the semi-sync source plugin is not loaded")
+	}
+	semiSync := strings.TrimSuffix(strings.ToLower(qr.Rows[0][0].ToString()), "_timeout")
+
+	require.NoError(t, createSchemaVersionTable(t))
+	isolateSchemaVersionTable(t)
+	t.Cleanup(func() {
+		execStatements(t, []string{
+			"drop table if exists hist_vis",
+			"drop table if exists hist_vis_new",
+			"drop table if exists hist_vis_old",
+		})
+	})
+	// count runs query, which counts rows, and returns the count.
+	count := func(c require.TestingT, query string) int64 {
+		qr, err := env.Mysqld.FetchSuperQuery(ctx, query)
+		require.NoError(c, err)
+		rows, err := qr.Rows[0][0].ToInt64()
+		require.NoError(c, err)
+		return rows
+	}
+	// waitForCount waits until query, which counts rows, counts more than floor.
+	waitForCount := func(query string, floor int64) {
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.Greater(c, count(c, query), floor)
+		}, 30*time.Second, 50*time.Millisecond)
+	}
+	// The schema engine compares create_time in seconds, so the shadow table is created in a
+	// later second than the original, and the engine loads both in a later second still.
+	waitPastCreateTime := func(table string) {
+		waitForCount("select count(*) from information_schema.tables "+
+			"where table_schema = database() and table_name = "+encodeString(table)+
+			" and create_time < now()", 0)
+	}
+	execStatements(t, []string{"create table hist_vis(id int, a int, b int, primary key(id))"})
+	waitPastCreateTime("hist_vis")
+	execStatements(t, []string{"create table hist_vis_new(id int, b int, primary key(id))"})
+	waitPastCreateTime("hist_vis_new")
+	require.NoError(t, env.SchemaEngine.Reload(ctx))
+	require.NoError(t, insertSchemaVersionRow(t, 1, primaryPosition(t),
+		"create table hist_vis(id int, a int, b int, primary key(id))", 123,
+		makeHistorianMinimalTable("hist_vis", []string{"id", "a", "b"})))
+
+	binlogDumps := "select count(*) from information_schema.processlist " +
+		"where command = 'Binlog Dump GTID'"
+	binlogDumpsBefore := count(t, binlogDumps)
+	tracker := schema.NewTracker(env.TabletEnv, engine, env.SchemaEngine)
+	tracker.Enable(true)
+	t.Cleanup(func() { tracker.Enable(false) })
+	// The tracker resumes from the row above, so once its stream is reading the binlog, it reads
+	// the RENAME as soon as the binlog has it.
+	waitForCount(binlogDumps, binlogDumpsBefore)
+
+	qr, err = env.Mysqld.FetchSuperQuery(ctx,
+		fmt.Sprintf("select @@global.%s_enabled, @@global.%s_timeout", semiSync, semiSync))
+	require.NoError(t, err)
+	enabled, timeout := qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString()
+	execStatements(t, []string{
+		fmt.Sprintf("set global %s_timeout = 3000", semiSync),
+		fmt.Sprintf("set global %s_enabled = 1", semiSync),
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{
+			fmt.Sprintf("set global %s_enabled = %s", semiSync, enabled),
+			fmt.Sprintf("set global %s_timeout = %s", semiSync, timeout),
+		})
+	})
+
+	start := time.Now()
+	execStatements(t, []string{"rename table hist_vis to hist_vis_old, hist_vis_new to hist_vis"})
+	require.GreaterOrEqual(t, time.Since(start), 2*time.Second,
+		"semi-sync should have held the RENAME's commit")
+
+	waitForCount("select count(*) from _vt.schema_version where id > 1", 0)
+	qr, err = env.Mysqld.FetchSuperQuery(ctx,
+		"select ddl, schemax from _vt.schema_version where id > 1 order by id limit 1")
+	require.NoError(t, err)
+	require.Equal(t, "rename table hist_vis to hist_vis_old, hist_vis_new to hist_vis",
+		qr.Rows[0][0].ToString())
+	blob, err := qr.Rows[0][1].ToBytes()
+	require.NoError(t, err)
+	sch := &binlogdatapb.MinimalSchema{}
+	require.NoError(t, sch.UnmarshalVT(blob))
+	var saved []string
+	for _, table := range sch.Tables {
+		if table.Name != "hist_vis" {
+			continue
+		}
+		for _, field := range table.Fields {
+			saved = append(saved, field.Name)
+		}
+	}
+	require.Equal(t, []string{"id", "b"}, saved,
+		"the version saved for the RENAME should have the swapped-in table's columns")
+}
+
+// createSchemaVersionTable creates _vt.schema_version as the sidecar database defines it, unless
+// it exists: TestVersion drops the table, and the schema tracker needs its AUTO_INCREMENT id.
 func createSchemaVersionTable(t *testing.T) error {
 	t.Helper()
 	return env.Mysqld.ExecuteSuperQueryList(t.Context(), []string{
 		"create database if not exists _vt",
-		"create table if not exists _vt.schema_version(id int, pos longblob, time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
+		"create table if not exists _vt.schema_version(id int not null auto_increment, " +
+			"pos longblob not null, time_updated bigint(20) not null, ddl blob default null, " +
+			"schemax longblob not null, primary key(id))",
 	})
 }
 

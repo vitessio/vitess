@@ -99,6 +99,9 @@ type vstreamer struct {
 	// eventGTID is the formatted GTID of the current transaction, or empty
 	// outside one. It is set by setEventGTID and stamped on each VEvent.
 	eventGTID string
+	// gtid is the GTID of the last GTID event, which for a DDL is the DDL's own.
+	// setEventGTID sets it together with eventGTID.
+	gtid replication.GTID
 
 	phase   string
 	vse     *Engine
@@ -187,8 +190,10 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	}
 }
 
-// setEventGTID formats gtid into eventGTID, or clears it if gtid is nil.
+// setEventGTID records gtid and formats it into eventGTID, or clears both if
+// gtid is nil.
 func (vs *vstreamer) setEventGTID(gtid replication.GTID) {
+	vs.gtid = gtid
 	vs.eventGTID = ""
 	if gtid != nil {
 		vs.eventGTID = gtid.String()
@@ -700,7 +705,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent, bufferAndTransmit func(vev
 				})
 			}
 			if schema.MustReloadSchemaOnDDL(q.SQL, vs.cp.DBName(), vs.vse.env.Environment().Parser()) {
-				if err := vs.se.ReloadAt(vs.ctx, vs.pos); err != nil {
+				if err := vs.se.ReloadAtDDL(vs.ctx, vs.pos, vs.gtid); err != nil {
 					return nil, vterrors.Wrap(err, "failed to reload schema after DDL encountered in stream")
 				}
 				if err := vs.rebuildPlans(); err != nil {

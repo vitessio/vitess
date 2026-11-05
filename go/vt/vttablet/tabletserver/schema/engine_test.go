@@ -43,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema/schematest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -50,6 +51,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -518,6 +520,46 @@ func TestOpenAndReload(t *testing.T) {
 	err = se.ReloadAt(t.Context(), pos2)
 	require.NoError(t, err)
 	assert.Equal(t, want, se.GetSchema())
+
+	// A binlog reader can see a DDL before the DDL commits, so a reload at a DDL whose GTID is a
+	// MySQL GTID first waits for MySQL to execute that GTID, and only that GTID.
+	sid, err := replication.ParseSID("7b04699f-f5e9-11e9-bf88-9cb6d089e1c3")
+	require.NoError(t, err)
+	se.reloadTimeout = 2 * time.Second // makes the wait query's timeout 1 second
+	pos3, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-30")
+	require.NoError(t, err)
+	waitDDL30 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:30', 1)"
+	db.AddQuery(waitDDL30, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"))
+	err = se.ReloadAtDDL(t.Context(), pos3, replication.Mysql56GTID{Server: sid, Sequence: 30})
+	require.NoError(t, err)
+	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL30))
+	assert.Equal(t, pos3, se.reloadAtPos)
+
+	// The engine has already reloaded at pos3, so it doesn't wait again.
+	err = se.ReloadAtDDL(t.Context(), pos3, replication.Mysql56GTID{Server: sid, Sequence: 30})
+	require.NoError(t, err)
+	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL30))
+
+	// A DDL that MySQL doesn't commit within the reload timeout fails the reload, rather than
+	// loading a schema without it.
+	pos4, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-40")
+	require.NoError(t, err)
+	waitDDL40 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:40', 1)"
+	db.AddQuery(waitDDL40, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "1"))
+	err = se.ReloadAtDDL(t.Context(), pos4, replication.Mysql56GTID{Server: sid, Sequence: 40})
+	require.ErrorContains(t, err, "7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:40")
+	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL40))
+	assert.Equal(t, pos3, se.reloadAtPos)
+
+	// A DDL with any other kind of GTID is reloaded at without a wait, which the file position
+	// and MariaDB waits can't provide on a primary.
+	pos5, err := replication.DecodePosition("MariaDB/0-41983-50")
+	require.NoError(t, err)
+	mariadbGTID := replication.MariadbGTID{Domain: 0, Server: 41983, Sequence: 50}
+	err = se.ReloadAtDDL(t.Context(), pos5, mariadbGTID)
+	require.NoError(t, err)
+	assert.Equal(t, pos5, se.reloadAtPos)
 }
 
 // TestUserTableNamedDual verifies that a real user table named `dual` is
