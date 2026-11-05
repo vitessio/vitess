@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -206,14 +207,14 @@ func TestExecuteSuperQueryListTaintedDiscardsConnection(t *testing.T) {
 // TestSuperQueriesHonorContext checks that DBA-pool calls return when their
 // context ends while mysqld isn't answering their query, even if the handshake
 // of the connection that replaces the one closed on cancellation never
-// completes. A drained backup restores a primary's semi-sync with these calls
-// while holding the tablet's action lock, which a hung mysqld must not keep
-// held.
+// completes. Callers make these calls while holding the tablet's action lock,
+// which a hung mysqld must not keep held.
 func TestSuperQueriesHonorContext(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		query string
 		call  func(context.Context, *Mysqld) error
+		setup func(*fakesqldb.DB)
 	}{{
 		name:  "semi-sync enable",
 		query: "SET GLOBAL rpl_semi_sync_source_enabled = 1, GLOBAL rpl_semi_sync_replica_enabled = 1",
@@ -236,10 +237,77 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			return err
 		},
 	}, {
+		name:  "replication status",
+		query: "SHOW REPLICA STATUS",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.ReplicationStatus(ctx)
+			return err
+		},
+	}, {
+		name:  "executed position",
+		query: "SELECT @@global.gtid_executed",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.PrimaryPosition(ctx)
+			return err
+		},
+	}, {
+		name:  "primary status",
+		query: "SHOW BINARY LOG STATUS",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.PrimaryStatus(ctx)
+			return err
+		},
+	}, {
+		name:  "primary status UUID",
+		query: "SELECT @@global.server_uuid",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.PrimaryStatus(ctx)
+			return err
+		},
+		setup: func(db *fakesqldb.DB) {
+			// The first read must succeed so cancellation reaches the UUID read.
+			status := sqltypes.MakeTestResult(sqltypes.MakeTestFields("File|Position|Binlog_Do_DB|Binlog_Ignore_DB|Executed_Gtid_Set", "varchar|uint64|varchar|varchar|varchar"), "mysql-bin.000001|123|||")
+			db.AddQuery("SHOW BINARY LOG STATUS", status)
+		},
+	}, {
+		name:  "read-only check",
+		query: "SHOW VARIABLES LIKE 'read_only'",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.IsReadOnly(ctx)
+			return err
+		},
+	}, {
+		name:  "promotion position",
+		query: "SELECT @@global.gtid_executed",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.Promote(ctx, nil)
+			return err
+		},
+	}, {
 		name:  "receiver restart",
 		query: "STOP REPLICA IO_THREAD",
 		call: func(ctx context.Context, mysqld *Mysqld) error {
 			return mysqld.RestartReplicationReceiver(ctx, nil)
+		},
+	}, {
+		name:  "semi-sync blocked check",
+		query: "select variable_value from performance_schema.global_status where regexp_like(variable_name, 'Rpl_semi_sync_(source|master)_wait_sessions')",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.IsSemiSyncBlocked(ctx)
+			return err
+		},
+	}, {
+		name:  "super_read_only",
+		query: "SET GLOBAL super_read_only = 'ON'",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.SetSuperReadOnly(ctx, true, WithLockWaitTimeout(time.Second))
+			return err
+		},
+	}, {
+		name:  "global read lock",
+		query: "FLUSH TABLES WITH READ LOCK",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			return mysqld.AcquireGlobalReadLock(ctx)
 		},
 	}, {
 		name:  "connection check",
@@ -259,6 +327,9 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			db := fakesqldb.New(t)
 			t.Cleanup(db.Close)
 			db.AddQueryPattern(".*", &sqltypes.Result{})
+			if tc.setup != nil {
+				tc.setup(db)
+			}
 			// The fake server does not answer the query until the test ends.
 			release := make(chan struct{})
 			started := make(chan struct{})
@@ -320,4 +391,66 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			assert.Eventually(t, func() bool { return connects.Load() > 1 }, 30*time.Second, 10*time.Millisecond)
 		})
 	}
+}
+
+// TestReleaseGlobalReadLockHonorsContext checks that ReleaseGlobalReadLock
+// returns when its context ends, even if UNLOCK TABLES succeeds while the
+// timed-out query is being killed, which closes the connection, and the
+// replacement's handshake never completes.
+func TestReleaseGlobalReadLockHonorsContext(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	params := *db.ConnParams()
+	dbcfgs := dbconfigs.NewTestDBConfigs(params, params, "fakesqldb")
+	mysqld := NewMysqld(dbcfgs)
+	t.Cleanup(mysqld.Close)
+	// Only the first pool connection completes its handshake.
+	mysqld.dbaPool.Close()
+	mysqld.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", nil, dbaPoolSize, DbaIdleTimeout, 0, 0)
+	var connects atomic.Int32
+	mysqld.dbaPool.ConnPool.Open(func(ctx context.Context) (*dbconnpool.DBConnection, error) {
+		if connects.Add(1) == 1 {
+			return dbconnpool.NewDBConnection(ctx, dbcfgs.DbaWithDB())
+		}
+		<-ctx.Done()
+		return nil, errors.New("handshake did not complete")
+	}, nil)
+	require.NoError(t, mysqld.AcquireGlobalReadLock(t.Context()))
+
+	// UNLOCK TABLES succeeds once the kill of the timed-out query starts.
+	unlocking := make(chan struct{})
+	killed := make(chan struct{})
+	db.AddQuery("UNLOCK TABLES", &sqltypes.Result{})
+	db.SetBeforeFunc("UNLOCK TABLES", func() {
+		close(unlocking)
+		<-killed
+	})
+	kill := fmt.Sprintf("kill %d", mysqld.lockConn.Conn.ID())
+	db.AddQuery(kill, &sqltypes.Result{})
+	db.SetBeforeFunc(kill, func() { close(killed) })
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	returned := make(chan error, 1)
+	go func() { returned <- mysqld.ReleaseGlobalReadLock(ctx) }()
+	require.Eventually(t, func() bool {
+		select {
+		case <-unlocking:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "UNLOCK TABLES did not run")
+	cancel()
+	var err error
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-returned:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "ReleaseGlobalReadLock did not return after its context ended")
+	require.NoError(t, err)
 }
