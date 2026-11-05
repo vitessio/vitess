@@ -37,3 +37,13 @@ func (ts *Server) ExpireCellInfo(cell string) {
 func (ts *Server) CellReader(ctx context.Context, cell string) (any, error) {
 	return ts.cellReaderFor(ctx, cell)
 }
+
+// ExpireCellNames makes the next StaleTolerantView listing of the cells read them again.
+func (ts *Server) ExpireCellNames() {
+	ts.expireCellNames()
+}
+
+// CellNames returns the list of cells that ts's StaleTolerantView finds tablets in.
+func (ts *Server) CellNames(ctx context.Context) ([]string, error) {
+	return ts.cellNamesFor(ctx)
+}

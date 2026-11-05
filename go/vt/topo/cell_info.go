@@ -49,7 +49,12 @@ func (ts *Server) GetCellInfoNames(ctx context.Context) ([]string, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	entries, err := ts.globalCell.ListDir(ctx, CellsPath, false /*full*/)
+	return getCellInfoNames(ctx, ts.globalCell)
+}
+
+// getCellInfoNames lists the cells through conn, sorted by name.
+func getCellInfoNames(ctx context.Context, conn Conn) ([]string, error) {
+	entries, err := conn.ListDir(ctx, CellsPath, false /*full*/)
 	switch {
 	case IsErrType(err, NoNode):
 		return nil, nil
@@ -108,6 +113,7 @@ func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatap
 	// A cell name can be reused after a delete, so a CellInfo cached for an earlier cell of this name must
 	// not be reused.
 	ts.expireCellInfo(cell)
+	ts.expireCellNames()
 	return nil
 }
 
@@ -203,6 +209,7 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 		return err
 	}
 	ts.expireCellInfo(cell)
+	ts.expireCellNames()
 	return nil
 }
 

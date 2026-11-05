@@ -18,6 +18,7 @@ package topo
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"golang.org/x/sync/semaphore"
@@ -47,10 +48,11 @@ func (ts *Server) connReaderForCell(ctx context.Context, cell string) (cellReade
 }
 
 // StaleTolerantView reads cell-local records through a connection chosen from a CellInfo up to
-// --topo-cell-info-cache-ttl old, rather than reading the cell's CellInfo from the global topo on every call.
-// After a cell is re-pointed or deleted by another process, its reads may come from the cell's old topo
-// server for up to the TTL, so it is only for callers that can act on such data, like the tablet throttler
-// choosing which tablets to probe. With the TTL at 0, it reads exactly like the Server.
+// --topo-cell-info-cache-ttl old, and lists cells from a list up to that old, rather than reading the cell's
+// CellInfo and the list of cells from the global topo on every call. After a cell is added, re-pointed or
+// deleted by another process, its reads may miss the new cell or come from the cell's old topo server for up
+// to the TTL, so it is only for callers that can act on such data, like the tablet throttler choosing which
+// tablets to probe. With the TTL at 0, it reads exactly like the Server.
 type StaleTolerantView struct {
 	ts *Server
 }
@@ -69,15 +71,70 @@ func (v *StaleTolerantView) GetTablet(ctx context.Context, alias *topodatapb.Tab
 	return getTablet(ctx, alias, v.ts.cellReaderFor)
 }
 
-// FindAllTabletAliasesInShard is Server.FindAllTabletAliasesInShard, reading each cell's location from the
-// CellInfo cache.
+// FindAllTabletAliasesInShard is Server.FindAllTabletAliasesInShard, reading the list of cells, and each cell's
+// location, from the cache.
 func (v *StaleTolerantView) FindAllTabletAliasesInShard(ctx context.Context, keyspace, shard string) ([]*topodatapb.TabletAlias, error) {
 	span, ctx := trace.NewSpan(ctx, "topo.StaleTolerantView.FindAllTabletAliasesInShard")
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	return v.ts.findAllTabletAliasesInShardByCell(ctx, keyspace, shard, nil, v.ts.cellReaderFor)
+	cells, err := v.ts.cellNamesFor(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return v.ts.findAllTabletAliasesInShardByCell(ctx, keyspace, shard, cells, v.ts.cellReaderFor)
+}
+
+// cellNamesFor returns the names of the existing cells, sorted by name, from a list read within the cache TTL if
+// there is one. With the TTL at 0, it is GetCellInfoNames. After another process adds or deletes a cell, the list
+// misses the new cell, or still has the deleted one, for up to the TTL.
+func (ts *Server) cellNamesFor(ctx context.Context) ([]string, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	ts.mu.Lock()
+	if ts.cellInfoCacheTTL <= 0 {
+		ts.mu.Unlock()
+		return ts.GetCellInfoNames(ctx)
+	}
+	read := ts.cellNames
+	if !read.readStart.IsZero() && !read.expired && time.Since(read.readStart) < ts.cellInfoCacheTTL {
+		ts.mu.Unlock()
+		return slices.Clone(read.names), nil
+	}
+	if ts.closed {
+		ts.mu.Unlock()
+		return nil, NewError(Interrupted, CellsPath)
+	}
+	generation := ts.cellNamesGeneration
+	global := ts.globalCell
+	ts.mu.Unlock()
+
+	// A strong read, as the result is trusted for the TTL. Calls that find the list stale at the same time each
+	// read it, rather than wait for one another: nothing else waits on this read, and the list is one ListDir.
+	readStart := time.Now()
+	names, err := getCellInfoNames(ctx, global)
+	if err != nil {
+		return nil, err
+	}
+
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	// Keep the newest read, as a call that started later may have recorded its result first. If the list was
+	// expired while we read it, what we read may predate the change, so leave it expired for the next call.
+	if readStart.After(ts.cellNames.readStart) {
+		ts.cellNames = cellNamesRead{names: names, readStart: readStart, expired: ts.cellNamesGeneration != generation}
+	}
+	return slices.Clone(names), nil
+}
+
+// expireCellNames makes the next cellNamesFor read the list of cells from the global topo again.
+func (ts *Server) expireCellNames() {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.cellNamesGeneration++
+	ts.cellNames.expired = true
 }
 
 // cellReaderFor returns a cellReader for the cell, from a CellInfo read within the cache TTL if there is one.
