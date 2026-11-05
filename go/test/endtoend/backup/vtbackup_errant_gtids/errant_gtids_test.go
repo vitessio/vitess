@@ -277,8 +277,14 @@ func testERSWithReachablePrimary(t *testing.T) {
 	oldPrimary, err := localCluster.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
 	require.Equal(t, topodatapb.TabletType_REPLICA, oldPrimary.Type, "ERS didn't repoint %s, so the scenario is invalid", primary.Alias)
-	qr := execOnTablet(t, primary, fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
-	require.Equal(t, "1", qr.Rows[0][0].ToString(), "%s didn't commit %q, so the scenario is invalid", primary.Alias, msg)
+	// ERS doesn't wait for the repoint, which can still be running. A vttablet
+	// without #21667 disables primary-side semi-sync only after closing its
+	// semi-sync monitor, which waits for the monitor's blocked write until the
+	// pool's close timeout (10s), so it can commit the write after ERS returns.
+	require.Eventually(t, func() bool {
+		qr, err := vtbackupQuery(t, tabletSocketPath(primary), fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
+		return err == nil && qr.Rows[0][0].ToString() == "1"
+	}, 30*time.Second, 250*time.Millisecond, "%s didn't commit %q, so the scenario is invalid", primary.Alias, msg)
 	requireRowAbsent(t, replica1, msg)
 
 	// vtbackup must wait while the shard record names a repointed primary. If
