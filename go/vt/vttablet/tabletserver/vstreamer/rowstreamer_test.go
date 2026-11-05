@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -787,4 +788,108 @@ func TestTrimRowPool(t *testing.T) {
 	require.True(t, dropped)
 	require.Equal(t, 0, poolBytes)
 	require.Nil(t, kept)
+}
+
+// fillRowPool converts one packet of rows into the reused pool exactly as
+// streamQuery does, returning the pool, its retained bytes and the packet's
+// value bytes.
+func fillRowPool(rows []*querypb.Row, poolBytes int, packet [][]sqltypes.Value) (_ []*querypb.Row, newPoolBytes, byteCount int) {
+	for i, r := range packet {
+		if i >= len(rows) {
+			rows = append(rows, &querypb.Row{})
+		}
+		prevCap := cap(rows[i].Values) + cap(rows[i].Lengths)*8
+		byteCount += sqltypes.RowToProto3Inplace(r, rows[i])
+		poolBytes += cap(rows[i].Values) + cap(rows[i].Lengths)*8 - prevCap
+	}
+	return rows, poolBytes, byteCount
+}
+
+// TestRowPoolSteadyStateReuse checks that uniform packets never trip the
+// budget: the pool is filled once and then reused without allocating.
+func TestRowPoolSteadyStateReuse(t *testing.T) {
+	const rowsPerPacket, fieldCount = 1000, 4
+	packet := make([][]sqltypes.Value, rowsPerPacket)
+	for i := range packet {
+		packet[i] = []sqltypes.Value{
+			sqltypes.NewInt64(int64(i)),
+			sqltypes.NewVarBinary(strings.Repeat("x", 100)),
+			sqltypes.NewVarChar("abc"),
+			sqltypes.NULL,
+		}
+	}
+
+	var rows []*querypb.Row
+	poolBytes, byteCount, warm := 0, 0, 0
+	for packetNo := range 50 {
+		rows, poolBytes, byteCount = fillRowPool(rows, poolBytes, packet)
+		budget := sqltypes.RowPoolBudget(byteCount, rowsPerPacket, fieldCount)
+		var dropped bool
+		rows, poolBytes, dropped = trimRowPool(rows, poolBytes, budget)
+		require.False(t, dropped, "packet %d: pool dropped under uniform rows", packetNo)
+		require.Equal(t, sqltypes.RowPoolRetained(rows), poolBytes, "packet %d: incremental accounting drifted", packetNo)
+		if packetNo == 0 {
+			warm = poolBytes
+			continue
+		}
+		require.Equal(t, warm, poolBytes, "packet %d: pool grew under uniform rows", packetNo)
+	}
+
+	// A warm pool is filled without allocating.
+	require.Zero(t, testing.AllocsPerRun(10, func() {
+		fillRowPool(rows, poolBytes, packet)
+	}))
+}
+
+// TestRowPoolBoundsRetention checks that a large value moving between slots
+// does not leave its high-water mark in every slot it visited: the pool never
+// retains more than the budget of the packet it just carried, and a large
+// value that stays in its slot is steady state, not retention.
+func TestRowPoolBoundsRetention(t *testing.T) {
+	const rowsPerPacket, fieldCount = 200, 2
+	big := sqltypes.NewVarBinary(strings.Repeat("b", 8<<20))
+	small := sqltypes.NewVarBinary("s")
+	newPacket := func(bigSlot int) [][]sqltypes.Value {
+		packet := make([][]sqltypes.Value, rowsPerPacket)
+		for i := range packet {
+			packet[i] = []sqltypes.Value{sqltypes.NewInt64(int64(i)), small}
+		}
+		if bigSlot >= 0 {
+			packet[bigSlot][1] = big
+		}
+		return packet
+	}
+
+	var rows []*querypb.Row
+	poolBytes, byteCount, drops := 0, 0, 0
+	for packetNo := range 40 {
+		// Even packets carry the large value, each time in a different slot;
+		// odd packets are all small rows.
+		bigSlot := -1
+		if packetNo%2 == 0 {
+			bigSlot = (packetNo * 37) % rowsPerPacket
+		}
+		rows, poolBytes, byteCount = fillRowPool(rows, poolBytes, newPacket(bigSlot))
+		budget := sqltypes.RowPoolBudget(byteCount, rowsPerPacket, fieldCount)
+		var dropped bool
+		rows, poolBytes, dropped = trimRowPool(rows, poolBytes, budget)
+		if dropped {
+			drops++
+		}
+		require.LessOrEqual(t, poolBytes, budget, "packet %d", packetNo)
+		require.Equal(t, sqltypes.RowPoolRetained(rows), poolBytes, "packet %d: incremental accounting drifted", packetNo)
+	}
+	// A packet of small rows cannot keep the large value around.
+	require.Positive(t, drops)
+	require.LessOrEqual(t, poolBytes, sqltypes.RowPoolMinBytes)
+
+	// The large value staying in its slot is the shape of every packet, so
+	// the pool is never dropped.
+	rows, poolBytes = nil, 0
+	for packetNo := range 10 {
+		rows, poolBytes, byteCount = fillRowPool(rows, poolBytes, newPacket(0))
+		var dropped bool
+		rows, poolBytes, dropped = trimRowPool(rows, poolBytes, sqltypes.RowPoolBudget(byteCount, rowsPerPacket, fieldCount))
+		require.False(t, dropped, "packet %d: pool dropped with a stable large row", packetNo)
+	}
 }

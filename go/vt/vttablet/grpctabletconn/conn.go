@@ -755,7 +755,12 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 		return err
 	}
 	r := binlogdatapb.VStreamRowsResponseFromVTPool()
-	defer r.ReturnToVTPool()
+	defer func() {
+		// Don't hand this stream's row pool, however large it grew, to the
+		// next stream that takes a response from the pool.
+		r.Rows = nil
+		r.ReturnToVTPool()
+	}()
 	for {
 		err := stream.RecvMsg(r)
 		if err != nil {
@@ -767,8 +772,24 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 		if err := send(r); err != nil {
 			return err
 		}
+		r.Rows = trimRowPool(r.Rows)
 		r.ResetVT()
 	}
+}
+
+// trimRowPool bounds what a pooled response's reused rows retain across a
+// stream. RecvMsg decodes every packet into the same *Row slots, and the
+// generated Row.UnmarshalVT appends into Values[:0] and Lengths[:0], so each
+// slot grows to the largest row it has ever held and a long stream retains
+// the sum of those high-water marks (vitessio/vitess#20954). Once that
+// exceeds the budget for the packet the slots just carried, the slice is
+// dropped: an O(1) reset after which the next packet reallocates only what
+// it needs. Call it after send and before ResetVT.
+func trimRowPool(rows []*querypb.Row) []*querypb.Row {
+	if sqltypes.RowPoolRetained(rows) <= sqltypes.RowPoolPacketBudget(rows) {
+		return rows
+	}
+	return nil
 }
 
 // VStreamTables streams rows of a query from the specified starting point.
@@ -798,7 +819,10 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 		return err
 	}
 	r := binlogdatapb.VStreamTablesResponseFromVTPool()
-	defer r.ReturnToVTPool()
+	defer func() {
+		r.Rows = nil // see VStreamRows
+		r.ReturnToVTPool()
+	}()
 	for {
 		err := stream.RecvMsg(r)
 		if err != nil {
@@ -810,6 +834,7 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 		if err := send(r); err != nil {
 			return err
 		}
+		r.Rows = trimRowPool(r.Rows)
 		r.ResetVT()
 	}
 }
