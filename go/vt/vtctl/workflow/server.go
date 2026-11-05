@@ -2701,11 +2701,12 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 	return s.ts.DeleteShard(ctx, keyspace, shard)
 }
 
-// updateShardRecords updates the shard records based on 'from' or 'to' direction.
+// updateShardRecords updates QueryServiceDisabled for the shards based on 'from'
+// or 'to' direction. See topotools.UpdateShardRecords.
 func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string,
-	servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool, logger logutil.Logger,
+	servedType topodatapb.TabletType, isFrom bool, logger logutil.Logger,
 ) (err error) {
-	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, shardTabletRefreshTimeout, logger)
+	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, shardTabletRefreshTimeout, logger)
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
