@@ -464,10 +464,11 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 
 // checkQualifiedSequenceVSchema checks the vschema entries of the backing
 // tables that qualified sequence references name, without searching other
-// keyspaces. A backing table must be defined as a sequence, which a sharded
-// keyspace allows when it's pinned, or be missing from the vschema of an
-// unsharded keyspace, in which case it is marked to be added by
-// prepareTargetSequences. It changes nothing, as it also runs on dry runs.
+// keyspaces. A backing table's keyspace must have one shard with a primary, and
+// the table must be defined as a sequence, which a sharded keyspace allows when
+// it's pinned, or be missing from the vschema of an unsharded keyspace, in which
+// case it is marked to be added by prepareTargetSequences. It changes nothing,
+// as it also runs on dry runs.
 func (ts *trafficSwitcher) checkQualifiedSequenceVSchema(ctx context.Context, sequences map[string]*sequenceMetadata) error {
 	keyspaces := make(map[string]*topo.KeyspaceVSchemaInfo)
 	for _, sm := range sequences {
@@ -482,6 +483,9 @@ func (ts *trafficSwitcher) checkQualifiedSequenceVSchema(ctx context.Context, se
 			if err != nil {
 				return vterrors.Wrapf(err, "failed to get vschema for sequence keyspace %s", keyspace)
 			}
+			if err := ts.checkSequenceKeyspaceShard(ctx, keyspace); err != nil {
+				return err
+			}
 			keyspaces[keyspace] = kvs
 		}
 		found, err := findSequenceInVSchema(kvs, sm.backingTableName)
@@ -494,6 +498,32 @@ func (ts *trafficSwitcher) checkQualifiedSequenceVSchema(ctx context.Context, se
 				keyspace, sm.backingTableName)
 		}
 		sm.registerInVSchema = !found
+	}
+	return nil
+}
+
+// checkSequenceKeyspaceShard checks that a keyspace that qualified sequence
+// references name has one shard, with a primary. Initializing the sequences,
+// after writes are stopped, updates each backing table on the primary of the
+// only shard of its keyspace (see updateSequenceValues), so this refuses the
+// switch before writes are stopped instead.
+func (ts *trafficSwitcher) checkSequenceKeyspaceShard(ctx context.Context, keyspace string) error {
+	// These are the shards that GetOnlyShard counts when the sequences are
+	// initialized.
+	shards, err := ts.TopoServer().FindAllShardsInKeyspace(ctx, keyspace, nil)
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to get the shards of sequence keyspace %s", keyspace)
+	}
+	if len(shards) != 1 {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"sequence keyspace %s has %d shards, but initializing its sequences needs it to have exactly one; update the target auto_increment sequence references to a keyspace with one shard",
+			keyspace, len(shards))
+	}
+	for _, si := range shards {
+		if si.PrimaryAlias == nil {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"sequence keyspace %s does not currently have a primary tablet", keyspace)
+		}
 	}
 	return nil
 }

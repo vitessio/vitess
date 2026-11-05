@@ -283,6 +283,10 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 	// references can name.
 	globalKeyspace := "global-ks"
 	env.addTablet(t, ctx, 300, globalKeyspace, "0", topodatapb.TabletType_PRIMARY, true)
+	// An unsharded keyspace whose only shard has no primary.
+	noPrimaryKeyspace := "no-primary-ks"
+	env.addTablet(t, ctx, 400, noPrimaryKeyspace, "0", topodatapb.TabletType_REPLICA, true)
+	require.NoError(t, env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: noPrimaryKeyspace, Keyspace: &vschema.Keyspace{}}))
 
 	env.tmc.schema = map[string]*tabletmanagerdatapb.SchemaDefinition{
 		unescapedTable: {
@@ -576,19 +580,24 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
+			// The sharded keyspace has one shard, so only the missing
+			// sequence is refused.
 			name: "qualified sequence in a sharded keyspace",
+			globalVSchema: &vschema.Keyspace{
+				Sharded: true,
+			},
 			targetVSchema: &vschema.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschema.Table{
 					table: {
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "my-col",
-							Sequence: fmt.Sprintf("`%s`.`my-seq1`", targetKeyspace.KeyspaceName),
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
 						},
 					},
 				},
 			},
-			err:     "sharded keyspace targetks doesn't define sequence my-seq1 in its vschema; define it there as a pinned sequence, or update the target auto_increment sequence reference to an unsharded keyspace",
+			err:     "sharded keyspace global-ks doesn't define sequence my-seq1 in its vschema; define it there as a pinned sequence, or update the target auto_increment sequence reference to an unsharded keyspace",
 			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
@@ -629,9 +638,47 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 		},
 		{
-			// A sharded keyspace can hold a pinned sequence, which is left as
-			// it is.
+			// A sharded keyspace with one shard can hold a pinned sequence,
+			// which is left as it is.
 			name: "qualified pinned sequence in a sharded keyspace",
+			globalVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence", Pinned: "00"},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+				},
+			},
+		},
+		{
+			// Initializing the sequence reads and updates the backing table on
+			// the only shard's primary, so a pinned sequence in a keyspace with
+			// two shards is refused before writes are stopped.
+			name: "qualified pinned sequence in a keyspace with two shards",
 			targetVSchema: &vschema.Keyspace{
 				Sharded: true,
 				Tables: map[string]*vschema.Table{
@@ -644,21 +691,27 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			want: map[string]*sequenceMetadata{
-				"my-seq1": {
-					backingTableName:     "my-seq1",
-					backingTableKeyspace: targetKeyspace.KeyspaceName,
-					backingTableDBName:   "vt_" + targetKeyspace.KeyspaceName,
-					usingTableName:       unescapedTable,
-					usingTableDBName:     "vt_targetks",
-					usingTableDefinition: &vschema.Table{
+			err:     "sequence keyspace targetks has 2 shards, but initializing its sequences needs it to have exactly one; update the target auto_increment sequence references to a keyspace with one shard",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// Initializing the sequence updates the backing table on the
+			// primary, so a keyspace without one is refused before writes are
+			// stopped.
+			name: "qualified sequence in a keyspace with no primary",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
 						AutoIncrement: &vschema.AutoIncrement{
 							Column:   "my-col",
-							Sequence: targetKeyspace.KeyspaceName + ".my-seq1",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", noPrimaryKeyspace),
 						},
 					},
 				},
 			},
+			err:     "sequence keyspace no-primary-ks does not currently have a primary tablet",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
 			name: "auto_increment replaced with sequence",
