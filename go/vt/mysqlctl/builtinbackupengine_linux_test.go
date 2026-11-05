@@ -184,6 +184,7 @@ func TestRestoreChunksWriteMode(t *testing.T) {
 			cnf := &Mycnf{DataDir: t.TempDir()}
 			if tt.mode == restoreWriteModeDirect && tt.expectErr == "" {
 				requireDirectIO(t, cnf.DataDir)
+				requireFallocate(t, cnf.DataDir)
 			}
 			setRestoreWriteMode(t, tt.mode)
 
@@ -284,7 +285,7 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 		expectFailedPrecondition bool
 	}{
 		{
-			name: "buffered mode leaves the file sparse",
+			name: "buffered mode does not preallocate the file",
 			mode: restoreWriteModeBuffered,
 		},
 		{
@@ -316,10 +317,16 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 				requireFallocate(t, cnf.DataDir)
 			}
 			setRestoreWriteMode(t, tt.mode)
-			if tt.fallocateErr != nil {
-				oldFallocate := fallocate
-				t.Cleanup(func() { fallocate = oldFallocate })
-				fallocate = func(*os.File, int64) error { return tt.fallocateErr }
+			// Counts the preallocations, and fails them with fallocateErr when it is set.
+			var fallocateCalls int
+			oldFallocate := fallocate
+			t.Cleanup(func() { fallocate = oldFallocate })
+			fallocate = func(f *os.File, size int64) error {
+				fallocateCalls++
+				if tt.fallocateErr != nil {
+					return tt.fallocateErr
+				}
+				return oldFallocate(f, size)
 			}
 
 			fes := []FileEntry{{Base: backupData, Name: "vt_test/t1.ibd", Chunks: computeFileChunks(0, fileSize, 1024*1024)}}
@@ -337,12 +344,15 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 			fi, err := os.Stat(path.Join(cnf.DataDir, fes[0].Name))
 			require.NoError(t, err)
 			assert.EqualValues(t, fileSize, fi.Size())
-			allocated := fi.Sys().(*syscall.Stat_t).Blocks * 512
-			if tt.expectAllocated {
-				assert.GreaterOrEqual(t, allocated, int64(fileSize), "file should be preallocated")
-			} else {
-				assert.Less(t, allocated, int64(fileSize), "file should be sparse")
+			if !tt.expectAllocated {
+				// Whether a truncated file takes up blocks depends on the filesystem, so this only
+				// checks that the file wasn't preallocated.
+				assert.Zero(t, fallocateCalls, "the file must not be preallocated")
+				return
 			}
+			assert.Equal(t, 1, fallocateCalls, "the file must be preallocated once")
+			allocated := fi.Sys().(*syscall.Stat_t).Blocks * 512
+			assert.GreaterOrEqual(t, allocated, int64(fileSize), "file should be preallocated")
 		})
 	}
 }
