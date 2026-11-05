@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -363,7 +364,12 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 	}
 	tablets := maps.Values(tabletMap)
 
-	log.Info(fmt.Sprintf("Gathering tablet replication status for: %v", tablets))
+	aliases := make([]string, 0, len(tablets))
+	for _, ti := range tablets {
+		aliases = append(aliases, ti.AliasString())
+	}
+	slices.Sort(aliases)
+	log.Info("Gathering tablet replication status", slog.Any("tablets", aliases))
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	result := make([]*replicationdatapb.Status, len(tablets))

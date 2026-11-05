@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -199,7 +200,9 @@ func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context
 				allErrors.RecordError(err)
 			} else {
 				if qr == nil {
-					log.Info(fmt.Sprintf("Callback returned nil result for tablet %s-%d", primary.Alias.Cell, primary.Alias.Uid))
+					log.Info("Callback returned nil result for tablet",
+						slog.String("workflow", vx.workflow),
+						slog.String("tablet", topoproto.TabletAliasString(primary.Alias)))
 					return // no result
 				}
 				mu.Lock()
