@@ -34,12 +34,13 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-// cellInfoFactory wraps a memorytopo.Factory, counting the global reads of CellInfo. Once armed, the next such
-// read waits for release, or for its ctx to be done like a real topo read, after it reads the CellInfo, or
-// before if beforeRead is set.
+// cellInfoFactory wraps a memorytopo.Factory, counting the global reads of CellInfo and the global listings of
+// the cells. Once armed, the next such read waits for release, or for its ctx to be done like a real topo read,
+// after it reads, or before if beforeRead is set.
 type cellInfoFactory struct {
 	*memorytopo.Factory
 	reads   atomic.Int64
+	lists   atomic.Int64
 	armed   chan struct{}
 	paused  chan struct{}
 	release chan struct{}
@@ -140,6 +141,24 @@ func (c *cellInfoConn) Get(ctx context.Context, filePath string) ([]byte, topo.V
 		return nil, nil, pauseErr
 	}
 	return contents, version, err
+}
+
+func (c *cellInfoConn) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
+	if dirPath != topo.CellsPath {
+		return c.Conn.ListDir(ctx, dirPath, full)
+	}
+	c.factory.lists.Add(1)
+	if c.factory.beforeRead {
+		if err := c.pause(ctx); err != nil {
+			return nil, err
+		}
+		return c.Conn.ListDir(ctx, dirPath, full)
+	}
+	entries, err := c.Conn.ListDir(ctx, dirPath, full)
+	if pauseErr := c.pause(ctx); pauseErr != nil {
+		return nil, pauseErr
+	}
+	return entries, err
 }
 
 // pause waits for release if the factory is armed and this is the first read since.
@@ -481,6 +500,131 @@ func TestStaleTolerantViewAfterClose(t *testing.T) {
 	_, err = ts.CellReader(ctx, "zone1")
 	assert.True(t, topo.IsErrType(err, topo.Interrupted), "got %v", err)
 	assert.Equal(t, before, factory.reads.Load())
+}
+
+// TestStaleTolerantViewCachesCellNames verifies that the StaleTolerantView's FindAllTabletAliasesInShard lists
+// the cells from the global topo once per cache TTL rather than on every call, as the Server's does, and on
+// every call with the TTL at 0.
+func TestStaleTolerantViewCachesCellNames(t *testing.T) {
+	ctx := t.Context()
+	ts, _, factory := newCellInfoServer(t, time.Hour)
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+	view := ts.StaleTolerantView()
+
+	before := factory.lists.Load()
+	for range 3 {
+		_, err := view.FindAllTabletAliasesInShard(ctx, "ks", "0")
+		require.NoError(t, err)
+	}
+	assert.Equal(t, before+1, factory.lists.Load(), "the cells were listed more than once within the TTL")
+
+	before = factory.lists.Load()
+	for range 3 {
+		_, err := ts.FindAllTabletAliasesInShard(ctx, "ks", "0")
+		require.NoError(t, err)
+	}
+	assert.Equal(t, before+3, factory.lists.Load(), "the Server's FindAllTabletAliasesInShard did not list the cells on every call")
+
+	ts.SetCellInfoCacheTTL(0)
+	before = factory.lists.Load()
+	for range 3 {
+		_, err := view.FindAllTabletAliasesInShard(ctx, "ks", "0")
+		require.NoError(t, err)
+	}
+	assert.Equal(t, before+3, factory.lists.Load(), "with the TTL at 0, the cells were not listed on every call")
+}
+
+// TestStaleTolerantViewCellNamesFollowThisProcess verifies that a cell added by another process is missing from
+// the cached list of cells until the TTL, while a cell this process adds or deletes is reflected on the next
+// call.
+func TestStaleTolerantViewCellNamesFollowThisProcess(t *testing.T) {
+	ctx := t.Context()
+	ts, other, factory := newCellInfoServer(t, time.Hour)
+
+	names, err := ts.CellNames(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []string{"zone1"}, names)
+
+	require.NoError(t, other.CreateCellInfo(ctx, "zone2", &topodatapb.CellInfo{Root: "/zone2"}))
+	before := factory.lists.Load()
+	names, err = ts.CellNames(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"zone1"}, names, "another process's new cell appeared before the TTL")
+	assert.Equal(t, before, factory.lists.Load())
+
+	require.NoError(t, ts.CreateCellInfo(ctx, "zone3", &topodatapb.CellInfo{Root: "/zone3"}))
+	names, err = ts.CellNames(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"zone1", "zone2", "zone3"}, names, "this process's CreateCellInfo did not expire the list")
+
+	require.NoError(t, ts.DeleteCellInfo(ctx, "zone1", true /*force*/))
+	names, err = ts.CellNames(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"zone2", "zone3"}, names, "this process's DeleteCellInfo did not expire the list")
+
+	// The caller cannot change the cached list through the slice it gets.
+	names[0] = "changed"
+	names, err = ts.CellNames(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"zone2", "zone3"}, names)
+}
+
+// TestStaleTolerantViewCellNamesExpiryDuringRead verifies that when this process adds a cell while the
+// StaleTolerantView is listing the cells, the view does not mark the list it read as fresh, so the next call
+// lists the cells again and finds the new one.
+func TestStaleTolerantViewCellNamesExpiryDuringRead(t *testing.T) {
+	ctx := t.Context()
+	ts, _, factory := newCellInfoServer(t, time.Hour)
+
+	close(factory.armed)
+	done := make(chan []string, 1)
+	go func() {
+		names, err := ts.CellNames(ctx)
+		assert.NoError(t, err)
+		done <- names
+	}()
+	<-factory.paused
+
+	require.NoError(t, ts.CreateCellInfo(ctx, "zone2", &topodatapb.CellInfo{Root: "/zone2"}))
+	close(factory.release)
+	assert.Equal(t, []string{"zone1"}, <-done, "the paused call returned the list it read")
+
+	names, err := ts.CellNames(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"zone1", "zone2"}, names, "the list read before the change was reused")
+}
+
+// TestStaleTolerantViewCellNamesAfterClose verifies that once the Server is closed, the StaleTolerantView's
+// FindAllTabletAliasesInShard fails with Interrupted, whether or not the list of cells is still cached, rather
+// than reading from the closed global connection.
+func TestStaleTolerantViewCellNamesAfterClose(t *testing.T) {
+	ctx := t.Context()
+	for _, tc := range []struct {
+		name   string
+		expire bool
+	}{
+		{name: "cached list"},
+		{name: "expired list", expire: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, _, factory := newCellInfoServer(t, time.Hour)
+			require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+			require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+			view := ts.StaleTolerantView()
+			_, err := view.FindAllTabletAliasesInShard(ctx, "ks", "0")
+			require.NoError(t, err)
+			if tc.expire {
+				ts.ExpireCellNames()
+			}
+
+			ts.Close()
+			before := factory.lists.Load()
+			_, err = view.FindAllTabletAliasesInShard(ctx, "ks", "0")
+			assert.True(t, topo.IsErrType(err, topo.Interrupted), "got %v", err)
+			assert.Equal(t, before, factory.lists.Load())
+		})
+	}
 }
 
 // TestStaleTolerantViewConcurrentRepoints runs StaleTolerantView reads, ConnForCell calls and re-points of
