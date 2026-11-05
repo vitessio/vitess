@@ -595,20 +595,36 @@ func TestStaleTolerantViewCellNamesExpiryDuringRead(t *testing.T) {
 	assert.Equal(t, []string{"zone1", "zone2"}, names, "the list read before the change was reused")
 }
 
-// TestStaleTolerantViewCellNamesAfterClose verifies that once the Server is closed, listing the cells fails
-// rather than reading from the closed global connection.
+// TestStaleTolerantViewCellNamesAfterClose verifies that once the Server is closed, the StaleTolerantView's
+// FindAllTabletAliasesInShard fails with Interrupted, whether or not the list of cells is still cached, rather
+// than reading from the closed global connection.
 func TestStaleTolerantViewCellNamesAfterClose(t *testing.T) {
 	ctx := t.Context()
-	ts, _, factory := newCellInfoServer(t, time.Hour)
+	for _, tc := range []struct {
+		name   string
+		expire bool
+	}{
+		{name: "cached list"},
+		{name: "expired list", expire: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, _, factory := newCellInfoServer(t, time.Hour)
+			require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+			require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+			view := ts.StaleTolerantView()
+			_, err := view.FindAllTabletAliasesInShard(ctx, "ks", "0")
+			require.NoError(t, err)
+			if tc.expire {
+				ts.ExpireCellNames()
+			}
 
-	_, err := ts.CellNames(ctx)
-	require.NoError(t, err)
-	ts.ExpireCellNames()
-	ts.Close()
-	before := factory.lists.Load()
-	_, err = ts.CellNames(ctx)
-	assert.True(t, topo.IsErrType(err, topo.Interrupted), "got %v", err)
-	assert.Equal(t, before, factory.lists.Load())
+			ts.Close()
+			before := factory.lists.Load()
+			_, err = view.FindAllTabletAliasesInShard(ctx, "ks", "0")
+			assert.True(t, topo.IsErrType(err, topo.Interrupted), "got %v", err)
+			assert.Equal(t, before, factory.lists.Load())
+		})
+	}
 }
 
 // TestStaleTolerantViewConcurrentRepoints runs StaleTolerantView reads, ConnForCell calls and re-points of

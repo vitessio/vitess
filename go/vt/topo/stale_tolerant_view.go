@@ -98,14 +98,15 @@ func (ts *Server) cellNamesFor(ctx context.Context) ([]string, error) {
 		ts.mu.Unlock()
 		return ts.GetCellInfoNames(ctx)
 	}
+	// Close leaves the cached list in place, so check for it first: the caller would read the closed topo next.
+	if ts.closed {
+		ts.mu.Unlock()
+		return nil, NewError(Interrupted, CellsPath)
+	}
 	read := ts.cellNames
 	if !read.readStart.IsZero() && !read.expired && time.Since(read.readStart) < ts.cellInfoCacheTTL {
 		ts.mu.Unlock()
 		return slices.Clone(read.names), nil
-	}
-	if ts.closed {
-		ts.mu.Unlock()
-		return nil, NewError(Interrupted, CellsPath)
 	}
 	generation := ts.cellNamesGeneration
 	global := ts.globalCell
