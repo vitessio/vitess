@@ -18,6 +18,7 @@ package zk2topo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -285,12 +286,18 @@ func DeleteRecursive(ctx context.Context, zconn *ZkConn, zkPath string, version 
 	return err
 }
 
+// errQueueLockHeld is returned by obtainQueueLock when wait is false
+// and another node holds the lock.
+var errQueueLockHeld = errors.New("obtainQueueLock: lock is held by another node")
+
 // obtainQueueLock waits until we hold the lock in the provided path.
 // The lexically lowest node is the lock holder - verify that this
 // path holds the lock.  Call this queue-lock because the semantics are
 // a hybrid.  Normal Zookeeper locks make assumptions about sequential
 // numbering that don't hold when the data in a lock is modified.
-func obtainQueueLock(ctx context.Context, conn *ZkConn, zkPath string) error {
+// If wait is false, it returns errQueueLockHeld instead of waiting
+// when another node holds the lock.
+func obtainQueueLock(ctx context.Context, conn *ZkConn, zkPath string, wait bool) error {
 	queueNode := path.Dir(zkPath)
 	lockNode := path.Base(zkPath)
 
@@ -308,6 +315,9 @@ func obtainQueueLock(ctx context.Context, conn *ZkConn, zkPath string) error {
 		// If we are the first node, we got the lock.
 		if children[0] == lockNode {
 			return nil
+		}
+		if !wait {
+			return errQueueLockHeld
 		}
 
 		// If not, find the previous node.
