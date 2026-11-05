@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -3931,14 +3932,24 @@ func TestReplicationHooksUseCallerContext(t *testing.T) {
 			root := t.TempDir()
 			require.NoError(t, os.Mkdir(filepath.Join(root, "vthook"), 0o700))
 			t.Setenv("VTROOT", root)
-			// The hook records its PID, which sleep keeps, so that cleanup can
-			// kill a hook the test failed to cancel.
+			// The hook records its PID, which sleep keeps, and its start time,
+			// so that cleanup can kill a hook the test failed to cancel, and not
+			// another process that reused its PID.
 			marker := filepath.Join(root, "entered")
-			require.NoError(t, os.WriteFile(filepath.Join(root, "vthook", tc.hook), []byte("#!/bin/sh\necho $$ > "+marker+"\nexec sleep 60\n"), 0o700))
+			require.NoError(t, os.WriteFile(filepath.Join(root, "vthook", tc.hook), []byte(`#!/bin/sh
+echo "$$ $(ps -o lstart= -p $$)" > `+marker+`
+exec sleep 60
+`), 0o700))
 			t.Cleanup(func() {
 				data, _ := os.ReadFile(marker)
-				if pid, err := strconv.Atoi(strings.TrimSpace(string(data))); err == nil {
-					_ = syscall.Kill(pid, syscall.SIGKILL)
+				pid, start, ok := strings.Cut(strings.TrimSpace(string(data)), " ")
+				n, err := strconv.Atoi(pid)
+				if !ok || err != nil {
+					return
+				}
+				out, err := exec.Command("ps", "-o", "lstart=", "-p", pid).Output()
+				if err == nil && strings.TrimSpace(string(out)) == strings.TrimSpace(start) {
+					_ = syscall.Kill(n, syscall.SIGKILL)
 				}
 			})
 			db := fakesqldb.New(t)
@@ -3970,12 +3981,16 @@ func TestReplicationHooksUseCallerContext(t *testing.T) {
 				return err == nil
 			}, 30*time.Second, 10*time.Millisecond, "the hook did not start")
 			cancel()
-			select {
-			case err := <-returned:
-				require.ErrorContains(t, err, "failed(-7)")
-			case <-time.After(30 * time.Second):
-				require.FailNow(t, "the replication hook ignored the caller's context")
-			}
+			var err error
+			require.Eventually(t, func() bool {
+				select {
+				case err = <-returned:
+					return true
+				default:
+					return false
+				}
+			}, 30*time.Second, 10*time.Millisecond, "the replication hook ignored the caller's context")
+			require.ErrorContains(t, err, "failed(-7)")
 			stop, start := "STOP REPLICA", "START REPLICA"
 			if tc.receiver {
 				stop, start = "STOP REPLICA IO_THREAD", "START REPLICA IO_THREAD"

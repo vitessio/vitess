@@ -18,7 +18,6 @@ package hook
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -69,26 +68,57 @@ func TestExecuteContext(t *testing.T) {
 	assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
 }
 
-// installHook writes a shell hook to $VTROOT/vthook, with $MARKER and $PIDS in
-// script replaced by a marker file to touch and a file to append the PIDs of
-// the hook's children to. The children are killed on cleanup.
+// processStart returns the start time of process pid, or "" if there is no
+// such process. A PID with a different start time is another process.
+func processStart(pid int) string {
+	out, err := exec.Command("ps", "-o", "lstart=", "-p", strconv.Itoa(pid)).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// recordProcess is the shell code that writes "<pid> <start time>" for the
+// process whose PID it is given.
+func recordProcess(pid string) string {
+	return `echo "` + pid + ` $(ps -o lstart= -p ` + pid + `)"`
+}
+
+// recordedProcess returns the PID and start time that recordProcess wrote in
+// line.
+func recordedProcess(line string) (int, string, bool) {
+	pid, start, ok := strings.Cut(strings.TrimSpace(line), " ")
+	n, err := strconv.Atoi(pid)
+	return n, strings.TrimSpace(start), ok && err == nil
+}
+
+// killChildren kills the hook children that the hook installed with marker
+// recorded, and that are still running.
+func killChildren(marker string) {
+	data, _ := os.ReadFile(path.Join(path.Dir(marker), "pids"))
+	for line := range strings.Lines(string(data)) {
+		// A PID can be reused once its process ends: kill it only if it is
+		// still the recorded child.
+		if pid, start, ok := recordedProcess(line); ok && start != "" && processStart(pid) == start {
+			_ = syscall.Kill(pid, syscall.SIGKILL)
+		}
+	}
+}
+
+// installHook writes a shell hook to $VTROOT/vthook, in a VTROOT of its own,
+// with $MARKER and $PIDS in script replaced by a marker file to touch and a
+// file to record the hook's children in, with `echo $! >> $PIDS`. Children
+// that are still running are killed on cleanup.
 func installHook(t *testing.T, name, script string) (marker string) {
-	vtroot, err := vtenv.VtRoot()
-	require.NoError(t, err)
+	vtroot := t.TempDir()
+	t.Setenv("VTROOT", vtroot)
+	require.NoError(t, os.Mkdir(path.Join(vtroot, "vthook"), 0o700))
 	dir := t.TempDir()
 	marker, pids := path.Join(dir, "marker"), path.Join(dir, "pids")
-	t.Cleanup(func() {
-		data, _ := os.ReadFile(pids)
-		for field := range strings.FieldsSeq(string(data)) {
-			if pid, err := strconv.Atoi(field); err == nil {
-				_ = syscall.Kill(pid, syscall.SIGKILL)
-			}
-		}
-	})
-	hookPath := path.Join(vtroot, "vthook", name)
+	t.Cleanup(func() { killChildren(marker) })
+	script = strings.ReplaceAll(script, "echo $! >> $PIDS", recordProcess("$!")+" >> $PIDS")
 	script = strings.NewReplacer("$MARKER", marker, "$PIDS", pids).Replace(script)
-	require.NoError(t, os.WriteFile(hookPath, []byte("#!/bin/sh\n"+script), 0o755))
-	t.Cleanup(func() { require.NoError(t, os.Remove(hookPath)) })
+	require.NoError(t, os.WriteFile(path.Join(vtroot, "vthook", name), []byte("#!/bin/sh\n"+script), 0o755))
 	return marker
 }
 
@@ -106,19 +136,21 @@ func TestExecuteOptionalContext(t *testing.T) {
 		go func() { returned <- NewSimpleHook(name).ExecuteOptionalContext(ctx) }()
 		return returned
 	}
-	requireReturns := func(t *testing.T, returned chan error) error {
+	requireReturns := func(t *testing.T, returned chan error) (err error) {
 		t.Helper()
-		select {
-		case err := <-returned:
-			return err
-		case <-time.After(30 * time.Second):
-			require.FailNow(t, "the hook call did not return")
-			return nil
-		}
+		require.Eventually(t, func() bool {
+			select {
+			case err = <-returned:
+				return true
+			default:
+				return false
+			}
+		}, 30*time.Second, 10*time.Millisecond, "the hook call did not return")
+		return err
 	}
 
 	t.Run("canceled running hook", func(t *testing.T) {
-		marker := installHook(t, "running_hook", "touch $MARKER\nexec sleep 60\n")
+		marker := installHook(t, "running_hook", "echo diagnostics >&2\ntouch $MARKER\nexec sleep 60\n")
 		ctx, cancel := context.WithCancel(t.Context())
 		t.Cleanup(cancel)
 		returned := runAsync(ctx, "running_hook")
@@ -127,6 +159,9 @@ func TestExecuteOptionalContext(t *testing.T) {
 		err := requireReturns(t, returned)
 		require.ErrorContains(t, err, "failed(-7)")
 		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+		// Killing the hook closed its output, which is complete.
+		require.ErrorContains(t, err, "diagnostics")
+		assert.NotContains(t, err.Error(), "the output is incomplete")
 	})
 
 	t.Run("running hook past its deadline", func(t *testing.T) {
@@ -167,7 +202,8 @@ func TestExecuteOptionalContext(t *testing.T) {
 		assert.Contains(t, hr.Stderr, "the output is incomplete", "a failed hook's output was cut off without a warning")
 	})
 
-	// The context ends after the hook exited, while a child holds its output.
+	// The context ends after the hook exited, while a child holds its output:
+	// the hook keeps its exit status.
 	for _, tc := range []struct {
 		exitCode int
 		wantErr  string
@@ -176,19 +212,24 @@ func TestExecuteOptionalContext(t *testing.T) {
 		{exitCode: 17, wantErr: "failed(17)"},
 	} {
 		t.Run(fmt.Sprintf("hook that exited %d before the cancellation", tc.exitCode), func(t *testing.T) {
-			marker := installHook(t, "exited_hook", fmt.Sprintf("sleep 60 &\necho $! >> $PIDS\necho $$ > $MARKER\nexit %d\n", tc.exitCode))
+			marker := installHook(t, "exited_hook", fmt.Sprintf("sleep 60 &\necho $! >> $PIDS\n%s > $MARKER\nexit %d\n", recordProcess("$$"), tc.exitCode))
 			ctx, cancel := context.WithCancel(t.Context())
 			t.Cleanup(cancel)
-			returned := runAsync(ctx, "exited_hook")
+			// The output wait is long enough that only the child's exit ends it.
+			returned := make(chan error, 1)
+			go func() {
+				h := NewSimpleHook("exited_hook")
+				returned <- h.optionalError(h.execute(ctx, time.Minute))
+			}()
 			waitForFile(t, marker)
 			require.Eventually(t, func() bool {
 				data, err := os.ReadFile(marker)
 				if err != nil {
 					return false
 				}
-				pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+				pid, start, ok := recordedProcess(string(data))
 				// The hook has exited and been reaped.
-				return err == nil && errors.Is(syscall.Kill(pid, 0), syscall.ESRCH)
+				return ok && start != "" && processStart(pid) != start
 			}, 30*time.Second, time.Millisecond)
 			select {
 			case err := <-returned:
@@ -196,6 +237,7 @@ func TestExecuteOptionalContext(t *testing.T) {
 			default:
 			}
 			cancel()
+			killChildren(marker)
 			err := requireReturns(t, returned)
 			if tc.wantErr == "" {
 				require.NoError(t, err)
