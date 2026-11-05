@@ -18,6 +18,7 @@ package throttler
 
 import (
 	"fmt"
+	"log/slog"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -618,7 +619,10 @@ func (m *MaxReplicationLagModule) decreaseAndGuessRate(r *Result, now time.Time,
 	d := lagRecordNow.time.Sub(lagRecordBefore.time)
 	lagDifference := time.Duration(lagRecordNow.lag()-lagRecordBefore.lag()) * time.Second
 	if lagDifference > d {
-		log.Error(fmt.Sprintf("Replication lag increase is higher than the elapsed time: %v > %v. This should not happen. Replication Lag Data points: Before: %+v Now: %+v", lagDifference, d, lagRecordBefore, lagRecordNow))
+		log.Error("Replication lag increase is higher than the elapsed time. This should not happen.",
+			slog.Duration("lag_difference", lagDifference), slog.Duration("elapsed", d),
+			slog.String("tablet", topoproto.TabletAliasString(lagRecordNow.Tablet.GetAlias())),
+			slog.Int64("previous_replication_lag_seconds", lagBefore), slog.Int64("replication_lag_seconds", lagNow))
 		d = lagDifference
 	}
 
@@ -637,7 +641,9 @@ func (m *MaxReplicationLagModule) guessReplicationRate(r *Result, avgPrimaryRate
 	// from the relative change in the replication lag.
 	avgReplicationRate := avgPrimaryRate * (d - lagDifference).Seconds() / d.Seconds()
 	if avgReplicationRate <= 0 {
-		log.Warn(fmt.Sprintf("guessed Replication rate was <= 0 (%v). Primary rate: %v d: %.1f lag difference: %.1f", avgReplicationRate, avgPrimaryRate, d.Seconds(), lagDifference.Seconds()))
+		log.Warn("guessed Replication rate was <= 0",
+			slog.Float64("guessed_replication_rate", avgReplicationRate), slog.Float64("primary_rate", avgPrimaryRate),
+			slog.Duration("elapsed", d), slog.Duration("lag_difference", lagDifference))
 		avgReplicationRate = 1
 	}
 	r.PrimaryRate = int64(avgPrimaryRate)

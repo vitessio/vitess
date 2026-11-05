@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"sync"
 	"sync/atomic"
@@ -226,7 +227,7 @@ func (rp *ResourcePool) reopen() {
 	rp.reopenMutex.Lock() // Avoid race, since we can refresh asynchronously
 	defer rp.reopenMutex.Unlock()
 	capacity := int(rp.capacity.Load())
-	log.Info(fmt.Sprintf("Draining and reopening resource pool with capacity %d by request", capacity))
+	log.Info("Draining and reopening resource pool by request", slog.Int("capacity", capacity))
 	rp.Close()
 	_ = rp.SetCapacity(capacity)
 	if rp.idleTimer != nil {

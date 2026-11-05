@@ -20,12 +20,14 @@ package syslogger
 
 import (
 	"errors"
+	"log/slog"
 	"log/syslog"
 	"testing"
 
-	"vitess.io/vitess/go/event"
-
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 type TestEvent struct {
@@ -77,54 +79,41 @@ func TestSyslog(t *testing.T) {
 // TestBadWriter verifies we are still triggering (to normal logs) if
 // the syslog connection failed
 func TestBadWriter(t *testing.T) {
-	tl := NewTestLogger()
-	defer tl.Close()
-
+	logs := logtest.Capture(t, slog.LevelInfo)
 	writer = nil
 	wantMsg := "testing message"
-	wantLevel := "ERROR"
-	ev := &TestEvent{priority: syslog.LOG_ALERT, message: wantMsg}
-	event.Dispatch(ev)
-	assert.Contains(t, tl.getLog().msg, wantMsg)
-	assert.Contains(t, tl.getLog().level, wantLevel)
-
-	ev = &TestEvent{priority: syslog.LOG_CRIT, message: wantMsg}
-	event.Dispatch(ev)
-	assert.Contains(t, tl.getLog().level, wantLevel)
-
-	ev = &TestEvent{priority: syslog.LOG_ERR, message: wantMsg}
-	event.Dispatch(ev)
-	assert.Contains(t, tl.getLog().level, wantLevel)
-
-	ev = &TestEvent{priority: syslog.LOG_EMERG, message: wantMsg}
-	event.Dispatch(ev)
-	assert.Contains(t, tl.getLog().level, wantLevel)
-
-	wantLevel = "WARNING"
-	ev = &TestEvent{priority: syslog.LOG_WARNING, message: wantMsg}
-	event.Dispatch(ev)
-	assert.Contains(t, tl.getLog().level, wantLevel)
-
-	wantLevel = "INFO"
-	ev = &TestEvent{priority: syslog.LOG_INFO, message: wantMsg}
-	event.Dispatch(ev)
-	assert.Contains(t, tl.getLog().level, wantLevel)
-
-	ev = &TestEvent{priority: syslog.LOG_NOTICE, message: wantMsg}
-	event.Dispatch(ev)
-	assert.Contains(t, tl.getLog().level, wantLevel)
-
-	ev = &TestEvent{priority: syslog.LOG_DEBUG, message: wantMsg}
-	event.Dispatch(ev)
-	assert.Contains(t, tl.getLog().level, wantLevel)
-	assert.True(t, ev.triggered)
+	for _, tc := range []struct {
+		priority syslog.Priority
+		level    string
+	}{
+		{syslog.LOG_ALERT, "ERROR"},
+		{syslog.LOG_CRIT, "ERROR"},
+		{syslog.LOG_ERR, "ERROR"},
+		{syslog.LOG_EMERG, "ERROR"},
+		{syslog.LOG_WARNING, "WARN"},
+		{syslog.LOG_INFO, "INFO"},
+		{syslog.LOG_NOTICE, "INFO"},
+		{syslog.LOG_DEBUG, "INFO"},
+	} {
+		logs.Reset()
+		ev := &TestEvent{priority: tc.priority, message: wantMsg}
+		event.Dispatch(ev)
+		assert.True(t, ev.triggered)
+		record := logs.Record(t, "syslog event")
+		assert.Equal(t, tc.level, record["level"])
+		assert.Equal(t, wantMsg, record["syslog_message"])
+	}
 }
 
-// TestWriteError checks that we don't panic on a write error.
+// TestWriteError checks that we don't panic on a write error, and log it.
 func TestWriteError(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	writer = &fakeWriter{err: errors.New("forced error")}
 
 	event.Dispatch(&TestEvent{priority: syslog.LOG_EMERG})
+	record := logs.Record(t, "can't write syslog event")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "forced error", record["error"])
 }
 
 func TestInvalidSeverity(t *testing.T) {
