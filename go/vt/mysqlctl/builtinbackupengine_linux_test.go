@@ -25,6 +25,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 
@@ -355,6 +356,34 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 			assert.GreaterOrEqual(t, allocated, int64(fileSize), "file should be preallocated")
 		})
 	}
+}
+
+// TestBackupRestoreWithManyChunksDirect runs the backup and restore of TestBackupRestoreWithManyChunks
+// through ExecuteBackup and ExecuteRestore with --builtinbackup-restore-write-mode=direct, and checks
+// that every chunk is written with O_DIRECT.
+func TestBackupRestoreWithManyChunksDirect(t *testing.T) {
+	backupRoot := t.TempDir()
+	requireDirectIO(t, backupRoot)
+	requireFallocate(t, backupRoot)
+	setRestoreWriteMode(t, restoreWriteModeDirect)
+
+	// Only the restore opens files through openFile in this test: the destinations of the chunks.
+	var directOpens, bufferedOpens atomic.Int32
+	oldOpenFile := openFile
+	t.Cleanup(func() { openFile = oldOpenFile })
+	openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		if flag&unix.O_DIRECT != 0 {
+			directOpens.Add(1)
+		} else if flag&(os.O_WRONLY|os.O_RDWR) != 0 {
+			bufferedOpens.Add(1)
+		}
+		return oldOpenFile(name, flag, perm)
+	}
+
+	backupRestoreWithManyChunks(t, backupRoot)
+
+	assert.Zero(t, bufferedOpens.Load(), "no chunk may be written without O_DIRECT")
+	assert.GreaterOrEqual(t, directOpens.Load(), int32(256), "each of the 256 chunks must be written with O_DIRECT")
 }
 
 func directIOEnabled(t *testing.T, f *os.File) bool {

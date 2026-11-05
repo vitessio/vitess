@@ -743,6 +743,17 @@ func newBackupTestMysqld(t *testing.T) *FakeMysqlDaemon {
 // fan-out without requiring the large file sizes that the 4MiB minimum would
 // impose.
 func TestBackupRestoreWithManyChunks(t *testing.T) {
+	backupRoot := t.TempDir()
+	bm := backupRestoreWithManyChunks(t, backupRoot)
+
+	// A backup without binlogs restores none and writes no binlog index.
+	assert.False(t, bm.IncludesBinlogs)
+	assert.NoFileExists(t, path.Join(backupRoot, "binlog.index"))
+}
+
+// backupRestoreWithManyChunks backs up a 16MiB file in 256 chunks to file backup storage under
+// backupRoot, restores it, checks that the restored file matches and returns the manifest.
+func backupRestoreWithManyChunks(t *testing.T, backupRoot string) *BackupManifest {
 	ctx := context.Background()
 
 	const (
@@ -765,7 +776,6 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	minBackupFileChunkSize = chunkSize
 
 	// Create a single 16MiB file filled with random (incompressible) data.
-	backupRoot := t.TempDir()
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
 	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
@@ -849,10 +859,7 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	restoredData, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
-
-	// A backup without binlogs restores none and writes no binlog index.
-	assert.False(t, bm.IncludesBinlogs)
-	assert.NoFileExists(t, path.Join(backupRoot, "binlog.index"))
+	return bm
 }
 
 // TestBackupRestoreWithBinlogs backs up a source with binlogs and checks that

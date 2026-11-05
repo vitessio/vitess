@@ -98,6 +98,26 @@ func TestBuiltinBackupChunked(t *testing.T) {
 	t.Run("TestChunkedBackup", chunkedBackup)
 }
 
+// TestBuiltinBackupChunkedDirect is TestBuiltinBackupChunked with the chunks restored with
+// --builtinbackup-restore-write-mode=direct. This verifies that MySQL can start successfully and
+// read back rows from files written with O_DIRECT.
+func TestBuiltinBackupChunkedDirect(t *testing.T) {
+	defer setDefaultCommonArgs()
+	const chunkSizeBytes = 4194304 // 4MiB
+	commonTabletArg = append(
+		getDefaultCommonArgs(),
+		"--builtinbackup-file-chunk-threshold", strconv.Itoa(chunkSizeBytes),
+		"--builtinbackup-file-chunk-size", strconv.Itoa(chunkSizeBytes),
+		"--builtinbackup-restore-write-mode", "direct",
+	)
+
+	code, err := LaunchCluster(BuiltinBackup, "xbstream", 0, nil)
+	require.NoErrorf(t, err, "setup failed with status code %d", code)
+	defer TearDownCluster()
+
+	t.Run("TestChunkedBackup", chunkedBackup)
+}
+
 // TestBuiltinBackupNonChunked verifies that with the default threshold of 0, no chunking
 // occurs and the MANIFEST remains compatible with older Vitess versions.
 func TestBuiltinBackupNonChunked(t *testing.T) {
