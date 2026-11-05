@@ -769,3 +769,255 @@ func TestSemiSyncExtensionLoaded(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, mysql.SemiSyncTypeOff, res)
 }
+<<<<<<< HEAD
+||||||| parent of 271e8bd3bf (VTTablet: Preserve semi-sync durability during demotion, draining and promotion (#21409))
+
+func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
+	newTestMysqld := func(t *testing.T) (*fakesqldb.DB, *Mysqld) {
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+
+		params := db.ConnParams()
+		cp := *params
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.super_read_only", "int64"), "0"))
+		db.AddQuery("SET SESSION lock_wait_timeout = 1", &sqltypes.Result{})
+		db.AddQuery("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout", &sqltypes.Result{})
+		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+
+		testMysqld := NewMysqld(dbc)
+		t.Cleanup(testMysqld.Close)
+		return db, testMysqld
+	}
+
+	t.Run("applies the session lock_wait_timeout before enabling", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.NoError(t, err)
+		assert.NotNil(t, resetFunc)
+
+		queryLog := db.QueryLog()
+		setIdx := strings.Index(queryLog, "set session lock_wait_timeout = 1")
+		enableIdx := strings.Index(queryLog, "set global super_read_only = 'on'")
+		require.NotEqual(t, -1, setIdx, "expected the session lock_wait_timeout to be set, got queries: %s", queryLog)
+		require.NotEqual(t, -1, enableIdx, "expected super_read_only to be enabled, got queries: %s", queryLog)
+		assert.Less(t, setIdx, enableIdx, "lock_wait_timeout must be set before enabling super_read_only")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "the session lock_wait_timeout must be restored on success")
+	})
+
+	t.Run("rounds the timeout up to whole seconds", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddQuery("SET SESSION lock_wait_timeout = 2", &sqltypes.Result{})
+
+		_, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(500*time.Millisecond))
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"))
+
+		_, err = testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(1500*time.Millisecond))
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 2"))
+	})
+
+	t.Run("default leaves lock_wait_timeout untouched", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true)
+		require.NoError(t, err)
+		assert.NotNil(t, resetFunc)
+
+		assert.NotContains(t, db.QueryLog(), "lock_wait_timeout")
+	})
+
+	t.Run("enabling failure still surfaces the error", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddRejectedQuery("SET GLOBAL super_read_only = 'ON'", sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, sqlerror.SSUnknownSQLState, "Lock wait timeout exceeded; try restarting transaction"))
+
+		_, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.ErrorContains(t, err, "Lock wait timeout exceeded")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "the session must be restored after a clean statement failure")
+	})
+
+	t.Run("reset function does not apply the lock_wait_timeout", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.NoError(t, err)
+		require.NotNil(t, resetFunc)
+
+		require.NoError(t, resetFunc())
+
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"), "the reset must not bound its lock wait")
+	})
+
+	t.Run("unknown lock_wait_timeout proceeds without a bound", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddRejectedQuery("SET SESSION lock_wait_timeout = 1", sqlerror.NewSQLError(sqlerror.ERUnknownSystemVariable, sqlerror.SSUnknownSQLState, "Unknown system variable 'lock_wait_timeout'"))
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.NoError(t, err)
+		assert.NotNil(t, resetFunc)
+
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not restore a lock_wait_timeout that was never set")
+	})
+}
+=======
+
+func TestSetSuperReadOnlyLockWaitTimeout(t *testing.T) {
+	newTestMysqld := func(t *testing.T) (*fakesqldb.DB, *Mysqld) {
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+
+		params := db.ConnParams()
+		cp := *params
+		dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+
+		db.AddQuery("SELECT 1", &sqltypes.Result{})
+		db.AddQuery("SELECT @@global.super_read_only", sqltypes.MakeTestResult(sqltypes.MakeTestFields("@@global.super_read_only", "int64"), "0"))
+		db.AddQuery("SET SESSION lock_wait_timeout = 1", &sqltypes.Result{})
+		db.AddQuery("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout", &sqltypes.Result{})
+		db.AddQuery("SET GLOBAL super_read_only = 'ON'", &sqltypes.Result{})
+
+		testMysqld := NewMysqld(dbc)
+		t.Cleanup(testMysqld.Close)
+		return db, testMysqld
+	}
+
+	t.Run("applies the session lock_wait_timeout before enabling", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.NoError(t, err)
+		assert.NotNil(t, resetFunc)
+
+		queryLog := db.QueryLog()
+		setIdx := strings.Index(queryLog, "set session lock_wait_timeout = 1")
+		enableIdx := strings.Index(queryLog, "set global super_read_only = 'on'")
+		require.NotEqual(t, -1, setIdx, "expected the session lock_wait_timeout to be set, got queries: %s", queryLog)
+		require.NotEqual(t, -1, enableIdx, "expected super_read_only to be enabled, got queries: %s", queryLog)
+		assert.Less(t, setIdx, enableIdx, "lock_wait_timeout must be set before enabling super_read_only")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "the session lock_wait_timeout must be restored on success")
+	})
+
+	t.Run("rounds the timeout up to whole seconds", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddQuery("SET SESSION lock_wait_timeout = 2", &sqltypes.Result{})
+
+		_, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(500*time.Millisecond))
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"))
+
+		_, err = testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(1500*time.Millisecond))
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 2"))
+	})
+
+	t.Run("default leaves lock_wait_timeout untouched", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true)
+		require.NoError(t, err)
+		assert.NotNil(t, resetFunc)
+
+		assert.NotContains(t, db.QueryLog(), "lock_wait_timeout")
+	})
+
+	t.Run("enabling failure still surfaces the error", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddRejectedQuery("SET GLOBAL super_read_only = 'ON'", sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, sqlerror.SSUnknownSQLState, "Lock wait timeout exceeded; try restarting transaction"))
+
+		_, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.ErrorContains(t, err, "Lock wait timeout exceeded")
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "the session must be restored after a clean statement failure")
+	})
+
+	t.Run("reset function does not apply the lock_wait_timeout", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddQuery("SET GLOBAL super_read_only = 'OFF'", &sqltypes.Result{})
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.NoError(t, err)
+		require.NotNil(t, resetFunc)
+
+		require.NoError(t, resetFunc())
+
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'OFF'"))
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = 1"), "the reset must not bound its lock wait")
+	})
+
+	t.Run("unknown lock_wait_timeout proceeds without a bound", func(t *testing.T) {
+		db, testMysqld := newTestMysqld(t)
+		db.AddRejectedQuery("SET SESSION lock_wait_timeout = 1", sqlerror.NewSQLError(sqlerror.ERUnknownSystemVariable, sqlerror.SSUnknownSQLState, "Unknown system variable 'lock_wait_timeout'"))
+
+		resetFunc, err := testMysqld.SetSuperReadOnly(t.Context(), true, WithLockWaitTimeout(time.Second))
+		require.NoError(t, err)
+		assert.NotNil(t, resetFunc)
+
+		assert.Equal(t, 1, db.GetQueryCalledNum("SET GLOBAL super_read_only = 'ON'"))
+		assert.Equal(t, 0, db.GetQueryCalledNum("SET SESSION lock_wait_timeout = @@global.lock_wait_timeout"), "must not restore a lock_wait_timeout that was never set")
+	})
+}
+
+// TestRestartReplicationReceiver checks that only the receiver is restarted,
+// and that a flavor without receiver commands runs nothing.
+func TestRestartReplicationReceiver(t *testing.T) {
+	injectedErr := errors.New("injected receiver failure")
+	for _, tc := range []struct {
+		name    string
+		queries []fakesqldb.ExpectedExecuteFetch
+		wantErr error
+	}{
+		{name: "receiver commands", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+			{Query: "START REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+		}},
+		// A failed stop must not be followed by a start.
+		{name: "stop fails", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", Error: injectedErr},
+		}, wantErr: injectedErr},
+		{name: "start fails", queries: []fakesqldb.ExpectedExecuteFetch{
+			{Query: "STOP REPLICA IO_THREAD", QueryResult: &sqltypes.Result{}},
+			{Query: "START REPLICA IO_THREAD", Error: injectedErr},
+		}, wantErr: injectedErr},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			t.Cleanup(db.Close)
+			db.OrderMatters()
+			t.Cleanup(db.VerifyAllExecutedOrFail)
+			db.AddExpectedQuery("SELECT 1", nil)
+			for _, q := range tc.queries {
+				db.AddExpectedExecuteFetch(q)
+			}
+			cp := *db.ConnParams()
+			mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+			t.Cleanup(mysqld.Close)
+
+			err := mysqld.RestartReplicationReceiver(t.Context(), nil)
+			if tc.wantErr == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tc.wantErr.Error())
+		})
+	}
+	t.Run("unsupported flavor", func(t *testing.T) {
+		db := fakesqldb.New(t)
+		t.Cleanup(db.Close)
+		db.OrderMatters()
+		t.Cleanup(db.VerifyAllExecutedOrFail)
+		db.AddExpectedQuery("SELECT 1", nil)
+		cp := *db.ConnParams()
+		cp.Flavor = replication.FilePosFlavorID
+		mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb"))
+		t.Cleanup(mysqld.Close)
+
+		require.ErrorIs(t, mysqld.RestartReplicationReceiver(t.Context(), nil), ErrReceiverRestartUnsupported)
+	})
+}
+>>>>>>> 271e8bd3bf (VTTablet: Preserve semi-sync durability during demotion, draining and promotion (#21409))
