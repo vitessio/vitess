@@ -2265,13 +2265,13 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			},
 			want: []string{
 				"Lock keyspace " + sourceKeyspaceName,
-				"Lock keyspace " + targetKeyspaceName,
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [REPLICA,RDONLY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
 				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
-				"Unlock keyspace " + targetKeyspaceName,
 				"Unlock keyspace " + sourceKeyspaceName,
 				"Lock keyspace " + sourceKeyspaceName,
 				"Lock keyspace " + targetKeyspaceName,
+				fmt.Sprintf("Mirroring 0.00 percent of traffic from keyspace %s to keyspace %s for tablet types [PRIMARY]", sourceKeyspaceName, targetKeyspaceName),
 				fmt.Sprintf("Sequence backing tables [%s.t1_seq] will be added to the vschema of their keyspace", sequenceKeyspaceName),
 				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:0;position:%s]",
 					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position),
@@ -2407,19 +2407,13 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			require.NoError(t, err)
 
-<<<<<<< HEAD
 			require.EqualValues(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
-||||||| parent of c7e43a374c (VReplication: fix qualified sequence VSchema registration in MoveTables (#21834))
-			require.Equal(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
-=======
-			require.Equal(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
 			if tc.targetVSchema != nil {
 				// A dry run changes no vschema.
 				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
 				require.NoError(t, err)
 				assert.Empty(t, kvs.Tables)
 			}
->>>>>>> c7e43a374c (VReplication: fix qualified sequence VSchema registration in MoveTables (#21834))
 		})
 	}
 }
