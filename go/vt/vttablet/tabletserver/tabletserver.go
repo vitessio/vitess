@@ -2102,7 +2102,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 			}
 		}
 		if logged {
-			attrs = append(attrs, slog.Int("errno", int(errnum)), slog.String("sql_state", sqlState))
+			attrs = append(attrs, slog.Int("mysql_errno", int(errnum)), slog.String("sql_state", sqlState))
 		}
 	} else {
 		if logged {

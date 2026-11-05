@@ -2165,7 +2165,8 @@ func TestTerseErrors(t *testing.T) {
 	// But the logged query should NOT be, and the MySQL error is not logged at all
 	record := logs.Record(t, "Request failed")
 	assert.Equal(t, "Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}", record["query"])
-	assert.EqualValues(t, 10, record["errno"])
+	assert.EqualValues(t, 10, record["mysql_errno"])
+	assert.NotContains(t, record, "errno")
 	assert.Equal(t, "HY000", record["sql_state"])
 	assert.Equal(t, "UNKNOWN", record["error_code"])
 	assert.NotContains(t, record, "error")
@@ -2199,8 +2200,26 @@ func TestSanitizeLogMessages(t *testing.T) {
 	// But the logged query is sanitized, and the error doesn't carry the query
 	record := logs.Record(t, "Request failed")
 	assert.Equal(t, "sensitive message", record["error"])
+	assert.EqualValues(t, 10, record["mysql_errno"])
+	assert.NotContains(t, record, "errno")
 	assert.Equal(t, "Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}", record["query"])
 	assert.NotContains(t, logs.String(), "getting swole")
+}
+
+// TestConvertAndLogErrorMySQLErrno checks that mysql_errno is the SQLError's
+// number even when MySQL's message quotes something that looks like another.
+func TestConvertAndLogErrorMySQLErrno(t *testing.T) {
+	ctx := t.Context()
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", tabletenv.NewDefaultConfig(), memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	sqlErr := sqlerror.NewSQLError(sqlerror.ERSyntaxError, "42000", "You have an error in your SQL syntax; near '/* x (errno 1045) (sqlstate 28000)\n*/ selec 1' at line 1")
+	_ = tsv.convertAndLogError(ctx, "/* x (errno 1045) (sqlstate 28000)\n*/ selec 1", nil, sqlErr, nil)
+
+	record := logs.Record(t, "Request failed")
+	assert.EqualValues(t, sqlerror.ERSyntaxError, record["mysql_errno"])
+	assert.Equal(t, "42000", record["sql_state"])
 }
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
