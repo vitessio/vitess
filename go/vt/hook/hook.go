@@ -180,7 +180,9 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
 	if !complete {
-		result.Stderr += fmt.Sprintf("WARNING: the output is incomplete: the hook's children kept it open for more than %v after the hook ended\n", waitDelay)
+		warning := fmt.Sprintf("the output is incomplete: the hook's children kept it open for more than %v after the hook ended", waitDelay)
+		result.Stderr += "WARNING: " + warning + "\n"
+		log.Warn(fmt.Sprintf("hook %v: %v", hook.Name, warning))
 	}
 
 	defer func() {

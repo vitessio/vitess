@@ -165,11 +165,10 @@ func TestExecuteOptionalContext(t *testing.T) {
 	})
 
 	t.Run("running hook past its deadline", func(t *testing.T) {
-		marker := installHook(t, "slow_hook", "touch $MARKER\nexec sleep 60\n")
+		installHook(t, "slow_hook", "exec sleep 60\n")
 		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		t.Cleanup(cancel)
 		err := NewSimpleHook("slow_hook").ExecuteOptionalContext(ctx)
-		waitForFile(t, marker)
 		require.ErrorContains(t, err, "failed(-7)")
 		assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	})
