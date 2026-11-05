@@ -122,8 +122,8 @@ func TestNoTimeouts(t *testing.T) {
 	}()
 
 	select {
-	case <-c:
-		assert.Fail(t, "Connection timeout, without a timeout")
+	case err := <-c:
+		assert.Failf(t, "Connection timeout, without a timeout", "got error: %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// NOOP
 	}
@@ -141,8 +141,8 @@ func TestNoTimeouts(t *testing.T) {
 		}
 	}()
 	select {
-	case <-c2:
-		assert.Fail(t, "Connection timeout, without a timeout")
+	case err := <-c2:
+		assert.Failf(t, "Connection timeout, without a timeout", "got error: %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// NOOP
 	}

@@ -420,20 +420,21 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubque
 	var setExprs sqlparser.SetExprs
 	var resetSetExprs sqlparser.SetExprs
 	defaultValue := &sqlparser.Default{}
-	for _, setting := range settings {
+	for i, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
+			// Parser errors can include the token near the failure, so do not wrap them.
+			return "", "", vterrors.NewErrorf(vterrors.Code(err), vterrors.ErrState(err), "[BUG]: failed to parse system setting at position %d", i+1)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
+			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement at position %d", i+1)
 		}
 		// settings are applied with no verification and no table ACL check, so a
 		// subquery is refused where the ACL is enforced, and sql_mode values must
 		// be constants that can be judged here
 		if rejectSubqueries {
-			if err := rejectSettingSubqueries(set, setting); err != nil {
+			if err := rejectSettingSubqueries(set); err != nil {
 				return "", "", err
 			}
 		}

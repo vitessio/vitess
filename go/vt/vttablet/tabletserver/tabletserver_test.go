@@ -62,6 +62,7 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -3705,5 +3706,66 @@ func TestTabletServerValidatesBindVariablesBeforeHotRowProtection(t *testing.T) 
 			assert.Zero(t, state.TransactionID, "no transaction should be begun")
 			assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
 		})
+	}
+}
+
+// Exercise both settings entry points through the logger: sanitizing the request
+// query alone must not leave a setting's literals in the error message.
+func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
+	const secret = "connection_setting_secret_21253"
+	tests := []struct {
+		name        string
+		setting     string
+		buildCode   vtrpcpb.Code
+		reserveCode vtrpcpb.Code
+	}{
+		{"subquery", "set @@sql_select_limit = (select count(*) from t where secret = '" + secret + "')", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"parse error", "set @@sql_select_limit = 1 '" + secret + "'", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"partial DDL", "create table a ignore me " + secret, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"not SET", "select '" + secret + "'", vtrpcpb.Code_INTERNAL, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"non-constant sql_mode", "set sql_mode = concat('" + secret + "', '')", vtrpcpb.Code_UNIMPLEMENTED, vtrpcpb.Code_UNIMPLEMENTED},
+		{"invalid sql_mode", "set sql_mode = '" + secret + "'", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
+	}
+	for _, tc := range tests {
+		for _, build := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/build=%t", tc.name, build), func(t *testing.T) {
+				ctx := t.Context()
+				cfg := tabletenv.NewDefaultConfig()
+				cfg.TerseErrors = false
+				cfg.SanitizeLogMessages = true
+				env := vtenv.NewTestEnv()
+				srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+				tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
+				logs := logtest.Capture(t, slog.LevelInfo)
+				// The rejected pre-query is separate from the request SQL that is logged.
+				settings := []string{"set sql_safe_updates = 1", tc.setting}
+				var err error
+				wantCode := tc.reserveCode
+				if build {
+					_, _, err = planbuilder.BuildSettingQuery(settings, env.Parser(), true)
+					wantCode = tc.buildCode
+				} else {
+					err = planbuilder.ValidateSettingsSQLMode(settings, env.Parser(), true)
+				}
+				require.Error(t, err)
+				assert.Equal(t, wantCode, vterrors.Code(err))
+				assert.NotContains(t, err.Error(), secret)
+				if tc.name == "parse error" || tc.name == "not SET" || tc.name == "partial DDL" {
+					assert.Contains(t, err.Error(), "position 2")
+				}
+				if tc.name == "invalid sql_mode" {
+					assert.Equal(t, vterrors.WrongValueForVar, vterrors.ErrState(err))
+				}
+				converted := tsv.convertAndLogError(ctx, "select 1 from dual", nil, err, nil)
+				require.Error(t, converted)
+				assert.Equal(t, wantCode, vterrors.Code(converted))
+				assert.NotContains(t, logs.String(), secret)
+				assert.NotContains(t, logs.String(), tc.setting)
+				records := logs.Records(t)
+				require.Len(t, records, 1)
+				assert.Equal(t, "Request failed", records[0]["msg"])
+				assert.Equal(t, err.Error(), records[0]["error"])
+			})
+		}
 	}
 }

@@ -17,11 +17,15 @@ limitations under the License.
 package utils
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,6 +36,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
 
 // stopped reports whether pid has exited: it is gone, or a zombie waiting to be reaped.
@@ -113,5 +118,162 @@ func TestStopMySQLInits(t *testing.T) {
 			require.NotNil(t, proc.ProcessState, "the fake was not reaped")
 			requireStopped(t, child, "the fake's child is still running")
 		})
+	}
+}
+
+// shardedSetupFault returns a customizer that fails the first tablet of the second shard:
+// its MySQL initialization, or its vttablet.
+func shardedSetupFault(fault string) any {
+	// Each shard has 3 tablets, so the second shard's first tablet is the 4th one started.
+	n := 0
+	switch fault {
+	case "mysql-init":
+		return func(mysqlctl *cluster.MysqlctlProcess) {
+			if n++; n == 4 {
+				mysqlctl.ExtraArgs = append(mysqlctl.ExtraArgs, "--injected-fault")
+			}
+		}
+	case "vttablet":
+		return func(vttablet *cluster.VttabletProcess) {
+			if n++; n == 4 {
+				vttablet.ExtraArgs = append(vttablet.ExtraArgs, "--injected-fault")
+			}
+		}
+	}
+	panic("unknown fault " + fault)
+}
+
+// ownedProcesses returns this user's processes that name root in their environment or arguments.
+// The cluster's processes inherit VTDATAROOT, which is under root, except mysqld_safe and mysqld,
+// whose arguments name their data directory. A failed observation is an error.
+func ownedProcesses(root string) ([]string, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil, err
+	}
+	var owned []string
+	for _, entry := range entries {
+		if _, err := strconv.Atoi(entry.Name()); err != nil {
+			continue
+		}
+		dir := filepath.Join("/proc", entry.Name())
+		info, err := os.Stat(dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		if info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) {
+			continue
+		}
+		env, err := os.ReadFile(filepath.Join(dir, "environ"))
+		if errors.Is(err, fs.ErrPermission) {
+			// A non-dumpable process, such as systemd's sd-pam, hides its environment. The
+			// processes found by environment, mysqlctl and the Vitess binaries, are dumpable.
+			env, err = nil, nil
+		}
+		var args []byte
+		if err == nil {
+			args, err = os.ReadFile(filepath.Join(dir, "cmdline"))
+		}
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ESRCH) {
+			continue
+		} else if err != nil {
+			return nil, err
+		}
+		if bytes.Contains(env, []byte(root)) || bytes.Contains(args, []byte(root)) {
+			owned = append(owned, entry.Name()+" "+strings.ReplaceAll(string(args), "\x00", " "))
+		}
+	}
+	return owned, nil
+}
+
+// TestOwnedProcesses checks that ownedProcesses finds a process by its environment alone, as
+// it must find mysqlctl, and by its arguments alone, as it must find mysqld.
+func TestOwnedProcesses(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("reads /proc")
+	}
+	root, err := os.MkdirTemp("", "*.owned")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	byEnv := exec.Command("sleep", "60")
+	byEnv.Env = append(os.Environ(), "VTDATAROOT="+root)
+	// No shell: a shell would start sleep as a descendant that the cleanup below misses.
+	byArgs := exec.Command("sleep", "60")
+	byArgs.Args[0] = root
+	for _, cmd := range []*exec.Cmd{byEnv, byArgs} {
+		require.NoError(t, cmd.Start())
+		t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	}
+
+	owned, err := ownedProcesses(root)
+	require.NoError(t, err)
+	assert.Len(t, owned, 2, "owned: %v", owned)
+}
+
+// TestShardedSetupFailureCleanup fails SetupShardedReparentCluster in its second shard, in a
+// child test process. The child must leave no process behind, and must remove its data
+// directory on CI only.
+func TestShardedSetupFailureCleanup(t *testing.T) {
+	if fault := os.Getenv("SHARDED_SETUP_FAULT"); fault != "" {
+		setupShardedCluster(t, policy.DurabilitySemiSync, nil, shardedSetupFault(fault))
+		t.Fatal("the setup did not fail")
+	}
+	if runtime.GOOS != "linux" {
+		t.Skip("reads /proc")
+	}
+
+	for fault, want := range map[string]string{
+		"mysql-init": "unable to start mysql process",
+		"vttablet":   "error starting vttablet",
+	} {
+		for _, ci := range []string{"true", "false"} {
+			t.Run(fault+"/CI="+ci, func(t *testing.T) {
+				// Not t.TempDir: MySQL socket paths must stay short. The suffix keeps one
+				// case's root from being a prefix of another's.
+				root, err := os.MkdirTemp(os.Getenv("VTDATAROOT"), "*.fault")
+				require.NoError(t, err)
+				t.Cleanup(func() { _ = os.RemoveAll(root) })
+				// Whatever the child does, kill what it left before removing its files.
+				t.Cleanup(func() {
+					require.EventuallyWithT(t, func(c *assert.CollectT) {
+						owned, err := ownedProcesses(root)
+						require.NoError(c, err)
+						for _, process := range owned {
+							pid, _ := strconv.Atoi(strings.Fields(process)[0])
+							_ = syscall.Kill(pid, syscall.SIGKILL)
+						}
+						assert.Empty(c, owned)
+					}, 30*time.Second, 500*time.Millisecond, "could not kill the child's processes")
+				})
+
+				// The child times itself out at 90s. A case then takes at most 100s, the WaitDelay
+				// and two 30s waits: 170s, which test/config.json's 15m package timeout covers four times.
+				ctx, cancel := context.WithTimeout(t.Context(), 100*time.Second)
+				defer cancel()
+				cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestShardedSetupFailureCleanup$", "-test.v", "-test.timeout=90s")
+				cmd.Env = append(os.Environ(), "SHARDED_SETUP_FAULT="+fault, "CI="+ci, "VTDATAROOT="+root)
+				cmd.WaitDelay = 10 * time.Second
+				out, err := cmd.CombinedOutput()
+				require.Error(t, err, "the child passed:\n%s", out)
+				// The setup logs each shard it starts, and why it failed.
+				require.Regexp(t, "(?s)Starting shard: 40-80.*"+want, string(out), "the child did not fail in the second shard:\n%s", out)
+
+				require.EventuallyWithT(t, func(c *assert.CollectT) {
+					owned, err := ownedProcesses(root)
+					require.NoError(c, err)
+					assert.Empty(c, owned, "processes left running")
+				}, 30*time.Second, time.Second)
+
+				dirs, err := filepath.Glob(filepath.Join(root, "vtroot_*"))
+				require.NoError(t, err)
+				if ci == "true" {
+					assert.Empty(t, dirs, "the data directory was not removed on CI")
+				} else {
+					assert.Len(t, dirs, 1, "the data directory was not kept locally")
+				}
+			})
+		}
 	}
 }

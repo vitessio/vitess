@@ -17,6 +17,7 @@ limitations under the License.
 package vtbackuperrantgtids
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -32,9 +33,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -58,8 +62,9 @@ const (
 
 // TestVtbackupErrantGTIDs runs vtbackup against base backups and data that have
 // GTIDs the shard primary lacks, and checks that it fails each such run without
-// completing a backup. The subtests share one shard and run in order; the last
-// two kill primaries.
+// completing a backup. It also checks that a write waiting for a semi-sync
+// acknowledgement stays out of a backup. The subtests share one shard and run in
+// order; the last two kill primaries.
 func TestVtbackupErrantGTIDs(t *testing.T) {
 	// --enable-errant-gtid-checks is new in v25.
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtbackup")
@@ -73,6 +78,7 @@ func TestVtbackupErrantGTIDs(t *testing.T) {
 
 	require.True(t, t.Run("poisoned base backup", testPoisonedBaseBackup))
 	require.True(t, t.Run("binlogged init SQL", testBinloggedInitSQL))
+	require.True(t, t.Run("write waiting for an acknowledgement", testWriteWaitingForAck))
 	require.True(t, t.Run("ERS with a reachable primary", testERSWithReachablePrimary))
 	require.True(t, t.Run("primary blocked on semi-sync", testPrimaryBlockedOnSemiSync))
 	require.True(t, t.Run("reparent during the upload", testReparentDuringUpload))
@@ -137,6 +143,69 @@ func testBinloggedInitSQL(t *testing.T) {
 	assert.Len(t, listBackups(t), len(backups))
 }
 
+// testWriteWaitingForAck checks, with the errant GTID checks off, that vtbackup
+// stops catching up at the primary's committed position on MySQL 8.4 and
+// later, and on MySQL 8.0 with at most one applier worker. A write that waits
+// for a semi-sync acknowledgement is already in the primary's binlog, so
+// vtbackup receives it, but it must stay out of the backup: an emergency
+// reparent can lose it, and every tablet restored from the backup would then
+// fail with an errant GTID.
+func testWriteWaitingForAck(t *testing.T) {
+	// vtbackup runs the same MySQL binaries, with the same configuration, as the
+	// tablets.
+	version := execOnTablet(t, primary, "select @@global.version").Rows[0][0].ToString()
+	if atLeast, err := capabilities.ServerVersionAtLeast(version, 8, 4); err != nil || !atLeast {
+		workers := execOnTablet(t, primary, "select @@global.slave_parallel_workers").Rows[0][0].ToString()
+		if !strings.HasPrefix(version, "8.0.") || (workers != "0" && workers != "1") {
+			t.Skipf("vtbackup stops at the committed position on MySQL 8.4 and later, and on MySQL 8.0 with at most one applier worker, not on %s with %s applier workers", version, workers)
+		}
+	}
+	const msg = "waiting-for-ack"
+	backups := listBackups(t)
+	// A committed write that the newest backup lacks, so that vtbackup catches up
+	// through it and stops partway through what it receives.
+	execOnTablet(t, primary, "insert into vt_insert_test (msg) values ('committed-before-the-backup')")
+	for _, replica := range []*cluster.Vttablet{replica1, replica2} {
+		execOnTablet(t, replica, "STOP REPLICA IO_THREAD")
+	}
+	writeInBackground(t, primary, msg)
+	require.Eventually(t, func() bool {
+		qr := execOnTablet(t, primary, fmt.Sprintf("select count(*) from information_schema.processlist where state like '%%semi-sync%%' and info like '%%%s%%'", msg))
+		return qr.Rows[0][0].ToString() == "1"
+	}, time.Minute, 250*time.Millisecond, "the write never waited for a semi-sync acknowledgement")
+	// Nothing commits on the primary until a replica acknowledges, so this is the
+	// position that vtbackup reads too.
+	committed, err := replication.DecodePosition("MySQL56/" + execOnTablet(t, primary, "select @@global.gtid_executed").Rows[0][0].ToString())
+	require.NoError(t, err)
+	require.False(t, backupPosition(t, backups[len(backups)-1]).AtLeast(committed), "the newest backup already has the committed position, so the scenario is invalid")
+
+	require.NoError(t, startVtbackup(t, "--enable-errant-gtid-checks=false").wait(t))
+	newBackups := listBackups(t)
+	require.Len(t, newBackups, len(backups)+1)
+	backedUp := backupPosition(t, newBackups[len(newBackups)-1])
+	assert.True(t, committed.AtLeast(backedUp), "the backup at %v has the write that waits for an acknowledgement, which the primary hasn't committed (%v)", backedUp, committed)
+	assert.True(t, backedUp.AtLeast(committed), "the backup at %v didn't catch up to the primary's committed position %v", backedUp, committed)
+
+	// A replica acknowledges the write, so the primary commits it.
+	for _, replica := range []*cluster.Vttablet{replica1, replica2} {
+		execOnTablet(t, replica, "START REPLICA IO_THREAD")
+	}
+	require.Eventually(t, func() bool {
+		qr := execOnTablet(t, primary, fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
+		return qr.Rows[0][0].ToString() == "1"
+	}, time.Minute, 250*time.Millisecond, "the primary never committed %q", msg)
+}
+
+// backupPosition returns the replication position in the backup's MANIFEST.
+func backupPosition(t *testing.T, backup string) replication.Position {
+	t.Helper()
+	data, err := os.ReadFile(path.Join(os.Getenv("VTDATAROOT"), "backups", keyspaceName, shardName, backup, "MANIFEST"))
+	require.NoError(t, err)
+	var manifest mysqlctl.BackupManifest
+	require.NoError(t, json.Unmarshal(data, &manifest))
+	return manifest.Position
+}
+
 // testERSWithReachablePrimary makes an ERS leave a reachable primary out of its
 // election, then release, by repointing that primary, a write that vtbackup
 // applied while the primary waited for a semi-sync acknowledgement. The old
@@ -144,14 +213,14 @@ func testBinloggedInitSQL(t *testing.T) {
 // ERS elects a primary that lacks it. vtbackup must not complete a backup with
 // the write.
 //
-// Tablet action locks order the steps. replica1's lock is held while ERS stops
-// replication, so the replicas answer while the primary's forced demotion is
-// still running, held up by closing the semi-sync monitor, which waits for the
-// monitor's blocked writes until the pool's close timeout (10s, longer than the
-// first sleep): ERS cancels the demotion and leaves the primary's position out. ERS then repoints the primary, which disables its primary-side
-// semi-sync and commits the write. A second sleep on replica1, queued behind ERS's RPC,
-// outlasts the promotion's timeout (topo.RemoteOperationTimeout, 15s), so the
-// promotion fails and the shard record keeps naming the repointed old primary.
+// Tablet action locks order the steps. The primary's lock is held until after
+// replica1's, so ERS's request to the primary is still waiting when the replicas
+// answer: ERS cancels it, so the primary is not demoted and its position is left
+// out. ERS then repoints the primary once its lock is free, which disables its
+// primary-side semi-sync and commits the write. A second sleep on replica1, queued
+// behind ERS's RPC, outlasts the promotion's timeout (topo.RemoteOperationTimeout,
+// 15s), so the promotion fails and the shard record keeps naming the repointed old
+// primary.
 func testERSWithReachablePrimary(t *testing.T) {
 	const msg = "released-by-repoint"
 	backups := listBackups(t)
@@ -170,16 +239,15 @@ func testERSWithReachablePrimary(t *testing.T) {
 	writeInBackground(t, primary, msg)
 	run.waitForRow(t, msg)
 	run.waitForLog(t, "has not committed")
-	// The forced demotion closes the semi-sync monitor before it disables
-	// semi-sync, and the close waits for the monitor's blocked writes.
-	require.Eventually(t, func() bool {
-		blocked, ok := primary.VttabletProcess.GetVars()["SemiSyncMonitorWritesBlocked"].(float64)
-		return ok && blocked > 0
-	}, time.Minute, 500*time.Millisecond, "the primary's semi-sync monitor never blocked on a write")
 
+	// The primary's sleep starts once replica1's holds its lock, and is longer,
+	// so it ends after replica1's. It ends long before the promotion's timeout.
 	firstSleep := sleepTablet(replica1, 8*time.Second)
 	require.Eventually(t, func() bool { return actionLockHeld(replica1) }, 30*time.Second, 100*time.Millisecond,
 		"%s never held its action lock", replica1.Alias)
+	primarySleep := sleepTablet(primary, 12*time.Second)
+	require.Eventually(t, func() bool { return actionLockHeld(primary) }, 30*time.Second, 100*time.Millisecond,
+		"%s never held its action lock", primary.Alias)
 	stopRPCs := countInFile(replica1.VttabletProcess.ErrorLog, "StopReplicationAndGetStatus")
 	ers := make(chan error, 1)
 	go func() {
@@ -209,8 +277,14 @@ func testERSWithReachablePrimary(t *testing.T) {
 	oldPrimary, err := localCluster.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
 	require.Equal(t, topodatapb.TabletType_REPLICA, oldPrimary.Type, "ERS didn't repoint %s, so the scenario is invalid", primary.Alias)
-	qr := execOnTablet(t, primary, fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
-	require.Equal(t, "1", qr.Rows[0][0].ToString(), "%s didn't commit %q, so the scenario is invalid", primary.Alias, msg)
+	// ERS doesn't wait for the repoint, which can still be running. A vttablet
+	// without #21667 disables primary-side semi-sync only after closing its
+	// semi-sync monitor, which waits for the monitor's blocked write until the
+	// pool's close timeout (10s), so it can commit the write after ERS returns.
+	require.Eventually(t, func() bool {
+		qr, err := vtbackupQuery(t, tabletSocketPath(primary), fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
+		return err == nil && qr.Rows[0][0].ToString() == "1"
+	}, 30*time.Second, 250*time.Millisecond, "%s didn't commit %q, so the scenario is invalid", primary.Alias, msg)
 	requireRowAbsent(t, replica1, msg)
 
 	// vtbackup must wait while the shard record names a repointed primary. If
@@ -227,7 +301,7 @@ func testERSWithReachablePrimary(t *testing.T) {
 	}, 3*time.Minute, 250*time.Millisecond, "vtbackup neither finished nor waited for the repointed primary")
 
 	// Elect replica1, which lacks the write, once its action lock is free.
-	for _, sleep := range []<-chan error{firstSleep, secondSleep} {
+	for _, sleep := range []<-chan error{primarySleep, firstSleep, secondSleep} {
 		select {
 		case <-sleep:
 		case <-time.After(2 * time.Minute):
