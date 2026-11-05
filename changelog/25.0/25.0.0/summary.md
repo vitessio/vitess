@@ -284,6 +284,24 @@ The following flags, which pass credentials as flag values, are now deprecated i
 
 **Impact**: Move these credentials into the files listed above and remove the deprecated flags and options from startup scripts or configuration before upgrading to v26.
 
+The `--xtrabackup-backup-flags`, `--xtrabackup-prepare-flags`, `--xbstream-restore-flags`, `--mysql-shell-flags`, `--mysql-shell-dump-flags`, `--mysql-shell-load-flags`, `--external-compressor`, `--external-decompressor` and `--manifest-external-decompressor` flags pass their values on to other tools, so they aren't deprecated. Keep secrets out of them too, and use each tool's own way of reading them from a file:
+
+- xtrabackup and xbstream: `--encrypt-key-file` instead of `--encrypt-key`. xtrabackup reads the tablet's `my.cnf`, so put a password in an `[xtrabackup]` section of a file listed in the `EXTRA_MY_CNF` environment variable.
+- MySQL Shell dump and load: the cloud provider's credential files or environment variables instead of credentials in the JSON options.
+- External compressors: a command that reads its key from a file, for example `openssl enc -aes-256-cbc -pass file:/path/to/key`.
+- `--mysql-shell-flags`: put the password in an option file:
+
+  ```ini
+  [mysqlsh]
+  password=...
+  ```
+
+  and pass that file in place of the default `/dev/null`, keeping the other default flags. `--defaults-file` must be the first flag:
+
+  ```
+  --mysql-shell-flags="--defaults-file=/path/to/mysqlsh.cnf --js -h localhost"
+  ```
+
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
 The `SelectStream` query plan type no longer exists: statements served over the streaming path now produce the same plan types as buffered execution (`Select`, `Show`, `SelectLockFunc`, ...), so query rules keyed on those concrete plan names now apply to both execution paths.
