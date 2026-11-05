@@ -246,7 +246,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.09,
 			givePriorityRandValue: 99,
-			wantErr:               "query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=10%",
+			wantErr:               "query throttled: stmtType=SELECT workload=\"unknown\" priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=10%",
 		},
 		{
 			name:           "priority 0 query is NEVER throttled (edge case)",
@@ -300,7 +300,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.5,
 			givePriorityRandValue: 99,
-			wantErr:               "query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
+			wantErr:               "query throttled: stmtType=SELECT workload=\"unknown\" priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 		{
 			// Regression: CTE DML (WITH ... DELETE) must match the DELETE rule.
@@ -325,7 +325,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.5,
 			givePriorityRandValue: 99,
-			wantErr:               "query throttled: stmtType=DELETE workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
+			wantErr:               "query throttled: stmtType=DELETE workload=\"unknown\" priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 		{
 			// Regression: a scoped config key ("shard/lag") must match a result the
@@ -352,7 +352,7 @@ func TestTabletThrottlerStrategy_ThrottleIfNeeded_Legacy(t *testing.T) {
 			giveThrottleCheckOK:   false,
 			giveRandValue:         0.5,
 			givePriorityRandValue: 99,
-			wantErr:               "query throttled: stmtType=SELECT workload=unknown priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
+			wantErr:               "query throttled: stmtType=SELECT workload=\"unknown\" priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%",
 		},
 	}
 	for _, tt := range tests {
@@ -1095,8 +1095,26 @@ func TestTabletThrottlerStrategy_Evaluate_HighestRatioWins(t *testing.T) {
 		require.Equal(t, 3.0, decision.MetricValue)
 		require.Equal(t, 2.0, decision.Threshold)
 		require.Equal(t, 1.0, decision.ThrottlePercentage)
-		require.Equal(t, "query throttled: stmtType=SELECT workload=unknown priority=100 metric=loadavg value=3.00 breached threshold=2.00 throttle=100%", decision.Message)
+		require.Equal(t, "query throttled: stmtType=SELECT workload=\"unknown\" priority=100 metric=loadavg value=3.00 breached threshold=2.00 throttle=100%", decision.Message)
 	}
+}
+
+// The workload name comes from the client, and VTGate unquotes the WORKLOAD_NAME directive, so it can hold newlines
+// and other control characters. The rejection message reaches the tablet's text logs, through the dry-run warning and
+// the log of rejected queries, so it quotes the workload rather than let a client write lines of its own into them.
+func TestTabletThrottlerStrategy_Evaluate_QuotesWorkload(t *testing.T) {
+	overloaded := &throttle.CheckResult{Metrics: map[string]*throttle.MetricResult{"lag": breachedMetric(20)}}
+	cfg := createTestQueryThrottlerConfig(&querythrottlerpb.TabletStrategyConfig{TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+		"PRIMARY": {StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+			"SELECT": {MetricRules: map[string]*querythrottlerpb.MetricRule{"lag": {Thresholds: makeThresholds(10, 100)}}},
+		}},
+	}})
+	strategy := newOverloadedStrategy(overloaded, 0, 99)
+
+	decision := strategy.Evaluate(t.Context(), cfg, topodatapb.TabletType_PRIMARY, &sqlparser.ParsedQuery{Query: "SELECT 1"},
+		sqlparser.StmtSelect, 0, toQueryAttributesForTest(&querypb.ExecuteOptions{Priority: "100", WorkloadName: "batch\nE1104 forged\tline"}))
+	require.True(t, decision.Throttle)
+	require.Equal(t, `query throttled: stmtType=SELECT workload="batch\nE1104 forged\tline" priority=100 metric=lag value=20.00 breached threshold=10.00 throttle=100%`, decision.Message)
 }
 
 // Only metrics that the throttler reports as THRESHOLD_EXCEEDED count. A metric that is within the
