@@ -1134,17 +1134,11 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
-<<<<<<< HEAD
 			require.EqualValues(t, tc.want, got)
-||||||| parent of c7e43a374c (VReplication: fix qualified sequence VSchema registration in MoveTables (#21834))
-			require.Equal(t, tc.want, got)
-=======
-			require.Equal(t, tc.want, got)
 			// This also runs on dry runs, so it changes no vschema, and it
 			// creates no backing table: the test tablet manager client
 			// fails an unexpected ApplySchema.
 			assert.Equal(t, vschemasBefore, vschemas())
->>>>>>> c7e43a374c (VReplication: fix qualified sequence VSchema registration in MoveTables (#21834))
 		})
 	}
 }

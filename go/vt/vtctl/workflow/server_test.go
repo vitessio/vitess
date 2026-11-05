@@ -2412,19 +2412,13 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			require.NoError(t, err)
 
-<<<<<<< HEAD
 			require.EqualValues(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
-||||||| parent of c7e43a374c (VReplication: fix qualified sequence VSchema registration in MoveTables (#21834))
-			require.Equal(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
-=======
-			require.Equal(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
 			if tc.targetVSchema != nil {
 				// A dry run changes no vschema.
 				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
 				require.NoError(t, err)
 				assert.Empty(t, kvs.Tables)
 			}
->>>>>>> c7e43a374c (VReplication: fix qualified sequence VSchema registration in MoveTables (#21834))
 		})
 	}
 }

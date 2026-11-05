@@ -287,22 +287,6 @@ func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences [
 // initializeTargetSequences initializes the backing sequence tables
 // using a map keyed by the backing sequence table name.
 //
-<<<<<<< HEAD
-// The backing tables must have already been created, unless a default
-// global keyspace exists for the trafficSwitcher -- in which case we
-// will create the backing table there if needed.
-
-||||||| parent of c7e43a374c (VReplication: fix qualified sequence VSchema registration in MoveTables (#21834))
-// The backing tables must be resolvable via a vschema -- either as a
-// fully qualified sequence reference or as a table of type sequence in
-// an unsharded keyspace's vschema -- but the physical tables do not
-// need to exist yet: the tablet manager creates any missing backing
-// table on demand during initialization. A default global keyspace is
-// only required when an unqualified sequence reference is not found in
-// any keyspace's vschema, in which case both the backing table and its
-// vschema entry are created there (see createMissingSequenceTables).
-//
-=======
 // The backing tables must be resolvable via a vschema -- either as a
 // fully qualified sequence reference or as a table of type sequence in
 // an unsharded keyspace's vschema -- but the physical tables do not
@@ -313,7 +297,6 @@ func (ts *trafficSwitcher) updateSequenceValues(ctx context.Context, sequences [
 // vschema entry are created there before writes are stopped (see
 // prepareTargetSequences).
 //
->>>>>>> c7e43a374c (VReplication: fix qualified sequence VSchema registration in MoveTables (#21834))
 // This function will then ensure that the next value is set to a value
 // greater than any currently stored in the using table on the target
 // keyspace. If the backing table is updated to a new higher value then
