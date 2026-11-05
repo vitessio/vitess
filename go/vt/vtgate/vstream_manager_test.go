@@ -308,6 +308,10 @@ func TestVStreamEvents(t *testing.T) {
 	for _, req := range sbc0.VStreamRequests {
 		require.NotNil(t, req.Options)
 		require.True(t, req.Options.NoTimeouts, "expected VStream request Options.NoTimeouts to be true")
+		// FromVtgate makes the tablet check its throttler as vstreamer:vtgate-vstream and
+		// rowstreamer:vtgate-vstream for this stream, so that it can be throttled or exempted apart from
+		// VReplication workflows (see issue #21673).
+		require.True(t, req.Options.FromVtgate, "expected VStream request Options.FromVtgate to be true")
 	}
 }
 

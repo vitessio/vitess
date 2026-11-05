@@ -235,6 +235,18 @@ func (vse *Engine) validateBinlogRowImage(ctx context.Context, db dbconfigs.Conn
 	return nil
 }
 
+// throttlerAppName returns the app name that a stream checks the throttler with. For a VTGate VStream, which
+// sets options.FromVtgate, that is app followed by throttlerapp.VTGateVStreamName, e.g.
+// "vstreamer:vtgate-vstream", so that a throttler rule for vtgate-vstream applies to it and not to the
+// VReplication workflows that also stream from this tablet as app. The throttler matches each part of the
+// name, so rules for app itself still apply to both.
+func throttlerAppName(app throttlerapp.Name, options *binlogdatapb.VStreamOptions) throttlerapp.Name {
+	if options.GetFromVtgate() {
+		return app.Concatenate(throttlerapp.VTGateVStreamName)
+	}
+	return app
+}
+
 // Stream starts a new stream.
 // This streams events from the binary logs
 func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK,
@@ -258,7 +270,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, tablePKs []*binl
 		vse.mu.Lock()
 		defer vse.mu.Unlock()
 		streamer := newUVStreamer(ctx, vse, vse.env.Config().DB.FilteredWithDB(), vse.se, startPos, tablePKs,
-			filter, vse.lvschema, throttlerApp, send, options)
+			filter, vse.lvschema, throttlerAppName(throttlerApp, options), send, options)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
