@@ -415,6 +415,9 @@ func (tm *TabletManager) restoreFromCloneLocked(
 // disableReplication stops and resets replication on the mysql server. It moreover sets impossible replication
 // source params, so that the replica can't possibly reconnect. It would take a `CHANGE [MASTER|REPLICATION SOURCE] TO ...` to
 // make the mysql server replicate again (available via tm.MysqlDaemon.SetReplicationPosition)
+// disabledReplicationSourceHost is the source that disableReplication sets.
+const disabledReplicationSourceHost = "//"
+
 func (tm *TabletManager) disableReplication(ctx context.Context) error {
 	if err := tm.MysqlDaemon.StopReplication(ctx, nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
@@ -423,7 +426,7 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	if err := tm.setReplicationSourceRecoverable(ctx, "//", 0, 0, false, true); err != nil {
+	if err := tm.setReplicationSourceRecoverable(ctx, disabledReplicationSourceHost, 0, 0, false, true); err != nil {
 		return vterrors.Wrap(err, "failed to disable replication")
 	}
 
