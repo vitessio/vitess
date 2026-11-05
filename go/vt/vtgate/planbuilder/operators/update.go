@@ -157,6 +157,7 @@ type updColumn struct {
 type updList []updColumn
 
 func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Update) (op Operator) {
+	ctx.DMLReadsItsRows = true
 	updClone := ctx.SemTable.Clone(upd).(*sqlparser.Update)
 	upd.Limit = nil
 
@@ -395,6 +396,8 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	}
 
 	if updStmt.Limit != nil {
+		// Unless the rows end up on one shard, the limit is applied above the route.
+		ctx.DMLReadsItsRows = true
 		updOp.Source = newLimit(updOp.Source, updStmt.Limit, false)
 	}
 

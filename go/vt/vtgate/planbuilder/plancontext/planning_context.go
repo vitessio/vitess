@@ -45,6 +45,12 @@ type PlanningContext struct {
 	// This is required for queries we are running with /*+ SET_VAR(foreign_key_checks=OFF) */
 	VerifyAllFKs bool
 
+	// DMLReadsItsRows is set when the DML can end up as a SELECT that reads the rows to write,
+	// followed by a write of each of them by primary key: always when it is planned that way, and
+	// when a LIMIT has to be applied to a multi-shard row source. Every join of the statement is
+	// then part of that SELECT, and its rows are read like those of any other query.
+	DMLReadsItsRows bool
+
 	// MergedSubqueries tracks subqueries that have been merged into routes,
 	// keyed by their arg name.
 	MergedSubqueries map[string]*sqlparser.Subquery
@@ -389,6 +395,7 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		PlannerVersion:    ctx.PlannerVersion,
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VerifyAllFKs:      ctx.VerifyAllFKs,
+		DMLReadsItsRows:   ctx.DMLReadsItsRows,
 		MergedSubqueries:  ctx.MergedSubqueries,
 		RowSubqueryArgs:   ctx.RowSubqueryArgs,
 		CurrentPhase:      ctx.CurrentPhase,
