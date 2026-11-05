@@ -88,7 +88,8 @@ func TestClusterFromString(t *testing.T) {
 			require.NotEmpty(t, id, "when err == nil, id must be non-empty")
 
 			assert.Equal(t, tt.expectedID, id)
-			assert.NotNil(t, c, "when err == nil, cluster should not be nil")
+			require.NotNil(t, c, "when err == nil, cluster should not be nil")
+			t.Cleanup(func() { _ = c.Close() })
 		})
 	}
 }

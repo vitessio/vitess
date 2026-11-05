@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math"
 	"net"
@@ -288,7 +289,11 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					log.Warn(fmt.Sprintf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err))
 				}
 
-				dynamicAPI = api.WithCluster(c, id)
+				dynamicAPI, err = api.WithCluster(c, id)
+				if err != nil {
+					vtadminhttp.NewJSONResponse(nil, &errors.ErrInvalidCluster{Err: err}).Write(w)
+					return
+				}
 			} else {
 				log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err))
 			}
@@ -300,7 +305,9 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // WithCluster returns a dynamic API with the given cluster. If `c` is non-nil,
 // it is used as the selected cluster. If the cluster is nil, then a cluster
-// with the given id is retrieved from the API and used in the dynamic API.
+// with the given id is retrieved from the API and used in the dynamic API. If
+// the cluster is nil and the API has no cluster with the given id, WithCluster
+// returns a NOT_FOUND error.
 //
 // Callers must ensure that:
 // 1. If c is non-nil, c.ID == id.
@@ -308,7 +315,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 // Note that using dynamic.ClusterFromString ensures both of these
 // preconditions.
-func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
+func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) {
 	api.clusterMu.Lock()
 	defer api.clusterMu.Unlock()
 
@@ -353,14 +360,21 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
 			log.Info(fmt.Sprintf("API already has cluster with id %s, using that instead", id))
+			if err := c.Close(); err != nil {
+				log.Error("failed to close duplicate dynamic cluster; some connections and goroutines may linger", slog.Any("error", err))
+			}
 		}
 	}
 
 	selectedCluster := api.clusterMap[id]
+	if selectedCluster == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: no cluster with id %s", errors.ErrUnsupportedCluster, id)
+	}
+
 	dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
 	dynamicAPI.clusterMap = map[string]*cluster.Cluster{id: selectedCluster}
 
-	return dynamicAPI
+	return dynamicAPI, nil
 }
 
 // rejectCrossSiteRequests refuses a state-changing request that a browser sent on

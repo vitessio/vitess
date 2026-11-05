@@ -5918,6 +5918,36 @@ func TestServeHTTP(t *testing.T) {
 	}
 }
 
+func TestServeHTTPUnknownDynamicCluster(t *testing.T) {
+	t.Parallel()
+
+	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	req := httptest.NewRequest(http.MethodGet, "/api/clusters", nil)
+	req.AddCookie(&http.Cookie{Name: "cluster", Value: url.QueryEscape(base64.StdEncoding.EncodeToString([]byte(`{"id": "dynamiccluster1"}`)))})
+
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, req)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
+
+	var body struct {
+		Ok    bool `json:"ok"`
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	require.NoError(t, json.NewDecoder(res.Body).Decode(&body))
+	assert.False(t, body.Ok)
+	assert.Equal(t, "invalid cluster", body.Error.Code)
+	assert.Contains(t, body.Error.Message, "no cluster with id dynamiccluster1")
+}
+
 func init() {
 	// For tests that don't actually care about mocking the tmclient (i.e. they
 	// call grpcvtctldserver.NewVtctldServer to initialize the unit under test),
