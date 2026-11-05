@@ -2020,10 +2020,10 @@ func TestQueryThrottlerLeavesOutTabletsWhoseThrottlerIsNotRunning(t *testing.T) 
 		Alias:  "cell1-101",
 		Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 101}},
 	}
-	// shardLag probes the replica whose throttler isn't running and, if withLaggingReplica, adds a replica that lags
-	// 30 seconds. It stores the metrics in the inventory as Operate does, by the tablet alias and the name each metric
-	// carries, and returns the aggregated shard lag.
-	shardLag := func(t *testing.T, throttlerType ThrottlerType, withLaggingReplica bool) base.MetricResult {
+	// shardMetrics probes the replica whose throttler isn't running and, if withLaggingReplica, adds a replica whose
+	// every metric reads 30. It stores the metrics in the inventory as Operate does, by the tablet alias and the name
+	// each metric carries, and returns every known metric aggregated over the shard.
+	shardMetrics := func(t *testing.T, throttlerType ThrottlerType, withLaggingReplica bool) map[base.MetricName]base.MetricResult {
 		throttler := newTestThrottler()
 		throttler.throttlerType = throttlerType
 		throttler.inventory.TabletMetrics = base.TabletResultMap{}
@@ -2046,19 +2046,30 @@ func TestQueryThrottlerLeavesOutTabletsWhoseThrottlerIsNotRunning(t *testing.T) 
 			store(lagging)
 		}
 		require.NoError(t, throttler.aggregateMetrics())
-		return throttler.getAggregatedMetric(base.LagMetricName.AggregatedName(base.ShardScope))
+		results := map[base.MetricName]base.MetricResult{}
+		for _, name := range base.KnownMetricNames {
+			results[name] = throttler.getAggregatedMetric(name.AggregatedName(base.ShardScope))
+		}
+		return results
 	}
 
 	t.Run("dedicated query throttler", func(t *testing.T) {
-		lag, err := shardLag(t, QueryTabletThrottler, true).Get()
-		require.NoError(t, err)
-		assert.Equal(t, 30.0, lag, "the lagging replica's lag, without the replica whose throttler isn't running")
+		for name, result := range shardMetrics(t, QueryTabletThrottler, true) {
+			value, err := result.Get()
+			if assert.NoError(t, err, name) {
+				assert.Equal(t, 30.0, value, "%v: the lagging replica's value, without the replica whose throttler isn't running", name)
+			}
+		}
 	})
 	t.Run("dedicated query throttler, no other replica", func(t *testing.T) {
-		assert.Equal(t, base.NoHostsMetricResult, shardLag(t, QueryTabletThrottler, false), "no replica left to read lag from")
+		for name, result := range shardMetrics(t, QueryTabletThrottler, false) {
+			assert.Equal(t, base.NoHostsMetricResult, result, "%v: no replica left to read it from", name)
+		}
 	})
 	t.Run("lag throttler", func(t *testing.T) {
-		assert.Equal(t, base.NoMetricResultYet, shardLag(t, DefaultTabletThrottler, true))
+		for name, result := range shardMetrics(t, DefaultTabletThrottler, true) {
+			assert.Equal(t, base.NoMetricResultYet, result, name)
+		}
 	})
 }
 
