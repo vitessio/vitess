@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/fileutil"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Hook is the input structure for this library.
@@ -237,7 +238,13 @@ func (hook *Hook) ExecuteOptional() error {
 // exits or is killed. A child the hook started that writes to its output after
 // that fails or is killed by SIGPIPE.
 func (hook *Hook) ExecuteOptionalContext(ctx context.Context) error {
-	return hook.optionalError(hook.execute(ctx, hookWaitDelay))
+	hr := hook.execute(ctx, hookWaitDelay)
+	if hr.ExitStatus == HOOK_TIMEOUT_ERROR {
+		// The hook was killed because ctx ended: keep the cancellation, and
+		// its code, in the error.
+		return vterrors.Wrapf(ctx.Err(), "%v hook failed(%v): %v", hook.Name, hr.ExitStatus, hr.Stderr)
+	}
+	return hook.optionalError(hr)
 }
 
 func (hook *Hook) optionalError(hr *HookResult) error {

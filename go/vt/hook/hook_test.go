@@ -35,6 +35,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	vtenv "vitess.io/vitess/go/vt/env"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestExecuteContext(t *testing.T) {
@@ -122,7 +124,19 @@ func TestExecuteOptionalContext(t *testing.T) {
 		returned := runAsync(ctx, "running_hook")
 		waitForFile(t, marker)
 		cancel()
-		require.ErrorContains(t, requireReturns(t, returned), "failed(-7)")
+		err := requireReturns(t, returned)
+		require.ErrorContains(t, err, "failed(-7)")
+		assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+	})
+
+	t.Run("running hook past its deadline", func(t *testing.T) {
+		marker := installHook(t, "slow_hook", "touch $MARKER\nexec sleep 60\n")
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+		t.Cleanup(cancel)
+		err := NewSimpleHook("slow_hook").ExecuteOptionalContext(ctx)
+		waitForFile(t, marker)
+		require.ErrorContains(t, err, "failed(-7)")
+		assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	})
 
 	t.Run("canceled hook with a child holding its output", func(t *testing.T) {
@@ -179,6 +193,8 @@ func TestExecuteOptionalContext(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				require.ErrorContains(t, err, tc.wantErr)
+				// The hook finished on its own: its result is not a cancellation.
+				assert.NotEqual(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
 			}
 		})
 	}
