@@ -817,7 +817,9 @@ func (t *rowPoolTracker) trim(rows []*querypb.Row) []*querypb.Row {
 		return rows
 	}
 
-	t.caps = t.caps[:0]
+	// Drop the tracker's storage with the pool: it is sized by the largest packet seen, which is what
+	// is being reclaimed.
+	t.caps = nil
 	t.total = 0
 	return nil
 }
