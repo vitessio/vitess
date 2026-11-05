@@ -1029,6 +1029,25 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 	}
 }
 
+// TestFormerPrimaryIsFencedWithoutPrimaryHostname covers a former primary whose
+// shard primary has no MySQL hostname yet: initialization cannot replicate,
+// but must still fence it.
+func TestFormerPrimaryIsFencedWithoutPrimaryHostname(t *testing.T) {
+	tm, md := newFormerPrimaryTM(t, "")
+	md.ExpectedExecuteSuperQueryList = nil
+	_, err := tm.TopoServer.UpdateTabletFields(t.Context(), &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}, func(tablet *topodatapb.Tablet) error {
+		tablet.MysqlHostname = ""
+		return nil
+	})
+	require.NoError(t, err)
+
+	_, err = tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.False(t, md.SemiSyncPrimaryEnabled, "a former primary must not wait for acknowledgements")
+	assert.True(t, md.SuperReadOnly.Load(), "a former primary must not accept writes")
+	require.NoError(t, md.CheckSuperQueryList(), "replication must not change")
+}
+
 // TestRestartAfterRestoreTakesTheActionLock covers the restart case of
 // TestRestartAfterRestoreInitializesReplication, which runs once the tablet may
 // serve RPCs: it must not change replication while an action holds the lock.
