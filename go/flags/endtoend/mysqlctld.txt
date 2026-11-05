@@ -43,7 +43,6 @@ Flags:
       --db-credentials-vault-tls-ca string                               Path to CA PEM for validating Vault server certificate
       --db-credentials-vault-tokenfile string                            Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                                How long to cache DB credentials from the Vault server (default 30m0s)
-      --db-dba-password string                                           db dba password
       --db-dba-use-ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
       --db-dba-user string                                               db dba user userKey (default "vt_dba")
       --db-flags uint                                                    Flag values as defined by MySQL.

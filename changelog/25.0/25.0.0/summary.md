@@ -263,6 +263,27 @@ The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, an
 
 **Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
 
+The following flags, which pass credentials as flag values, are now deprecated in favor of the existing options that read them from a file. They keep working, but print a deprecation warning when they are set, and will be removed in v26.
+
+| Deprecated | Binaries | Use instead |
+|---|---|---|
+| `--db-app-password`, `--db-appdebug-password`, `--db-allprivs-password`, `--db-dba-password`, `--db-filtered-password`, `--db-repl-password`, `--db-erepl-password`, `--db-clone-password` | `vttablet`, `vtbackup`, `vtcombo`, `mysqlctl`, `mysqlctld` | `--db-credentials-file` (or the Vault credentials server, `--db-credentials-server=vault`) |
+| `--mysql-auth-server-static-string` | `vtgate` | `--mysql-auth-server-static-file` |
+| `--mysql-ldap-auth-config-string` | `vtgate` | `--mysql-ldap-auth-config-file` |
+| The `vtsql-credentials-password` option of `--cluster` and `--cluster-defaults` | `vtadmin` | `vtsql-credentials-path-tmpl`, or the option in a `--cluster-config` file |
+| The `discovery-consul-token` option of `--cluster` and `--cluster-defaults` | `vtadmin` | The `CONSUL_HTTP_TOKEN_FILE` environment variable, or the option in a `--cluster-config` file |
+
+`--db-credentials-file` takes a JSON object that maps each user to a list of passwords, of which the first one is used. Keep the `--db-*-user` flags to choose the users:
+
+```json
+{
+  "vt_dba": ["dba-password"],
+  "vt_app": ["app-password"]
+}
+```
+
+**Impact**: Move these credentials into the files listed above and remove the deprecated flags and options from startup scripts or configuration before upgrading to v26.
+
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
 The `SelectStream` query plan type no longer exists: statements served over the streaming path now produce the same plan types as buffered execution (`Select`, `Show`, `SelectLockFunc`, ...), so query rules keyed on those concrete plan names now apply to both execution paths.

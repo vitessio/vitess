@@ -238,9 +238,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"--db-charset", charset,
 		"--db-app-user", user,
-		"--db-app-password", pass,
 		"--db-dba-user", user,
-		"--db-dba-password", pass,
 		"--proto-topo", string(protoTopo),
 		"--mycnf-server-id", "1",
 		"--mycnf-socket-file", socket,
@@ -254,6 +252,11 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		fmt.Sprintf("--no-scatter=%t", args.NoScatter),
 		fmt.Sprintf("--prevent-cross-keyspace-reads=%t", args.PreventCrossKeyspaceReads),
 	}...)
+	// The --db-*-password flags are deprecated, so only pass them when there is
+	// a password to set.
+	if pass != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, "--db-app-password", pass, "--db-dba-password", pass)
+	}
 
 	// If topo tablet refresh interval is not defined then we will give it value of 10s. Please note
 	// that the default value is 1 minute, but we are keeping it low to make vttestserver perform faster.

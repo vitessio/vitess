@@ -19,6 +19,7 @@ package dbconfigs
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"reflect"
@@ -26,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -326,6 +328,22 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 	require.Equalf(t, ErrUnknownUser, err, "Should not have old %s after config reload", oldStr)
 	_, pass, _ = cs.GetUserAndPassword(newStr)
 	require.Equalf(t, newStr, pass, "%s's Password should be '%s'", newStr, newStr)
+}
+
+// TestPasswordFlagsDeprecated checks that the --db-*-password flags are
+// deprecated in favor of --db-credentials-file, and still set the password.
+func TestPasswordFlagsDeprecated(t *testing.T) {
+	var uc UserConfig
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	registerPerUserFlags(fs, Dba, &uc, &mysql.ConnParams{})
+
+	flag := fs.Lookup("db-dba-password")
+	require.NotNil(t, flag)
+	assert.Equal(t, "use --db-credentials-file instead", flag.Deprecated)
+
+	require.NoError(t, fs.Parse([]string{"--db-dba-password=secret"}))
+	assert.Equal(t, "secret", uc.Password)
 }
 
 func TestYaml(t *testing.T) {

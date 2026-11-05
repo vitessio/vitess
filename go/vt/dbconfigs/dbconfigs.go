@@ -165,6 +165,7 @@ func registerPerUserFlags(fs *pflag.FlagSet, userKey string, uc *UserConfig, cp 
 	newPasswordFlag := "db-" + userKey + "-password"
 	utils.SetFlagStringVar(fs, &uc.Password, newPasswordFlag, "", "db "+userKey+" password")
 	// fs.StringVar(&uc.Password, newPasswordFlag, "", "db "+userKey+" password")
+	_ = fs.MarkDeprecated(newPasswordFlag, "use --db-credentials-file instead")
 
 	utils.SetFlagBoolVar(fs, &uc.UseSSL, "db-"+userKey+"-use-ssl", true, "Set this flag to false to make the "+userKey+" connection to not use ssl")
 	// fs.BoolVar(&uc.UseSSL, "db_"+userKey+"_use_ssl", true, "Set this flag to false to make the "+userKey+" connection to not use ssl")

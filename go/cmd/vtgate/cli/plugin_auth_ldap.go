@@ -34,6 +34,7 @@ var (
 func init() {
 	utils.SetFlagStringVar(Main.Flags(), &ldapAuthConfigFile, "mysql-ldap-auth-config-file", "", "JSON File from which to read LDAP server config.")
 	utils.SetFlagStringVar(Main.Flags(), &ldapAuthConfigString, "mysql-ldap-auth-config-string", "", "JSON representation of LDAP server config.")
+	_ = Main.Flags().MarkDeprecated("mysql-ldap-auth-config-string", "use --mysql-ldap-auth-config-file instead")
 	utils.SetFlagStringVar(Main.Flags(), &ldapAuthMethod, "mysql-ldap-auth-method", string(mysql.MysqlClearPassword), "client-side authentication method to use. Supported values: mysql_clear_password, dialog.")
 
 	vtgate.RegisterPluginInitializer(func() { ldapauthserver.Init(ldapAuthConfigFile, ldapAuthConfigString, ldapAuthMethod) })

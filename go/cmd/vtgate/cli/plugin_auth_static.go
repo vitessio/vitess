@@ -35,6 +35,7 @@ var (
 func init() {
 	utils.SetFlagStringVar(Main.Flags(), &mysqlAuthServerStaticFile, "mysql-auth-server-static-file", "", "JSON File to read the users/passwords from.")
 	utils.SetFlagStringVar(Main.Flags(), &mysqlAuthServerStaticString, "mysql-auth-server-static-string", "", "JSON representation of the users/passwords config.")
+	_ = Main.Flags().MarkDeprecated("mysql-auth-server-static-string", "use --mysql-auth-server-static-file instead")
 	utils.SetFlagDurationVar(Main.Flags(), &mysqlAuthServerStaticReloadInterval, "mysql-auth-static-reload-interval", 0, "Ticker to reload credentials")
 
 	vtgate.RegisterPluginInitializer(func() {
