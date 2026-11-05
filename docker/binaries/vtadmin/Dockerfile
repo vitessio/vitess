@@ -19,7 +19,7 @@ ARG NGINX_DIGEST=sha256:5366aa1ef633415d3fb30f8b5b2d824c4ae1c231a0f63358e7f39734
 
 FROM vitess/lite:${VT_BASE_VER} AS lite
 
-FROM node:22-${DEBIAN_VER}@${NODE_DIGEST} as node
+FROM node:22-${DEBIAN_VER}@${NODE_DIGEST} AS node
 
 # Prepare directory structure.
 RUN mkdir -p /vt/web
