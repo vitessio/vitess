@@ -1543,6 +1543,19 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		query:  "/select val from _vt.resharding_journal.*",
 		result: &querypb.QueryResult{},
 	}
+	// The journal that an earlier attempt at switching writes created.
+	journal, err := prototext.Marshal(&binlogdatapb.Journal{
+		Id:            1,
+		MigrationType: binlogdatapb.MigrationType_TABLES,
+		Tables:        []string{tableName},
+	})
+	require.NoError(t, err)
+	journalExistsQR := &queryResult{
+		query: "/select val from _vt.resharding_journal.*",
+		result: sqltypes.ResultToProto3(sqltypes.MakeTestResult([]*querypb.Field{
+			{Name: "val", Type: querypb.Type_BLOB},
+		}, string(journal))),
+	}
 	lockTableQR := &queryResult{
 		query:  fmt.Sprintf("LOCK TABLES `%s` READ", tableName),
 		result: &querypb.QueryResult{},
@@ -1767,10 +1780,13 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 					err:          errors.New("create failed"),
 				})
 			},
-			// Only the queries that switching reads runs, as the failure comes
-			// before switching writes runs any.
+			// Only the queries that switching reads runs, and the journal check
+			// of switching writes, as the failure comes before switching writes
+			// runs any other.
 			expectQueries: func(env *testEnv, source, target *testKeyspace) {
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, copyTableQR)
+				// Switching reads and switching writes each check the journal.
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalQR)
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalQR)
 			},
 			wantErr: true,
@@ -1788,6 +1804,80 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				env.tmc.mu.Lock()
 				defer env.tmc.mu.Unlock()
 				assert.Empty(t, env.tmc.applySchemaRequests[uint32(sequenceTabletUID)])
+				for tabletID, queries := range env.tmc.vrQueries {
+					assert.Empty(t, queries, "queries not run on tablet %d", tabletID)
+				}
+			},
+		},
+		{
+			// An earlier attempt created the journal, so this one only finishes
+			// the switch. Preparing the sequences would fail, as in the case
+			// above, but it isn't attempted.
+			name: "forward with sequence initialization after the journal was created",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:                  targetKeyspaceName,
+				Workflow:                  workflowName,
+				Direction:                 int32(DirectionForward),
+				TabletTypes:               allTabletTypes,
+				InitializeTargetSequences: true,
+			},
+			setUp: func(t *testing.T, env *testEnv) {
+				setUpSequence(t, env, sequenceTableName)
+				env.tmc.expectReadVReplicationWorkflowRequestOnTargetTablets(&readVReplicationWorkflowRequestResponse{
+					req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: workflowName},
+					res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+						Workflow:     workflowName,
+						WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+						Options:      fmt.Sprintf(`{"global_keyspace": %q}`, sequenceKeyspaceName),
+						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Tables:   []string{tableName},
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{{Match: tableName, Filter: "select * from " + tableName}},
+								},
+							},
+						}},
+					},
+				})
+				env.tmc.expectApplySchemaRequest(uint32(sequenceTabletUID), &applySchemaRequestResponse{
+					matchSqlOnly: true,
+					change:       &tmutils.SchemaChange{SQL: fmt.Sprintf("/create table if not exists `%s`", sequenceTableName)},
+					err:          errors.New("create failed"),
+				})
+			},
+			expectQueries: func(env *testEnv, source, target *testKeyspace) {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, copyTableQR)
+				// Switching reads and switching writes each check the journal.
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalExistsQR)
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalExistsQR)
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, freezeWFQR)
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "Reads Not Switched. Writes Not Switched",
+				CurrentState: "All Reads Switched. Writes Switched",
+			},
+			check: func(t *testing.T, env *testEnv, _ error) {
+				// The sequences weren't prepared: no backing table was created
+				// and nothing was added to a vschema.
+				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
+				require.NoError(t, err)
+				assert.Empty(t, kvs.Tables)
+				env.tmc.mu.Lock()
+				defer env.tmc.mu.Unlock()
+				assert.Len(t, env.tmc.applySchemaRequests[uint32(sequenceTabletUID)], 1)
+				// The rest of the switch ran, through freezing the workflow.
 				for tabletID, queries := range env.tmc.vrQueries {
 					assert.Empty(t, queries, "queries not run on tablet %d", tabletID)
 				}
