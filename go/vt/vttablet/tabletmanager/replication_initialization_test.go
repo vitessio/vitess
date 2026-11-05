@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -1072,6 +1073,47 @@ func TestRestartAfterRestoreTakesTheActionLock(t *testing.T) {
 	}, 30*time.Second, 10*time.Millisecond, "initialization did not finish after the action released the lock")
 	require.NoError(t, err)
 	require.NoError(t, md.CheckSuperQueryList())
+	assert.True(t, md.Replicating)
+}
+
+// endingDeferralBackupEngine ends the tablet's deferred replication
+// initialization during the backup, as the watcher can from a sample taken
+// before the backup started.
+type endingDeferralBackupEngine struct {
+	*mysqlctl.FakeBackupEngine
+	tm *TabletManager
+}
+
+func (e *endingDeferralBackupEngine) ExecuteBackup(ctx context.Context, params mysqlctl.BackupParams, bh backupstorage.BackupHandle) (mysqlctl.BackupResult, error) {
+	e.tm.tmState.cancelReplicationInit(ctx)
+	return e.FakeBackupEngine.ExecuteBackup(ctx, params, bh)
+}
+
+// TestBackupKeepsTheDeferralItStartedWith covers a deferral that ends during an
+// offline backup. The backup's cleanup, which does not hold the shard lock,
+// must still leave the source alone, as for a deferred replica.
+func TestBackupKeepsTheDeferralItStartedWith(t *testing.T) {
+	tm, md, _, _ := newReplicatingPendingTM(t)
+	tm.Cnf = &mysqlctl.Mycnf{}
+	md.DB().SetNeverFail(true)
+	md.ExpectedExecuteSuperQueryList = nil
+	// A repoint starts with STOP REPLICA, before the source changes.
+	var replicationQueries atomic.Int32
+	md.ExecuteSuperQueryListCallback = func() { replicationQueries.Add(1) }
+	useFakeBackupStorage(t)
+	const engine = "ending-deferral-drain"
+	mysqlctl.BackupRestoreEngineMap[engine] = &endingDeferralBackupEngine{
+		FakeBackupEngine: &mysqlctl.FakeBackupEngine{
+			ShouldDrainForBackupReturn: true,
+			ExecuteBackupReturn:        mysqlctl.FakeBackupEngineExecuteBackupReturn{Res: mysqlctl.BackupUsable},
+		},
+		tm: tm,
+	}
+	t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, engine) })
+	holdInitializationShardLock(t, tm.TopoServer)
+
+	require.NoError(t, tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)}))
+	assert.Zero(t, replicationQueries.Load(), "backup cleanup changed replication under another operation's shard lock")
 	assert.True(t, md.Replicating)
 }
 

@@ -133,6 +133,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return err
 		}
 		originalType = tablet.Type
+		// No deferral starts while the backup holds the action lock, but the
+		// watcher can end one from a sample taken before the backup: decide the
+		// cleanup now.
+		deferred := tm.tmState.replicationInitPending()
 		// A primary's semi-sync is restored from the policy in effect now, so a
 		// policy that can't be read refuses the backup before the type changes.
 		// VTOrc reconciles a later policy change once the primary serves again.
@@ -234,9 +238,8 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			// entering BACKUP turned off, which can restart a running receiver
 			// from its configured source. It leaves semi-sync off on a receiver
 			// that runs from a source other than the shard primary, which may be
-			// the primary a reparent replaces. No deferral starts while the
-			// backup holds the action lock.
-			if tm.tmState.replicationInitPending() {
+			// the primary a reparent replaces.
+			if deferred {
 				status, err := tm.MysqlDaemon.ReplicationStatus(replCtx)
 				if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
 					l.Errorf("Leaving semi-sync off: cannot read the replication status: %v", err)
