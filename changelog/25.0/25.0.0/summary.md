@@ -800,7 +800,9 @@ VTGate now marks the streams of its `VStream` API, and for them the source table
 vtctldclient UpdateThrottlerConfig --throttle-app vtgate-vstream --throttle-app-exempt --throttle-app-duration 8760h <keyspace>
 ```
 
-Existing rules for `vstreamer` and `rowstreamer` still apply to VTGate VStreams, so current configurations keep working. The new names are used only when both VTGate and the source VTTablet include this change. With an older VTGate or VTTablet, VTGate VStreams check the throttler as `vstreamer` and `rowstreamer`, as before.
+Existing rules for `vstreamer` and `rowstreamer` still apply to VTGate VStreams, so current configurations keep working. As for any app, an exempt rule takes precedence over throttle rules: with `vtgate-vstream` exempted, a throttle rule for `vstreamer` no longer pauses VTGate VStreams. The throttler's status, as shown by `vtctldclient GetThrottlerStatus`, lists the checks of VTGate VStreams under the new names, `vstreamer:vtgate-vstream` and `rowstreamer:vtgate-vstream`, rather than `vstreamer` and `rowstreamer`.
+
+The new names are used only when both VTGate and the source VTTablet include this change. With an older VTGate or VTTablet, VTGate VStreams check the throttler as `vstreamer` and `rowstreamer`, as before.
 
 See [#21673](https://github.com/vitessio/vitess/issues/21673) for details.
 
