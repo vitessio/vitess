@@ -130,14 +130,14 @@ func owesReferenceRows(ctx *plancontext.PlanningContext, joinType sqlparser.Join
 }
 
 // isDirectDMLRowSource reports whether a merge of these routes is the row source of a multi-table
-// DML rather than something that reads it. Nothing reads the preserved rows then: an unmatched one
-// has no row to update or delete on the other side, and a reference table that is itself the
-// target has a physical copy on every shard to write to. A target among these routes is what says
-// the DML writes through this join rather than reading it from further down, where an outer join
-// in a subquery does have its rows read.
+// DML sent to the shards as it is, rather than something that reads it. Nothing returns the
+// preserved rows then: an unmatched one has no row to update or delete on the other side. A target
+// among these routes is what says the DML writes through this join rather than reading it from
+// further down, where an outer join in a subquery does have its rows read. A DML that reads its
+// rows first does so through a SELECT, which is never the row source.
 func isDirectDMLRowSource(ctx *plancontext.PlanningContext, routes ...*Route) bool {
 	targets := ctx.SemTable.DMLTargets
-	if targets.IsEmpty() {
+	if targets.IsEmpty() || ctx.DMLReadsItsRows {
 		return false
 	}
 

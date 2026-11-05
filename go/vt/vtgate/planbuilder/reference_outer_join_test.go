@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/vschemawrapper"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -184,7 +185,8 @@ func TestMultiTableDeleteThroughAReferenceOuterJoinIsStillMerged(t *testing.T) {
 	require.Equal(t, "delete u from ref as r left join `user` as u on r.col = u.col", del.Query)
 }
 
-// The reference table can be the target itself, and then every shard has a physical copy to delete.
+// The reference table can be the target itself. Nothing in this statement depends on the other
+// side, so every shard deletes its whole copy, which is what the join asks for.
 func TestDeleteOfThePreservedReferenceTableIsStillMerged(t *testing.T) {
 	primitive := planReferenceOuterJoin(t,
 		"delete r from ref r left join `user` u on r.col = u.col")
@@ -282,4 +284,29 @@ func TestPreservedRowsOnTheNullExtendedSideAreMergedIntoTheScatter(t *testing.T)
 	route, ok := primitive.(*engine.Route)
 	require.True(t, ok, "the reference join is expected to be merged into the scatter, got %T", primitive)
 	require.Equal(t, engine.Scatter, route.Opcode)
+}
+
+// A DML that has to read its rows first, here because of the LIMIT, reads them through a SELECT
+// and writes them back by primary key. That SELECT is a read like any other: a scatter would
+// return each unmatched reference row once per shard and test `u.id is null` against one shard's
+// users at a time.
+func TestReferenceRowsReadByADMLWithInputAreNotMergedIntoTheScatter(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	id := sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
+	vschema.Keyspaces["user"].Tables["ref_with_source"].PrimaryKey = id
+	vschema.Keyspaces["main"].Tables["source_of_ref"].PrimaryKey = id
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	require.NoError(t, err)
+
+	plan, err := TestBuilder("update ref_with_source r left join `user` u on r.col = u.col set r.foo = 1 where u.id is null limit 5", vw, vw.CurrentDb())
+	require.NoError(t, err)
+
+	dml, ok := plan.Instructions.(*engine.DMLWithInput)
+	require.True(t, ok, "the rows are expected to be read before they are written, got %T", plan.Instructions)
+	limit, ok := dml.Input.(*engine.Limit)
+	require.True(t, ok, "the LIMIT is expected to stay above the join, got %T", dml.Input)
+	filter, ok := limit.Input.(*engine.Filter)
+	require.True(t, ok, "`u.id is null` is expected to be tested against every shard's users, got %T", limit.Input)
+	require.IsType(t, &engine.Join{}, filter.Input,
+		"merging the reference route into the scatter would read each unmatched r row once per shard")
 }
