@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -131,62 +130,59 @@ func TestRestoreChunksWriteMode(t *testing.T) {
 		concurrency   int
 		compress      bool
 		rejectODirect bool
-		// expectedDirect returns whether a chunk should be written with O_DIRECT.
-		expectedDirect func(chunk FileChunk) bool
-		// expectedWarning is a warning that must be logged exactly once. When empty, no warnings are expected.
-		expectedWarning string
+		// expectDirect is whether the chunks should be written with O_DIRECT.
+		expectDirect bool
+		// expectErr is the error createChunkedDestinations should fail with, before any chunk is restored.
+		expectErr string
 	}{
 		{
-			name:           "buffered",
-			mode:           restoreWriteModeBuffered,
-			chunkSize:      64 * 1024,
-			concurrency:    1,
-			expectedDirect: func(FileChunk) bool { return false },
+			name:        "buffered",
+			mode:        restoreWriteModeBuffered,
+			chunkSize:   64 * 1024,
+			concurrency: 1,
 		},
 		{
-			name:           "direct",
-			mode:           restoreWriteModeDirect,
-			chunkSize:      64 * 1024,
-			concurrency:    1,
-			expectedDirect: func(FileChunk) bool { return true },
+			name:         "direct",
+			mode:         restoreWriteModeDirect,
+			chunkSize:    64 * 1024,
+			concurrency:  1,
+			expectDirect: true,
 		},
 		{
-			name:           "direct with zstd compressed chunks",
-			mode:           restoreWriteModeDirect,
-			chunkSize:      64 * 1024,
-			concurrency:    1,
-			compress:       true,
-			expectedDirect: func(FileChunk) bool { return true },
+			name:         "direct with zstd compressed chunks",
+			mode:         restoreWriteModeDirect,
+			chunkSize:    64 * 1024,
+			concurrency:  1,
+			compress:     true,
+			expectDirect: true,
 		},
 		{
-			name:           "direct with chunks of the same file restored concurrently",
-			mode:           restoreWriteModeDirect,
-			chunkSize:      64 * 1024,
-			concurrency:    4,
-			expectedDirect: func(FileChunk) bool { return true },
+			name:         "direct with chunks of the same file restored concurrently",
+			mode:         restoreWriteModeDirect,
+			chunkSize:    64 * 1024,
+			concurrency:  4,
+			expectDirect: true,
 		},
 		{
-			name:            "direct falls back to buffered for unaligned chunk offsets",
-			mode:            restoreWriteModeDirect,
-			chunkSize:       6000,
-			concurrency:     1,
-			expectedDirect:  func(c FileChunk) bool { return c.Offset%directIOAlignment == 0 },
-			expectedWarning: "don't start at an O_DIRECT-aligned offset",
+			name:        "direct fails for unaligned chunk offsets",
+			mode:        restoreWriteModeDirect,
+			chunkSize:   6000,
+			concurrency: 1,
+			expectErr:   "starts at offset 6000, which is not a multiple of 4096",
 		},
 		{
-			name:            "direct falls back to buffered when O_DIRECT is rejected",
-			mode:            restoreWriteModeDirect,
-			chunkSize:       64 * 1024,
-			concurrency:     1,
-			rejectODirect:   true,
-			expectedDirect:  func(FileChunk) bool { return false },
-			expectedWarning: "Can't use O_DIRECT for chunked file",
+			name:          "direct fails when O_DIRECT is rejected",
+			mode:          restoreWriteModeDirect,
+			chunkSize:     64 * 1024,
+			concurrency:   1,
+			rejectODirect: true,
+			expectErr:     "O_DIRECT is not supported",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cnf := &Mycnf{DataDir: t.TempDir()}
-			if tt.mode == restoreWriteModeDirect && !tt.rejectODirect {
+			if tt.mode == restoreWriteModeDirect && tt.expectErr == "" {
 				requireDirectIO(t, cnf.DataDir)
 			}
 			setRestoreWriteMode(t, tt.mode)
@@ -235,15 +231,21 @@ func TestRestoreChunksWriteMode(t *testing.T) {
 					return io.NopCloser(bytes.NewReader(stored[filename])), nil
 				},
 			}
-			logger := logutil.NewMemoryLogger()
 			params := RestoreParams{
 				Cnf:         cnf,
-				Logger:      logger,
+				Logger:      logutil.NewMemoryLogger(),
 				Stats:       backupstats.NoStats(),
 				Concurrency: tt.concurrency,
 			}
 
-			require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", params.Logger))
+			err = createChunkedDestinations(t.Context(), fes, cnf, "", params.Logger)
+			if tt.expectErr != "" {
+				require.ErrorContains(t, err, tt.expectErr)
+				require.ErrorContains(t, err, "--builtinbackup-restore-write-mode=buffered", "the error must say how to restore the backup")
+				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "the restore must not be retried")
+				return
+			}
+			require.NoError(t, err)
 			// Only count the opens made to restore the chunks.
 			directOpens = nil
 			be := &BuiltinBackupEngine{}
@@ -253,26 +255,17 @@ func TestRestoreChunksWriteMode(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, bytes.Equal(data, got), "restored file does not match")
 
-			var expectedDirectOpens, directOpenCount int
-			for _, c := range fes[0].Chunks {
-				if tt.expectedDirect(c) {
-					expectedDirectOpens++
-				}
-			}
+			var directOpenCount int
 			for _, direct := range directOpens {
 				if direct {
 					directOpenCount++
 				}
 			}
 			assert.Len(t, directOpens, len(fes[0].Chunks), "every chunk opens its destination once")
-			assert.Equal(t, expectedDirectOpens, directOpenCount, "chunks opened with O_DIRECT")
-
-			warnings := warningsLogged(logger)
-			if tt.expectedWarning == "" {
-				assert.Empty(t, warnings)
+			if tt.expectDirect {
+				assert.Equal(t, len(fes[0].Chunks), directOpenCount, "every chunk must be opened with O_DIRECT")
 			} else {
-				require.Len(t, warnings, 1, "the fallback should be logged once per file, not once per chunk")
-				assert.Contains(t, warnings[0], tt.expectedWarning)
+				assert.Zero(t, directOpenCount, "no chunk may be opened with O_DIRECT")
 			}
 		})
 	}
@@ -287,6 +280,8 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 		fallocateErr    error
 		expectAllocated bool
 		expectErr       string
+		// expectFailedPrecondition is whether the error must not be retried.
+		expectFailedPrecondition bool
 	}{
 		{
 			name: "buffered mode leaves the file sparse",
@@ -298,9 +293,11 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 			expectAllocated: true,
 		},
 		{
-			name:         "direct mode falls back to a sparse file when fallocate is unsupported",
-			mode:         restoreWriteModeDirect,
-			fallocateErr: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "test"),
+			name:                     "direct mode fails when fallocate is unsupported",
+			mode:                     restoreWriteModeDirect,
+			fallocateErr:             vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "fallocate is not supported"),
+			expectErr:                "fallocate is not supported",
+			expectFailedPrecondition: true,
 		},
 		{
 			name:         "direct mode fails on other fallocate errors",
@@ -312,6 +309,9 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cnf := &Mycnf{DataDir: t.TempDir()}
+			if tt.mode == restoreWriteModeDirect {
+				requireDirectIO(t, cnf.DataDir)
+			}
 			if tt.expectAllocated {
 				requireFallocate(t, cnf.DataDir)
 			}
@@ -325,7 +325,11 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 			fes := []FileEntry{{Base: backupData, Name: "vt_test/t1.ibd", Chunks: computeFileChunks(0, fileSize, 1024*1024)}}
 			err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewMemoryLogger())
 			if tt.expectErr != "" {
-				assert.ErrorContains(t, err, tt.expectErr)
+				require.ErrorContains(t, err, tt.expectErr)
+				if tt.expectFailedPrecondition {
+					require.ErrorContains(t, err, "--builtinbackup-restore-write-mode=buffered", "the error must say how to restore the backup")
+					assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "the restore must not be retried")
+				}
 				return
 			}
 			require.NoError(t, err)
@@ -389,14 +393,4 @@ func compressForTest(t *testing.T, engine string, data []byte) []byte {
 	require.NoError(t, err)
 	require.NoError(t, c.Close())
 	return buf.Bytes()
-}
-
-func warningsLogged(logger *logutil.MemoryLogger) []string {
-	var warnings []string
-	for _, e := range logger.LogEvents() {
-		if e.Level == logutilpb.Level_WARNING {
-			warnings = append(warnings, e.Value)
-		}
-	}
-	return warnings
 }
