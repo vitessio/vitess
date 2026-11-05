@@ -772,39 +772,57 @@ func TestBackupLeavesDeferredReplicationAlone(t *testing.T) {
 	}
 }
 
-// statusErrorAfterBackupDaemon, when err is set, fails the second replication
-// status read of a backup: the first is entering BACKUP, the second is the
-// cleanup's. Later reads succeed.
+// statusErrorAfterBackupDaemon changes the second replication status read of
+// a backup, the cleanup's (the first is entering BACKUP): it fails with err if
+// set, or does not return until its context ends if hang is set. It reports
+// the receiver as retrying a failed connection if connecting is set.
 type statusErrorAfterBackupDaemon struct {
 	*mysqlctl.FakeMysqlDaemon
-	err   error
-	reads atomic.Int32
+	err        error
+	hang       bool
+	connecting bool
+	reads      atomic.Int32
 }
 
 func (d *statusErrorAfterBackupDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
-	if d.reads.Add(1) == 2 && d.err != nil {
-		return replication.ReplicationStatus{}, d.err
+	if d.reads.Add(1) == 2 {
+		if d.err != nil {
+			return replication.ReplicationStatus{}, d.err
+		}
+		if d.hang {
+			<-ctx.Done()
+			return replication.ReplicationStatus{}, ctx.Err()
+		}
 	}
-	return d.FakeMysqlDaemon.ReplicationStatus(ctx)
+	status, err := d.FakeMysqlDaemon.ReplicationStatus(ctx)
+	if d.connecting {
+		status.IOState = replication.ReplicationStateConnecting
+		status.LastIOError = "error connecting to source"
+	}
+	return status, err
 }
 
 // TestBackupOfRunningDeferredReplica covers an offline backup of a deferred
 // replica that replicates again after the backup. Entering BACKUP turns off
 // semi-sync. While initialization is deferred, the backup's cleanup must turn
 // the replica's semi-sync role back on without setting the source, but only if
-// replication runs from the shard primary: a replica that replicates from
-// another source, such as a primary a reparent replaces, or whose status cannot
-// be read, must not acknowledge.
+// replication runs from the shard primary: a replica that replicates, or
+// connects, to another source, such as a primary a reparent replaces, or whose
+// status cannot be read, must not acknowledge. A status read that does not
+// return must not keep the backup's action lock.
 func TestBackupOfRunningDeferredReplica(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		source    string
-		statusErr error
-		semiSync  bool
+		name             string
+		source           string
+		statusErr        error
+		hang, connecting bool
+		semiSync         bool
 	}{
 		{name: "from the shard primary", source: "old-primary", semiSync: true},
 		{name: "from another source", source: "stale-primary"},
+		{name: "retrying another source", source: "stale-primary", connecting: true},
 		{name: "status unreadable", source: "stale-primary", statusErr: errors.New("status read failed")},
+		{name: "status read hangs", source: "old-primary", hang: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tm, md, qsc, id := newReplicatingPendingTM(t)
@@ -826,10 +844,27 @@ func TestBackupOfRunningDeferredReplica(t *testing.T) {
 			t.Cleanup(func() { delete(mysqlctl.BackupRestoreEngineMap, engine) })
 			holdInitializationShardLock(t, tm.TopoServer)
 
-			// A status read that fails at cleanup, and succeeds again later.
-			daemon := &statusErrorAfterBackupDaemon{FakeMysqlDaemon: md, err: tc.statusErr}
-			tm.MysqlDaemon = daemon
-			require.NoError(t, tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)}))
+			tm.MysqlDaemon = &statusErrorAfterBackupDaemon{FakeMysqlDaemon: md, err: tc.statusErr, hang: tc.hang, connecting: tc.connecting}
+			if tc.hang {
+				previous := topo.RemoteOperationTimeout
+				topo.RemoteOperationTimeout = time.Second
+				t.Cleanup(func() { topo.RemoteOperationTimeout = previous })
+			}
+			// The backup holds the action lock until its cleanup returns.
+			returned := make(chan error, 1)
+			go func() {
+				returned <- tm.Backup(t.Context(), logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: new(engine)})
+			}()
+			var err error
+			require.Eventually(t, func() bool {
+				select {
+				case err = <-returned:
+					return true
+				default:
+					return false
+				}
+			}, 30*time.Second, 10*time.Millisecond, "the backup's cleanup did not return")
+			require.NoError(t, err)
 			assert.False(t, repointed.Load(), "backup cleanup set the replication source under another operation's shard lock")
 			require.NoError(t, md.CheckSuperQueryList(), "backup cleanup restarted replication")
 			assert.Equal(t, tc.semiSync, md.SemiSyncReplicaEnabled)
