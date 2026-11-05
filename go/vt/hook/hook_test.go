@@ -156,7 +156,15 @@ func TestExecuteOptionalContext(t *testing.T) {
 		assert.Less(t, time.Since(start), 30*time.Second, "the hook call waited for the child")
 		hr := NewSimpleHook("exiting_parent").execute(t.Context(), hookWaitDelay)
 		assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
-		assert.Contains(t, hr.Stderr, "the output may be incomplete")
+		assert.Contains(t, hr.Stderr, "the output is incomplete")
+	})
+
+	t.Run("failed hook with a child holding its output", func(t *testing.T) {
+		installHook(t, "failing_parent", "sleep 60 &\necho $! >> $PIDS\necho diagnostics >&2\nexit 17\n")
+		hr := NewSimpleHook("failing_parent").execute(t.Context(), hookWaitDelay)
+		assert.Equal(t, 17, hr.ExitStatus)
+		assert.Contains(t, hr.Stderr, "diagnostics")
+		assert.Contains(t, hr.Stderr, "the output is incomplete", "a failed hook's output was cut off without a warning")
 	})
 
 	// The context ends after the hook exited, while a child holds its output.

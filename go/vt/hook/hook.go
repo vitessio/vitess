@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -156,18 +157,31 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 		return result
 	}
 
-	// Run it.
+	// Run it. The hook writes to pipes that this reads, so that it knows
+	// whether the output was complete: a child the hook started can keep them
+	// open after the hook exits.
 	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.WaitDelay = waitDelay
+	output, err := captureOutput(cmd, &stdout, &stderr)
+	if err != nil {
+		result.ExitStatus = HOOK_GENERIC_ERROR
+		result.Stderr = err.Error() + "\n"
+		return result
+	}
 
 	start := time.Now()
-	err = cmd.Run()
+	err = cmd.Start()
+	output.closeWriters()
+	if err == nil {
+		err = cmd.Wait()
+	}
 	duration := time.Since(start)
+	complete := output.wait(waitDelay)
 
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
+	if !complete {
+		result.Stderr += fmt.Sprintf("WARNING: the output is incomplete: the hook's children kept it open for more than %v after the hook ended\n", waitDelay)
+	}
 
 	defer func() {
 		log.Info(fmt.Sprintf("hook: result is %v", result.String()))
@@ -179,13 +193,10 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 	}
 
 	// A hook that exited on its own keeps its exit status, even if its
-	// context ended while a child held its output open.
+	// context ended before it was reaped.
 	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
 		result.ExitStatus = cmd.ProcessState.ExitCode()
-		if result.ExitStatus == HOOK_SUCCESS {
-			// Only the wait for the output failed.
-			result.Stderr += "WARNING: the output may be incomplete: " + err.Error() + "\n"
-		} else {
+		if result.ExitStatus != HOOK_SUCCESS {
 			result.Stderr += "ERROR: " + err.Error() + "\n"
 		}
 		return result
@@ -220,6 +231,71 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 	result.Stderr += "ERROR: " + err.Error() + "\n"
 
 	return result
+}
+
+// hookOutput copies a hook's stdout and stderr from pipes.
+type hookOutput struct {
+	readers, writers []*os.File
+	done             chan struct{}
+}
+
+// captureOutput connects cmd's stdout and stderr to pipes, and starts copying
+// them into stdout and stderr.
+func captureOutput(cmd *exec.Cmd, stdout, stderr io.Writer) (*hookOutput, error) {
+	output := &hookOutput{done: make(chan struct{})}
+	for range 2 {
+		r, w, err := os.Pipe()
+		if err != nil {
+			output.closeWriters()
+			for _, r := range output.readers {
+				r.Close()
+			}
+			return nil, err
+		}
+		output.readers = append(output.readers, r)
+		output.writers = append(output.writers, w)
+	}
+	cmd.Stdout, cmd.Stderr = output.writers[0], output.writers[1]
+	var copies sync.WaitGroup
+	for i, w := range []io.Writer{stdout, stderr} {
+		copies.Go(func() { _, _ = io.Copy(w, output.readers[i]) })
+	}
+	go func() {
+		copies.Wait()
+		close(output.done)
+	}()
+	return output, nil
+}
+
+// closeWriters closes this process's copies of the pipes' write ends. Once
+// the hook started, its own copies, and its children's, are the only ones
+// left, so the copies end when those close.
+func (o *hookOutput) closeWriters() {
+	for _, w := range o.writers {
+		w.Close()
+	}
+}
+
+// wait waits for the output to close, at most waitDelay unless it is zero,
+// and reports whether it closed. Otherwise it closes the pipes, so that a
+// child that writes to them later fails or is killed by SIGPIPE.
+func (o *hookOutput) wait(waitDelay time.Duration) bool {
+	o.closeWriters()
+	complete := true
+	if waitDelay == 0 {
+		<-o.done
+	} else {
+		select {
+		case <-o.done:
+		case <-time.After(waitDelay):
+			complete = false
+		}
+	}
+	for _, r := range o.readers {
+		r.Close()
+	}
+	<-o.done
+	return complete
 }
 
 // Execute tries to execute the Hook and returns a HookResult.
