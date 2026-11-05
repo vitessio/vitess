@@ -1958,11 +1958,42 @@ func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
 // rather than every 5 seconds as the lag throttler still does, to keep the lag that a lag rule reads after a reparent
 // short.
 func TestQueryThrottlerLeaderCheckInterval(t *testing.T) {
-	env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "LeaderCheckTest")
-	lagThrottler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{}, nil, nil, DefaultTabletThrottler)
-	assert.Equal(t, 5*time.Second, lagThrottler.leaderCheckInterval)
-	queryThrottler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{}, nil, nil, QueryTabletThrottler)
-	assert.Equal(t, time.Second, queryThrottler.leaderCheckInterval)
+	t.Run("intervals", func(t *testing.T) {
+		env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "LeaderCheckTest")
+		lagThrottler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{}, nil, nil, DefaultTabletThrottler)
+		assert.Equal(t, 5*time.Second, lagThrottler.leaderCheckInterval)
+		queryThrottler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{}, nil, nil, QueryTabletThrottler)
+		assert.Equal(t, time.Second, queryThrottler.leaderCheckInterval)
+	})
+	// Operate checks at the throttler's own interval, so with an interval of an hour, a promotion after Operate's first
+	// check goes unseen for longer than the lag throttler's 5 seconds.
+	t.Run("Operate checks at the interval", func(t *testing.T) {
+		throttler := newTestThrottler()
+		throttler.leaderCheckInterval = time.Hour
+		var tabletType atomic.Int32
+		tabletType.Store(int32(topodatapb.TabletType_REPLICA))
+		// Nothing checks this throttler, so it never stimulates the primary, and only the leader check reads the tablet
+		// type. The count goes up only after the read, so a promotion after it can't reach that same check.
+		var leaderChecks atomic.Int64
+		throttler.tabletTypeFunc = func() topodatapb.TabletType {
+			read := topodatapb.TabletType(tabletType.Load())
+			leaderChecks.Add(1)
+			return read
+		}
+		throttler.isOpen.Store(true)
+		wg := throttler.Enable()
+		require.NotNil(t, wg)
+		t.Cleanup(func() {
+			throttler.Disable()
+			wg.Wait()
+			throttler.isOpen.Store(false)
+		})
+
+		require.Eventually(t, func() bool { return leaderChecks.Load() > 0 }, 30*time.Second, 10*time.Millisecond,
+			"Operate checks once as it starts")
+		tabletType.Store(int32(topodatapb.TabletType_PRIMARY))
+		assert.Never(t, throttler.isLeader.Load, 6*time.Second, 50*time.Millisecond)
+	})
 }
 
 // notRunningTMClient answers a throttler check as a tablet manager does when the throttler isn't running, for example
