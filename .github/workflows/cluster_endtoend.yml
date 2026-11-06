@@ -110,6 +110,7 @@ jobs:
               - '.github/actions/setup-mysql/action.yml'
               - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
+              - '.github/actions/tool-downloads/**'
               - '.github/actions/setup-microceph/action.yml'
 
   test:
@@ -223,6 +224,12 @@ jobs:
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
         timeout-minutes: 10
         uses: $/.github/actions/setup-microceph
+
+      # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
+      # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
+      - name: Restore tool downloads
+        if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
+        uses: $/.github/actions/tool-downloads
 
       - name: Install Consul and ZooKeeper
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')

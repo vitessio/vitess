@@ -70,6 +70,7 @@ jobs:
               - '.github/actions/setup-mysql/action.yml'
               - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
+              - '.github/actions/tool-downloads/**'
 
   test:
     needs: changes
@@ -183,6 +184,10 @@ jobs:
           mkdir -p dist bin
           curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
           mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
+
+      - name: Restore tool downloads
+        if: needs.changes.outputs.unit_tests == 'true'
+        uses: $/.github/actions/tool-downloads
 
       - name: Run make tools
         if: needs.changes.outputs.unit_tests == 'true'

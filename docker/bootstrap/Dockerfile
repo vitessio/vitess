@@ -20,6 +20,11 @@
 # set it to build a flavor on a common image built separately.
 ARG base_image=common
 
+# The downloads that bootstrap.sh keeps in dist/download-cache. CI passes the
+# ones it restored as the download-cache build context; by default there are
+# none, and bootstrap.sh downloads every tool.
+FROM scratch AS download-cache
+
 FROM --platform=linux/amd64 golang:1.25.13-bookworm@sha256:40dfc169bd5ad8a8617e49c8ead7fe16c6873e79d6937539e9c2e5947b7984ef AS common
 
 # Install Vitess build dependencies
@@ -74,7 +79,14 @@ RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln 
 WORKDIR /vt/src/vitess.io/vitess
 
 USER vitess
-RUN ./bootstrap.sh
+# bootstrap.sh checks each file's checksum before it uses it, and downloads the
+# ones that are missing, unreadable or do not match. The image keeps none of
+# the downloads.
+RUN --mount=type=bind,from=download-cache,target=/tmp/download-cache \
+    mkdir -p dist/download-cache && \
+    { cp -R /tmp/download-cache/. dist/download-cache/ || true; } && \
+    ./bootstrap.sh && \
+    rm -rf dist/download-cache
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
