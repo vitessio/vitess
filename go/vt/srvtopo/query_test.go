@@ -91,7 +91,7 @@ func TestResilientQueryLogsEmptyCachedValue(t *testing.T) {
 	}
 	rq := &resilientQuery{
 		query:                query,
-		counts:               stats.NewCountersWithSingleLabel("TestResilientQueryLogsEmptyCachedValue", "Test for resilient query", "type"),
+		counts:               stats.NewCountersWithSingleLabel("", "Test for resilient query", "type"),
 		cacheRefreshInterval: time.Millisecond,
 		cacheTTL:             time.Minute,
 		entries:              make(map[string]*queryEntry),
