@@ -542,21 +542,13 @@ func (dt DateTime) FormatDecimal() decimal.Decimal {
 	return decimal.New(dt.Date.FormatInt64(), 6).Add(dt.Time.FormatDecimal())
 }
 
+// Compare orders two datetimes by date and then by time. A zero date is the
+// earliest date, so 0000-00-00 orders before 0001-01-01, as in MySQL.
+//
+// A TIME is also held as a DateTime with a zero date, and Compare can't tell
+// the two apart. To compare a TIME with a DATE, DATETIME or TIMESTAMP, first
+// place the TIME on the current date with Time.ToDateTime, as MySQL does.
 func (dt DateTime) Compare(dt2 DateTime) int {
-	zerodate1, zerodate2 := dt.Date.IsZero(), dt2.Date.IsZero()
-
-	switch {
-	case zerodate1 && zerodate2:
-		return dt.Time.Compare(dt2.Time)
-	case zerodate1 || zerodate2:
-		// if we're comparing a time to a datetime, we need to normalize them
-		// both into datetimes; this normalization is not trivial because negative
-		// times result in a date change, so let the standard library handle this
-
-		// Using the current time is OK here since the comparison is relative
-		now := time.Now()
-		return dt.ToStdTime(now).Compare(dt2.ToStdTime(now))
-	}
 	if cmp := dt.Date.Compare(dt2.Date); cmp != 0 {
 		return cmp
 	}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -165,7 +166,7 @@ func TestWeightStrings(t *testing.T) {
 					v2, err := valueToEvalCast(b.value, typ, tc.col, tc.values, 0)
 					require.NoError(t, err)
 
-					cmp, err := evalCompareNullSafe(v1, v2, collations.MySQL8())
+					cmp, err := evalCompareNullSafe(v1, v2, collations.MySQL8(), time.Now())
 					require.NoError(t, err)
 
 					if cmp > 0 {
