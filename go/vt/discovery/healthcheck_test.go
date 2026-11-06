@@ -1127,6 +1127,42 @@ func TestGetHealthyTablets(t *testing.T) {
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	mustMatch(t, want, a, "unexpected result")
 
+	// Grow the lag 1s per update, less than 3% each time, past a 2m high
+	// watermark. Each update must refresh the healthy list, so the tablet
+	// shows its latest lag and leaves the list once that lag is above 2m.
+	// The legacy algorithm, which this package's tests use by default, keeps
+	// a lone tablet whatever its lag, so use the default algorithm here.
+	prevHighLag := GetHighReplicationLagMinServing()
+	t.Cleanup(func() { SetHighReplicationLagMinServing(prevHighLag) })
+	SetHighReplicationLagMinServing(2 * time.Minute)
+	testSetLegacyReplicationLagAlgorithm(false)
+	t.Cleanup(func() { testSetLegacyReplicationLagAlgorithm(true) })
+	replicaTarget := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+	for lag := uint32(36); lag <= 125; lag++ {
+		input <- &querypb.StreamHealthResponse{
+			TabletAlias:   tablet.Alias,
+			Target:        replicaTarget,
+			Serving:       true,
+			RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: lag, CpuUsage: 0.2},
+		}
+		<-resultChan
+		a = hc.GetHealthyTabletStats(replicaTarget)
+		if lag > 120 {
+			assert.Empty(t, a, "tablet with %ds of lag must not be healthy", lag)
+			continue
+		}
+		require.Len(t, a, 1, "tablet with %ds of lag must be healthy", lag)
+		assert.Equal(t, lag, a[0].Stats.ReplicationLagSeconds,
+			"healthy list has %ds of lag, want %ds", a[0].Stats.ReplicationLagSeconds, lag)
+	}
+	testSetLegacyReplicationLagAlgorithm(true)
+
+	// Send the 35s update again so the steps below start from the list they expect.
+	input <- shr
+	<-resultChan
+	a = hc.GetHealthyTabletStats(replicaTarget)
+	mustMatch(t, want, a, "unexpected result")
+
 	// add a second tablet
 	tablet2 := createTestTablet(11, "cell", "host2")
 	tablet2.Type = topodatapb.TabletType_REPLICA
