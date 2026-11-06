@@ -1,0 +1,30 @@
+name: "Tool downloads"
+description: >-
+  Restore the downloads that bootstrap.sh keeps in dist/download-cache, as one
+  cache entry per platform.
+outputs:
+  key:
+    description: >-
+      The key that the go_cache_warm workflow saves this commit's entry under.
+    value: ${{ steps.restore.outputs.cache-primary-key }}
+runs:
+  using: "composite"
+  steps:
+    # Jobs only restore. The go_cache_warm workflow is the only writer: on
+    # every push to main or a release branch it restores the newest entry,
+    # runs make tools, which checks each restored file's checksum and downloads
+    # the file again if it does not match, and saves the downloads if they
+    # changed. So a bad entry is replaced, and deleted, by the next push.
+    # bootstrap.sh checks every restored file, so a job never uses a bad one.
+    #
+    # The prefix holds the hash of build.env and bootstrap.sh, which set the
+    # tool versions and checksums, so a version bump starts a new entry. The
+    # key never matches, so the restore picks the newest entry with the
+    # prefix.
+    - name: Restore the tool downloads
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: dist/download-cache
+        key: tool-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build.env', 'bootstrap.sh') }}-${{ github.sha }}
+        restore-keys: tool-downloads-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('build.env', 'bootstrap.sh') }}-

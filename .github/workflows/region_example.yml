@@ -64,6 +64,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/actions/tool-downloads/**'
             - 'examples/**'
             - '.github/workflows/region_example.yml'
             - '.github/actions/build-bootstrap/**'
@@ -102,6 +103,10 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: 'false'
+
+    - name: Restore tool downloads
+      if: needs.changes.outputs.examples == 'true'
+      uses: $/.github/actions/tool-downloads
 
     - name: Build bootstrap images
       if: needs.changes.outputs.examples == 'true'

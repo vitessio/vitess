@@ -46,6 +46,7 @@ jobs:
         filters: |
           vtadmin_changes:
             - 'bootstrap.sh'
+            - '.github/actions/tool-downloads/**'
             - 'tools/**'
             - 'build.env'
             - 'go.sum'
@@ -99,6 +100,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         sudo service etcd stop
+
+    - name: Restore tool downloads
+      if: needs.changes.outputs.vtadmin_changes == 'true'
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make minimaltools
       if: needs.changes.outputs.vtadmin_changes == 'true'
