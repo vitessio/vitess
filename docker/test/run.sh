@@ -121,8 +121,10 @@ if [[ -n "$existing_cache_image" ]]; then
 	image=$existing_cache_image
 fi
 
-# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
-chmod -R o=rx -- *
+# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions.
+# dist/ is left out: the container doesn't copy it, and the vitess user owns
+# the files that it adds to dist/download-cache.
+find . -mindepth 1 -maxdepth 1 ! -name '.*' ! -name dist -exec chmod -R o=rx -- {} +
 
 # This is required by the vtctld_web_test.py test.
 # Otherwise, /usr/bin/chromium will crash with the error:
