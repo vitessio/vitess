@@ -167,3 +167,250 @@ updates:
       docker:
         patterns:
           - "*"
+
+  # Maintained release branches. Dependabot reads this file only from main, so
+  # each release branch gets its own entries through target-branch. A release
+  # branch takes every GitHub Actions update, so that deprecated action runtimes
+  # get replaced, but no major version of anything it ships. The Go minor
+  # version of a release branch is fixed, and the Update Golang Version workflow
+  # bumps its patch version, so Dependabot leaves the golang images alone beyond
+  # patch versions. The tools/* modules only matter for development and stay
+  # at the versions the release branch pinned.
+  #
+  # Add a release branch here when it is created and remove it when it reaches
+  # its end of life, together with the Update Golang Version workflow.
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    target-branch: "release-24.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "[release-24.0] build(deps)"
+    allow:
+      - dependency-type: "direct"
+      - dependency-name: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+        dependency-type: "all"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      go:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "google.golang.org/protobuf"
+          - "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+          - "github.com/planetscale/vtprotobuf"
+          - "github.com/dave/jennifer"
+          - "golang.org/x/tools"
+      codegen:
+        patterns:
+          - "google.golang.org/protobuf"
+          - "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+          - "github.com/planetscale/vtprotobuf"
+          - "github.com/dave/jennifer"
+          - "golang.org/x/tools"
+
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/.github/actions/*"
+    target-branch: "release-24.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "[release-24.0] build(deps)"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "maven"
+    directory: "/java"
+    target-branch: "release-24.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "[release-24.0] build(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      java:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/vtadmin"
+    target-branch: "release-24.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 30
+    commit-message:
+      prefix: "[release-24.0] build(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      vtadmin-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/"
+      - "/docker/binaries/*"
+      - "/docker/bootstrap"
+      - "/docker/lite"
+      - "/docker/mini"
+      - "/docker/vttestserver"
+      - "/go/mysql/collations/tools/colldump"
+    target-branch: "release-24.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "[release-24.0] build(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "golang"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "mysql"
+        versions:
+          - ">= 8.5"
+    groups:
+      docker:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    target-branch: "release-23.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "[release-23.0] build(deps)"
+    allow:
+      - dependency-type: "direct"
+      - dependency-name: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+        dependency-type: "all"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      go:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "google.golang.org/protobuf"
+          - "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+          - "github.com/planetscale/vtprotobuf"
+          - "github.com/dave/jennifer"
+          - "golang.org/x/tools"
+      codegen:
+        patterns:
+          - "google.golang.org/protobuf"
+          - "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
+          - "github.com/planetscale/vtprotobuf"
+          - "github.com/dave/jennifer"
+          - "golang.org/x/tools"
+
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/.github/actions/*"
+    target-branch: "release-23.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "[release-23.0] build(deps)"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "maven"
+    directory: "/java"
+    target-branch: "release-23.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "[release-23.0] build(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # This branch stays on Netty 4.1. gRPC Java builds on Netty 4.2 from
+      # 1.83 on.
+      - dependency-name: "io.netty:*"
+        versions:
+          - ">= 4.2"
+      - dependency-name: "io.grpc:*"
+        versions:
+          - ">= 1.83"
+    groups:
+      java:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/vtadmin"
+    target-branch: "release-23.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 30
+    commit-message:
+      prefix: "[release-23.0] build(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      vtadmin-npm:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/"
+      - "/docker/binaries/*"
+      - "/docker/bootstrap"
+      - "/docker/lite"
+      - "/docker/mini"
+      - "/docker/vttestserver"
+      - "/examples/compose/external_db/mysql"
+      - "/go/mysql/collations/tools/colldump"
+    target-branch: "release-23.0"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 14
+    commit-message:
+      prefix: "[release-23.0] build(deps)"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "golang"
+        update-types: ["version-update:semver-minor"]
+      - dependency-name: "mysql"
+        versions:
+          - ">= 8.5"
+    groups:
+      docker:
+        patterns:
+          - "*"
