@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log/logtest"
 )
 
@@ -79,7 +80,8 @@ func TestResilientQueryGetCurrentValueInitialization(t *testing.T) {
 }
 
 // TestResilientQueryLogsEmptyCachedValue checks that a cached nil list of
-// names logs as an empty list when a refresh fails.
+// names logs as an empty list when a refresh fails, and that the caller IDs
+// in the context stay out of the logs.
 func TestResilientQueryLogsEmptyCachedValue(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 	var calls atomic.Int32
@@ -97,14 +99,19 @@ func TestResilientQueryLogsEmptyCachedValue(t *testing.T) {
 		entries:              make(map[string]*queryEntry),
 	}
 	cell := cellName("cell-1")
+	ctx := callerid.NewContext(t.Context(),
+		callerid.NewEffectiveCallerID("effective-principal", "", ""),
+		callerid.NewImmediateCallerID("immediate-username"))
 
-	_, err := rq.getCurrentValue(t.Context(), cell, false)
+	_, err := rq.getCurrentValue(ctx, cell, false)
 	require.NoError(t, err)
 	time.Sleep(2 * time.Millisecond)
-	_, err = rq.getCurrentValue(t.Context(), cell, false)
+	_, err = rq.getCurrentValue(ctx, cell, false)
 	require.NoError(t, err)
 
 	record := logs.Wait(t, "ResilientQuery failed (cached value still considered valid)")
 	assert.Equal(t, "WARN", record["level"])
 	assert.Equal(t, []any{}, record["cached_value"])
+	assert.NotContains(t, logs.String(), "effective-principal")
+	assert.NotContains(t, logs.String(), "immediate-username")
 }
