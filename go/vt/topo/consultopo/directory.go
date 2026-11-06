@@ -21,6 +21,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/hashicorp/consul/api/v2"
+
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -35,9 +37,10 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 
 	isRoot := dirPath == "" || dirPath == "/"
 
-	keys, _, err := s.kv.Keys(nodePath, "", nil)
+	options := &api.QueryOptions{}
+	keys, _, err := s.kv.Keys(nodePath, "", options.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, convertError(err, nodePath)
 	}
 	if len(keys) == 0 {
 		// No key starts with this prefix, means the directory
