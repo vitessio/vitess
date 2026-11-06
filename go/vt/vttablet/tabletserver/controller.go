@@ -79,6 +79,10 @@ type Controller interface {
 	// SetQueryRules sets the query rules for this QueryService
 	SetQueryRules(ruleSource string, qrs *rules.Rules) error
 
+	// WaitForAdmittedWrites waits until every write to one of tables that
+	// was admitted before it was called has finished, or until ctx is done.
+	WaitForAdmittedWrites(ctx context.Context, tables []string) error
+
 	// QueryService returns the QueryService object used by this Controller
 	QueryService() queryservice.QueryService
 

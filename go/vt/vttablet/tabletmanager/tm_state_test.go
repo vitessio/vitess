@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -167,6 +168,45 @@ func TestStateDenyList(t *testing.T) {
 			assert.Equal(t, tt.wantQueryRules, string(b))
 		})
 	}
+}
+
+// TestStateDenyListWaitsForAdmittedWrites verifies that loading the denied
+// tables rule waits for the writes to the denied tables that were admitted
+// before it, and that the refresh fails if the wait does.
+func TestStateDenyListWaitsForAdmittedWrites(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	defer tm.Stop()
+
+	fmd := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fmd.Schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{Name: "t1"}, {Name: "t2"}},
+	}
+	qsc := tm.QueryServiceControl.(*tabletservermock.Controller)
+	waitsBefore := len(qsc.AdmittedWritesWaits())
+	shardInfo := func(deniedTables ...string) *topo.ShardInfo {
+		return &topo.ShardInfo{Shard: &topodatapb.Shard{
+			TabletControls: []*topodatapb.Shard_TabletControl{{
+				TabletType:   topodatapb.TabletType_REPLICA,
+				Cells:        []string{"cell1"},
+				DeniedTables: deniedTables,
+			}},
+		}}
+	}
+
+	// No table is denied: there is nothing to wait for.
+	require.NoError(t, tm.tmState.RefreshFromTopoInfo(ctx, shardInfo(), nil))
+	assert.Len(t, qsc.AdmittedWritesWaits(), waitsBefore)
+
+	require.NoError(t, tm.tmState.RefreshFromTopoInfo(ctx, shardInfo("t1"), nil))
+	waits := qsc.AdmittedWritesWaits()
+	require.Len(t, waits, waitsBefore+1)
+	assert.Equal(t, []string{"t1"}, waits[waitsBefore])
+
+	qsc.WaitForAdmittedWritesError = errors.New("writes are still running")
+	err := tm.tmState.RefreshFromTopoInfo(ctx, shardInfo("t1"), nil)
+	assert.ErrorContains(t, err, "writes are still running")
 }
 
 func TestStateTabletControls(t *testing.T) {
