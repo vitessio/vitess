@@ -3040,7 +3040,7 @@ func (asm *assembler) Fn_LTRIM2(col collations.TypedCollation) {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
-		str.bytes = bytes.TrimPrefix(str.bytes, pat.bytes)
+		str.bytes = trimLeftRepeated(str.bytes, pat.bytes)
 		str.col = col
 		env.vm.sp--
 		return 1
@@ -3053,7 +3053,7 @@ func (asm *assembler) Fn_RTRIM2(col collations.TypedCollation) {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
-		str.bytes = bytes.TrimSuffix(str.bytes, pat.bytes)
+		str.bytes = trimRightRepeated(str.bytes, pat.bytes)
 		str.col = col
 		env.vm.sp--
 		return 1
@@ -3066,7 +3066,7 @@ func (asm *assembler) Fn_TRIM2(col collations.TypedCollation) {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
-		str.bytes = bytes.TrimPrefix(bytes.TrimSuffix(str.bytes, pat.bytes), pat.bytes)
+		str.bytes = trimRightRepeated(trimLeftRepeated(str.bytes, pat.bytes), pat.bytes)
 		str.col = col
 		env.vm.sp--
 		return 1

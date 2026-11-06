@@ -147,6 +147,14 @@ uninstall_all() {
 
     # toxiproxy
     uninstall_toxiproxy "$VTROOT/dist/toxiproxy"
+
+    # Maven, which bootstrap.sh installs only with BUILD_MAVEN=1.
+    echo "Removing Maven..."
+    rm -rf "${VTROOT:?}/dist/maven"
+
+    # Downloads kept by bootstrap.sh.
+    echo "Removing cached downloads..."
+    rm -rf "${VTROOT:?}/dist/download-cache"
 }
 
 uninstall_all

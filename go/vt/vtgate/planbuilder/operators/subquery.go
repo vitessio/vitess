@@ -230,6 +230,8 @@ func (sq *SubQuery) settle(ctx *plancontext.PlanningContext, outer Operator) Ope
 var correlatedSubqueryErr = vterrors.VT12001("correlated subquery is only supported for EXISTS")
 var subqueryNotAtTopErr = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
+var rowSubqueryAmongOthersErr = vterrors.VT12001("row comparison with an unmergable subquery in a predicate with other subqueries")
+
 func (sq *SubQuery) addLimit() {
 	// for a correlated subquery, we can add a limit 1 to the subquery
 	sq.Subquery = newLimit(sq.Subquery, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")}, true)
@@ -242,6 +244,12 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		}
 		sq.addLimit()
 		return outer
+	}
+	// Every subquery in the predicate is replaced with this subquery's argument below, which is only right when it
+	// is the only one (#21638). Refuse a row comparison in such a predicate, instead of comparing a row with the
+	// result of another subquery.
+	if hasRowSubqueryAmongOthers(sq.Original) {
+		panic(rowSubqueryAmongOthersErr)
 	}
 
 	hasValuesArg := func() string {
@@ -270,9 +278,12 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		}
 
 		var arg sqlparser.Expr
-		if sq.FilterType.NeedsListArg() {
+		switch {
+		case sq.FilterType.NeedsListArg():
 			arg = sqlparser.NewListArg(sq.ArgName)
-		} else {
+		case sq.FilterType == opcode.PulloutValue && sq.RowColumns() > 1:
+			arg = sq.rowArguments(ctx)
+		default:
 			arg = sqlparser.NewArgument(sq.ArgName)
 		}
 		cursor.Replace(arg)
@@ -307,6 +318,62 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		sq.SubqueryValueName = sq.ArgName
 	}
 	return newFilter(outer, predicates...)
+}
+
+// RowColumns returns how many columns each row of the subquery has. It returns 1 when that is not known, which
+// is the case for a subquery selecting `*`.
+func (sq *SubQuery) RowColumns() int {
+	return subqueryRowColumns(sq.originalSubquery)
+}
+
+func subqueryRowColumns(subq *sqlparser.Subquery) int {
+	columns := subq.Select.GetColumns()
+	for _, column := range columns {
+		if _, isStar := column.(*sqlparser.StarExpr); isStar {
+			return 1
+		}
+	}
+	return max(len(columns), 1)
+}
+
+// hasRowSubqueryAmongOthers reports whether expr contains more than one subquery, not counting those nested in
+// another, and one of them, other than an EXISTS, returns rows of more than one column.
+func hasRowSubqueryAmongOthers(expr sqlparser.Expr) bool {
+	count, hasRow := 0, false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.ExistsExpr:
+			count++
+			return false, nil
+		case *sqlparser.Subquery:
+			count++
+			hasRow = hasRow || subqueryRowColumns(node) > 1
+			return false, nil
+		}
+		return true, nil
+	}, expr)
+	return count > 1 && hasRow
+}
+
+// rowArguments returns the row of arguments that stands in for a value subquery whose row has more than one
+// column, as in `(a, b) < (select x, y ...)`. A single argument can't hold a row, so each column gets its own.
+// The arguments are reserved the first time they're needed, and reused after that. They are left untyped: the
+// select expressions of a UNION's first arm don't give the types of the row it returns.
+func (sq *SubQuery) rowArguments(ctx *plancontext.PlanningContext) sqlparser.ValTuple {
+	names, ok := ctx.RowSubqueryArgs[sq.ArgName]
+	if !ok {
+		names = make([]string, sq.RowColumns())
+		for i := range names {
+			names[i] = ctx.ReservedVars.ReserveVariable(fmt.Sprintf("%s_%d", sq.ArgName, i))
+		}
+		ctx.RowSubqueryArgs[sq.ArgName] = names
+	}
+
+	row := make(sqlparser.ValTuple, len(names))
+	for i, name := range names {
+		row[i] = sqlparser.NewArgument(name)
+	}
+	return row
 }
 
 func dontEnterSubqueries(node, _ sqlparser.SQLNode) bool {

@@ -60,36 +60,28 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 	if err != nil {
 		return err
 	}
-	flags := map[string]string{
-		"--topo-implementation":        vtbackup.TopoImplementation,
-		"--topo-global-server-address": vtbackup.TopoGlobalAddress,
-		"--topo-global-root":           vtbackup.TopoGlobalRoot,
-		"--log_dir":                    vtbackup.LogDir,
+	// The dashed flag names only exist from v23 on, and vtbackup may be the
+	// previous release in upgrade/downgrade tests.
+	flagFor := func(name string) string {
+		return utils.GetFlagVariantForTestsByVersion(name, vtbackupVer)
+	}
+	vtbackup.proc = exec.Command(
+		vtbackup.Binary,
+		flagFor("--topo-implementation"), vtbackup.TopoImplementation,
+		flagFor("--topo-global-server-address"), vtbackup.TopoGlobalAddress,
+		flagFor("--topo-global-root"), vtbackup.TopoGlobalRoot,
+		"--log_dir", vtbackup.LogDir,
 
 		//initDBfile is required to run vtbackup
-		"--mysql-port":       fmt.Sprintf("%d", vtbackup.MysqlPort),
-		"--init-db-sql-file": vtbackup.initDBfile,
-		"--init-keyspace":    vtbackup.Keyspace,
-		"--init-shard":       vtbackup.Shard,
+		flagFor("--mysql-port"), fmt.Sprintf("%d", vtbackup.MysqlPort),
+		flagFor("--init-db-sql-file"), vtbackup.initDBfile,
+		flagFor("--init-keyspace"), vtbackup.Keyspace,
+		flagFor("--init-shard"), vtbackup.Shard,
 
 		//Backup Arguments are not optional
-		utils.GetFlagVariantForTestsByVersion("--file-backup-storage-root", vtbackupVer): vtbackup.BackupStorageImplementation,
-		"--file-backup-storage-root": vtbackup.FileBackupStorageRoot,
-	}
-
-	utils.SetFlagVariantsForTests(flags, "--topo-implementation", vtbackup.TopoImplementation)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-server-address", vtbackup.TopoGlobalAddress)
-	utils.SetFlagVariantsForTests(flags, "--topo-global-root", vtbackup.TopoGlobalRoot)
-	utils.SetFlagVariantsForTests(flags, "--mysql-port", fmt.Sprintf("%d", vtbackup.MysqlPort))
-	utils.SetFlagVariantsForTests(flags, "--init-db-sql-file", vtbackup.initDBfile)
-	utils.SetFlagVariantsForTests(flags, "--init-keyspace", vtbackup.Keyspace)
-	utils.SetFlagVariantsForTests(flags, "--init-shard", vtbackup.Shard)
-	utils.SetFlagVariantsForTests(flags, "--backup-storage-implementation", vtbackup.BackupStorageImplementation)
-
-	vtbackup.proc = exec.Command(vtbackup.Binary)
-	for k, v := range flags {
-		vtbackup.proc.Args = append(vtbackup.proc.Args, k, v)
-	}
+		flagFor("--backup-storage-implementation"), vtbackup.BackupStorageImplementation,
+		flagFor("--file-backup-storage-root"), vtbackup.FileBackupStorageRoot,
+	)
 
 	if vtbackup.initialBackup {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, "--initial_backup")

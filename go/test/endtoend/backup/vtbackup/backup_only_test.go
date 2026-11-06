@@ -241,16 +241,19 @@ func startVtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disabl
 	// Prepare opentsdb stats file path.
 	statsPath := path.Join(t.TempDir(), fmt.Sprintf("opentsdb.%s.txt", t.Name()))
 
+	vtbackupVer, err := cluster.GetMajorVersion("vtbackup")
+	require.NoError(t, err)
+
 	// Take the back using vtbackup executable
 	extraArgs := []string{
 		"--allow_first_backup",
 		"--db-credentials-file", dbCredentialFile,
-		utils.GetFlagVariantForTests("--mysql-socket"), mysqlSocket.Name(),
+		utils.GetFlagVariantForTestsByVersion("--mysql-socket", vtbackupVer), mysqlSocket.Name(),
 
 		// Use opentsdb for stats.
-		utils.GetFlagVariantForTests("--stats-backend"), "opentsdb",
+		utils.GetFlagVariantForTestsByVersion("--stats-backend", vtbackupVer), "opentsdb",
 		// Write stats to file for reading afterwards.
-		utils.GetFlagVariantForTests("--opentsdb-uri"), fmt.Sprintf("file://%s", statsPath),
+		utils.GetFlagVariantForTestsByVersion("--opentsdb-uri", vtbackupVer), fmt.Sprintf("file://%s", statsPath),
 	}
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")

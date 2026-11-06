@@ -19,11 +19,14 @@ package utils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -37,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -578,6 +582,37 @@ func StopTablet(t *testing.T, tab *cluster.Vttablet, stopDatabase bool) {
 	}
 }
 
+// KillTablet stops the tablet's vttablet gracefully, then kills its mysqld
+// when cluster.KillDiscardedMySQL allows it, and shuts mysqld down
+// gracefully otherwise. Use it only for a tablet whose mysqld is never
+// started or read again: a kill models a dead primary at least as well as a
+// clean shutdown, which takes many seconds for a semi-sync primary.
+func KillTablet(t *testing.T, tab *cluster.Vttablet) {
+	err := tab.VttabletProcess.TearDownWithTimeout(30 * time.Second)
+	require.NoError(t, err)
+	if !cluster.KillDiscardedMySQL() {
+		require.NoError(t, tab.MysqlctlProcess.Stop())
+		return
+	}
+	require.NoError(t, tab.MysqlctlProcess.Kill())
+	// Kill only sends the signal, so wait until mysqld refuses connections.
+	addr := net.JoinHostPort(Hostname, strconv.Itoa(tab.MySQLPort))
+	require.Eventually(t, func() bool {
+		conn, err := net.DialTimeout("tcp", addr, time.Second)
+		if err != nil {
+			return true
+		}
+		conn.Close()
+		return false
+	}, 30*time.Second, 10*time.Millisecond, "mysqld of %s still accepts connections", tab.Alias)
+	// The teardown kills mysqld by the pid in this file, which may belong to
+	// another process by then.
+	err = os.Remove(path.Join(tab.MysqlctlProcess.BasePath(), "mysql.pid"))
+	if !errors.Is(err, os.ErrNotExist) {
+		require.NoError(t, err)
+	}
+}
+
 // RestartTablet restarts the tablet
 func RestartTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tab *cluster.Vttablet) {
 	tab.MysqlctlProcess.InitMysql = false
@@ -631,6 +666,20 @@ func GetNewPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *
 	return newPrimary
 }
 
+// GetShardPrimary returns the tablet that the shard record names as primary.
+func GetShardPrimary(t *testing.T, clusterInstance *cluster.LocalProcessCluster) *cluster.Vttablet {
+	shard, err := clusterInstance.VtctldClientProcess.GetShard(KeyspaceName, ShardName)
+	require.NoError(t, err)
+	alias := topoproto.TabletAliasString(shard.GetShard().GetPrimaryAlias())
+	for _, tablet := range clusterInstance.Keyspaces[0].Shards[0].Vttablets {
+		if tablet.Alias == alias {
+			return tablet
+		}
+	}
+	require.FailNow(t, "the shard primary is not a tablet of the cluster", "primary alias: %q", alias)
+	return nil
+}
+
 // GetShardReplicationPositions gets the shards replication positions.
 // This should not generally be called directly, instead use the WaitForReplicationToCatchup method.
 func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, doPrint bool) []string {
@@ -651,19 +700,19 @@ func GetShardReplicationPositions(t *testing.T, clusterInstance *cluster.LocalPr
 }
 
 func WaitForReplicationToStart(t *testing.T, clusterInstance *cluster.LocalProcessCluster, keyspaceName, shardName string, tabletCnt int, doPrint bool) {
-	tkr := time.NewTicker(500 * time.Millisecond)
+	timeout := time.After(replicationWaitTimeout)
+	tkr := time.NewTicker(100 * time.Millisecond)
 	defer tkr.Stop()
 	for {
+		strArray := GetShardReplicationPositions(t, clusterInstance, keyspaceName, shardName, true)
+		if len(strArray) == tabletCnt && strings.Contains(strArray[0], "primary") { // primary first
+			return
+		}
 		select {
 		case <-tkr.C:
-			strArray := GetShardReplicationPositions(t, clusterInstance, KeyspaceName, shardName, true)
-			if len(strArray) == tabletCnt && strings.Contains(strArray[0], "primary") { // primary first
-				return
-			}
-		case <-time.After(replicationWaitTimeout):
+		case <-timeout:
 			require.FailNow(t, fmt.Sprintf("replication did not start everywhere in %s/%s within the timeout of %v",
 				keyspaceName, shardName, replicationWaitTimeout))
-			return
 		}
 	}
 }

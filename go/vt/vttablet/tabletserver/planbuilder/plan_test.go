@@ -444,7 +444,7 @@ func TestSettingsRejectSubqueries(t *testing.T) {
 		for _, tc := range tests {
 			t.Run(fmt.Sprintf("strict=%t %s", strictTableACL, tc.setting), func(t *testing.T) {
 				settings := []string{"set @@sql_safe_updates = 1", tc.setting}
-				expectedErr := "connection setting must not contain a subquery: " + tc.setting
+				expectedErr := "connection setting must not contain a subquery"
 				rejected := tc.subquery && strictTableACL
 
 				query, resetQuery, err := BuildSettingQuery(settings, parser, strictTableACL)

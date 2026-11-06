@@ -14,19 +14,31 @@ permissions:
   contents: read
 
 jobs:
-  # Path filtering and changed-package detection run here, on a GitHub-hosted
-  # runner, so that the coverage job below (on a large runner) is not started
-  # at all when there is nothing to measure. Code Coverage is not a required
-  # check, so skipping it at the job level reports nothing misleading.
+  # Path filtering and changed-package detection run here, on a small runner (a
+  # CNCF container in vitess-security), so that the coverage job below (on a
+  # large runner) is not started at all when there is nothing to measure. Code
+  # Coverage is not a required check, so skipping it at the job level reports
+  # nothing misleading.
   changes:
     if: github.event_name != 'pull_request' || !contains(github.event.pull_request.labels.*.name, 'Backport')
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 10
     outputs:
+      can_upload: ${{ steps.upload.outputs.can_upload }}
       is_full_run: ${{ steps.mode.outputs.is_full_run }}
       packages: ${{ steps.packages.outputs.packages }}
     steps:
+    # Codecov accepts uploads without a token only from public repositories, so a private repository without the
+    # CODECOV_TOKEN secret, such as vitess-security, skips the coverage job instead of failing its upload. It also
+    # skips the checkout and path filter below, so the steps that detect changed packages are skipped too.
+    - name: Check whether the coverage report can be uploaded
+      id: upload
+      env:
+        CAN_UPLOAD: ${{ !github.event.repository.private || secrets.CODECOV_TOKEN != '' }}
+      run: echo "can_upload=$CAN_UPLOAD" >> "$GITHUB_OUTPUT"
+
     - name: Check out code
+      if: steps.upload.outputs.can_upload == 'true'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         # Full history is needed to diff the pull request's base and head.
@@ -42,17 +54,29 @@ jobs:
           echo "is_full_run=false" >> "$GITHUB_OUTPUT"
         fi
 
+    - name: Find the base of the pull request's merge commit
+      # github.event.pull_request.base.sha is not updated when the base branch
+      # moves, so paths-filter would also count the base branch's newer commits.
+      # With token: '', paths-filter diffs against `base` on pull_request
+      # events too (see its README); action.yml's input description is stale.
+      id: merge-base
+      if: steps.upload.outputs.can_upload == 'true' && github.event_name == 'pull_request'
+      run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+
     - name: Check for changes in files relevant to code coverage
-      if: steps.mode.outputs.is_full_run != 'true'
+      if: steps.upload.outputs.can_upload == 'true' && steps.mode.outputs.is_full_run != 'true'
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
       id: changes
       with:
         token: ''
+        base: ${{ steps.merge-base.outputs.sha }}
         filters: |
           changed_files:
             - .github/workflows/codecov.yml
             - .github/actions/setup-mysql/action.yml
+            - '.github/actions/tune-os/**'
             - .github/actions/setup-go/action.yml
+            - '.github/actions/tool-downloads/**'
             - 'go/**'
             - go.mod
             - go.sum
@@ -61,14 +85,10 @@ jobs:
     # Needed by `go list` in the next step.
     - name: Set up Go
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
-      # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: $/.github/actions/setup-go
       with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-        cache-dependency-path: |
-          go.sum
-          tools/**/go.sum
+        build-cache: none
+        go-tools: none
 
     - name: Detect changed Go packages
       if: steps.mode.outputs.is_full_run != 'true' && steps.changes.outputs.changed_files == 'true'
@@ -108,9 +128,9 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != ''
+    if: needs.changes.outputs.can_upload == 'true' && (needs.changes.outputs.is_full_run == 'true' || needs.changes.outputs.packages != '')
     name: Code Coverage
-    runs-on: ${{ github.repository == 'vitessio/vitess' && 'oracle-vm-8cpu-32gb-x86-64' || 'ubuntu-24.04' }}
+    runs-on: ${{ github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-8-32-x86' || 'ubuntu-24.04' }}
 
     steps:
     - name: Check out code
@@ -119,13 +139,13 @@ jobs:
         persist-credentials: 'false'
 
     - name: Set up Go
-      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      uses: $/.github/actions/setup-go
       with:
-        go-version-file: go.mod
-        cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
-        cache-dependency-path: |
-          go.sum
-          tools/**/go.sum
+        # The coverage build uses its own flags; only its "make build" step
+        # reuses the build entry.
+        build-cache: build
+        # tools/run_codecov.sh runs go test directly, without gotestsum.
+        go-tools: none
 
     - name: Set up python
       uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -148,6 +168,9 @@ jobs:
         mkdir -p dist bin
         curl --max-time 10 --retry 3 --retry-max-time 45 -s -L https://github.com/coreos/etcd/releases/download/v3.5.25/etcd-v3.5.25-linux-amd64.tar.gz | tar -zxC dist
         mv dist/etcd-v3.5.25-linux-amd64/{etcd,etcdctl} bin/
+
+    - name: Restore tool downloads
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make tools
       run: |
