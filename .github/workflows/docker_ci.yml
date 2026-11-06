@@ -135,7 +135,7 @@ jobs:
       # The test containers run as the vitess user (uid 1000), not as the
       # runner user that restored the caches, and add to them.
       - name: Share the Go caches with the test containers
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.changes.outputs.end_to_end == 'true'
         run: |
           gomodcache=$(go env GOMODCACHE)
           gocache=$(go env GOCACHE)
@@ -149,7 +149,7 @@ jobs:
       # them, but every test installs Maven. The go_cache_warm workflow is the
       # only writer of this cache.
       - name: Restore the Maven cache
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.changes.outputs.end_to_end == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -160,7 +160,7 @@ jobs:
             docker-maven-
 
       - name: Share the Maven cache with the test containers
-        if: steps.changes.outputs.end_to_end == 'true'
+        if: needs.changes.outputs.end_to_end == 'true'
         run: |
           mkdir -p /tmp/maven /tmp/mavencache
           chmod -R a+rwX /tmp/maven /tmp/mavencache
