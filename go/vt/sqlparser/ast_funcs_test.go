@@ -512,3 +512,57 @@ func TestVersionedCommentParsing(t *testing.T) {
 		})
 	}
 }
+
+// TestVersionedCommentSixDigitVersions tests six-digit versions in versioned
+// comments, which MySQL reads from 8.1.0 on when whitespace follows the sixth
+// digit. The MySQL 8.0 expectations are validated against MySQL 8.0.43, and the
+// others follow the lexer of MySQL 8.4 (sql/sql_lex.cc).
+func TestVersionedCommentSixDigitVersions(t *testing.T) {
+	tests := []struct {
+		name     string
+		version  string
+		query    string
+		expected string
+	}{
+		{
+			name:     "MySQL 8.0 reads five digits and the sixth as content",
+			version:  "8.0.40",
+			query:    "SELECT 2 * /*!100000 + */ 3",
+			expected: "select 2 * 0 + 3 from dual",
+		},
+		{
+			name:     "discarded (six-digit version too new)",
+			version:  "8.4.6",
+			query:    "SELECT 2 * /*!100000 + */ 3",
+			expected: "select 2 * 3 from dual",
+		},
+		{
+			name:     "expanded (six-digit version matches)",
+			version:  "8.4.6",
+			query:    "SELECT 2 * /*!080400 1 + */ 3",
+			expected: "select 2 * 1 + 3 from dual",
+		},
+		{
+			name:     "discarded (six-digit version one patch release too new)",
+			version:  "8.4.6",
+			query:    "SELECT 2 * /*!080407 1 + */ 3",
+			expected: "select 2 * 3 from dual",
+		},
+		{
+			name:     "sixth digit without whitespace after it is content",
+			version:  "8.4.6",
+			query:    "SELECT 2 * /*!100000+ */ 3",
+			expected: "select 2 * 0 + 3 from dual",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser, err := New(Options{MySQLServerVersion: tt.version})
+			require.NoError(t, err)
+			stmt, err := parser.Parse(tt.query)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, String(stmt))
+		})
+	}
+}

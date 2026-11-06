@@ -360,6 +360,25 @@ func (p *Parser) IsMySQL80AndAbove() bool {
 	return p.version >= "80000"
 }
 
+// readsSixDigitCommentVersions reports whether the parser's MySQL version
+// reads six-digit versions in versioned comments, as MySQL does from 8.1.0.
+func (p *Parser) readsSixDigitCommentVersions() bool {
+	return p.commentVersionApplies("80100")
+}
+
+// commentVersionApplies reports whether a versioned comment for the given
+// five- or six-digit version, or for no version if it is empty, applies to the
+// parser's MySQL version. The versions are compared as numbers, as they can
+// differ in length.
+func (p *Parser) commentVersionApplies(version string) bool {
+	if version == "" {
+		return true
+	}
+	v, _ := strconv.Atoi(version)
+	parserVersion, _ := strconv.Atoi(p.version)
+	return v <= parserVersion
+}
+
 func (p *Parser) SetTruncateErrLen(l int) {
 	p.truncateErrLen = l
 }
