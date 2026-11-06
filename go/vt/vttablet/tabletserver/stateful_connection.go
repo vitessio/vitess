@@ -308,6 +308,16 @@ func (sc *StatefulConnection) ReleaseString(reason string) {
 	if sc.dbConn == nil {
 		return
 	}
+	if sc.txProps != nil && sc.pool != nil && sc.pool.concludeTx != nil {
+		// The connection goes with its transaction still open: it was closed
+		// under the transaction (a query timeout inside a transaction kills
+		// the connection, as does losing it to an error), or the pool is
+		// shutting down. The transaction ends with the connection, so conclude
+		// it as a commit or rollback would: the transaction limiter gets the
+		// caller's slot back and the transaction is logged. A rollback that
+		// comes after this finds the connection gone.
+		sc.pool.concludeTx(sc, tx.TxClose)
+	}
 	if sc.pool != nil {
 		sc.pool.unregister(sc.ConnID, reason)
 		if sc.holdsTempTables && !sc.keepAliveManaged {

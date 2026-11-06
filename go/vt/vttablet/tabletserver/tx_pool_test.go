@@ -448,6 +448,73 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 		}, limiter.Actions())
 }
 
+// TestTxPoolClosedConnConcludesTransaction verifies that a transaction whose
+// connection is closed under it is concluded when the connection is released:
+// the transaction limiter gets the caller's slot back once, and the
+// transaction is logged as closed, whichever path releases the connection.
+func TestTxPoolClosedConnConcludesTransaction(t *testing.T) {
+	const slow = "select sleep(1)"
+	cases := []struct {
+		name string
+		// end closes the transaction's connection and releases it, starting
+		// with the connection locked by Begin.
+		end func(t *testing.T, ctx context.Context, txPool *TxPool, conn *StatefulConnection)
+	}{{
+		name: "query timeout inside the transaction",
+		end: func(t *testing.T, ctx context.Context, txPool *TxPool, conn *StatefulConnection) {
+			// Inside a transaction, a query timeout kills the whole connection.
+			execCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+			defer cancel()
+			_, err := conn.Exec(execCtx, slow, 1, false, false /* keepConnOnTimeout */)
+			require.Error(t, err)
+			require.True(t, conn.IsClosed())
+			conn.Unlock()
+
+			// The rollback vtgate sends next no longer finds the connection.
+			_, err = txPool.GetAndLock(ctx, conn.ReservedID(), "for rollback")
+			require.Error(t, err)
+		},
+	}, {
+		name: "rollback after the connection closed",
+		end: func(t *testing.T, ctx context.Context, txPool *TxPool, conn *StatefulConnection) {
+			conn.Close()
+			txPool.RollbackAndRelease(ctx, conn)
+		},
+	}, {
+		name: "pool closed",
+		end: func(t *testing.T, ctx context.Context, txPool *TxPool, conn *StatefulConnection) {
+			conn.Unlock()
+			txPool.Close()
+		},
+	}}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, txPool, limiter, closer := setup(t)
+			defer closer()
+			db.AddQuery(slow, &sqltypes.Result{})
+			db.SetBeforeFunc(slow, func() {
+				// Outlasts the context deadline so the statement is interrupted.
+				time.Sleep(1 * time.Second)
+			})
+
+			im := &querypb.VTGateCallerID{Username: "user"}
+			ef := &vtrpcpb.CallerID{Principal: "principle"}
+			ctx := callerid.NewContext(t.Context(), ef, im)
+			closedBefore := txPool.txStats.Counts()["TabletServerTest.close"]
+
+			conn, _, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{}, false, 0, nil)
+			require.NoError(t, err)
+			tc.end(t, ctx, txPool, conn)
+
+			assert.Equal(t, []fakeLimiterEntry{
+				{immediate: im, effective: ef, isRelease: false},
+				{immediate: im, effective: ef, isRelease: true},
+			}, limiter.Actions())
+			assert.Equal(t, int64(1), txPool.txStats.Counts()["TabletServerTest.close"]-closedBefore)
+		})
+	}
+}
+
 func TestTxTimeoutDoesNotKillShortLivedTransactions(t *testing.T) {
 	ctx := t.Context()
 
