@@ -32,7 +32,7 @@ maven="${dir}/apache-maven-${maven_version}"
 if [[ ! -x "${maven}/bin/mvn" ]]; then
 	echo "Installing Maven ${maven_version}..."
 	tmp="$(mktemp -d "${dir}/install.XXXXXX")"
-	curl -fsSL --connect-timeout 10 --retry 3 "https://archive.apache.org/dist/maven/maven-3/${maven_version}/binaries/apache-maven-${maven_version}-bin.tar.gz" | tar -xz -C "${tmp}"
+	curl -fsSL --connect-timeout 10 --retry 3 "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${maven_version}/apache-maven-${maven_version}-bin.tar.gz" | tar -xz -C "${tmp}"
 	mv -T "${tmp}/apache-maven-${maven_version}" "${maven}"
 	rmdir "${tmp}"
 	echo "Maven installed"
