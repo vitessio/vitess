@@ -21,6 +21,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vtadmin"
+	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/dynamic"
 	"vitess.io/vitess/go/vt/vtenv"
 
@@ -146,23 +148,39 @@ func TestUnaryServerInterceptorRepeatedSpecDoesNotLeakCluster(t *testing.T) {
 	goleak.VerifyNone(t, existingGoroutines, goleak.IgnoreTopFunction("google.golang.org/grpc.(*addrConn).resetTransportAndUnlock"))
 }
 
+// panickingAPI is a dynamic API whose GetClusters panics.
+type panickingAPI struct {
+	vtadminpb.UnimplementedVTAdminServer
+}
+
+func (api *panickingAPI) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) {
+	if c != nil {
+		_ = c.Close()
+	}
+
+	return api, nil
+}
+
+func (api *panickingAPI) Handler() http.Handler { return nil }
+
+func (api *panickingAPI) GetClusters(ctx context.Context, req *vtadminpb.GetClustersRequest) (*vtadminpb.GetClustersResponse, error) {
+	panic("GetClusters failed")
+}
+
 // Not parallel, because it captures the process-wide logger.
 func TestUnaryServerInterceptorRecoversPanic(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelError)
-	interceptor := dynamic.UnaryServerInterceptor(newDynamicAPI(t))
-	info := &grpc.UnaryServerInfo{FullMethod: "/vtadmin.VTAdmin/ApplySchema"}
-	// ApplySchema panics when Request is nil.
-	req := &vtadminpb.ApplySchemaRequest{ClusterId: "dynamic_cluster", Sql: "select 1"}
+	interceptor := dynamic.UnaryServerInterceptor(&panickingAPI{})
 
-	resp, err := interceptor(clusterContext(t.Context(), validSpec), req, info, staticHandler(t))
+	resp, err := interceptor(clusterContext(t.Context(), validSpec), &vtadminpb.GetClustersRequest{}, getClustersInfo(), staticHandler(t))
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err), "unexpected error: %v", err)
 	assert.Nil(t, resp)
 
 	record := logs.Record(t, "panic in VTAdmin handler with dynamic cluster")
 	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "/vtadmin.VTAdmin/ApplySchema", record["method"])
-	assert.Contains(t, record["panic"], "nil pointer dereference")
+	assert.Equal(t, "/vtadmin.VTAdmin/GetClusters", record["method"])
+	assert.Equal(t, "GetClusters failed", record["panic"])
 }
 
 func TestUnaryServerInterceptorUnknownCluster(t *testing.T) {
