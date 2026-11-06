@@ -162694,6 +162694,7 @@ export const vschema = $root.vschema = (() => {
          * @property {vschema.Keyspace.ForeignKeyMode|null} [foreign_key_mode] Keyspace foreign_key_mode
          * @property {vschema.MultiTenantSpec.$Properties|null} [multi_tenant_spec] Keyspace multi_tenant_spec
          * @property {boolean|null} [prevent_cross_keyspace_reads] Keyspace prevent_cross_keyspace_reads
+         * @property {boolean|null} [advisory_locks] Keyspace advisory_locks
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -162784,6 +162785,14 @@ export const vschema = $root.vschema = (() => {
         Keyspace.prototype.prevent_cross_keyspace_reads = false;
 
         /**
+         * Keyspace advisory_locks.
+         * @member {boolean} advisory_locks
+         * @memberof vschema.Keyspace
+         * @instance
+         */
+        Keyspace.prototype.advisory_locks = false;
+
+        /**
          * Creates a new Keyspace instance using the specified properties.
          * @function create
          * @memberof vschema.Keyspace
@@ -162835,6 +162844,8 @@ export const vschema = $root.vschema = (() => {
                 $root.vschema.MultiTenantSpec.encode(message.multi_tenant_spec, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
             if (message.prevent_cross_keyspace_reads != null && $Object.hasOwnProperty.call(message, "prevent_cross_keyspace_reads") && message.prevent_cross_keyspace_reads !== false)
                 writer.uint32(/* id 7, wireType 0 =*/56).bool(message.prevent_cross_keyspace_reads);
+            if (message.advisory_locks != null && $Object.hasOwnProperty.call(message, "advisory_locks") && message.advisory_locks !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.advisory_locks);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -163006,6 +163017,15 @@ export const vschema = $root.vschema = (() => {
                             delete message.prevent_cross_keyspace_reads;
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.advisory_locks = value;
+                        else
+                            delete message.advisory_locks;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -163091,6 +163111,9 @@ export const vschema = $root.vschema = (() => {
             if (message.prevent_cross_keyspace_reads != null && $Object.hasOwnProperty.call(message, "prevent_cross_keyspace_reads"))
                 if (typeof message.prevent_cross_keyspace_reads !== "boolean")
                     return "prevent_cross_keyspace_reads: boolean expected";
+            if (message.advisory_locks != null && $Object.hasOwnProperty.call(message, "advisory_locks"))
+                if (typeof message.advisory_locks !== "boolean")
+                    return "advisory_locks: boolean expected";
             return null;
         };
 
@@ -163172,6 +163195,9 @@ export const vschema = $root.vschema = (() => {
             if (object.prevent_cross_keyspace_reads != null)
                 if (object.prevent_cross_keyspace_reads)
                     message.prevent_cross_keyspace_reads = $Boolean(object.prevent_cross_keyspace_reads);
+            if (object.advisory_locks != null)
+                if (object.advisory_locks)
+                    message.advisory_locks = $Boolean(object.advisory_locks);
             return message;
         };
 
@@ -163202,6 +163228,7 @@ export const vschema = $root.vschema = (() => {
                 object.foreign_key_mode = options.enums === $String ? "unspecified" : 0;
                 object.multi_tenant_spec = null;
                 object.prevent_cross_keyspace_reads = false;
+                object.advisory_locks = false;
             }
             if (message.sharded != null && $Object.hasOwnProperty.call(message, "sharded"))
                 object.sharded = message.sharded;
@@ -163230,6 +163257,8 @@ export const vschema = $root.vschema = (() => {
                 object.multi_tenant_spec = $root.vschema.MultiTenantSpec.toObject(message.multi_tenant_spec, options, _depth + 1);
             if (message.prevent_cross_keyspace_reads != null && $Object.hasOwnProperty.call(message, "prevent_cross_keyspace_reads"))
                 object.prevent_cross_keyspace_reads = message.prevent_cross_keyspace_reads;
+            if (message.advisory_locks != null && $Object.hasOwnProperty.call(message, "advisory_locks"))
+                object.advisory_locks = message.advisory_locks;
             return object;
         };
 

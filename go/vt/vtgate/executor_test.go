@@ -3846,3 +3846,61 @@ func TestExecutorShowShards(t *testing.T) {
 		})
 	}
 }
+
+// TestLockUsesDesignatedKeyspace tests that advisory locks run in the keyspace
+// designated in the VSchema, even when it is not the first keyspace by name
+// and even when it is not serving.
+func TestLockUsesDesignatedKeyspace(t *testing.T) {
+	buffer.SetBufferingModeInTestingEnv(true)
+	t.Cleanup(func() {
+		buffer.SetBufferingModeInTestingEnv(false)
+	})
+
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
+
+	srvVSchema := proto.Clone(executor.vm.GetCurrentSrvVschema()).(*vschemapb.SrvVSchema)
+	srvVSchema.Keyspaces[KsTestUnsharded].AdvisoryLocks = true
+	executor.vm.VSchemaUpdate(srvVSchema, nil)
+
+	sbc1.Queries = nil
+	session := econtext.NewSafeSession(nil)
+	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
+	require.NoError(t, err)
+	require.NotNil(t, session.LockSession)
+	require.Equal(t, KsTestUnsharded, session.LockSession.Target.Keyspace)
+	require.NotEmpty(t, sbclookup.Queries)
+	require.Empty(t, sbc1.Queries)
+
+	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
+	require.True(t, ok)
+	hc := gw.hc.(*discovery.FakeHealthCheck)
+	for _, tablet := range hc.GetAllTablets() {
+		if tablet.Keyspace == KsTestUnsharded {
+			hc.SetServing(tablet, false)
+		}
+	}
+	// Broadcast twice so the keyspace event watcher has consumed every
+	// healthcheck from the first broadcast before the test reads serving state.
+	hc.BroadcastAll()
+	hc.BroadcastAll()
+	require.NotContains(t, gw.GetServingKeyspaces(), KsTestUnsharded)
+
+	releasePlan, _ := getPlanCached(t, t.Context(), executor, econtext.NewSafeSession(nil), "select release_lock('lock name') from dual", sqlparser.MarginComments{}, nil, false)
+	lock, ok := releasePlan.Instructions.(*engine.Lock)
+	require.True(t, ok)
+	require.Equal(t, KsTestUnsharded, lock.Keyspace.Name)
+}
+
+// TestLockRejectsMultipleDesignatedKeyspaces tests that planning an advisory
+// lock fails when the VSchema designates more than one keyspace.
+func TestLockRejectsMultipleDesignatedKeyspaces(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+
+	srvVSchema := proto.Clone(executor.vm.GetCurrentSrvVschema()).(*vschemapb.SrvVSchema)
+	srvVSchema.Keyspaces[KsTestSharded].AdvisoryLocks = true
+	srvVSchema.Keyspaces[KsTestUnsharded].AdvisoryLocks = true
+	executor.vm.VSchemaUpdate(srvVSchema, nil)
+
+	_, err := exec(executor, econtext.NewSafeSession(nil), "select get_lock('lock name', 10) from dual")
+	require.ErrorContains(t, err, "VT12001: unsupported: advisory locks designated in more than one keyspace")
+}
