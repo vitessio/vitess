@@ -242,10 +242,10 @@ install_maven() {
 	# SHA512 checksum for Maven 3.9.16 from Apache downloads.
 	local sha512="831a8591fe20c8243b1dbe7d71e3244f31d1665b0804b2e825e38cbbe5ce0cafb8338851f90780735568773e0a6cd07bbec107cda0b896b008b861075358b6f6"
 
-	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
+	# Maven Central keeps every Maven release, unlike dlcdn.apache.org, and
+	# archive.apache.org keeps timing out from the CI runners.
 	download_verified "$file" 512 "$sha512" \
-		"https://dlcdn.apache.org/maven/maven-3/${version}/binaries/${file}" \
-		"https://archive.apache.org/dist/maven/maven-3/${version}/binaries/${file}"
+		"https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${version}/${file}"
 	tar -xzf "$DOWNLOAD_CACHE/$file" --strip-components=1
 }
 
