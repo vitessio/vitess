@@ -551,11 +551,19 @@ func (throttler *Throttler) IsRunning() bool {
 // Enable activates the throttler probes; when enabled, the throttler responds to check queries based on
 // the collected metrics.
 // The function returns a WaitGroup that can be used to wait for the throttler to be fully disabled, ie when
-// the Operate() goroutine function terminates and caches are invalidated.
+// the Operate() goroutine function terminates and caches are invalidated. It returns nil if the throttler is
+// closed or already enabled.
 func (throttler *Throttler) Enable() *sync.WaitGroup {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
+	// This check must stay under enableMutex: Close marks the throttler closed before it takes enableMutex to
+	// disable it, so either we see the throttler closed here, or that Disable undoes what we do.
+	if !throttler.IsOpen() {
+		// Close disables the throttler, which applies the config again on the next Open.
+		log.Info("Throttler: not enabling, since the throttler is closed")
+		return nil
+	}
 	if wasEnabled := throttler.isEnabled.Swap(true); wasEnabled {
 		log.Info("Throttler: already enabled")
 		return nil
@@ -619,11 +627,23 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 			// while applying the changes.
 			throttler.initMutex.Lock()
 			defer throttler.initMutex.Unlock()
+			if ctx.Err() != nil {
+				// The throttler was closed while we read the config. The next Open reads it again.
+				log.Info("Throttler.retryReadAndApplyThrottlerConfig(): throttler was closed, not applying the config")
+				return
+			}
 			throttler.applyThrottlerConfig(ctx, throttlerConfig) // may issue an Enable
 			go watchSrvKeyspaceOnce.Do(func() {
 				// We start watching SrvKeyspace only after we know it's been created. Now is that time!
-				// We watch using the given ctx, which is cancelled when the throttler is Close()d.
-				throttler.srvTopoServer.WatchSrvKeyspace(ctx, throttler.tabletAlias.Cell, throttler.keyspace, throttler.WatchSrvKeyspaceCallback)
+				// We watch using the given ctx, which is cancelled when the throttler is Close()d. srvtopo
+				// drops a listener that returns false for a change, so this one stops at the first change
+				// after ctx is cancelled, without applying it; the next Open starts its own.
+				throttler.srvTopoServer.WatchSrvKeyspace(ctx, throttler.tabletAlias.Cell, throttler.keyspace, func(srvks *topodatapb.SrvKeyspace, err error) bool {
+					if ctx.Err() != nil {
+						return false
+					}
+					return throttler.WatchSrvKeyspaceCallback(srvks, err)
+				})
 			})
 			return
 		}
