@@ -101,6 +101,26 @@ func newEngine(t *testing.T, ctx context.Context, binlogRowImage string) {
 	engine.Open()
 }
 
+// replaceEngine replaces the package engine and env with new ones whose MySQL
+// runs with the given binlog_row_image, and puts the old ones back when the
+// test ends. The cleanup is registered before the new ones start, so a failed
+// start, such as mysqld not coming up, still restores the old ones and the
+// tests that run next keep working.
+func replaceEngine(t *testing.T, binlogRowImage string) {
+	oldEngine, oldEnv := engine, env
+	engine, env = nil, nil
+	t.Cleanup(func() {
+		if engine != nil {
+			engine.Close()
+		}
+		if env != nil {
+			env.Close()
+		}
+		engine, env = oldEngine, oldEnv
+	})
+	newEngine(t, t.Context(), binlogRowImage)
+}
+
 func customEngine(t *testing.T, modifier func(mysql.ConnParams) mysql.ConnParams) *Engine {
 	original, err := env.Dbcfgs.AppWithDB().MysqlParams()
 	require.NoError(t, err)
