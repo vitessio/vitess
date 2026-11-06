@@ -175,6 +175,9 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 		err = cmd.Wait()
 	}
 	duration := time.Since(start)
+	// Whether the context ended before the hook did, not while its output
+	// was still open.
+	canceled := ctx.Err() != nil
 	complete := output.wait(waitDelay)
 
 	result.Stdout = stdout.String()
@@ -204,7 +207,7 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 		return result
 	}
 
-	if ctx.Err() != nil {
+	if canceled {
 		// When (exec.Cmd).Run hits a context that expired or was canceled, the process is killed.
 		// This means:
 		// 	1. cmd.ProcessState.Exited() is false.

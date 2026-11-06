@@ -201,17 +201,19 @@ func TestExecuteOptionalContext(t *testing.T) {
 		assert.Contains(t, hr.Stderr, "the output is incomplete", "a failed hook's output was cut off without a warning")
 	})
 
-	// The context ends after the hook exited, while a child holds its output:
-	// the hook keeps its exit status.
+	// The context ends after the hook ended, while a child holds its output:
+	// the hook keeps its result.
 	for _, tc := range []struct {
-		exitCode int
-		wantErr  string
+		name    string
+		end     string
+		wantErr string
 	}{
-		{exitCode: 0},
-		{exitCode: 17, wantErr: "failed(17)"},
+		{name: "hook that exited 0", end: "exit 0"},
+		{name: "hook that exited 17", end: "exit 17", wantErr: "failed(17)"},
+		{name: "hook killed by a signal", end: "kill -TERM $$", wantErr: "failed(-6)"},
 	} {
-		t.Run(fmt.Sprintf("hook that exited %d before the cancellation", tc.exitCode), func(t *testing.T) {
-			marker := installHook(t, "exited_hook", fmt.Sprintf("sleep 60 &\necho $! >> $PIDS\n%s > $MARKER\nexit %d\n", recordProcess("$$"), tc.exitCode))
+		t.Run(tc.name+" before the cancellation", func(t *testing.T) {
+			marker := installHook(t, "exited_hook", fmt.Sprintf("sleep 60 &\necho $! >> $PIDS\n%s > $MARKER\n%s\n", recordProcess("$$"), tc.end))
 			ctx, cancel := context.WithCancel(t.Context())
 			t.Cleanup(cancel)
 			// The output wait is long enough that only the child's exit ends it.
