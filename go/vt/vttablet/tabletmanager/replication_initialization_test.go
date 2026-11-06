@@ -240,6 +240,23 @@ func TestInitializeReplicationHoldsShardLockThroughReceiverStart(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestInitializeReplicationStopsWhenShardLockIsLost loses the lock while
+// initialization waits for the applier to stop, after its other checks.
+func TestInitializeReplicationStopsWhenShardLockIsLost(t *testing.T) {
+	tm, md, _, factory := newReplicationInitializationTM(t)
+	md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+	md.ExecuteSuperQueryListCallback = func() {
+		factory.AddOperationError(memorytopo.CheckLock, ".*", errors.New("lock lost"))
+	}
+
+	_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
+	require.ErrorContains(t, err, "lock lost")
+	require.NoError(t, md.CheckSuperQueryList())
+	assert.False(t, md.Replicating)
+	assert.False(t, md.SemiSyncReplicaEnabled)
+	assert.Empty(t, md.CurrentSourceHost)
+}
+
 func TestInitializeReplicationValidationFailurePreservesSemiSync(t *testing.T) {
 	tm, md, _, _ := newReplicationInitializationTM(t)
 	md.PrimaryPositionError = errors.New("cannot read executed position")

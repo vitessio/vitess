@@ -369,6 +369,10 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	}
 
 	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet)
+	// Not a fencing token: the lock can still be lost during the RPC.
+	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
+		return err
+	}
 	return tmc.SetReplicationSource(ctx, tablet, shardPrimary.Alias, 0, "", false, isSemiSync, 0)
 }
 

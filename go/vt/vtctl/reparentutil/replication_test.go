@@ -2763,9 +2763,9 @@ func (fake *blockingSourceTMC) SetReplicationSource(ctx context.Context, tablet 
 // newSetReplicationSourceTopo returns a topology whose shard record names
 // zone1-0000000100 as primary, with zone1-0000000101 also of type PRIMARY, and
 // the replica zone1-0000000102.
-func newSetReplicationSourceTopo(t *testing.T) (*topo.Server, *topodatapb.Tablet) {
+func newSetReplicationSourceTopo(t *testing.T) (*topo.Server, *memorytopo.Factory, *topodatapb.Tablet) {
 	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "zone1")
+	ts, factory := memorytopo.NewServerAndFactory(ctx, "zone1")
 	t.Cleanup(ts.Close)
 	testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Type: topodatapb.TabletType_PRIMARY, Keyspace: "ks", Shard: "-",
@@ -2776,13 +2776,13 @@ func newSetReplicationSourceTopo(t *testing.T) (*topo.Server, *topodatapb.Tablet
 	replica := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Type: topodatapb.TabletType_REPLICA, Keyspace: "ks", Shard: "-"}
 	testutil.AddTablet(ctx, t, ts, replica, nil)
 	reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "ks", policy.DurabilitySemiSync)
-	return ts, replica
+	return ts, factory, replica
 }
 
 // TestSetReplicationSourceHoldsShardLock checks that SetReplicationSource reads the
 // shard primary only once it holds the shard lock, and holds it through the RPC.
 func TestSetReplicationSourceHoldsShardLock(t *testing.T) {
-	ts, replica := newSetReplicationSourceTopo(t)
+	ts, _, replica := newSetReplicationSourceTopo(t)
 	tmc := &blockingSourceTMC{parents: make(chan *topodatapb.TabletAlias, 1), release: make(chan struct{})}
 
 	// A reparent holds the lock and publishes the new primary before releasing it.
@@ -2823,7 +2823,7 @@ func TestSetReplicationSourceHoldsShardLock(t *testing.T) {
 // TestSetReplicationSourceLockCanceled checks that SetReplicationSource sends no RPC
 // if its context ends while it waits for the shard lock.
 func TestSetReplicationSourceLockCanceled(t *testing.T) {
-	ts, replica := newSetReplicationSourceTopo(t)
+	ts, _, replica := newSetReplicationSourceTopo(t)
 	tmc := &blockingSourceTMC{parents: make(chan *topodatapb.TabletAlias, 1), release: make(chan struct{})}
 	close(tmc.release)
 	_, unlock, err := ts.LockShard(t.Context(), "ks", "-", "reparent")
@@ -2833,6 +2833,18 @@ func TestSetReplicationSourceLockCanceled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	require.Error(t, SetReplicationSource(ctx, ts, tmc, replica))
+	assert.Empty(t, tmc.parents)
+}
+
+// TestSetReplicationSourceLockLost checks that SetReplicationSource sends no RPC
+// once it has lost the shard lock.
+func TestSetReplicationSourceLockLost(t *testing.T) {
+	ts, factory, replica := newSetReplicationSourceTopo(t)
+	tmc := &blockingSourceTMC{parents: make(chan *topodatapb.TabletAlias, 1), release: make(chan struct{})}
+	close(tmc.release)
+	factory.AddOperationError(memorytopo.CheckLock, ".*", errors.New("lock lost"))
+
+	require.ErrorContains(t, SetReplicationSource(t.Context(), ts, tmc, replica), "lock lost")
 	assert.Empty(t, tmc.parents)
 }
 
@@ -2861,7 +2873,7 @@ func TestSetReplicationSourceBoundsLockHold(t *testing.T) {
 			saved := topo.RemoteOperationTimeout
 			topo.RemoteOperationTimeout = tc.remoteTimeout
 			t.Cleanup(func() { topo.RemoteOperationTimeout = saved })
-			ts, replica := newSetReplicationSourceTopo(t)
+			ts, _, replica := newSetReplicationSourceTopo(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), tc.callerTimeout)
 			defer cancel()
@@ -2903,7 +2915,7 @@ func TestSetReplicationSourceLookupErrors(t *testing.T) {
 		})
 	}
 	t.Run("primary of another type", func(t *testing.T) {
-		ts, _ := newSetReplicationSourceTopo(t)
+		ts, _, _ := newSetReplicationSourceTopo(t)
 		_, err := ts.UpdateTabletFields(t.Context(), &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, func(tablet *topodatapb.Tablet) error {
 			tablet.Type = topodatapb.TabletType_REPLICA
 			return nil
