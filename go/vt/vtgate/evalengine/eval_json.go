@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"math"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -72,12 +73,21 @@ func evalConvert_bj(e *evalBytes) *evalJSON {
 	return json.NewBlob(e.string())
 }
 
-func evalConvert_fj(e *evalFloat) *evalJSON {
+// MySQL cannot hold a NaN or infinite double: the computation that would
+// produce one raises this error instead.
+var errDoubleOutOfRange = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DOUBLE value is out of range")
+
+func evalConvert_fj(e *evalFloat) (*evalJSON, error) {
+	if math.IsNaN(e.f) || math.IsInf(e.f, 0) {
+		return nil, errDoubleOutOfRange
+	}
 	f := e.ToRawBytes()
-	if bytes.IndexByte(f, '.') < 0 {
+	// A double is a JSON double, not an integer, so an integral value keeps a
+	// fraction; one already printed in exponent form is unambiguous as it is.
+	if bytes.IndexByte(f, '.') < 0 && bytes.IndexByte(f, 'e') < 0 {
 		f = append(f, '.', '0')
 	}
-	return json.NewNumber(hack.String(f), json.NumberTypeFloat)
+	return json.NewNumber(hack.String(f), json.NumberTypeFloat), nil
 }
 
 func evalConvert_nj(e evalNumeric) *evalJSON {
@@ -122,7 +132,7 @@ func evalToJSON(e eval) (*evalJSON, error) {
 	case *evalJSON:
 		return e, nil
 	case *evalFloat:
-		return evalConvert_fj(e), nil
+		return evalConvert_fj(e)
 	case evalNumeric:
 		return evalConvert_nj(e), nil
 	case *evalBytes:
@@ -144,7 +154,7 @@ func argToJSON(e eval) (*evalJSON, error) {
 	case *evalJSON:
 		return e, nil
 	case *evalFloat:
-		return evalConvert_fj(e), nil
+		return evalConvert_fj(e)
 	case evalNumeric:
 		return evalConvert_nj(e), nil
 	case *evalBytes:

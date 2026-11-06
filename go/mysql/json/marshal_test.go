@@ -85,3 +85,32 @@ func TestMarshalSQLValueNormalizesInvalidUTF8(t *testing.T) {
 	expected := "CAST(JSON_QUOTE(_utf8mb4" + sqltypes.EncodeStringSQL(normalized) + ") as JSON)"
 	require.Equal(t, expected, string(got.Raw()))
 }
+
+// TestMarshalSQLValueKeepsStoredNumbers verifies that numbers MySQL printed
+// from a stored document reach the SQL exactly as they were printed.
+func TestMarshalSQLValueKeepsStoredNumbers(t *testing.T) {
+	testcases := []struct {
+		input    string
+		expected string
+	}{
+		{
+			input:    `[92851060.59457423]`,
+			expected: `JSON_ARRAY(92851060.59457423)`,
+		},
+		{
+			input:    `{"a": 92851060.59457423}`,
+			expected: `JSON_OBJECT(_utf8mb4'a', 92851060.59457423)`,
+		},
+		{
+			input:    `[123456789012345678901234567890]`,
+			expected: `JSON_ARRAY(123456789012345678901234567890)`,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := MarshalSQLValue([]byte(tc.input))
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, string(got.Raw()))
+		})
+	}
+}
