@@ -1132,18 +1132,18 @@ func TestSetupWithOrphanedSemiSyncSource(t *testing.T) {
 		return utils.IsPrimarySemiSyncSetupCorrectly(t, primary, "ON")
 	}, 30*time.Second, time.Second, "expected VTOrc to enable semi-sync on the primary")
 
-	// If the test fails before the second setup finishes, the primary must not
-	// stay a blocked semi-sync source for the rest of the package.
-	t.Cleanup(func() {
-		semiSyncType, err := utils.SemiSyncExtensionLoaded(t, primary)
-		require.NoError(t, err)
-		switch semiSyncType {
-		case mysql.SemiSyncTypeSource:
-			_, _ = utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_source_enabled = false", primary, "")
-		case mysql.SemiSyncTypeMaster:
-			_, _ = utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_master_enabled = false", primary, "")
+	// disableSemiSync releases any statement blocked in the primary's
+	// semi-sync wait. If the test fails before the second setup finishes, the
+	// primary must not stay a blocked semi-sync source for the rest of the
+	// package.
+	disableSemiSync := func() {
+		cmd, err := primary.VttabletProcess.DisableSemiSyncCommand()
+		if assert.NoError(t, err) && cmd != "" {
+			_, err = utils.RunSQL(t, cmd, primary, "")
+			assert.NoError(t, err)
 		}
-	})
+	}
+	t.Cleanup(disableSemiSync)
 
 	// Stop VTOrc first so it cannot repair replication, then orphan the
 	// semi-sync source: stop replication on every other tablet so no acker
@@ -1172,9 +1172,19 @@ func TestSetupWithOrphanedSemiSyncSource(t *testing.T) {
 	}()
 	select {
 	case <-done:
+		return
 	case <-time.After(3 * time.Minute):
-		require.Fail(t, "cluster setup did not complete, instance cleanup is blocked on an orphaned semi-sync source")
 	}
+
+	// Setup is blocked. Release it and wait for it to return before failing:
+	// once this test ends, the next test sets up the same cluster, and a setup
+	// still running from here would race with it.
+	disableSemiSync()
+	select {
+	case <-done:
+	case <-time.After(time.Minute):
+	}
+	require.Fail(t, "cluster setup did not complete, instance cleanup is blocked on an orphaned semi-sync source")
 }
 
 // waitForPrimaryAndPick blocks until VTOrc has elected a primary and returns
