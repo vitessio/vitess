@@ -6,6 +6,7 @@ name: Warm Go caches
 # cache entries and a golangci-lint analysis cache entry for that commit. All
 # are built from an empty cache, so they contain exactly what the jobs need and
 # nothing stale. Pull requests restore the newest entries of their base branch.
+# It likewise fills the Maven cache that docker_ci restores.
 on:
   push:
     branches:
@@ -118,6 +119,76 @@ jobs:
           key: ${{ steps.key.outputs.key }}
 
       - name: Delete superseded module cache entries
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          PREFIX: ${{ steps.key.outputs.prefix }}
+          KEY: ${{ steps.key.outputs.key }}
+        run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
+
+  # Maven and its repository for the test containers of docker_ci, keyed by
+  # what determines them. See tools/warm_maven_cache.sh.
+  maven:
+    name: "Warm Maven cache"
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: read
+      # To delete the entries this run supersedes.
+      actions: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Determine the cache key
+        id: key
+        env:
+          SUM: ${{ hashFiles('docker/test/install_maven.sh', 'tools/warm_maven_cache.sh', 'java/**/pom.xml') }}
+        run: |
+          echo "prefix=docker-maven-" >> "${GITHUB_OUTPUT}"
+          echo "key=docker-maven-${SUM}" >> "${GITHUB_OUTPUT}"
+
+      # A key is never saved twice, so only a change to what determines the
+      # cache saves an entry.
+      - name: Look up the Maven cache
+        id: lookup
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            /tmp/maven
+            /tmp/mavencache
+          key: ${{ steps.key.outputs.key }}
+          lookup-only: true
+
+      # Java 17, like the bootstrap image.
+      - name: Warm the Maven cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        run: |
+          export JAVA_HOME="${JAVA_HOME_17_X64}"
+          tools/warm_maven_cache.sh /tmp/maven /tmp/mavencache
+          du -sh /tmp/maven /tmp/mavencache
+
+      - name: Save the Maven cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            /tmp/maven
+            /tmp/mavencache
+          key: ${{ steps.key.outputs.key }}
+
+      - name: Delete superseded Maven cache entries
         if: steps.lookup.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
