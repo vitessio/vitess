@@ -855,6 +855,50 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		catchup(t, customerTab1, workflow, workflowType)
 		catchup(t, customerTab2, workflow, workflowType)
 
+		// json_tbl is created with stats_auto_recalc=0 and only a primary key, so
+		// InnoDB never recalculates its statistics on its own. The copy analyzes
+		// it, so each target shard that copied rows has statistics that count
+		// some, instead of the empty ones saved at create time. n_rows is a
+		// sampled estimate, so it is not compared with the row count.
+		statsQuery := "select n_rows from mysql.innodb_table_stats where database_name = 'vt_" + defaultTargetKs + "' and table_name = 'json_tbl'"
+		copiedRows := map[string]int64{}
+		for shard, tab := range map[string]*cluster.VttabletProcess{"-80": customerTab1, "80-": customerTab2} {
+			qr, err := tab.QueryTablet("select count(*) from json_tbl", defaultTargetKs, true)
+			require.NoError(t, err)
+			count, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err)
+			copiedRows[shard] = count
+			qr, err = tab.QueryTablet(statsQuery, defaultTargetKs, false)
+			require.NoError(t, err)
+			require.Len(t, qr.Rows, 1)
+			nRows, err := qr.Rows[0][0].ToInt64()
+			require.NoError(t, err)
+			if count > 0 {
+				require.Positive(t, nRows, "json_tbl statistics on %s were not updated after the copy", tab.TabletPath)
+			}
+		}
+		require.Positive(t, copiedRows["-80"]+copiedRows["80-"])
+		// The ANALYZE TABLE is binlogged, so the targets' replicas, in every cell,
+		// get the statistics too.
+		for shard, count := range copiedRows {
+			if count == 0 {
+				continue
+			}
+			for _, tablet := range custKs.Shards[shard].Tablets {
+				if tablet.Vttablet.IsPrimary {
+					continue
+				}
+				require.Eventuallyf(t, func() bool {
+					qr, err := tablet.Vttablet.QueryTablet(statsQuery, defaultTargetKs, false)
+					if err != nil || len(qr.Rows) != 1 {
+						return false
+					}
+					nRows, err := qr.Rows[0][0].ToInt64()
+					return err == nil && nRows > 0
+				}, defaultTimeout, defaultTick, "json_tbl statistics on replica %s were not updated after the copy", tablet.Vttablet.TabletPath)
+			}
+		}
+
 		// The wait in the next code block which checks that customer.dec80 is updated, also confirms that the
 		// blob-related dmls we execute here are vreplicated.
 		insertIntoBlobTable(t)

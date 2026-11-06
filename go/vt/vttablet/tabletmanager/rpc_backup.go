@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -43,7 +44,7 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage.
-func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) error {
+func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) (retErr error) {
 	if tm.Cnf == nil {
 		return errors.New("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
@@ -129,18 +130,58 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return err
 		}
 		originalType = tablet.Type
-		// Update our type to `BACKUP`.
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
-			return err
+		// A primary's semi-sync is restored from the policy in effect now, so a
+		// policy that can't be read refuses the backup before the type changes.
+		// VTOrc reconciles a later policy change once the primary serves again.
+		var primarySemiSync SemiSyncAction
+		if originalType == topodatapb.TabletType_PRIMARY {
+			if primarySemiSync, err = tm.primarySemiSyncAction(ctx, tablet.Tablet); err != nil {
+				return err
+			}
 		}
-
-		// Adding defer to original value in case of any failures.
+		// Restore the original type even if the change to BACKUP fails after
+		// publishing it.
 		defer func() {
-			bgCtx := context.Background()
+			// An earlier error explains why the backup failed; keep it.
+			fail := func(err error) {
+				if retErr == nil {
+					err = vterrors.Wrap(err, "backup completed, but tablet restoration failed")
+					retErr = err
+				}
+				l.Errorf("%s", err)
+			}
+			// Each restore step gets a fresh context independent of the RPC. This
+			// bounds semi-sync restoration and the primary topology update;
+			// subsystem startup and subsequent cleanup may outlive those deadlines.
+			withBudget := func(step func(context.Context) error) error {
+				ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+				defer cancel()
+				return step(ctx)
+			}
+			// Entering BACKUP turned off semi-sync. A primary turns it back on as
+			// its policy required when the backup started, before it serves again.
+			restoreSemiSync := originalType == topodatapb.TabletType_PRIMARY && primarySemiSync == SemiSyncActionSet
+			if restoreSemiSync {
+				if err := withBudget(func(ctx context.Context) error {
+					return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, true, true)
+				}); err != nil {
+					fail(vterrors.Wrapf(err, "failed to restore primary semi-sync, keeping tablet type %v", topodatapb.TabletType_BACKUP))
+					return
+				}
+			}
 			// Change our type back to the original value.
 			// Original type could be primary so pass in a real value for PrimaryTermStartTime
-			if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
-				l.Errorf("Failed to change tablet type from %v to %v, error: %v", topodatapb.TabletType_BACKUP, originalType, err)
+			bgCtx := context.Background()
+			err := withBudget(func(topoCtx context.Context) error {
+				return tm.changeTypeLockedWithTopoContext(bgCtx, topoCtx, originalType, DBActionNone, SemiSyncActionNone)
+			})
+			// The semi-sync monitor runs only on a primary, so it starts once the
+			// tablet is PRIMARY locally, even if a later step of the change failed.
+			if restoreSemiSync && tm.SemiSyncMonitor != nil && tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+				tm.SemiSyncMonitor.Open()
+			}
+			if err != nil {
+				fail(vterrors.Wrapf(err, "failed to change tablet type from %v to %v", topodatapb.TabletType_BACKUP, originalType))
 				return
 			}
 
@@ -183,6 +224,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()
+
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
+			return err
+		}
 	}
 
 	// Now we can run the backup.
@@ -190,6 +235,20 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	returnErr := mysqlctl.Backup(ctx, backupParams)
 
 	return returnErr
+}
+
+// primarySemiSyncAction returns the semi-sync action that the keyspace's
+// durability policy requires for the primary.
+func (tm *TabletManager) primarySemiSyncAction(ctx context.Context, tablet *topodatapb.Tablet) (SemiSyncAction, error) {
+	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+	}
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+	}
+	return tm.convertBoolToSemiSyncAction(ctx, policy.SemiSyncAckers(durability, tablet) > 0)
 }
 
 // RestoreFromBackup deletes all local data and then restores the data from the latest backup [at

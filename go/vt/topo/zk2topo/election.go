@@ -111,7 +111,7 @@ func (mp *zkLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	// Wait until we are it, or we are interrupted. Using a
 	// small-ish time out so it gets exercised faster (as opposed
 	// to crashing after a day of use).
-	err = obtainQueueLock(mp.stopCtx, mp.zs.conn, proposal)
+	err = obtainQueueLock(mp.stopCtx, mp.zs.conn, proposal, true /*wait*/)
 	switch err {
 	case nil:
 		break

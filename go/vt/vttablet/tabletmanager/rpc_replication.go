@@ -605,6 +605,11 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 		return nil, err
 	}
 	defer tm.unlock()
+	return tm.demotePrimaryLocked(ctx, revertPartialFailure, force)
+}
+
+// demotePrimaryLocked implements demotePrimary. The caller must hold the action lock.
+func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialFailure bool, force bool) (primaryStatus *replicationdatapb.PrimaryStatus, finalErr error) {
 	defer tm.QueryServiceControl.SetDemotePrimaryStalled(false)
 
 	finishCtx, cancel := context.WithCancel(context.Background())
@@ -927,14 +932,21 @@ func (tm *TabletManager) setReplicationSourceSemiSyncNoAction(ctx context.Contex
 }
 
 func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartReplication bool, semiSync SemiSyncAction, heartbeatInterval float64) (err error) {
-	// Change our type to REPLICA if we used to be PRIMARY.
-	// Being sent SetReplicationSource means another PRIMARY has been successfully promoted,
-	// so we convert to REPLICA first, since we want to do it even if other
-	// steps fail below.
-	// Note it is important to check for PRIMARY here so that we don't
-	// unintentionally change the type of RDONLY tablets
+	// Being sent SetReplicationSource means another PRIMARY has been promoted.
+	// If we are still PRIMARY, demote before changing our type to REPLICA. A
+	// failed demotion leaves the type unchanged; after a successful demotion,
+	// change the type even if the subsequent replication setup fails.
+	// Only change PRIMARY tablets so RDONLY tablets retain their type.
+	//
+	// A primary that ERS could not reach may still have writes blocked on semi-sync
+	// when it later handles this RPC. Demote it before disabling source-side
+	// semi-sync so those clients receive errors, and read its position only after
+	// the blocked commits complete.
 	tablet := tm.Tablet()
 	if tablet.Type == topodatapb.TabletType_PRIMARY {
+		if _, err := tm.demotePrimaryLocked(ctx, false /* revertPartialFailure */, true /* force */); err != nil {
+			return vterrors.Wrap(err, "failed to demote the primary before repointing it")
+		}
 		if err := tm.tmState.ChangeTabletType(ctx, topodatapb.TabletType_REPLICA, DBActionNone); err != nil {
 			return err
 		}
@@ -1231,6 +1243,10 @@ func isPrimaryEligible(tabletType topodatapb.TabletType) bool {
 }
 
 func (tm *TabletManager) fixSemiSync(ctx context.Context, tabletType topodatapb.TabletType, semiSync SemiSyncAction) error {
+	// A delayed repoint may request ACKs after the tablet has been drained.
+	if tabletType == topodatapb.TabletType_DRAINED && semiSync == SemiSyncActionSet {
+		semiSync = SemiSyncActionUnset
+	}
 	switch semiSync {
 	case SemiSyncActionNone:
 		return nil
@@ -1285,12 +1301,16 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 	// we should restart replication. First, let's make sure
 	// replication is running.
 	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
-	if err != nil {
-		// Replication is not configured, nothing to do.
+	if errors.Is(err, mysql.ErrNotReplica) {
 		return nil
 	}
-	if !status.IOHealthy() {
-		// IO thread is not running, nothing to do.
+	if err != nil {
+		return vterrors.Wrap(err, "failed to read replication status")
+	}
+	// A stopped receiver reads the setting when it starts. A receiver
+	// reconnecting after an error needs the restart when ACKs are turned off:
+	// reconnecting with them off stops it with error 13117.
+	if status.IOState == replication.ReplicationStateStopped {
 		return nil
 	}
 
@@ -1304,8 +1324,14 @@ func (tm *TabletManager) fixSemiSyncAndReplication(ctx context.Context, tabletTy
 		return nil
 	}
 
-	// We need to restart replication
-	log.Info(fmt.Sprintf("Restarting replication for semi-sync flag change to take effect from %v to %v", acking, shouldAck))
+	// Only the receiver registers with the source as a semi-sync replica, so
+	// restarting it applies the change without waiting for the applier.
+	log.Info(fmt.Sprintf("Restarting the replication receiver for semi-sync flag change to take effect from %v to %v", acking, shouldAck))
+	err = tm.MysqlDaemon.RestartReplicationReceiver(ctx, tm.hookExtraEnv())
+	if !errors.Is(err, mysqlctl.ErrReceiverRestartUnsupported) {
+		return vterrors.Wrap(err, "failed to restart the replication receiver")
+	}
+	// Flavors that can't restart the receiver on its own restart replication.
 	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 		return vterrors.Wrap(err, "failed to StopReplication")
 	}
