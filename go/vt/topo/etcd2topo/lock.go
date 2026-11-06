@@ -160,31 +160,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-<<<<<<< HEAD
-	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		if e.Name == locksPath && e.Type == topo.TypeDirectory && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents, leaseTTL)
-||||||| parent of 00b81d440f (topo: make `TryLock` fail fast instead of check-then-lock (#21590))
-	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		if e.Name == locksPath && e.Type == topo.TypeDirectory && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents, leaseTTL)
-=======
 	return s.lock(ctx, dirPath, contents, leaseTTL, false /*wait*/)
->>>>>>> 00b81d440f (topo: make `TryLock` fail fast instead of check-then-lock (#21590))
 }
 
 // Lock is part of the topo.Conn interface.

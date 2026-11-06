@@ -18,7 +18,6 @@ package zk2topo
 
 import (
 	"context"
-	"fmt"
 	"path"
 	"time"
 
@@ -70,37 +69,7 @@ func (zs *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.L
 		return nil, convertError(err, dirPath)
 	}
 
-<<<<<<< HEAD
-	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		// there is a bug where ListDir return ephemeral = false for locks. It is due
-		// https://github.com/vitessio/vitess/blob/main/go/vt/topo/zk2topo/utils.go#L55
-		// TODO: Fix/send ephemeral flag value recursively while creating ephemeral file
-		if e.Name == locksPath && e.Type == topo.TypeDirectory {
-			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return zs.lock(ctx, dirPath, contents)
-||||||| parent of 00b81d440f (topo: make `TryLock` fail fast instead of check-then-lock (#21590))
-	// If there is a folder '/locks' with some entries in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		// there is a bug where ListDir return ephemeral = false for locks. It is due
-		// https://github.com/vitessio/vitess/blob/main/go/vt/topo/zk2topo/utils.go#L55
-		// TODO: Fix/send ephemeral flag value recursively while creating ephemeral file
-		if e.Name == locksPath && e.Type == topo.TypeDirectory {
-			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return zs.lock(ctx, dirPath, contents)
-=======
 	return zs.lock(ctx, dirPath, contents, false /*wait*/)
->>>>>>> 00b81d440f (topo: make `TryLock` fail fast instead of check-then-lock (#21590))
 }
 
 // lock is used by Lock(), LockWithTTL(), LockName() and TryLock().
@@ -124,7 +93,7 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string, wait bool)
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), baseTimeout)
 		defer cancel()
 		if err := zs.conn.Delete(cleanupCtx, nodePath, -1); err != nil {
-			log.Warn(fmt.Sprintf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err))
+			log.Warningf("Failed to cleanup unsuccessful lock path %s: %v", nodePath, err)
 		}
 		return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
 	}

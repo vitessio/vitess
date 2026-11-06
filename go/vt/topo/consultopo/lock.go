@@ -18,7 +18,6 @@ package consultopo
 
 import (
 	"context"
-	"fmt"
 	"path"
 	"time"
 
@@ -87,31 +86,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		return nil, convertError(err, dirPath)
 	}
 
-<<<<<<< HEAD
-	// If there is a file 'lock' in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		if e.Name == locksFilename && e.Type == topo.TypeFile && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, fmt.Sprintf("lock already exists at path %s", dirPath))
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents, s.lockTTL)
-||||||| parent of 00b81d440f (topo: make `TryLock` fail fast instead of check-then-lock (#21590))
-	// If there is a file 'lock' in it then we can assume that someone else already has a lock.
-	// Throw error in this case
-	for _, e := range entries {
-		if e.Name == locksFilename && e.Type == topo.TypeFile && e.Ephemeral {
-			return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
-		}
-	}
-
-	// everything is good let's acquire the lock.
-	return s.lock(ctx, dirPath, contents, s.lockTTL)
-=======
 	return s.lock(ctx, dirPath, contents, s.lockTTL, false /*wait*/)
->>>>>>> 00b81d440f (topo: make `TryLock` fail fast instead of check-then-lock (#21590))
 }
 
 // lock is used by Lock(), LockWithTTL(), LockName() and TryLock().

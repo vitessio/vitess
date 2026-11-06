@@ -493,10 +493,10 @@ func TestConsulTopoTryLockAcrossServers(t *testing.T) {
 	cmd, configFilename, serverAddr := startConsul(t, "")
 	t.Cleanup(func() {
 		if err := cmd.Process.Kill(); err != nil {
-			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
+			log.Errorf("cmd process kill has an error: %v", err)
 		}
 		if err := cmd.Wait(); err != nil {
-			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
+			log.Errorf("cmd wait has an error: %v", err)
 		}
 		os.Remove(configFilename)
 	})
