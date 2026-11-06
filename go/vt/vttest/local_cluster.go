@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -43,6 +44,7 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -347,14 +349,18 @@ func (db *LocalCluster) Setup() error {
 		}
 	}
 
-	log.Info(fmt.Sprintf("LocalCluster environment: %+v", db.Env))
+	log.Info("LocalCluster environment", slog.String("environment", fmt.Sprintf("%+v", db.Env)))
 
 	// Set up topo manager if we are using a remote topo server
 	if db.ExternalTopoImplementation != "" {
 		db.topo = db.Env.TopoManager(db.ExternalTopoImplementation, db.ExternalTopoGlobalServerAddress, db.ExternalTopoGlobalRoot, db.Topology)
-		log.Info(fmt.Sprintf("Initializing Topo Manager: %+v", db.topo))
+		log.Info("Initializing Topo Manager",
+			slog.String("topo_implementation", db.ExternalTopoImplementation),
+			slog.String("topo_global_server_address", db.ExternalTopoGlobalServerAddress),
+			slog.String("topo_global_root", db.ExternalTopoGlobalRoot),
+			slog.String("topology", fmt.Sprint(db.Topology)))
 		if err := db.topo.Setup(); err != nil {
-			log.Error(fmt.Sprintf("Failed to set up Topo Manager: %v", err))
+			log.Error("Failed to set up Topo Manager", slog.Any("error", err))
 			return err
 		}
 	}
@@ -367,11 +373,11 @@ func (db *LocalCluster) Setup() error {
 	initializing := !db.PersistentMode || !dirExist(db.mysql.TabletDir())
 
 	if initializing {
-		log.Info(fmt.Sprintf("Initializing MySQL Manager (%T)...", db.mysql))
+		log.Info("Initializing MySQL Manager...", slog.String("type", fmt.Sprintf("%T", db.mysql)))
 		if err := db.mysql.Setup(); err != nil {
-			log.Error(fmt.Sprintf("Mysqlctl failed to start: %s", err))
+			log.Error("Mysqlctl failed to start", slog.Any("error", err))
 			if err, ok := err.(*exec.ExitError); ok {
-				log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
+				log.Error("stderr", slog.String("stderr", string(err.Stderr)))
 			}
 			logMySQLErrorLog(db.mysql.TabletDir())
 			return err
@@ -381,19 +387,23 @@ func (db *LocalCluster) Setup() error {
 			return err
 		}
 	} else {
-		log.Info(fmt.Sprintf("Starting MySQL Manager (%T)...", db.mysql))
+		log.Info("Starting MySQL Manager...", slog.String("type", fmt.Sprintf("%T", db.mysql)))
 		if err := db.mysql.Start(); err != nil {
-			log.Error(fmt.Sprintf("Mysqlctl failed to start: %s", err))
+			log.Error("Mysqlctl failed to start", slog.Any("error", err))
 			if err, ok := err.(*exec.ExitError); ok {
-				log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
+				log.Error("stderr", slog.String("stderr", string(err.Stderr)))
 			}
 			logMySQLErrorLog(db.mysql.TabletDir())
 			return err
 		}
 	}
 
-	mycfg, _ := json.Marshal(db.mysql.Params(""))
-	log.Info(fmt.Sprintf("MySQL up: %s", mycfg))
+	params := db.mysql.Params("")
+	if params.Pass != "" {
+		params.Pass = "****"
+	}
+	mycfg, _ := json.Marshal(params)
+	log.Info("MySQL up", slog.String("mysql_params", string(mycfg)))
 
 	if !db.OnlyMySQL {
 		log.Info("Starting vtcombo...")
@@ -401,7 +411,7 @@ func (db *LocalCluster) Setup() error {
 		if err := db.vt.WaitStart(); err != nil {
 			return err
 		}
-		log.Info("vtcombo up: " + db.vt.Address())
+		log.Info("vtcombo up", slog.String("address", db.vt.Address()))
 	}
 
 	if initializing {
@@ -443,9 +453,9 @@ func (db *LocalCluster) TearDown() error {
 	if err := db.mysql.TearDown(); err != nil {
 		errors = append(errors, fmt.Sprintf("mysql: %s", err))
 
-		log.Error(fmt.Sprintf("failed to shutdown MySQL: %s", err))
+		log.Error("failed to shutdown MySQL", slog.Any("error", err))
 		if err, ok := err.(*exec.ExitError); ok {
-			log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
+			log.Error("stderr", slog.String("stderr", string(err.Stderr)))
 		}
 	}
 
@@ -588,7 +598,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 	}
 
 	for _, cmd := range sql {
-		log.Info(fmt.Sprintf("Execute(%s): \"%s\"", dbname, cmd))
+		log.Info("Execute", slog.String("db_name", dbname), slog.String("query", cmd))
 		_, err := conn.ExecuteFetch(cmd, -1, false)
 		if err != nil {
 			return err
@@ -609,7 +619,7 @@ func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Resul
 	}
 	defer conn.Close()
 
-	log.Info(fmt.Sprintf("ExecuteFetch(%s): \"%s\"", dbname, sql))
+	log.Info("ExecuteFetch", slog.String("db_name", dbname), slog.String("query", sql))
 	rs, err := conn.ExecuteFetch(sql, -1, true)
 	return rs, err
 }
@@ -662,7 +672,7 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 	args := []string{"ApplyVSchema", "--sql", migration, keyspace}
 	fmt.Printf("Applying vschema %v", args)
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
-		log.Info(fmt.Sprint(e))
+		log.Info("ApplyVSchema event", eventAttrs(keyspace, e)...)
 	})
 
 	return err
@@ -671,13 +681,36 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
-	log.Info(fmt.Sprintf("Reloading keyspace schema %v", args))
+	log.Info("Reloading keyspace schema", slog.String("keyspace", keyspace))
 
 	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
-		log.Info(fmt.Sprint(e))
+		log.Info("ReloadSchemaKeyspace event", eventAttrs(keyspace, e)...)
 	})
 
 	return err
+}
+
+// eventAttrs returns a vtctl event's fields as attributes. The level is always
+// logged; the time, file, line and text are left out when unset, as the
+// event's proto text leaves them out.
+func eventAttrs(keyspace string, event *logutil.Event) []slog.Attr {
+	attrs := []slog.Attr{
+		slog.String("keyspace", keyspace),
+		slog.String("event_level", event.Level.String()),
+	}
+	if event.Time != nil {
+		attrs = append(attrs, slog.Time("event_time", protoutil.TimeFromProto(event.Time)))
+	}
+	if event.File != "" {
+		attrs = append(attrs, slog.String("event_file", event.File))
+	}
+	if event.Line != 0 {
+		attrs = append(attrs, slog.Int64("event_line", event.Line))
+	}
+	if event.Value != "" {
+		attrs = append(attrs, slog.String("message", event.Value))
+	}
+	return attrs
 }
 
 // logMySQLErrorLog logs the end of mysqld's error log. When mysqld exits during
@@ -685,7 +718,7 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 // never logs the error log itself, and nothing else reports why mysqld exited.
 func logMySQLErrorLog(tabletDir string) {
 	// mysqlctl writes the error log here, see Mycnf.ErrorLogPath.
-	log.Error(mysqlctl.ReadTailOfMysqldErrorLog(path.Join(tabletDir, "error.log")))
+	log.Error("mysqld error log", slog.String("error_log", mysqlctl.ReadTailOfMysqldErrorLog(path.Join(tabletDir, "error.log"))))
 }
 
 func dirExist(dir string) bool {

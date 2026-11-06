@@ -20,6 +20,7 @@ package vttest
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -152,7 +153,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 		vtp.proc.Stdout = os.Stdout
 	}
 
-	log.Info(strings.Join(vtp.proc.Args, " "))
+	log.Info("Starting Vitess process", slog.String("exec_cmd", strings.Join(redactPasswordArgs(vtp.proc.Args), " ")))
 	err = vtp.proc.Start()
 	if err != nil {
 		return
@@ -185,6 +186,27 @@ func (vtp *VtProcess) WaitStart() (err error) {
 	exitErr := <-vtp.exit
 	vtp.proc = nil
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtp.Name, exitErr)
+}
+
+// redactPasswordArgs returns a copy of a command line with the non-empty
+// values of flags whose names end in "password", such as --db-app-password or
+// --db_dba_password, given as the next argument or after "=", replaced by
+// "****".
+func redactPasswordArgs(args []string) []string {
+	isPassword := func(option string) bool {
+		name := strings.TrimLeft(option, "-")
+		return name != option && strings.HasSuffix(name, "password")
+	}
+	redacted := make([]string, len(args))
+	for i, arg := range args {
+		if i > 0 && isPassword(args[i-1]) && arg != "" {
+			arg = "****"
+		} else if option, value, ok := strings.Cut(arg, "="); ok && isPassword(option) && value != "" {
+			arg = option + "=****"
+		}
+		redacted[i] = arg
+	}
+	return redacted
 }
 
 const (
