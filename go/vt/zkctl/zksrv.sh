@@ -21,22 +21,8 @@ logdir="$1"
 config="$2"
 pidfile="$3"
 zk_java_opts=${ZK_JAVA_OPTS:-}
-<<<<<<< HEAD
 zk_ver=${ZK_VERSION:-3.8.0}
 classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/zookeeper-$zk_ver-fatjar.jar:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-zk_ver=${ZK_VERSION:-3.9.6}
-
-# Build classpath: use wildcard to include all JARs in the lib directory.
-# This supports both the old fatjar layout and the new binary distribution layout.
-classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/*:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
-=======
-zk_ver=${ZK_VERSION:-3.9.7}
-
-# Build classpath: use wildcard to include all JARs in the lib directory.
-# This supports both the old fatjar layout and the new binary distribution layout.
-classpath="$VTROOT/dist/vt-zookeeper-$zk_ver/lib/*:/usr/local/lib/zookeeper-$zk_ver-fatjar.jar:/usr/share/java/zookeeper-$zk_ver.jar"
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 
 mkdir -p "$logdir"
 touch "$logdir/zksrv.log"

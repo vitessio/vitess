@@ -25,16 +25,9 @@ source ./dev.env
 
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
-<<<<<<< HEAD
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-BUILD_PROTOC=${BUILD_PROTOC:-1}
-=======
-BUILD_PROTOC=${BUILD_PROTOC:-1}
-# Maven is off by default: the bootstrap image runs bootstrap.sh and must not
-# contain it (CVE-2024-47554). docker/test/run.sh turns it on in the test
-# containers.
+# Maven is off by default: docker/test/run.sh turns it on in the test
+# containers, and the go_cache_warm workflow in its Maven job.
 BUILD_MAVEN=${BUILD_MAVEN:-0}
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
 VITESS_RESOURCES_RELEASE="v4.0"
@@ -98,46 +91,7 @@ install_dep() {
 # available on macOS or some linuxes:
 # https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
 get_arch() {
-<<<<<<< HEAD
   uname -m
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-	uname -m
-}
-
-# verify_sha256 verifies the SHA256 checksum of a file.
-#
-# Usage: verify_sha256 <file> <expected_sha256>
-verify_sha256() {
-	local file="$1"
-	local expected="$2"
-
-	if command -v sha256sum &>/dev/null; then
-		echo "$expected  $file" | sha256sum -c - &>/dev/null || fail "SHA256 checksum verification failed for $file"
-	elif command -v shasum &>/dev/null; then
-		echo "$expected  $file" | shasum -a 256 -c - &>/dev/null || fail "SHA256 checksum verification failed for $file"
-	else
-		fail "Neither sha256sum nor shasum found. Cannot verify checksum."
-	fi
-	echo "OK: SHA256 checksum verified for $file"
-}
-
-# verify_sha512 verifies the SHA512 checksum of a file.
-#
-# Usage: verify_sha512 <file> <expected_sha512>
-verify_sha512() {
-	local file="$1"
-	local expected="$2"
-
-	if command -v sha512sum &>/dev/null; then
-		echo "$expected  $file" | sha512sum -c - &>/dev/null || fail "SHA512 checksum verification failed for $file"
-	elif command -v shasum &>/dev/null; then
-		echo "$expected  $file" | shasum -a 512 -c - &>/dev/null || fail "SHA512 checksum verification failed for $file"
-	else
-		fail "Neither sha512sum nor shasum found. Cannot verify checksum."
-	fi
-	echo "OK: SHA512 checksum verified for $file"
-=======
-	uname -m
 }
 
 # Downloads are kept here, outside the directories that install_dep wipes,
@@ -148,18 +102,18 @@ DOWNLOAD_CACHE="$VTROOT/dist/download-cache"
 #
 # Usage: checksum_matches <256|512> <file> <expected_checksum>
 checksum_matches() {
-	local bits="$1"
-	local file="$2"
-	local expected="$3"
+  local bits="$1"
+  local file="$2"
+  local expected="$3"
 
-	[[ -f "$file" ]] || return 1
-	if command -v "sha${bits}sum" &>/dev/null; then
-		echo "$expected  $file" | "sha${bits}sum" -c - &>/dev/null
-	elif command -v shasum &>/dev/null; then
-		echo "$expected  $file" | shasum -a "$bits" -c - &>/dev/null
-	else
-		fail "Neither sha${bits}sum nor shasum found. Cannot verify checksum."
-	fi
+  [[ -f "$file" ]] || return 1
+  if command -v "sha${bits}sum" &>/dev/null; then
+    echo "$expected  $file" | "sha${bits}sum" -c - &>/dev/null
+  elif command -v shasum &>/dev/null; then
+    echo "$expected  $file" | shasum -a "$bits" -c - &>/dev/null
+  else
+    fail "Neither sha${bits}sum nor shasum found. Cannot verify checksum."
+  fi
 }
 
 # download_verified makes sure that $DOWNLOAD_CACHE/<file> exists and has the
@@ -172,41 +126,40 @@ checksum_matches() {
 #
 # Usage: download_verified <file> <256|512> <expected_checksum> <url>...
 download_verified() {
-	local file="$1"
-	local bits="$2"
-	local expected="$3"
-	shift 3
+  local file="$1"
+  local bits="$2"
+  local expected="$3"
+  shift 3
 
-	local cached="$DOWNLOAD_CACHE/$file"
-	if checksum_matches "$bits" "$cached" "$expected"; then
-		echo "OK: using cached $cached"
-		return
-	fi
+  local cached="$DOWNLOAD_CACHE/$file"
+  if checksum_matches "$bits" "$cached" "$expected"; then
+    echo "OK: using cached $cached"
+    return
+  fi
 
-	mkdir -p "$DOWNLOAD_CACHE"
-	# A unique name, as the docker test containers share the cache.
-	local partial
-	partial="$(mktemp "$cached.XXXXXX")"
-	local url
-	for url in "$@"; do
-		# Tries must be bounded: wget-retry retries a 404 forever by default and
-		# the next URL would never be tried.
-		if "${VTROOT}/tools/wget-retry" -q -t 3 -O "$partial" "$url"; then
-			if checksum_matches "$bits" "$partial" "$expected"; then
-				# mktemp makes the file private, but the docker builds and test
-				# containers read it as another user.
-				chmod 644 "$partial"
-				mv "$partial" "$cached"
-				echo "OK: SHA${bits} checksum verified for $cached"
-				return
-			fi
-			rm -f "$partial"
-			fail "SHA${bits} checksum verification failed for $file downloaded from $url"
-		fi
-	done
-	rm -f "$partial"
-	fail "Could not download $file"
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
+  mkdir -p "$DOWNLOAD_CACHE"
+  # A unique name, as the docker test containers share the cache.
+  local partial
+  partial="$(mktemp "$cached.XXXXXX")"
+  local url
+  for url in "$@"; do
+    # Tries must be bounded: wget-retry retries a 404 forever by default and
+    # the next URL would never be tried.
+    if "${VTROOT}/tools/wget-retry" -q -t 3 -O "$partial" "$url"; then
+      if checksum_matches "$bits" "$partial" "$expected"; then
+        # mktemp makes the file private, but the docker builds and test
+        # containers read it as another user.
+        chmod 644 "$partial"
+        mv "$partial" "$cached"
+        echo "OK: SHA${bits} checksum verified for $cached"
+        return
+      fi
+      rm -f "$partial"
+      fail "SHA${bits} checksum verification failed for $file downloaded from $url"
+    fi
+  done
+  rm -f "$partial"
+  fail "Could not download $file"
 }
 
 # Install protoc.
@@ -230,106 +183,62 @@ install_protoc() {
       *)   echo "ERROR: unsupported architecture for protoc"; exit 1;;
   esac
 
-  # This is how we'd download directly from source:
-  "${VTROOT}/tools/wget-retry" -q -t 3 https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  #"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/protoc-$version-$platform-${target}.zip"
-  unzip "protoc-$version-$platform-${target}.zip"
+  # SHA256 checksums for protoc v21.3 from official releases.
+  local sha256
+  case "${platform}-${target}" in
+    linux-x86_64) sha256="214b670884972d09a1ccf7b7b4c65a12bdd73d55ebea6b5207b5eb2333ae32ec";;
+    linux-aarch_64) sha256="e22ad6908e197ac326a02ddabc49046846b64d051f3bef16f5d3afd50ffdec18";;
+    osx-x86_64) sha256="b988e06fed5279865445978efd97ec92990ca24b0fe16c04aafe85d6cee71eeb";;
+    osx-aarch_64) sha256="3f1b2a59ba111e3227adf47e5513b3ea9133d9621dc5df70cd1ffed6dc756877";;
+    *) echo "ERROR: no checksum for protoc $platform-$target"; exit 1;;
+  esac
 
-<<<<<<< HEAD
+  local file="protoc-${version}-${platform}-${target}.zip"
+
+  # This is how we'd download from the Vitess resources mirror:
+  # "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  download_verified "$file" 256 "$sha256" "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
+  unzip "$DOWNLOAD_CACHE/$file"
+
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-	local file="protoc-${version}-${platform}-${target}.zip"
-
-	# This is how we'd download directly from source:
-	"${VTROOT}/tools/wget-retry" -q -t 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
-	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	verify_sha256 "$file" "$sha256"
-	unzip "$file"
-
-	ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
-=======
-	local file="protoc-${version}-${platform}-${target}.zip"
-
-	# This is how we'd download from the Vitess resources mirror:
-	# "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	download_verified "$file" 256 "$sha256" "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
-	unzip "$DOWNLOAD_CACHE/$file"
-
-	ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 }
 
 
 # Install Zookeeper.
 install_zookeeper() {
-<<<<<<< HEAD
   local version="$1"
   local dist="$2"
   zk="zookeeper-$version"
+  local file="apache-${zk}.tar.gz"
+
+  # SHA512 checksum for the Zookeeper 3.8.0 source release from Apache archives.
+  local sha512="0bfaf823af115d3d8e589d69312658df359a8c740996acf3c7fc392c8912a588507189831459ede89b0cfd203fac96d3bb2b3f258b894fedc034d7f1331f6d0a"
+
   # This is how we'd download directly from source:
-  # wget "https://dlcdn.apache.org/zookeeper/$zk/apache-$zk.tar.gz"
-  "${VTROOT}/tools/wget-retry" -q -t 3 "${VITESS_RESOURCES_DOWNLOAD_URL}/apache-${zk}.tar.gz"
-  tar -xzf "$dist/apache-$zk.tar.gz"
+  # wget "https://dlcdn.apache.org/zookeeper/$zk/${file}"
+  download_verified "$file" 512 "$sha512" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  tar -xzf "$DOWNLOAD_CACHE/$file"
   mvn -q -f $dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/pom.xml clean install -P fatjar -DskipTests
   mkdir -p $dist/lib
   cp "$dist/apache-$zk/zookeeper-contrib/zookeeper-contrib-fatjar/target/$zk-fatjar.jar" "$dist/lib/$zk-fatjar.jar"
   rm -rf "$dist/apache-$zk"
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-	local version="$1"
-	local dist="$2"
-	local zk="zookeeper-$version"
-	local file="apache-${zk}-bin.tar.gz"
-
-	# SHA512 checksum for Zookeeper 3.9.6 from Apache archives.
-	local sha512="e999626df06de30dc8bb53bb51da9bb786b1658406adafc6b92f104d72ca25e869f70a57c83a726f8b9558cc0fb519fc20f201aa5d6da09884bc4be5fe6dd3b0"
-
-	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
-	# Tries must be bounded: wget-retry retries a 404 forever by default and the fallback would never run.
-	"${VTROOT}/tools/wget-retry" -q -t 3 "https://dlcdn.apache.org/zookeeper/${zk}/${file}" || \
-		"${VTROOT}/tools/wget-retry" -q -t 3 "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
-	verify_sha512 "$dist/$file" "$sha512"
-	tar -xzf "$dist/$file"
-	mkdir -p "$dist"/lib
-	cp "$dist/apache-$zk-bin/lib/"*.jar "$dist/lib/"
-	rm -rf "$dist/apache-$zk-bin"
-=======
-	local version="$1"
-	local dist="$2"
-	local zk="zookeeper-$version"
-	local file="apache-${zk}-bin.tar.gz"
-
-	# SHA512 checksum for Zookeeper 3.9.7 from Apache archives.
-	local sha512="69ce6bf0b6df9a9ecdf080bdc15758eef97ef176a88f1408214f2327fe6e5349fedf738031977e6fc2f52cb636b45779653389a6bfda75be9c82dd3e72f24f25"
-
-	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
-	download_verified "$file" 512 "$sha512" \
-		"https://dlcdn.apache.org/zookeeper/${zk}/${file}" \
-		"https://archive.apache.org/dist/zookeeper/${zk}/${file}"
-	tar -xzf "$DOWNLOAD_CACHE/$file"
-	mkdir -p "$dist"/lib
-	cp "$dist/apache-$zk-bin/lib/"*.jar "$dist/lib/"
-	rm -rf "$dist/apache-$zk-bin"
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 }
 
-<<<<<<< HEAD
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-=======
 # Install Maven.
 install_maven() {
-	local version="$1"
-	local file="apache-maven-${version}-bin.tar.gz"
+  local version="$1"
+  local file="apache-maven-${version}-bin.tar.gz"
 
-	# SHA512 checksum for Maven 3.9.16 from Apache downloads.
-	local sha512="831a8591fe20c8243b1dbe7d71e3244f31d1665b0804b2e825e38cbbe5ce0cafb8338851f90780735568773e0a6cd07bbec107cda0b896b008b861075358b6f6"
+  # SHA512 checksum for Maven 3.9.16 from Apache downloads.
+  local sha512="831a8591fe20c8243b1dbe7d71e3244f31d1665b0804b2e825e38cbbe5ce0cafb8338851f90780735568773e0a6cd07bbec107cda0b896b008b861075358b6f6"
 
-	# Maven Central keeps every Maven release, unlike dlcdn.apache.org, and
-	# archive.apache.org keeps timing out from the CI runners.
-	download_verified "$file" 512 "$sha512" \
-		"https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${version}/${file}"
-	tar -xzf "$DOWNLOAD_CACHE/$file" --strip-components=1
+  # Maven Central keeps every Maven release, unlike dlcdn.apache.org, and
+  # archive.apache.org keeps timing out from the CI runners.
+  download_verified "$file" 512 "$sha512" \
+    "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${version}/${file}"
+  tar -xzf "$DOWNLOAD_CACHE/$file" --strip-components=1
 }
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
+
 
 # Download and install etcd, link etcd binary into our root.
 install_etcd() {
@@ -349,49 +258,28 @@ install_etcd() {
       *)   echo "ERROR: unsupported architecture for etcd"; exit 1;;
   esac
 
-  file="etcd-${version}-${platform}-${target}.${ext}"
+  # SHA256 checksums for etcd v3.5.25 from official releases.
+  local sha256
+  case "${platform}-${target}" in
+    linux-amd64) sha256="168af82b59772e1811a9af7b358d42f5c6df44e0d9767afb006ecf12c4bbd607";;
+    linux-arm64) sha256="419dce0b679df31cc45201ef2449b7a6a48e9d241af01741957c9ac86a35badc";;
+    darwin-amd64) sha256="9ed3e9128ebae6cbd5b4d758a5b67fb10718c03516cc215f50fb570dc51df7b9";;
+    darwin-arm64) sha256="feff53187f00c0029a6dd83441c3d011fdde0107588f547aa88567b6cc21de41";;
+    *) echo "ERROR: no checksum for etcd $platform-$target"; exit 1;;
+  esac
 
-<<<<<<< HEAD
-  # This is how we'd download directly from source:
-  "${VTROOT}/tools/wget-retry" -q -t 3 "https://github.com/etcd-io/etcd/releases/download/$version/$file"
-  #"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  local file="etcd-${version}-${platform}-${target}.${ext}"
+
+  # This is how we'd download from the Vitess resources mirror:
+  # "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  download_verified "$file" 256 "$sha256" "https://github.com/etcd-io/etcd/releases/download/$version/$file"
   if [ "$ext" = "tar.gz" ]; then
-    tar xzf "$file"
+    tar xzf "$DOWNLOAD_CACHE/$file"
   else
-    unzip "$file"
+    unzip "$DOWNLOAD_CACHE/$file"
   fi
-  rm "$file"
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-	local file="etcd-${version}-${platform}-${target}.${ext}"
-
-	# This is how we'd download directly from source:
-	"${VTROOT}/tools/wget-retry" -q -t 3 "https://github.com/etcd-io/etcd/releases/download/$version/$file"
-	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	verify_sha256 "$file" "$sha256"
-	if [ "$ext" = "tar.gz" ]; then
-		tar xzf "$file"
-	else
-		unzip "$file"
-	fi
-	rm "$file"
-	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
-	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
-=======
-	local file="etcd-${version}-${platform}-${target}.${ext}"
-
-	# This is how we'd download from the Vitess resources mirror:
-	# "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	download_verified "$file" 256 "$sha256" "https://github.com/etcd-io/etcd/releases/download/$version/$file"
-	if [ "$ext" = "tar.gz" ]; then
-		tar xzf "$DOWNLOAD_CACHE/$file"
-	else
-		unzip "$DOWNLOAD_CACHE/$file"
-	fi
-	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
-	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 }
 
 # Download and install consul, link consul binary into our root.
@@ -412,16 +300,28 @@ install_consul() {
     *)   echo "ERROR: unsupported architecture for consul"; exit 1;;
   esac
 
+  # SHA256 checksums for consul 1.11.4 from Vitess resources mirror.
+  # Note: darwin checksums differ from official HashiCorp releases.
+  local sha256
+  case "${platform}_${target}" in
+    linux_amd64) sha256="5155f6a3b7ff14d3671b0516f6b7310530b509a2b882b95b4fdf25f4219342c8";;
+    linux_arm64) sha256="97dbf36500dcefbe463f070471602992d148cb2fe91db7e37319e1b9c809f1f0";;
+    darwin_amd64) sha256="f00f81897ec0c608019a37dec243837ce0fd471b67401ea05be9a8b105d247ce";;
+    darwin_arm64) sha256="22a87e88c9fd36f773ebd62b18f41dad5512e753769f5a385a7842a0b9364e0a";;
+    *) echo "ERROR: no checksum for consul ${platform}_${target}"; exit 1;;
+  esac
+
+  local file="consul_${version}_${platform}_${target}.zip"
+
   # This is how we'd download directly from source:
   # download_url=https://releases.hashicorp.com/consul
-  # wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
-  "${VTROOT}/tools/wget-retry" -q -t 3 "${VITESS_RESOURCES_DOWNLOAD_URL}/consul_${version}_${platform}_${target}.zip"
-  unzip "consul_${version}_${platform}_${target}.zip"
+  # wget "${download_url}/${version}/${file}"
+  download_verified "$file" 256 "$sha256" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  unzip "$DOWNLOAD_CACHE/$file"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
 
-<<<<<<< HEAD
 # Download and install toxiproxy, link toxiproxy binary into our root.
 install_toxiproxy() {
   local version="$1"
@@ -440,27 +340,22 @@ install_toxiproxy() {
     *)   echo "WARNING: unsupported architecture. Some tests that rely on toxiproxy will not function."; return;;
   esac
 
+  # SHA256 checksums for toxiproxy v2.7.0 from official releases.
+  local sha256
+  case "${platform}-${target}" in
+    linux-amd64) sha256="4957d7e8949ecc54f798fdfc8901c022ff24cd4394493be9e321a3e3d4556ac0";;
+    linux-arm64) sha256="7f63da3a5b15a8db31cf05379d09fda9bce862288c7f70912c78237ce030b0c9";;
+    darwin-amd64) sha256="8f439c3abea34c20ef615aa46368e883ec7e1c9c904070f3be7f05f90f9ac51b";;
+    darwin-arm64) sha256="619148a5af477aa83f642e7ed0f5de05f005ac493fae3ec06ece00a22df4a2cb";;
+    *) echo "WARNING: no checksum for toxiproxy $platform-$target. Some tests that rely on toxiproxy will not function."; return;;
+  esac
+
   # This is how we'd download directly from source:
-  file="toxiproxy-server-${platform}-${target}"
-  "${VTROOT}/tools/wget-retry" -q -t 3 "https://github.com/Shopify/toxiproxy/releases/download/$version/$file"
+  local file="toxiproxy-server-${platform}-${target}"
+  download_verified "$file" 256 "$sha256" "https://github.com/Shopify/toxiproxy/releases/download/$version/$file"
+  cp "$DOWNLOAD_CACHE/$file" "$dist/$file"
   chmod +x "$dist/$file"
   ln -snf "$dist/$file" "$VTROOT/bin/toxiproxy-server"
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-	# This is how we'd download directly from source:
-	# download_url=https://releases.hashicorp.com/consul
-	# wget "${download_url}/${version}/${file}"
-	"${VTROOT}/tools/wget-retry" -q -t 3 "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	verify_sha256 "$file" "$sha256"
-	unzip "$file"
-	ln -snf "$dist/consul" "$VTROOT/bin/consul"
-=======
-	# This is how we'd download directly from source:
-	# download_url=https://releases.hashicorp.com/consul
-	# wget "${download_url}/${version}/${file}"
-	download_verified "$file" 256 "$sha256" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	unzip "$DOWNLOAD_CACHE/$file"
-	ln -snf "$dist/consul" "$VTROOT/bin/consul"
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 }
 
 install_all() {
@@ -482,24 +377,16 @@ install_all() {
     install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
   fi
 
-<<<<<<< HEAD
   # toxiproxy
   install_dep "toxiproxy" "$TOXIPROXY_VER" "$VTROOT/dist/toxiproxy" install_toxiproxy
 
+  # Maven, on the PATH of the bootstrap image as dist/maven/bin.
+  if [ "$BUILD_MAVEN" == 1 ]; then
+    install_dep "Maven" "$MAVEN_VER" "$VTROOT/dist/maven" install_maven
+  fi
+
   echo
   echo "bootstrap finished - run 'make build' to compile"
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-	echo
-	echo "bootstrap finished - run 'make build' to compile"
-=======
-	# Maven, on the PATH of the bootstrap image as dist/maven/bin.
-	if [ "$BUILD_MAVEN" == 1 ]; then
-		install_dep "Maven" "$MAVEN_VER" "$VTROOT/dist/maven" install_maven
-	fi
-
-	echo
-	echo "bootstrap finished - run 'make build' to compile"
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 }
 
 install_all

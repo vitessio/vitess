@@ -140,7 +140,6 @@ uninstall_all() {
     # etcd
     uninstall_etcd "$ETCD_VER" "$VTROOT/dist/etcd"
 
-<<<<<<< HEAD
     # consul
     if [ "$BUILD_CONSUL" == 1 ] ; then
         uninstall_consul "$VTROOT/dist/consul"
@@ -148,25 +147,14 @@ uninstall_all() {
 
     # toxiproxy
     uninstall_toxiproxy "$VTROOT/dist/toxiproxy"
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-	# consul
-	if [ "$BUILD_CONSUL" == 1 ]; then
-		uninstall_consul "$VTROOT/dist/consul"
-	fi
-=======
-	# consul
-	if [ "$BUILD_CONSUL" == 1 ]; then
-		uninstall_consul "$VTROOT/dist/consul"
-	fi
 
-	# Maven, which bootstrap.sh installs only with BUILD_MAVEN=1.
-	echo "Removing Maven..."
-	rm -rf "${VTROOT:?}/dist/maven"
+    # Maven, which bootstrap.sh installs only with BUILD_MAVEN=1.
+    echo "Removing Maven..."
+    rm -rf "${VTROOT:?}/dist/maven"
 
-	# Downloads kept by bootstrap.sh.
-	echo "Removing cached downloads..."
-	rm -rf "${VTROOT:?}/dist/download-cache"
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
+    # Downloads kept by bootstrap.sh.
+    echo "Removing cached downloads..."
+    rm -rf "${VTROOT:?}/dist/download-cache"
 }
 
 uninstall_all

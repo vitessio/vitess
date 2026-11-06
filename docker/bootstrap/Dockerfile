@@ -20,21 +20,13 @@
 # set it to build a flavor on a common image built separately.
 ARG base_image=common
 
-<<<<<<< HEAD
-FROM --platform=linux/amd64 golang:1.25.13-bookworm@sha256:40dfc169bd5ad8a8617e49c8ead7fe16c6873e79d6937539e9c2e5947b7984ef AS common
-
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-# Build the Vitess Go binaries
-FROM $image AS common
-=======
 # The downloads that bootstrap.sh keeps in dist/download-cache. CI passes the
 # ones it restored as the download-cache build context; by default there are
 # none, and bootstrap.sh downloads every tool.
 FROM scratch AS download-cache
 
-# Build the Vitess Go binaries
-FROM $image AS common
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
+FROM --platform=linux/amd64 golang:1.25.13-bookworm@sha256:40dfc169bd5ad8a8617e49c8ead7fe16c6873e79d6937539e9c2e5947b7984ef AS common
+
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     # TODO(mberlin): Group these to make it easier to understand which library actually requires them.
@@ -87,20 +79,14 @@ RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln 
 WORKDIR /vt/src/vitess.io/vitess
 
 USER vitess
-<<<<<<< HEAD
-RUN ./bootstrap.sh
-||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
-RUN BUILD_CONSUL=0 ./bootstrap.sh
-=======
 # bootstrap.sh checks each file's checksum before it uses it, and downloads the
 # ones that are missing, unreadable or do not match. The image keeps none of
 # the downloads.
 RUN --mount=type=bind,from=download-cache,target=/tmp/download-cache \
     mkdir -p dist/download-cache && \
     { cp -R /tmp/download-cache/. dist/download-cache/ || true; } && \
-    BUILD_CONSUL=0 ./bootstrap.sh && \
+    ./bootstrap.sh && \
     rm -rf dist/download-cache
->>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
