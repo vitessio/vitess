@@ -20,7 +20,6 @@ package cache
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -273,10 +272,7 @@ func (c *Cache[Key, Value]) backfill() {
 
 		// Finally, store the value.
 		if err := c.add(key, val, cache.DefaultExpiration); err != nil {
-			log.Warn("failed to add value to cache",
-				slog.String("cache_key", key),
-				slog.String("cached_value", fmt.Sprintf("%+v", val)),
-				slog.Any("error", err))
+			log.Warn("failed to add value to cache", slog.String("cache_key", key), slog.Any("error", err))
 		}
 	}
 }

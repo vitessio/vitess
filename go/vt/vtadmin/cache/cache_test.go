@@ -75,9 +75,9 @@ func TestLogs(t *testing.T) {
 		return strings.Contains(logs.String(), "failed to add value to cache")
 	}, 30*time.Second, time.Millisecond)
 
+	assert.NotContains(t, logs.String(), value)
 	var failed []map[string]any
 	for _, record := range logs.Records(t) {
-		assert.NotContains(t, record["msg"], value)
 		if record["msg"] == "failed to add value to cache" {
 			failed = append(failed, record)
 		}
@@ -85,7 +85,7 @@ func TestLogs(t *testing.T) {
 	require.NotEmpty(t, failed)
 	assert.Equal(t, "WARN", failed[0]["level"])
 	assert.Equal(t, "ks/-80", failed[0]["cache_key"])
-	assert.Equal(t, value, failed[0]["cached_value"])
+	assert.NotContains(t, failed[0], "cached_value")
 	assert.Contains(t, failed[0]["error"], "ks/-80")
 }
 
