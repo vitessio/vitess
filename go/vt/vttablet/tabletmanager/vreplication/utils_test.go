@@ -199,3 +199,33 @@ func TestIsUnrecoverableError(t *testing.T) {
 		})
 	}
 }
+
+// TestIsParallelApplyConflictError checks which errors make the controller
+// retry a parallel stream with the serial applier: duplicate-key and FK
+// violation errors, also when wrapped, and nothing else.
+func TestIsParallelApplyConflictError(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{name: "nil", err: nil},
+		{name: "non-SQL error", err: errors.New("boom")},
+		{name: "lock wait timeout", err: sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, sqlerror.SSUnknownSQLState, "Lock wait timeout exceeded")},
+		{name: "duplicate entry", err: sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '1' for key 'PRIMARY'"), expected: true},
+		{
+			name:     "wrapped duplicate entry",
+			err:      vterrors.Wrapf(sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '1' for key 'PRIMARY'"), "error applying event"),
+			expected: true,
+		},
+		{name: "no referenced row", err: sqlerror.NewSQLError(sqlerror.ERNoReferencedRow, sqlerror.SSConstraintViolation, "Cannot add or update a child row"), expected: true},
+		{name: "row is referenced", err: sqlerror.NewSQLError(sqlerror.ERRowIsReferenced, sqlerror.SSConstraintViolation, "Cannot delete or update a parent row"), expected: true},
+		{name: "row is referenced 2", err: sqlerror.NewSQLError(sqlerror.ERRowIsReferenced2, sqlerror.SSConstraintViolation, "Cannot delete or update a parent row: a foreign key constraint fails"), expected: true},
+		{name: "no referenced row 2", err: sqlerror.NewSQLError(sqlerror.ErNoReferencedRow2, sqlerror.SSConstraintViolation, "Cannot add or update a child row: a foreign key constraint fails"), expected: true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.expected, isParallelApplyConflictError(tc.err))
+		})
+	}
+}

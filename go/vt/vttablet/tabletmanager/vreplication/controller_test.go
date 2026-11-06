@@ -885,6 +885,79 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 	assert.Equal(t, "UNKNOWN", errorTextRecord["error_code"])
 }
 
+// TestControllerParallelApplyConflictFallsBackToSerialApply checks that a
+// duplicate-key error from the parallel applier makes the controller retry
+// with the serial applier instead of going into the Error state, that the
+// same error from the serial applier is still terminal, and that a new
+// controller applies in parallel again.
+func TestControllerParallelApplyConflictFallsBackToSerialApply(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+	savedWorkers := vttablet.DefaultVReplicationConfig.ParallelReplicationWorkers
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	t.Cleanup(func() {
+		vttablet.DefaultVReplicationConfig.ParallelReplicationWorkers = savedWorkers
+		vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay
+	})
+	vttablet.DefaultVReplicationConfig.ParallelReplicationWorkers = 2
+	vttablet.DefaultVReplicationConfig.RetryDelay = 10 * time.Millisecond
+
+	execStatements(t, []string{
+		"create table parallel_fallback(id int, val int, primary key(id))",
+		fmt.Sprintf("create table %s.parallel_fallback(id int, val int, primary key(id))", vrepldb),
+		// The stream's insert of the same id fails with a duplicate-key
+		// error, whichever applier runs it.
+		fmt.Sprintf("insert into %s.parallel_fallback values (1, 100)", vrepldb),
+	})
+	t.Cleanup(func() {
+		execStatements(t, []string{"drop table parallel_fallback", fmt.Sprintf("drop table %s.parallel_fallback", vrepldb)})
+	})
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	cancel, id := startVReplication(t, &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "parallel_fallback"}}},
+	}, "")
+	defer cancel()
+	defer drainDBQueries()
+	execStatements(t, []string{"insert into parallel_fallback values (1, 1)"})
+
+	const fallbackMsg = "parallel apply failed with a duplicate-key or foreign key error, retrying with the serial applier"
+	fallbacks := func() int64 {
+		globalStats.mu.Lock()
+		defer globalStats.mu.Unlock()
+		return globalStats.controllers[int32(id)].blpStats.ErrorCounts.Counts()["ParallelApplyFallback"]
+	}
+	stateQuery := fmt.Sprintf("select state, message from _vt.vreplication where id=%d", id)
+	waitForTerminalError := func() {
+		t.Helper()
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			qr, err := playerEngine.Exec(stateQuery)
+			require.NoError(c, err)
+			require.Len(c, qr.Rows, 1)
+			assert.Equal(c, binlogdatapb.VReplicationWorkflowState_Error.String(), qr.Rows[0][0].ToString())
+			assert.Contains(c, qr.Rows[0][1].ToString(), UnrecoverableErrorIndicator)
+			assert.Contains(c, qr.Rows[0][1].ToString(), "Duplicate entry")
+		}, 30*time.Second, 10*time.Millisecond)
+	}
+
+	// The parallel applier's error falls back once. Had the retry run in
+	// parallel too, it would have fallen back again rather than end the
+	// stream: only the serial applier's error is terminal.
+	waitForTerminalError()
+	assert.EqualValues(t, 1, fallbacks())
+	record := logs.Record(t, fallbackMsg)
+	assert.Equal(t, "WARN", record["level"])
+	assert.EqualValues(t, id, record["stream_id"])
+	assert.Contains(t, record["error"], "Duplicate entry")
+
+	// A new controller applies in parallel again, so it falls back again.
+	_, err := playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Running', message='' where id=%d", id))
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return fallbacks() == 2 }, 30*time.Second, 10*time.Millisecond)
+	waitForTerminalError()
+}
+
 // TestTerminalVReplicationError tests the terminal error messages: the
 // unrecoverable class keeps the "terminal error:" prefix the Online DDL
 // executor's history scan matches; the resumable retries-exhausted class

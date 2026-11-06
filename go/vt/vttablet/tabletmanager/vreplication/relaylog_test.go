@@ -18,14 +18,119 @@ package vreplication
 
 import (
 	"context"
+	"io"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+func TestRelayLogSendFetch(t *testing.T) {
+	ctx := t.Context()
+	rl := newRelayLog(ctx, 5, 10, nil)
+
+	event := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "t1",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}},
+			}},
+		},
+	}
+
+	require.NoError(t, rl.Send([]*binlogdatapb.VEvent{event}))
+
+	items, err := rl.Fetch()
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Len(t, items[0], 1)
+	assert.Equal(t, binlogdatapb.VEventType_ROW, items[0][0].Type)
+}
+
+func TestRelayLogSendTimeout(t *testing.T) {
+	ctx := t.Context()
+	oldDeadline := vplayerProgressDeadline
+	vplayerProgressDeadline = 100 * time.Millisecond
+	t.Cleanup(func() {
+		vplayerProgressDeadline = oldDeadline
+	})
+
+	rl := newRelayLog(ctx, 1, 1, nil)
+
+	event := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "t1",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: &querypb.Row{Values: []byte("1"), Lengths: []int64{1}},
+			}},
+		},
+	}
+
+	require.NoError(t, rl.Send([]*binlogdatapb.VEvent{event}))
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- rl.Send([]*binlogdatapb.VEvent{event})
+	}()
+
+	select {
+	case err := <-errCh:
+		require.Error(t, err)
+		require.ErrorContains(t, err, relayLogIOStalledMsg)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for send")
+	}
+}
+
+func TestRelayLogFetchTimeout(t *testing.T) {
+	ctx := t.Context()
+	oldIdle := idleTimeout
+	idleTimeout = 100 * time.Millisecond
+	t.Cleanup(func() {
+		idleTimeout = oldIdle
+	})
+
+	rl := newRelayLog(ctx, 1, 1, nil)
+
+	items, err := rl.Fetch()
+	require.NoError(t, err)
+	assert.Empty(t, items)
+}
+
+func TestRelayLogDoneReturnsEOF(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	rl := newRelayLog(ctx, 1, 1, nil)
+
+	items, err := rl.Fetch()
+	require.ErrorIs(t, err, io.EOF)
+	assert.Nil(t, items)
+}
+
+func TestRelayLogEventsSize(t *testing.T) {
+	rowEvent := &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "t1",
+			RowChanges: []*binlogdatapb.RowChange{
+				{Before: &querypb.Row{Values: []byte("ab"), Lengths: []int64{2}}},
+				{After: &querypb.Row{Values: []byte("cde"), Lengths: []int64{3}}},
+			},
+		},
+	}
+	otherEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT}
+
+	size := eventsSize([]*binlogdatapb.VEvent{rowEvent, otherEvent})
+	assert.Equal(t, 5, size)
+}
 
 // TestRelayLogSendStallDeferredWhileThrottled guards against the vplayer
 // stall detector firing while the applier is throttled
