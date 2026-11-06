@@ -17,6 +17,7 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"encoding/binary"
 	"io"
 	"net"
@@ -31,19 +32,27 @@ import (
 
 // Opcodes from the ZooKeeper wire protocol.
 const (
-	fakeOpGetData    = 4
-	fakeOpPing       = 11
-	fakeOpSetWatches = 101
-	fakeOpClose      = -11
+	fakeOpDelete       = 2
+	fakeOpExists       = 3
+	fakeOpGetData      = 4
+	fakeOpPing         = 11
+	fakeOpGetChildren2 = 12
+	fakeOpSetWatches   = 101
+	fakeOpClose        = -11
 )
 
 // fakeZkServer speaks just enough of the ZooKeeper wire protocol to
-// establish and resume sessions, answer getData and pings, and accept
-// setWatches. It lets tests control when connections drop and how long a
-// reconnect takes, which a real ZooKeeper does not.
+// establish and resume sessions, answer getData, getChildren2, exists and
+// pings, and accept delete and setWatches. Every node exists, and has the
+// children in children. It lets tests control when connections drop and
+// how long a reconnect takes, which a real ZooKeeper does not.
 type fakeZkServer struct {
 	t         *testing.T
 	listeners []net.Listener
+	children  []string
+
+	// requests receives the opcode and path of each request with a path.
+	requests chan fakeZkRequest
 
 	// connectDelay is how long the server waits before answering a
 	// connect request.
@@ -53,8 +62,18 @@ type fakeZkServer struct {
 	conns map[net.Conn]struct{}
 }
 
-func startFakeZkServer(t *testing.T, n int) *fakeZkServer {
-	s := &fakeZkServer{t: t, conns: make(map[net.Conn]struct{})}
+type fakeZkRequest struct {
+	opcode int32
+	path   string
+}
+
+func startFakeZkServer(t *testing.T, n int, children ...string) *fakeZkServer {
+	s := &fakeZkServer{
+		t:        t,
+		children: children,
+		requests: make(chan fakeZkRequest, 100),
+		conns:    make(map[net.Conn]struct{}),
+	}
 	for range n {
 		l, err := net.Listen("tcp", "127.0.0.1:0")
 		require.NoError(t, err)
@@ -76,6 +95,22 @@ func (s *fakeZkServer) addr() string {
 		addrs = append(addrs, l.Addr().String())
 	}
 	return strings.Join(addrs, ",")
+}
+
+// waitForRequest waits until the server receives a request with opcode,
+// and returns its path.
+func (s *fakeZkServer) waitForRequest(opcode int32) string {
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case req := <-s.requests:
+			if req.opcode == opcode {
+				return req.path
+			}
+		case <-timeout:
+			s.t.Fatalf("fake zk server: no request with opcode %d", opcode)
+		}
+	}
 }
 
 // dropConnections closes every client connection, as if the ZooKeeper
@@ -110,6 +145,11 @@ func readFrame(c net.Conn) ([]byte, error) {
 	buf := make([]byte, binary.BigEndian.Uint32(size[:]))
 	_, err := io.ReadFull(c, buf)
 	return buf, err
+}
+
+func appendString(buf []byte, str string) []byte {
+	buf = binary.BigEndian.AppendUint32(buf, uint32(len(str)))
+	return append(buf, str...)
 }
 
 func writeFrame(c net.Conn, body []byte) error {
@@ -163,12 +203,28 @@ func (s *fakeZkServer) handle(c net.Conn) {
 		resp = binary.BigEndian.AppendUint64(resp, 1)
 		resp = binary.BigEndian.AppendUint32(resp, 0)
 		switch opcode {
+		case fakeOpDelete, fakeOpExists, fakeOpGetData, fakeOpGetChildren2:
+			// The request starts with the path.
+			size := binary.BigEndian.Uint32(req[8:12])
+			s.requests <- fakeZkRequest{opcode: opcode, path: string(req[12 : 12+size])}
+		}
+		// A Stat is 68 bytes.
+		stat := make([]byte, 68)
+		switch opcode {
 		case fakeOpGetData:
-			// getDataResponse: data []byte, then a Stat of 68 bytes.
-			resp = binary.BigEndian.AppendUint32(resp, 4)
-			resp = append(resp, "data"...)
-			resp = append(resp, make([]byte, 68)...)
-		case fakeOpPing, fakeOpSetWatches:
+			// getDataResponse: data []byte, stat Stat.
+			resp = appendString(resp, "data")
+			resp = append(resp, stat...)
+		case fakeOpGetChildren2:
+			// getChildren2Response: children []string, stat Stat.
+			resp = binary.BigEndian.AppendUint32(resp, uint32(len(s.children)))
+			for _, child := range s.children {
+				resp = appendString(resp, child)
+			}
+			resp = append(resp, stat...)
+		case fakeOpExists:
+			resp = append(resp, stat...)
+		case fakeOpDelete, fakeOpPing, fakeOpSetWatches:
 		case fakeOpClose:
 			writeFrame(c, resp)
 			return
@@ -206,5 +262,60 @@ func TestWatchNotifiedWhenConnectionDrops(t *testing.T) {
 		require.Error(t, wd.Err)
 	case <-time.After(10 * time.Second):
 		t.Fatal("watch was not notified after its connection dropped")
+	}
+}
+
+// TestObtainQueueLockFailsWhenConnectionDrops checks that waiting for a
+// queue lock fails when the connection drops, instead of reading the queue
+// again on a new connection: our node belongs to the session of the dropped
+// connection, and may go away with it.
+func TestObtainQueueLockFailsWhenConnectionDrops(t *testing.T) {
+	fake := startFakeZkServer(t, 2, "lock-0000000001", "lock-0000000002")
+	conn := Connect(fake.addr())
+	defer conn.Close()
+
+	errc := make(chan error, 1)
+	go func() {
+		errc <- obtainQueueLock(t.Context(), conn, "/locks/lock-0000000002", true)
+	}()
+	require.Equal(t, "/locks/lock-0000000001", fake.waitForRequest(fakeOpExists))
+
+	fake.connectDelay.Store(int64(1500 * time.Millisecond))
+	fake.dropConnections()
+
+	select {
+	case err := <-errc:
+		require.Error(t, err)
+	case <-time.After(10 * time.Second):
+		t.Fatal("obtainQueueLock did not fail after its connection dropped")
+	}
+}
+
+// TestLeaderDeletesProposalWhenConnectionDrops checks that a leader that
+// stops leading because its connection dropped deletes its proposal, so it
+// does not block the other participants if its session stays alive.
+func TestLeaderDeletesProposalWhenConnectionDrops(t *testing.T) {
+	fake := startFakeZkServer(t, 2)
+	zs := NewServer(fake.addr(), "/")
+	defer zs.Close()
+
+	mp := &zkLeaderParticipation{
+		zs:      zs,
+		name:    "election",
+		stopCtx: t.Context(),
+		done:    make(chan struct{}),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	go mp.watchLeadership(ctx, zs.conn, "/election/proposal", cancel)
+	require.Equal(t, "/election/proposal", fake.waitForRequest(fakeOpGetData))
+
+	fake.connectDelay.Store(int64(1500 * time.Millisecond))
+	fake.dropConnections()
+
+	require.Equal(t, "/election/proposal", fake.waitForRequest(fakeOpDelete))
+	select {
+	case <-ctx.Done():
+	case <-time.After(10 * time.Second):
+		t.Fatal("leadership was not canceled after its connection dropped")
 	}
 }
