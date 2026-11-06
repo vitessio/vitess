@@ -339,9 +339,16 @@ func TestERSRepointsRestartingReplica(t *testing.T) {
 	holdERS(t, nil, func(t *testing.T, ci *cluster.LocalProcessCluster, r1 *cluster.Vttablet, deadline time.Time) {
 		vp := r1.VttabletProcess
 		require.NoError(t, vp.TearDownWithTimeout(30*time.Second))
+		// Setup recreates the log at this path; the old log already has a lock attempt.
+		require.NoError(t, os.Remove(vp.ErrorLog))
 		vp.ServingStatus = ""
 		started := make(chan error, 1)
 		go func() { started <- vp.Setup() }()
 		t.Cleanup(func() { <-started })
+		// Release ERS only once R1 waits for its lock.
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			b, _ := os.ReadFile(vp.ErrorLog)
+			assert.Contains(c, string(b), "for action initialize replication", "R1 did not try to take the shard lock")
+		}, time.Until(deadline), 100*time.Millisecond)
 	})
 }
