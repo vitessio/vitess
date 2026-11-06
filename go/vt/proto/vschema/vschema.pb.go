@@ -210,8 +210,13 @@ type Keyspace struct {
 	// keyspaces. Can be overridden per-query with the
 	// /*vt+ ALLOW_CROSS_KEYSPACE_READS */ comment directive.
 	PreventCrossKeyspaceReads bool `protobuf:"varint,7,opt,name=prevent_cross_keyspace_reads,json=preventCrossKeyspaceReads,proto3" json:"prevent_cross_keyspace_reads,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// If advisory_locks is true, vtgate runs advisory lock functions such as
+	// GET_LOCK and RELEASE_LOCK in this keyspace, and never moves them to
+	// another keyspace. If more than one keyspace sets it, vtgate acquires each
+	// lock in a majority of them.
+	AdvisoryLocks bool `protobuf:"varint,8,opt,name=advisory_locks,json=advisoryLocks,proto3" json:"advisory_locks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Keyspace) Reset() {
@@ -289,6 +294,13 @@ func (x *Keyspace) GetMultiTenantSpec() *MultiTenantSpec {
 func (x *Keyspace) GetPreventCrossKeyspaceReads() bool {
 	if x != nil {
 		return x.PreventCrossKeyspaceReads
+	}
+	return false
+}
+
+func (x *Keyspace) GetAdvisoryLocks() bool {
+	if x != nil {
+		return x.AdvisoryLocks
 	}
 	return false
 }
@@ -1158,7 +1170,7 @@ const file_vschema_proto_rawDesc = "" +
 	"\vRoutingRule\x12\x1d\n" +
 	"\n" +
 	"from_table\x18\x01 \x01(\tR\tfromTable\x12\x1b\n" +
-	"\tto_tables\x18\x02 \x03(\tR\btoTables\"\x8b\x05\n" +
+	"\tto_tables\x18\x02 \x03(\tR\btoTables\"\xb2\x05\n" +
 	"\bKeyspace\x12\x18\n" +
 	"\asharded\x18\x01 \x01(\bR\asharded\x12;\n" +
 	"\bvindexes\x18\x02 \x03(\v2\x1f.vschema.Keyspace.VindexesEntryR\bvindexes\x125\n" +
@@ -1166,7 +1178,8 @@ const file_vschema_proto_rawDesc = "" +
 	"\x18require_explicit_routing\x18\x04 \x01(\bR\x16requireExplicitRouting\x12J\n" +
 	"\x10foreign_key_mode\x18\x05 \x01(\x0e2 .vschema.Keyspace.ForeignKeyModeR\x0eforeignKeyMode\x12D\n" +
 	"\x11multi_tenant_spec\x18\x06 \x01(\v2\x18.vschema.MultiTenantSpecR\x0fmultiTenantSpec\x12?\n" +
-	"\x1cprevent_cross_keyspace_reads\x18\a \x01(\bR\x19preventCrossKeyspaceReads\x1aL\n" +
+	"\x1cprevent_cross_keyspace_reads\x18\a \x01(\bR\x19preventCrossKeyspaceReads\x12%\n" +
+	"\x0eadvisory_locks\x18\b \x01(\bR\radvisoryLocks\x1aL\n" +
 	"\rVindexesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12%\n" +
 	"\x05value\x18\x02 \x01(\v2\x0f.vschema.VindexR\x05value:\x028\x01\x1aI\n" +

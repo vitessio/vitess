@@ -94,7 +94,9 @@ type (
 		TimeZone() *time.Location
 		SQLMode() string
 
-		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
+		// ExecuteLock runs a lock function. When multiKeyspace is true, the
+		// session may hold lock connections in more than one keyspace.
+		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType, multiKeyspace bool) (*sqltypes.Result, error)
 
 		InTransactionAndIsDML() bool
 

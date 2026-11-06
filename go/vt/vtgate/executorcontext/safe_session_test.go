@@ -307,3 +307,20 @@ func TestShardSessionSnapshots(t *testing.T) {
 	assert.EqualValues(t, 20, snapshots[0].TransactionID,
 		"a snapshot must not observe later in-place updates of the live shard session")
 }
+
+// TestAdvisoryLockCounts tests that a session tracks each advisory lock it
+// holds, and holds none after releasing all of them.
+func TestAdvisoryLockCounts(t *testing.T) {
+	session := NewSafeSession(nil)
+	session.AddAdvisoryLock("first")
+	session.AddAdvisoryLock("second")
+	session.AddAdvisoryLock("second")
+	assert.Equal(t, map[string]int64{"first": 1, "second": 2}, session.AdvisoryLock)
+
+	session.RemoveAdvisoryLock("first")
+	session.RemoveAdvisoryLock("second")
+	assert.True(t, session.HasAdvisoryLock())
+
+	session.RemoveAdvisoryLock("second")
+	assert.False(t, session.HasAdvisoryLock())
+}

@@ -303,8 +303,15 @@ func (vw *VSchemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {
 	return vw.V.Keyspaces[keys[0]].Keyspace, nil
 }
 
-func (vw *VSchemaWrapper) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
-	return vw.AnyKeyspace()
+func (vw *VSchemaWrapper) AdvisoryLockKeyspaces() ([]*vindexes.Keyspace, error) {
+	if keyspaces := vw.V.AdvisoryLockKeyspaces(); len(keyspaces) > 0 {
+		return keyspaces, nil
+	}
+	ks, err := vw.AnyKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	return []*vindexes.Keyspace{ks}, nil
 }
 
 func (vw *VSchemaWrapper) TargetString() string {
