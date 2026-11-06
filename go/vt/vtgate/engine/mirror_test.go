@@ -294,20 +294,8 @@ func TestMirror(t *testing.T) {
 			// races with the mirror's own maxMirrorTargetLag timer.
 			select {
 			case <-ctx.Done():
-<<<<<<< HEAD
-				require.NotNil(t, ctx.Err())
-				require.ErrorContains(t, ctx.Err(), "context canceled")
-			default:
-				require.Fail(t, "mirror target context not done")
-||||||| parent of eae4f28c88 (engine: stop the TestMirror fast and slow target subtests racing the clock (#21908))
-				require.Error(t, ctx.Err())
-				require.ErrorContains(t, ctx.Err(), "context canceled")
-			default:
-				require.Fail(t, "mirror target context not done")
-=======
 			case <-time.After(10 * time.Second):
 				assert.Fail(t, "mirror target context not done")
->>>>>>> eae4f28c88 (engine: stop the TestMirror fast and slow target subtests racing the clock (#21908))
 			}
 		}
 
