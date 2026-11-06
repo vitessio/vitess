@@ -69,6 +69,7 @@ jobs:
             - '.github/actions/setup-mysql/action.yml'
             - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
+            - '.github/actions/tool-downloads/**'
 
   build:
     name: End-to-End Test
@@ -130,6 +131,10 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         
         sudo service etcd stop
+
+    - name: Restore tool downloads
+      if: needs.changes.outputs.end_to_end == 'true'
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make minimaltools
       if: needs.changes.outputs.end_to_end == 'true'
