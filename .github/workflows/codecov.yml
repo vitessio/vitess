@@ -79,7 +79,7 @@ jobs:
         predicate-quantifier: 'every'
         filters: |
           changed_files:
-            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml,.github/actions/tool-downloads/**,go/**,go.mod,go.sum,Makefile}'
             - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
     # Needed by `go list` in the next step.
@@ -178,6 +178,9 @@ jobs:
         sudo apt-get update
 
         sudo apt-get install -y make unzip g++ curl git wget
+
+    - name: Restore tool downloads
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make tools
       timeout-minutes: 10
