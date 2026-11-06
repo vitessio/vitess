@@ -818,9 +818,10 @@ func TestHistorianStartupRefreshOuterStreamRefreshesOnce(t *testing.T) {
 // TestSchemaReloadWaitsForDDLCommit checks that the schema tracker saves the schema that a DDL
 // produces even when its vstream reads the DDL from the binlog before the DDL commits (#21883).
 // MySQL sends a transaction's binlog events to the binlog dump threads once the binlog is
-// synced, and semi-sync with no replica connected then holds the commit for the semi-sync
-// timeout, which makes that window seconds long. The DDL is an Online DDL style cutover: a
-// RENAME that swaps a shadow table, created later, over the original.
+// synced, and semi-sync's AFTER_SYNC wait, with no replica connected, then holds the commit
+// until the test switches semi-sync off, once the tracker has reached the DDL. The DDL is an
+// Online DDL style cutover: a RENAME that swaps a shadow table, created later, over the
+// original.
 func TestSchemaReloadWaitsForDDLCommit(t *testing.T) {
 	ctx := t.Context()
 	if !strings.HasPrefix(primaryPosition(t), replication.Mysql56FlavorID+"/") {
@@ -884,25 +885,42 @@ func TestSchemaReloadWaitsForDDLCommit(t *testing.T) {
 	// the RENAME as soon as the binlog has it.
 	waitForCount(binlogDumps, binlogDumpsBefore)
 
-	qr, err = env.Mysqld.FetchSuperQuery(ctx,
-		fmt.Sprintf("select @@global.%s_enabled, @@global.%s_timeout", semiSync, semiSync))
+	qr, err = env.Mysqld.FetchSuperQuery(ctx, fmt.Sprintf(
+		"select @@global.%[1]s_enabled, @@global.%[1]s_timeout, @@global.%[1]s_wait_point",
+		semiSync))
 	require.NoError(t, err)
 	enabled, timeout := qr.Rows[0][0].ToString(), qr.Rows[0][1].ToString()
-	execStatements(t, []string{
-		fmt.Sprintf("set global %s_timeout = 3000", semiSync),
-		fmt.Sprintf("set global %s_enabled = 1", semiSync),
-	})
+	waitPoint := qr.Rows[0][2].ToString()
 	t.Cleanup(func() {
 		execStatements(t, []string{
 			fmt.Sprintf("set global %s_enabled = %s", semiSync, enabled),
 			fmt.Sprintf("set global %s_timeout = %s", semiSync, timeout),
+			fmt.Sprintf("set global %s_wait_point = %s", semiSync, waitPoint),
 		})
 	})
+	// The timeout outlasts the wait below for the tracker to reach the RENAME, so the RENAME
+	// commits only once the test switches semi-sync off, and it bounds the wait for the RENAME
+	// to return.
+	execStatements(t, []string{
+		fmt.Sprintf("set global %s_wait_point = AFTER_SYNC", semiSync),
+		fmt.Sprintf("set global %s_timeout = 60000", semiSync),
+		fmt.Sprintf("set global %s_enabled = 1", semiSync),
+	})
 
-	start := time.Now()
-	execStatements(t, []string{"rename table hist_vis to hist_vis_old, hist_vis_new to hist_vis"})
-	require.GreaterOrEqual(t, time.Since(start), 2*time.Second,
-		"semi-sync should have held the RENAME's commit")
+	// Buffered, so that the RENAME's goroutine exits even if the test fails before reading it.
+	renamed := make(chan error, 1)
+	go func() {
+		renamed <- env.Mysqld.ExecuteSuperQuery(ctx,
+			"rename table hist_vis to hist_vis_old, hist_vis_new to hist_vis")
+	}()
+	// The tracker has reached the RENAME once it waits for the RENAME to commit or, without that
+	// wait, saves a schema version for it, whose commit semi-sync holds too.
+	waitForCount("select count(*) from information_schema.processlist where "+
+		"info like 'select wait_for_executed_gtid_set(%' or "+
+		"info like 'insert into _vt.schema_version%'", 0)
+	require.Empty(t, renamed, "the RENAME committed before the tracker reached it")
+	execStatements(t, []string{fmt.Sprintf("set global %s_enabled = 0", semiSync)})
+	require.NoError(t, <-renamed)
 
 	waitForCount("select count(*) from _vt.schema_version where id > 1", 0)
 	qr, err = env.Mysqld.FetchSuperQuery(ctx,
