@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -372,6 +373,7 @@ func (db *LocalCluster) Setup() error {
 			if err, ok := err.(*exec.ExitError); ok {
 				log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
 			}
+			logMySQLErrorLog(db.mysql.TabletDir())
 			return err
 		}
 
@@ -385,6 +387,7 @@ func (db *LocalCluster) Setup() error {
 			if err, ok := err.(*exec.ExitError); ok {
 				log.Error(fmt.Sprintf("stderr: %s", err.Stderr))
 			}
+			logMySQLErrorLog(db.mysql.TabletDir())
 			return err
 		}
 	}
@@ -675,6 +678,35 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	})
 
 	return err
+}
+
+// logMySQLErrorLog logs the end of mysqld's error log. When mysqld exits during
+// startup, mysqlctl only waits for the socket until it is killed, so the error
+// log is the only record of why, and it is removed with the cluster's
+// directory.
+func logMySQLErrorLog(tabletDir string) {
+	const maxBytes = 16 * 1024
+
+	name := path.Join(tabletDir, "error.log")
+	f, err := os.Open(name)
+	if err != nil {
+		log.Error("Could not open the mysqld error log", slog.String("path", name), slog.Any("error", err))
+		return
+	}
+	defer f.Close()
+
+	if fi, err := f.Stat(); err == nil && fi.Size() > maxBytes {
+		if _, err := f.Seek(-maxBytes, io.SeekEnd); err != nil {
+			log.Error("Could not read the mysqld error log", slog.String("path", name), slog.Any("error", err))
+			return
+		}
+	}
+	contents, err := io.ReadAll(f)
+	if err != nil {
+		log.Error("Could not read the mysqld error log", slog.String("path", name), slog.Any("error", err))
+		return
+	}
+	log.Error("mysqld error log", slog.String("path", name), slog.String("contents", string(contents)))
 }
 
 func dirExist(dir string) bool {
