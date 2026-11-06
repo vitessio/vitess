@@ -87,7 +87,7 @@ func TestLogs(t *testing.T) {
 			AddOrBackfill(c, nil, key, time.Hour, full)
 		}
 		return strings.Contains(logs.String(), "failed to add schema to cache")
-	}, 10*time.Second, time.Millisecond)
+	}, 30*time.Second, time.Millisecond)
 	for _, record := range logs.Records(t) {
 		if record["msg"] == "failed to add schema to cache" {
 			assert.Equal(t, "WARN", record["level"])

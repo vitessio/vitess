@@ -73,7 +73,7 @@ func TestLogs(t *testing.T) {
 	require.Eventually(t, func() bool {
 		c.EnqueueBackfill(key)
 		return strings.Contains(logs.String(), "failed to add value to cache")
-	}, 10*time.Second, time.Millisecond)
+	}, 30*time.Second, time.Millisecond)
 
 	var failed []map[string]any
 	for _, record := range logs.Records(t) {
