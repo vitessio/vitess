@@ -150,12 +150,14 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.DbName = "vt_" + vttablet.Keyspace
 
-	vttablet.exit = make(chan error)
+	// The waiter captures this process and channel: TearDown returns once it
+	// receives the exit result, and a restart then replaces both fields, so
+	// the waiter must not read them again when it closes the channel.
+	proc, exit := vttablet.proc, make(chan error)
+	vttablet.exit = exit
 	go func() {
-		if vttablet.proc != nil {
-			vttablet.exit <- vttablet.proc.Wait()
-			close(vttablet.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	if vttablet.ServingStatus != "" {

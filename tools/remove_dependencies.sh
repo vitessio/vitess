@@ -122,6 +122,14 @@ uninstall_all() {
 	if [ "$BUILD_CONSUL" == 1 ]; then
 		uninstall_consul "$VTROOT/dist/consul"
 	fi
+
+	# Maven, which bootstrap.sh installs only with BUILD_MAVEN=1.
+	echo "Removing Maven..."
+	rm -rf "${VTROOT:?}/dist/maven"
+
+	# Downloads kept by bootstrap.sh.
+	echo "Removing cached downloads..."
+	rm -rf "${VTROOT:?}/dist/download-cache"
 }
 
 uninstall_all
