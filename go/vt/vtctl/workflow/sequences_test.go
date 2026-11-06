@@ -993,6 +993,53 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			err: "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: my-seq1",
 		},
 		{
+			// The tablet manager would initialize another table than this
+			// one, whose name starts and ends with a backtick, so it's
+			// refused even though the vschema defines it.
+			name: "unqualified sequence whose name has backticks",
+			sourceVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {Type: "sequence"},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "```my-seq1```",
+						},
+					},
+				},
+			},
+			err:     "sequence table name \"`my-seq1`\" used by table t1 contains a backtick, which initializing target sequences doesn't support; rename the sequence table, or switch traffic without initializing target sequences",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// Initializing this one would fail after writes are stopped, so
+			// it's refused even though the vschema defines it.
+			name: "qualified sequence whose name has a backtick",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my`seq1": {Type: "sequence"},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my``seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			err:     "sequence table name \"my`seq1\" used by table t1 contains a backtick, which initializing target sequences doesn't support; rename the sequence table, or switch traffic without initializing target sequences",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
 			name: "invalid keyspace name",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,

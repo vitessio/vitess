@@ -742,6 +742,9 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 			seqTable.AutoIncrement.Sequence = sm.backingTableName
 			allFullyQualified = false
 		}
+		if err := checkSequenceTableName(sm.backingTableName, unescapedTable); err != nil {
+			return nil, false, err
+		}
 		// The column names can be escaped in the vschema definition.
 		for i := range seqTable.ColumnVindexes {
 			var (
@@ -774,6 +777,21 @@ func (ts *trafficSwitcher) findSequenceUsageInKeyspace(vschema *vschemapb.Keyspa
 	}
 
 	return sequencesByBackingTable, allFullyQualified, nil
+}
+
+// checkSequenceTableName refuses a backing sequence table name that contains a
+// backtick. Initializing the sequence escapes the name with
+// sqlescape.EnsureEscaped, on the tablet too. That reads a name that starts and
+// ends with a backtick as already escaped, so it can initialize another table,
+// and it fails on other names with a backtick after writes are stopped. Older
+// tablets do the same, so these names are refused before writes are stopped.
+func checkSequenceTableName(backingTableName, usingTableName string) error {
+	if strings.Contains(backingTableName, "`") {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"sequence table name %q used by table %s contains a backtick, which initializing target sequences doesn't support; rename the sequence table, or switch traffic without initializing target sequences",
+			backingTableName, usingTableName)
+	}
+	return nil
 }
 
 func (ts *trafficSwitcher) mustResetSequences(ctx context.Context) (bool, error) {
