@@ -221,11 +221,6 @@ func (te *TxEngine) redoPreparedTransactionsLocked() {
 		return
 	}
 
-	// We should only open the prepared pool and the transaction pool if the opening of twoPC pool is successful.
-	// We use the prepared pool being open to know if we need to redo the prepared transactions.
-	// So if we open the prepared pool and then opening of twoPC fails, we will never end up opening the twoPC pool at all!
-	// This is why opening prepared pool after the twoPC pool is crucial for correctness.
-	te.preparedPool.Open()
 	// We have to defer opening the transaction pool because we call shutdown in the beginning that closes it.
 	// We want to open the transaction pool after the prepareFromRedo has run. Also, we want this to run even if that fails.
 	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
@@ -431,6 +426,24 @@ func (te *TxEngine) prepareFromRedo() error {
 		return readErr
 	}
 
+	// Reserve every durable dtid before the pool opens. CommitPrepared then
+	// returns an error for a dtid that replay does not restore.
+	durable := make([]string, 0, len(prepared)+len(failed))
+	for _, preparedTx := range prepared {
+		durable = append(durable, preparedTx.Dtid)
+	}
+
+	for _, preparedTx := range failed {
+		durable = append(durable, preparedTx.Dtid)
+	}
+
+	te.preparedPool.ReserveInDoubt(durable)
+
+	// Open the prepared pool only after the redo log is read. An open pool
+	// tells transition that recovery is done, and the pool must stay closed
+	// for the next transition to retry it.
+	te.preparedPool.Open()
+
 	var (
 		maxID           = int64(0)
 		preparedCounter = 0
@@ -512,7 +525,10 @@ func (te *TxEngine) prepareTx(ctx context.Context, preparedTx *tx.PreparedTx) (f
 	}
 	// We should not use the external Prepare because
 	// we don't want to write again to the redo log.
-	err = te.preparedPool.Put(conn, preparedTx.Dtid)
+	if err = te.preparedPool.PutRecovered(conn, preparedTx.Dtid); err != nil {
+		te.txPool.RollbackAndRelease(ctx, conn)
+	}
+
 	return
 }
 
