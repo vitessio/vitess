@@ -710,7 +710,7 @@ func tryMergeShardedRouting(
 		// can merge via join predicates instead.
 		fallthrough
 
-	case engine.Scatter, engine.IN, engine.None:
+	case engine.Scatter, engine.IN, engine.None, engine.SubShard:
 		if len(joinPredicates) == 0 {
 			// If we are doing two Scatters, we have to make sure that the
 			// joins are on the correct vindex to allow them to be merged
