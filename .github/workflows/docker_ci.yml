@@ -67,6 +67,7 @@ jobs:
               - 'java/**'
               - '.github/workflows/docker_ci.yml'
               - '.github/actions/build-bootstrap/**'
+              - '.github/actions/tool-downloads/**'
 
   build:
     name: ${{ matrix.name }}
@@ -114,6 +115,12 @@ jobs:
         with:
           persist-credentials: "false"
 
+      # The bootstrap image build and docker/test/run.sh use the downloads,
+      # and bootstrap.sh checks each file's checksum before it uses it.
+      - name: Restore tool downloads
+        if: needs.changes.outputs.end_to_end == 'true'
+        uses: $/.github/actions/tool-downloads
+
       - name: Build bootstrap images
         if: needs.changes.outputs.end_to_end == 'true'
         uses: $/.github/actions/build-bootstrap
@@ -138,26 +145,23 @@ jobs:
           echo "DOCKER_TEST_GOMODCACHE=${gomodcache}" >> "${GITHUB_ENV}"
           echo "DOCKER_TEST_GOCACHE=${gocache}" >> "${GITHUB_ENV}"
 
-      # docker/test/run.sh installs Maven into /tmp/maven and shares
-      # /tmp/mavencache as the containers' ~/.m2. Only the java shard uses
-      # them, but every test installs Maven. The go_cache_warm workflow is the
-      # only writer of this cache.
+      # docker/test/run.sh shares /tmp/mavencache as the containers' ~/.m2.
+      # Only the java shard uses it. The go_cache_warm workflow is the only
+      # writer of this cache.
       - name: Restore the Maven cache
         if: needs.changes.outputs.end_to_end == 'true'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            /tmp/maven
-            /tmp/mavencache
-          key: docker-maven-${{ hashFiles('docker/test/install_maven.sh', 'tools/warm_maven_cache.sh', 'java/**/pom.xml') }}
+          path: /tmp/mavencache
+          key: docker-maven-${{ hashFiles('build.env', 'tools/warm_maven_cache.sh', 'java/**/pom.xml') }}
           restore-keys: |
             docker-maven-
 
       - name: Share the Maven cache with the test containers
         if: needs.changes.outputs.end_to_end == 'true'
         run: |
-          mkdir -p /tmp/maven /tmp/mavencache
-          chmod -R a+rwX /tmp/maven /tmp/mavencache
+          mkdir -p /tmp/mavencache
+          chmod -R a+rwX /tmp/mavencache
 
       - name: Tune the OS
         if: needs.changes.outputs.end_to_end == 'true'

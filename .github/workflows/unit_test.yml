@@ -70,6 +70,7 @@ jobs:
               - '.github/actions/setup-mysql/action.yml'
               - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
+              - '.github/actions/tool-downloads/**'
 
   test:
     needs: changes
@@ -183,6 +184,10 @@ jobs:
         run: |
           export DEBIAN_FRONTEND="noninteractive"
           sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
+
+      - name: Restore tool downloads
+        if: needs.changes.outputs.unit_tests == 'true'
+        uses: $/.github/actions/tool-downloads
 
       - name: Run make tools
         if: needs.changes.outputs.unit_tests == 'true'

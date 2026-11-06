@@ -76,6 +76,7 @@ jobs:
             - .github/actions/setup-mysql/action.yml
             - '.github/actions/tune-os/**'
             - .github/actions/setup-go/action.yml
+            - '.github/actions/tool-downloads/**'
             - 'go/**'
             - go.mod
             - go.sum
@@ -168,6 +169,9 @@ jobs:
         sudo apt-get update
 
         sudo apt-get install -y make unzip g++ curl git wget
+
+    - name: Restore tool downloads
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make tools
       run: |
