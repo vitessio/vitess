@@ -110,6 +110,16 @@ func (cf *ClustersFlag) Set(value string) error {
 
 var discoveryFlagRegexp = regexp.MustCompile(`^discovery-(?P<impl>\w+)-(?P<flag>.+)$`)
 
+// deprecatedFlagOptions maps the cluster options that are deprecated in
+// --cluster and --cluster-defaults to the way they should be set instead. They
+// can still be set in a --cluster-config file.
+var deprecatedFlagOptions = map[string]string{
+	"vtsql-credentials-password": "use vtsql-credentials-path-tmpl, or set it in --cluster-config",
+	"discovery-consul-token":     "set the CONSUL_HTTP_TOKEN_FILE environment variable, or set it in --cluster-config",
+}
+
+// parseFlag parses the value of a --cluster or --cluster-defaults flag into
+// cfg.
 func parseFlag(cfg *Config, value string) error {
 	args := strings.SplitSeq(value, ",")
 	for arg := range args {
@@ -125,6 +135,10 @@ func parseFlag(cfg *Config, value string) error {
 		} else {
 			name = arg
 			val = "true"
+		}
+
+		if msg, ok := deprecatedFlagOptions[name]; ok {
+			log.Warn(fmt.Sprintf("the %s option of --cluster and --cluster-defaults is deprecated and will be removed in v26; %s", name, msg))
 		}
 
 		if err := parseOne(cfg, name, val); err != nil {

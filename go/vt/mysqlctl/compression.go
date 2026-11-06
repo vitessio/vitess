@@ -112,11 +112,11 @@ func init() {
 func registerBackupCompressionFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&compressionLevel, "compression-level", compressionLevel, "what level to pass to the compressor.")
 	fs.StringVar(&CompressionEngineName, "compression-engine-name", CompressionEngineName, "compressor engine used for compression.")
-	fs.StringVar(&ExternalCompressorCmd, "external-compressor", ExternalCompressorCmd, "command with arguments to use when compressing a backup.")
+	fs.StringVar(&ExternalCompressorCmd, "external-compressor", ExternalCompressorCmd, "command with arguments to use when compressing a backup. Do not put secrets in the arguments; have the command read them from a file instead.")
 	fs.StringVar(&ExternalCompressorExt, "external-compressor-extension", ExternalCompressorExt, "extension to use when using an external compressor.")
-	fs.StringVar(&ExternalDecompressorCmd, "external-decompressor", ExternalDecompressorCmd, "command with arguments to use when decompressing a backup.")
+	fs.StringVar(&ExternalDecompressorCmd, "external-decompressor", ExternalDecompressorCmd, "command with arguments to use when decompressing a backup. Do not put secrets in the arguments; have the command read them from a file instead.")
 	fs.BoolVar(&ExternalDecompressorUseManifest, "external-decompressor-use-manifest", ExternalDecompressorUseManifest, "allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.")
-	fs.StringVar(&ManifestExternalDecompressorCmd, "manifest-external-decompressor", ManifestExternalDecompressorCmd, "command with arguments to store in the backup manifest when compressing a backup with an external compression engine.")
+	fs.StringVar(&ManifestExternalDecompressorCmd, "manifest-external-decompressor", ManifestExternalDecompressorCmd, "command with arguments to store in the backup manifest when compressing a backup with an external compression engine. Do not put secrets in the arguments; have the command read them from a file instead.")
 }
 
 func getExtensionFromEngine(engine string) (string, error) {

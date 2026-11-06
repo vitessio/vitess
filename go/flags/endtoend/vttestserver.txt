@@ -39,9 +39,9 @@ Flags:
       --enable-direct-ddl                                                Allow users to submit direct DDL statements (default true)
       --enable-online-ddl                                                Allow users to submit, review and control Online DDL (default true)
       --enable-system-settings                                           This will enable the system settings to be changed per session at the database connection level (default true)
-      --external-compressor string                                       command with arguments to use when compressing a backup.
+      --external-compressor string                                       command with arguments to use when compressing a backup. Do not put secrets in the arguments; have the command read them from a file instead.
       --external-compressor-extension string                             extension to use when using an external compressor.
-      --external-decompressor string                                     command with arguments to use when decompressing a backup.
+      --external-decompressor string                                     command with arguments to use when decompressing a backup. Do not put secrets in the arguments; have the command read them from a file instead.
       --external-decompressor-use-manifest                               allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.
       --external-topo-global-root string                                 the path of the global topology data in the global topology server for vtcombo process
       --external-topo-global-server-address string                       the address of the global topology server for vtcombo process
@@ -91,7 +91,7 @@ Flags:
       --log-level string                                                 minimum log level when structured logging is enabled (debug, info, warn, error) (default "info")
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log-structured                                                   enable structured JSON logging (default true)
-      --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
+      --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine. Do not put secrets in the arguments; have the command read them from a file instead.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --max-table-shard-size int                                         The maximum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly (default 10000)
       --min-table-shard-size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize-with-random-data is false. The actual number is chosen randomly. (default 1000)
@@ -100,9 +100,9 @@ Flags:
       --mysql-only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-shell-backup-location string                               location where the backup will be stored
-      --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
-      --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
-      --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
+      --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string. Do not put cloud storage credentials here; MySQL Shell can read them from the cloud provider's configuration files or environment variables. (default "{\"threads\": 4}")
+      --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load. Do not put passwords here; put them in an option file and pass it with --defaults-file as the first flag, keeping the other default flags, e.g. "--defaults-file=/path/to/mysqlsh.cnf --js -h localhost" (default "--defaults-file=/dev/null --js -h localhost")
+      --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string and will be saved in the MANIFEST. Do not put cloud storage credentials here; MySQL Shell can read them from the cloud provider's configuration files or environment variables. (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
       --mysql-shell-restore-skip-version-check                           skip the MySQL version compatibility check when restoring from a mysql-shell backup
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
@@ -172,9 +172,9 @@ Flags:
       --vtgate-grpc-fail-fast                                            whether to enable grpc fail fast when connecting
       --vtgate-grpc-key string                                           the key to use to connect
       --vtgate-grpc-server-name string                                   the server name to use to validate server certificate
-      --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
-      --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
-      --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
+      --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt. Do not put secrets here; use --encrypt-key-file instead of --encrypt-key.
+      --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command. Do not put secrets here; read them from files instead, e.g. --encrypt-key-file instead of --encrypt-key, and a password in an [xtrabackup] section of a file listed in the EXTRA_MY_CNF environment variable.
+      --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command. Do not put secrets here; read them from files instead.
       --xtrabackup-root-path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
       --xtrabackup-should-drain                                          Decide if we should drain while taking a backup or continue to serving traffic
       --xtrabackup-stream-mode string                                    Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
