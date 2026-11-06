@@ -64,6 +64,9 @@ type FakeQueryService struct {
 	// VStreamRowsResponses are sent, in order, by VStreamRows. Each is cloned before it is sent, so a
 	// test can reuse one response several times.
 	VStreamRowsResponses []*binlogdatapb.VStreamRowsResponse
+
+	// VStreamTablesResponses are sent, in order, by VStreamTables, each cloned before it is sent.
+	VStreamTablesResponses []*binlogdatapb.VStreamTablesResponse
 }
 
 var _ queryservice.QueryService = (*FakeQueryService)(nil)
@@ -736,9 +739,20 @@ func (f *FakeQueryService) VStreamRows(ctx context.Context, request *binlogdatap
 	return nil
 }
 
-// VStreamTables is part of the QueryService interface.
+// VStreamTables is part of the QueryService interface. It sends VStreamTablesResponses in order.
 func (f *FakeQueryService) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
-	panic("not implemented")
+	if f.HasError {
+		return f.TabletError
+	}
+	if f.Panics {
+		panic(errors.New("test-triggered panic"))
+	}
+	for _, resp := range f.VStreamTablesResponses {
+		if err := send(resp.CloneVT()); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // VStreamResults is part of the QueryService interface.

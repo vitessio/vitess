@@ -790,107 +790,109 @@ func TestTrimRowPool(t *testing.T) {
 	require.Nil(t, kept)
 }
 
-// fillRowPool converts one packet of rows into the reused pool exactly as
-// streamQuery does, returning the pool, its retained bytes and the packet's
-// value bytes.
-func fillRowPool(rows []*querypb.Row, poolBytes int, packet [][]sqltypes.Value) (_ []*querypb.Row, newPoolBytes, byteCount int) {
-	for i, r := range packet {
-		if i >= len(rows) {
-			rows = append(rows, &querypb.Row{})
+// smallColumns repeats what (a column definition or a value) for the 15 small columns of the reuse test.
+func smallColumns(what string) string {
+	parts := make([]string, 15)
+	for i := range parts {
+		parts[i] = what
+		if strings.HasPrefix(what, "varbinary") {
+			parts[i] = fmt.Sprintf("c%d %s", i+1, what)
 		}
-		prevCap := cap(rows[i].Values) + cap(rows[i].Lengths)*8
-		byteCount += sqltypes.RowToProto3Inplace(r, rows[i])
-		poolBytes += cap(rows[i].Values) + cap(rows[i].Lengths)*8 - prevCap
 	}
-	return rows, poolBytes, byteCount
+	return strings.Join(parts, ", ")
 }
 
-// TestRowPoolSteadyStateReuse checks that uniform packets never trip the
-// budget: the pool is filled once and then reused without allocating.
-func TestRowPoolSteadyStateReuse(t *testing.T) {
-	const rowsPerPacket, fieldCount = 1000, 4
-	packet := make([][]sqltypes.Value, rowsPerPacket)
-	for i := range packet {
-		packet[i] = []sqltypes.Value{
-			sqltypes.NewInt64(int64(i)),
-			sqltypes.NewVarBinary(strings.Repeat("x", 100)),
-			sqltypes.NewVarChar("abc"),
-			sqltypes.NULL,
-		}
+// TestStreamRowsReusesRowPool streams tables whose packets are all alike through the engine and checks
+// in the send callback that the row pool is filled once and then reused: the same *Row objects serve
+// every packet and the pool neither grows nor is dropped (vitessio/vitess#20954). The rows are shaped so
+// that the pool's per-row overhead (Lengths and the Row structs) outweighs the values, which is what
+// catches a budget or an accounting that counts only the values.
+func TestStreamRowsReusesRowPool(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
 	}
 
-	var rows []*querypb.Row
-	poolBytes, byteCount, warm := 0, 0, 0
-	for packetNo := range 50 {
-		rows, poolBytes, byteCount = fillRowPool(rows, poolBytes, packet)
-		budget := sqltypes.RowPoolBudget(byteCount, rowsPerPacket, fieldCount)
-		var dropped bool
-		rows, poolBytes, dropped = trimRowPool(rows, poolBytes, budget)
-		require.False(t, dropped, "packet %d: pool dropped under uniform rows", packetNo)
-		require.Equal(t, sqltypes.RowPoolRetained(rows), poolBytes, "packet %d: incremental accounting drifted", packetNo)
-		if packetNo == 0 {
-			warm = poolBytes
-			continue
-		}
-		require.Equal(t, warm, poolBytes, "packet %d: pool grew under uniform rows", packetNo)
+	cases := []struct {
+		name       string
+		create     string
+		rowValues  func(id int) string
+		rows       int
+		packetSize int
+		minPackets int
+	}{
+		{
+			// About 12k rows of 16 one-byte columns per 256 KiB packet: each row's Lengths outweigh its
+			// values, so the pool holds about 1.9 MB per packet, over the 1 MiB floor and over four times
+			// the values it carries. A budget or an accounting that ignores Lengths drops it.
+			name:       "many small rows",
+			create:     "create table t1(id int, " + smallColumns("varbinary(1)") + ", primary key(id))",
+			rowValues:  func(id int) string { return fmt.Sprintf("(%d, %s)", id, smallColumns("'a'")) },
+			rows:       160000,
+			packetSize: 256 << 10,
+			minPackets: 12,
+		},
+		{
+			// A large value in every row, one row per packet: a value that stays in its slot is the shape of
+			// every packet, not retention.
+			name:       "one large row per packet",
+			create:     "create table t1(id int, val longblob, primary key(id))",
+			rowValues:  func(id int) string { return fmt.Sprintf("(%d, repeat('b', %d))", id, 64<<10) },
+			rows:       60,
+			packetSize: 64 << 10,
+			minPackets: 60,
+		},
 	}
 
-	// A warm pool is filled without allocating.
-	require.Zero(t, testing.AllocsPerRun(10, func() {
-		fillRowPool(rows, poolBytes, packet)
-	}))
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			execStatements(t, []string{tc.create})
+			defer execStatements(t, []string{"drop table t1"})
 
-// TestRowPoolBoundsRetention checks that a large value moving between slots
-// does not leave its high-water mark in every slot it visited: the pool never
-// retains more than the budget of the packet it just carried, and a large
-// value that stays in its slot is steady state, not retention.
-func TestRowPoolBoundsRetention(t *testing.T) {
-	const rowsPerPacket, fieldCount = 200, 2
-	big := sqltypes.NewVarBinary(strings.Repeat("b", 8<<20))
-	small := sqltypes.NewVarBinary("s")
-	newPacket := func(bigSlot int) [][]sqltypes.Value {
-		packet := make([][]sqltypes.Value, rowsPerPacket)
-		for i := range packet {
-			packet[i] = []sqltypes.Value{sqltypes.NewInt64(int64(i)), small}
-		}
-		if bigSlot >= 0 {
-			packet[bigSlot][1] = big
-		}
-		return packet
-	}
+			// Six-digit ids keep every row the same length, so every full packet holds the same number of rows.
+			const batch, firstID = 5000, 100000
+			var stmts []string
+			for first := firstID; first < firstID+tc.rows; first += batch {
+				var values []string
+				for id := first; id < first+batch && id < firstID+tc.rows; id++ {
+					values = append(values, tc.rowValues(id))
+				}
+				stmts = append(stmts, "insert into t1 values "+strings.Join(values, ","))
+			}
+			execStatements(t, stmts)
 
-	var rows []*querypb.Row
-	poolBytes, byteCount, drops := 0, 0, 0
-	for packetNo := range 40 {
-		// Even packets carry the large value, each time in a different slot;
-		// odd packets are all small rows.
-		bigSlot := -1
-		if packetNo%2 == 0 {
-			bigSlot = (packetNo * 37) % rowsPerPacket
-		}
-		rows, poolBytes, byteCount = fillRowPool(rows, poolBytes, newPacket(bigSlot))
-		budget := sqltypes.RowPoolBudget(byteCount, rowsPerPacket, fieldCount)
-		var dropped bool
-		rows, poolBytes, dropped = trimRowPool(rows, poolBytes, budget)
-		if dropped {
-			drops++
-		}
-		require.LessOrEqual(t, poolBytes, budget, "packet %d", packetNo)
-		require.Equal(t, sqltypes.RowPoolRetained(rows), poolBytes, "packet %d: incremental accounting drifted", packetNo)
-	}
-	// A packet of small rows cannot keep the large value around.
-	require.Positive(t, drops)
-	require.LessOrEqual(t, poolBytes, sqltypes.RowPoolMinBytes)
+			var options binlogdatapb.VStreamOptions
+			options.ConfigOverrides = map[string]string{
+				"vstream-dynamic-packet-size": "false",
+				"vstream-packet-size":         strconv.Itoa(tc.packetSize),
+			}
 
-	// The large value staying in its slot is the shape of every packet, so
-	// the pool is never dropped.
-	rows, poolBytes = nil, 0
-	for packetNo := range 10 {
-		rows, poolBytes, byteCount = fillRowPool(rows, poolBytes, newPacket(0))
-		var dropped bool
-		rows, poolBytes, dropped = trimRowPool(rows, poolBytes, sqltypes.RowPoolBudget(byteCount, rowsPerPacket, fieldCount))
-		require.False(t, dropped, "packet %d: pool dropped with a stable large row", packetNo)
+			type seen struct {
+				rows     int
+				retained int
+				first    *querypb.Row
+			}
+			var got []seen
+			err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+				if len(rows.Rows) == 0 {
+					return nil
+				}
+				got = append(got, seen{rows: len(rows.Rows), retained: sqltypes.RowPoolRetained(rows.Rows), first: rows.Rows[0]})
+				return nil
+			}, &options)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(got), tc.minPackets)
+
+			// The first packet fills the pool and every later one is served by the same rows. The last packet
+			// is whatever is left of the table, so the full-packet checks stop before it.
+			warm := got[0]
+			for i := 1; i < len(got); i++ {
+				assert.Same(t, warm.first, got[i].first, "packet %d: the pool was dropped under uniform rows", i)
+				if i < len(got)-1 {
+					assert.Equal(t, warm.rows, got[i].rows, "packet %d: not a full packet", i)
+					assert.Equal(t, warm.retained, got[i].retained, "packet %d: the pool grew under uniform rows", i)
+				}
+			}
+		})
 	}
 }
 
