@@ -84,14 +84,13 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 	if err != nil {
 		return nil, err
 	}
-	log.Info("got table schemas from source primary",
-		slog.String("schema_definition", fmt.Sprintf("%+v", schema)),
-		slog.String("primary_tablet", topoproto.TabletAliasString(primary)))
-
-	var sourceTables []string
+	sourceTables := make([]string, 0, len(schema.TableDefinitions))
 	for _, td := range schema.TableDefinitions {
 		sourceTables = append(sourceTables, td.Name)
 	}
+	log.Info("got table schemas from source primary",
+		slog.Any("tables", sourceTables),
+		slog.String("primary_tablet", topoproto.TabletAliasString(primary)))
 	return sourceTables, nil
 }
 
