@@ -62,6 +62,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 // correct: that they don't contain the missing columns and that the
 // DataColumns bitmap is sent.
 func TestNoBlob(t *testing.T) {
+<<<<<<< HEAD
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	oldEngine := engine
@@ -79,6 +80,26 @@ func TestNoBlob(t *testing.T) {
 		engine = oldEngine
 		env = oldEnv
 	}()
+||||||| parent of ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
+	ctx := t.Context()
+	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
+	newEngine(t, ctx, "noblob")
+	defer func() {
+		if engine != nil {
+			engine.Close()
+		}
+		if env != nil {
+			env.Close()
+		}
+		engine = oldEngine
+		env = oldEnv
+	}()
+=======
+	replaceEngine(t, "noblob")
+>>>>>>> ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
 
 	ts := &TestSpec{
 		t: t,
@@ -149,6 +170,450 @@ func TestNoBlob(t *testing.T) {
 		{"commit", nil},
 	}}
 	ts.Run()
+<<<<<<< HEAD
+||||||| parent of ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
+
+	// The BeforeDataColumns and AfterDataColumns bitmaps describe the columns as
+	// emitted by the stream, so when the filter reorders or drops columns they are
+	// projected along with the values. The existing DataColumns bitmap is
+	// intentionally left in the source table's column order for compatibility
+	// with existing consumers.
+	// t5 reorders the columns and keeps the blob; t6 drops the blob altogether.
+	tsp := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t5(id int, blb blob, val varbinary(4), primary key(id))",
+			"create table t6(id int, blb blob, val varbinary(4), primary key(id))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{
+					{Match: "t5", Filter: "select blb, id, val from t5"},
+					{Match: "t6", Filter: "select val, id from t6"},
+				},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsp.Close()
+	tsp.Init()
+
+	reorderedFE := &TestFieldEvent{
+		table: "t5",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	subsetFE := &TestFieldEvent{
+		table: "t6",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
+	// The legacy after image bitmap is in the source table's (id, blb, val) order
+	// for both tables: only the blob is absent, i.e. 00000101.
+	afterBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x05}}
+	// The before and projected after image bitmaps follow the emitted columns. In
+	// the emitted (blb, id, val) order only the blob is absent: 00000110.
+	reorderedBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x06}}
+	// The omitted blob is not part of the emitted (val, id) columns, so both bits are set.
+	subsetBitmap := &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}}
+
+	tsp.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t5 values (1, 'blob1', 'aaa')", []TestRowEvent{
+			{event: reorderedFE.String()},
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{after: []string{"blob1", "1", "aaa"}}}}},
+		}},
+		{"update t5 set val = 'bbb'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{
+				beforeRaw:            &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1aaa")},
+				afterRaw:             &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
+				dataColumnsRaw:       afterBitmap,
+				beforeDataColumnsRaw: reorderedBitmap,
+				afterDataColumnsRaw:  reorderedBitmap,
+			}}}},
+		}},
+		{"delete from t5 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{
+				beforeRaw:            &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
+				beforeDataColumnsRaw: reorderedBitmap,
+			}}}},
+		}},
+		{"commit", nil},
+	}, {
+		{"begin", nil},
+		{"insert into t6 values (1, 'blob1', 'aaa')", []TestRowEvent{
+			{event: subsetFE.String()},
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{after: []string{"aaa", "1"}}}}},
+		}},
+		{"update t6 set val = 'bbb'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{
+				before:               []string{"aaa", "1"},
+				after:                []string{"bbb", "1"},
+				dataColumnsRaw:       afterBitmap,
+				beforeDataColumnsRaw: subsetBitmap,
+				afterDataColumnsRaw:  subsetBitmap,
+			}}}},
+		}},
+		{"delete from t6 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{
+				before:               []string{"bbb", "1"},
+				beforeDataColumnsRaw: subsetBitmap,
+			}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsp.Run()
+
+	// An UPDATE whose row moves into the target key range is delivered with
+	// only its after image, which the consumer applies as an INSERT. Under
+	// NOBLOB that image omits the unchanged blob and, unlike a real INSERT
+	// where an omitted column took its default, the target has no row to keep
+	// the value from. The stream fails closed. When the blob changed too the
+	// image is full and the row is delivered.
+	// 1, 2, 3 and 5 hash into -80; 4 and 6 into 80-.
+	execStatements(t, []string{
+		"create table t7(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+	})
+	defer execStatements(t, []string{"drop table t7"})
+	keyrangeFilter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t7",
+			Filter: "select id1, blb, val from t7 where in_keyrange(id1, 'hash', '-80')",
+		}},
+	}
+
+	pos := primaryPosition(t)
+	execStatements(t, []string{
+		"insert into t7 values (4, 1, 'blob1', 'aaa')", // 80-, filtered out
+		"update t7 set id1 = 3 where id1 = 4",          // moves into -80, blob unchanged and omitted
+	})
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for range ch {
+		}
+	}()
+	// Without the check the stream would simply deliver the event and keep
+	// running; bound it so a regression fails instead of hanging.
+	streamCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	err := vstream(streamCtx, t, pos, nil, keyrangeFilter, ch, false)
+	close(ch)
+	require.ErrorContains(t, err, "a row moving into the target key range has a partial after image from which column blb cannot be reconstructed")
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+
+	// The same move is fine when the filter does not select the omitted blob:
+	// every emitted value is present.
+	projectedFE := &TestFieldEvent{
+		table: "t9",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsu := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t9(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t9",
+					Filter: "select id1, val from t9 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsu.Close()
+	tsu.Init()
+	tsu.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t9 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t9 set id1 = 5 where id1 = 6", []TestRowEvent{ // moves into -80, blob omitted but not selected
+			{event: projectedFE.String()},
+			{spec: &TestRowEventSpec{table: "t9", changes: []TestRowChange{{
+				after: []string{"5", "aaa"},
+				// The image is still partial: the legacy bitmap is in source order
+				// (id1, id2, blb, val) with the blob absent, the projected one
+				// covers the emitted (id1, val), both present.
+				dataColumnsRaw:      &binlogdatapb.RowChange_Bitmap{Count: 4, Cols: []byte{0x0b}},
+				afterDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}},
+			}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsu.Run()
+
+	movedFE := &TestFieldEvent{
+		table: "t8",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsm := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t8(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t8",
+					Filter: "select id1, blb, val from t8 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsm.Close()
+	tsm.Init()
+	tsm.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t8 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t8 set id1 = 5, blb = 'blob2' where id1 = 6", []TestRowEvent{ // moves into -80 with a full image
+			{event: movedFE.String()},
+			{spec: &TestRowEventSpec{table: "t8", changes: []TestRowChange{{after: []string{"5", "blob2", "aaa"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsm.Run()
+=======
+
+	// The BeforeDataColumns and AfterDataColumns bitmaps describe the columns as
+	// emitted by the stream, so when the filter reorders or drops columns they are
+	// projected along with the values. The existing DataColumns bitmap is
+	// intentionally left in the source table's column order for compatibility
+	// with existing consumers.
+	// t5 reorders the columns and keeps the blob; t6 drops the blob altogether.
+	tsp := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t5(id int, blb blob, val varbinary(4), primary key(id))",
+			"create table t6(id int, blb blob, val varbinary(4), primary key(id))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{
+					{Match: "t5", Filter: "select blb, id, val from t5"},
+					{Match: "t6", Filter: "select val, id from t6"},
+				},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsp.Close()
+	tsp.Init()
+
+	reorderedFE := &TestFieldEvent{
+		table: "t5",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	subsetFE := &TestFieldEvent{
+		table: "t6",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+			{name: "id", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+		},
+	}
+	// The legacy after image bitmap is in the source table's (id, blb, val) order
+	// for both tables: only the blob is absent, i.e. 00000101.
+	afterBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x05}}
+	// The before and projected after image bitmaps follow the emitted columns. In
+	// the emitted (blb, id, val) order only the blob is absent: 00000110.
+	reorderedBitmap := &binlogdatapb.RowChange_Bitmap{Count: 3, Cols: []byte{0x06}}
+	// The omitted blob is not part of the emitted (val, id) columns, so both bits are set.
+	subsetBitmap := &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}}
+
+	tsp.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t5 values (1, 'blob1', 'aaa')", []TestRowEvent{
+			{event: reorderedFE.String()},
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{after: []string{"blob1", "1", "aaa"}}}}},
+		}},
+		{"update t5 set val = 'bbb'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{
+				beforeRaw:            &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1aaa")},
+				afterRaw:             &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
+				dataColumnsRaw:       afterBitmap,
+				beforeDataColumnsRaw: reorderedBitmap,
+				afterDataColumnsRaw:  reorderedBitmap,
+			}}}},
+		}},
+		{"delete from t5 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t5", changes: []TestRowChange{{
+				beforeRaw:            &querypb.Row{Lengths: []int64{-1, 1, 3}, Values: []byte("1bbb")},
+				beforeDataColumnsRaw: reorderedBitmap,
+			}}}},
+		}},
+		{"commit", nil},
+	}, {
+		{"begin", nil},
+		{"insert into t6 values (1, 'blob1', 'aaa')", []TestRowEvent{
+			{event: subsetFE.String()},
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{after: []string{"aaa", "1"}}}}},
+		}},
+		{"update t6 set val = 'bbb'", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{
+				before:               []string{"aaa", "1"},
+				after:                []string{"bbb", "1"},
+				dataColumnsRaw:       afterBitmap,
+				beforeDataColumnsRaw: subsetBitmap,
+				afterDataColumnsRaw:  subsetBitmap,
+			}}}},
+		}},
+		{"delete from t6 where id = 1", []TestRowEvent{
+			{spec: &TestRowEventSpec{table: "t6", changes: []TestRowChange{{
+				before:               []string{"bbb", "1"},
+				beforeDataColumnsRaw: subsetBitmap,
+			}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsp.Run()
+
+	// An UPDATE whose row moves into the target key range is delivered with
+	// only its after image, which the consumer applies as an INSERT. Under
+	// NOBLOB that image omits the unchanged blob and, unlike a real INSERT
+	// where an omitted column took its default, the target has no row to keep
+	// the value from. The stream fails closed. When the blob changed too the
+	// image is full and the row is delivered.
+	// 1, 2, 3 and 5 hash into -80; 4 and 6 into 80-.
+	execStatements(t, []string{
+		"create table t7(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+	})
+	defer execStatements(t, []string{"drop table t7"})
+	keyrangeFilter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t7",
+			Filter: "select id1, blb, val from t7 where in_keyrange(id1, 'hash', '-80')",
+		}},
+	}
+
+	pos := primaryPosition(t)
+	execStatements(t, []string{
+		"insert into t7 values (4, 1, 'blob1', 'aaa')", // 80-, filtered out
+		"update t7 set id1 = 3 where id1 = 4",          // moves into -80, blob unchanged and omitted
+	})
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for range ch {
+		}
+	}()
+	// Without the check the stream would simply deliver the event and keep
+	// running; bound it so a regression fails instead of hanging.
+	streamCtx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	err := vstream(streamCtx, t, pos, nil, keyrangeFilter, ch, false)
+	close(ch)
+	require.ErrorContains(t, err, "a row moving into the target key range has a partial after image from which column blb cannot be reconstructed")
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+
+	// The same move is fine when the filter does not select the omitted blob:
+	// every emitted value is present.
+	projectedFE := &TestFieldEvent{
+		table: "t9",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsu := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t9(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t9",
+					Filter: "select id1, val from t9 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsu.Close()
+	tsu.Init()
+	tsu.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t9 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t9 set id1 = 5 where id1 = 6", []TestRowEvent{ // moves into -80, blob omitted but not selected
+			{event: projectedFE.String()},
+			{spec: &TestRowEventSpec{table: "t9", changes: []TestRowChange{{
+				after: []string{"5", "aaa"},
+				// The image is still partial: the legacy bitmap is in source order
+				// (id1, id2, blb, val) with the blob absent, the projected one
+				// covers the emitted (id1, val), both present.
+				dataColumnsRaw:      &binlogdatapb.RowChange_Bitmap{Count: 4, Cols: []byte{0x0b}},
+				afterDataColumnsRaw: &binlogdatapb.RowChange_Bitmap{Count: 2, Cols: []byte{0x03}},
+			}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsu.Run()
+
+	movedFE := &TestFieldEvent{
+		table: "t8",
+		db:    testenv.DBName,
+		cols: []*TestColumn{
+			{name: "id1", dataType: "INT32", colType: "int(11)", len: 11, collationID: 63},
+			{name: "blb", dataType: "BLOB", colType: "blob", len: 65535, collationID: 63},
+			{name: "val", dataType: "VARBINARY", colType: "varbinary(4)", len: 4, collationID: 63},
+		},
+	}
+	tsm := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t8(id1 int, id2 int, blb blob, val varbinary(4), primary key(id1))",
+		},
+		options: &TestSpecOptions{
+			noblob: true,
+			filter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t8",
+					Filter: "select id1, blb, val from t8 where in_keyrange(id1, 'hash', '-80')",
+				}},
+			},
+			customFieldEvents: true,
+		},
+	}
+	defer tsm.Close()
+	tsm.Init()
+	tsm.tests = [][]*TestQuery{{
+		{"begin", nil},
+		{"insert into t8 values (6, 1, 'blob1', 'aaa')", noEvents}, // 80-
+		{"update t8 set id1 = 5, blb = 'blob2' where id1 = 6", []TestRowEvent{ // moves into -80 with a full image
+			{event: movedFE.String()},
+			{spec: &TestRowEventSpec{table: "t8", changes: []TestRowChange{{after: []string{"5", "blob2", "aaa"}}}}},
+		}},
+		{"commit", nil},
+	}}
+	tsm.Run()
+>>>>>>> ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
 }
 
 // TestSetAndEnum confirms that the events for set and enum columns are correct.
@@ -1929,6 +2394,7 @@ func TestJournal(t *testing.T) {
 
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
+<<<<<<< HEAD
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	oldEngine := engine
@@ -1947,6 +2413,28 @@ func TestMinimalMode(t *testing.T) {
 	}()
 	newEngine(t, ctx, "minimal")
 	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
+||||||| parent of ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
+	ctx := t.Context()
+	oldEngine := engine
+	engine = nil
+	oldEnv := env
+	env = nil
+	defer func() {
+		if engine != nil {
+			engine.Close()
+		}
+		if env != nil {
+			env.Close()
+		}
+		engine = oldEngine
+		env = oldEnv
+	}()
+	newEngine(t, ctx, "minimal")
+	err := engine.Stream(t.Context(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
+=======
+	replaceEngine(t, "minimal")
+	err := engine.Stream(t.Context(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
+>>>>>>> ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
 

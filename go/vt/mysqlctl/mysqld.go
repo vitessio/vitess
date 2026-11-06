@@ -775,7 +775,13 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
 	if err = mysqld.startNoWait(cnf); err != nil {
+<<<<<<< HEAD
 		log.Errorf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+||||||| parent of ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
+		log.Error(fmt.Sprintf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+=======
+		log.Error(fmt.Sprintf("failed starting mysqld: %v\n%v", err, ReadTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+>>>>>>> ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
 		return err
 	}
 
@@ -786,7 +792,13 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
+<<<<<<< HEAD
 		log.Errorf("failed starting mysqld in time: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+||||||| parent of ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
+		log.Error(fmt.Sprintf("failed starting mysqld in time: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+=======
+		log.Error(fmt.Sprintf("failed starting mysqld in time: %v\n%v", err, ReadTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+>>>>>>> ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
 		return err
 	}
 	if initDBSQLFile == "" { // default to built-in
@@ -812,11 +824,12 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	return nil
 }
 
-// For debugging purposes show the last few lines of the MySQL error log.
+// ReadTailOfMysqldErrorLog returns the last few KB of the MySQL error log, for
+// debugging.
 // Return a suggestion (string) if the file is non regular or can not be opened.
 // This helps prevent cases where the error log is symlinked to /dev/stderr etc,
 // In which case the user can manually open the file.
-func readTailOfMysqldErrorLog(fileName string) string {
+func ReadTailOfMysqldErrorLog(fileName string) string {
 	fileInfo, err := os.Stat(fileName)
 	if err != nil {
 		return fmt.Sprintf("could not stat mysql error log (%v): %v", fileName, err)
@@ -864,7 +877,13 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
+<<<<<<< HEAD
 			log.Errorf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+||||||| parent of ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
+			log.Error(fmt.Sprintf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+=======
+			log.Error(fmt.Sprintf("mysqld --initialize-insecure failed: %v\n%v", err, ReadTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+>>>>>>> ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
 			return err
 		}
 		return nil
@@ -883,7 +902,13 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		return err
 	}
 	if _, _, err = execCmd(cmdPath, args, nil, mysqlRoot, nil); err != nil {
+<<<<<<< HEAD
 		log.Errorf("mysql_install_db failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
+||||||| parent of ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
+		log.Error(fmt.Sprintf("mysql_install_db failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+=======
+		log.Error(fmt.Sprintf("mysql_install_db failed: %v\n%v", err, ReadTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+>>>>>>> ec3376b946 (vstreamer: keep the test engine when a replacement fails to start, and log why mysqld did not come up (#21909))
 		return err
 	}
 	return nil

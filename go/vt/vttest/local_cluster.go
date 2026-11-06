@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
@@ -393,6 +394,7 @@ func (db *LocalCluster) Setup() error {
 			if err, ok := err.(*exec.ExitError); ok {
 				log.Errorf("stderr: %s", err.Stderr)
 			}
+			logMySQLErrorLog(db.mysql.TabletDir())
 			return err
 		}
 
@@ -406,6 +408,7 @@ func (db *LocalCluster) Setup() error {
 			if err, ok := err.(*exec.ExitError); ok {
 				log.Errorf("stderr: %s", err.Stderr)
 			}
+			logMySQLErrorLog(db.mysql.TabletDir())
 			return err
 		}
 	}
@@ -696,6 +699,14 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	})
 
 	return err
+}
+
+// logMySQLErrorLog logs the end of mysqld's error log. When mysqld exits during
+// startup, mysqlctl waits for its socket until vttest kills it, so mysqlctl
+// never logs the error log itself, and nothing else reports why mysqld exited.
+func logMySQLErrorLog(tabletDir string) {
+	// mysqlctl writes the error log here, see Mycnf.ErrorLogPath.
+	log.Error(mysqlctl.ReadTailOfMysqldErrorLog(path.Join(tabletDir, "error.log")))
 }
 
 func dirExist(dir string) bool {
