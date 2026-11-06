@@ -110,6 +110,8 @@ func TestStateManagerServeNonPrimary(t *testing.T) {
 	verifySubcomponent(t, 3, sm.messager, testStateClosed)
 	verifySubcomponent(t, 4, sm.tracker, testStateClosed)
 	assert.True(t, sm.se.(*testSchemaEngine).nonPrimary)
+	// Unused cached sequence values are returned before the tablet reconnects as a non-primary.
+	assert.Equal(t, int64(4), sm.se.(*testSchemaEngine).releasedAt)
 
 	verifySubcomponent(t, 5, sm.se, testStateOpen)
 	verifySubcomponent(t, 6, sm.vstreamer, testStateOpen)
@@ -138,6 +140,8 @@ func TestStateManagerUnservePrimary(t *testing.T) {
 	verifySubcomponent(t, 6, sm.te, testStateClosed)
 
 	verifySubcomponent(t, 7, sm.tracker, testStateClosed)
+	// Unused cached sequence values are returned after all transactions have completed.
+	assert.Equal(t, int64(7), sm.se.(*testSchemaEngine).releasedAt)
 	verifySubcomponent(t, 8, sm.se, testStateOpen)
 	verifySubcomponent(t, 9, sm.vstreamer, testStateOpen)
 	verifySubcomponent(t, 10, sm.binlogDumper, testStateOpen)
@@ -223,6 +227,8 @@ func TestStateManagerClose(t *testing.T) {
 	verifySubcomponent(t, 5, sm.messager, testStateClosed)
 	verifySubcomponent(t, 6, sm.te, testStateClosed)
 	verifySubcomponent(t, 7, sm.tracker, testStateClosed)
+	// Unused cached sequence values are returned before the schema engine closes.
+	assert.Equal(t, int64(7), sm.se.(*testSchemaEngine).releasedAt)
 
 	verifySubcomponent(t, 8, sm.txThrottler, testStateClosed)
 	verifySubcomponent(t, 9, sm.qe, testStateClosed)
@@ -835,6 +841,8 @@ type testSchemaEngine struct {
 	testOrderState
 	ensureCalled bool
 	nonPrimary   bool
+	// releasedAt is the value of order when ReleaseSequenceCaches was last called.
+	releasedAt int64
 
 	failMySQL bool
 }
@@ -860,6 +868,10 @@ func (te *testSchemaEngine) MakeNonPrimary() {
 
 func (te *testSchemaEngine) MakePrimary(serving bool) {
 	te.nonPrimary = false
+}
+
+func (te *testSchemaEngine) ReleaseSequenceCaches() {
+	te.releasedAt = order.Load()
 }
 
 func (te *testSchemaEngine) Close() {
