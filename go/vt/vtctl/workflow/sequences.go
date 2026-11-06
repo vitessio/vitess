@@ -389,13 +389,9 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 		if kvs == nil || kvs.Sharded || len(kvs.Tables) == 0 {
 			return nil
 		}
+		// VTGate uses the table names in a vschema as they are, so an entry
+		// whose name is a backing table's name in backticks doesn't define it.
 		for tableName, tableDef := range kvs.Tables {
-			// The table name can be escaped in the vschema definition.
-			unescapedTableName, err := sqlescape.UnescapeID(tableName)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid table name %q in keyspace %s: %v",
-					tableName, keyspace, err)
-			}
 			select {
 			case <-sctx.Done():
 				return sctx.Err()
@@ -406,10 +402,10 @@ func (ts *trafficSwitcher) getTargetSequenceMetadata(ctx context.Context) (map[s
 			if complete := func() bool {
 				smMu.Lock() // Prevent concurrent access to the map
 				defer smMu.Unlock()
-				sm := sequencesByBackingTable[unescapedTableName]
+				sm := sequencesByBackingTable[tableName]
 				if tableDef != nil && tableDef.Type == vindexes.TypeSequence &&
 					sm != nil && sm.backingTableKeyspace == "" {
-					tablesFound[unescapedTableName] = struct{}{} // This is also protected by the mutex
+					tablesFound[tableName] = struct{}{} // This is also protected by the mutex
 					sm.backingTableKeyspace = keyspace
 					// Set the default keyspace name. We will later check to
 					// see if the tablet we send requests to is using a dbname
@@ -569,14 +565,11 @@ func (ts *trafficSwitcher) registerSequencesInVSchema(ctx context.Context, seque
 }
 
 // findSequenceInVSchema reports whether the keyspace's vschema defines the
-// table, under its raw name or else its escaped one, and returns an error if
-// it defines it as anything other than a sequence. Other tables' names are
-// never parsed, as a raw name can contain a backtick.
+// table, and returns an error if it defines it as anything other than a
+// sequence. VTGate uses the table names in a vschema as they are, so an entry
+// whose name is the table's name in backticks doesn't define it.
 func findSequenceInVSchema(kvs *topo.KeyspaceVSchemaInfo, tableName string) (bool, error) {
 	table, ok := kvs.Tables[tableName]
-	if !ok {
-		table, ok = kvs.Tables[sqlescape.EscapeID(tableName)]
-	}
 	if !ok {
 		return false, nil
 	}

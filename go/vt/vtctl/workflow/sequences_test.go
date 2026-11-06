@@ -88,13 +88,13 @@ func TestInitializeTargetSequences(t *testing.T) {
 
 	// my-seq1 was missing from every keyspace's vschema, and both backing
 	// tables were missing from the vschema when it was checked, but my-seq2
-	// has been added since, with an escaped name.
+	// has been added since.
 	mySeq2Definition := func() *vschema.Table {
 		return &vschema.Table{Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}}
 	}
 	err = env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 		Name:     sourceKeyspaceName,
-		Keyspace: &vschema.Keyspace{Tables: map[string]*vschema.Table{"`my-seq2`": mySeq2Definition()}},
+		Keyspace: &vschema.Keyspace{Tables: map[string]*vschema.Table{"my-seq2": mySeq2Definition()}},
 	})
 	require.NoError(t, err)
 	sequencesByBackingTable := map[string]*sequenceMetadata{
@@ -241,8 +241,8 @@ func TestInitializeTargetSequences(t *testing.T) {
 			kvs, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
 			require.NoError(t, err)
 			assert.Equal(t, map[string]*vschema.Table{
-				"my-seq1":   {Type: "sequence"},
-				"`my-seq2`": mySeq2Definition(),
+				"my-seq1": {Type: "sequence"},
+				"my-seq2": mySeq2Definition(),
 			}, kvs.Tables)
 
 			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
@@ -315,6 +315,9 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			want: nil,
 		},
 		{
+			// VTGate uses the table names in a vschema as they are, so the
+			// entry whose name is in backticks doesn't define my-seq1, and
+			// it's to be added under its raw name.
 			name: "sequences with backticks and qualified table",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
@@ -360,6 +363,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 							Sequence: sourceKeyspace.KeyspaceName + ".my-seq1",
 						},
 					},
+					registerInVSchema: true,
 				},
 			},
 		},
@@ -458,8 +462,9 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 		},
 		{
-			// The search finds my-seq1 under its escaped name, so only the
-			// missing my-seq2 is to be created.
+			// VTGate uses the table names in a vschema as they are, so the
+			// search doesn't find my-seq1 in the entry whose name is in
+			// backticks, and both sequences are to be created.
 			name: "escaped and missing unqualified sequences",
 			sourceVSchema: &vschema.Keyspace{
 				Tables: map[string]*vschema.Table{
@@ -500,6 +505,8 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 							Sequence: "my-seq1",
 						},
 					},
+					registerInVSchema:  true,
+					createBackingTable: true,
 				},
 				"my-seq2": {
 					backingTableName:     "my-seq2",
@@ -562,7 +569,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			name: "qualified sequence that is not a sequence",
 			globalVSchema: &vschema.Keyspace{
 				Tables: map[string]*vschema.Table{
-					"`my-seq1`": {},
+					"my-seq1": {},
 				},
 			},
 			targetVSchema: &vschema.Keyspace{
@@ -765,13 +772,21 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 		},
 		{
+			// The target vschema's names are in backticks. VSchema table names
+			// are raw, so a table's name in another keyspace that's searched
+			// can contain a backtick.
 			name: "sequences with backticks",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
 				Tables: map[string]*vschema.Table{
-					"`my-seq1`": {
+					"my-seq1": {
 						Type: "sequence",
 					},
+				},
+			},
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"odd`name": {},
 				},
 			},
 			targetVSchema: &vschema.Keyspace{
@@ -946,11 +961,14 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid table name",
+			// VTGate uses the table names in a vschema as they are, so the
+			// entry whose name is in backticks doesn't define my-seq1, and
+			// there's no global keyspace to create it in.
+			name: "unqualified sequence whose vschema name is in backticks",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
 				Tables: map[string]*vschema.Table{
-					"`my-`seq1`": {
+					"`my-seq1`": {
 						Type: "sequence",
 					},
 				},
@@ -972,7 +990,7 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			err: "invalid table name \"`my-`seq1`\" in keyspace source-ks: UnescapeID err: unexpected single backtick at position 3 in 'my-`seq1'",
+			err: "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: my-seq1",
 		},
 		{
 			name: "invalid keyspace name",
