@@ -26,6 +26,7 @@ import (
 	"net/http/httptest"
 	"sort"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -573,6 +574,10 @@ func TestOpenAndReload(t *testing.T) {
 	// connected, so the pattern matches any timeout.
 	var waitsDDL60 atomic.Int64
 	commit := make(chan struct{})
+	commitDDL60 := sync.OnceFunc(func() { close(commit) })
+	// Ends the shared wait if a check fails first, so that it doesn't run on, holding its
+	// connection and the fake server's handler, until the reload timeout.
+	defer commitDDL60()
 	db.AddQueryPatternWithCallback(
 		`SELECT WAIT_FOR_EXECUTED_GTID_SET\('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:60', \d+\)`,
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"),
@@ -585,13 +590,17 @@ func TestOpenAndReload(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return waitsDDL60.Load() == 1
 	}, 30*time.Second, 10*time.Millisecond)
+	// The wait doesn't hold the engine's mutex, so the engine's other users, such as tablet
+	// state changes and schema readers, don't wait for a DDL that is slow to commit.
+	require.True(t, se.mu.TryLock(), "the DDL commit wait holds the engine's mutex")
+	se.mu.Unlock()
 	secondCtx, cancelSecond := context.WithTimeout(t.Context(), 200*time.Millisecond)
 	defer cancelSecond()
 	err = se.ReloadAtDDL(secondCtx, pos6, gtid60)
 	require.ErrorContains(t, err, "stopped waiting for the DDL")
 	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	assert.EqualValues(t, 1, waitsDDL60.Load())
-	close(commit)
+	commitDDL60()
 	require.NoError(t, <-firstDone)
 	assert.EqualValues(t, 1, waitsDDL60.Load())
 	assert.Equal(t, pos6, se.reloadAtPos)
