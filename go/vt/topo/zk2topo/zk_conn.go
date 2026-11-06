@@ -107,7 +107,7 @@ type ZkConn struct {
 	mu   sync.Mutex
 	conn *zk.Conn
 	// connDropped is closed when conn is dropped, to notify the
-	// watches set on it.
+	// callers waiting on watches set on it.
 	connDropped chan struct{}
 }
 
@@ -142,9 +142,6 @@ func (c *ZkConn) Get(ctx context.Context, path string) (data []byte, stat *zk.St
 func (c *ZkConn) GetW(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		data, stat, watch, err = conn.GetW(path)
-		if err == nil {
-			watch = c.watchUntilDropped(conn, path, watch)
-		}
 		return err
 	})
 	return
@@ -163,9 +160,6 @@ func (c *ZkConn) Children(ctx context.Context, path string) (children []string, 
 func (c *ZkConn) ChildrenW(ctx context.Context, path string) (children []string, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		children, stat, watch, err = conn.ChildrenW(path)
-		if err == nil {
-			watch = c.watchUntilDropped(conn, path, watch)
-		}
 		return err
 	})
 	return
@@ -184,9 +178,6 @@ func (c *ZkConn) Exists(ctx context.Context, path string) (exists bool, stat *zk
 func (c *ZkConn) ExistsW(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		exists, stat, watch, err = conn.ExistsW(path)
-		if err == nil {
-			watch = c.watchUntilDropped(conn, path, watch)
-		}
 		return err
 	})
 	return
@@ -363,40 +354,43 @@ func (c *ZkConn) dropConn(conn *zk.Conn) {
 	conn.Close()
 }
 
-// watchUntilDropped returns a channel that delivers the event of a watch
-// set on conn, or an error event if conn is dropped first.
+// getWUntilDropped is like GetW, but also returns a channel that is closed
+// when zk2topo drops the connection the watch was set on. Callers must
+// treat that as a watch error.
 //
 // We can't rely on the Zookeeper client to fire the watch when we close
-// conn: if the client is reconnecting at that time, it can resume the
-// session on another server after Close gave up on sending the close
-// request. The session then stays alive, but the client can no longer
-// set the watch again on the server, and never fires it.
-func (c *ZkConn) watchUntilDropped(conn *zk.Conn, path string, watch <-chan zk.Event) <-chan zk.Event {
-	c.mu.Lock()
-	dropped := c.connDropped
-	if c.conn != conn {
-		dropped = closedChan
-	}
-	c.mu.Unlock()
+// the connection: if the client is reconnecting at that time, it can
+// resume the session on another server after Close gave up on sending the
+// close request. The session then stays alive, but the client can no
+// longer set the watch again on the server, and never fires it.
+func (c *ZkConn) getWUntilDropped(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, dropped <-chan struct{}, err error) {
+	err = c.withRetry(ctx, func(conn *zk.Conn) error {
+		data, stat, watch, err = conn.GetW(path)
+		dropped = c.droppedChan(conn)
+		return err
+	})
+	return
+}
 
-	events := make(chan zk.Event, 1)
-	go func() {
-		defer close(events)
-		select {
-		case event, ok := <-watch:
-			if ok {
-				events <- event
-			}
-		case <-dropped:
-			events <- zk.Event{
-				Type:  zk.EventNotWatching,
-				State: zk.StateDisconnected,
-				Path:  path,
-				Err:   zk.ErrClosing,
-			}
-		}
-	}()
-	return events
+// existsWUntilDropped is like ExistsW, with the dropped channel of
+// getWUntilDropped.
+func (c *ZkConn) existsWUntilDropped(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, dropped <-chan struct{}, err error) {
+	err = c.withRetry(ctx, func(conn *zk.Conn) error {
+		exists, stat, watch, err = conn.ExistsW(path)
+		dropped = c.droppedChan(conn)
+		return err
+	})
+	return
+}
+
+// droppedChan returns a channel that is closed when conn is dropped.
+func (c *ZkConn) droppedChan(conn *zk.Conn) <-chan struct{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.conn != conn {
+		return closedChan
+	}
+	return c.connDropped
 }
 
 // handleSessionEvents is processing events from the session channel.

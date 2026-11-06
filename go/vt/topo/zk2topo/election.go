@@ -141,7 +141,7 @@ func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkCo
 	defer cancel()
 
 	// get to work watching our own proposal
-	_, stats, events, err := conn.GetW(ctx, proposal)
+	_, stats, events, dropped, err := conn.getWUntilDropped(ctx, proposal)
 	if err != nil {
 		log.Warn(fmt.Sprintf("Cannot watch proposal while being Leader, stopping: %v", err))
 		return
@@ -166,12 +166,17 @@ func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkCo
 			cancel()
 			deleteProposal(conn, proposal, stats.Version)
 		}
+
+	case <-dropped:
+		log.Warn(fmt.Sprintf("Connection for the watch on our proposal was dropped, canceling leadership '%v'", mp.name))
+		cancel()
+		deleteProposal(conn, proposal, stats.Version)
 	}
 }
 
 // deleteProposal removes a proposal we gave up on. The proposal is an
 // ephemeral node, but the session that created it may stay alive after we
-// dropped its connection (see watchUntilDropped), and the proposal would
+// dropped its connection (see getWUntilDropped), and the proposal would
 // then block the other participants.
 func deleteProposal(conn *ZkConn, proposal string, version int32) {
 	ctx, cancel := context.WithTimeout(context.Background(), baseTimeout)
