@@ -312,10 +312,8 @@ func TestLeaderDeletesProposalWhenConnectionDrops(t *testing.T) {
 	fake.connectDelay.Store(int64(1500 * time.Millisecond))
 	fake.dropConnections()
 
+	// Leadership must be canceled before the proposal is deleted, so that
+	// no other participant can become leader while we still lead.
 	require.Equal(t, "/election/proposal", fake.waitForRequest(fakeOpDelete))
-	select {
-	case <-ctx.Done():
-	case <-time.After(10 * time.Second):
-		t.Fatal("leadership was not canceled after its connection dropped")
-	}
+	require.Error(t, ctx.Err(), "leadership was not canceled before deleting the proposal")
 }

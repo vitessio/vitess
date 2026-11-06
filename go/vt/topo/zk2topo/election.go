@@ -161,6 +161,9 @@ func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkCo
 		// something happened to our proposal, that can only be bad.
 		log.Warn(fmt.Sprintf("Watch on proposal triggered, canceling leadership '%v': %v", mp.name, e))
 		if e.Err != nil {
+			// Stop leading before cleaning up, as the cleanup may
+			// take a while.
+			cancel()
 			deleteProposal(conn, proposal, stats.Version)
 		}
 	}
