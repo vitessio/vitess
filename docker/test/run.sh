@@ -207,16 +207,8 @@ bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
-<<<<<<< HEAD
-# Maven was setup in /vt/dist, may need to reinstall it.
-bashcmd=$(append_cmd "$bashcmd" "echo 'Checking if mvn needs installing...'; if [[ ! \$(command -v mvn) ]]; then echo 'install maven'; curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 /vt/dist/maven; fi; echo 'mvn check done'")
-||||||| parent of a648cbb83d (CI: share the Go and Maven caches between docker_ci test containers (#21721))
-# Install Maven 3.9.12 on-demand (not in base image to avoid CVE-2024-47554)
-bashcmd=$(append_cmd "$bashcmd" "if [[ ! -x dist/maven/bin/mvn ]]; then echo 'Installing Maven 3.9.12...'; curl -fsSL --connect-timeout 10 --retry 3 https://archive.apache.org/dist/maven/maven-3/3.9.12/binaries/apache-maven-3.9.12-bin.tar.gz | tar -xz && mv apache-maven-3.9.12 dist/maven && echo 'Maven installed'; fi")
-=======
 # Install Maven on-demand into the shared /vt/maven.
 bashcmd=$(append_cmd "$bashcmd" "docker/test/install_maven.sh /vt/maven dist/maven")
->>>>>>> a648cbb83d (CI: share the Go and Maven caches between docker_ci test containers (#21721))
 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")

@@ -59,19 +59,10 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
     mkdir -p /vt/vtdataroot /home/vitess && \
     chown -R vitess:vitess /vt /home/vitess
 
-<<<<<<< HEAD
 # Download vendored Go dependencies
 RUN cd /vt/src/vitess.io/vitess && \
  su vitess -c "/usr/local/go/bin/go mod download"
 
-||||||| parent of a648cbb83d (CI: share the Go and Maven caches between docker_ci test containers (#21721))
-# Download vendored Go dependencies
-RUN --mount=type=cache,target=/go/pkg/mod,uid=1000,gid=1000 \
-    cd /vt/src/vitess.io/vitess && \
-    su vitess -c "/usr/local/go/bin/go mod download"
-
-=======
->>>>>>> a648cbb83d (CI: share the Go and Maven caches between docker_ci test containers (#21721))
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
 
