@@ -190,9 +190,14 @@ func TestExecuteOptionalContext(t *testing.T) {
 		start := time.Now()
 		require.NoError(t, NewSimpleHook("exiting_parent").ExecuteOptionalContext(t.Context()))
 		assert.Less(t, time.Since(start), 30*time.Second, "the hook call waited for the child")
+		logs := logtest.Capture(t, slog.LevelInfo)
 		hr := NewSimpleHook("exiting_parent").execute(t.Context(), hookWaitDelay)
 		assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
 		assert.Contains(t, hr.Stderr, "the output is incomplete")
+		incomplete := logs.Record(t, "hook: the output is incomplete: the hook's children kept it open for more than the wait delay after the hook ended")
+		assert.Equal(t, "WARN", incomplete["level"])
+		assert.Equal(t, "exiting_parent", incomplete["hook"])
+		assert.Equal(t, float64(hookWaitDelay), incomplete["wait_delay"])
 	})
 
 	t.Run("failed hook with a child holding its output", func(t *testing.T) {
