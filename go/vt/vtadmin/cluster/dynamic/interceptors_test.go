@@ -45,12 +45,13 @@ import (
 )
 
 const (
-	// validSpec builds a cluster without connecting to anything.
+	// validSpec builds a cluster whose hosts don't resolve, so its connections
+	// never succeed even when a local Vitess cluster is running.
 	validSpec = `{
 		"id": "dynamic_cluster",
 		"name": "dynamic_cluster",
 		"discovery": "dynamic",
-		"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"localhost:15000\", \"hostname\": \"localhost:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"localhost:15991\" } } ] }"
+		"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"vtctld.invalid:15000\", \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }"
 	}`
 	// idOnlySpec has an id but cannot be built into a cluster.
 	idOnlySpec = `{"id": "dynamic_cluster"}`
@@ -144,7 +145,7 @@ func TestUnaryServerInterceptorRepeatedSpecDoesNotLeakCluster(t *testing.T) {
 		assert.Equal(t, []string{"dynamic_cluster"}, clusterIDs(t, resp))
 	}
 
-	// The registered cluster keeps redialing its vtctld, which does not exist.
+	// The registered cluster keeps redialing its vtctld, which doesn't resolve.
 	goleak.VerifyNone(t, existingGoroutines, goleak.IgnoreTopFunction("google.golang.org/grpc.(*addrConn).resetTransportAndUnlock"))
 }
 
