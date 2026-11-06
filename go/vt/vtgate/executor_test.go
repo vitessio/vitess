@@ -565,6 +565,12 @@ func assertMatchesNoOrder(t *testing.T, expected, got string) {
 }
 
 func TestExecutorShow(t *testing.T) {
+	// SHOW lists every sandbox keyspace and its vindexes. Create TestMultiCol
+	// here so the expected output does not depend on TestMultiCol running first.
+	multiCol := createSandbox("TestMultiCol")
+	multiCol.ShardSpec = "-20-20a0-"
+	multiCol.VSchema = multiColVschema
+
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
