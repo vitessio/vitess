@@ -118,6 +118,8 @@ type SandboxConn struct {
 	VStreamErrors     []error
 	VStreamCh         chan *binlogdatapb.VEvent
 	VStreamEventDelay time.Duration // Any sleep that should be introduced before each event is streamed
+	VStreamStarted    chan struct{} // If set, VStream does a non-blocking send on it once it is called
+	VStreamGate       chan struct{} // If set, VStream receives from it before streaming VStreamEvents
 	// VStreamRequests records every VStreamRequest received by VStream so tests can inspect
 	// what was sent to the tablet (e.g. Options.NoTimeouts).
 	VStreamRequests []*binlogdatapb.VStreamRequest
@@ -717,6 +719,12 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 		log.Error(fmt.Sprintf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos))
 		return fmt.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)
 	}
+	if sbc.VStreamStarted != nil {
+		select {
+		case sbc.VStreamStarted <- struct{}{}:
+		default:
+		}
+	}
 	done := false
 	// for testing the minimize stream skew feature (TestStreamSkew) we need the ability to send events in specific sequences from
 	// multiple streams. We introduce a channel in the sandbox that we listen on and vstream those events
@@ -757,6 +765,13 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 		}
 	} else {
 		// this path is followed for all vstream tests other than the skew tests
+		if sbc.VStreamGate != nil {
+			select {
+			case <-sbc.VStreamGate:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
 		for {
 			ev, ok, err := sbc.popVStreamEvents()
 			if !ok {
