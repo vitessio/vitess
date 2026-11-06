@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -72,7 +73,39 @@ type comboTablet struct {
 }
 
 // tabletMap maps the tablet uid to the tablet record
-var tabletMap map[uint32]*comboTablet
+var (
+	tabletMapMu sync.RWMutex
+	tabletMap   map[uint32]*comboTablet
+)
+
+func lookupTablet(uid uint32) (*comboTablet, bool) {
+	tabletMapMu.RLock()
+	defer tabletMapMu.RUnlock()
+	tablet, ok := tabletMap[uid]
+	return tablet, ok
+}
+
+func registerTablet(tablet *comboTablet) {
+	tabletMapMu.Lock()
+	defer tabletMapMu.Unlock()
+	tabletMap[tablet.uid] = tablet
+}
+
+func snapshotTablets() []*comboTablet {
+	tabletMapMu.RLock()
+	defer tabletMapMu.RUnlock()
+	tablets := make([]*comboTablet, 0, len(tabletMap))
+	for _, tablet := range tabletMap {
+		tablets = append(tablets, tablet)
+	}
+	return tablets
+}
+
+func unregisterTablet(uid uint32) {
+	tabletMapMu.Lock()
+	defer tabletMapMu.Unlock()
+	delete(tabletMap, uid)
+}
 
 // CreateTablet creates an individual tablet, with its tm, and adds
 // it to the map. If it's a primary tablet, it also issues a TER.
@@ -135,7 +168,7 @@ func CreateTablet(
 	}
 	controller.AddStatusHeader()
 	controller.AddStatusPart()
-	tabletMap[uid] = &comboTablet{
+	registerTablet(&comboTablet{
 		alias:      alias,
 		keyspace:   keyspace,
 		shard:      shard,
@@ -145,7 +178,7 @@ func CreateTablet(
 
 		qsc: controller,
 		tm:  tm,
-	}
+	})
 	return nil
 }
 
@@ -195,7 +228,9 @@ func InitTabletMap(
 	ensureDatabase bool,
 	srvTopoCounts *stats.CountersWithSingleLabel,
 ) (uint32, error) {
+	tabletMapMu.Lock()
 	tabletMap = make(map[uint32]*comboTablet)
+	tabletMapMu.Unlock()
 
 	ctx := context.Background()
 
@@ -230,7 +265,7 @@ func InitTabletMap(
 
 	// run healthcheck on all vttablets
 	tmc := tmclient.NewTabletManagerClient()
-	for _, tablet := range tabletMap {
+	for _, tablet := range snapshotTablets() {
 		tabletInfo, err := ts.GetTablet(ctx, tablet.alias)
 		if err != nil {
 			return 0, fmt.Errorf("cannot find tablet: %+v", tablet.alias)
@@ -249,20 +284,23 @@ func DeleteKs(
 	mysqld mysqlctl.MysqlDaemon,
 	tpb *vttestpb.VTTestTopology,
 ) error {
-	for key, tablet := range tabletMap {
-		if tablet.keyspace == ksName {
-			delete(tabletMap, key)
-			tablet.tm.Stop()
-			tablet.tm.Close()
-			tablet.qsc.SchemaEngine().Close()
-			err := tablet.qsc.QueryService().Close(ctx)
-			if err != nil {
-				return err
-			}
-			err = ts.DeleteTablet(ctx, tablet.alias)
-			if err != nil {
-				return err
-			}
+	// Shutdown can call back into the registry, so iterate over a snapshot and
+	// only hold the registry lock while removing each tablet.
+	for _, tablet := range snapshotTablets() {
+		if tablet.keyspace != ksName {
+			continue
+		}
+		unregisterTablet(tablet.uid)
+		tablet.tm.Stop()
+		tablet.tm.Close()
+		tablet.qsc.SchemaEngine().Close()
+		err := tablet.qsc.QueryService().Close(ctx)
+		if err != nil {
+			return err
+		}
+		err = ts.DeleteTablet(ctx, tablet.alias)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -436,7 +474,7 @@ func CreateKs(
 
 // dialer is our tabletconn.Dialer
 func dialer(ctx context.Context, tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "connection refused")
 	}
@@ -789,7 +827,7 @@ func (itmc *internalTabletManagerClient) UnlockTables(ctx context.Context, table
 }
 
 func (itmc *internalTabletManagerClient) Ping(ctx context.Context, tablet *topodatapb.Tablet) error {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -802,7 +840,7 @@ func (itmc *internalTabletManagerClient) GetSchema(
 	tablet *topodatapb.Tablet,
 	request *tabletmanagerdatapb.GetSchemaRequest,
 ) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -810,7 +848,7 @@ func (itmc *internalTabletManagerClient) GetSchema(
 }
 
 func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -819,7 +857,7 @@ func (itmc *internalTabletManagerClient) GetPermissions(ctx context.Context, tab
 
 // GetGlobalStatusVars is part of the tmclient.TabletManagerClient interface.
 func (itmc *internalTabletManagerClient) GetGlobalStatusVars(ctx context.Context, tablet *topodatapb.Tablet, variables []string) (map[string]string, error) {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", topoproto.TabletAliasString(tablet.Alias))
 	}
@@ -835,7 +873,7 @@ func (itmc *internalTabletManagerClient) SetReadWrite(ctx context.Context, table
 }
 
 func (itmc *internalTabletManagerClient) ChangeTags(ctx context.Context, tablet *topodatapb.Tablet, tabletTags map[string]string, replace bool) (*tabletmanagerdatapb.ChangeTagsResponse, error) {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -849,7 +887,7 @@ func (itmc *internalTabletManagerClient) ChangeTags(ctx context.Context, tablet 
 }
 
 func (itmc *internalTabletManagerClient) ChangeType(ctx context.Context, tablet *topodatapb.Tablet, dbType topodatapb.TabletType, semiSync bool) error {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -858,7 +896,7 @@ func (itmc *internalTabletManagerClient) ChangeType(ctx context.Context, tablet 
 }
 
 func (itmc *internalTabletManagerClient) Sleep(ctx context.Context, tablet *topodatapb.Tablet, duration time.Duration) error {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -871,7 +909,7 @@ func (itmc *internalTabletManagerClient) ExecuteHook(ctx context.Context, tablet
 }
 
 func (itmc *internalTabletManagerClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -879,7 +917,7 @@ func (itmc *internalTabletManagerClient) RefreshState(ctx context.Context, table
 }
 
 func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -888,7 +926,7 @@ func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tab
 }
 
 func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Tablet, waitPosition string) error {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -896,7 +934,7 @@ func (itmc *internalTabletManagerClient) ReloadSchema(ctx context.Context, table
 }
 
 func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, tablet *topodatapb.Tablet, changes []string) ([]*tabletmanagerdatapb.SchemaChangeResult, error) {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
@@ -904,7 +942,7 @@ func (itmc *internalTabletManagerClient) PreflightSchema(ctx context.Context, ta
 }
 
 func (itmc *internalTabletManagerClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
-	t, ok := tabletMap[tablet.Alias.Uid]
+	t, ok := lookupTablet(tablet.Alias.Uid)
 	if !ok {
 		return nil, fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
