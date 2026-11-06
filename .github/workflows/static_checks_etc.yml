@@ -90,6 +90,7 @@ jobs:
               - 'go.mod'
               - 'build.env'
               - 'bootstrap.sh'
+              - '.github/actions/tool-downloads/**'
               - 'tools/**'
               - '.github/workflows/static_checks_etc.yml'
             proto_changes:
@@ -168,6 +169,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
+
+      - name: Restore tool downloads
+        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        uses: $/.github/actions/tool-downloads
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')

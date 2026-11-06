@@ -22,6 +22,11 @@ ARG image=golang:1.26.10-bookworm@sha256:ee3901c61e423732605a51f1b8157c849ec0119
 # set it to build a flavor on a common image built separately.
 ARG base_image=common
 
+# The downloads that bootstrap.sh keeps in dist/download-cache. CI passes the
+# ones it restored as the download-cache build context; by default there are
+# none, and bootstrap.sh downloads every tool.
+FROM scratch AS download-cache
+
 # Build the Vitess Go binaries
 FROM $image AS common
 # Install Vitess build dependencies
@@ -57,11 +62,6 @@ RUN groupadd -r -g 1000 vitess && \
     mkdir -p /vt/vtdataroot /home/vitess && \
     chown -R vitess:vitess /vt /home/vitess
 
-# Download vendored Go dependencies
-RUN --mount=type=cache,target=/go/pkg/mod,uid=1000,gid=1000 \
-    cd /vt/src/vitess.io/vitess && \
-    su vitess -c "/usr/local/go/bin/go mod download"
-
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
 
@@ -73,7 +73,14 @@ RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln 
 WORKDIR /vt/src/vitess.io/vitess
 
 USER vitess
-RUN BUILD_CONSUL=0 ./bootstrap.sh
+# bootstrap.sh checks each file's checksum before it uses it, and downloads the
+# ones that are missing, unreadable or do not match. The image keeps none of
+# the downloads.
+RUN --mount=type=bind,from=download-cache,target=/tmp/download-cache \
+    mkdir -p dist/download-cache && \
+    { cp -R /tmp/download-cache/. dist/download-cache/ || true; } && \
+    BUILD_CONSUL=0 ./bootstrap.sh && \
+    rm -rf dist/download-cache
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
