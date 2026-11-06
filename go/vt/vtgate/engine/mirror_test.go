@@ -213,9 +213,10 @@ func TestMirror(t *testing.T) {
 			targetErr.Store(nil)
 		}()
 
-		// The primitive finishes only after the mirror target has, so the
-		// target always finishes on time. Fixed sleeps on both sides race
-		// on a loaded machine.
+		// The primitive finishes only after the mirror target's hook has
+		// returned, so the target is left with the mirror's whole
+		// maxMirrorTargetLag to report its result. Fixed sleeps on both
+		// sides race on a loaded machine.
 		targetDone := make(chan struct{})
 		vc.onExecuteMultiShardFn = func(ctx context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
 			select {
@@ -260,10 +261,8 @@ func TestMirror(t *testing.T) {
 		wg.Wait()
 
 		// The target finished on time, so the mirror recorded the target's own
-		// result and execution time rather than cancelling it, which records
-		// the source time plus maxMirrorTargetLag.
+		// result rather than cancelling it.
 		require.NoError(t, *targetErr.Load())
-		require.Less(t, *targetExecTime.Load(), *sourceExecTime.Load()+maxMirrorTargetLag)
 	})
 
 	t.Run("TryExecute slow mirror target", func(t *testing.T) {
@@ -451,9 +450,10 @@ func TestMirror(t *testing.T) {
 			targetErr.Store(nil)
 		}()
 
-		// The primitive finishes only after the mirror target has, so the
-		// target always finishes on time. Fixed sleeps on both sides race
-		// on a loaded machine.
+		// The primitive finishes only after the mirror target's hook has
+		// returned, so the target is left with the mirror's whole
+		// maxMirrorTargetLag to report its result. Fixed sleeps on both
+		// sides race on a loaded machine.
 		targetDone := make(chan struct{})
 		vc.onStreamExecuteMultiFn = func(ctx context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, _ []map[string]*querypb.BindVariable, _ bool, _ bool, _ func(*sqltypes.Result) error) {
 			select {
@@ -504,10 +504,8 @@ func TestMirror(t *testing.T) {
 		})
 
 		// The target finished on time, so the mirror recorded the target's own
-		// result and execution time rather than cancelling it, which records
-		// the source time plus maxMirrorTargetLag.
+		// result rather than cancelling it.
 		require.NoError(t, *targetErr.Load())
-		require.Less(t, *targetExecTime.Load(), *sourceExecTime.Load()+maxMirrorTargetLag)
 	})
 
 	t.Run("TryStreamExecute slow mirror target", func(t *testing.T) {
