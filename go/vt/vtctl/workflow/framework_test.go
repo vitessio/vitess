@@ -569,9 +569,8 @@ func (tmc *testTMClient) expectValidateVReplicationPermissionsResponse(tabletID 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
-
 	if requests, ok := tmc.applySchemaRequests[tablet.Alias.Uid]; ok {
+		defer tmc.mu.Unlock()
 		if len(requests) == 0 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ApplySchema request on tablet %s: got %+v",
 				topoproto.TabletAliasString(tablet.Alias), change)
@@ -596,6 +595,8 @@ func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 		tmc.applySchemaRequests[tablet.Alias.Uid] = tmc.applySchemaRequests[tablet.Alias.Uid][1:]
 		return expect.res, expect.err
 	}
+	// ExecuteFetchAsDba takes the lock too.
+	tmc.mu.Unlock()
 
 	stmts := strings.Split(change.SQL, ";")
 
@@ -913,6 +914,9 @@ func (tmc *testTMClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Ta
 }
 
 func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	expect := tmc.updateSequenceTablesRequests[tablet.Alias.Uid]
 	if expect == nil {
 		return nil, nil
@@ -932,6 +936,10 @@ func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topod
 }
 
 func (tmc *testTMClient) GetMaxValueForSequences(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	// The targets are asked concurrently, and share the request.
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	expect := tmc.getMaxValueForSequencesRequests[tablet.Alias.Uid]
 	if expect == nil {
 		return &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
