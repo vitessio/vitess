@@ -799,6 +799,144 @@ func TestExtractCommentDirectives(t *testing.T) {
 	assert.True(t, d.IsSet("six"), "d.IsSet(six)")
 }
 
+func TestRemoveDirective(t *testing.T) {
+	parser := NewTestParser()
+	testCases := []struct {
+		name         string
+		query        string
+		wantQuery    string
+		wantComments Comments
+		wantRemoved  bool
+	}{{
+		name:      "nil comments",
+		query:     "select * from t",
+		wantQuery: "select * from t",
+	}, {
+		name:         "ordinary and short comments",
+		query:        "select /* ordinary */ /*vt+ */ * from t",
+		wantQuery:    "select /* ordinary */ /*vt+ */ * from t",
+		wantComments: Comments{"/* ordinary */", "/*vt+ */"},
+	}, {
+		name:         "absent directive",
+		query:        "select /*vt+ WORKLOAD_NAME=online */ * from t",
+		wantQuery:    "select /*vt+ WORKLOAD_NAME=online */ * from t",
+		wantComments: Comments{"/*vt+ WORKLOAD_NAME=online */"},
+	}, {
+		name:        "only directive",
+		query:       "select /*vt+ PRIORITY=50 */ * from t",
+		wantQuery:   "select * from t",
+		wantRemoved: true,
+	}, {
+		name:        "directive separates tokens",
+		query:       "create /*vt+ PRIORITY=50 */table t (id int)",
+		wantQuery:   "create table t (id int)",
+		wantRemoved: true,
+	}, {
+		name:        "directive is the only token separator",
+		query:       "create/*vt+ PRIORITY=50 */table t (id int)",
+		wantQuery:   "create table t (id int)",
+		wantRemoved: true,
+	}, {
+		name:         "mixed directives",
+		query:        "select /*vt+ WORKLOAD_NAME=online PRIORITY=50 QUERY_TIMEOUT_MS=100 */ * from t",
+		wantQuery:    "select /*vt+ WORKLOAD_NAME=online QUERY_TIMEOUT_MS=100 */ * from t",
+		wantComments: Comments{"/*vt+ WORKLOAD_NAME=online QUERY_TIMEOUT_MS=100 */"},
+		wantRemoved:  true,
+	}, {
+		name:         "case insensitive exact match",
+		query:        "select /*vt+ PRIORITY_EXTRA=49 priority=50 */ * from t",
+		wantQuery:    "select /*vt+ PRIORITY_EXTRA=49 */ * from t",
+		wantComments: Comments{"/*vt+ PRIORITY_EXTRA=49 */"},
+		wantRemoved:  true,
+	}, {
+		name:         "duplicates and multiple comments",
+		query:        "select /* before */ /*vt+ PRIORITY=50 PRIORITY=49 WORKLOAD_NAME=online */ /*vt+ PRIORITY=48 */ /* after */ * from t",
+		wantQuery:    "select /* before */ /*vt+ WORKLOAD_NAME=online */ /* after */ * from t",
+		wantComments: Comments{"/* before */", "/*vt+ WORKLOAD_NAME=online */", "/* after */"},
+		wantRemoved:  true,
+	}, {
+		name:         "separate directive comments",
+		query:        "select /*vt+ WORKLOAD_NAME=online */ /*vt+ PRIORITY=50 */ /*vt+ QUERY_TIMEOUT_MS=100 */ * from t",
+		wantQuery:    "select /*vt+ WORKLOAD_NAME=online */ /*vt+ QUERY_TIMEOUT_MS=100 */ * from t",
+		wantComments: Comments{"/*vt+ WORKLOAD_NAME=online */", "/*vt+ QUERY_TIMEOUT_MS=100 */"},
+		wantRemoved:  true,
+	}, {
+		name:        "same directive in CTE",
+		query:       "with cte as (select /*vt+ PRIORITY=50 */ 1) select /*vt+ PRIORITY=50 */ * from cte",
+		wantQuery:   "with cte as (select /*vt+ PRIORITY=50 */ 1) select * from cte",
+		wantRemoved: true,
+	}, {
+		name:        "parenthesized query",
+		query:       "((select /*vt+ PRIORITY=50 */ * from t))",
+		wantQuery:   "((select * from t))",
+		wantRemoved: true,
+	}, {
+		name:         "preserves formatting and matching string literal",
+		query:        "select /*vt+  WORKLOAD_NAME=online\t PRIORITY=50  QUERY_TIMEOUT_MS=100 */ '/*vt+ PRIORITY=50 */' from t",
+		wantQuery:    "select /*vt+  WORKLOAD_NAME=online\t QUERY_TIMEOUT_MS=100 */ '/*vt+ PRIORITY=50 */' from t",
+		wantComments: Comments{"/*vt+  WORKLOAD_NAME=online\t QUERY_TIMEOUT_MS=100 */"},
+		wantRemoved:  true,
+	}}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			stmt, err := parser.Parse(testCase.query)
+			require.NoError(t, err)
+			comments := stmt.(Commented).GetParsedComments()
+			original := append(Comments(nil), comments.GetComments()...)
+			gotQuery, gotComments, gotRemoved := parser.RemoveDirective(testCase.query, comments, DirectivePriority)
+			assert.Equal(t, testCase.wantQuery, gotQuery)
+			assert.Equal(t, testCase.wantComments, gotComments)
+			assert.Equal(t, testCase.wantRemoved, gotRemoved)
+			assert.Equal(t, original, comments.GetComments())
+		})
+	}
+}
+
+func BenchmarkPriorityDirective(b *testing.B) {
+	parser := NewTestParser()
+	for _, testCase := range []struct {
+		name  string
+		query string
+	}{
+		{name: "short", query: "select /*vt+ PRIORITY=50 */ * from music_user_map"},
+		{name: "CTE", query: "with cte1 as (select id from music_user_map), cte2 as (select id from cte1), cte3 as (select id from cte2), cte4 as (select id from cte3) select /*vt+ PRIORITY=50 */ * from cte4"},
+	} {
+		b.Run(testCase.name, func(b *testing.B) {
+			b.Run("unchanged", func(b *testing.B) {
+				b.ReportAllocs()
+				for i := 0; i < b.N; i++ {
+					stmt, err := parser.Parse(testCase.query)
+					if err != nil {
+						b.Fatal(err)
+					}
+					if _, err := BuildQueryHints(stmt); err != nil {
+						b.Fatal(err)
+					}
+				}
+			})
+			b.Run("surgical removal", func(b *testing.B) {
+				b.ReportAllocs()
+				for i := 0; i < b.N; i++ {
+					stmt, err := parser.Parse(testCase.query)
+					if err != nil {
+						b.Fatal(err)
+					}
+					if _, err := BuildQueryHints(stmt); err != nil {
+						b.Fatal(err)
+					}
+					commented := stmt.(Commented)
+					_, comments, removed := parser.RemoveDirective(testCase.query, commented.GetParsedComments(), DirectivePriority)
+					if !removed {
+						b.Fatal("priority directive was not removed")
+					}
+					commented.SetComments(comments)
+				}
+			})
+		})
+	}
+}
+
 func TestSkipQueryPlanCacheDirective(t *testing.T) {
 	parser := NewTestParser()
 	stmt, _ := parser.Parse("insert /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ into user(id) values (1), (2)")
