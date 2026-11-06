@@ -294,7 +294,6 @@ func newTestThrottler() *Throttler {
 	throttler.initConfig()
 	throttler.throttleMetricChan = make(chan *base.ThrottleMetric)
 	throttler.clusterProbesChan = make(chan *base.ClusterProbes)
-	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
 	throttler.inventory = base.NewInventory()
 
@@ -440,6 +439,133 @@ func TestApplyThrottlerConfig(t *testing.T) {
 			require.True(t, ok)
 			assert.Equal(t, float64(1.0), val)
 		}
+	})
+}
+
+// TestApplyThrottlerConfigEnablesInOrder checks that applying a config enables or disables the throttler before
+// the next config is applied, so that two configs applied in a row leave the throttler as the latter says.
+func TestApplyThrottlerConfigEnablesInOrder(t *testing.T) {
+	throttler := newTestThrottler()
+	throttler.isOpen.Store(true)
+	t.Cleanup(func() {
+		throttler.Disable()
+		throttler.isOpen.Store(false)
+	})
+	applyThrottlerConfig := func(enabled bool) {
+		throttler.initMutex.Lock()
+		defer throttler.initMutex.Unlock()
+		throttler.applyThrottlerConfig(t.Context(), &topodatapb.ThrottlerConfig{Enabled: enabled, Threshold: 5})
+	}
+
+	applyThrottlerConfig(true)
+	assert.True(t, throttler.IsEnabled())
+	applyThrottlerConfig(false)
+	assert.False(t, throttler.IsEnabled())
+	assert.Never(t, throttler.IsEnabled, time.Second, 10*time.Millisecond)
+}
+
+// TestPendingThrottlerConfig covers the configs that WatchSrvKeyspaceCallback leaves for Operate while the
+// throttler is enabled, and one that arrives while Operate disables the throttler.
+func TestPendingThrottlerConfig(t *testing.T) {
+	newThrottler := func(t *testing.T) *Throttler {
+		throttler := newTestThrottler()
+		throttler.isOpen.Store(true)
+		t.Cleanup(func() {
+			throttler.Disable()
+			throttler.isOpen.Store(false)
+		})
+		return throttler
+	}
+	srvKeyspace := func(threshold float64) *topodatapb.SrvKeyspace {
+		return &topodatapb.SrvKeyspace{ThrottlerConfig: &topodatapb.ThrottlerConfig{Enabled: true, Threshold: threshold}}
+	}
+
+	t.Run("Operate ends up with the latest one, and doesn't apply it again", func(t *testing.T) {
+		throttler := newThrottler(t)
+		wg := throttler.Enable()
+		require.NotNil(t, wg)
+		t.Cleanup(func() {
+			throttler.Disable()
+			wg.Wait()
+		})
+
+		// Two configs arrive while Operate is busy.
+		release := make(chan struct{})
+		runSerialFunction(t, t.Context(), throttler, func(context.Context) { <-release })
+		throttler.WatchSrvKeyspaceCallback(srvKeyspace(2), nil)
+		throttler.WatchSrvKeyspaceCallback(srvKeyspace(3), nil)
+		close(release)
+
+		assert.Eventually(t, func() bool {
+			return throttler.GetMetricsThreshold() == 3
+		}, 30*time.Second, 10*time.Millisecond)
+		assert.Never(t, func() bool {
+			return throttler.GetMetricsThreshold() != 3
+		}, time.Second, 10*time.Millisecond, "the older config was applied after the newer one")
+
+		// A later signal doesn't apply the config again.
+		throttler.StoreMetricsThreshold(9)
+		throttler.applyPendingThrottlerConfig(t.Context())
+		assert.Equal(t, float64(9), throttler.GetMetricsThreshold())
+	})
+	t.Run("the next Operate doesn't apply one left for the previous Operate", func(t *testing.T) {
+		throttler := newThrottler(t)
+		wg := throttler.Enable()
+		require.NotNil(t, wg)
+		throttler.Disable()
+		wg.Wait()
+
+		// The throttler reads as enabled, as when WatchSrvKeyspaceCallback runs right before the Disable, and the
+		// Operate exited without reading the config.
+		throttler.isEnabled.Store(true)
+		throttler.WatchSrvKeyspaceCallback(srvKeyspace(2), nil)
+		throttler.isEnabled.Store(false)
+
+		// The throttler is disabled, so it applies this config directly, and starts the next Operate.
+		throttler.WatchSrvKeyspaceCallback(srvKeyspace(3), nil)
+		assert.Equal(t, float64(3), throttler.GetMetricsThreshold())
+		assert.True(t, throttler.IsEnabled())
+		assert.Never(t, func() bool {
+			return throttler.GetMetricsThreshold() != 3
+		}, time.Second, 10*time.Millisecond, "the older config was applied over the newer one")
+	})
+	t.Run("an Operate that was cancelled doesn't apply it", func(t *testing.T) {
+		throttler := newThrottler(t)
+
+		// The throttler reads as enabled, and Close disables it before Operate applies the config.
+		throttler.isEnabled.Store(true)
+		throttler.WatchSrvKeyspaceCallback(srvKeyspace(2), nil)
+		throttler.isEnabled.Store(false)
+		operateCtx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		throttler.applyPendingThrottlerConfig(operateCtx)
+		assert.False(t, throttler.IsEnabled())
+		assert.Equal(t, 0.75, throttler.GetMetricsThreshold())
+	})
+	t.Run("one that arrives while Operate disables the throttler isn't left for it", func(t *testing.T) {
+		throttler := newThrottler(t)
+		wg := throttler.Enable()
+		require.NotNil(t, wg)
+		t.Cleanup(func() {
+			throttler.Disable()
+			wg.Wait()
+		})
+
+		// Operate applies a config that disables the throttler, and another config arrives meanwhile.
+		throttler.initMutex.Lock()
+		var returned atomic.Bool
+		go func() {
+			throttler.WatchSrvKeyspaceCallback(&topodatapb.SrvKeyspace{ThrottlerConfig: &topodatapb.ThrottlerConfig{Threshold: 4}}, nil)
+			returned.Store(true)
+		}()
+		assert.Never(t, returned.Load, time.Second, 10*time.Millisecond, "the config didn't wait for the one that Operate applies")
+		throttler.applyThrottlerConfig(t.Context(), &topodatapb.ThrottlerConfig{Threshold: 3})
+		throttler.initMutex.Unlock()
+
+		require.Eventually(t, returned.Load, 30*time.Second, 10*time.Millisecond)
+		assert.Equal(t, 4.0, throttler.GetMetricsThreshold(), "the config was left for the Operate of the disabled throttler")
+		assert.False(t, throttler.IsEnabled())
 	})
 }
 
