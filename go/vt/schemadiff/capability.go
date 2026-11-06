@@ -17,13 +17,13 @@ limitations under the License.
 package schemadiff
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -200,7 +200,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 						slog.String("alter", sqlparser.CanonicalString(alterOption)))
 				}
 				if err != nil {
-					log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+					log.Error("Error while checking MySQL server INSTANT DDL capability for ALTER",
+						slog.String("alter", sqlparser.CanonicalString(alterOption)), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				}
 				return capable, err
 			}
@@ -267,7 +268,8 @@ func alterOptionCapableOfInstantDDL(alterOption sqlparser.AlterOption, createTab
 					slog.String("alter", sqlparser.CanonicalString(alterOption)))
 			}
 			if err != nil {
-				log.Error(fmt.Sprintf("Error while checking MySQL server INSTANT DDL capability for ALTER %q: %v", sqlparser.CanonicalString(alterOption), err))
+				log.Error("Error while checking MySQL server INSTANT DDL capability for ALTER",
+					slog.String("alter", sqlparser.CanonicalString(alterOption)), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 			return capable, err
 		}

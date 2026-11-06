@@ -17,8 +17,8 @@ limitations under the License.
 package trace
 
 import (
-	"fmt"
 	"io"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -28,7 +28,7 @@ func LogErrorsWhenClosing(in io.Closer) func() {
 	return func() {
 		err := in.Close()
 		if err != nil {
-			log.Error(fmt.Sprint(err))
+			log.Error("Failed to close tracer", slog.Any("error", err))
 		}
 	}
 }

@@ -18,9 +18,14 @@ package stats
 
 import (
 	"expvar"
+	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 )
 
 func TestCounter(t *testing.T) {
@@ -39,6 +44,21 @@ func TestCounter(t *testing.T) {
 	assert.Equal(t, "1", v.String())
 	v.Reset()
 	assert.EqualValues(t, 0, v.Get())
+}
+
+func TestCounterAddNegativeLogs(t *testing.T) {
+	saved := logCounterNegative
+	t.Cleanup(func() { logCounterNegative = saved })
+	logCounterNegative = logutil.NewThrottledLogger("StatsCounterNegative", time.Minute)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	v := NewCounter("", "help")
+	v.Add(5)
+	v.Add(-2)
+	record := logs.Record(t, "Adding a negative value to a counter, it should be a gauge instead")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "StatsCounterNegative", record["logger"])
+	assert.EqualValues(t, 5, record["counter_value"])
 }
 
 func TestGaugeFunc(t *testing.T) {

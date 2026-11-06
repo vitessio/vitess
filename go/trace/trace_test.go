@@ -21,14 +21,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"testing"
 
 	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/viperutil/vipertest"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestFakeSpan(t *testing.T) {
@@ -64,6 +67,24 @@ func TestRegisterService(t *testing.T) {
 	tracer := closer.(*fakeTracer)
 
 	require.Equal(t, serviceName, tracer.name, "tracer name mismatch: expected %s, got %s", serviceName, tracer.name)
+}
+
+func TestStartTracingUnknownBackend(t *testing.T) {
+	saved := tracingBackendFactories
+	t.Cleanup(func() { tracingBackendFactories = saved })
+	tracingBackendFactories = map[string]TracerFactory{"zipkin": nil, "jaeger": nil, "noop": nil}
+
+	v := viper.New()
+	t.Cleanup(vipertest.Stub(t, v, tracingServer))
+	v.Set(tracingServer.Key(), "unknown")
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	StartTracing("vtservice")
+	record := logs.Record(t, "no such tracing backend found")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "vtservice", record["tracing_service"])
+	assert.Equal(t, "unknown", record["tracing_backend"])
+	assert.Equal(t, "jaeger,noop,zipkin", record["tracing_backends"])
 }
 
 func TestNewFromString(t *testing.T) {
