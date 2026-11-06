@@ -640,9 +640,9 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	se.lastChange = curTime
 	if len(created) > 0 || len(altered) > 0 || len(dropped) > 0 {
 		log.Info("schema engine created, altered, dropped tables",
-			slog.String("created_tables", strings.Join(extractNamesFromTablesList(created), ",")),
-			slog.String("altered_tables", strings.Join(extractNamesFromTablesList(altered), ",")),
-			slog.String("dropped_tables", strings.Join(extractNamesFromTablesList(dropped), ",")),
+			slog.Any("created_tables", extractNamesFromTablesList(created)),
+			slog.Any("altered_tables", extractNamesFromTablesList(altered)),
+			slog.Any("dropped_tables", extractNamesFromTablesList(dropped)),
 		)
 	}
 	se.broadcast(created, altered, dropped, udfsChanged)
@@ -971,9 +971,13 @@ func (se *Engine) GetTableForPos(ctx context.Context, tableName sqlparser.Identi
 		}
 	}
 
+	tables := slices.Sorted(maps0.Keys(se.tables))
+	if tables == nil {
+		tables = []string{}
+	}
 	log.Info("table not found in vttablet schema",
 		slog.String("table", tableNameStr),
-		slog.String("tables", strings.Join(slices.Sorted(maps0.Keys(se.tables)), ",")),
+		slog.Any("tables", tables),
 	)
 	return nil, fmt.Errorf("table %v not found in vttablet schema", tableNameStr)
 }
@@ -1217,10 +1221,7 @@ func (se *Engine) Environment() *vtenv.Environment {
 }
 
 func extractNamesFromTablesList(tables []*Table) []string {
-	var tableNames []string
-	if len(tables) > 0 {
-		tableNames = make([]string, 0, len(tables))
-	}
+	tableNames := make([]string, 0, len(tables))
 	for _, table := range tables {
 		tableNames = append(tableNames, table.Name.String())
 	}

@@ -71,8 +71,8 @@ func TestThrottlerInitLogsHealthCheckCells(t *testing.T) {
 	NewTxThrottler(env, ts)
 
 	initialized := logs.Record(t, "Initialized transaction throttler")
-	assert.Equal(t, "rdonly,replica", initialized["tablet_types"])
-	assert.Equal(t, "cell1,cell2", initialized["health_check_cells"])
+	assert.Equal(t, []any{"rdonly", "replica"}, initialized["tablet_types"])
+	assert.Equal(t, []any{"cell1", "cell2"}, initialized["health_check_cells"])
 	assert.NotContains(t, initialized, "cells_from_topo")
 }
 
@@ -152,7 +152,7 @@ func TestEnabledThrottler(t *testing.T) {
 	throttlerImpl, _ := throttler.(*txThrottler)
 	assert.NotNil(t, throttlerImpl)
 	initialized := logs.Record(t, "Initialized transaction throttler")
-	assert.Equal(t, "replica", initialized["tablet_types"])
+	assert.Equal(t, []any{"replica"}, initialized["tablet_types"])
 	assert.Equal(t, true, initialized["cells_from_topo"])
 	assert.EqualValues(t, cfg.TxThrottlerTopoRefreshInterval.Nanoseconds(), initialized["topo_refresh_interval"])
 	assert.Equal(t, cfg.TxThrottlerConfig.Get().String(), initialized["tx_throttler_config"])

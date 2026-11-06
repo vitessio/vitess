@@ -21,6 +21,7 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
@@ -41,6 +42,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -614,11 +616,17 @@ func TestUserTableNamedDual(t *testing.T) {
 	})
 
 	gotCreated, gotAltered, gotDropped = nil, nil, nil
+	logs := logtest.Capture(t, slog.LevelInfo)
 	require.NoError(t, se.Reload(t.Context()))
 	assert.Empty(t, gotCreated)
 	assert.Equal(t, []string{"dual"}, gotAltered)
 	assert.Empty(t, gotDropped)
 	assert.Equal(t, int64(1427325877), se.GetTable(sqlparser.NewIdentifierCS("dual")).CreateTime)
+	record := logs.Record(t, "schema engine created, altered, dropped tables")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, []any{}, record["created_tables"])
+	assert.Equal(t, []any{"dual"}, record["altered_tables"])
+	assert.Equal(t, []any{}, record["dropped_tables"])
 
 	// Reload with dual removed from the database: it should flow through `dropped`
 	// and disappear from se.tables.

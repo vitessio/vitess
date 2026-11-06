@@ -418,7 +418,7 @@ func (ts *tmState) applyDenyList(ctx context.Context) (err error) {
 		// Verify that at least one table matches the wildcards, so
 		// that we don't add a rule to deny all tables
 		if len(tables) > 0 {
-			log.Info("Denying tables", slog.String("tables", strings.Join(tables, ",")))
+			log.Info("Denying tables", slog.Any("tables", tables))
 			qr := rules.NewQueryRule("enforce denied tables", "denied_table", rules.QRFailRetry)
 			for _, t := range tables {
 				qr.AddTableCond(t)

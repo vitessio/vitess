@@ -41,7 +41,20 @@ func TestGetTableForPosNotFoundLog(t *testing.T) {
 
 	record := logs.Record(t, "table not found in vttablet schema")
 	assert.Equal(t, "missing", record["table"])
-	assert.Equal(t, "a,b", record["tables"])
+	assert.Equal(t, []any{"a", "b"}, record["tables"])
+}
+
+// TestGetTableForPosNotFoundLogNoTables checks that an engine with no tables
+// logs an empty list, not null.
+func TestGetTableForPosNotFoundLogNoTables(t *testing.T) {
+	se := NewEngineForTests()
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, err := se.GetTableForPos(t.Context(), sqlparser.NewIdentifierCS("missing"), "")
+	require.EqualError(t, err, "table missing not found in vttablet schema")
+
+	record := logs.Record(t, "table not found in vttablet schema")
+	assert.Equal(t, []any{}, record["tables"])
 }
 
 // TestResetSequencesLog checks that the sequence cache is logged as its two

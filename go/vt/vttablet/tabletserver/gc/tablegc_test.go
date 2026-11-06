@@ -576,6 +576,31 @@ func TestOperateLogs(t *testing.T) {
 	assert.Equal(t, true, dropped["is_base_table"])
 }
 
+// TestOpenLogsLifecycleStates checks that Open logs the sorted lifecycle states as a list.
+func TestOpenLogsLifecycleStates(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.SetNeverFail(true)
+	db.AddQuery("SELECT variable_value FROM performance_schema.global_variables WHERE variable_name = 'innodb_adaptive_hash_index'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("variable_value", "varchar"),
+		"ON",
+	))
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.EnableTableGC = true
+	cfg.DB = dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "fakesqldb")
+	collector := NewTableGC(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name()), nil, nil)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, collector.Open())
+	collector.Close()
+	logs.Wait(t, "TableGC: done operating")
+
+	record := logs.Record(t, "TableGC: MySQL version and lifecycle states")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, []any{"DROP", "EVAC", "HOLD", "PURGE"}, record["lifecycle_states"])
+}
+
 type fakeGCConn struct {
 	query  string
 	result *sqltypes.Result

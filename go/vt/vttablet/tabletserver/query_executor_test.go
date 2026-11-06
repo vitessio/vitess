@@ -1760,10 +1760,13 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelectImpossible, qre.plan.PlanID)
 	// query should fail because nobody has read access to test_table
+	logs := logtest.Capture(t, slog.LevelInfo)
 	_, err := qre.Execute()
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 
 	require.EqualError(t, err, `SelectImpossible command denied to user 'basic_username' for table 'test_table' (ACL check error)`)
+	record := logs.Record(t, "command denied (ACL check error)")
+	assert.Equal(t, []any{}, record["groups"])
 
 	// table acl should be ignored when querying against dual table
 	query = "select @@version_comment from dual limit 1"
@@ -1884,9 +1887,14 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
+	logs := logtest.Capture(t, slog.LevelInfo)
 	_, err := qre.Execute()
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 	require.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
+	record := logs.Record(t, "command denied (ACL check error)")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "u2", record["user"])
+	assert.Equal(t, []any{"eng", "beta"}, record["groups"])
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"

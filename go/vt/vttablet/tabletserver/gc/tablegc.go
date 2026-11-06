@@ -229,7 +229,7 @@ func (collector *TableGC) Open() (err error) {
 	sort.Strings(lifecycleStates)
 	log.Info("TableGC: MySQL version and lifecycle states",
 		slog.String("mysql_version", conn.ServerVersion),
-		slog.String("lifecycle_states", strings.Join(lifecycleStates, ",")),
+		slog.Any("lifecycle_states", lifecycleStates),
 	)
 
 	ctx := context.Background()

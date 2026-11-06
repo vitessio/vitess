@@ -503,6 +503,33 @@ func TestStateChangeTabletTypeWithFailure(t *testing.T) {
 	assert.Equal(t, int64(1), statsTabletTypeCount.Counts()["spare"])
 }
 
+// TestStateDenyListLogsTables checks that the denied tables are logged as a list.
+func TestStateDenyListLogsTables(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+	defer tm.Stop()
+	tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon).Schema = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{Name: "t1"}, {Name: "t2"}},
+	}
+	si := &topo.ShardInfo{
+		Shard: &topodatapb.Shard{
+			TabletControls: []*topodatapb.Shard_TabletControl{{
+				TabletType:   topodatapb.TabletType_REPLICA,
+				Cells:        []string{"cell1"},
+				DeniedTables: []string{"t1", "t2"},
+			}},
+		},
+	}
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	tm.tmState.RefreshFromTopoInfo(ctx, si, nil)
+
+	record := logs.Record(t, "Denying tables")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, []any{"t1", "t2"}, record["tables"])
+}
+
 // TestStateDenyListFailureLogsError checks the error logged when the denied
 // tables can't be resolved, and that the returned error is unchanged.
 func TestStateDenyListFailureLogsError(t *testing.T) {

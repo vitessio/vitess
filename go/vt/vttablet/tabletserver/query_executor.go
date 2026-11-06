@@ -971,7 +971,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 			qre.tsv.qe.accessCheckerLogger.Info("command denied (ACL check error)",
 				slog.String("plan_type", qre.plan.PlanID.String()),
 				slog.String("user", callerID.Username),
-				slog.String("groups", strings.Join(callerID.Groups, ",")),
+				slog.Any("groups", aclGroups(callerID)),
 				slog.String("table", tableName),
 			)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
@@ -1022,9 +1022,18 @@ func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateC
 	qre.tsv.qe.accessCheckerLogger.Info("command denied for a table set that cannot be determined (ACL check error)",
 		slog.String("plan_type", qre.plan.PlanID.String()),
 		slog.String("user", callerID.Username),
-		slog.String("groups", strings.Join(callerID.Groups, ",")),
+		slog.Any("groups", aclGroups(callerID)),
 	)
 	return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
+}
+
+// aclGroups returns the caller's groups for an ACL denial log record. A
+// caller with no groups logs an empty list, not null.
+func aclGroups(callerID *querypb.VTGateCallerID) []string {
+	if callerID.Groups == nil {
+		return []string{}
+	}
+	return callerID.Groups
 }
 
 // aclGroupsSuffix renders the caller's groups for an ACL denial message, so

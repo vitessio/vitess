@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -183,15 +184,15 @@ func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) TxThrottler {
 	if config.EnableTxThrottler {
 		if len(config.TxThrottlerHealthCheckCells) == 0 {
 			defer log.Info("Initialized transaction throttler",
-				slog.String("tablet_types", fmt.Sprintf("%+v", config.TxThrottlerTabletTypes)),
+				slog.Any("tablet_types", topoproto.MakeStringTypeList(*config.TxThrottlerTabletTypes)),
 				slog.Bool("cells_from_topo", true),
 				slog.Duration("topo_refresh_interval", config.TxThrottlerTopoRefreshInterval),
 				slog.String("tx_throttler_config", fmt.Sprint(config.TxThrottlerConfig.Get())),
 			)
 		} else {
 			defer log.Info("Initialized transaction throttler",
-				slog.String("tablet_types", fmt.Sprintf("%+v", config.TxThrottlerTabletTypes)),
-				slog.String("health_check_cells", strings.Join(config.TxThrottlerHealthCheckCells, ",")),
+				slog.Any("tablet_types", topoproto.MakeStringTypeList(*config.TxThrottlerTabletTypes)),
+				slog.Any("health_check_cells", config.TxThrottlerHealthCheckCells),
 				slog.String("tx_throttler_config", fmt.Sprint(config.TxThrottlerConfig.Get())),
 			)
 		}
