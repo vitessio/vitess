@@ -153,6 +153,14 @@ jobs:
               - '.github/**'
               - 'Makefile'
               - '.github/workflows/static_checks_etc.yml'
+            release_tooling:
+              - 'tools/release/**'
+              - '.github/workflows/release.yml'
+              - '.github/actions/release-checkout/**'
+              - 'go/vt/servenv/version.go'
+              - 'java/**/pom.xml'
+              - 'examples/operator/**'
+              - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
         if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
@@ -299,6 +307,12 @@ jobs:
           echo "$output"
           echo ""
           exit 1
+
+      - name: Check release tooling
+        if: steps.changes.outputs.release_tooling == 'true'
+        run: |
+          shellcheck -x tools/release/*.sh
+          tools/release/selftest.sh
 
       - name: Run zizmor 🌈
         uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1

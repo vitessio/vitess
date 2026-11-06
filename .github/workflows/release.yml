@@ -1,0 +1,426 @@
+# Patch releases, driven from main: see doc/internal/release/patch-release-automation.md.
+#
+# This is the preparation half of the release: it validates the branch and the
+# milestone, builds the release commit and the back-to-dev commit into a git
+# bundle, then builds and smoke-tests the packages, the vitess/lite image and
+# the Java artifacts from that release commit. Nothing is pushed or published;
+# every job is a pure function of the vetted commit and can be re-run freely.
+# The publishing half (tags, Docker Hub, GitHub release, Maven Central) lands in
+# a later change and hangs off the artifacts produced here.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_branch:
+        description: "Release branch to cut the patch from, e.g. release-23.0"
+        required: true
+        type: string
+      sha:
+        description: "Commit the patch is cut from. Must be the current tip of the release branch; leave empty to use the tip at dispatch time."
+        required: false
+        type: string
+        default: ""
+      allow_empty:
+        description: "Allow a release without any pull request since the previous tag"
+        required: false
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: release-${{ inputs.release_branch }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      go_tag: ${{ steps.plan.outputs.go_tag }}
+      next_version: ${{ steps.plan.outputs.next_version }}
+      base_sha: ${{ steps.plan.outputs.base_sha }}
+      prev_tag: ${{ steps.plan.outputs.prev_tag }}
+      latest: ${{ steps.plan.outputs.latest }}
+      milestone_number: ${{ steps.plan.outputs.milestone_number }}
+      summary_path: ${{ steps.plan.outputs.summary_path }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Plan the release
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          SHA: ${{ inputs.sha }}
+          ALLOW_EMPTY: ${{ inputs.allow_empty }}
+          OUT_DIR: ${{ runner.temp }}/plan
+        run: tools/release/plan.sh
+
+      - name: Upload the plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-plan
+          path: ${{ runner.temp }}/plan
+          if-no-files-found: error
+          overwrite: true
+
+  prepare:
+    name: Prepare the release commits
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      release_sha: ${{ steps.prepare.outputs.release_sha }}
+      back_to_dev_sha: ${{ steps.prepare.outputs.back_to_dev_sha }}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      # The release commits are authored by the App that will push them once
+      # publishing lands; only its identity is needed here, so the token is
+      # minted read-only and never leaves this job.
+      - name: Mint an App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: read
+
+      - name: Resolve the App identity
+        id: identity
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          echo "name=${APP_SLUG}[bot]" >> "${GITHUB_OUTPUT}"
+          echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "${GITHUB_OUTPUT}"
+
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the base commit
+        env:
+          BASE_SHA: ${{ needs.plan.outputs.base_sha }}
+        run: git worktree add --detach "${RUNNER_TEMP}/release" "${BASE_SHA}"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ runner.temp }}/release/go.mod
+          cache: false
+
+      - name: Download the plan
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-plan
+          path: ${{ runner.temp }}/plan
+
+      # Both commits are dated with the run's creation time, so re-running
+      # this job inside the same run reproduces the same commit hashes.
+      - name: Pin the commit date to the run
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: echo "created_at=$(gh run view "${GITHUB_RUN_ID}" --json createdAt --jq .createdAt)" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare the release commits
+        id: prepare
+        working-directory: ${{ runner.temp }}/release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PLAN_DIR: ${{ runner.temp }}/plan
+          OUT_DIR: ${{ runner.temp }}/prep
+          GIT_AUTHOR_NAME: ${{ steps.identity.outputs.name }}
+          GIT_AUTHOR_EMAIL: ${{ steps.identity.outputs.email }}
+          COMMIT_DATE: ${{ steps.run.outputs.created_at }}
+        run: |
+          "${GITHUB_WORKSPACE}/tools/release/prepare.sh"
+
+      - name: Upload the release commits
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-prep
+          path: ${{ runner.temp }}/prep
+          if-no-files-found: error
+          overwrite: true
+
+  build-packages:
+    name: Build the packages
+    needs: [plan, prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the release commits
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-prep
+          path: ${{ runner.temp }}/prep
+
+      - name: Check out the release commit
+        id: checkout
+        uses: ./.github/actions/release-checkout
+        with:
+          bundle: ${{ runner.temp }}/prep/release.bundle
+          ref: ${{ needs.prepare.outputs.release_sha }}
+          path: ${{ runner.temp }}/release
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ steps.checkout.outputs.path }}/go.mod
+          cache: false
+
+      - name: Tune the OS
+        timeout-minutes: 5
+        uses: ./.github/actions/tune-os
+
+      - name: Get dependencies
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make ruby ruby-dev
+
+      - name: Build the packages
+        working-directory: ${{ steps.checkout.outputs.path }}
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
+          OUT_DIR: ${{ runner.temp }}/packages
+        run: |
+          "${GITHUB_WORKSPACE}/tools/release/build-packages.sh"
+
+      - name: Upload the packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-packages
+          path: ${{ runner.temp }}/packages
+          if-no-files-found: error
+          overwrite: true
+
+  build-images-check:
+    name: Build the vitess/lite image
+    needs: [plan, prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the release commits
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-prep
+          path: ${{ runner.temp }}/prep
+
+      - name: Check out the release commit
+        id: checkout
+        uses: ./.github/actions/release-checkout
+        with:
+          bundle: ${{ runner.temp }}/prep/release.bundle
+          ref: ${{ needs.prepare.outputs.release_sha }}
+          path: ${{ runner.temp }}/release
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+
+      - name: Build vitess/lite without pushing
+        timeout-minutes: 30
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ${{ steps.checkout.outputs.path }}
+          file: ${{ steps.checkout.outputs.path }}/docker/lite/Dockerfile
+          push: false
+          load: true
+          tags: vitess/lite:${{ needs.plan.outputs.tag }}
+
+      - name: Smoke test the image
+        env:
+          IMAGE: vitess/lite:${{ needs.plan.outputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
+        run: |
+          banner="$(docker run --rm "${IMAGE}" vtgate --version)"
+          echo "${banner}"
+          case "${banner}" in
+            "Version: ${VERSION} "*"Git revision ${RELEASE_SHA} "*) ;;
+            *)
+              echo "vtgate --version in ${IMAGE} does not report version ${VERSION} built from ${RELEASE_SHA}" >&2
+              exit 1
+              ;;
+          esac
+
+  java-verify:
+    name: Verify the Java artifacts
+    needs: [plan, prepare]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the release commits
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-prep
+          path: ${{ runner.temp }}/prep
+
+      - name: Check out the release commit
+        id: checkout
+        uses: ./.github/actions/release-checkout
+        with:
+          bundle: ${{ runner.temp }}/prep/release.bundle
+          ref: ${{ needs.prepare.outputs.release_sha }}
+          path: ${{ runner.temp }}/release
+
+      - name: Set up Java
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Everything the release profile does at deploy time except signing and
+      # uploading: sources, javadoc and the Central bundle validation.
+      - name: Run the release build
+        working-directory: ${{ steps.checkout.outputs.path }}
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          mvn -B -f java/pom.xml -P release -DskipTests -Dgpg.skip verify
+          ls -l java/*/target/*"${VERSION}"*.jar
+
+      - name: Upload the Java artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: java-artifacts
+          path: ${{ steps.checkout.outputs.path }}/java/*/target/*.jar
+          if-no-files-found: error
+          overwrite: true
+
+  summary:
+    name: Summary
+    needs: [plan, prepare, build-packages, build-images-check, java-verify]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Download the plan
+        if: needs.plan.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-plan
+          path: ${{ runner.temp }}/plan
+
+      - name: Download the release commits
+        if: needs.prepare.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-prep
+          path: ${{ runner.temp }}/prep
+
+      - name: Download the packages
+        if: needs.build-packages.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-packages
+          path: ${{ runner.temp }}/packages
+
+      - name: Render the summary
+        env:
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          RESULT_PLAN: ${{ needs.plan.result }}
+          RESULT_PREPARE: ${{ needs.prepare.result }}
+          RESULT_PACKAGES: ${{ needs.build-packages.result }}
+          RESULT_IMAGES: ${{ needs.build-images-check.result }}
+          RESULT_JAVA: ${{ needs.java-verify.result }}
+        run: |
+          {
+            echo "# Release preparation of ${TAG:-?} from ${RELEASE_BRANCH}"
+            echo
+            echo "| Job | Result |"
+            echo "|---|---|"
+            echo "| plan | ${RESULT_PLAN} |"
+            echo "| prepare | ${RESULT_PREPARE} |"
+            echo "| build-packages | ${RESULT_PACKAGES} |"
+            echo "| build-images-check | ${RESULT_IMAGES} |"
+            echo "| java-verify | ${RESULT_JAVA} |"
+            echo
+            echo "Nothing has been pushed or published. The release commits, notes and packages are attached to this run as artifacts."
+            echo
+            for file in "${RUNNER_TEMP}/plan/plan.md" "${RUNNER_TEMP}/prep/prep.md" "${RUNNER_TEMP}/packages/packages.md"; do
+              if [ -f "${file}" ]; then
+                cat "${file}"
+                echo
+              fi
+            done
+          } >> "${GITHUB_STEP_SUMMARY}"
