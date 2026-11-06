@@ -26,6 +26,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -3738,6 +3739,40 @@ func TestDeleteShards(t *testing.T) {
 				},
 			},
 			shouldErr: false,
+		},
+		{
+			name: "repeated shard",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+				{
+					Keyspace: "otherkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+					{
+						Keyspace: "otherkeyspace",
+						Name:     "-",
+					},
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected:                &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{},
+			shouldErr:               false,
 		},
 		{
 			name: "topo is down",
@@ -13868,6 +13903,81 @@ func TestValidate(t *testing.T) {
 	}, resp)
 }
 
+// permissionsCountingTMC counts a fake tablet manager client's GetPermissions
+// calls by tablet alias.
+type permissionsCountingTMC struct {
+	*testutil.TabletManagerClient
+
+	mu    sync.Mutex
+	calls map[string]int
+}
+
+func (tmc *permissionsCountingTMC) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
+	tmc.mu.Lock()
+	tmc.calls[topoproto.TabletAliasString(tablet.Alias)]++
+	tmc.mu.Unlock()
+	return tmc.TabletManagerClient.GetPermissions(ctx, tablet)
+}
+
+func TestValidatePermissionsKeyspace(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	tmc := &permissionsCountingTMC{
+		TabletManagerClient: &testutil.TabletManagerClient{
+			GetPermissionsResults: map[string]struct {
+				Permissions *tabletmanagerdatapb.Permissions
+				Error       error
+			}{
+				"zone1-0000000100": {Permissions: &tabletmanagerdatapb.Permissions{}},
+				"zone1-0000000101": {Permissions: &tabletmanagerdatapb.Permissions{}},
+			},
+		},
+		calls: map[string]int{},
+	}
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks1",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+	}, &topodatapb.Tablet{
+		Keyspace: "ks1",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}, &topodatapb.Tablet{
+		Keyspace: "ks1",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_REPLICA,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  101,
+		},
+	})
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	// A repeated shard is validated once: each tablet's permissions are read
+	// once.
+	_, err := vtctld.ValidatePermissionsKeyspace(ctx, &vtctldatapb.ValidatePermissionsKeyspaceRequest{
+		Keyspace: "ks1",
+		Shards:   []string{"-", "-"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]int{
+		"zone1-0000000100": 1,
+		"zone1-0000000101": 1,
+	}, tmc.calls)
+}
+
 func TestValidateSchemaKeyspace(t *testing.T) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
@@ -14052,6 +14162,29 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 			},
 		},
 		{
+			name: "repeated shard",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace: "ks1",
+				Shards:   []string{"-", "-"},
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{"zone1-0000000100 has an extra table named not_in_vschema"},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{"zone1-0000000100 has an extra table named not_in_vschema"}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				}, schema1)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				}, schema2)
+			},
+		},
+		{
 			name: "skip-no-primary: no primary",
 			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
 				Keyspace:      "ks2",
@@ -14088,6 +14221,84 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 
 			assert.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestValidateVSchema(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{
+			"zone1-0000000100": {
+				Schema: &tabletmanagerdatapb.SchemaDefinition{
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+						Name:    "not_in_vschema",
+						Columns: []string{"c1"},
+					}},
+				},
+			},
+		},
+	}
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks1",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+	}, &topodatapb.Tablet{
+		Keyspace: "ks1",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	})
+	require.NoError(t, ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks1",
+		Keyspace: &vschemapb.Keyspace{},
+	}))
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	tests := []struct {
+		name   string
+		shards []string
+	}{
+		{
+			name:   "one shard",
+			shards: []string{"-"},
+		},
+		{
+			name:   "repeated shard",
+			shards: []string{"-", "-"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := vtctld.ValidateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{
+				Keyspace: "ks1",
+				Shards:   tt.shards,
+			})
+			require.NoError(t, err)
+
+			result := "ks1/- has tables that are not in the vschema: [not_in_vschema]"
+			utils.MustMatch(t, &vtctldatapb.ValidateVSchemaResponse{
+				Results: []string{result},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{result}},
+				},
+			}, resp)
 		})
 	}
 }

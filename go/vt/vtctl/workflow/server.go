@@ -3213,21 +3213,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	// Find out if the target is using any sequence tables for auto_increment
-	// value generation. If so, then we'll need to ensure that they are
-	// initialized properly before allowing new writes on the target.
-	sequenceMetadata := make(map[string]*sequenceMetadata)
-	// For sharded to sharded migrations the sequence must already be setup.
-	// For reshards the sequence usage is not changed.
-	if req.InitializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
-		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
-		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
-		sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
-		if err != nil {
-			return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
-		}
-	}
-
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
 	if err != nil {
@@ -3235,6 +3220,28 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
+
+		// Find out if the target is using any sequence tables for auto_increment
+		// value generation. If so, then we'll need to ensure that they are
+		// initialized properly before allowing new writes on the target. This
+		// only runs before the journals are created: the sequences are
+		// initialized before then, so a switch that finds the journals has
+		// nothing left to set up for them and only has to finish.
+		sequenceMetadata := make(map[string]*sequenceMetadata)
+		// For sharded to sharded migrations the sequence must already be setup.
+		// For reshards the sequence usage is not changed.
+		if req.InitializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+			ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
+			!ts.SourceKeyspaceSchema().Keyspace.Sharded {
+			sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
+			if err != nil {
+				return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
+			}
+			if err := sw.prepareTargetSequences(ctx, sequenceMetadata); err != nil {
+				return handleError(fmt.Sprintf("failed to prepare the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
+			}
+		}
+
 		sm, err := BuildStreamMigrator(ctx, ts, cancel, s.env.Parser())
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
