@@ -145,10 +145,12 @@ func (c *Conn) lock(ctx context.Context, dirPath, contents string, named bool) (
 	}
 }
 
-// Check is part of the topo.LockDescriptor interface.
-// We can never lose a lock in this implementation.
+// Check is part of the topo.LockDescriptor interface. A lock is lost only
+// when a test adds a CheckLock error.
 func (ld *memoryTopoLockDescriptor) Check(ctx context.Context) error {
-	return nil
+	ld.c.factory.mu.Lock()
+	defer ld.c.factory.mu.Unlock()
+	return ld.c.factory.getOperationError(CheckLock, ld.dirPath)
 }
 
 // Unlock is part of the topo.LockDescriptor interface.

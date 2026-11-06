@@ -1544,10 +1544,6 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 		return "", err
 	}
 
-	// This check is not a fencing token: the lock lease can still expire after it.
-	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
-		return "", err
-	}
 	// Check again once nothing else can commit: the fence waits for a
 	// former primary's commits, and STOP REPLICA for the applier's
 	// transaction in progress. Fence first, because with source-side
@@ -1561,6 +1557,12 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 	}
 	primaryStatus, err := tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet)
 	if err != nil {
+		return "", err
+	}
+	// Check the lock after the waits above, just before acknowledging and
+	// connecting to the source. It is not a fencing token: the lock lease
+	// can still expire after it.
+	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
 		return "", err
 	}
 	// Change semi-sync only after validating the source, but before the
