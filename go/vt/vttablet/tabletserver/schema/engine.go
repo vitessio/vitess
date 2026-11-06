@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/singleflight"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/constants/sidecar"
@@ -94,6 +95,9 @@ type Engine struct {
 	ticks           *timer.Timer
 	reloadTimeout   time.Duration
 	throttledLogger *logutil.ThrottledLogger
+	// ddlCommitWaits shares one wait for a DDL to commit among the vstreams that reach it, keyed
+	// by the DDL's GTID.
+	ddlCommitWaits singleflight.Group
 
 	// dbCreationFailed is for preventing log spam.
 	dbCreationFailed bool
@@ -454,32 +458,53 @@ func (se *Engine) waitForDDLCommit(
 		return nil
 	}
 
+	// The vstreams that reach a DDL before any reload at it share one wait, so that a DDL that is
+	// slow to commit, such as one held for a semi-sync acknowledgement, costs one MySQL
+	// connection rather than one per vstream. The shared wait doesn't end with any one caller's
+	// context; each caller stops waiting when its own context ends.
+	shared := se.ddlCommitWaits.DoChan(mysqlGTID.String(), func() (any, error) {
+		return nil, se.waitForGTID(context.WithoutCancel(ctx), mysqlGTID)
+	})
+	select {
+	case result := <-shared:
+		return result.Err
+	case <-ctx.Done():
+		return vterrors.Wrapf(ctx.Err(),
+			"stopped waiting for the DDL with GTID %v to commit before reloading the schema",
+			mysqlGTID)
+	}
+}
+
+// waitForGTID waits until MySQL has committed the transaction whose GTID is gtid, for up to the
+// reload timeout. It runs in the goroutine that ddlCommitWaits starts for a DDL's first waiter,
+// which ends when MySQL commits the DDL, the reload timeout passes or the connection fails, even
+// if every waiter has stopped waiting by then.
+func (se *Engine) waitForGTID(ctx context.Context, gtid replication.Mysql56GTID) error {
 	ctx, cancel := context.WithTimeout(ctx, se.reloadTimeout)
 	defer cancel()
 	conn, err := se.cp.Connect(ctx)
 	if err != nil {
 		return vterrors.Wrapf(err,
-			"failed to connect to wait for the DDL with GTID %v to commit", mysqlGTID)
+			"failed to connect to wait for the DDL with GTID %v to commit", gtid)
 	}
 	defer conn.Close()
 	// The wait query doesn't watch its context, so closing the connection is what ends the wait
-	// when the context does: when a vstream closes, or if MySQL stops answering.
+	// when the reload timeout passes while MySQL has stopped answering.
 	stop := context.AfterFunc(ctx, conn.Close)
 	defer stop()
 
 	start := time.Now()
-	ddlPos := replication.Position{GTIDSet: mysqlGTID.GTIDSet()}
+	ddlPos := replication.Position{GTIDSet: gtid.GTIDSet()}
 	if err := conn.WaitUntilPosition(ctx, ddlPos); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			err = ctxErr
 		}
 		return vterrors.Wrapf(err,
-			"failed to wait up to %v for the DDL with GTID %v to commit before reloading the "+
-				"schema", se.reloadTimeout, mysqlGTID)
+			"failed to wait for the DDL with GTID %v to commit before reloading the schema", gtid)
 	}
 	if waited := time.Since(start); waited > slowDDLCommitWait {
 		log.Warn("Waited for MySQL to commit a DDL before reloading the schema",
-			slog.String("gtid", mysqlGTID.String()), slog.Duration("waited", waited))
+			slog.String("gtid", gtid.String()), slog.Duration("waited", waited))
 	}
 	return nil
 }

@@ -560,6 +560,33 @@ func TestOpenAndReload(t *testing.T) {
 	err = se.ReloadAtDDL(t.Context(), pos5, mariadbGTID)
 	require.NoError(t, err)
 	assert.Equal(t, pos5, se.reloadAtPos)
+
+	// The vstreams that reach the same DDL share one wait, and each stops waiting when its own
+	// context ends: a second caller neither runs a wait query of its own nor waits past its
+	// context, while the first one goes on waiting until the DDL commits.
+	se.reloadTimeout = 30 * time.Second // makes the shared wait query's timeout 29 seconds
+	pos6, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-60")
+	require.NoError(t, err)
+	gtid60 := replication.Mysql56GTID{Server: sid, Sequence: 60}
+	waitDDL60 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:60', 29)"
+	db.AddQuery(waitDDL60, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"))
+	commit := make(chan struct{})
+	db.SetBeforeFunc(waitDDL60, func() { <-commit })
+	firstDone := make(chan error, 1)
+	go func() { firstDone <- se.ReloadAtDDL(t.Context(), pos6, gtid60) }()
+	require.Eventually(t, func() bool {
+		return db.GetQueryCalledNum(waitDDL60) == 1
+	}, 30*time.Second, 10*time.Millisecond)
+	secondCtx, cancelSecond := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancelSecond()
+	err = se.ReloadAtDDL(secondCtx, pos6, gtid60)
+	require.ErrorContains(t, err, "stopped waiting for the DDL")
+	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL60))
+	close(commit)
+	require.NoError(t, <-firstDone)
+	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL60))
+	assert.Equal(t, pos6, se.reloadAtPos)
 }
 
 // TestUserTableNamedDual verifies that a real user table named `dual` is
