@@ -14,25 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Fills the Maven cache that docker_ci restores and docker/test/run.sh shares
-# with the test containers: Maven itself in MAVEN_DIR (/tmp/maven), and the
+# Fills the Maven repository cache that docker_ci restores and
+# docker/test/run.sh shares with the test containers as their ~/.m2: the
 # dependencies and plugins of the java shard's builds, "make java_test" and
-# test/client_test.sh, in M2_DIR (/tmp/mavencache), which the containers use
-# as ~/.m2. The go_cache_warm workflow runs it from an empty cache, so the
-# entry it saves holds nothing stale. Usage:
+# test/client_test.sh, in M2_DIR (/tmp/mavencache). It uses the Maven that
+# "BUILD_MAVEN=1 ./bootstrap.sh" installs in dist/maven, the one the containers
+# use. The go_cache_warm workflow runs it from an empty cache, so the entry it
+# saves holds nothing stale. Usage:
 #
-#   tools/warm_maven_cache.sh MAVEN_DIR M2_DIR
+#   tools/warm_maven_cache.sh M2_DIR
 
 set -euo pipefail
 
-maven_dir="$1"
-m2_dir="$2"
+m2_dir="$1"
 
-mkdir -p "${maven_dir}" "${m2_dir}"
-link="$(mktemp -u)"
-docker/test/install_maven.sh "${maven_dir}" "${link}"
+mkdir -p "${m2_dir}"
 mvn() {
-	"${link}/bin/mvn" -B -Dmaven.repo.local="${m2_dir}/repository" "$@"
+	dist/maven/bin/mvn -B -Dmaven.repo.local="${m2_dir}/repository" "$@"
 }
 
 # "make java_test", without running its tests. Surefire only resolves its
@@ -47,4 +45,3 @@ mvn -f java/pom.xml clean
 # The install above put the client's own snapshot in the cache; every build
 # makes its own.
 rm -rf "${m2_dir}/repository/io/vitess"
-rm -f "${link}"

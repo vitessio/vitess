@@ -6,7 +6,10 @@ name: Warm Go caches
 # cache entries and a golangci-lint analysis cache entry for that commit. All
 # are built from an empty cache, so they contain exactly what the jobs need and
 # nothing stale. Pull requests restore the newest entries of their base branch.
-# It likewise fills the Maven cache that docker_ci restores.
+#
+# It is also the only writer of the tool download entries that jobs restore
+# through the tool-downloads action (see the tool-downloads job), and of the
+# Maven repository cache that docker_ci restores (see the maven job).
 on:
   push:
     branches:
@@ -128,8 +131,85 @@ jobs:
           KEY: ${{ steps.key.outputs.key }}
         run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
 
-  # Maven and its repository for the test containers of docker_ci, keyed by
-  # what determines them. See tools/warm_maven_cache.sh.
+  # One entry per platform for the downloads that bootstrap.sh keeps in
+  # dist/download-cache. Each leg restores the newest entry, and make tools
+  # checks the restored files' checksums and downloads any file that is
+  # missing or does not match. If that changed the downloads, they are saved,
+  # and the entries they supersede are deleted. Jobs restore these entries
+  # through the tool-downloads action.
+  tool-downloads:
+    name: "Warm tool downloads (${{ matrix.arch }})"
+    if: github.repository == 'vitessio/vitess'
+    permissions:
+      contents: read
+      # To delete the entries this run supersedes.
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      # build.env, which bootstrap.sh sources, needs Go, but no modules.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Restore the tool downloads
+        id: restore
+        uses: $/.github/actions/tool-downloads
+
+      # make tools downloads every file that is missing or fails its checksum,
+      # so the downloads changed if their hash did.
+      - name: Record the restored downloads
+        id: restored
+        env:
+          HASH: ${{ hashFiles('dist/download-cache/**') }}
+        run: echo "hash=${HASH}" >> "${GITHUB_OUTPUT}"
+
+      # Maven too, which only the docker_ci test containers install.
+      - name: Check the tool downloads
+        timeout-minutes: 10
+        run: BUILD_MAVEN=1 make tools
+
+      - name: Save the tool downloads
+        if: hashFiles('dist/download-cache/**') != steps.restored.outputs.hash
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: dist/download-cache
+          key: ${{ steps.restore.outputs.key }}
+
+      - name: Delete superseded tool download entries
+        if: hashFiles('dist/download-cache/**') != steps.restored.outputs.hash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          SHA: ${{ github.sha }}
+          KEY: ${{ steps.restore.outputs.key }}
+        run: tools/delete_superseded_cache_entries.sh "${KEY%"${SHA}"}" "${KEY}"
+
+  # The Maven repository for the test containers of docker_ci, keyed by what
+  # determines it: build.env sets the Maven version. See
+  # tools/warm_maven_cache.sh.
   maven:
     name: "Warm Maven cache"
     if: github.repository == 'vitessio/vitess'
@@ -142,7 +222,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -154,7 +234,7 @@ jobs:
       - name: Determine the cache key
         id: key
         env:
-          SUM: ${{ hashFiles('docker/test/install_maven.sh', 'tools/warm_maven_cache.sh', 'java/**/pom.xml') }}
+          SUM: ${{ hashFiles('build.env', 'tools/warm_maven_cache.sh', 'java/**/pom.xml') }}
         run: |
           echo "prefix=docker-maven-" >> "${GITHUB_OUTPUT}"
           echo "key=docker-maven-${SUM}" >> "${GITHUB_OUTPUT}"
@@ -165,27 +245,32 @@ jobs:
         id: lookup
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            /tmp/maven
-            /tmp/mavencache
+          path: /tmp/mavencache
           key: ${{ steps.key.outputs.key }}
           lookup-only: true
+
+      # build.env, which bootstrap.sh sources, needs Go, but no modules.
+      - name: Set up Go
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
 
       # Java 17, like the bootstrap image.
       - name: Warm the Maven cache
         if: steps.lookup.outputs.cache-hit != 'true'
         run: |
           export JAVA_HOME="${JAVA_HOME_17_X64}"
-          tools/warm_maven_cache.sh /tmp/maven /tmp/mavencache
-          du -sh /tmp/maven /tmp/mavencache
+          BUILD_MAVEN=1 BUILD_JAVA=0 BUILD_CONSUL=0 BUILD_PROTOC=0 ./bootstrap.sh
+          tools/warm_maven_cache.sh /tmp/mavencache
+          du -sh /tmp/mavencache
 
       - name: Save the Maven cache
         if: steps.lookup.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            /tmp/maven
-            /tmp/mavencache
+          path: /tmp/mavencache
           key: ${{ steps.key.outputs.key }}
 
       - name: Delete superseded Maven cache entries

@@ -121,8 +121,10 @@ if [[ -n "$existing_cache_image" ]]; then
 	image=$existing_cache_image
 fi
 
-# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
-chmod -R o=rx -- *
+# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions.
+# dist/ is left out: the container doesn't copy it, and the vitess user owns
+# the files that it adds to dist/download-cache.
+find . -mindepth 1 -maxdepth 1 ! -name '.*' ! -name dist -exec chmod -R o=rx -- {} +
 
 # This is required by the vtctld_web_test.py test.
 # Otherwise, /usr/bin/chromium will crash with the error:
@@ -132,11 +134,18 @@ args="$args --cap-add=SYS_ADMIN"
 args="$args -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
 
-# Share Maven and its dependency cache so they don't have to be redownloaded every time.
-mkdir -p /tmp/maven /tmp/mavencache
-chmod 777 /tmp/maven /tmp/mavencache
-args="$args -v /tmp/maven:/vt/maven"
+# Share Maven's dependency cache so it doesn't have to be redownloaded every time.
+mkdir -p /tmp/mavencache
+chmod 777 /tmp/mavencache
 args="$args -v /tmp/mavencache:/home/vitess/.m2"
+
+# Share the downloads that bootstrap.sh keeps, so that each test installs the
+# tools that the image lacks, such as Maven, without downloading them again.
+# bootstrap.sh checks each file's checksum before it uses it. The vitess user
+# (uid 1000) adds missing files.
+mkdir -p dist/download-cache
+chmod 777 dist/download-cache
+args="$args -v $PWD/dist/download-cache:/vt/src/vitess.io/vitess/dist/download-cache"
 
 # Share the Go module and build caches, so that each test doesn't download
 # every module and compile every package again. DOCKER_TEST_GOMODCACHE and
@@ -207,11 +216,9 @@ bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
-# Install Maven on-demand into the shared /vt/maven.
-bashcmd=$(append_cmd "$bashcmd" "docker/test/install_maven.sh /vt/maven dist/maven")
-
-# Run bootstrap every time now
-bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
+# Run bootstrap every time now. It also installs Maven, which the image leaves
+# out (CVE-2024-47554).
+bashcmd=$(append_cmd "$bashcmd" "BUILD_MAVEN=1 ./bootstrap.sh")
 
 # At last, append the user's command.
 bashcmd=$(append_cmd "$bashcmd" "$cmd")
