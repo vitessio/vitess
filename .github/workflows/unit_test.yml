@@ -55,6 +55,7 @@ jobs:
           base: ${{ steps.merge-base.outputs.sha }}
           filters: |
             unit_tests:
+<<<<<<< HEAD
               - 'test/config.json'
               - 'go/**'
               - 'test.go'
@@ -70,6 +71,13 @@ jobs:
               - '.github/actions/setup-mysql/action.yml'
               - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
+||||||| parent of 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
+              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml}'
+              - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
+=======
+              - '{test/config.json,go/**,test.go,Makefile,build.env,go.sum,go.mod,proto/*.proto,tools/**,config/**,bootstrap.sh,.github/workflows/unit_test.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml,.github/actions/tool-downloads/**}'
+              - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
+>>>>>>> 3a06228183 (ci: bump ZooKeeper to 3.9.7 and Maven to 3.9.16, and cache the verified tool downloads (#21886))
 
   test:
     needs: changes
@@ -183,6 +191,10 @@ jobs:
         run: |
           export DEBIAN_FRONTEND="noninteractive"
           sudo apt-get install -y make unzip g++ curl git wget ${{ matrix.java && 'ant default-jre-headless' || '' }}
+
+      - name: Restore tool downloads
+        if: needs.changes.outputs.unit_tests == 'true'
+        uses: $/.github/actions/tool-downloads
 
       - name: Run make tools
         if: needs.changes.outputs.unit_tests == 'true'
