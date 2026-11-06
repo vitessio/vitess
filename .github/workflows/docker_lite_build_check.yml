@@ -65,17 +65,16 @@ jobs:
           fetch-depth: 2
           persist-credentials: 'false'
 
-      - name: Find the base of the pull request's merge commit
-        id: merge-base
-        if: github.event_name == 'pull_request'
-        run: echo "sha=$(git rev-parse HEAD^1)" >> "$GITHUB_OUTPUT"
+      - name: Find the commit to diff against
+        id: diff-base
+        uses: $/.github/actions/diff-base
 
       - name: Check for changes in relevant files
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: changes
         with:
           token: ''
-          base: ${{ steps.merge-base.outputs.sha }}
+          base: ${{ steps.diff-base.outputs.sha }}
           filters: |
             docker_lite:
               - 'go/**/!(*_test).go'
