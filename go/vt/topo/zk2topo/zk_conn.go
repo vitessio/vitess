@@ -106,7 +106,18 @@ type ZkConn struct {
 	// mu protects the following fields.
 	mu   sync.Mutex
 	conn *zk.Conn
+	// connDropped is closed when conn is dropped, to notify the
+	// watches set on it.
+	connDropped chan struct{}
 }
+
+// closedChan is an already closed channel, for watches set on a
+// connection that has already been dropped.
+var closedChan = func() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}()
 
 // Connect to the Zookeeper servers specified in addr
 // addr can be a comma separated list of servers and each server can be a DNS entry with multiple values.
@@ -131,6 +142,9 @@ func (c *ZkConn) Get(ctx context.Context, path string) (data []byte, stat *zk.St
 func (c *ZkConn) GetW(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		data, stat, watch, err = conn.GetW(path)
+		if err == nil {
+			watch = c.watchUntilDropped(conn, path, watch)
+		}
 		return err
 	})
 	return
@@ -149,6 +163,9 @@ func (c *ZkConn) Children(ctx context.Context, path string) (children []string, 
 func (c *ZkConn) ChildrenW(ctx context.Context, path string) (children []string, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		children, stat, watch, err = conn.ChildrenW(path)
+		if err == nil {
+			watch = c.watchUntilDropped(conn, path, watch)
+		}
 		return err
 	})
 	return
@@ -167,6 +184,9 @@ func (c *ZkConn) Exists(ctx context.Context, path string) (exists bool, stat *zk
 func (c *ZkConn) ExistsW(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, err error) {
 	err = c.withRetry(ctx, func(conn *zk.Conn) error {
 		exists, stat, watch, err = conn.ExistsW(path)
+		if err == nil {
+			watch = c.watchUntilDropped(conn, path, watch)
+		}
 		return err
 	})
 	return
@@ -282,13 +302,8 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 
 		// We got an error, because the connection was closed.
 		// Let's clear up our errored connection and try again.
-		c.mu.Lock()
-		if c.conn == conn {
-			c.conn = nil
-		}
-		c.mu.Unlock()
 		log.Info(fmt.Sprintf("zk conn: got ErrConnectionClosed for addr %v: closing", c.addr))
-		conn.Close()
+		c.dropConn(conn)
 	}
 	return
 }
@@ -305,6 +320,7 @@ func (c *ZkConn) getConn(ctx context.Context) (*zk.Conn, error) {
 			return nil, err
 		}
 		c.conn = conn
+		c.connDropped = make(chan struct{})
 		go c.handleSessionEvents(conn, events)
 		c.maybeAddAuth(ctx)
 	}
@@ -334,6 +350,55 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 	}
 }
 
+// dropConn closes conn. If the ZkConn still references it, it clears the
+// reference, so the next call connects again, and notifies the watches
+// set on it.
+func (c *ZkConn) dropConn(conn *zk.Conn) {
+	c.mu.Lock()
+	if c.conn == conn {
+		c.conn = nil
+		close(c.connDropped)
+	}
+	c.mu.Unlock()
+	conn.Close()
+}
+
+// watchUntilDropped returns a channel that delivers the event of a watch
+// set on conn, or an error event if conn is dropped first.
+//
+// We can't rely on the Zookeeper client to fire the watch when we close
+// conn: if the client is reconnecting at that time, it can resume the
+// session on another server after Close gave up on sending the close
+// request. The session then stays alive, but the client can no longer
+// set the watch again on the server, and never fires it.
+func (c *ZkConn) watchUntilDropped(conn *zk.Conn, path string, watch <-chan zk.Event) <-chan zk.Event {
+	c.mu.Lock()
+	dropped := c.connDropped
+	if c.conn != conn {
+		dropped = closedChan
+	}
+	c.mu.Unlock()
+
+	events := make(chan zk.Event, 1)
+	go func() {
+		defer close(events)
+		select {
+		case event, ok := <-watch:
+			if ok {
+				events <- event
+			}
+		case <-dropped:
+			events <- zk.Event{
+				Type:  zk.EventNotWatching,
+				State: zk.StateDisconnected,
+				Path:  path,
+				Err:   zk.ErrClosing,
+			}
+		}
+	}()
+	return events
+}
+
 // handleSessionEvents is processing events from the session channel.
 // When it detects that the connection is not working any more, it
 // clears out the connection record.
@@ -342,14 +407,7 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 		zkConnState.Add(event.State.String(), 1)
 		switch event.State {
 		case zk.StateDisconnected, zk.StateExpired, zk.StateConnecting:
-			c.mu.Lock()
-			if c.conn == conn {
-				// The ZkConn still references this
-				// connection, let's nil it.
-				c.conn = nil
-			}
-			c.mu.Unlock()
-			conn.Close()
+			c.dropConn(conn)
 			log.Info(fmt.Sprintf("zk conn: session for addr %v ended: %v", c.addr, event))
 			return
 		}
