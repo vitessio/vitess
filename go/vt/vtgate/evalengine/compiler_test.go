@@ -1359,6 +1359,79 @@ func TestCompiledJSONInList(t *testing.T) {
 	}
 }
 
+// TestCompiledJSONNullArguments verifies that JSON_ARRAY and JSON_OBJECT turn a
+// NULL argument into a JSON null, and that JSON_OBJECT rejects a NULL key, when
+// compiled for a column of any type, as MySQL does and as the interpreter does.
+func TestCompiledJSONNullArguments(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+		err        string
+	}{
+		{`JSON_ARRAY(column0)`, `JSON("[null]")`, ""},
+		{`JSON_ARRAY(1, column0, 'a')`, `JSON("[1, null, \"a\"]")`, ""},
+		{`JSON_OBJECT('k', column0)`, `JSON("{\"k\": null}")`, ""},
+		{`JSON_OBJECT('k', JSON_ARRAY(column0))`, `JSON("{\"k\": [null]}")`, ""},
+		// A cast of text that is not a date is NULL.
+		{`JSON_ARRAY(CAST(column1 AS DATETIME))`, `JSON("[null]")`, ""},
+		{`JSON_OBJECT(column0, 1)`, "", "JSON documents may not contain NULL member names."},
+		{`JSON_OBJECT('k', 1, column0, 2)`, "", "JSON documents may not contain NULL member names."},
+	}
+	types := []sqltypes.Type{
+		sqltypes.Int64, sqltypes.Uint64, sqltypes.Float64, sqltypes.Decimal,
+		sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Date, sqltypes.Datetime,
+		sqltypes.Time, sqltypes.Timestamp, sqltypes.TypeJSON, sqltypes.Year,
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, typ := range types {
+		for _, tc := range testCases {
+			t.Run(typ.String()+" / "+tc.expression, func(t *testing.T) {
+				// The fields carry the column's type while the row holds NULL.
+				fields := makeFields([]sqltypes.Value{sqltypes.MakeTrusted(typ, nil), sqltypes.NewVarChar("")})
+				row := []sqltypes.Value{sqltypes.NULL, sqltypes.NewVarChar("not a date")}
+
+				expr, err := venv.Parser().ParseExpr(tc.expression)
+				require.NoError(t, err)
+
+				cfg := &evalengine.Config{
+					ResolveColumn: evalengine.FieldResolver(fields).Column,
+					Collation:     collations.CollationUtf8mb4ID,
+					Environment:   venv,
+				}
+				translated, err := evalengine.Translate(expr, cfg)
+				require.NoError(t, err)
+
+				untyped, ok := translated.(*evalengine.UntypedExpr)
+				require.True(t, ok)
+
+				env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, nil))
+				env.Row = row
+				env.Fields = fields
+
+				interpreted, err := env.EvaluateAST(untyped)
+				if tc.err != "" {
+					require.ErrorContains(t, err, tc.err)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, tc.result, interpreted.String())
+				}
+
+				compiled, err := untyped.Compile(env)
+				require.NoError(t, err)
+
+				res, err := env.EvaluateVM(compiled)
+				if tc.err != "" {
+					require.ErrorContains(t, err, tc.err)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, tc.result, res.String())
+				}
+			})
+		}
+	}
+}
+
 // TestCompileFoldedJSONLiteralConcurrency compiles distinct type
 // specialisations of one translated expression concurrently while the
 // interpreter evaluates it concurrently too. Both read the same folded JSON

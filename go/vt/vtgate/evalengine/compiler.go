@@ -645,6 +645,22 @@ func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
 	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
 }
 
+// compileArgToJSONOrNull converts the JSON_ARRAY or JSON_OBJECT argument at
+// SP-1 to JSON. A NULL argument becomes a JSON null, as in MySQL, where
+// JSON_ARRAY(NULL) is [null].
+func (c *compiler) compileArgToJSONOrNull(doct ctype) error {
+	var skip *jump
+	if doct.nullable() {
+		skip = c.asm.jumpFrom()
+		c.asm.NullJSON1(skip)
+	}
+	if _, err := c.compileArgToJSON(doct, 1); err != nil {
+		return err
+	}
+	c.asm.jumpDestination(skip)
+	return nil
+}
+
 func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.Null {
 		return errJSONKeyIsNil
@@ -655,7 +671,11 @@ func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.VarBinary {
 		return nil
 	}
+	// A NULL key skips the conversion and stays NULL, so that JSON_OBJECT
+	// rejects it the way it rejects a NULL string key.
+	skip := c.compileNullCheck1(key)
 	c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+	c.asm.jumpDestination(skip)
 	return nil
 }
 

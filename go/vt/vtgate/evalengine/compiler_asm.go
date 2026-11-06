@@ -3535,6 +3535,18 @@ func (asm *assembler) NullCheck1(j *jump) {
 	}, "NULLCHECK SP-1")
 }
 
+// NullJSON1 replaces a NULL at SP-1 with a JSON null and jumps past the
+// conversion that would otherwise turn SP-1 into JSON.
+func (asm *assembler) NullJSON1(j *jump) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-1] == nil {
+			env.vm.stack[env.vm.sp-1] = json.ValueNull
+			return j.offset()
+		}
+		return 1
+	}, "NULLJSON SP-1")
+}
+
 func (asm *assembler) NullCheck1r(j *jump) {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-1] == nil {
