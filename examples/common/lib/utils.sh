@@ -201,6 +201,30 @@ function stop_process() {
 	fi
 }
 
+# Remove the directory of the given tablet UID. Right after the tablet's mysqld
+# has shut down, files can still appear in it, so rm can fail with "Directory
+# not empty"; retry until it is gone.
+# Example:
+#  remove_tablet_dir 101
+function remove_tablet_dir() {
+	if [[ -z ${1} ]]; then
+		fail "A tablet UID must be specified when attempting to remove a tablet directory"
+	fi
+
+	local tablet_dir
+	printf -v tablet_dir '%s/vt_%010d' "${VTDATAROOT:?}" "${1}"
+	local wait_secs=30
+
+	for _ in $(seq 1 ${wait_secs}); do
+		if rm -rf "${tablet_dir}"; then
+			return
+		fi
+		echo "Could not remove ${tablet_dir}, retrying..."
+		sleep 1
+	done
+	fail "Timed out after ${wait_secs} seconds trying to remove ${tablet_dir}"
+}
+
 # Print error message and exit with error code.
 function fail() {
 	echo "ERROR: ${1}"
