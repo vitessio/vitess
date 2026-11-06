@@ -823,6 +823,9 @@ func TestHistorianStartupRefreshOuterStreamRefreshesOnce(t *testing.T) {
 // RENAME that swaps a shadow table, created later, over the original.
 func TestSchemaReloadWaitsForDDLCommit(t *testing.T) {
 	ctx := t.Context()
+	if !strings.HasPrefix(primaryPosition(t), replication.Mysql56FlavorID+"/") {
+		t.Skip("DDL commit waits require MySQL GTIDs")
+	}
 	qr, err := env.Mysqld.FetchSuperQuery(ctx,
 		"select variable_name from performance_schema.global_variables where variable_name in "+
 			"('rpl_semi_sync_source_timeout', 'rpl_semi_sync_master_timeout')")
