@@ -317,7 +317,9 @@ func TestOpenAndReload(t *testing.T) {
 	))
 	firstReadRowsValue := 12
 	AddFakeInnoDBReadRowsResult(db, firstReadRowsValue)
-	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	// A periodic reload's table size queries panic against the results faked here, and the DDL
+	// wait cases below take seconds, so the reload interval outlasts the test.
+	se := newEngine(time.Minute, 10*time.Second, 0, db, nil)
 	se.Open()
 	defer se.Close()
 
@@ -553,6 +555,33 @@ func TestOpenAndReload(t *testing.T) {
 	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL40))
 	assert.Equal(t, pos3, se.reloadAtPos)
+
+	// A wait query that MySQL never answers ends when the reload timeout passes, which closes its
+	// connection, and a retry then waits afresh.
+	pos45, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-45")
+	require.NoError(t, err)
+	gtid45 := replication.Mysql56GTID{Server: sid, Sequence: 45}
+	waitDDL45 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:45', 1)"
+	db.AddQuery(waitDDL45, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"))
+	answer := make(chan struct{})
+	db.SetBeforeFunc(waitDDL45, func() {
+		// The fallback answers a wait that the reload timeout didn't end, so that the test
+		// fails rather than hangs.
+		select {
+		case <-answer:
+		case <-time.After(30 * time.Second):
+		}
+	})
+	err = se.ReloadAtDDL(t.Context(), pos45, gtid45)
+	require.ErrorContains(t, err,
+		"failed to wait for the DDL with GTID 7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:45")
+	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
+	assert.Equal(t, pos3, se.reloadAtPos)
+	close(answer)
+	err = se.ReloadAtDDL(t.Context(), pos45, gtid45)
+	require.NoError(t, err)
+	assert.Equal(t, 2, db.GetQueryCalledNum(waitDDL45))
+	assert.Equal(t, pos45, se.reloadAtPos)
 
 	// A DDL with any other kind of GTID is reloaded at without a wait, which the file position
 	// and MariaDB waits can't provide on a primary.
