@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -46,6 +45,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
@@ -681,32 +681,11 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 }
 
 // logMySQLErrorLog logs the end of mysqld's error log. When mysqld exits during
-// startup, mysqlctl only waits for the socket until it is killed, so the error
-// log is the only record of why, and it is removed with the cluster's
-// directory.
+// startup, mysqlctl waits for its socket until vttest kills it, so mysqlctl
+// never logs the error log itself, and nothing else reports why mysqld exited.
 func logMySQLErrorLog(tabletDir string) {
-	const maxBytes = 16 * 1024
-
-	name := path.Join(tabletDir, "error.log")
-	f, err := os.Open(name)
-	if err != nil {
-		log.Error("Could not open the mysqld error log", slog.String("path", name), slog.Any("error", err))
-		return
-	}
-	defer f.Close()
-
-	if fi, err := f.Stat(); err == nil && fi.Size() > maxBytes {
-		if _, err := f.Seek(-maxBytes, io.SeekEnd); err != nil {
-			log.Error("Could not read the mysqld error log", slog.String("path", name), slog.Any("error", err))
-			return
-		}
-	}
-	contents, err := io.ReadAll(f)
-	if err != nil {
-		log.Error("Could not read the mysqld error log", slog.String("path", name), slog.Any("error", err))
-		return
-	}
-	log.Error("mysqld error log", slog.String("path", name), slog.String("contents", string(contents)))
+	// mysqlctl writes the error log here, see Mycnf.ErrorLogPath.
+	log.Error(mysqlctl.ReadTailOfMysqldErrorLog(path.Join(tabletDir, "error.log")))
 }
 
 func dirExist(dir string) bool {
