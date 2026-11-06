@@ -83,6 +83,32 @@ func TestInitializeTargetSequences(t *testing.T) {
 	require.NoError(t, err)
 	sw := &switcher{ts: ts, s: env.ws}
 
+<<<<<<< HEAD
+||||||| parent of d4230347e1 (VReplication: match sequence VSchema names as VTGate does when switching traffic (#21891))
+	// my-seq1 was missing from every keyspace's vschema, and both backing
+	// tables were missing from the vschema when it was checked, but my-seq2
+	// has been added since, with an escaped name.
+	mySeq2Definition := func() *vschema.Table {
+		return &vschema.Table{Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}}
+	}
+	err = env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     sourceKeyspaceName,
+		Keyspace: &vschema.Keyspace{Tables: map[string]*vschema.Table{"`my-seq2`": mySeq2Definition()}},
+	})
+	require.NoError(t, err)
+=======
+	// my-seq1 was missing from every keyspace's vschema, and both backing
+	// tables were missing from the vschema when it was checked, but my-seq2
+	// has been added since.
+	mySeq2Definition := func() *vschema.Table {
+		return &vschema.Table{Type: "sequence", Columns: []*vschema.Column{{Name: "id"}}}
+	}
+	err = env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     sourceKeyspaceName,
+		Keyspace: &vschema.Keyspace{Tables: map[string]*vschema.Table{"my-seq2": mySeq2Definition()}},
+	})
+	require.NoError(t, err)
+>>>>>>> d4230347e1 (VReplication: match sequence VSchema names as VTGate does when switching traffic (#21891))
 	sequencesByBackingTable := map[string]*sequenceMetadata{
 		"my-seq1": {
 			backingTableName:     "my-seq1",
@@ -207,6 +233,52 @@ func TestInitializeTargetSequences(t *testing.T) {
 			env.tmc.expectGetMaxValueForSequencesRequest(200, tc.maxValueRequest)
 			env.tmc.expectUpdateSequenceTablesRequest(100, tc.updateSeqTableRequest)
 
+<<<<<<< HEAD
+||||||| parent of d4230347e1 (VReplication: match sequence VSchema names as VTGate does when switching traffic (#21891))
+			// SwitchTraffic prepares the sequences before it stops writes:
+			// it creates my-seq1, and adds only it to the vschema.
+			env.tmc.expectApplySchemaRequest(100, &applySchemaRequestResponse{
+				change: &tmutils.SchemaChange{
+					SQL:                     sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlescape.EscapeID("my-seq1")).Query,
+					AllowReplication:        true,
+					SQLMode:                 vreplication.SQLMode,
+					DisableForeignKeyChecks: true,
+				},
+				res: &tabletmanagerdatapb.SchemaChangeResult{},
+			})
+			err = sw.prepareTargetSequences(ctx, sequencesByBackingTable)
+			require.NoError(t, err)
+			assert.Empty(t, env.tmc.applySchemaRequests[100], "expected no remaining ApplySchema requests")
+			kvs, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
+			require.NoError(t, err)
+			assert.Equal(t, map[string]*vschema.Table{
+				"my-seq1":   {Type: "sequence"},
+				"`my-seq2`": mySeq2Definition(),
+			}, kvs.Tables)
+
+=======
+			// SwitchTraffic prepares the sequences before it stops writes:
+			// it creates my-seq1, and adds only it to the vschema.
+			env.tmc.expectApplySchemaRequest(100, &applySchemaRequestResponse{
+				change: &tmutils.SchemaChange{
+					SQL:                     sqlparser.BuildParsedQuery(sqlCreateSequenceTable, sqlescape.EscapeID("my-seq1")).Query,
+					AllowReplication:        true,
+					SQLMode:                 vreplication.SQLMode,
+					DisableForeignKeyChecks: true,
+				},
+				res: &tabletmanagerdatapb.SchemaChangeResult{},
+			})
+			err = sw.prepareTargetSequences(ctx, sequencesByBackingTable)
+			require.NoError(t, err)
+			assert.Empty(t, env.tmc.applySchemaRequests[100], "expected no remaining ApplySchema requests")
+			kvs, err := env.ts.GetVSchema(ctx, sourceKeyspaceName)
+			require.NoError(t, err)
+			assert.Equal(t, map[string]*vschema.Table{
+				"my-seq1": {Type: "sequence"},
+				"my-seq2": mySeq2Definition(),
+			}, kvs.Tables)
+
+>>>>>>> d4230347e1 (VReplication: match sequence VSchema names as VTGate does when switching traffic (#21891))
 			err = sw.initializeTargetSequences(ctx, sequencesByBackingTable)
 			assert.NoError(t, err)
 
@@ -268,6 +340,9 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			want: nil,
 		},
 		{
+			// VTGate uses the table names in a vschema as they are, so the
+			// entry whose name is in backticks doesn't define my-seq1, and
+			// it's to be added under its raw name.
 			name: "sequences with backticks and qualified table",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
@@ -313,10 +388,718 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 							Sequence: fmt.Sprintf("%s.my-seq1", sourceKeyspace.KeyspaceName),
 						},
 					},
+					registerInVSchema: true,
 				},
 			},
 		},
 		{
+<<<<<<< HEAD
+||||||| parent of d4230347e1 (VReplication: match sequence VSchema names as VTGate does when switching traffic (#21891))
+			name:          "qualified sequence missing from vschema",
+			sourceVSchema: &vschema.Keyspace{},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+					registerInVSchema: true,
+				},
+			},
+		},
+		{
+			// The qualified reference names global-ks, so the same-named
+			// sequence in the source keyspace, which the search for the
+			// unqualified, missing one sees, must not replace it.
+			name: "qualified and unqualified sequences",
+			sourceVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence"},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+					table2: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+					registerInVSchema: true,
+				},
+				"my-seq2": {
+					backingTableName:     "my-seq2",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       table2,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+					registerInVSchema:  true,
+					createBackingTable: true,
+				},
+			},
+		},
+		{
+			// The search finds my-seq1 under its escaped name, so only the
+			// missing my-seq2 is to be created.
+			name: "escaped and missing unqualified sequences",
+			sourceVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {Type: "sequence"},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+					table2: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+				},
+				"my-seq2": {
+					backingTableName:     "my-seq2",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       table2,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+					registerInVSchema:  true,
+					createBackingTable: true,
+				},
+			},
+		},
+		{
+			name: "missing sequence that the global keyspace defines as a table",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               globalKeyspace,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+				},
+			},
+			err:     "table global-ks.my-seq1 is not a sequence in vschema; correct the backing table definition or the target auto_increment sequence reference",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			name: "qualified sequence in a keyspace that doesn't exist",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "`nonexistent-ks`.`my-seq1`",
+						},
+					},
+				},
+			},
+			err: "failed to get vschema for sequence keyspace nonexistent-ks: node doesn't exist: keyspaces/nonexistent-ks/VSchema",
+		},
+		{
+			name: "qualified sequence that is not a sequence",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			err:     "table global-ks.my-seq1 is not a sequence in vschema; correct the backing table definition or the target auto_increment sequence reference",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// The sharded keyspace has one shard, so only the missing
+			// sequence is refused.
+			name: "qualified sequence in a sharded keyspace",
+			globalVSchema: &vschema.Keyspace{
+				Sharded: true,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			err:     "sharded keyspace global-ks doesn't define sequence my-seq1 in its vschema; define it there as a pinned sequence, or update the target auto_increment sequence reference to an unsharded keyspace",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// VSchema table names are raw, so an unrelated table's name can
+			// contain a backtick.
+			name: "qualified sequence next to a table whose name has a backtick",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1":  {Type: "sequence"},
+					"odd`name": {},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+				},
+			},
+		},
+		{
+			// A sharded keyspace with one shard can hold a pinned sequence,
+			// which is left as it is.
+			name: "qualified pinned sequence in a sharded keyspace",
+			globalVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence", Pinned: "00"},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+				},
+			},
+		},
+		{
+			// Initializing the sequence reads and updates the backing table on
+			// the only shard's primary, so a pinned sequence in a keyspace with
+			// two shards is refused before writes are stopped.
+			name: "qualified pinned sequence in a keyspace with two shards",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence", Pinned: "00"},
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", targetKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+			err:     "sequence keyspace targetks has 2 shards, but initializing its sequences needs it to have exactly one; update the target auto_increment sequence references to a keyspace with one shard",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// Initializing the sequence updates the backing table on the
+			// primary, so a keyspace without one is refused before writes are
+			// stopped.
+			name: "qualified sequence in a keyspace with no primary",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", noPrimaryKeyspace),
+						},
+					},
+				},
+			},
+			err:     "sequence keyspace no-primary-ks does not currently have a primary tablet",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+=======
+			name:          "qualified sequence missing from vschema",
+			sourceVSchema: &vschema.Keyspace{},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+					registerInVSchema: true,
+				},
+			},
+		},
+		{
+			// The qualified reference names global-ks, so the same-named
+			// sequence in the source keyspace, which the search for the
+			// unqualified, missing one sees, must not replace it.
+			name: "qualified and unqualified sequences",
+			sourceVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence"},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+					table2: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+					registerInVSchema: true,
+				},
+				"my-seq2": {
+					backingTableName:     "my-seq2",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       table2,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+					registerInVSchema:  true,
+					createBackingTable: true,
+				},
+			},
+		},
+		{
+			// VTGate uses the table names in a vschema as they are, so the
+			// search doesn't find my-seq1 in the entry whose name is in
+			// backticks, and both sequences are to be created.
+			name: "escaped and missing unqualified sequences",
+			sourceVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {Type: "sequence"},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               sourceKeyspace.KeyspaceName,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+					table2: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+					registerInVSchema:  true,
+					createBackingTable: true,
+				},
+				"my-seq2": {
+					backingTableName:     "my-seq2",
+					backingTableKeyspace: sourceKeyspace.KeyspaceName,
+					backingTableDBName:   "vt_" + sourceKeyspace.KeyspaceName,
+					usingTableName:       table2,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq2",
+						},
+					},
+					registerInVSchema:  true,
+					createBackingTable: true,
+				},
+			},
+		},
+		{
+			name: "missing sequence that the global keyspace defines as a table",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {},
+				},
+			},
+			options: &vtctldatapb.WorkflowOptions{
+				ShardedAutoIncrementHandling: vtctldatapb.ShardedAutoIncrementHandling_REPLACE,
+				GlobalKeyspace:               globalKeyspace,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "my-seq1",
+						},
+					},
+				},
+			},
+			err:     "table global-ks.my-seq1 is not a sequence in vschema; correct the backing table definition or the target auto_increment sequence reference",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			name: "qualified sequence in a keyspace that doesn't exist",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "`nonexistent-ks`.`my-seq1`",
+						},
+					},
+				},
+			},
+			err: "failed to get vschema for sequence keyspace nonexistent-ks: node doesn't exist: keyspaces/nonexistent-ks/VSchema",
+		},
+		{
+			name: "qualified sequence that is not a sequence",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			err:     "table global-ks.my-seq1 is not a sequence in vschema; correct the backing table definition or the target auto_increment sequence reference",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// The sharded keyspace has one shard, so only the missing
+			// sequence is refused.
+			name: "qualified sequence in a sharded keyspace",
+			globalVSchema: &vschema.Keyspace{
+				Sharded: true,
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			err:     "sharded keyspace global-ks doesn't define sequence my-seq1 in its vschema; define it there as a pinned sequence, or update the target auto_increment sequence reference to an unsharded keyspace",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// VSchema table names are raw, so an unrelated table's name can
+			// contain a backtick.
+			name: "qualified sequence next to a table whose name has a backtick",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my-seq1":  {Type: "sequence"},
+					"odd`name": {},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+				},
+			},
+		},
+		{
+			// A sharded keyspace with one shard can hold a pinned sequence,
+			// which is left as it is.
+			name: "qualified pinned sequence in a sharded keyspace",
+			globalVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence", Pinned: "00"},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			want: map[string]*sequenceMetadata{
+				"my-seq1": {
+					backingTableName:     "my-seq1",
+					backingTableKeyspace: globalKeyspace,
+					backingTableDBName:   "vt_" + globalKeyspace,
+					usingTableName:       unescapedTable,
+					usingTableDBName:     "vt_targetks",
+					usingTableDefinition: &vschema.Table{
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: globalKeyspace + ".my-seq1",
+						},
+					},
+				},
+			},
+		},
+		{
+			// Initializing the sequence reads and updates the backing table on
+			// the only shard's primary, so a pinned sequence in a keyspace with
+			// two shards is refused before writes are stopped.
+			name: "qualified pinned sequence in a keyspace with two shards",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					"my-seq1": {Type: "sequence", Pinned: "00"},
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", targetKeyspace.KeyspaceName),
+						},
+					},
+				},
+			},
+			err:     "sequence keyspace targetks has 2 shards, but initializing its sequences needs it to have exactly one; update the target auto_increment sequence references to a keyspace with one shard",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// Initializing the sequence updates the backing table on the
+			// primary, so a keyspace without one is refused before writes are
+			// stopped.
+			name: "qualified sequence in a keyspace with no primary",
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my-seq1`", noPrimaryKeyspace),
+						},
+					},
+				},
+			},
+			err:     "sequence keyspace no-primary-ks does not currently have a primary tablet",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+>>>>>>> d4230347e1 (VReplication: match sequence VSchema names as VTGate does when switching traffic (#21891))
 			name: "auto_increment replaced with sequence",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
@@ -377,13 +1160,21 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 		},
 		{
+			// The target vschema's names are in backticks. VSchema table names
+			// are raw, so a table's name in another keyspace that's searched
+			// can contain a backtick.
 			name: "sequences with backticks",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
 				Tables: map[string]*vschema.Table{
-					"`my-seq1`": {
+					"my-seq1": {
 						Type: "sequence",
 					},
+				},
+			},
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"odd`name": {},
 				},
 			},
 			targetVSchema: &vschema.Keyspace{
@@ -558,11 +1349,14 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 			},
 		},
 		{
-			name: "invalid table name",
+			// VTGate uses the table names in a vschema as they are, so the
+			// entry whose name is in backticks doesn't define my-seq1, and
+			// there's no global keyspace to create it in.
+			name: "unqualified sequence whose vschema name is in backticks",
 			sourceVSchema: &vschema.Keyspace{
 				Vindexes: vindexes,
 				Tables: map[string]*vschema.Table{
-					"`my-`seq1`": {
+					"`my-seq1`": {
 						Type: "sequence",
 					},
 				},
@@ -584,7 +1378,54 @@ func TestGetTargetSequenceMetadata(t *testing.T) {
 					},
 				},
 			},
-			err: "invalid table name \"`my-`seq1`\" in keyspace source-ks: UnescapeID err: unexpected single backtick at position 3 in 'my-`seq1'",
+			err: "failed to locate all of the backing sequence tables being used and no global-keyspace was provided to auto create them in: my-seq1",
+		},
+		{
+			// The tablet manager would initialize another table than this
+			// one, whose name starts and ends with a backtick, so it's
+			// refused even though the vschema defines it.
+			name: "unqualified sequence whose name has backticks",
+			sourceVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"`my-seq1`": {Type: "sequence"},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: "```my-seq1```",
+						},
+					},
+				},
+			},
+			err:     "sequence table name \"`my-seq1`\" used by table t1 contains a backtick, which initializing target sequences doesn't support; rename the sequence table, or switch traffic without initializing target sequences",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
+		},
+		{
+			// Initializing this one would fail after writes are stopped, so
+			// it's refused even though the vschema defines it.
+			name: "qualified sequence whose name has a backtick",
+			globalVSchema: &vschema.Keyspace{
+				Tables: map[string]*vschema.Table{
+					"my`seq1": {Type: "sequence"},
+				},
+			},
+			targetVSchema: &vschema.Keyspace{
+				Sharded: true,
+				Tables: map[string]*vschema.Table{
+					table: {
+						AutoIncrement: &vschema.AutoIncrement{
+							Column:   "my-col",
+							Sequence: fmt.Sprintf("`%s`.`my``seq1`", globalKeyspace),
+						},
+					},
+				},
+			},
+			err:     "sequence table name \"my`seq1\" used by table t1 contains a backtick, which initializing target sequences doesn't support; rename the sequence table, or switch traffic without initializing target sequences",
+			errCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
 			name: "invalid keyspace name",
