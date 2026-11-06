@@ -119,8 +119,11 @@ checksum_matches() {
 
 # download_verified makes sure that $DOWNLOAD_CACHE/<file> exists and has the
 # expected checksum. A cached file is used only if its checksum matches;
-# otherwise it is removed and downloaded again from the first URL that works.
-# Only a download that passes the checksum is moved into the cache.
+# otherwise it is downloaded again from the first URL that works. Only a
+# download that passes the checksum is moved into the cache, with a rename that
+# replaces the cached file atomically. The cached file is never deleted first:
+# the docker test containers share the cache, and another one may have just
+# published it and be about to extract it.
 #
 # Usage: download_verified <file> <256|512> <expected_checksum> <url>...
 download_verified() {
@@ -136,7 +139,6 @@ download_verified() {
 	fi
 
 	mkdir -p "$DOWNLOAD_CACHE"
-	rm -f "$cached"
 	# A unique name, as the docker test containers share the cache.
 	local partial
 	partial="$(mktemp "$cached.XXXXXX")"
