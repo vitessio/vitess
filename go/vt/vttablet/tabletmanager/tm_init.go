@@ -1231,6 +1231,9 @@ func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Lo
 			if err := tm.lock(ctx); err != nil {
 				return err
 			}
+			// A restore that finds data runs the hook after unlocking, with
+			// no restore error.
+			defer tm.invokeRestoreDoneHook(time.Now(), nil, "")
 			defer tm.unlock()
 			// A point-in-time restore disabled replication, whatever the
 			// flags of this start: keep it disabled. Without the status, it
