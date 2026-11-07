@@ -439,6 +439,74 @@ func TestEtcd2TopoServerClosed(t *testing.T) {
 	require.True(t, topo.IsErrType(err, topo.Interrupted), "Error should be topo.Interrupted, got: %v", err)
 }
 
+// leaselessKV clears the lease from Get responses. With keysOnly set, it
+// only does so for keys-only reads, as etcd 3.7+ servers do.
+type leaselessKV struct {
+	clientv3.KV
+	keysOnly bool
+}
+
+func (kv leaselessKV) Get(ctx context.Context, key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
+	resp, err := kv.KV.Get(ctx, key, opts...)
+	if err == nil && (!kv.keysOnly || clientv3.OpGet(key, opts...).IsKeysOnly()) {
+		for _, item := range resp.Kvs {
+			item.Lease = 0
+		}
+	}
+	return resp, err
+}
+
+// newLeaselessServer starts etcd and returns a Server whose reads go through
+// leaselessKV, with a held lock on the "ks" directory.
+func newLeaselessServer(t *testing.T, root string, keysOnly bool) *Server {
+	clientAddr, _ := startEtcd(t, testfiles.GoVtTopoEtcd2topoPort, testfiles.GoVtTopoEtcd2topoPeerPort)
+
+	s, err := NewServer(clientAddr, root)
+	require.NoError(t, err)
+	t.Cleanup(s.Close)
+	s.cli.KV = leaselessKV{KV: s.cli.KV, keysOnly: keysOnly}
+
+	ctx := t.Context()
+	_, err = s.Create(ctx, "ks/Keyspace", []byte{})
+	require.NoError(t, err)
+
+	lock, err := s.Lock(ctx, "ks", "holder")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = lock.Unlock(context.Background()) })
+	return s
+}
+
+// TestEtcd2TopoListDirEphemeralWithoutKeysOnlyLeases checks that a full
+// ListDir reports a held lock as ephemeral when keys-only reads return no
+// lease, as on etcd 3.7+ servers.
+func TestEtcd2TopoListDirEphemeralWithoutKeysOnlyLeases(t *testing.T) {
+	s := newLeaselessServer(t, "/test-listdir-keys-only", true /*keysOnly*/)
+
+	entries, err := s.ListDir(t.Context(), "ks", true /*full*/)
+	require.NoError(t, err)
+	i := slices.IndexFunc(entries, func(e topo.DirEntry) bool { return e.Name == locksPath })
+	require.GreaterOrEqual(t, i, 0, "ListDir should return %v, got: %v", locksPath, entries)
+	require.True(t, entries[i].Ephemeral, "ListDir should report %v as ephemeral", locksPath)
+}
+
+// TestEtcd2TopoTryLockWithoutLeases checks that TryLock fails fast on a held
+// lock without relying on reads to return leases, and that the failed
+// attempt leaves no lock file behind.
+func TestEtcd2TopoTryLockWithoutLeases(t *testing.T) {
+	root := "/test-trylock-without-leases"
+	s := newLeaselessServer(t, root, false /*keysOnly*/)
+
+	ctx := t.Context()
+	tryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	_, err := s.TryLock(tryCtx, "ks", "contender")
+	require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+
+	resp, err := s.cli.Get(ctx, path.Join(root, "ks", locksPath)+"/", clientv3.WithPrefix(), clientv3.WithCountOnly())
+	require.NoError(t, err)
+	require.EqualValues(t, 1, resp.Count, "only the holder's lock file should remain")
+}
+
 // testKeyspaceLock tests etcd-specific heartbeat (TTL).
 // Note TTL granularity is in seconds, even though the API uses time.Duration.
 // So we have to wait a long time in these tests.

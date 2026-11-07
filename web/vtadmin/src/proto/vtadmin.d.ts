@@ -68781,6 +68781,9 @@ export namespace vtctldata {
         /** BackupShardRequest include_binlogs. */
         include_binlogs: boolean;
 
+        /** BackupShardRequest tablet_types. */
+        tablet_types: topodata.TabletType[];
+
         /**
          * Creates a new BackupShardRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -68891,6 +68894,9 @@ export namespace vtctldata {
 
             /** BackupShardRequest include_binlogs */
             include_binlogs?: (boolean|null);
+
+            /** BackupShardRequest tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];

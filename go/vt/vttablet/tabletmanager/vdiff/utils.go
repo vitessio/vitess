@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -96,7 +97,7 @@ func insertVDiffLog(ctx context.Context, dbClient binlogplayer.DBClient, vdiffID
 	query := "insert into _vt.vdiff_log(vdiff_id, message) values (%d, %s)"
 	query = fmt.Sprintf(query, vdiffID, encodeString(message))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-		log.Error(fmt.Sprintf("Error inserting into _vt.vdiff_log: %v", err))
+		log.Error("Error inserting into _vt.vdiff_log", slog.Int64("vdiff_id", vdiffID), slog.Any("error", err))
 	}
 }
 

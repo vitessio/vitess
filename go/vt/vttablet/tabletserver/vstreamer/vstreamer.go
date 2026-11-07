@@ -209,7 +209,7 @@ func (vs *vstreamer) Stream() error {
 		vs.vse.vstreamerCount.Add(-1)
 	}()
 	vs.vse.vstreamersCreated.Add(1)
-	log.Info("Starting Stream()", slog.String("start_pos", vs.startPos))
+	log.Info("Starting Stream()", slog.String("start_position", vs.startPos))
 	pos, err := replication.DecodePosition(vs.startPos)
 	if err != nil {
 		vs.vse.errorCounts.Add("StreamRows", 1)
@@ -406,10 +406,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	logger := logutil.NewThrottledLogger(vs.vse.GetTabletInfo(), throttledLoggerInterval)
-	wfNameLog := ""
-	if vs.filter != nil && vs.filter.WorkflowName != "" {
-		wfNameLog = " in workflow " + vs.filter.WorkflowName
-	}
 	throttlerErrs := make(chan error, 1) // How we share the error when we've been fully throttled too long
 	defer close(throttlerErrs)
 	throttleEvents := func(throttledEvents chan mysql.BinlogEvent) {
@@ -432,7 +428,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 						return
 					}
 				}
-				logger.Infof("vstreamer throttled%s: %s.", wfNameLog, checkResult.Summary())
+				logger.Info("vstreamer throttled",
+					slog.String("workflow", vs.filter.GetWorkflowName()),
+					slog.String("reason", checkResult.Summary()),
+				)
 				continue
 			}
 			throttledTime.Store(0) // We are no longer fully throttled
@@ -1553,13 +1552,13 @@ func wrapError(err error, stopPos replication.Position, vse *Engine) error {
 		vse.vstreamersEndedWithErrors.Add(1)
 		vse.errorCounts.Add("StreamEnded", 1)
 		log.Error("stream (at source tablet) error, position includes the GTID we failed to process",
-			slog.String("position", stopPos.String()),
+			slog.String("position", replication.EncodePosition(stopPos)),
 			slog.String("error_code", vterrors.Code(err).String()),
 			slog.Any("error", err))
 		// Wrap rather than reformat so that the error's code survives: the
 		// vplayer only treats FAILED_PRECONDITION stream errors as terminal.
 		return vterrors.Wrapf(err, "stream (at source tablet) error @ (including the GTID we failed to process) %v", stopPos)
 	}
-	log.Info("stream (at source tablet) ended", slog.String("position", stopPos.String()))
+	log.Info("stream (at source tablet) ended", slog.String("position", replication.EncodePosition(stopPos)))
 	return nil
 }

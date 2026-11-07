@@ -62,6 +62,7 @@ type MysqlDaemon interface {
 	StopReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
 	StartIOThread(ctx context.Context) error
+	RestartReplicationReceiver(ctx context.Context, hookExtraEnv map[string]string) error
 	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
 	CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error)
