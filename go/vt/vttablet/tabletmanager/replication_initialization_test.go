@@ -1059,7 +1059,8 @@ func TestDeferredRestoreRecordsRestoredPosition(t *testing.T) {
 // restore again, and must initialize replication as an ordinary start does: a
 // restore that deferred replication initialization left replication reset. A
 // point-in-time restore keeps the replication it disabled, also when this start
-// has no point-in-time flag.
+// has no point-in-time flag. A start that finds data runs the restore hook, as
+// on main.
 func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -1094,7 +1095,14 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 			}
 
 			md.ReplicationStatusError = tc.statusErr
+			hookOutput := setupHookDir(t)
 			err := tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger())
+			if !tc.pointInTime {
+				// As a restore that finds data does, it runs the restore hook.
+				hookEnv := readHookOutput(t, hookOutput)
+				assert.Contains(t, hookEnv, "TM_RESTORE_DATA_START_TS=")
+				assert.NotContains(t, hookEnv, "TM_RESTORE_DATA_ERROR=")
+			}
 			if tc.statusErr != nil {
 				// It may be disabled by a point-in-time restore.
 				require.ErrorContains(t, err, "status read failed")
