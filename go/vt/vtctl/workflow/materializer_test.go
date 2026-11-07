@@ -640,7 +640,7 @@ func TestDeploySchemaLogs(t *testing.T) {
 			noSourcePrimary: true,
 			wantErr:         "shard must have a primary for copying schema: 0",
 			wantLog:         "Error getting DDLs of source tables",
-			wantLogAttrs:    map[string]any{"level": "ERROR", "error": "shard must have a primary for copying schema: 0"},
+			wantLogAttrs:    map[string]any{"level": "ERROR", "error": "shard must have a primary for copying schema: 0", "error_code": "UNKNOWN"},
 		},
 		{
 			name:         "AtomicCopy normalizes the schema",

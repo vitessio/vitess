@@ -347,7 +347,10 @@ func (mz *materializer) deploySchema() error {
 			}
 			mu.Unlock()
 			if err != nil {
-				log.Error("Error getting DDLs of source tables", slog.String("workflow", mz.ms.Workflow), slog.Any("error", err))
+				log.Error("Error getting DDLs of source tables",
+					slog.String("workflow", mz.ms.Workflow),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()))
 				return err
 			}
 
