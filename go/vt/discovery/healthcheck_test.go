@@ -1115,6 +1115,125 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 	})
 }
 
+// TestDeliberateTeardownIsNotHealthcheckError checks that removing, replacing
+// or closing a tablet's health check does not count the canceled stream as a
+// HealthcheckErrors stat.
+func TestDeliberateTeardownIsNotHealthcheckError(t *testing.T) {
+	tests := []struct {
+		name     string
+		teardown func(hc *HealthCheckImpl, tablet *topodatapb.Tablet)
+	}{
+		{
+			name: "RemoveTablet",
+			teardown: func(hc *HealthCheckImpl, tablet *topodatapb.Tablet) {
+				hc.RemoveTablet(tablet)
+			},
+		},
+		{
+			name: "ReplaceTablet",
+			teardown: func(hc *HealthCheckImpl, tablet *topodatapb.Tablet) {
+				newTablet := createTestTablet(0, "cell", "a")
+				newTablet.Type = topodatapb.TabletType_REPLICA
+				newTablet.PortMap["vt"] = 5
+				newTablet.PortMap["grpc"] = 6
+				createFakeConn(newTablet, make(chan *querypb.StreamHealthResponse))
+				hc.ReplaceTablet(tablet, newTablet)
+			},
+		},
+		{
+			name: "Close",
+			teardown: func(hc *HealthCheckImpl, tablet *topodatapb.Tablet) {
+				hc.Close()
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx := t.Context()
+				ts := memorytopo.NewServer(ctx, "cell")
+				t.Cleanup(func() { ts.Close() })
+				hcErrorCounters.ResetAll()
+				hc := createTestHc(ctx, ts)
+				t.Cleanup(func() { hc.Close() })
+
+				tablet := createTestTablet(0, "cell", "a")
+				tablet.Type = topodatapb.TabletType_REPLICA
+				input := make(chan *querypb.StreamHealthResponse)
+				fc := createFakeConn(tablet, input)
+				// Make the canceled stream return ctx.Err() right away, like a
+				// real gRPC stream does.
+				fc.releaseOnCancel = make(chan struct{})
+				close(fc.releaseOnCancel)
+
+				target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+				hc.AddTablet(tablet)
+				input <- &querypb.StreamHealthResponse{
+					TabletAlias:   tablet.Alias,
+					Target:        target,
+					Serving:       true,
+					RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+				}
+				synctest.Wait()
+				require.Len(t, hc.GetHealthyTabletStats(target), 1, "tablet should be healthy before the teardown")
+
+				tt.teardown(hc, tablet)
+				synctest.Wait()
+
+				require.True(t, fc.isCanceled(), "the tablet's stream should be canceled by the teardown")
+				assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
+			})
+		})
+	}
+}
+
+// TestHealthCheckTimeoutRacingTeardownIsCounted checks that a health check
+// timeout is still counted as a HealthcheckErrors stat when the tablet is
+// removed before checkConn handles the timed-out stream.
+func TestHealthCheckTimeoutRacingTeardownIsCounted(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, "cell")
+		t.Cleanup(func() { ts.Close() })
+		hcErrorCounters.ResetAll()
+		hc := createTestHc(ctx, ts)
+		t.Cleanup(func() { hc.Close() })
+
+		tablet := createTestTablet(0, "cell", "a")
+		tablet.Type = topodatapb.TabletType_REPLICA
+		input := make(chan *querypb.StreamHealthResponse)
+		fc := createFakeConn(tablet, input)
+		// Park the timed-out stream so that the tablet can be removed before
+		// checkConn handles it.
+		fc.releaseOnCancel = make(chan struct{})
+		releaseConn := sync.OnceFunc(func() { close(fc.releaseOnCancel) })
+		t.Cleanup(releaseConn)
+
+		target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+		hc.AddTablet(tablet)
+		input <- &querypb.StreamHealthResponse{
+			TabletAlias:   tablet.Alias,
+			Target:        target,
+			Serving:       true,
+			RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+		}
+		synctest.Wait()
+		require.Len(t, hc.GetHealthyTabletStats(target), 1, "tablet should be healthy before the timeout")
+
+		// The tablet stops sending health updates, so the health check times out.
+		time.Sleep(hc.healthCheckTimeout + time.Second)
+		synctest.Wait()
+		require.True(t, fc.isCanceled(), "the stream should be canceled by the health check timeout")
+
+		// The tablet is removed while the timed-out stream is still returning.
+		hc.RemoveTablet(tablet)
+		releaseConn()
+		synctest.Wait()
+
+		assert.Positive(t, hcErrorCounters.Counts()["k.s.replica"], "the health check timeout should be counted")
+	})
+}
+
 // When an external primary failover is performed,
 // the demoted primary will advertise itself as a `PRIMARY`
 // tablet until it recognizes that it was demoted,
