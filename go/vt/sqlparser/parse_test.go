@@ -167,6 +167,54 @@ var validSQL = []struct {
 	input:  "alter table t1 rename = t2, drop column a cascade",
 	output: "alter table t1 rename t2, drop column a",
 }, {
+	// MySQL reads `0b` and `0x` without digits of their base after them as
+	// the start of an identifier.
+	input:  "select 0b2, 0b02, 0x, 0xg, 0b101, 0x1f from user",
+	output: "select `0b2`, `0b02`, `0x`, `0xg`, 0b101, 0x1f from `user`",
+}, {
+	// A function name that MySQL reads as a keyword only before '(' can name
+	// a table.
+	input:  "create table NOW (a int)",
+	output: "create table `NOW` (\n\ta int\n)",
+}, {
+	input:  "alter schema s1 read only = default",
+	output: "alter database s1 read only default",
+}, {
+	input:  "alter database s1 read only 1 character set utf8mb4",
+	output: "alter database s1 read only 1 character set utf8mb4",
+}, {
+	// STORAGE DEFAULT stands for no STORAGE attribute.
+	input:  "create table t (a int storage disk storage default)",
+	output: "create table t (\n\ta int\n)",
+}, {
+	// MySQL builds TABLE t as SELECT * FROM t.
+	input:  "create table t2 (unique i3 type btree (c1)) table t1",
+	output: "create table t2 (\n\tunique key i3 (c1) using btree\n) as select * from t1",
+}, {
+	input:  "table t1 order by a limit 1",
+	output: "select * from t1 order by a asc limit 1",
+}, {
+	input:  "insert into t2 table t1",
+	output: "insert into t2 select * from t1",
+}, {
+	// MySQL reads an ODBC escape as a temporal literal only when its string is
+	// one, so the escape is kept as written.
+	input:  "create table t1 as select {d'2001-01-01'}, {ts '2001-01-01 10:10:10'}, {D 'x'}",
+	output: "create table t1 as select {d '2001-01-01'}, {ts '2001-01-01 10:10:10'}, {D 'x'} from dual",
+}, {
+	input:  "select t1.a from { oj t2 left outer join t1 on (t1.a=t2.a) }",
+	output: "select t1.a from t2 left join t1 on t1.a = t2.a",
+}, {
+	input:  "create table t as select cast(1 as year), cast('a' as national char(2)), cast(1 as signed int), cast(1 as unsigned int), cast(1 as double precision), cast(1 as dec(5,2)), cast(1 as float4), cast(1 as float8)",
+	output: "create table t as select cast(1 as year), cast('a' as nchar(2)), cast(1 as signed), cast(1 as unsigned), cast(1 as double), cast(1 as decimal(5, 2)), cast(1 as float), cast(1 as double) from dual",
+}, {
+	// MySQL reads a decimal field length up to its point.
+	input:  "create table t (a int(10.5), b float(10.3))",
+	output: "create table t (\n\ta int(10),\n\tb float(10)\n)",
+}, {
+	input:  "create table t1 (f1 bit(2) not null default b'')",
+	output: "create table t1 (\n\tf1 bit(2) not null default b''\n)",
+}, {
 	// MySQL allows every character from U+0080 on in an unquoted identifier.
 	input:  "create table tæøå (кол int, 🐬 int, index ix_ā (кол))",
 	output: "create table `tæøå` (\n\t`кол` int,\n\t`🐬` int,\n\tkey `ix_ā` (`кол`)\n)",
@@ -4689,9 +4737,6 @@ func TestInvalid(t *testing.T) {
 		}, {
 			input: "SELECT b'012' FROM user",
 			err:   "syntax error at position 12",
-		}, {
-			input: "SELECT 0b2 FROM user",
-			err:   "syntax error at position 11",
 		}, {
 			input: "select * from foo where b <=> any (select id from t1)",
 			err:   "syntax error at position 42",

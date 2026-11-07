@@ -381,6 +381,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfNullTreatmentClause(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
+	case *ODBCEscape:
+		return CloneRefOfODBCEscape(in)
 	case *Offset:
 		return CloneRefOfOffset(in)
 	case OnDup:
@@ -2530,6 +2532,17 @@ func CloneRefOfNullVal(n *NullVal) *NullVal {
 	return &out
 }
 
+// CloneRefOfODBCEscape creates a deep clone of the input.
+func CloneRefOfODBCEscape(n *ODBCEscape) *ODBCEscape {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Type = CloneIdentifierCS(n.Type)
+	out.Expr = CloneExpr(n.Expr)
+	return &out
+}
+
 // CloneRefOfOffset creates a deep clone of the input.
 func CloneRefOfOffset(n *Offset) *Offset {
 	if n == nil {
@@ -4424,6 +4437,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfNtileExpr(in)
 	case *NullVal:
 		return CloneRefOfNullVal(in)
+	case *ODBCEscape:
+		return CloneRefOfODBCEscape(in)
 	case *Offset:
 		return CloneRefOfOffset(in)
 	case *OrExpr:

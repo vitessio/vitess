@@ -252,41 +252,55 @@ func TestMySQLTestSuiteDDL(t *testing.T) {
 	parser := NewTestParser()
 	checked := 0
 	for _, statement := range statements {
-		if statement.ansiQuotes || !mysqlDDLStatement.MatchString(statement.sql) {
+		// mysqltest sends the text up to its delimiter as one query, which can
+		// hold several statements when the delimiter is not ';'. An expected
+		// error then belongs to one of them, but not to a known one.
+		pieces, err := parser.SplitStatementToPieces(statement.sql)
+		if err != nil || len(pieces) > 1 && statement.expectedErrors != "" {
 			continue
 		}
-		checked++
-		tree, err := parser.Parse(statement.sql)
-		if isMySQLParseError(statement.expectedErrors) {
-			assert.Error(t, err, "%s:%d: MySQL rejects this statement as a syntax error\n%s", statement.file, statement.line, statement.sql)
-			continue
-		}
-		if err != nil {
-			if statement.expectedErrors == "" {
-				assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
+		for _, piece := range pieces {
+			statement.sql = piece
+			if statement.ansiQuotes || !mysqlDDLStatement.MatchString(statement.sql) {
+				continue
 			}
-			continue
+			checked++
+			checkMySQLTestStatement(t, parser, statement)
 		}
-		if ddl, ok := tree.(DDLStatement); ok && !ddl.IsFullyParsed() {
-			_, err := parser.ParseStrictDDL(statement.sql)
-			if statement.expectedErrors == "" {
-				assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
-			}
-			continue
-		}
-		if ddl, ok := tree.(DBDDLStatement); ok && !ddl.IsFullyParsed() {
-			_, err := parser.ParseStrictDDL(statement.sql)
-			if statement.expectedErrors == "" {
-				assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
-			}
-			continue
-		}
-		formatted := String(tree)
-		reparsed, err := parser.Parse(formatted)
-		if !assert.NoError(t, err, "%s:%d: the formatted statement does not parse\n%s\n%s", statement.file, statement.line, statement.sql, formatted) {
-			continue
-		}
-		assert.Equal(t, formatted, String(reparsed), "%s:%d: the formatted statement does not round-trip\n%s", statement.file, statement.line, statement.sql)
 	}
 	t.Logf("checked %d DDL statements of %d statements", checked, len(statements))
+}
+
+func checkMySQLTestStatement(t *testing.T, parser *Parser, statement mysqlTestStatement) {
+	tree, err := parser.Parse(statement.sql)
+	if isMySQLParseError(statement.expectedErrors) {
+		assert.Error(t, err, "%s:%d: MySQL rejects this statement as a syntax error\n%s", statement.file, statement.line, statement.sql)
+		return
+	}
+	if err != nil {
+		if statement.expectedErrors == "" {
+			assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
+		}
+		return
+	}
+	if ddl, ok := tree.(DDLStatement); ok && !ddl.IsFullyParsed() {
+		_, err := parser.ParseStrictDDL(statement.sql)
+		if statement.expectedErrors == "" {
+			assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
+		}
+		return
+	}
+	if ddl, ok := tree.(DBDDLStatement); ok && !ddl.IsFullyParsed() {
+		_, err := parser.ParseStrictDDL(statement.sql)
+		if statement.expectedErrors == "" {
+			assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
+		}
+		return
+	}
+	formatted := String(tree)
+	reparsed, err := parser.Parse(formatted)
+	if !assert.NoError(t, err, "%s:%d: the formatted statement does not parse\n%s\n%s", statement.file, statement.line, statement.sql, formatted) {
+		return
+	}
+	assert.Equal(t, formatted, String(reparsed), "%s:%d: the formatted statement does not round-trip\n%s", statement.file, statement.line, statement.sql)
 }

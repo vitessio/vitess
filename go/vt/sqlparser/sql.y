@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+  "strconv"
   "strings"
 
   "vitess.io/vitess/go/ptr"
@@ -501,8 +502,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <signalSets> signal_set_list_opt signal_set_list
 %type <signalSet> signal_set
 %type <signalConditionName> condition_information_item_name
-%type <databaseOption> collate character_set encryption
-%type <databaseOptions> create_options create_options_opt
+%type <databaseOption> collate character_set encryption alter_database_option
+%type <databaseOptions> create_options create_options_opt alter_database_options
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
 %type <compoundStatement> compound_statement compound_statement_without_semicolon compound_statement_with_semicolon
 %type <compoundStatements> compound_statement_list_opt compound_statement_list else_opt
@@ -656,7 +657,8 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <tableOption> table_option ternary_option
 %type <boolean> no_write_to_binlog_opt
 %type <strs> check_type_list_opt repair_type_list_opt
-%type <str> check_type repair_type index_type_keyword
+%type <str> check_type repair_type index_type_keyword function_keyword
+%type <integer> int_number
 %type <literal> partition_node_group
 %type <valTuple> partition_value_tuple
 %type <exprs> partition_value_list
@@ -1318,6 +1320,11 @@ query_primary:
   {
     $$ = $1
   }
+// TABLE t is MySQL's explicit table, which it builds as SELECT * FROM t.
+| TABLE table_name
+  {
+    $$ = NewSelect(nil, &SelectExprs{Exprs: []SelectExpr{&StarExpr{}}}, nil, nil, TableExprs{&AliasedTableExpr{Expr: $2}}, nil, nil, nil, nil)
+  }
 
 insert_statement:
   insert_or_replace comment_opt ignore_opt into_table_name opt_partition_clause insert_data on_dup_opt
@@ -1815,6 +1822,29 @@ create_options_opt:
     $$ = $1
   }
 
+// ALTER DATABASE takes the options of CREATE DATABASE, and READ ONLY.
+alter_database_options:
+  alter_database_option
+  {
+    $$ = []DatabaseOption{$1}
+  }
+| alter_database_options alter_database_option
+  {
+    $$ = append($1, $2)
+  }
+
+alter_database_option:
+  character_set
+| collate
+| encryption
+| READ ONLY equal_opt ternary_option
+  {
+    $$ = DatabaseOption{Type: ReadOnlyType, Value: "default"}
+    if $4.Value != nil {
+      $$.Value = $4.Value.Val
+    }
+  }
+
 create_options:
   character_set
   {
@@ -2064,6 +2094,12 @@ column_attribute_list_opt:
 | column_attribute_list_opt STORAGE MEMORY
   {
     $1.StorageMedia = MemoryStorageMedia
+    $$ = $1
+  }
+| column_attribute_list_opt STORAGE DEFAULT
+  {
+    // STORAGE DEFAULT stands for no STORAGE attribute.
+    $1.StorageMedia = UnspecifiedStorageMedia
     $$ = $1
   }
 // A CHECK constraint among the attributes of a column is added to the table
@@ -2930,20 +2966,25 @@ length_opt:
   {
     $$ = nil
   }
-| '(' INTEGRAL ')'
+| '(' int_number ')'
   {
-    $$ = ptr.Of(convertStringToInt($2))
+    $$ = ptr.Of($2)
+  }
+| '(' DECIMAL ')'
+  {
+    // MySQL reads a length such as (10.3) up to its decimal point.
+    $$ = ptr.Of(integerPart($2))
   }
 
 double_length_opt:
   {
     $$ = LengthScaleOption{}
   }
-| '(' INTEGRAL ',' INTEGRAL ')'
+| '(' int_number ',' int_number ')'
   {
     $$ = LengthScaleOption{
-        Length: ptr.Of(convertStringToInt($2)),
-        Scale: ptr.Of(convertStringToInt($4)),
+        Length: ptr.Of($2),
+        Scale: ptr.Of($4),
     }
   }
 
@@ -2952,10 +2993,16 @@ double_length_opt
   {
     $$ = $1
   }
-| '(' INTEGRAL ')'
+| '(' int_number ')'
   {
     $$ = LengthScaleOption{
-        Length: ptr.Of(convertStringToInt($2)),
+        Length: ptr.Of($2),
+    }
+  }
+| '(' DECIMAL ')'
+  {
+    $$ = LengthScaleOption{
+        Length: ptr.Of(integerPart($2)),
     }
   }
 
@@ -2963,18 +3010,37 @@ decimal_length_opt:
   {
     $$ = LengthScaleOption{}
   }
-| '(' INTEGRAL ')'
+| '(' int_number ')'
   {
     $$ = LengthScaleOption{
-        Length: ptr.Of(convertStringToInt($2)),
+        Length: ptr.Of($2),
     }
   }
-| '(' INTEGRAL ',' INTEGRAL ')'
+| '(' DECIMAL ')'
   {
     $$ = LengthScaleOption{
-        Length: ptr.Of(convertStringToInt($2)),
-        Scale: ptr.Of(convertStringToInt($4)),
+        Length: ptr.Of(integerPart($2)),
     }
+  }
+| '(' int_number ',' int_number ')'
+  {
+    $$ = LengthScaleOption{
+        Length: ptr.Of($2),
+        Scale: ptr.Of($4),
+    }
+  }
+
+// int_number is an integer that is stored as an int. A number that does not
+// fit is an error, rather than a different number.
+int_number:
+  INTEGRAL
+  {
+    value, err := strconv.Atoi($1)
+    if err != nil {
+      yylex.Error("number is out of range")
+      return 1
+    }
+    $$ = value
   }
 
 charset_opt:
@@ -4073,7 +4139,7 @@ alter_statement:
 // the encryption keyword, or the encryption database name, resulting in the conflict.
 // The preference here is to shift, so it is treated as a database name. This matches the MySQL
 // behavior as well.
-| alter_database_prefix table_id_opt create_options
+| alter_database_prefix table_id_opt alter_database_options
   {
     $1.FullyParsed = true
     $1.DBName = $2
@@ -4488,9 +4554,9 @@ algorithm_opt:
   {
     $$ = 0
   }
-| ALGORITHM '=' INTEGRAL
+| ALGORITHM '=' int_number
   {
-    $$ = convertStringToInt($3)
+    $$ = $3
   }
 
 json_table_function:
@@ -4607,18 +4673,18 @@ partitions_opt:
   {
     $$ = -1
   }
-| PARTITIONS INTEGRAL
+| PARTITIONS int_number
   {
-    $$ = convertStringToInt($2)
+    $$ = $2
   }
 
 subpartitions_opt:
   {
     $$ = -1
   }
-| SUBPARTITIONS INTEGRAL
+| SUBPARTITIONS int_number
   {
-    $$ = convertStringToInt($2)
+    $$ = $2
   }
 
 partition_operation:
@@ -5061,15 +5127,15 @@ partition_index_directory:
   }
 
 partition_max_rows:
-  MAX_ROWS equal_opt INTEGRAL
+  MAX_ROWS equal_opt int_number
   {
-    $$ = convertStringToInt($3)
+    $$ = $3
   }
 
 partition_min_rows:
-  MIN_ROWS equal_opt INTEGRAL
+  MIN_ROWS equal_opt int_number
   {
-    $$ = convertStringToInt($3)
+    $$ = $3
   }
 
 partition_tablespace_name:
@@ -6355,6 +6421,16 @@ table_references:
 table_reference:
   table_factor
 | join_table
+// { OJ t1 LEFT JOIN t2 ON ... } is the ODBC escape for an outer join, which
+// MySQL reads as the join inside the braces.
+| '{' ID table_reference '}'
+  {
+    if !strings.EqualFold($2, "oj") {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = $3
+  }
 
 table_factor:
   aliased_table_name
@@ -6594,6 +6670,10 @@ table_name:
   table_id
   {
     $$ = TableName{Name: $1}
+  }
+| function_keyword
+  {
+    $$ = TableName{Name: NewIdentifierCS(string($1))}
   }
 | table_id '.' reserved_table_id
   {
@@ -6872,6 +6952,13 @@ simple_expr:
 function_call_keyword
   {
     $$ = $1
+  }
+// {d 'str'}, {t 'str'} and {ts 'str'} are ODBC escapes. MySQL reads one as a
+// temporal literal when its string is one, and as the expression otherwise,
+// so it is kept as written.
+| '{' sql_id expression '}'
+  {
+    $$ = &ODBCEscape{Type: NewIdentifierCS($2.String()), Expr: $3}
   }
 | function_call_nonkeyword
   {
@@ -8595,15 +8682,23 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
-| NCHAR length_opt
+| CHARACTER length_opt charset_opt
   {
-    $$ = &ConvertType{Type: string($1), Length: $2}
+    $$ = &ConvertType{Type: "char", Length: $2, Charset: $3}
+  }
+| national_char length_opt
+  {
+    $$ = &ConvertType{Type: "nchar", Length: $2}
   }
 | SIGNED
   {
     $$ = &ConvertType{Type: string($1)}
   }
 | SIGNED INTEGER
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| SIGNED INT
   {
     $$ = &ConvertType{Type: string($1)}
   }
@@ -8619,15 +8714,69 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1)}
   }
+| UNSIGNED INT
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
 | FLOAT_TYPE length_opt
   {
     $$ = &ConvertType{Type: string($1), Length: $2}
+  }
+| FLOAT4_TYPE length_opt
+  {
+    $$ = &ConvertType{Type: "float", Length: $2}
   }
 | DOUBLE
   {
     $$ = &ConvertType{Type: string($1)}
   }
+| DOUBLE PRECISION
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| FLOAT8_TYPE
+  {
+    $$ = &ConvertType{Type: "double"}
+  }
 | REAL
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| DEC decimal_length_opt
+  {
+    $$ = &ConvertType{Type: "decimal"}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| YEAR
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| POINT
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| LINESTRING
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| POLYGON
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| MULTIPOINT
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| MULTILINESTRING
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| MULTIPOLYGON
+  {
+    $$ = &ConvertType{Type: string($1)}
+  }
+| GEOMETRYCOLLECTION
   {
     $$ = &ConvertType{Type: string($1)}
   }
@@ -9542,6 +9691,20 @@ table_id:
   {
     $$ = NewIdentifierCS(string($1))
   }
+
+// function_keyword is a function name that MySQL reads as a keyword only
+// when a '(' follows it right away, and as a name otherwise, as in
+// `CREATE TABLE NOW (a INT)`. The grammar reads these names as keywords in
+// expressions, where some of them stand for the function without parentheses,
+// but takes them as the names of tables.
+function_keyword:
+  CAST
+| CURDATE
+| CURTIME
+| EXTRACT
+| NOW
+| SUBSTRING
+| SYSDATE
 
 table_id_opt:
   /* empty */ %prec LOWER_THAN_CHARSET

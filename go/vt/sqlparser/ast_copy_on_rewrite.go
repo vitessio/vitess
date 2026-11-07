@@ -380,6 +380,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfNullTreatmentClause(n, parent)
 	case *NullVal:
 		return c.copyOnRewriteRefOfNullVal(n, parent)
+	case *ODBCEscape:
+		return c.copyOnRewriteRefOfODBCEscape(n, parent)
 	case *Offset:
 		return c.copyOnRewriteRefOfOffset(n, parent)
 	case OnDup:
@@ -4996,6 +4998,31 @@ func (c *cow) copyOnRewriteRefOfNullVal(n *NullVal, parent SQLNode) (out SQLNode
 	return
 }
 
+func (c *cow) copyOnRewriteRefOfODBCEscape(n *ODBCEscape, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Type, changedType := c.copyOnRewriteIdentifierCS(n.Type, n)
+		_Expr, changedExpr := c.copyOnRewriteExpr(n.Expr, n)
+		if changedType || changedExpr {
+			res := *n
+			res.Type, _ = _Type.(IdentifierCS)
+			res.Expr, _ = _Expr.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
 func (c *cow) copyOnRewriteRefOfOffset(n *Offset, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -8480,6 +8507,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfNtileExpr(n, parent)
 	case *NullVal:
 		return c.copyOnRewriteRefOfNullVal(n, parent)
+	case *ODBCEscape:
+		return c.copyOnRewriteRefOfODBCEscape(n, parent)
 	case *Offset:
 		return c.copyOnRewriteRefOfOffset(n, parent)
 	case *OrExpr:

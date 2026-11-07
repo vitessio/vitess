@@ -2239,6 +2239,8 @@ func (node DatabaseOptionType) ToString() string {
 		return CollateStr
 	case EncryptionType:
 		return EncryptionStr
+	case ReadOnlyType:
+		return DatabaseReadOnlyStr
 	default:
 		return "Unknown DatabaseOptionType Type"
 	}
@@ -2619,10 +2621,21 @@ func encodeIndexOptionValue(optionName, value string) string {
 // option's own syntax. CHARACTER SET and COLLATE take a name, but MySQL only
 // accepts ENCRYPTION as a quoted 'Y' or 'N'.
 func encodeDatabaseOptionValue(option DatabaseOption) string {
-	if option.Type == EncryptionType {
+	switch option.Type {
+	case EncryptionType:
 		return encodeSQLString(option.Value)
+	case ReadOnlyType:
+		// READ ONLY takes 0, 1 or DEFAULT. Any other value, which only an AST
+		// built by hand can hold, is quoted, so that it cannot be read as more
+		// than one value.
+		switch strings.ToLower(option.Value) {
+		case "0", "1", "default":
+			return option.Value
+		}
+		return encodeSQLString(option.Value)
+	default:
+		return encodeSQLName(option.Value)
 	}
-	return encodeSQLName(option.Value)
 }
 
 // isBareName reports whether name may be written unquoted into a charset,
@@ -2871,6 +2884,14 @@ func AddKeyspace(in SQLNode, ks string) {
 		}
 		return true
 	}, nil)
+}
+
+// integerPart returns the integer that MySQL reads from a decimal where it
+// takes an integer, such as the length in FLOAT(10.3): the digits before the
+// point.
+func integerPart(decimal string) int {
+	whole, _, _ := strings.Cut(decimal, ".")
+	return convertStringToInt(whole)
 }
 
 func convertStringToInt(integer string) int {

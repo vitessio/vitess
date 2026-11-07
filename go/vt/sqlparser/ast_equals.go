@@ -1100,6 +1100,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfNullVal(a, b)
+	case *ODBCEscape:
+		b, ok := inB.(*ODBCEscape)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfODBCEscape(a, b)
 	case *Offset:
 		b, ok := inB.(*Offset)
 		if !ok {
@@ -4038,6 +4044,18 @@ func (cmp *Comparator) RefOfNullVal(a, b *NullVal) bool {
 		return false
 	}
 	return true
+}
+
+// RefOfODBCEscape does deep equals between the two objects.
+func (cmp *Comparator) RefOfODBCEscape(a, b *ODBCEscape) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.IdentifierCS(a.Type, b.Type) &&
+		cmp.Expr(a.Expr, b.Expr)
 }
 
 // RefOfOffset does deep equals between the two objects.
@@ -7102,6 +7120,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfNullVal(a, b)
+	case *ODBCEscape:
+		b, ok := inB.(*ODBCEscape)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfODBCEscape(a, b)
 	case *Offset:
 		b, ok := inB.(*Offset)
 		if !ok {

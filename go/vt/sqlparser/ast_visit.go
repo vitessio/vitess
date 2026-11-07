@@ -380,6 +380,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfNullTreatmentClause(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
+	case *ODBCEscape:
+		return VisitRefOfODBCEscape(in, f)
 	case *Offset:
 		return VisitRefOfOffset(in, f)
 	case OnDup:
@@ -3396,6 +3398,22 @@ func VisitRefOfNullVal(in *NullVal, f Visit) error {
 	return nil
 }
 
+func VisitRefOfODBCEscape(in *ODBCEscape, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCS(in.Type, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.Expr, f); err != nil {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfOffset(in *Offset, f Visit) error {
 	if in == nil {
 		return nil
@@ -5871,6 +5889,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfNtileExpr(in, f)
 	case *NullVal:
 		return VisitRefOfNullVal(in, f)
+	case *ODBCEscape:
+		return VisitRefOfODBCEscape(in, f)
 	case *Offset:
 		return VisitRefOfOffset(in, f)
 	case *OrExpr:
