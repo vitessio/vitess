@@ -6845,6 +6845,15 @@ var invalidSQL = []struct {
 	input:  "select get_format(year, 'internal')",
 	output: "syntax error at position 23 near 'year'",
 }, {
+	// The parser keeps no text of DO and LOAD DATA, so a procedure body that
+	// holds one cannot be formatted, and is rejected rather than sent as
+	// `otheradmin`.
+	input:  "create procedure p1 () begin do (select 1); insert into t1 values (1); end",
+	output: "DO, LOAD DATA, REPAIR and OPTIMIZE are not supported in a procedure body at position 75",
+}, {
+	input:  "create procedure p1() load data infile 'f' into table t1",
+	output: "DO, LOAD DATA, REPAIR and OPTIMIZE are not supported in a procedure body at position 57 near 'data'",
+}, {
 	// MySQL takes no index type for a FULLTEXT or SPATIAL index, and no second
 	// COLLATE on a column.
 	input:  "create fulltext index b using btree on A (col1)",
