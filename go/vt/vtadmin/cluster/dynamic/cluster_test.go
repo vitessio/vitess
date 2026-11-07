@@ -65,6 +65,24 @@ func TestClusterFromString(t *testing.T) {
 			s:         `{`,
 			shouldErr: true,
 		},
+		{
+			name:       "null discovery config",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "null"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name:       "null vtgate",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtgates\": [null]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name:       "vtctld without host",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{}]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -81,6 +99,7 @@ func TestClusterFromString(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Nil(t, c, "when err != nil, cluster must be nil")
+				assert.Equal(t, tt.expectedID, id)
 				return
 			}
 
@@ -88,7 +107,8 @@ func TestClusterFromString(t *testing.T) {
 			require.NotEmpty(t, id, "when err == nil, id must be non-empty")
 
 			assert.Equal(t, tt.expectedID, id)
-			assert.NotNil(t, c, "when err == nil, cluster should not be nil")
+			require.NotNil(t, c, "when err == nil, cluster should not be nil")
+			t.Cleanup(func() { _ = c.Close() })
 		})
 	}
 }

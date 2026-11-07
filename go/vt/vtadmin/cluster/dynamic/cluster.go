@@ -22,6 +22,9 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // ClusterFromString returns a cluster ID and possibly fully-usable Cluster
@@ -44,8 +47,22 @@ import (
 //		// log error. if desired, lookup the existing cluster with ID: `id`
 //	}
 //	// Use `c` (or existing cluster with ID == `id`) based on the dynamic cluster
-//	api.WithCluster(c, id).DoAThing()
+//	dynamicAPI, err := api.WithCluster(c, id)
+//	if err != nil {
+//		// neither `c` nor an existing cluster with ID: `id` is available.
+//	}
+//	dynamicAPI.DoAThing()
+//
+// A panic while loading or instantiating the cluster is returned as an error,
+// because the spec comes from request metadata and a panic would otherwise end
+// the process.
 func ClusterFromString(ctx context.Context, s string) (c *cluster.Cluster, id string, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			c, err = nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "failed to build cluster %s: %v", id, p)
+		}
+	}()
+
 	cfg, id, err := cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(s)), "json")
 	if err != nil {
 		return nil, id, err
