@@ -41,6 +41,11 @@ type (
 		// Routes that have been merged into this one.
 		MergedWith []*Route
 
+		// ContainsSpecialUnionInput is set when the route includes a reference,
+		// dual, or global aggregate input that can return the same rows on every
+		// shard. UNION ALL must not widen such a route to multiple shards.
+		ContainsSpecialUnionInput bool
+
 		Routing Routing
 
 		Ordering []RouteOrdering

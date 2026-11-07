@@ -110,6 +110,9 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
+	lhsInput, rhsInput := operatorsToRoutes(lhs, rhs)
+	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput)
+
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
@@ -122,15 +125,17 @@ func mergeUnionInputs(
 	// incorrectly discard the other side's rows.
 	if a == none || b == none {
 		if op, exprs, merged := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b); merged {
+			markSpecialUnionInput(op, containsSpecialInput)
 			return op, exprs
 		}
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
 
-	// UNION ALL must not widen a reference or dual input to a multi-shard route.
-	if !distinct && (((a == anyShard || a == dual) && b == sharded && !isSingleShardRouting(routingB)) ||
-		((b == anyShard || b == dual) && a == sharded && !isSingleShardRouting(routingA))) {
+	// A UNION ALL route containing a reference, dual, or global aggregate input
+	// may be merged while single-shard, but must not later widen to multi-shard.
+	if !distinct && containsSpecialInput &&
+		((a == sharded && !isSingleShardRouting(routingA)) || (b == sharded && !isSingleShardRouting(routingB))) {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
@@ -140,13 +145,18 @@ func mergeUnionInputs(
 	// tryMergeUnionShardedRouting prevent a later UNION ALL arm from widening
 	// a route to scatter.
 	case b == dual || (b == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		markSpecialUnionInput(op, containsSpecialInput)
+		return op, exprs
 	case a == dual || (a == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		markSpecialUnionInput(op, containsSpecialInput)
+		return op, exprs
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
 		if res != nil {
+			markSpecialUnionInput(res, containsSpecialInput)
 			return res, exprs
 		}
 	}
@@ -159,6 +169,57 @@ func mergeUnionInputs(
 
 func isSingleShardRouting(routing Routing) bool {
 	return routing.OpCode().IsSingleShard()
+}
+
+func routeContainsSpecialUnionInput(route *Route) bool {
+	if route == nil {
+		return false
+	}
+	if route.ContainsSpecialUnionInput {
+		return true
+	}
+	switch route.Routing.(type) {
+	case *AnyShardRouting, *DualRouting:
+		return true
+	}
+	return false
+}
+
+func markSpecialUnionInput(op Operator, contains bool) {
+	if route, ok := op.(*Route); ok && contains {
+		route.ContainsSpecialUnionInput = true
+	}
+}
+
+func hasGlobalAggregate(ctx *plancontext.PlanningContext, op Operator) bool {
+	if op == nil {
+		return false
+	}
+	if agg, ok := op.(*Aggregator); ok && len(agg.Grouping) == 0 && len(agg.Aggregations) > 0 {
+		return true
+	}
+	if horizon, ok := op.(*Horizon); ok && hasGlobalAggregateQuery(ctx, horizon.Query) {
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), func(input Operator) bool {
+		return hasGlobalAggregate(ctx, input)
+	})
+}
+
+func hasGlobalAggregateQuery(ctx *plancontext.PlanningContext, query sqlparser.SQLNode) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		selectStmt, ok := node.(*sqlparser.Select)
+		if !ok || selectStmt.GroupBy != nil {
+			return true, nil
+		}
+		if ctx.ContainsAggr(selectStmt.SelectExprs) || ctx.ContainsAggr(selectStmt.Having) {
+			found = true
+			return false, nil
+		}
+		return !found, nil
+	}, query)
+	return found
 }
 
 // tryMergeNoneUnion merges a union pairing in which at least one side has a
@@ -241,11 +302,6 @@ func tryMergeUnionShardedRouting(
 
 	scatterA := tblA.RouteOpCode == engine.Scatter
 	scatterB := tblB.RouteOpCode == engine.Scatter
-	if !distinct && scatterA != scatterB {
-		// Merging a single-shard or IN route into a scatter route executes that
-		// arm on shards it did not target before. Keep UNION ALL arms separate.
-		return nil, nil
-	}
 
 	switch {
 	case scatterA:

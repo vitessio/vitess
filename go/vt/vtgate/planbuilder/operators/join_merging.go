@@ -209,6 +209,7 @@ func getRoutesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute 
 	if refA, ok := routingA.(*AnyShardRouting); ok &&
 		!TableID(lhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
 		if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
+			altARoute = withSpecialUnionInput(altARoute)
 			return altARoute, rhsRoute, altARoute.Routing, routingB, true
 		}
 	}
@@ -216,6 +217,7 @@ func getRoutesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute 
 	if refB, ok := routingB.(*AnyShardRouting); ok &&
 		!TableID(rhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
 		if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
+			altBRoute = withSpecialUnionInput(altBRoute)
 			return lhsRoute, altBRoute, routingA, altBRoute.Routing, true
 		}
 	}
@@ -282,9 +284,45 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 		}
 	}
 	return &Route{
-		unaryOperator: newUnaryOp(aj),
-		MergedWith:    []*Route{op2},
-		Routing:       r,
-		Conditions:    conditions,
+		unaryOperator:             newUnaryOp(aj),
+		MergedWith:                []*Route{op2},
+		ContainsSpecialUnionInput: containsSpecialInputAfterJoin(ctx, jm.joinType, op1, op2, r),
+		Routing:                   r,
+		Conditions:                conditions,
 	}
+}
+
+func containsSpecialInputAfterJoin(ctx *plancontext.PlanningContext, joinType sqlparser.JoinType, lhs, rhs *Route, routing Routing) bool {
+	lhsSpecial := routeContainsSpecialUnionInput(lhs)
+	rhsSpecial := routeContainsSpecialUnionInput(rhs)
+	if !lhsSpecial && !rhsSpecial {
+		return false
+	}
+	if _, sharded := routing.(*ShardedRouting); !sharded {
+		return true
+	}
+
+	lhsSharded := isOrdinaryShardedRoute(ctx, lhs)
+	rhsSharded := isOrdinaryShardedRoute(ctx, rhs)
+	if joinType.IsInner() && (lhsSharded || rhsSharded) {
+		return false
+	}
+	if !joinType.IsInner() && lhsSharded {
+		return lhsSpecial
+	}
+	return true
+}
+
+func isOrdinaryShardedRoute(ctx *plancontext.PlanningContext, route *Route) bool {
+	if route == nil || routeContainsSpecialUnionInput(route) || hasGlobalAggregate(ctx, route.Source) {
+		return false
+	}
+	_, ok := route.Routing.(*ShardedRouting)
+	return ok
+}
+
+func withSpecialUnionInput(route *Route) *Route {
+	copy := *route
+	copy.ContainsSpecialUnionInput = true
+	return &copy
 }
