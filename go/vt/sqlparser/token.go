@@ -38,12 +38,17 @@ type Tokenizer struct {
 	ParseTrees          []Statement
 	BindVars            map[string]struct{}
 
-	lastTokenType      int
-	lastToken          string
-	posVarIndex        int
-	partialDDL         Statement
-	multi              bool
-	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
+	lastTokenType int
+	lastToken     string
+	lastTokenEnd  int
+	// qualifiedNameFollows is set after a '.' that directly follows an
+	// identifier, where MySQL reads what comes next as an identifier even
+	// when it starts with a digit, as in `t1.1a`.
+	qualifiedNameFollows bool
+	posVarIndex          int
+	partialDDL           Statement
+	multi                bool
+	inVersionedComment   bool // true when scanning inside a MySQL versioned comment (/*!...*/)
 
 	Pos       int
 	buf       string
@@ -116,6 +121,7 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	lval.setstr(val)
 	tkn.lastTokenType = typ
 	tkn.lastToken = val
+	tkn.lastTokenEnd = tkn.Pos
 	return typ
 }
 
@@ -167,6 +173,12 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			tkn.skipBlank()
 		}
 		tkn.currStart = tkn.Pos
+		if tkn.qualifiedNameFollows {
+			tkn.qualifiedNameFollows = false
+			if isDigit(tkn.cur()) {
+				return tkn.scanQualifiedName()
+			}
+		}
 		switch ch := tkn.cur(); {
 		case ch == '@':
 			tokenID := AT_ID
@@ -196,7 +208,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				return tID, ""
 			}
 			return tokenID, tBytes
-		case isLetter(ch):
+		case isIdentifierCharacter(ch):
 			if ch == 'X' || ch == 'x' {
 				if tkn.peek(1) == '\'' {
 					tkn.skip(2)
@@ -242,7 +254,10 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			return 0, ""
 		default:
 			if ch == '.' && isDigit(tkn.peek(1)) {
-				return tkn.scanNumber()
+				if tkn.lastTokenType != ID || tkn.lastTokenEnd != tkn.Pos {
+					return tkn.scanNumber()
+				}
+				tkn.qualifiedNameFollows = true
 			}
 
 			tkn.skip(1)
@@ -416,7 +431,7 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 
 	for {
 		ch := tkn.cur()
-		if !isLetter(ch) && !isDigit(ch) && (!isVariable || !isCarat(ch)) {
+		if !isIdentifierCharacter(ch) && !isDigit(ch) && (!isVariable || !isCarat(ch)) {
 			break
 		}
 		tkn.skip(1)
@@ -600,7 +615,11 @@ func (tkn *Tokenizer) scanNumber() (int, string) {
 	}
 
 exponent:
-	if tkn.cur() == 'e' || tkn.cur() == 'E' {
+	// MySQL reads an `e` as an exponent only when digits follow it, perhaps
+	// after a sign. Otherwise, digits followed by `e` start an identifier
+	// such as `1e` or `1ea10`, and a decimal followed by `e` is rejected
+	// below.
+	if (tkn.cur() == 'e' || tkn.cur() == 'E') && tkn.hasExponentDigits() {
 		token = FLOAT
 		tkn.skip(1)
 		if tkn.cur() == '+' || tkn.cur() == '-' {
@@ -610,7 +629,7 @@ exponent:
 	}
 
 exit:
-	if isLetter(tkn.cur()) {
+	if isIdentifierCharacter(tkn.cur()) {
 		// A letter cannot immediately follow a float number.
 		if token == FLOAT || token == DECIMAL {
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
@@ -619,7 +638,7 @@ exit:
 		// as an identifier and not a number.
 		for {
 			ch := tkn.cur()
-			if !isLetter(ch) && !isDigit(ch) {
+			if !isIdentifierCharacter(ch) && !isDigit(ch) {
 				break
 			}
 			tkn.skip(1)
@@ -628,6 +647,27 @@ exit:
 	}
 
 	return token, tkn.buf[start:tkn.Pos]
+}
+
+// scanQualifiedName scans the name that follows a '.' after an identifier.
+// It can start with a digit and consist only of digits, so `t1.1a` and `t1.12`
+// name the columns `1a` and `12` of table `t1`, as in MySQL.
+func (tkn *Tokenizer) scanQualifiedName() (int, string) {
+	start := tkn.Pos
+	for isIdentifierCharacter(tkn.cur()) || isDigit(tkn.cur()) {
+		tkn.skip(1)
+	}
+	return ID, tkn.buf[start:tkn.Pos]
+}
+
+// hasExponentDigits reports whether the `e` at the current position is
+// followed by the digits of an exponent, perhaps after a sign.
+func (tkn *Tokenizer) hasExponentDigits() bool {
+	next := tkn.peek(1)
+	if next == '+' || next == '-' {
+		next = tkn.peek(2)
+	}
+	return isDigit(next)
 }
 
 // scanString scans a string surrounded by the given `delim`, which can be
@@ -826,6 +866,15 @@ func (tkn *Tokenizer) reset() {
 
 func isLetter(ch uint16) bool {
 	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '$'
+}
+
+// isIdentifierCharacter reports whether ch can be part of an unquoted
+// identifier. MySQL allows every character from U+0080 on in an unquoted
+// identifier. The tokenizer reads bytes, and every byte of the UTF-8 encoding
+// of such a character is 0x80 or more, as is every byte of the other character
+// sets that MySQL allows for identifiers, so it accepts any such byte.
+func isIdentifierCharacter(ch uint16) bool {
+	return isLetter(ch) || 0x80 <= ch && ch < eofChar
 }
 
 func isCarat(ch uint16) bool {
