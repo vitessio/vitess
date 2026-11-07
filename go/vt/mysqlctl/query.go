@@ -140,7 +140,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList 
 		return err
 	}
 	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	defer conn.Close()
 
 	// The exchange is a blocking write and read of its own, so it is bounded the
@@ -169,7 +169,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryLis
 		return err
 	}
 	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	defer conn.Close()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
@@ -210,7 +210,7 @@ func (mysqld *Mysqld) FetchSuperQuery(ctx context.Context, query string) (*sqlty
 	if connErr != nil {
 		return nil, connErr
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	qr, err := mysqld.executeFetchContext(ctx, conn, query, 10000, true)
 	if err != nil {
 		return nil, err
@@ -460,7 +460,7 @@ func (mysqld *Mysqld) AcquireGlobalReadLock(ctx context.Context) error {
 
 	err = mysqld.executeSuperQueryListConn(ctx, conn, []string{"FLUSH TABLES WITH READ LOCK"})
 	if err != nil {
-		conn.Recycle()
+		recycle(ctx, conn)
 		return err
 	}
 
@@ -478,7 +478,7 @@ func (mysqld *Mysqld) ReleaseGlobalReadLock(ctx context.Context) error {
 		return err
 	}
 
-	mysqld.lockConn.Recycle()
+	recycle(ctx, mysqld.lockConn)
 	mysqld.lockConn = nil
 	return nil
 }

@@ -167,5 +167,11 @@ func (mysqld *Mysqld) Promote(ctx context.Context, hookExtraEnv map[string]strin
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
 		return replication.Position{}, err
 	}
-	return conn.Conn.PrimaryPosition()
+	var pos replication.Position
+	err = mysqld.executeWithContext(ctx, conn, "executed position", func() error {
+		var err error
+		pos, err = conn.Conn.PrimaryPosition()
+		return err
+	})
+	return pos, err
 }
