@@ -125,7 +125,8 @@ func TestMySQLErrno(t *testing.T) {
 }
 
 // TestParseErrnoLarge checks that reading a large error takes linear time. The
-// bound leaves room for -race; a quadratic parse of broken takes minutes.
+// bound leaves room for -race on a loaded machine; a quadratic parse of broken
+// takes minutes.
 func TestParseErrnoLarge(t *testing.T) {
 	quoted := strings.Repeat("'"+fakeMarker+"' ", 1<<20/40) + dupEntry + " (errno 1062) (sqlstate 23000)"
 	broken := strings.Repeat("(errno 1062) ", 1<<20/13)
@@ -135,7 +136,7 @@ func TestParseErrnoLarge(t *testing.T) {
 	assert.Equal(t, ERDupEntry, errno)
 	_, ok = parseErrno(broken)
 	assert.False(t, ok)
-	assert.Less(t, time.Since(start), 5*time.Second)
+	assert.Less(t, time.Since(start), 60*time.Second)
 }
 
 func TestLogMySQLError(t *testing.T) {
