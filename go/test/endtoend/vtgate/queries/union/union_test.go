@@ -169,11 +169,11 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 		"[[INT64(200)] [INT64(1)] [INT64(1)] [INT64(2)]]",
 	)
 	mcmp.AssertMatchesNoOrder(
-		"select r.id from ref r left join t1 u on u.id = r.id",
+		"select r.id from ref r left join t1 u on u.id1 = r.id",
 		"[[INT64(100)]]",
 	)
 	mcmp.AssertMatchesNoOrder(
-		"select r.id from ref r left join t1 u on u.id = r.id union all select id1 from t1",
+		"select r.id from ref r left join t1 u on u.id1 = r.id union all select id1 from t1",
 		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
 	)
 }
