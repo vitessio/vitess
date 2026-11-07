@@ -488,10 +488,11 @@ func (si *ShardInfo) UpdateDeniedTables(ctx context.Context, opts UpdateDeniedTa
 func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletControl, remove bool, tables []string, allowReads bool) error {
 	tc.AllowReads = allowReads
 
-	var newTables []string
+	var newTables, presentTables []string
 	for _, table := range tables {
-		exists := slices.Contains(tc.DeniedTables, table)
-		if !exists {
+		if slices.Contains(tc.DeniedTables, table) {
+			presentTables = append(presentTables, table)
+		} else {
 			newTables = append(newTables, table)
 		}
 	}
@@ -518,12 +519,6 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	if len(newTables) != len(tables) {
 		// Some of the tables already existed in the DeniedTables list so we don't
 		// need to add them.
-		presentTables := make([]string, 0, len(tables)-len(newTables))
-		for _, table := range tables {
-			if !slices.Contains(newTables, table) {
-				presentTables = append(presentTables, table)
-			}
-		}
 		log.Warn(dlTablesAlreadyPresent,
 			slog.Any("tables", presentTables),
 			slog.Any("added_tables", append([]string{}, newTables...)))
