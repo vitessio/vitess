@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"maps"
 	"reflect"
 	"strconv"
@@ -32,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -167,6 +169,7 @@ func TestGetSrvKeyspace(t *testing.T) {
 	errorTestStart := time.Now()
 	errorReqsBefore := counts.Counts()[errorCategory]
 	forceErr := topo.NewError(topo.Timeout, "test topo error")
+	logs := logtest.Capture(t, slog.LevelInfo)
 	factory.SetError(forceErr)
 
 	expiry = time.Now().Add(srvTopoCacheTTL / 2)
@@ -205,6 +208,11 @@ func TestGetSrvKeyspace(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	record := logs.Wait(t, "ResilientWatch stream failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "test_cell", record["cell"])
+	assert.Equal(t, "test_ks", record["keyspace"])
+	assert.Equal(t, forceErr.Error(), record["error"])
 
 	// Clear the error away and check that the cached error is still returned
 	// until the refresh interval elapses
@@ -525,6 +533,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	assert.Equalf(t, wantNames, names, "GetSrvKeyspaceNames got %v want %v", names, wantNames)
 
 	forceErr := errors.New("force test error")
+	logs := logtest.Capture(t, slog.LevelInfo)
 	factory.SetError(forceErr)
 
 	// Lock the topo for half the duration of the cache TTL to ensure our
@@ -568,6 +577,12 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	if err != forceErr {
 		assert.Failf(t, "unexpected error", "got error %v want %v", err, forceErr)
 	}
+	record := logs.Wait(t, "ResilientQuery failed (cached value still considered valid)")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "test_cell", record["cell"])
+	assert.Equal(t, "force test error", record["error"])
+	assert.Equal(t, "UNKNOWN", record["error_code"])
+	assert.Equal(t, []any{"test_ks", "test_ks2"}, record["cached_value"])
 
 	// Now, since the TTL has expired, check that when we ask for stale
 	// info, we'll get it.

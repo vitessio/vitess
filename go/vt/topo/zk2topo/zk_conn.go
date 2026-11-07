@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -287,7 +288,7 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 			c.conn = nil
 		}
 		c.mu.Unlock()
-		log.Info(fmt.Sprintf("zk conn: got ErrConnectionClosed for addr %v: closing", c.addr))
+		log.Info("zk conn: got ErrConnectionClosed: closing", slog.String("zk_address", c.addr))
 		conn.Close()
 	}
 	return
@@ -318,18 +319,18 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 	}
 	authInfoBytes, err := os.ReadFile(authFile)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to read topo-zk-auth-file: %v", err))
+		log.Error("failed to read topo-zk-auth-file", slog.Any("error", err))
 		return
 	}
 	authInfo := strings.TrimRight(string(authInfoBytes), "\n")
 	authInfoParts := strings.SplitN(authInfo, ":", 2)
 	if len(authInfoParts) != 2 {
-		log.Error("failed to parse topo-zk-auth-file contents, expected format <scheme>:<auth> but saw: " + authInfo)
+		log.Error("failed to parse topo-zk-auth-file contents, expected format <scheme>:<auth>", slog.String("path", authFile))
 		return
 	}
 	err = c.conn.AddAuth(authInfoParts[0], []byte(authInfoParts[1]))
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to add auth from topo-zk-auth-file: %v", err))
+		log.Error("failed to add auth from topo-zk-auth-file", slog.Any("error", err))
 		return
 	}
 }
@@ -350,10 +351,10 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 			}
 			c.mu.Unlock()
 			conn.Close()
-			log.Info(fmt.Sprintf("zk conn: session for addr %v ended: %v", c.addr, event))
+			log.Info("zk conn: session ended", slog.String("zk_address", c.addr), slog.String("zk_event", fmt.Sprint(event)))
 			return
 		}
-		log.Info(fmt.Sprintf("zk conn: session for addr %v event: %v", c.addr, event))
+		log.Info("zk conn: session event", slog.String("zk_address", c.addr), slog.String("zk_event", fmt.Sprint(event)))
 	}
 }
 
@@ -372,16 +373,16 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 
 		serverName, _, _ := strings.Cut(addr, ":")
 
-		log.Info(fmt.Sprintf("Using TLS ZK, connecting to %v server name %v", addr, serverName))
+		log.Info("Using TLS ZK, connecting", slog.String("zk_address", addr), slog.String("server_name", serverName))
 		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unable to load cert %v and key %v, err %v", certPath, keyPath, err))
+			log.Error("Unable to load cert and key", slog.String("cert_path", certPath), slog.String("key_path", keyPath), slog.Any("error", err))
 			os.Exit(1)
 		}
 
 		clientCACert, err := os.ReadFile(caPath)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unable to open ca cert %v, err %v", caPath, err))
+			log.Error("Unable to open ca cert", slog.String("ca_path", caPath), slog.Any("error", err))
 			os.Exit(1)
 		}
 
