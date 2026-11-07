@@ -32,9 +32,13 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx"}
+		tables := []string{"t1", "t1_id2_idx", "t2", "t2_id4_idx", "ref"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
+		}
+		for _, shard := range clusterInstance.Keyspaces[0].Shards {
+			_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("delete from ref", keyspaceName, true)
+			require.NoError(t, err)
 		}
 	}
 
@@ -138,6 +142,40 @@ from (
 	select id3, id4, id1+id4 from t1 join t2 on id3 + 1 = id1
 ) as t`)
 	})
+}
+
+func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Seed the same reference row on both shards, as expected for a reference table.
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2)")
+
+	mcmp.AssertMatchesNoOrder(
+		"select id from ref union all select id1 from t1",
+		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select id from ref union all select id1 from t1 where id1 = 1 union all select id1 from t1",
+		"[[INT64(100)] [INT64(1)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select 200 from dual union all select id1 from t1 where id1 = 1 union all select id1 from t1",
+		"[[INT64(200)] [INT64(1)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select r.id from ref r left join t1 u on u.id = r.id",
+		"[[INT64(100)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select r.id from ref r left join t1 u on u.id = r.id union all select id1 from t1",
+		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
 }
 
 func TestUnion(t *testing.T) {

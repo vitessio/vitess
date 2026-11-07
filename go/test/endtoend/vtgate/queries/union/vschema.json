@@ -64,6 +64,9 @@
           "name": "hash"
         }
       ]
+    },
+    "ref": {
+      "type": "reference"
     }
   }
 }

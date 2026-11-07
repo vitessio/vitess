@@ -23,3 +23,8 @@ create table t2_id4_idx(
                            primary key(id),
                            key idx_id4(id4)
 ) Engine=InnoDB;
+
+create table ref(
+                   id bigint,
+                   primary key(id)
+) Engine=InnoDB;

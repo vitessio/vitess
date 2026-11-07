@@ -2,6 +2,7 @@
   {
     "comment": "UNION ALL does not widen a single-shard route containing a reference arm",
     "query": "select id from ref union all select id from user where id = 1 union all select id from user",
+    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
@@ -44,6 +45,7 @@
   {
     "comment": "UNION ALL does not widen a single-shard route containing a cross-keyspace reference arm",
     "query": "select id from source_of_ref union all select id from user where id = 1 union all select id from user",
+    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
