@@ -397,9 +397,17 @@ func (client *FakeTabletManagerClient) StopReplicationAndGetStatus(ctx context.C
 	return &replicationdatapb.StopReplicationStatus{}, nil
 }
 
+func (client *FakeTabletManagerClient) PrepareEmergencyReparent(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
+	return &tabletmanagerdatapb.PrepareEmergencyReparentResponse{}, nil
+}
+
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	return "", nil
+}
+
+func (client *FakeTabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	return &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{}, nil
 }
 
 //

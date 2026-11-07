@@ -1527,6 +1527,19 @@ func (client *Client) StopReplicationAndGetStatus(ctx context.Context, tablet *t
 	}, nil
 }
 
+func (client *Client) PrepareEmergencyReparent(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.PrepareEmergencyReparent(ctx, request)
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return response, nil
+}
+
 // PromoteReplica is part of the tmclient.TabletManagerClient interface.
 func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
@@ -1542,6 +1555,19 @@ func (client *Client) PromoteReplica(ctx context.Context, tablet *topodatapb.Tab
 		return "", vterrors.FromGRPC(err)
 	}
 	return response.Position, nil
+}
+
+func (client *Client) PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+	c, closer, err := client.dialer.dial(ctx, tablet)
+	if err != nil {
+		return nil, err
+	}
+	defer closer.Close()
+	response, err := c.PromoteReplicaAndJournal(ctx, request)
+	if err != nil {
+		return nil, vterrors.FromGRPC(err)
+	}
+	return response, nil
 }
 
 // Backup related methods
