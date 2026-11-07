@@ -19,6 +19,7 @@ package vreplication
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"regexp"
 	"strings"
@@ -35,6 +36,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log/logtest"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	qh "vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication/queryhistory"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
@@ -719,6 +721,7 @@ func TestPlayerCopyTables(t *testing.T) {
 
 func testPlayerCopyTables(t *testing.T) {
 	defer deleteTablet(addTablet(100))
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	execStatements(t, []string{
 		"create table ast1(id int, primary key(id))",
@@ -818,6 +821,25 @@ func testPlayerCopyTables(t *testing.T) {
 	})
 	expectData(t, "yes", [][]string{})
 	validateCopyRowCountStat(t, 5)
+
+	var copying []any
+	finished := make(map[any]map[string]any)
+	for _, record := range logs.Records(t) {
+		switch record["msg"] {
+		case "Copying table":
+			assert.Equal(t, "test", record["workflow"])
+			assert.EqualValues(t, qr.InsertID, record["stream_id"])
+			copying = append(copying, record["table"])
+		case "Copy of the table finished":
+			finished[record["table"]] = record
+		}
+	}
+	assert.Equal(t, []any{"ast1", "dst1", "yes"}, copying)
+	require.Contains(t, finished, "dst1")
+	assert.Equal(t, "test", finished["dst1"]["workflow"])
+	assert.EqualValues(t, qr.InsertID, finished["dst1"]["stream_id"])
+	assert.Contains(t, finished["dst1"]["last_pk"], `values:\"5\"`)
+
 	ctx, cancel := context.WithCancel(t.Context())
 
 	// The analyzed dst1 has statistics for its five rows, instead of the empty ones InnoDB saved at create time.

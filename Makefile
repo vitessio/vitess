@@ -243,7 +243,9 @@ site_integration_test:
 	go run test.go -docker=false -tag=site_test
 
 java_test:
-	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
+	# Into the bin/ the tests start it from, with the CGO_ENABLED=0 and
+	# -trimpath of "make build", whose compiled packages this then reuses.
+	CGO_ENABLED=0 go build -trimpath -o ${PWD}/bin/ ./go/cmd/vtgateclienttest
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 PROTO_SRCS = $(wildcard proto/*.proto)

@@ -75,8 +75,11 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
+        - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
+        - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
     - **[VTAdmin](#minor-changes-vtadmin)**
-        - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
+        - [vtadmin-web updated to node v24.21.0 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
@@ -862,11 +865,61 @@ The upgrade changes how `--compression-level` is interpreted for the lz4 engine.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
+#### <a id="vtbackup-errant-gtid-checks"/>`vtbackup` can refuse backups with errant GTIDs</a>
+
+The new `--enable-errant-gtid-checks` flag makes `vtbackup` fail a run, without completing a backup, when a position has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. A replica restored from a backup that has them fails with `Errant GTID detected`, and without the checks every `vtbackup` run restores such a backup and carries the errant GTIDs into the next one. With the flag, `vtbackup` checks three times:
+
+- **The restored backup**, or the data cloned with `--restore-with-clone`, before catching up.
+- **The data to back up**, before the upload. Errant GTIDs here come from a reparent that lost transactions `vtbackup` had already applied, or from `--init-backup-sql-queries` running binlogged statements such as `ANALYZE TABLE`, `OPTIMIZE TABLE` or `FLUSH TABLES`.
+- **The new backup**, just before its `MANIFEST` is written. If an emergency reparent during the upload loses transactions that the backup holds, the backup is aborted instead of left for restores to reject.
+
+The error names where the errant GTIDs came from and how to repair them. Before the upload, and again before writing the `MANIFEST`, `vtbackup` also waits while the primary hasn't committed GTIDs under its own UUID that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
+
+Before turning the flag on:
+- If the shard's newest backup already has errant GTIDs, every run fails. `vtbackup` restores the newest backup, so take a new backup of a healthy replica with `vtctldclient Backup`, and then remove the backups that hold the errant GTIDs.
+- Init SQL that runs binlogged statements fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
+- The checks wait for a missing or unreachable primary, an unreachable topo server, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one. While the checks of the restored data and of the data to back up run, the `Phase` metric reports the `VerifyErrantGTIDs` phase; the check before the `MANIFEST` runs within `TakeNewBackup`.
+- MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
+
+See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
+
+#### <a id="vtbackup-stop-at-committed-position"/>`vtbackup` stops catching up at the primary's committed position</a>
+
+On MySQL 8.4 and later, and on MySQL 8.0 with `replica_parallel_workers` set to 0 or 1, `vtbackup` no longer applies binlogged transactions that are still waiting for their semi-sync acknowledgement. An emergency reparent during or after the run can lose such transactions, and a backup that held them would then have errant GTIDs: every replica restored from it, or from a later backup built on it, would fail with `Errant GTID detected`.
+
+It stops catch-up at the primary's committed position, which, with semi-sync's default `AFTER_SYNC` wait point, doesn't include them yet. MySQL 8.0 runs a parallel applier on a single thread until it reaches a stop position, so with more workers (the default is 4 from 8.0.27), `vtbackup` catches up as before, as it does on other versions and MariaDB.
+
+When `vtbackup` stops at the committed position:
+- At startup, it waits while it can't read the shard primary or that tablet's record doesn't say `PRIMARY`, but a shard with no primary still fails the run at once. As with the existing wait for an unreachable primary, only the job's deadline, if it has one, bounds this wait.
+- If replication breaks, it restarts replication only from a primary whose `vttablet` answers and whose tablet record says `PRIMARY`. As before, the run fails once replication has stayed stopped for 60 seconds.
+
+With `--enable-errant-gtid-checks`, whether or not catch-up stops at the committed position, a restart after replication breaks also needs such a primary, and `vtbackup` first checks the data caught up so far for errant GTIDs, failing the run if it finds any.
+
+See [#20676](https://github.com/vitessio/vitess/issues/20676) and [#20679](https://github.com/vitessio/vitess/issues/20679).
+
+#### <a id="backup-shard-tablet-types"/>`BackupShard` can choose the tablet type to back up from</a>
+
+`BackupShard` picks whichever of the shard's `REPLICA`, `RDONLY` and `SPARE` tablets has the lowest replication lag, ignoring the type. A new `--tablet-types` flag, and the matching `tablet_types` field on `BackupShardRequest`, turn that into an ordered preference: the first listed type with a usable tablet wins, and the lowest lag decides within a type. When the flag is unset, the tablet with the lowest lag among `REPLICA`, `RDONLY` and `SPARE` is used, as before.
+
+Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tablet and falls back to a `REPLICA` if no `RDONLY` tablet can serve one, which keeps backup load off the tablets serving replica reads.
+
+`primary` cannot be listed. `--allow-primary` keeps its meaning: when no tablet of the listed types can take the backup, it is taken on the primary.
+
+| flags | result |
+|---|---|
+| `--tablet-types=rdonly,replica` | an `RDONLY` tablet, falling back to a `REPLICA` when none can serve the backup |
+| `--tablet-types=rdonly` | an `RDONLY` tablet only, with no fallback |
+| `--tablet-types=rdonly --allow-primary` | an `RDONLY` tablet, falling back to the primary when none can serve the backup |
+| `--tablet-types=rdonly,primary` | rejected: `primary` cannot be listed, use `--allow-primary` |
+| unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
+
+`--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
+
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 
-#### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v22.23.2 (LTS)</a>
+#### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v24.21.0 (LTS)</a>
 
-Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
+Building `vtadmin-web` now requires node v24.15.0 or newer on the 24 line, or v26 and above, with npm v11.12.1 or newer, up from node v22.13.0 and npm v10.9.2; node 22 is no longer supported. `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v24.21.0. The node range is what jsdom 30, a test dependency, supports on those lines. npm 11 is required because `npm ci` on npm 10 fails against the lock file that npm 11 writes. Full details on the node v24.21.0 release can be found at https://nodejs.org/en/blog/release/v24.21.0.
 
 ### <a id="minor-changes-general"/>General</a>
 

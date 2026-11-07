@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -212,8 +213,8 @@ func (td *tableDiffer) buildTablePlan(dbClient binlogplayer.DBClient, dbName str
 
 	tp.sourceQuery = sqlparser.String(sourceSelect)
 	tp.targetQuery = sqlparser.String(targetSelect)
-	log.Info(fmt.Sprintf("VDiff query on source: %v", tp.sourceQuery))
-	log.Info(fmt.Sprintf("VDiff query on target: %v", tp.targetQuery))
+	log.Info("VDiff query on source", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.String("query", tp.sourceQuery))...)
+	log.Info("VDiff query on target", td.wd.ct.logAttrs(slog.String("table", td.table.Name), slog.String("query", tp.targetQuery))...)
 
 	tp.aggregates = aggregates
 	td.tablePlan = tp
@@ -237,7 +238,7 @@ func (tp *tablePlan) findPKs(dbClient binlogplayer.DBClient, targetSelect *sqlpa
 			case *sqlparser.FuncExpr: // eg. weight_string()
 				// no-op
 			default:
-				log.Warn(fmt.Sprintf("Not considering column %v for PK, type %v not handled", selExpr, ct))
+				log.Warn("Not considering column for PK, type not handled", slog.String("table", tp.table.Name), slog.String("expression", sqlparser.String(selExpr)), slog.String("type", fmt.Sprintf("%T", ct)))
 			}
 			if strings.EqualFold(pk, colname) {
 				tp.compareCols[i].isPK = true

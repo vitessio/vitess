@@ -118,9 +118,10 @@ func (wr *Wrangler) refreshPrimaryTablets(ctx context.Context, shards []*topo.Sh
 	return rec.Error()
 }
 
-// updateShardRecords updates the shard records based on 'from' or 'to' direction.
-func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool) (err error) {
-	return topotools.UpdateShardRecords(ctx, wr.ts, wr.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, shardTabletRefreshTimeout, wr.Logger())
+// updateShardRecords updates QueryServiceDisabled for the shards based on 'from'
+// or 'to' direction. See topotools.UpdateShardRecords.
+func (wr *Wrangler) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string, servedType topodatapb.TabletType, isFrom bool) (err error) {
+	return topotools.UpdateShardRecords(ctx, wr.ts, wr.tmc, keyspace, shards, cells, servedType, isFrom, shardTabletRefreshTimeout, wr.Logger())
 }
 
 func encodeString(in string) string {

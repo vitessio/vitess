@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -28,10 +29,14 @@ import (
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestMySQLShellBackupBackupPreCheck(t *testing.T) {
@@ -364,6 +369,9 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	defer fakedb.Close()
 	mysql := NewFakeMysqlDaemon(fakedb)
 	defer mysql.Close()
+	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
+	require.NoError(t, err)
+	mysql.CurrentPrimaryPosition = pos
 
 	params := BackupParams{
 		TabletAlias: "test",
@@ -390,7 +398,13 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
 		require.NoError(t, err)
 
-		_, err = be.ExecuteBackup(t.Context(), params, bh)
+		var verified []replication.Position
+		verifyingParams := params
+		verifyingParams.VerifyPosition = func(ctx context.Context, p replication.Position) error {
+			verified = append(verified, p)
+			return nil
+		}
+		_, err = be.ExecuteBackup(t.Context(), verifyingParams, bh)
 		require.NoError(t, err)
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 
@@ -400,6 +414,11 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
+
+		// The engine verified the position its MANIFEST records.
+		require.Len(t, verified, 1)
+		assert.True(t, pos.Equal(verified[0]), "verified %v, want %v", verified[0], pos)
+		assert.True(t, manifest.Position.Equal(verified[0]))
 
 		if hostname, err := netutil.FullyQualifiedHostname(); err == nil {
 			require.Equal(t, hostname, manifest.Hostname)
@@ -455,6 +474,34 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 
 		_, err = be.ExecuteBackup(t.Context(), params, bh)
 		require.ErrorContains(t, err, "mysqlshell failed")
+		require.False(t, mysql.GlobalReadLock) // lock must be released.
+	})
+
+	t.Run("lock released and no MANIFEST written when the position check fails", func(t *testing.T) {
+		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
+		mysql.GlobalReadLock = false // clear lock status.
+		logger.Clear()
+		handle := &FakeBackupHandle{
+			Dir:           t.TempDir(),
+			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()},
+		}
+		bs.StartBackupReturn.BackupHandle = handle
+
+		// this simulates mysql shell completing without any issues.
+		generateTestFile(t, be.binaryName, fmt.Sprintf(
+			"#!/bin/bash\n>&2 echo %s; echo \"backup completed\"; sleep 0.01", mysqlShellLockMessage))
+
+		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
+		require.NoError(t, err)
+
+		failingParams := params
+		failingParams.VerifyPosition = func(context.Context, replication.Position) error {
+			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
+		}
+		result, err := be.ExecuteBackup(t.Context(), failingParams, bh)
+		require.ErrorContains(t, err, "errant GTIDs")
+		assert.Equal(t, BackupUnusable, result)
+		assert.Empty(t, handle.AddFileCalls, "a failed check must not write the MANIFEST")
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 	})
 }

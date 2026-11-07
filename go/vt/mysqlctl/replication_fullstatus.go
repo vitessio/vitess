@@ -69,7 +69,7 @@ func (mysqld *Mysqld) CollectFullStatusData(ctx context.Context) (*replicationda
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	if conn.Conn.IsMariaDB() {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "FullStatus is not supported on MariaDB")
