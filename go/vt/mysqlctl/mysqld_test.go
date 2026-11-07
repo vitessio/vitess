@@ -589,3 +589,15 @@ func TestBoundShutdownWaitContext(t *testing.T) {
 		assert.WithinDuration(t, before.Add(MysqldShutdownGracePeriod), deadline, 5*time.Second)
 	})
 }
+
+// TestMysqlApplyArgsStayBinlogged pins that ApplyBinlogFile's replay is binlogged:
+// PITR on restored binlogs relies on the replayed transactions landing in the
+// server's own binlogs, so the mysql client must not disable sql_log_bin.
+func TestMysqlApplyArgsStayBinlogged(t *testing.T) {
+	args := mysqlApplyArgs("/tmp/defaults.cnf")
+	assert.Equal(t, []string{"--defaults-extra-file=/tmp/defaults.cnf"}, args)
+	for _, arg := range args {
+		assert.NotContains(t, arg, "sql_log_bin")
+		assert.NotContains(t, arg, "init-command")
+	}
+}

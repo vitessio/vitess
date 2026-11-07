@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
@@ -73,7 +74,7 @@ func (lvs *localVSchema) findTable(tablename string) (*vindexes.BaseTable, error
 	table := ks.Tables[tablename]
 	if table == nil {
 		if schema.IsInternalOperationTableName(tablename) {
-			log.Info(fmt.Sprintf("found internal table %s, ignoring in local vschema search", tablename))
+			log.Info("found internal table, ignoring in local vschema search", slog.String("table", tablename))
 		} else {
 			if ks.Error != nil {
 				return nil, fmt.Errorf("table %s not found in keyspace %s (keyspace has error: %v)", tablename, lvs.keyspace, ks.Error)

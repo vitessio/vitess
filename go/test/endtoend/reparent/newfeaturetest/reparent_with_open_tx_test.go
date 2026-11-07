@@ -211,6 +211,10 @@ func TestErrorsInTransaction(t *testing.T) {
 	clusterInstance := utils.SetupShardedReparentCluster(t, policy.DurabilitySemiSync, []string{
 		"--queryserver-config-transaction-timeout", "5m",
 		"--queryserver-config-query-timeout", "5m",
+		// vtgate keeps a health stream open to every tablet, so each vttablet
+		// stop waits out the whole OnTermSync timeout (10s by default) for the
+		// gRPC server to stop gracefully.
+		"--onterm-timeout", "2s",
 	})
 
 	defer utils.TeardownCluster(clusterInstance)

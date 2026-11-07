@@ -263,7 +263,21 @@ var _ HealthCheck = (*HealthCheckImpl)(nil)
 // KeyFromTarget includes cell which we ignore here
 // because tabletStatsCache is intended to be per-cell
 func KeyFromTarget(target *query.Target) KeyspaceShardTabletType {
-	return KeyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType)))
+	return healthyKeyFromTarget(target).kst()
+}
+
+type healthyKey struct {
+	keyspace   string
+	shard      string
+	tabletType topodata.TabletType
+}
+
+func healthyKeyFromTarget(target *query.Target) healthyKey {
+	return healthyKey{keyspace: target.Keyspace, shard: target.Shard, tabletType: target.TabletType}
+}
+
+func (k healthyKey) kst() KeyspaceShardTabletType {
+	return KeyspaceShardTabletType(k.keyspace + "." + k.shard + "." + topoproto.TabletTypeLString(k.tabletType))
 }
 
 // HealthCheckImpl performs health checking and stores the results.
@@ -293,8 +307,10 @@ type HealthCheckImpl struct {
 	// contains a map of TabletHealth keyed by tablet alias for each tablet relevant to the keyspace.shard.tabletType
 	// has to be kept in sync with healthByAlias
 	healthData map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth
-	// another map keyed by keyspace.shard.tabletType, this one containing a sorted list of TabletHealth
-	healthy map[KeyspaceShardTabletType][]*TabletHealth
+	// healthy maps each healthyKey to its sorted, immutable []*TabletHealth. It is
+	// read without hc.mu by GetHealthyTabletStats; writers must hold hc.mu and
+	// publish a new slice through setHealthyLocked instead of mutating one.
+	healthy sync.Map
 	// connsWG keeps track of all launched Go routines that monitor tablet connections.
 	connsWG sync.WaitGroup
 	// topology watchers that inform healthcheck of tablets being added and deleted
@@ -372,7 +388,6 @@ func NewHealthCheck(
 		healthCheckTimeout: healthCheckTimeout,
 		healthByAlias:      make(map[tabletAliasString]*tabletHealthCheck),
 		healthData:         make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
-		healthy:            make(map[KeyspaceShardTabletType][]*TabletHealth),
 		subscribers:        make(map[chan *TabletHealth]string),
 		cellAliases:        make(map[string]string),
 		loadTabletsTrigger: make(chan topo.KeyspaceShard, 1024),
@@ -484,7 +499,8 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 		// any possible secondary map keys:
 		// key: keyspace.shard.tabletType -> val: map[tabletAlias]tabletHealth
 		for _, tabletType := range topoproto.AllTabletTypes {
-			key := KeyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tabletType)))
+			hk := healthyKey{keyspace: tablet.Keyspace, shard: tablet.Shard, tabletType: tabletType}
+			key := hk.kst()
 			// delete from map by keyspace.shard.tabletType
 			ths, ok := hc.healthData[key]
 			if !ok {
@@ -492,8 +508,8 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 			}
 			delete(ths, tabletAlias)
 			// delete from healthy list
-			healthy, ok := hc.healthy[key]
-			if ok && len(healthy) > 0 {
+			healthy := hc.loadHealthy(hk)
+			if len(healthy) > 0 {
 				if tabletType == topodata.TabletType_PRIMARY {
 					// If the deleted tablet was a primary,
 					// and it matches what we think is the current active primary,
@@ -502,11 +518,11 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 					// See the logic in `updateHealth` for more details.
 					alias := tabletAliasString(topoproto.TabletAliasString(healthy[0].Tablet.Alias))
 					if alias == tabletAlias {
-						hc.healthy[key] = []*TabletHealth{}
+						hc.setHealthyLocked(hk, []*TabletHealth{})
 					}
 				} else {
 					// Simply recompute the list of healthy tablets for all other tablet types.
-					hc.recomputeHealthy(key)
+					hc.recomputeHealthy(hk, key)
 				}
 			}
 		}
@@ -537,12 +553,13 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 
 	targetKey := KeyFromTarget(th.Target)
 	targetChanged := prevTarget.TabletType != th.Target.TabletType || prevTarget.Keyspace != th.Target.Keyspace || prevTarget.Shard != th.Target.Shard
+	var oldTargetKey KeyspaceShardTabletType
 	if targetChanged {
 		// Error counter has to be set here in case we get a new tablet type for the first time in a stream response
 		hcErrorCounters.Add([]string{th.Target.Keyspace, th.Target.Shard, topoproto.TabletTypeLString(th.Target.TabletType)}, 0)
 		// keyspace and shard are not expected to change, but just in case ...
 		// move this tabletHealthCheck to the correct map
-		oldTargetKey := KeyFromTarget(prevTarget)
+		oldTargetKey = KeyFromTarget(prevTarget)
 		delete(hc.healthData[oldTargetKey], tabletAlias)
 		_, ok := hc.healthData[targetKey]
 		if !ok {
@@ -576,33 +593,29 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 	}
 	hc.healthData[targetKey][tabletAlias] = th
 
+	targetHealthyKey := healthyKeyFromTarget(th.Target)
 	isPrimary := th.Target.TabletType == topodata.TabletType_PRIMARY
 	switch {
 	case isPrimary && up:
-		if len(hc.healthy[targetKey]) == 0 {
-			hc.healthy[targetKey] = append(hc.healthy[targetKey], th)
+		// If we already have one up server, only replace it with a newer primary.
+		healthy := hc.loadHealthy(targetHealthyKey)
+		if len(healthy) > 0 && th.PrimaryTermStartTime < healthy[0].PrimaryTermStartTime {
+			hc.logger().Warningf("not marking healthy primary %s as Up for %s because its PrimaryTermStartTime is smaller than the highest known timestamp from previous PRIMARYs %s: %d < %d ",
+				topoproto.TabletAliasString(th.Tablet.Alias),
+				topoproto.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
+				topoproto.TabletAliasString(healthy[0].Tablet.Alias),
+				th.PrimaryTermStartTime,
+				healthy[0].PrimaryTermStartTime)
 		} else {
-			// We already have one up server, see if we
-			// need to replace it.
-			if th.PrimaryTermStartTime < hc.healthy[targetKey][0].PrimaryTermStartTime {
-				hc.logger().Warningf("not marking healthy primary %s as Up for %s because its PrimaryTermStartTime is smaller than the highest known timestamp from previous PRIMARYs %s: %d < %d ",
-					topoproto.TabletAliasString(th.Tablet.Alias),
-					topoproto.KeyspaceShardString(th.Target.Keyspace, th.Target.Shard),
-					topoproto.TabletAliasString(hc.healthy[targetKey][0].Tablet.Alias),
-					th.PrimaryTermStartTime,
-					hc.healthy[targetKey][0].PrimaryTermStartTime)
-			} else {
-				// Just replace it.
-				hc.healthy[targetKey][0] = th
-			}
+			hc.setHealthyLocked(targetHealthyKey, []*TabletHealth{th})
 		}
 	case isPrimary && !up:
-		if healthy, ok := hc.healthy[targetKey]; ok && len(healthy) > 0 {
+		if healthy := hc.loadHealthy(targetHealthyKey); len(healthy) > 0 {
 			// isPrimary is true here therefore we should only have 1 tablet in healthy
 			alias := tabletAliasString(topoproto.TabletAliasString(healthy[0].Tablet.Alias))
 			// Clear healthy list for primary if the existing tablet is down
 			if alias == tabletAlias {
-				hc.healthy[targetKey] = []*TabletHealth{}
+				hc.setHealthyLocked(targetHealthyKey, []*TabletHealth{})
 			}
 		}
 	}
@@ -612,11 +625,10 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 		// Tablets from other cells for non-primary targets should not trigger a re-sort;
 		// they should also be excluded from healthy list.
 		if th.Target.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) {
-			hc.recomputeHealthy(targetKey)
+			hc.recomputeHealthy(targetHealthyKey, targetKey)
 		}
 		if targetChanged && prevTarget.TabletType != topodata.TabletType_PRIMARY && hc.isIncluded(th.Target.TabletType, th.Tablet.Alias) { // also recompute old target's healthy list
-			oldTargetKey := KeyFromTarget(prevTarget)
-			hc.recomputeHealthy(oldTargetKey)
+			hc.recomputeHealthy(healthyKeyFromTarget(prevTarget), oldTargetKey)
 		}
 	}
 
@@ -637,7 +649,7 @@ func (hc *HealthCheckImpl) updateHealth(thc *tabletHealthCheck, prevTarget *quer
 // if configured to do so.
 //
 // This should not be called for primary tablets.
-func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
+func (hc *HealthCheckImpl) recomputeHealthy(hk healthyKey, key KeyspaceShardTabletType) {
 	all := hc.healthData[key]
 	allArray := make([]*TabletHealth, 0, len(all))
 	for _, s := range all {
@@ -646,7 +658,21 @@ func (hc *HealthCheckImpl) recomputeHealthy(key KeyspaceShardTabletType) {
 			allArray = append(allArray, s)
 		}
 	}
-	hc.healthy[key] = FilterStatsByReplicationLag(allArray)
+	hc.setHealthyLocked(hk, FilterStatsByReplicationLag(allArray))
+}
+
+// loadHealthy returns the published healthy list for key. The result must not
+// be modified.
+func (hc *HealthCheckImpl) loadHealthy(key healthyKey) []*TabletHealth {
+	v, _ := hc.healthy.Load(key)
+	ths, _ := v.([]*TabletHealth)
+	return ths
+}
+
+// setHealthyLocked publishes ths as the healthy list for key. ths must not be
+// modified afterwards. hc.mu must be held.
+func (hc *HealthCheckImpl) setHealthyLocked(key healthyKey, ths []*TabletHealth) {
+	hc.healthy.Store(key, ths)
 }
 
 // Subscribe adds a listener. Used by vtgate buffer to learn about primary changes.
@@ -727,13 +753,12 @@ func (hc *HealthCheckImpl) CacheStatusMap() map[string]*TabletsCacheStatus {
 
 func (hc *HealthCheckImpl) HealthyStatusMap() map[string]*TabletsCacheStatus {
 	tcsMap := make(map[string]*TabletsCacheStatus)
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-	for _, ths := range hc.healthy {
-		for _, th := range ths {
+	hc.healthy.Range(func(_, v any) bool {
+		for _, th := range v.([]*TabletHealth) {
 			tabletHealthToTabletCacheStatus(th, tcsMap)
 		}
-	}
+		return true
+	})
 	return tcsMap
 }
 
@@ -784,9 +809,7 @@ func (hc *HealthCheckImpl) Close() error {
 // This returns a copy of the data so that callers can access without
 // synchronization
 func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*TabletHealth {
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-	ths := hc.healthy[KeyFromTarget(target)]
+	ths := hc.loadHealthy(healthyKeyFromTarget(target))
 	result := make([]*TabletHealth, 0, len(ths))
 	return append(result, ths...)
 }
@@ -796,9 +819,10 @@ func (hc *HealthCheckImpl) GetHealthyTabletStats(target *query.Target) []*Tablet
 // For TabletType_PRIMARY, this will only return at most one entry,
 // the most recent tablet of type primary.
 func (hc *HealthCheckImpl) GetTabletStats(target *query.Target) []*TabletHealth {
+	key := KeyFromTarget(target)
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	ths := hc.healthData[KeyFromTarget(target)]
+	ths := hc.healthData[key]
 	result := make([]*TabletHealth, 0, len(ths))
 	for _, th := range ths {
 		result = append(result, th)
@@ -907,9 +931,10 @@ func (hc *HealthCheckImpl) isRegisteredHealthCheckLocked(tabletAlias tabletAlias
 // registeredHealthCheck returns the tabletHealthCheck currently registered
 // for the given alias, or nil if there is none.
 func (hc *HealthCheckImpl) registeredHealthCheck(alias *topodata.TabletAlias) *tabletHealthCheck {
+	key := tabletAliasString(topoproto.TabletAliasString(alias))
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
-	return hc.healthByAlias[tabletAliasString(topoproto.TabletAliasString(alias))]
+	return hc.healthByAlias[key]
 }
 
 // TabletConnection returns the Connection to a given tablet.

@@ -19,4 +19,4 @@ if (( $# == 0 )); then
   exit 2
 fi
 
-exec go tool -modfile="$repo_root/tools/golangci-lint/go.mod" golangci-lint fmt -c "$repo_root/.golangci.yml" "$@"
+exec go run -trimpath -modfile="$repo_root/tools/golangci-lint/go.mod" github.com/golangci/golangci-lint/v2/cmd/golangci-lint fmt -c "$repo_root/.golangci.yml" "$@"

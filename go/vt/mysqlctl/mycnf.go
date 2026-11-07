@@ -95,6 +95,9 @@ type Mycnf struct {
 	// (used by vt software for binlog streaming)
 	BinLogPath string
 
+	// BinLogIndexPath is the binlog index file (log-bin-index), when set in my.cnf
+	BinLogIndexPath string
+
 	// MasterInfoFile is the master.info file location.
 	// Unused when vitess manages mysql config because we set
 	// master_info_repository = TABLE and
@@ -241,6 +244,8 @@ func ReadMycnf(mycnf *Mycnf, waitTime time.Duration) (*Mycnf, error) {
 		}
 		*member = val
 	}
+	// log-bin-index is optional and has no default, so it is read outside the mapping.
+	mycnf.BinLogIndexPath = mycnf.lookup("log-bin-index")
 
 	return mycnf, nil
 }

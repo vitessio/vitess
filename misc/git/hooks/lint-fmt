@@ -86,4 +86,4 @@ if [ -z "$changed_pkgs" ]; then
 fi
 
 echo "Linting staged changes..."
-go tool -modfile="$GOLANGCI_LINT_MODFILE" golangci-lint run --new-from-rev=HEAD $changed_pkgs
+go run -trimpath -modfile="$GOLANGCI_LINT_MODFILE" github.com/golangci/golangci-lint/v2/cmd/golangci-lint run --new-from-rev=HEAD $changed_pkgs

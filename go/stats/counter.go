@@ -17,6 +17,7 @@ limitations under the License.
 package stats
 
 import (
+	"log/slog"
 	"math"
 	"strconv"
 	"sync/atomic"
@@ -48,7 +49,7 @@ func NewCounter(name string, help string) *Counter {
 // Add adds the provided value to the Counter.
 func (v *Counter) Add(delta int64) {
 	if delta < 0 {
-		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", v)
+		logCounterNegative.Warn("Adding a negative value to a counter, it should be a gauge instead", slog.Int64("counter_value", v.Get()))
 	}
 	v.i.Add(delta)
 }
