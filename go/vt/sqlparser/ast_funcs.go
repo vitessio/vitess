@@ -2790,13 +2790,18 @@ func (ae *AliasedExpr) ColumnName() string {
 		return node.Name.String()
 	case *Literal:
 		if node.Type == StrVal {
-			return node.Val
+			return stringColumnName(node, ae.InputExpression)
 		}
 	case *IntroducerExpr:
 		// MySQL strips the charset introducer for string literals:
 		// _utf8 'hello' → column name is 'hello', not '_utf8 hello'
 		if lit, ok := node.Expr.(*Literal); ok && lit.Type == StrVal {
-			return lit.Val
+			return stringColumnName(lit, ae.InputExpression)
+		}
+	case *UnaryExpr:
+		// N'hello' is named hello too.
+		if lit, ok := node.Expr.(*Literal); ok && node.Operator == NStringOp && lit.Type == StrVal {
+			return stringColumnName(lit, ae.InputExpression)
 		}
 	}
 

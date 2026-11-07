@@ -199,13 +199,13 @@ var validSQL = []struct {
 	// MySQL reads an ODBC escape as a temporal literal only when its string is
 	// one, so the escape is kept as written.
 	input:  "create table t1 as select {d'2001-01-01'}, {ts '2001-01-01 10:10:10'}, {D 'x'}",
-	output: "create table t1 as select {d '2001-01-01'}, {ts '2001-01-01 10:10:10'}, {D 'x'} from dual",
+	output: "create table t1 as select {d '2001-01-01'} as `{d'2001-01-01'}`, {ts '2001-01-01 10:10:10'}, {D 'x'} from dual",
 }, {
 	input:  "select t1.a from { oj t2 left outer join t1 on (t1.a=t2.a) }",
 	output: "select t1.a from t2 left join t1 on t1.a = t2.a",
 }, {
 	input:  "create table t as select cast(1 as year), cast('a' as national char(2)), cast(1 as signed int), cast(1 as unsigned int), cast(1 as double precision), cast(1 as dec(5,2)), cast(1 as float4), cast(1 as float8)",
-	output: "create table t as select cast(1 as year), cast('a' as nchar(2)), cast(1 as signed), cast(1 as unsigned), cast(1 as double), cast(1 as decimal(5, 2)), cast(1 as float), cast(1 as double) from dual",
+	output: "create table t as select cast(1 as year), cast('a' as nchar(2)) as `cast('a' as national char(2))`, cast(1 as signed) as `cast(1 as signed int)`, cast(1 as unsigned) as `cast(1 as unsigned int)`, cast(1 as double) as `cast(1 as double precision)`, cast(1 as decimal(5, 2)) as `cast(1 as dec(5,2))`, cast(1 as float) as `cast(1 as float4)`, cast(1 as double) as `cast(1 as float8)` from dual",
 }, {
 	// MySQL reads a decimal field length up to its point.
 	input:  "create table t (a int(10.5), b float(10.3))",

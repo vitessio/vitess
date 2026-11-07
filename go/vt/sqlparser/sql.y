@@ -1601,6 +1601,11 @@ create_statement:
   }
 | create_view_prefix column_list_opt AS select_statement check_option_opt
   {
+    if len($2) == 0 {
+      preserveColumnNames($4, viewColumns)
+    } else {
+      preserveColumnNames($4, namedColumns)
+    }
     $1.Columns = $2
     $1.Select = $4
     $1.CheckOption = $5
@@ -1619,18 +1624,22 @@ create_statement:
 create_table_query:
   select_statement
   {
+    preserveColumnNames($1, tableColumns)
     $$ = &CreateTable{Select: $1}
   }
 | AS select_statement
   {
+    preserveColumnNames($2, tableColumns)
     $$ = &CreateTable{Select: $2}
   }
 | IGNORE as_opt select_statement
   {
+    preserveColumnNames($3, tableColumns)
     $$ = &CreateTable{IgnoreOrReplace: IgnoreType, Select: $3}
   }
 | REPLACE as_opt select_statement
   {
+    preserveColumnNames($3, tableColumns)
     $$ = &CreateTable{IgnoreOrReplace: ReplaceType, Select: $3}
   }
 
@@ -4148,6 +4157,11 @@ alter_statement:
   }
 | ALTER comment_opt algorithm_view_opt definer_opt security_view_opt VIEW table_name column_list_opt AS select_statement check_option_opt
   {
+    if len($8) == 0 {
+      preserveColumnNames($10, viewColumns)
+    } else {
+      preserveColumnNames($10, namedColumns)
+    }
     $$ = &AlterView{ViewName: $7, Comments: Comments($2).Parsed(), Algorithm:$3, Definer: $4 ,Security:$5, Columns:$8, Select: $10, CheckOption: $11 }
   }
 // The syntax here causes a shift / reduce issue, because ENCRYPTION is a non reserved keyword
@@ -6369,6 +6383,13 @@ select_expression:
           // doesn't preserve the original input form (e.g. DATE '2022-08-06',
           // x'48' vs X'48', b'1010' vs 0b1010)
           ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
+        case StrVal:
+          // MySQL names a string written as several strings, as in 'a' 'b',
+          // after the first one, so its text is kept. A single string is
+          // named after its value, which needs no text.
+          if text := yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end); isConcatenatedString(text, expr.Val) {
+            ae.InputExpression = text
+          }
         }
       default:
         ae.InputExpression = yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end)
