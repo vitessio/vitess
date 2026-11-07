@@ -2684,6 +2684,74 @@ func TestVStreamerThrottledCounts(t *testing.T) {
 	}, 30*time.Second, 50*time.Millisecond, "VStreamerThrottledCounts should increment while vstream is throttled")
 }
 
+// TestVStreamThrottlerAppName checks the app names that a stream checks the throttler with, in its copy phase
+// (rowstreamer) and its binlog phase (vstreamer). A VTGate VStream, which sets VStreamOptions.FromVtgate, adds
+// vtgate-vstream to both, so that a throttler rule for vtgate-vstream applies to it and not to a VReplication
+// workflow, which reaches the tablet through the same VStream RPC and checks as vstreamer and rowstreamer.
+func TestVStreamThrottlerAppName(t *testing.T) {
+	ts := &TestSpec{
+		t:    t,
+		ddls: []string{"create table throttler_app(id11 int, id12 int, primary key(id11))"},
+	}
+	ts.Init()
+	defer ts.Close()
+	execStatements(t, []string{"insert into throttler_app (id11, id12) values (1, 10)"})
+	// A stream with no start position copies every table in the schema engine, so it must know the new table.
+	require.NoError(t, engine.se.Reload(t.Context()))
+
+	for _, tc := range []struct {
+		name            string
+		fromVtgate      bool
+		wantVStreamer   throttlerapp.Name
+		wantRowStreamer throttlerapp.Name
+	}{
+		{
+			name:            "VReplication workflow",
+			wantVStreamer:   throttlerapp.VStreamerName,
+			wantRowStreamer: throttlerapp.RowStreamerName,
+		},
+		{
+			name:            "VTGate VStream",
+			fromVtgate:      true,
+			wantVStreamer:   "vstreamer:vtgate-vstream",
+			wantRowStreamer: "rowstreamer:vtgate-vstream",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "throttler_app", Filter: "select * from throttler_app"}}}
+			var gotVStreamer, gotRowStreamer []throttlerapp.Name
+			errStop := errors.New("stop after the first copied row")
+			err := engine.Stream(t.Context(), "", []*binlogdatapb.TableLastPK{getTablePK("throttler_app", 1)}, filter,
+				throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error {
+					for _, ev := range evs {
+						if ev.Type != binlogdatapb.VEventType_ROW {
+							continue
+						}
+						// Copied rows are sent from inside the rowstreamer, so this stream's uvstreamer and
+						// rowstreamer are both registered in the engine now.
+						engine.mu.Lock()
+						defer engine.mu.Unlock()
+						for _, uvs := range engine.streamers {
+							if uvs.filter == filter {
+								gotVStreamer = append(gotVStreamer, uvs.throttlerApp)
+							}
+						}
+						for _, rs := range engine.rowStreamers {
+							if strings.Contains(rs.query, "throttler_app") {
+								gotRowStreamer = append(gotRowStreamer, rs.throttlerApp)
+							}
+						}
+						return errStop
+					}
+					return nil
+				}, &binlogdatapb.VStreamOptions{FromVtgate: tc.fromVtgate})
+			require.ErrorContains(t, err, errStop.Error())
+			assert.Equal(t, []throttlerapp.Name{tc.wantVStreamer}, gotVStreamer)
+			assert.Equal(t, []throttlerapp.Name{tc.wantRowStreamer}, gotRowStreamer)
+		})
+	}
+}
+
 func TestNoFutureGTID(t *testing.T) {
 	// Execute something to make sure we have ranges in GTIDs.
 	execStatements(t, []string{

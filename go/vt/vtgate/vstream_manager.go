@@ -893,6 +893,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		// cause copy resume cycles and in doing so adding additional operational complexity, chance for failure
 		// (not all clients support copy resume well if at all), and extended copy/sync execution time.
 		options.NoTimeouts = true
+		// Let the source tablet's throttler tell this stream apart from VReplication workflows, which reach it
+		// through the same VStream RPC: it checks as vstreamer:vtgate-vstream and rowstreamer:vtgate-vstream.
+		options.FromVtgate = true
 
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
 		req := &binlogdatapb.VStreamRequest{

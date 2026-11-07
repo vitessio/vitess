@@ -68,6 +68,7 @@
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
         - [Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running](#vttablet-throttler-unprobed-heartbeats)
+        - [Throttler rules can target VTGate VStreams separately from VReplication workflows](#vttablet-throttler-vtgate-vstream-app)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -788,6 +789,22 @@ While the throttler on such a tablet is being checked, the tablet now asks the p
 Each tablet decides from its own `--throttle-tablet-types` whether the primary probes it, so set the flag to the same value on the primary and on the other tablets of the keyspace. A tablet that lists its own type while the primary does not would ask for heartbeats only once a minute, as before.
 
 See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
+
+#### <a id="vttablet-throttler-vtgate-vstream-app"/>Throttler rules can target VTGate VStreams separately from VReplication workflows</a>
+
+A VTGate `VStream` reaches the source tablet through the same VStream RPC as the VReplication workflows that stream from it, such as MoveTables, Reshard, Materialize, and Online DDL. The source tablet's vstreamer used to check its throttler as `vstreamer` (`rowstreamer` in the copy phase) for both, so a throttler rule for those names applied to CDC clients and to every workflow sourced from the keyspace at once.
+
+VTGate now marks the streams of its `VStream` API, and for them the source tablet checks its throttler as `vstreamer:vtgate-vstream` and `rowstreamer:vtgate-vstream`. The throttler matches each part of an app name, so a rule for the new `vtgate-vstream` app applies to VTGate VStreams only. For example, to exempt them while workflows stay throttled:
+
+```sh
+vtctldclient UpdateThrottlerConfig --throttle-app vtgate-vstream --throttle-app-exempt --throttle-app-duration 8760h <keyspace>
+```
+
+Existing rules for `vstreamer` and `rowstreamer` still apply to VTGate VStreams, so current configurations keep working. As for any app, an exempt rule takes precedence over throttle rules: with `vtgate-vstream` exempted, a throttle rule for `vstreamer` no longer pauses VTGate VStreams. The throttler's status, as shown by `vtctldclient GetThrottlerStatus`, lists the checks of VTGate VStreams under the new names, `vstreamer:vtgate-vstream` and `rowstreamer:vtgate-vstream`, rather than `vstreamer` and `rowstreamer`.
+
+The new names are used only when both VTGate and the source VTTablet include this change. With an older VTGate or VTTablet, VTGate VStreams check the throttler as `vstreamer` and `rowstreamer`, as before.
+
+See [#21673](https://github.com/vitessio/vitess/issues/21673) for details.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>

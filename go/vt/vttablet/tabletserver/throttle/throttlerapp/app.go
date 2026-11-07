@@ -74,6 +74,11 @@ const (
 	RowStreamerName       Name = "rowstreamer"
 	ExternalConnectorName Name = "external-connector"
 	ReplicaConnectorName  Name = "replica-connector"
+	// VTGateVStreamName is added to the app name that the source tablet's vstreamer and rowstreamer check
+	// the throttler with when they serve a VTGate VStream, e.g. "vstreamer:vtgate-vstream". A throttler
+	// rule for it then applies to VTGate VStreams only, and not to VReplication workflows, which reach the
+	// source tablet through the same VStream RPC.
+	VTGateVStreamName Name = "vtgate-vstream"
 
 	BinlogWatcherName Name = "binlog-watcher"
 	MessagerName      Name = "messager"
