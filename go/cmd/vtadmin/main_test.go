@@ -18,8 +18,8 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -40,11 +40,14 @@ func TestExitLogs(t *testing.T) {
 		log.SwapLogger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 	}
 	switch mode {
-	case "rbac":
+	case "rbac", "tracer":
+		if mode == "tracer" {
+			traceCloser = errCloser{}
+		}
 		enableDynamicClusters = true
 		enableRBAC = true
 		rbacConfigPath = rbacPath
-		rootCmd.SetContext(context.Background())
+		rootCmd.SetContext(t.Context())
 		run(rootCmd, nil)
 		return
 	case "flag":
@@ -81,6 +84,33 @@ func TestExitLogs(t *testing.T) {
 	record = runExit(t, "flag", "command failed")
 	assert.Equal(t, "ERROR", record["level"])
 	assert.Equal(t, "unknown flag: --no-such-flag", record["error"])
+
+	record = runExit(t, "tracer", "Failed to close tracer")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, errTracerClose.Error(), record["error"])
+}
+
+var errTracerClose = errors.New("tracer close failed")
+
+type errCloser struct{}
+
+func (errCloser) Close() error { return errTracerClose }
+
+type countingCloser struct{ closed int }
+
+func (c *countingCloser) Close() error {
+	c.closed++
+	return nil
+}
+
+func TestPostRunClosesTracer(t *testing.T) {
+	old := traceCloser
+	t.Cleanup(func() { traceCloser = old })
+	closer := &countingCloser{}
+	traceCloser = closer
+
+	rootCmd.PostRun(rootCmd, nil)
+	assert.Equal(t, 1, closer.closed)
 }
 
 func TestMainFlagRegistration(t *testing.T) {

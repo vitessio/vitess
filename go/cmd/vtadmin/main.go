@@ -77,7 +77,7 @@ var (
 		},
 		Run: run,
 		PostRun: func(cmd *cobra.Command, args []string) {
-			trace.LogErrorsWhenClosing(traceCloser)
+			trace.LogErrorsWhenClosing(traceCloser)()
 		},
 		Version: servenv.AppVersion.String(),
 	}
@@ -86,7 +86,7 @@ var (
 // exit ensures the tracer is closed and final spans are sent before calling
 // os.Exit(1). Callers log the reason with log.Error first.
 func exit() {
-	trace.LogErrorsWhenClosing(traceCloser)
+	trace.LogErrorsWhenClosing(traceCloser)()
 	os.Exit(1)
 }
 
