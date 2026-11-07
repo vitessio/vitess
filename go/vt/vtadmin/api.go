@@ -299,8 +299,9 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // WithCluster returns a dynamic API with the given cluster. If `c` is non-nil,
-// it is used as the selected cluster. If the cluster is nil, then a cluster
-// with the given id is retrieved from the API and used in the dynamic API.
+// it is used as the selected cluster. If an equivalent cluster is found in the API,
+// `c` is closed and the existing cluster is used instead . If `c` is nil,
+// then a cluster with the given id is retrieved from the API and used in the dynamic API.
 //
 // Callers must ensure that:
 // 1. If c is non-nil, c.ID == id.
@@ -353,6 +354,11 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
 			log.Info(fmt.Sprintf("API already has cluster with id %s, using that instead", id))
+			if c != existingCluster {
+				if err := c.Close(); err != nil {
+					log.Error(err.Error() + "; some connections and goroutines may linger")
+				}
+			}
 		}
 	}
 
