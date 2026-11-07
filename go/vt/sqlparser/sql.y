@@ -1724,6 +1724,10 @@ create_procedure:
   CREATE comment_opt definer_opt PROCEDURE not_exists_opt table_name openb proc_params_list_opt closeb compound_statement
   {
     $$ = &CreateProcedure{Comments: Comments($2).Parsed(), Name: $6, IfNotExists: $5, Definer: $3, Params: $8, Body: $10}
+    if hasStatementWithoutText($10) {
+      yylex.Error("DO, LOAD DATA, REPAIR and OPTIMIZE are not supported in a procedure body")
+      return 1
+    }
   }
 
 create_table_prefix:

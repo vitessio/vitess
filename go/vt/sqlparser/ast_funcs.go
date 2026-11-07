@@ -2886,6 +2886,23 @@ func AddKeyspace(in SQLNode, ks string) {
 	}, nil)
 }
 
+// hasStatementWithoutText reports whether node holds a statement that the
+// parser does not keep the text of, such as DO or LOAD DATA. Vitess sends
+// MySQL such a statement as the client's text when it is the whole query, but
+// it cannot format one that is part of another statement, such as a procedure
+// body.
+func hasStatementWithoutText(node SQLNode) bool {
+	found := false
+	_ = Walk(func(node SQLNode) (bool, error) {
+		switch node.(type) {
+		case *OtherAdmin, *Load:
+			found = true
+		}
+		return !found, nil
+	}, node)
+	return found
+}
+
 // hasValidIndexType reports whether the index takes the index type it names,
 // if any. MySQL takes no USING or TYPE clause for a FULLTEXT or SPATIAL index.
 func (idx *IndexDefinition) hasValidIndexType() bool {
