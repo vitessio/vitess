@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"io"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -72,7 +73,11 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
-	gotFields := wantfields
+	needFields := wantfields
+	for _, order := range ms.OrderBy {
+		needFields = needFields || (order.Col < 0 && order.ColumnName != "")
+	}
+	gotFields := needFields
 	handles := make([]*streamHandle, len(ms.Primitives))
 	for i, input := range ms.Primitives {
 		handles[i] = runOneStream(ctx, vcursor, input, bindVars, gotFields, ms.FetchLastInsertID)
@@ -83,17 +88,23 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		}
 	}
 
-	merge := &evalengine.Merger{
-		Compare: ms.OrderBy,
-	}
+	orderBy := slices.Clone(ms.OrderBy)
+	merge := &evalengine.Merger{Compare: orderBy}
 
-	if wantfields {
+	if needFields {
 		fields, err := ms.getStreamingFields(handles)
 		if err != nil {
 			return err
 		}
-		if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
-			return err
+		for idx := range orderBy {
+			if err := orderBy[idx].ResolveColumnName(fields); err != nil {
+				return err
+			}
+		}
+		if wantfields {
+			if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
+				return err
+			}
 		}
 	}
 

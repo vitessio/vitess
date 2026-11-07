@@ -376,8 +376,14 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	// The copy can be shallow because we won't be changing
 	// the contents of any row.
 	out := in.ShallowCopy()
+	orderBy := append(evalengine.Comparison(nil), route.OrderBy...)
+	for idx := range orderBy {
+		if err := orderBy[idx].ResolveColumnName(out.Fields); err != nil {
+			return nil, err
+		}
+	}
 
-	err := route.OrderBy.SortResult(out)
+	err := orderBy.SortResult(out)
 	return out, err
 }
 

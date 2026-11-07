@@ -791,6 +791,31 @@
     "skip_e2e": true
   },
   {
+    "comment": "UNION ALL allows aggregate joins constrained by sharded rows",
+    "query": "select u.*, u.id from user u join (select count(*) as n from ref) a on 1 = 1 where u.id = 1 union all select *, id from user order by id",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.*, u.id from user u join (select count(*) as n from ref) a on 1 = 1 where u.id = 1 union all select *, id from user order by id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.*, u.id from (select count(*) as n from ref where 1 != 1) as a, `user` as u where 1 != 1 union all select *, id from `user` where 1 != 1",
+        "OrderBy": "id ASC",
+        "Query": "select u.*, u.id from (select count(*) as n from ref) as a, `user` as u where u.id = 1 and 1 = 1 union all select *, id from `user` order by id asc"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "union of information_schema with normal table",
     "query": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS union select user_name from unsharded",
     "plan": {

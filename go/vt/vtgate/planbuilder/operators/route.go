@@ -61,7 +61,8 @@ type (
 	}
 
 	RouteOrdering struct {
-		AST sqlparser.Expr
+		AST        sqlparser.Expr
+		ColumnName string
 		// Offset and WOffset will contain the offset to the column (and the weightstring column). -1 if it's missing
 		Offset, WOffset int
 		Direction       sqlparser.OrderDirection
@@ -794,15 +795,22 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		offset := r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
+		offset := -1
+		columnName := ""
+		if col, ok := order.SimplifiedExpr.(*sqlparser.ColName); ok && hasUnresolvedUnionStar(r.Source) {
+			columnName = col.Name.String()
+		} else {
+			offset = r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
+		}
 
 		o := RouteOrdering{
-			AST:       order.Inner.Expr,
-			Offset:    offset,
-			WOffset:   -1,
-			Direction: order.Inner.Direction,
+			AST:        order.Inner.Expr,
+			ColumnName: columnName,
+			Offset:     offset,
+			WOffset:    -1,
+			Direction:  order.Inner.Direction,
 		}
-		if ctx.NeedsWeightString(order.SimplifiedExpr) {
+		if columnName == "" && ctx.NeedsWeightString(order.SimplifiedExpr) {
 			ws := weightStringFor(order.SimplifiedExpr)
 			offset := r.AddColumn(ctx, true, false, aeWrap(ws))
 			o.WOffset = offset
