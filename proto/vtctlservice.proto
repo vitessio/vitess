@@ -376,6 +376,13 @@ service Vtctld {
   rpc VDiffResume(vtctldata.VDiffResumeRequest) returns (vtctldata.VDiffResumeResponse) {};
   rpc VDiffShow(vtctldata.VDiffShowRequest) returns (vtctldata.VDiffShowResponse) {};
   rpc VDiffStop(vtctldata.VDiffStopRequest) returns (vtctldata.VDiffStopResponse) {};
+  // VDiffUpdate merges picker options (tablet types and cells) into an
+  // existing VDiff. If the VDiff is running on an affected shard
+  // (pending/started, or a live controller exists), the update is
+  // rejected and the operator must VDiff stop first. Otherwise the
+  // stored options are updated in place; the new options take effect
+  // on VDiff resume (or retry).
+  rpc VDiffUpdate(vtctldata.VDiffUpdateRequest) returns (vtctldata.VDiffUpdateResponse) {};
   // WorkflowDelete deletes a vreplication workflow.
   rpc WorkflowDelete(vtctldata.WorkflowDeleteRequest) returns (vtctldata.WorkflowDeleteResponse) {};
   rpc WorkflowStatus(vtctldata.WorkflowStatusRequest) returns (vtctldata.WorkflowStatusResponse) {};

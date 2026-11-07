@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -90,6 +91,17 @@ var (
 	stopOptions = struct {
 		UUID         uuid.UUID
 		TargetShards []string
+	}{}
+
+	updateOptions = struct {
+		UUID                         uuid.UUID
+		SourceCells                  []string
+		TargetCells                  []string
+		ClearSourceCells             bool
+		ClearTargetCells             bool
+		TabletTypes                  []topodatapb.TabletType
+		TabletTypesInPreferenceOrder bool
+		TargetShards                 []string
 	}{}
 
 	parseAndValidateCreate = func(cmd *cobra.Command, args []string) error {
@@ -244,6 +256,78 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 			return common.ValidateShards(stopOptions.TargetShards)
 		},
 		RunE: commandStop,
+	}
+
+	// update makes a VDiffUpdate gRPC call to a vtctld.
+	update = &cobra.Command{
+		Use:   "update",
+		Short: "Update picker options (tablet types and cells) on an existing VDiff.",
+		Long: `Update picker options (tablet types and cells) on an existing VDiff.
+
+The specified picker options are merged into the stored _vt.vdiff.options JSON
+on each target shard primary. Other options (core and report) are left unchanged.
+Progress (lastpk) is left untouched.
+
+If the VDiff is running on an affected shard (pending or started, or a live
+controller exists), the update is rejected. Stop the VDiff first with
+` + "`VDiff stop`" + `, then update, then ` + "`VDiff resume`" + ` (or retry) so the new
+options take effect.
+
+If the VDiff is stopped, errored, or completed, only the stored options are
+updated. A completed VDiff stays completed; the new options apply the next time
+it is resumed.
+
+Use --clear-source-cells / --clear-target-cells to reset cells to all cells
+(the same default as create).`,
+		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer update a037a9e2-5628-11ee-8c99-0242ac120002 --tablet-types PRIMARY --tablet-types-in-preference-order`,
+		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Update"},
+		Args:                  cobra.ExactArgs(1),
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			parsed, err := uuid.Parse(args[0])
+			if err != nil {
+				return fmt.Errorf("invalid UUID provided: %v", err)
+			}
+			updateOptions.UUID = parsed
+
+			if cmd.Flags().Lookup("source-cells").Changed {
+				for i, cell := range updateOptions.SourceCells {
+					updateOptions.SourceCells[i] = strings.TrimSpace(cell)
+				}
+			}
+			if cmd.Flags().Lookup("target-cells").Changed {
+				for i, cell := range updateOptions.TargetCells {
+					updateOptions.TargetCells[i] = strings.TrimSpace(cell)
+				}
+			}
+
+			hasTabletTypes := cmd.Flags().Lookup("tablet-types").Changed
+			hasSourceCells := cmd.Flags().Lookup("source-cells").Changed
+			hasTargetCells := cmd.Flags().Lookup("target-cells").Changed
+			hasClearSource := cmd.Flags().Lookup("clear-source-cells").Changed && updateOptions.ClearSourceCells
+			hasClearTarget := cmd.Flags().Lookup("clear-target-cells").Changed && updateOptions.ClearTargetCells
+			if hasSourceCells && hasClearSource {
+				return errors.New("cannot specify both --source-cells and --clear-source-cells")
+			}
+			if hasTargetCells && hasClearTarget {
+				return errors.New("cannot specify both --target-cells and --clear-target-cells")
+			}
+			if !hasTabletTypes && !hasSourceCells && !hasTargetCells && !hasClearSource && !hasClearTarget {
+				return errors.New("no picker options specified to update; provide --tablet-types, --source-cells, --target-cells, --clear-source-cells, and/or --clear-target-cells")
+			}
+			if !hasTabletTypes {
+				updateOptions.TabletTypes = nil
+			}
+			if !hasSourceCells {
+				updateOptions.SourceCells = nil
+			}
+			if !hasTargetCells {
+				updateOptions.TargetCells = nil
+			}
+
+			return common.ValidateShards(updateOptions.TargetShards)
+		},
+		RunE: commandUpdate,
 	}
 )
 
@@ -682,6 +766,68 @@ func commandStop(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func commandUpdate(cmd *cobra.Command, args []string) error {
+	format, err := common.GetOutputFormat(cmd)
+	if err != nil {
+		return err
+	}
+	cli.FinishedParsing(cmd)
+
+	tsp := tabletmanagerdatapb.TabletSelectionPreference_ANY
+	if updateOptions.TabletTypesInPreferenceOrder {
+		tsp = tabletmanagerdatapb.TabletSelectionPreference_INORDER
+	}
+
+	resp, err := common.GetClient().VDiffUpdate(common.GetCommandCtx(), &vtctldatapb.VDiffUpdateRequest{
+		Workflow:                  common.BaseOptions.Workflow,
+		TargetKeyspace:            common.BaseOptions.TargetKeyspace,
+		Uuid:                      updateOptions.UUID.String(),
+		TargetShards:              updateOptions.TargetShards,
+		TabletTypes:               updateOptions.TabletTypes,
+		TabletSelectionPreference: tsp,
+		SourceCells:               updateOptions.SourceCells,
+		TargetCells:               updateOptions.TargetCells,
+		ClearSourceCells:          updateOptions.ClearSourceCells,
+		ClearTargetCells:          updateOptions.ClearTargetCells,
+	})
+	if err != nil {
+		return err
+	}
+
+	return displayUpdateResponse(cmd.OutOrStdout(), format, resp)
+}
+
+func displayUpdateResponse(out io.Writer, format string, resp *vtctldatapb.VDiffUpdateResponse) error {
+	if resp == nil {
+		resp = &vtctldatapb.VDiffUpdateResponse{}
+	}
+	if format == "json" {
+		jsonText, err := cli.MarshalJSONPretty(resp)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(out, string(jsonText))
+		return nil
+	}
+	if len(resp.Results) == 0 {
+		fmt.Fprintln(out, "VDiff update completed with no shard results")
+		return nil
+	}
+	fmt.Fprintln(out, "VDiff update completed")
+	for _, result := range resp.Results {
+		state := result.State
+		if state == "" {
+			state = "unknown"
+		}
+		updated := "updated"
+		if !result.Updated {
+			updated = "unchanged"
+		}
+		fmt.Fprintf(out, "Shard %s: %s (state: %s)\n", result.Shard, updated, state)
+	}
+	return nil
+}
+
 func registerCommands(root *cobra.Command) {
 	common.AddCommonFlags(base)
 	root.AddCommand(base)
@@ -717,6 +863,15 @@ func registerCommands(root *cobra.Command) {
 
 	stop.Flags().StringSliceVar(&stopOptions.TargetShards, "target-shards", nil, "The target shards to stop the vdiff on; default is all shards.")
 	base.AddCommand(stop)
+
+	update.Flags().StringSliceVar(&updateOptions.SourceCells, "source-cells", nil, "The source cell(s) to compare from. When omitted, the existing value is left unchanged.")
+	update.Flags().StringSliceVar(&updateOptions.TargetCells, "target-cells", nil, "The target cell(s) to compare with. When omitted, the existing value is left unchanged.")
+	update.Flags().BoolVar(&updateOptions.ClearSourceCells, "clear-source-cells", false, "Reset source cells to all cells (the same default as create). Cannot be combined with --source-cells.")
+	update.Flags().BoolVar(&updateOptions.ClearTargetCells, "clear-target-cells", false, "Reset target cells to all cells (the same default as create). Cannot be combined with --target-cells.")
+	update.Flags().Var((*topoprotopb.TabletTypeListFlag)(&updateOptions.TabletTypes), "tablet-types", "Tablet types to use on the source and target (PRIMARY, REPLICA, RDONLY). When omitted, the existing value is left unchanged.")
+	update.Flags().BoolVar(&updateOptions.TabletTypesInPreferenceOrder, "tablet-types-in-preference-order", true, "When performing source tablet selection, look for candidates in the type order as they are listed in the tablet-types flag.")
+	update.Flags().StringSliceVar(&updateOptions.TargetShards, "target-shards", nil, "The target shards to update the vdiff on; default is all shards.")
+	base.AddCommand(update)
 }
 
 func init() {

@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -815,15 +816,84 @@ func TestGetStructNames(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestShowNoSamplesFlag(t *testing.T) {
-	root := &cobra.Command{Use: "test"}
-	registerCommands(root)
+var registerVDiffCommandsOnce sync.Once
 
-	showCmd, _, err := root.Find([]string{"VDiff", "show"})
+func ensureVDiffCommandsRegistered() {
+	registerVDiffCommandsOnce.Do(func() {
+		registerCommands(&cobra.Command{Use: "test"})
+	})
+}
+
+func TestShowNoSamplesFlag(t *testing.T) {
+	ensureVDiffCommandsRegistered()
+
+	showCmd, _, err := base.Find([]string{"show"})
 	require.NoError(t, err)
 
 	flag := showCmd.Flags().Lookup("no-samples")
 	require.NotNil(t, flag, "vdiff show must expose the --no-samples flag")
 	require.Equal(t, "false", flag.DefValue, "--no-samples must default to false")
 	require.Contains(t, flag.Usage, "gRPC message limits")
+}
+
+func TestUpdateCommandFlags(t *testing.T) {
+	ensureVDiffCommandsRegistered()
+
+	require.NotNil(t, update.Flags().Lookup("tablet-types"))
+	require.NotNil(t, update.Flags().Lookup("tablet-types-in-preference-order"))
+	require.NotNil(t, update.Flags().Lookup("source-cells"))
+	require.NotNil(t, update.Flags().Lookup("target-cells"))
+	require.NotNil(t, update.Flags().Lookup("clear-source-cells"))
+	require.NotNil(t, update.Flags().Lookup("clear-target-cells"))
+	require.NotNil(t, update.Flags().Lookup("target-shards"))
+	require.Equal(t, "true", update.Flags().Lookup("tablet-types-in-preference-order").DefValue)
+	require.Contains(t, update.Long, "VDiff stop")
+	require.Contains(t, update.Long, "VDiff resume")
+	require.Contains(t, update.Long, "clear-source-cells")
+	require.Contains(t, update.Example, "PRIMARY")
+	require.Contains(t, update.Flags().Lookup("tablet-types").Usage, "PRIMARY")
+	require.Contains(t, update.Flags().Lookup("tablet-types").Usage, "REPLICA")
+	require.Contains(t, update.Flags().Lookup("tablet-types").Usage, "RDONLY")
+	require.NotContains(t, update.Long, "stopped and resumed")
+
+	t.Run("invalid uuid", func(t *testing.T) {
+		err := update.PreRunE(update, []string{"not-a-uuid"})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid UUID provided")
+	})
+
+	t.Run("requires a picker option", func(t *testing.T) {
+		updateOptions.ClearSourceCells = false
+		updateOptions.ClearTargetCells = false
+		updateOptions.SourceCells = nil
+		updateOptions.TargetCells = nil
+		updateOptions.TabletTypes = nil
+		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "no picker options specified to update")
+	})
+
+	t.Run("clear source cells is a picker option", func(t *testing.T) {
+		require.NoError(t, update.Flags().Set("clear-source-cells", "true"))
+		t.Cleanup(func() {
+			require.NoError(t, update.Flags().Set("clear-source-cells", "false"))
+			updateOptions.ClearSourceCells = false
+		})
+		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
+		require.NoError(t, err)
+	})
+
+	t.Run("source cells and clear source cells are mutually exclusive", func(t *testing.T) {
+		require.NoError(t, update.Flags().Set("source-cells", "zone1"))
+		require.NoError(t, update.Flags().Set("clear-source-cells", "true"))
+		t.Cleanup(func() {
+			require.NoError(t, update.Flags().Set("source-cells", ""))
+			require.NoError(t, update.Flags().Set("clear-source-cells", "false"))
+			updateOptions.ClearSourceCells = false
+			updateOptions.SourceCells = nil
+		})
+		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "cannot specify both --source-cells and --clear-source-cells")
+	})
 }

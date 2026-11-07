@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -653,6 +654,207 @@ func TestVDiffStop(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, got)
+			}
+			env.tmc.confirmVDiffRequests(t)
+		})
+	}
+}
+
+func TestVDiffUpdate(t *testing.T) {
+	ctx := t.Context()
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"-80", "80-"},
+	}
+	workflow := "testwf"
+	vduuid := uuid.New().String()
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+
+	env.tmc.strict = true
+	action := string(vdiff.UpdateAction)
+	expectedReq := func() *tabletmanagerdatapb.VDiffRequest {
+		return &tabletmanagerdatapb.VDiffRequest{
+			Keyspace:  targetKeyspace.KeyspaceName,
+			Workflow:  workflow,
+			Action:    action,
+			VdiffUuid: vduuid,
+			Options: &tabletmanagerdatapb.VDiffOptions{
+				PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
+					TabletTypes: "in_order:primary",
+				},
+			},
+		}
+	}
+	shardOutput := func(state string) *tabletmanagerdatapb.VDiffResponse {
+		return &tabletmanagerdatapb.VDiffResponse{
+			Id:        1,
+			VdiffUuid: vduuid,
+			Output: sqltypes.ResultToProto3(sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields("state|updated", "varbinary|int64"),
+				state+"|1",
+			)),
+		}
+	}
+
+	tests := []struct {
+		name                  string
+		req                   *vtctldatapb.VDiffUpdateRequest
+		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse
+		wantErr               string
+		wantStates            map[string]string
+	}{
+		{
+			name: "basic update",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace:            targetKeyspace.KeyspaceName,
+				Workflow:                  workflow,
+				Uuid:                      vduuid,
+				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: expectedReq(),
+					res: shardOutput("stopped"),
+				},
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
+					req: expectedReq(),
+					res: shardOutput("error"),
+				},
+			},
+			wantStates: map[string]string{
+				"-80": "stopped",
+				"80-": "error",
+			},
+		},
+		{
+			name: "update on first shard",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace:            targetKeyspace.KeyspaceName,
+				TargetShards:              targetKeyspace.ShardNames[:1],
+				Workflow:                  workflow,
+				Uuid:                      vduuid,
+				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: expectedReq(),
+					res: shardOutput("stopped"),
+				},
+			},
+			wantStates: map[string]string{
+				"-80": "stopped",
+			},
+		},
+		{
+			name: "update on invalid shard",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace:            targetKeyspace.KeyspaceName,
+				TargetShards:              []string{"0"},
+				Workflow:                  workflow,
+				Uuid:                      vduuid,
+				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+			},
+			wantErr: "specified target shard 0 not a valid target for workflow " + workflow,
+		},
+		{
+			name: "no picker options",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           vduuid,
+			},
+			wantErr: "no picker options specified to update",
+		},
+		{
+			name: "clear source cells and source cells together",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace:   targetKeyspace.KeyspaceName,
+				Workflow:         workflow,
+				Uuid:             vduuid,
+				SourceCells:      []string{"zone1"},
+				ClearSourceCells: true,
+			},
+			wantErr: "cannot specify both source_cells and clear_source_cells",
+		},
+		{
+			name: "clear source cells",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace:   targetKeyspace.KeyspaceName,
+				Workflow:         workflow,
+				Uuid:             vduuid,
+				ClearSourceCells: true,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: vduuid,
+						Options: &tabletmanagerdatapb.VDiffOptions{
+							PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
+								SourceCell: defaultCellName,
+							},
+						},
+					},
+					res: shardOutput("stopped"),
+				},
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: vduuid,
+						Options: &tabletmanagerdatapb.VDiffOptions{
+							PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
+								SourceCell: defaultCellName,
+							},
+						},
+					},
+					res: shardOutput("completed"),
+				},
+			},
+			wantStates: map[string]string{
+				"-80": "stopped",
+				"80-": "completed",
+			},
+		},
+		{
+			name: "invalid uuid",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           "not-a-uuid",
+				TabletTypes:    []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+			},
+			wantErr: "invalid UUID provided: not-a-uuid",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for tab, vdr := range tt.expectedVDiffRequests {
+				env.tmc.expectVDiffRequest(tab, vdr)
+			}
+			got, err := env.ws.VDiffUpdate(ctx, tt.req)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			require.NotNil(t, got)
+			require.Len(t, got.Results, len(tt.wantStates))
+			for _, result := range got.Results {
+				require.Equal(t, tt.wantStates[result.Shard], result.State)
+				require.True(t, result.Updated)
 			}
 			env.tmc.confirmVDiffRequests(t)
 		})
