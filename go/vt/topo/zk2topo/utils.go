@@ -290,10 +290,6 @@ func DeleteRecursive(ctx context.Context, zconn *ZkConn, zkPath string, version 
 // and another node holds the lock.
 var errQueueLockHeld = errors.New("obtainQueueLock: lock is held by another node")
 
-// errQueueLockConnDropped is returned by obtainQueueLock when the
-// connection it was waiting on is dropped.
-var errQueueLockConnDropped = errors.New("obtainQueueLock: connection was dropped while waiting for the lock")
-
 // obtainQueueLock waits until we hold the lock in the provided path.
 // The lexically lowest node is the lock holder - verify that this
 // path holds the lock.  Call this queue-lock because the semantics are
@@ -338,7 +334,7 @@ func obtainQueueLock(ctx context.Context, conn *ZkConn, zkPath string, wait bool
 
 		// Set a watch on the previous node.
 		zkPrevLock := path.Join(queueNode, prevLock)
-		exists, _, watch, dropped, err := conn.existsWUntilDropped(ctx, zkPrevLock)
+		exists, _, watch, err := conn.ExistsW(ctx, zkPrevLock)
 		if err != nil {
 			return vterrors.Wrapf(err, "obtainQueueLock: unable to watch queued node %v", zkPrevLock)
 		}
@@ -349,20 +345,12 @@ func obtainQueueLock(ctx context.Context, conn *ZkConn, zkPath string, wait bool
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-dropped:
-			return errQueueLockConnDropped
 		case event := <-watch:
-			// If the watch failed, or the connection was dropped at
-			// the same time, the connection our node was created on
-			// was dropped, so the node may go away with its session:
-			// give up, and let the caller clean up.
+			// If the watch failed, the connection our node was
+			// created on was closed, so the node goes away with its
+			// session: give up, and let the caller clean up.
 			if event.Err != nil {
 				return vterrors.Wrapf(event.Err, "obtainQueueLock: watch on queued node %v failed", zkPrevLock)
-			}
-			select {
-			case <-dropped:
-				return errQueueLockConnDropped
-			default:
 			}
 			// Something happened to the previous lock.
 			// It doesn't matter what, read again.

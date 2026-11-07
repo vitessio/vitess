@@ -104,20 +104,10 @@ type ZkConn struct {
 	sem *semaphore.Weighted
 
 	// mu protects the following fields.
-	mu   sync.Mutex
-	conn *zk.Conn
-	// connDropped is closed when conn is dropped, to notify the
-	// callers waiting on watches set on it.
-	connDropped chan struct{}
+	mu      sync.Mutex
+	conn    *zk.Conn
+	sockets *socketDialer
 }
-
-// closedChan is an already closed channel, for watches set on a
-// connection that has already been dropped.
-var closedChan = func() chan struct{} {
-	ch := make(chan struct{})
-	close(ch)
-	return ch
-}()
 
 // Connect to the Zookeeper servers specified in addr
 // addr can be a comma separated list of servers and each server can be a DNS entry with multiple values.
@@ -239,6 +229,7 @@ func (c *ZkConn) Close() error {
 	defer c.mu.Unlock()
 	if c.conn != nil {
 		c.conn.Close()
+		c.sockets.Close()
 	}
 	return nil
 }
@@ -306,12 +297,12 @@ func (c *ZkConn) getConn(ctx context.Context) (*zk.Conn, error) {
 	defer c.mu.Unlock()
 
 	if c.conn == nil {
-		conn, events, err := dialZk(ctx, c.addr)
+		conn, sockets, events, err := dialZk(ctx, c.addr)
 		if err != nil {
 			return nil, err
 		}
 		c.conn = conn
-		c.connDropped = make(chan struct{})
+		c.sockets = sockets
 		go c.handleSessionEvents(conn, events)
 		c.maybeAddAuth(ctx)
 	}
@@ -342,55 +333,75 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 }
 
 // dropConn closes conn. If the ZkConn still references it, it clears the
-// reference, so the next call connects again, and notifies the watches
-// set on it.
+// reference, so the next call connects again, and closes its socket.
 func (c *ZkConn) dropConn(conn *zk.Conn) {
 	c.mu.Lock()
+	var sockets *socketDialer
 	if c.conn == conn {
 		c.conn = nil
-		close(c.connDropped)
+		sockets = c.sockets
+		c.sockets = nil
 	}
 	c.mu.Unlock()
 	conn.Close()
-}
-
-// getWUntilDropped is like GetW, but also returns a channel that is closed
-// when zk2topo drops the connection the watch was set on. Callers must
-// treat that as a watch error.
-//
-// We can't rely on the Zookeeper client to fire the watch when we close
-// the connection: if the client is reconnecting at that time, it can
-// resume the session on another server after Close gave up on sending the
-// close request. The session then stays alive, but the client can no
-// longer set the watch again on the server, and never fires it.
-func (c *ZkConn) getWUntilDropped(ctx context.Context, path string) (data []byte, stat *zk.Stat, watch <-chan zk.Event, dropped <-chan struct{}, err error) {
-	err = c.withRetry(ctx, func(conn *zk.Conn) error {
-		data, stat, watch, err = conn.GetW(path)
-		dropped = c.droppedChan(conn)
-		return err
-	})
-	return
-}
-
-// existsWUntilDropped is like ExistsW, with the dropped channel of
-// getWUntilDropped.
-func (c *ZkConn) existsWUntilDropped(ctx context.Context, path string) (exists bool, stat *zk.Stat, watch <-chan zk.Event, dropped <-chan struct{}, err error) {
-	err = c.withRetry(ctx, func(conn *zk.Conn) error {
-		exists, stat, watch, err = conn.ExistsW(path)
-		dropped = c.droppedChan(conn)
-		return err
-	})
-	return
-}
-
-// droppedChan returns a channel that is closed when conn is dropped.
-func (c *ZkConn) droppedChan(conn *zk.Conn) <-chan struct{} {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.conn != conn {
-		return closedChan
+	if sockets != nil {
+		sockets.Close()
 	}
-	return c.connDropped
+}
+
+// errSocketDialerClosed is returned when dialing with a closed socketDialer.
+var errSocketDialerClosed = errors.New("zk conn: connection was closed")
+
+// socketDialer dials the sockets of a zk.Conn, and can close them.
+//
+// We can't rely on zk.Conn.Close to end the session: if the client is
+// reconnecting at that time, it can resume the session on another server
+// after Close gave up on sending the close request. The session then stays
+// alive, but the client can no longer set its watches again on the server,
+// and never fires them. Closing the socket, and refusing to dial new ones,
+// makes the client stop, which fails all its watches. The server then
+// expires the session after the session timeout.
+type socketDialer struct {
+	dial zk.Dialer
+
+	// mu protects the following fields.
+	mu     sync.Mutex
+	socket net.Conn
+	closed bool
+}
+
+// Dial is a zk.Dialer.
+func (d *socketDialer) Dial(network, address string, timeout time.Duration) (net.Conn, error) {
+	d.mu.Lock()
+	closed := d.closed
+	d.mu.Unlock()
+	if closed {
+		return nil, errSocketDialerClosed
+	}
+
+	socket, err := d.dial(network, address, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		socket.Close()
+		return nil, errSocketDialerClosed
+	}
+	d.socket = socket
+	return socket, nil
+}
+
+// Close closes the current socket, and makes Dial fail from now on.
+func (d *socketDialer) Close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.closed = true
+	if d.socket != nil {
+		d.socket.Close()
+	}
 }
 
 // handleSessionEvents is processing events from the session channel.
@@ -410,9 +421,9 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 }
 
 // dialZk dials the server, and waits until connection.
-func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error) {
+func dialZk(ctx context.Context, addr string) (*zk.Conn, *socketDialer, <-chan zk.Event, error) {
 	servers := strings.Split(addr, ",")
-	dialer := zk.WithDialer(net.DialTimeout)
+	var dial zk.Dialer = net.DialTimeout
 	ctx, cancel := context.WithTimeout(ctx, baseTimeout)
 	defer cancel()
 	// If TLS is enabled use a TLS enabled dialer option
@@ -446,20 +457,21 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			ServerName:   serverName,
 		}
 
-		dialer = zk.WithDialer(func(network, address string, timeout time.Duration) (net.Conn, error) {
+		dial = func(network, address string, timeout time.Duration) (net.Conn, error) {
 			d := net.Dialer{Timeout: timeout}
 
 			return tls.DialWithDialer(&d, network, address, tlsConfig)
-		})
+		}
 	}
+	sockets := &socketDialer{dial: dial}
 	// Make sure we re-resolve the DNS name every time we reconnect to a server
 	// In environments where DNS changes such as Kubernetes we can't cache the IP address
 	hostProvider := zk.WithHostProvider(&zk.SimpleDNSHostProvider{})
 
 	// zk.Connect automatically shuffles the servers
-	zconn, session, err := zk.Connect(servers, baseTimeout, dialer, hostProvider)
+	zconn, session, err := zk.Connect(servers, baseTimeout, zk.WithDialer(sockets.Dial), hostProvider)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Wait for connection, skipping transition states.
@@ -467,17 +479,19 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 		select {
 		case <-ctx.Done():
 			zconn.Close()
-			return nil, nil, ctx.Err()
+			sockets.Close()
+			return nil, nil, nil, ctx.Err()
 		case event := <-session:
 			switch event.State {
 			case zk.StateConnected:
 				// success
-				return zconn, session, nil
+				return zconn, sockets, session, nil
 
 			case zk.StateAuthFailed:
 				// fast fail this one
 				zconn.Close()
-				return nil, nil, errors.New("zk connect failed: StateAuthFailed")
+				sockets.Close()
+				return nil, nil, nil, errors.New("zk connect failed: StateAuthFailed")
 			}
 		}
 	}

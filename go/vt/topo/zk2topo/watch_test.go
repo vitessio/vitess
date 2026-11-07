@@ -28,10 +28,15 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/z-division/go-zookeeper/zk"
+
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Opcodes from the ZooKeeper wire protocol.
 const (
+	fakeOpCreate       = 1
 	fakeOpDelete       = 2
 	fakeOpExists       = 3
 	fakeOpGetData      = 4
@@ -42,16 +47,18 @@ const (
 )
 
 // fakeZkServer speaks just enough of the ZooKeeper wire protocol to
-// establish and resume sessions, answer getData, getChildren2, exists and
-// pings, and accept delete and setWatches. Every node exists, and has the
-// children in children. It lets tests control when connections drop and
+// establish and resume sessions, answer create, getData, getChildren2,
+// exists and pings, and accept delete and setWatches. Every node exists,
+// and has the children in children. Creating a path that ends with a slash
+// creates the last of children in it, like a sequential node. It lets tests control when connections drop and
 // how long a reconnect takes, which a real ZooKeeper does not.
 type fakeZkServer struct {
 	t         *testing.T
 	listeners []net.Listener
 	children  []string
 
-	// requests receives the opcode and path of each request with a path.
+	// requests receives the opcode and path of each request with a path,
+	// once the server has replied to it.
 	requests chan fakeZkRequest
 
 	// connectDelay is how long the server waits before answering a
@@ -71,7 +78,7 @@ func startFakeZkServer(t *testing.T, n int, children ...string) *fakeZkServer {
 	s := &fakeZkServer{
 		t:        t,
 		children: children,
-		requests: make(chan fakeZkRequest, 100),
+		requests: make(chan fakeZkRequest, 1000),
 		conns:    make(map[net.Conn]struct{}),
 	}
 	for range n {
@@ -97,20 +104,31 @@ func (s *fakeZkServer) addr() string {
 	return strings.Join(addrs, ",")
 }
 
-// waitForRequest waits until the server receives a request with opcode,
-// and returns its path.
+// waitForRequest waits until the server has replied to a request with
+// opcode, and returns its path.
 func (s *fakeZkServer) waitForRequest(opcode int32) string {
-	timeout := time.After(10 * time.Second)
-	for {
-		select {
-		case req := <-s.requests:
-			if req.opcode == opcode {
-				return req.path
+	var path string
+	require.Eventually(s.t, func() bool {
+		for {
+			select {
+			case req := <-s.requests:
+				if req.opcode == opcode {
+					path = req.path
+					return true
+				}
+			default:
+				return false
 			}
-		case <-timeout:
-			s.t.Fatalf("fake zk server: no request with opcode %d", opcode)
 		}
-	}
+	}, 30*time.Second, 10*time.Millisecond, "fake zk server: no request with opcode %d", opcode)
+	return path
+}
+
+// numConns returns the number of open client connections.
+func (s *fakeZkServer) numConns() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.conns)
 }
 
 // dropConnections closes every client connection, as if the ZooKeeper
@@ -202,15 +220,23 @@ func (s *fakeZkServer) handle(c net.Conn) {
 		resp := binary.BigEndian.AppendUint32(nil, xid)
 		resp = binary.BigEndian.AppendUint64(resp, 1)
 		resp = binary.BigEndian.AppendUint32(resp, 0)
+		var path string
 		switch opcode {
-		case fakeOpDelete, fakeOpExists, fakeOpGetData, fakeOpGetChildren2:
+		case fakeOpCreate, fakeOpDelete, fakeOpExists, fakeOpGetData, fakeOpGetChildren2:
 			// The request starts with the path.
 			size := binary.BigEndian.Uint32(req[8:12])
-			s.requests <- fakeZkRequest{opcode: opcode, path: string(req[12 : 12+size])}
+			path = string(req[12 : 12+size])
 		}
 		// A Stat is 68 bytes.
 		stat := make([]byte, 68)
 		switch opcode {
+		case fakeOpCreate:
+			// createResponse: the path created.
+			created := path
+			if strings.HasSuffix(path, "/") && len(s.children) > 0 {
+				created += s.children[len(s.children)-1]
+			}
+			resp = appendString(resp, created)
 		case fakeOpGetData:
 			// getDataResponse: data []byte, stat Stat.
 			resp = appendString(resp, "data")
@@ -235,69 +261,97 @@ func (s *fakeZkServer) handle(c net.Conn) {
 		if writeFrame(c, resp) != nil {
 			return
 		}
+		if path != "" {
+			s.requests <- fakeZkRequest{opcode: opcode, path: path}
+		}
 	}
 }
+
+// dropConnectionsAfterSlowReconnect drops the client connections, and makes
+// reconnecting take longer than zk.Conn.Close waits to send its close
+// request.
+func (s *fakeZkServer) dropConnectionsAfterSlowReconnect() {
+	s.connectDelay.Store(int64(1500 * time.Millisecond))
+	s.dropConnections()
+}
+
+// healthyFor is how long tests check that nothing fails while the
+// connection is healthy.
+const healthyFor = 500 * time.Millisecond
 
 // TestWatchNotifiedWhenConnectionDrops checks that a watch reports an error
 // once its ZooKeeper connection drops, even when the client library resumes
 // the session on another server before Vitess's Close takes effect. In that
-// case the library keeps the session alive but can no longer re-register
-// its watches, so without an error the watch would never fire again.
+// case the library keeps the session alive but can no longer set its watches
+// again, so without an error the watch would never fire again. It also
+// checks that the resumed session is ended.
 func TestWatchNotifiedWhenConnectionDrops(t *testing.T) {
 	fake := startFakeZkServer(t, 2)
 	zs := NewServer(fake.addr(), "/")
-	defer zs.Close()
+	t.Cleanup(zs.Close)
 
 	_, changes, err := zs.Watch(t.Context(), "keyspace/SrvVSchema")
 	require.NoError(t, err)
+	require.Never(t, func() bool { return len(changes) > 0 }, healthyFor, 10*time.Millisecond,
+		"watch fired on a healthy connection")
 
-	// Resuming the session takes longer than zk.Conn.Close waits to send
-	// its close request.
-	fake.connectDelay.Store(int64(1500 * time.Millisecond))
-	fake.dropConnections()
+	fake.dropConnectionsAfterSlowReconnect()
 
-	select {
-	case wd, ok := <-changes:
-		require.True(t, ok, "watch channel closed without an error")
-		require.Error(t, wd.Err)
-	case <-time.After(10 * time.Second):
-		t.Fatal("watch was not notified after its connection dropped")
-	}
+	var wd *topo.WatchData
+	require.Eventually(t, func() bool {
+		select {
+		case wd = <-changes:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "watch was not notified after its connection dropped")
+	require.NotNil(t, wd, "watch channel closed without an error")
+	require.ErrorContains(t, wd.Err, zk.ErrClosing.Error())
+
+	require.Eventually(t, func() bool { return fake.numConns() == 0 }, 30*time.Second, 10*time.Millisecond,
+		"the resumed session still has a connection")
 }
 
 // TestObtainQueueLockFailsWhenConnectionDrops checks that waiting for a
 // queue lock fails when the connection drops, instead of reading the queue
 // again on a new connection: our node belongs to the session of the dropped
-// connection, and may go away with it.
+// connection, and goes away with it.
 func TestObtainQueueLockFailsWhenConnectionDrops(t *testing.T) {
 	fake := startFakeZkServer(t, 2, "lock-0000000001", "lock-0000000002")
 	conn := Connect(fake.addr())
-	defer conn.Close()
+	t.Cleanup(func() { conn.Close() })
 
 	errc := make(chan error, 1)
 	go func() {
 		errc <- obtainQueueLock(t.Context(), conn, "/locks/lock-0000000002", true)
 	}()
 	require.Equal(t, "/locks/lock-0000000001", fake.waitForRequest(fakeOpExists))
+	require.Never(t, func() bool { return len(errc) > 0 }, healthyFor, 10*time.Millisecond,
+		"obtainQueueLock returned on a healthy connection")
 
-	fake.connectDelay.Store(int64(1500 * time.Millisecond))
-	fake.dropConnections()
+	fake.dropConnectionsAfterSlowReconnect()
 
-	select {
-	case err := <-errc:
-		require.Error(t, err)
-	case <-time.After(10 * time.Second):
-		t.Fatal("obtainQueueLock did not fail after its connection dropped")
-	}
+	var err error
+	require.Eventually(t, func() bool {
+		select {
+		case err = <-errc:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "obtainQueueLock did not fail after its connection dropped")
+	_, cause := vterrors.Unwrap(err)
+	require.ErrorIs(t, cause, zk.ErrClosing)
 }
 
-// TestLeaderDeletesProposalWhenConnectionDrops checks that a leader that
-// stops leading because its connection dropped deletes its proposal, so it
-// does not block the other participants if its session stays alive.
+// TestLeaderDeletesProposalWhenConnectionDrops checks that a leader stops
+// leading when its connection drops, and then deletes its proposal, so the
+// other participants don't wait for the session to expire.
 func TestLeaderDeletesProposalWhenConnectionDrops(t *testing.T) {
 	fake := startFakeZkServer(t, 2)
 	zs := NewServer(fake.addr(), "/")
-	defer zs.Close()
+	t.Cleanup(zs.Close)
 
 	mp := &zkLeaderParticipation{
 		zs:      zs,
@@ -305,15 +359,42 @@ func TestLeaderDeletesProposalWhenConnectionDrops(t *testing.T) {
 		stopCtx: t.Context(),
 		done:    make(chan struct{}),
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	go mp.watchLeadership(ctx, zs.conn, "/election/proposal", cancel)
 	require.Equal(t, "/election/proposal", fake.waitForRequest(fakeOpGetData))
+	require.Never(t, func() bool { return ctx.Err() != nil }, healthyFor, 10*time.Millisecond,
+		"leadership was canceled on a healthy connection")
 
-	fake.connectDelay.Store(int64(1500 * time.Millisecond))
-	fake.dropConnections()
+	fake.dropConnectionsAfterSlowReconnect()
 
 	// Leadership must be canceled before the proposal is deleted, so that
 	// no other participant can become leader while we still lead.
 	require.Equal(t, "/election/proposal", fake.waitForRequest(fakeOpDelete))
 	require.Error(t, ctx.Err(), "leadership was not canceled before deleting the proposal")
+}
+
+// TestWaitForLeadershipDeletesProposalWhenConnectionDrops checks that a
+// participant waiting for leadership deletes its proposal when its
+// connection drops, so the participants behind it don't wait for the
+// session to expire.
+func TestWaitForLeadershipDeletesProposalWhenConnectionDrops(t *testing.T) {
+	fake := startFakeZkServer(t, 2, "0000000001", "0000000002")
+	zs := NewServer(fake.addr(), "/")
+	t.Cleanup(zs.Close)
+
+	mp, err := zs.NewLeaderParticipation("election", "id")
+	require.NoError(t, err)
+	errc := make(chan error, 1)
+	go func() {
+		_, err := mp.WaitForLeadership()
+		errc <- err
+	}()
+	require.Equal(t, "/elections/election/0000000001", fake.waitForRequest(fakeOpExists))
+	require.Never(t, func() bool { return len(errc) > 0 }, healthyFor, 10*time.Millisecond,
+		"WaitForLeadership returned on a healthy connection")
+
+	fake.dropConnectionsAfterSlowReconnect()
+
+	require.Equal(t, "/elections/election/0000000002", fake.waitForRequest(fakeOpDelete))
+	require.Error(t, <-errc)
 }

@@ -21,8 +21,6 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/z-division/go-zookeeper/zk"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -36,7 +34,7 @@ func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, 
 	initialCtx, initialCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer initialCancel()
 
-	data, stats, watch, dropped, err := zs.conn.getWUntilDropped(initialCtx, zkPath)
+	data, stats, watch, err := zs.conn.GetW(initialCtx, zkPath)
 	if err != nil {
 		return nil, nil, convertError(err, zkPath)
 	}
@@ -67,10 +65,6 @@ func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, 
 					return
 				}
 
-			case <-dropped:
-				c <- &topo.WatchData{Err: vterrors.Wrapf(zk.ErrClosing, "connection for the watch on %v was dropped", zkPath)}
-				return
-
 			case <-ctx.Done():
 				// user is not interested any more
 				c <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, "watch")}
@@ -78,7 +72,7 @@ func (zs *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, 
 			}
 
 			// Get the value again, and send it, or error.
-			data, stats, watch, dropped, err = zs.conn.getWUntilDropped(ctx, zkPath)
+			data, stats, watch, err = zs.conn.GetW(ctx, zkPath)
 			if err != nil {
 				c <- &topo.WatchData{Err: convertError(err, zkPath)}
 				return
