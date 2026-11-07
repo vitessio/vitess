@@ -1801,6 +1801,137 @@ func TestDormant(t *testing.T) {
 	})
 }
 
+// Enable marks the throttler enabled before Operate creates the rate limiter that checks mark, and a check from a
+// throttler client or a CheckThrottler RPC can land in between. A check there, or during any later Enable, must
+// neither dereference a nil rate limiter nor race with Operate.
+func TestCheckWhileEnabling(t *testing.T) {
+	for range 20 {
+		throttler := newTestThrottler()
+		throttler.isOpen.Store(true)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		checksDone := make(chan struct{})
+		go func() {
+			defer close(checksDone)
+			for ctx.Err() == nil {
+				throttler.Check(ctx, throttlerapp.TestingName.String(), nil, &CheckFlags{})
+			}
+		}()
+		for range 3 {
+			wg := throttler.Enable()
+			require.NotNil(t, wg)
+			throttler.Disable()
+			wg.Wait()
+		}
+		cancel()
+		<-checksDone
+		throttler.isOpen.Store(false)
+	}
+}
+
+// Before its first Operate, a throttler has no rate limiter to tell when it was last checked, and reports itself
+// neither dormant nor recently checked.
+func TestRecentCheckBeforeOperate(t *testing.T) {
+	throttler := newTestThrottler()
+	require.Nil(t, throttler.recentCheckRateLimiter.Load())
+	assert.False(t, throttler.isDormant())
+	assert.False(t, throttler.recentlyChecked())
+}
+
+// Enable marks the throttler enabled before Operate creates the rate limiter that checks mark. A check in between
+// must not dereference the nil rate limiter.
+func TestCheckBeforeOperate(t *testing.T) {
+	throttler := newTestThrottler()
+	throttler.isOpen.Store(true)
+	throttler.isEnabled.Store(true)
+	t.Cleanup(func() {
+		throttler.isEnabled.Store(false)
+		throttler.isOpen.Store(false)
+	})
+
+	assert.NotPanics(t, func() {
+		throttler.Check(t.Context(), throttlerapp.TestingName.String(), nil, &CheckFlags{})
+	})
+}
+
+// Disable doesn't wait for Operate to exit, so after a Disable and an Enable the old Operate can exit after the new
+// one stored its rate limiter. The old Operate must stop its own rate limiter, whose goroutine leaks otherwise, and
+// not the new one's: a stopped one reads as checked just now, forever, so the throttler would report itself recently
+// checked and never go dormant.
+func TestOperateStopsItsOwnRateLimiter(t *testing.T) {
+	throttler := newTestThrottler()
+
+	oldCtx, cancelOld := context.WithCancel(t.Context())
+	oldWG := &sync.WaitGroup{}
+	throttler.Operate(oldCtx, oldWG)
+	oldRateLimiter := throttler.recentCheckRateLimiter.Load()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	wg := &sync.WaitGroup{}
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+	throttler.Operate(ctx, wg)
+
+	cancelOld()
+	oldWG.Wait()
+	assert.False(t, throttler.recentlyChecked(), "nothing checked the throttler")
+	// Stop marks a rate limiter as last used at MaxInt64, so its Diff is negative.
+	assert.Negative(t, oldRateLimiter.Diff(), "the old Operate didn't stop its rate limiter")
+}
+
+// Disable doesn't wait for Operate to exit, so a Disable and an Enable in quick succession start an Operate while the
+// previous one still runs. The new Operate must not run its loop until the previous one has exited: the loops share
+// the throttler's channels and inventory, and the previous one's cleanup clears inventory.TabletMetrics, a plain map,
+// which the new one writes to. An Operate that is cancelled while it waits, as on two Disables and Enables in a row,
+// must keep waiting, or else the Operate after it overlaps the one before it.
+func TestOperateWaitsForPreviousOperate(t *testing.T) {
+	throttler := newTestThrottler()
+
+	oldCtx, cancelOld := context.WithCancel(t.Context())
+	oldWG := &sync.WaitGroup{}
+	throttler.Operate(oldCtx, oldWG)
+	// Hold the old Operate inside its loop, then cancel it, as Disable does.
+	entered, release := make(chan struct{}), make(chan struct{})
+	throttler.serialFuncChan <- func() {
+		close(entered)
+		<-release
+	}
+	<-entered
+	cancelOld()
+
+	// The next Operate is cancelled while it waits for the old one.
+	middleCtx, cancelMiddle := context.WithCancel(t.Context())
+	middleWG := &sync.WaitGroup{}
+	throttler.Operate(middleCtx, middleWG)
+	cancelMiddle()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	wg := &sync.WaitGroup{}
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+	throttler.Operate(ctx, wg)
+
+	metric := &base.ThrottleMetric{Name: base.LagMetricName, Scope: base.SelfScope, Alias: "cell1-101", Value: 1}
+	sendMetric := func() bool {
+		select {
+		case throttler.throttleMetricChan <- metric:
+			return true
+		default:
+			return false
+		}
+	}
+	assert.Never(t, sendMetric, time.Second, 10*time.Millisecond, "no loop may take a metric while the old Operate still runs")
+
+	close(release)
+	oldWG.Wait()
+	middleWG.Wait()
+	assert.Eventually(t, sendMetric, 30*time.Second, 10*time.Millisecond, "the new Operate must run its loop once the ones before it have exited")
+}
+
 func TestChecks(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
