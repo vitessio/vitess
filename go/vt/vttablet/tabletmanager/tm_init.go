@@ -1172,34 +1172,48 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 
 const replicationInitializationPrimaryStatusTimeout = 2 * time.Second
 
-// replicationInitializationLockAcquireTimeout bounds the shard lock acquisition
-// of replication initialization. It does not bound the topology backend's
-// cleanup after a timed-out acquisition.
-const replicationInitializationLockAcquireTimeout = time.Second
+// replicationInitializationLockWait is how long replication initialization
+// retries a held shard lock: long enough for other tablets' replication
+// initializations, which hold it briefly, but not for a reparent. The lock
+// holder may need RPCs to this tablet, which a starting tablet does not serve
+// yet and a restoring tablet blocks with its action lock, so the wait delays
+// the holder.
+const replicationInitializationLockWait = time.Second
 
-// lockReplicationInitialization waits at most
-// replicationInitializationLockAcquireTimeout for the shard lock: long enough
-// for other tablets' replication initializations, which hold it briefly, but
-// not for a reparent. The lock holder may need RPCs to this tablet, which a
-// starting tablet does not serve yet and a restoring tablet blocks with its
-// action lock, so the wait delays the holder.
+// replicationInitializationLockRetryInterval is the pause between attempts to
+// take a held shard lock.
+const replicationInitializationLockRetryInterval = 100 * time.Millisecond
+
+// lockReplicationInitialization takes the shard lock without waiting in the
+// lock's queue, retrying for replicationInitializationLockWait while it is
+// held. Each attempt has its own topo.RemoteOperationTimeout, and the first
+// one always runs to completion, so a slow topology server costs only its
+// round trips and is not mistaken for a held lock.
 func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (context.Context, func(*error), error) {
 	tablet := tm.Tablet()
-	lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication",
-		topo.WithAcquireTimeout(replicationInitializationLockAcquireTimeout))
-	if err != nil {
-		msg := fmt.Sprintf("cannot initialize replication for %s/%s; replication has not been changed", tablet.Keyspace, tablet.Shard)
+	msg := fmt.Sprintf("cannot initialize replication for %s/%s; replication has not been changed", tablet.Keyspace, tablet.Shard)
+	deadline := time.Now().Add(replicationInitializationLockWait)
+	for {
+		lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication",
+			topo.WithType(topo.NonBlocking), topo.WithAcquireTimeout(topo.RemoteOperationTimeout))
 		switch {
+		case err == nil:
+			return lockedCtx, unlock, nil
 		case ctx.Err() != nil:
 			return nil, nil, vterrors.Wrap(ctx.Err(), msg)
-		case topo.IsErrType(err, topo.Timeout):
+		case topo.IsErrType(err, topo.NodeExists) && time.Now().Before(deadline):
+			select {
+			case <-ctx.Done():
+				return nil, nil, vterrors.Wrap(ctx.Err(), msg)
+			case <-time.After(replicationInitializationLockRetryInterval):
+			}
+		case topo.IsErrType(err, topo.NodeExists), topo.IsErrType(err, topo.Timeout):
 			err = vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out acquiring the shard lock: %v", err)
+			return nil, nil, &shardLockUnavailableError{vterrors.Wrap(err, msg)}
 		default:
 			return nil, nil, vterrors.Wrap(err, msg)
 		}
-		return nil, nil, &shardLockUnavailableError{vterrors.Wrap(err, msg)}
 	}
-	return lockedCtx, unlock, nil
 }
 
 // restoreAtStartup restores as --restore-from-backup or --restore-with-clone

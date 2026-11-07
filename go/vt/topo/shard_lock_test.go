@@ -38,7 +38,7 @@ func TestShardLockAcquireTimeout(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { var unlockErr error; unlock(&unlockErr); require.NoError(t, unlockErr) })
 
-	_, _, err = ts.LockShard(ctx, "ks", "0", "contender", topo.WithType(topo.NonBlocking), topo.WithAcquireTimeout(time.Millisecond))
+	_, _, err = ts.LockShard(ctx, "ks", "0", "contender", topo.WithAcquireTimeout(time.Millisecond))
 	require.True(t, topo.IsErrType(err, topo.Timeout), "expected acquisition timeout, got %v", err)
 	require.NoError(t, ctx.Err(), "acquisition timeout must not cancel the caller")
 }

@@ -214,6 +214,51 @@ func TestInitializeReplicationDoesNotReviveReceiverDuringReparent(t *testing.T) 
 	require.NoError(t, md.CheckSuperQueryList())
 }
 
+// slowLockFactory serves a memorytopo whose TryLock takes delay before it
+// starts, as a remote topology server's round trips do.
+type slowLockFactory struct {
+	*memorytopo.Factory
+	delay time.Duration
+}
+
+func (f *slowLockFactory) Create(cell, serverAddr, root string) (topo.Conn, error) {
+	conn, err := f.Factory.Create(cell, serverAddr, root)
+	if err != nil {
+		return nil, err
+	}
+	return &slowLockConn{Conn: conn, delay: f.delay}, nil
+}
+
+type slowLockConn struct {
+	topo.Conn
+	delay time.Duration
+}
+
+func (c *slowLockConn) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(c.delay):
+	}
+	return c.Conn.TryLock(ctx, dirPath, contents)
+}
+
+// TestInitializeReplicationTakesFreeShardLockFromSlowTopo checks that a free
+// shard lock whose acquisition outlasts the wait for a held lock is taken,
+// not treated as held.
+func TestInitializeReplicationTakesFreeShardLockFromSlowTopo(t *testing.T) {
+	_, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
+	ts, err := topo.NewWithFactory(&slowLockFactory{Factory: factory, delay: replicationInitializationLockWait + 500*time.Millisecond}, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	tm, md := newReplicationInitializationTMWithServer(t, ts, 1)
+
+	_, err = tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
+	require.NoError(t, err)
+	assert.True(t, md.Replicating)
+	require.NoError(t, md.CheckSuperQueryList())
+}
+
 func TestInitializeReplicationHoldsShardLockThroughReceiverStart(t *testing.T) {
 	tm, md, ts, _ := newReplicationInitializationTM(t)
 	checks := 0
@@ -283,10 +328,10 @@ func TestInitializeReplicationReadOnlyCasesDoNotLockShard(t *testing.T) {
 			})
 			require.NoError(t, err)
 			holdInitializationShardLock(t, ts)
-			before := factory.GetCallStats().Counts()["Lock"]
+			before := factory.GetCallStats().Counts()["TryLock"]
 			_, err = tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
 			require.NoError(t, err)
-			assert.Equal(t, before, factory.GetCallStats().Counts()["Lock"])
+			assert.Equal(t, before, factory.GetCallStats().Counts()["TryLock"])
 			assert.Zero(t, md.ExpectedExecuteSuperQueryCurrent)
 		})
 	}
@@ -305,11 +350,11 @@ func TestInitializeReplicationEmptyPrimaryHostnamePreservesSemiSync(t *testing.T
 func TestInitializeReplicationRereadsPrimaryAfterAcquiringLock(t *testing.T) {
 	tm, md, ts, factory := newReplicationInitializationTM(t)
 	release := holdInitializationShardLock(t, ts)
-	before := factory.GetCallStats().Counts()["Lock"]
+	before := factory.GetCallStats().Counts()["TryLock"]
 	done := make(chan error, 1)
 	go func() { _, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA); done <- err }()
 	// Publish the new primary and release the lock while acquisition waits for it.
-	require.Eventually(t, func() bool { return factory.GetCallStats().Counts()["Lock"] > before }, 30*time.Second, time.Millisecond)
+	require.Eventually(t, func() bool { return factory.GetCallStats().Counts()["TryLock"] > before }, 30*time.Second, time.Millisecond)
 	primary := newTestTablet(t, 3, "ks", "0", nil)
 	primary.Type = topodatapb.TabletType_PRIMARY
 	primary.MysqlHostname, primary.MysqlPort = "new-primary", 3306
@@ -369,7 +414,7 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 				// Stop the watcher before the lock is released.
 				t.Cleanup(tm.tmState.cancel)
 				if tc.lockErr != nil {
-					factory.AddOperationError(memorytopo.Lock, ".*", tc.lockErr)
+					factory.AddOperationError(memorytopo.TryLock, ".*", tc.lockErr)
 				}
 				require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
 				md.ExpectedExecuteSuperQueryList = nil
@@ -385,9 +430,9 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 					var cancel context.CancelFunc
 					ctx, cancel = context.WithCancel(ctx)
 					t.Cleanup(cancel)
-					before := factory.GetCallStats().Counts()["Lock"]
+					before := factory.GetCallStats().Counts()["TryLock"]
 					go func() {
-						assert.Eventually(t, func() bool { return factory.GetCallStats().Counts()["Lock"] > before }, 30*time.Second, time.Millisecond)
+						assert.Eventually(t, func() bool { return factory.GetCallStats().Counts()["TryLock"] > before }, 30*time.Second, time.Millisecond)
 						cancel()
 					}()
 				}
@@ -400,7 +445,7 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 				// may need, so it waits for the shard lock only briefly.
 				start := time.Now()
 				err := rsm.finish(ctx, replCmd)
-				assert.Less(t, time.Since(start), replicationInitializationLockAcquireTimeout+5*time.Second)
+				assert.Less(t, time.Since(start), replicationInitializationLockWait+5*time.Second)
 
 				require.NoError(t, md.CheckSuperQueryList())
 				assert.False(t, md.Replicating)
@@ -441,7 +486,7 @@ func TestStartWaitsBrieflyForHeldShardLock(t *testing.T) {
 	start := time.Now()
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	t.Cleanup(tm.Stop)
-	assert.Less(t, time.Since(start), replicationInitializationLockAcquireTimeout+5*time.Second)
+	assert.Less(t, time.Since(start), replicationInitializationLockWait+5*time.Second)
 
 	md := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	assert.False(t, tm.QueryServiceControl.(*tabletservermock.Controller).IsServing())
