@@ -2306,6 +2306,10 @@ type ColumnTypeOptions struct {
 	// Key specification
 	KeyOpt ColumnKeyOption
 
+	// SerialDefaultValue is the SERIAL DEFAULT VALUE attribute, an alias for
+	// NOT NULL AUTO_INCREMENT UNIQUE.
+	SerialDefaultValue bool
+
 	// Stores the tri state of having either VISIBLE, INVISIBLE or nothing specified
 	// on the column. In case of nothing, this is nil, when VISIBLE is set it's false
 	// and only when INVISIBLE is set does the pointer value return true.

@@ -1234,6 +1234,14 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			buf.WriteString(encodeSQLName(ct.Options.Collate))
 		}
+		if ct.Options.SerialDefaultValue {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[SERIAL])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[DEFAULT])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[VALUE])
+		}
 		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {
 				buf.WriteByte(' ')

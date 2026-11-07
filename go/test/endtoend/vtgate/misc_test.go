@@ -587,6 +587,69 @@ func TestCreateIndex(t *testing.T) {
 	utils.Exec(t, conn, `create index i2 on ks.t1000 (id1)`)
 }
 
+// TestSerialDefaultValue tests that SERIAL DEFAULT VALUE columns are stored as
+// MySQL would store the client's own text, since VTGate and VTTablet send the
+// regenerated text.
+func TestSerialDefaultValue(t *testing.T) {
+	conn, closer := start(t)
+	t.Cleanup(closer)
+	t.Cleanup(func() {
+		_, _ = utils.ExecAllowError(t, conn, "drop table if exists serial_default_value")
+	})
+
+	testcases := []struct {
+		name     string
+		column   string
+		nullable string
+		keys     []string
+	}{{
+		name:     "attribute",
+		column:   "int serial default value",
+		nullable: "NO",
+		keys:     []string{"id"},
+	}, {
+		name:     "null before the attribute",
+		column:   "int null serial default value",
+		nullable: "NO",
+		keys:     []string{"id"},
+	}, {
+		name:     "null after the attribute",
+		column:   "int serial default value null",
+		nullable: "YES",
+		keys:     []string{"id"},
+	}, {
+		name:     "not null after the attribute",
+		column:   "int serial default value not null",
+		nullable: "NO",
+		keys:     []string{"id"},
+	}, {
+		name:     "primary key",
+		column:   "int serial default value primary key",
+		nullable: "NO",
+		keys:     []string{"PRIMARY", "id"},
+	}}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			utils.Exec(t, conn, "drop table if exists serial_default_value")
+			utils.Exec(t, conn, "create table serial_default_value (id "+tc.column+")")
+
+			qr := utils.Exec(t, conn, "select is_nullable, extra from information_schema.columns where table_name = 'serial_default_value' and column_name = 'id'")
+			require.Len(t, qr.Rows, 1)
+			assert.Equal(t, tc.nullable, qr.Rows[0][0].ToString())
+			assert.Equal(t, "auto_increment", qr.Rows[0][1].ToString())
+
+			qr = utils.Exec(t, conn, "select index_name, non_unique from information_schema.statistics where table_name = 'serial_default_value'")
+			var keys []string
+			for _, row := range qr.Rows {
+				// every key is unique
+				assert.Equal(t, "0", row[1].ToString())
+				keys = append(keys, row[0].ToString())
+			}
+			assert.ElementsMatch(t, tc.keys, keys)
+		})
+	}
+}
+
 func TestVersions(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
