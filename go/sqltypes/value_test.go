@@ -517,6 +517,15 @@ func TestEncodeStringSQL(t *testing.T) {
 			in:  "\x00'\"\b\n\r\t\x1A\\",
 			out: "'\\0\\'\"\\b\\n\\r\\t\\Z\\\\'",
 		},
+		{
+			// A string in a character set other than UTF-8 keeps its bytes.
+			in:  "\xe9'\xff",
+			out: "'\xe9\\'\xff'",
+		},
+		{
+			in:  "é'中",
+			out: "'é\\'中'",
+		},
 	}
 	for _, tcase := range testcases {
 		out := EncodeStringSQL(tcase.in)
