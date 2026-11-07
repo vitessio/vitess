@@ -53,5 +53,8 @@ if [[ ${#pkgs[@]} -eq 0 ]]; then
 fi
 
 bin="${VTROOTBIN:-${PWD}/bin}/logcheck"
-go build -o "${bin}" ./go/tools/logcheck/main
+# go vet keys its cached results on the tool binary's hash. Without
+# -buildvcs=false, every commit stamps a different revision into it, and
+# none of the results go_cache_warm leaves behind are reused.
+go build -buildvcs=false -o "${bin}" ./go/tools/logcheck/main
 go vet -vettool="${bin}" "${pkgs[@]}"
