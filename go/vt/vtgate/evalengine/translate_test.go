@@ -103,6 +103,9 @@ func TestTranslateSimplification(t *testing.T) {
 		{"time'12:34:45'", ok(`'12:34:45'`), ok(`'12:34:45'`)},
 		{"timestamp'2022-10-03 12:34:45'", ok(`'2022-10-03 12:34:45'`), ok(`'2022-10-03 12:34:45'`)},
 		{"date'2022'", err(`Incorrect DATE value: '2022'`), err(`Incorrect DATE value: '2022'`)},
+		// MySQL calls a stored function of a quoted name, not IF.
+		{"`if`(1, 2, 3)", err("expr cannot be translated, not supported: `if`(1, 2, 3)"), err("expr cannot be translated, not supported: `if`(1, 2, 3)")},
+		{"if(1, 2, 3)", ok("case when 1 is true then 2 else 3"), ok("2")},
 		{"time'2022-10-03'", err(`Incorrect TIME value: '2022-10-03'`), err(`Incorrect TIME value: '2022-10-03'`)},
 		{"timestamp'2022-10-03'", err(`Incorrect DATETIME value: '2022-10-03'`), err(`Incorrect DATETIME value: '2022-10-03'`)},
 		{"ifnull(12, 23)", ok(`case when 12 is null then 23 else 12`), ok(`12`)},

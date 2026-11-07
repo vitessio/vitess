@@ -2777,6 +2777,13 @@ type (
 		Qualifier IdentifierCS
 		Name      IdentifierCI
 		Exprs     []Expr
+		// QuotedName is set for a call whose name MySQL reads as a name
+		// rather than as a keyword: a quoted name, as in `left`(a), or a
+		// name such as COUNT that MySQL reads as a keyword only when a '('
+		// follows it right away, as in COUNT (a). MySQL calls a stored or
+		// loadable function of that name then, so the name is written
+		// quoted, for MySQL to read it the same way.
+		QuotedName bool
 	}
 
 	// ValuesFuncExpr represents a function call.
