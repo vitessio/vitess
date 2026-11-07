@@ -820,7 +820,8 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 		defer close(done)
 		if previousDone != nil {
 			// Whoever starts an Operate cancels the previous one first, so it exits promptly. This goroutine holds no
-			// lock, so the previous Operate can still take initMutex on its way out.
+			// lock, so the previous Operate can still take initMutex on its way out. The wait ignores ctx: if this
+			// Operate stopped waiting once cancelled, the next one would run its loop while the previous one still runs.
 			<-*previousDone
 		}
 		defer func() {
