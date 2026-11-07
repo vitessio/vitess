@@ -45,6 +45,11 @@ func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]IR, error)
 }
 
 func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
+	if fn.QuotedName {
+		// MySQL calls a stored or loadable function of the name, as for
+		// `if`(a, b, c), rather than the function that the name stands for.
+		return nil, translateExprNotSupported(fn)
+	}
 	var args TupleExpr
 	for _, expr := range fn.Exprs {
 		convertedExpr, err := ast.translateExpr(expr)

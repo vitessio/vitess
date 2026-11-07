@@ -2950,7 +2950,8 @@ func (cmp *Comparator) RefOfFuncExpr(a, b *FuncExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.IdentifierCS(a.Qualifier, b.Qualifier) &&
+	return a.QuotedName == b.QuotedName &&
+		cmp.IdentifierCS(a.Qualifier, b.Qualifier) &&
 		cmp.IdentifierCI(a.Name, b.Name) &&
 		cmp.SliceOfExpr(a.Exprs, b.Exprs)
 }

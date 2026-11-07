@@ -10112,7 +10112,7 @@ INPUT
 select 1e8 sum(distinct df) from t1;
 END
 ERROR
-syntax error at position 16
+syntax error at position 15 near 'sum'
 END
 INPUT
 select * from t1 where soundex(a) = soundex('Test');
@@ -18932,7 +18932,7 @@ INPUT
 select 1e8 min(df) from t1;
 END
 ERROR
-syntax error at position 16
+syntax error at position 15 near 'min'
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_icelandic_ci;

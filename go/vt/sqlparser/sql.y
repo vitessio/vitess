@@ -423,7 +423,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE ANY_VALUE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
-%token <str> MASTER_BIND REPEAT GET_FORMAT GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
+%token <str> MASTER_BIND REPEAT SESSION_USER SYSTEM_USER ST_COLLECT GET_FORMAT GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
@@ -654,7 +654,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <tableOption> table_option ternary_option
 %type <boolean> no_write_to_binlog_opt
 %type <strs> check_type_list_opt repair_type_list_opt
-%type <str> check_type repair_type index_type_keyword function_keyword
+%type <str> check_type repair_type index_type_keyword
 %type <integer> int_number
 %type <literal> partition_node_group
 %type <valTuple> partition_value_tuple
@@ -6736,15 +6736,6 @@ table_name:
   {
     $$ = TableName{Name: $1}
   }
-| function_keyword
-  {
-    // MySQL reads the name as the function when '(' follows it right away.
-    if tkn := yylex.(*Tokenizer); @1.end < len(tkn.buf) && tkn.buf[@1.end] == '(' {
-      yylex.Error("syntax error")
-      return 1
-    }
-    $$ = TableName{Name: NewIdentifierCS(string($1))}
-  }
 | table_id '.' reserved_table_id
   {
     $$ = TableName{Qualifier: $1, Name: $3}
@@ -7484,7 +7475,12 @@ expression_list:
 function_call_generic:
   sql_id openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
+    quoted, ok := yylex.(*Tokenizer).nameOfFunction(@1.start, @1.end, $1)
+    if !ok {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &FuncExpr{Name: $1, Exprs: $3, QuotedName: quoted}
   }
 | table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
@@ -8694,6 +8690,19 @@ function_call_conflict:
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
   }
+// MySQL reads SESSION_USER() and SYSTEM_USER() as USER().
+| SESSION_USER openb closeb
+  {
+    $$ = &FuncExpr{Name: NewIdentifierCI("session_user")}
+  }
+| SYSTEM_USER openb closeb
+  {
+    $$ = &FuncExpr{Name: NewIdentifierCI("system_user")}
+  }
+| ST_COLLECT openb expression closeb
+  {
+    $$ = &FuncExpr{Name: NewIdentifierCI("st_collect"), Exprs: []Expr{$3}}
+  }
 // MySQL reserves REPEAT and GROUPING, but takes them as the names of these
 // functions.
 | REPEAT openb expression ',' expression closeb
@@ -9796,20 +9805,6 @@ table_id:
     $$ = NewIdentifierCS(string($1))
   }
 
-// function_keyword is a function name that MySQL reads as a keyword only
-// when a '(' follows it right away, and as a name otherwise, as in
-// `CREATE TABLE NOW (a INT)`. The grammar reads these names as keywords in
-// expressions, where some of them stand for the function without parentheses,
-// but takes them as the names of tables.
-function_keyword:
-  CAST
-| CURDATE
-| CURTIME
-| EXTRACT
-| NOW
-| SUBSTRING
-| SYSDATE
-
 table_id_opt:
   /* empty */ %prec LOWER_THAN_CHARSET
   {
@@ -9896,7 +9891,6 @@ reserved_keyword:
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
 | CURRENT_USER
-| CURTIME
 | DATABASE
 | DATABASES
 | DAY_HOUR
@@ -9926,7 +9920,6 @@ reserved_keyword:
 | EXISTS
 | EXIT
 | EXPLAIN
-| EXTRACT
 | FALSE
 | FIRST_VALUE
 | FLOAT4_TYPE
@@ -9999,7 +9992,6 @@ reserved_keyword:
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
-| NOW
 | NO_WRITE_TO_BINLOG
 | NTH_VALUE
 | NTILE
@@ -10065,8 +10057,6 @@ reserved_keyword:
 | STORED
 | STRAIGHT_JOIN
 | SUBSTR
-| SUBSTRING
-| SYSDATE
 | SYSTEM
 | TABLE
 | TABLESAMPLE
@@ -10117,7 +10107,13 @@ non_reserved_keyword:
   AGAINST
 | ACTION
 | ACTIVE
+// MySQL reads these function names as keywords right before '(' too, but
+// takes them as names.
 | ADDDATE %prec FUNCTION_CALL_NON_KEYWORD
+| SESSION_USER %prec FUNCTION_CALL_NON_KEYWORD
+| ST_COLLECT %prec FUNCTION_CALL_NON_KEYWORD
+| SUBDATE %prec FUNCTION_CALL_NON_KEYWORD
+| SYSTEM_USER %prec FUNCTION_CALL_NON_KEYWORD
 | ADMIN
 | AFTER
 | ALGORITHM
@@ -10133,9 +10129,6 @@ non_reserved_keyword:
 | BEGIN
 | BIT
 | BINLOG
-| BIT_AND %prec FUNCTION_CALL_NON_KEYWORD
-| BIT_OR %prec FUNCTION_CALL_NON_KEYWORD
-| BIT_XOR %prec FUNCTION_CALL_NON_KEYWORD
 | BOOL
 | BOOLEAN
 | BUCKETS
@@ -10171,15 +10164,12 @@ non_reserved_keyword:
 | CONSTRAINT_SCHEMA
 | CONTEXT
 | COPY
-| COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV
 | CURRENT
 | CURSOR_NAME
 | CUTOVER_THRESHOLD
 | DATA
 | DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
-| DATE_ADD %prec FUNCTION_CALL_NON_KEYWORD
-| DATE_SUB %prec FUNCTION_CALL_NON_KEYWORD
 | DATETIME
 | DEALLOCATE
 | DELAY_KEY_WRITE
@@ -10237,7 +10227,6 @@ non_reserved_keyword:
 | GET_SOURCE_PUBLIC_KEY
 | GLOBAL
 | GRANTS
-| GROUP_CONCAT %prec FUNCTION_CALL_NON_KEYWORD
 | GTID_EXECUTED
 | GTID_SUBSET %prec FUNCTION_CALL_NON_KEYWORD
 | GTID_SUBTRACT %prec FUNCTION_CALL_NON_KEYWORD
@@ -10260,7 +10249,6 @@ non_reserved_keyword:
 | ISOLATION
 | JSON
 | JSON_ARRAY %prec FUNCTION_CALL_NON_KEYWORD
-| JSON_ARRAYAGG %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_ARRAY_APPEND %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_ARRAY_INSERT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_CONTAINS %prec FUNCTION_CALL_NON_KEYWORD
@@ -10269,7 +10257,6 @@ non_reserved_keyword:
 | JSON_EXTRACT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_INSERT %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_KEYS %prec FUNCTION_CALL_NON_KEYWORD
-| JSON_OBJECTAGG %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_MERGE %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_MERGE_PATCH %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_MERGE_PRESERVE %prec FUNCTION_CALL_NON_KEYWORD
@@ -10315,15 +10302,12 @@ non_reserved_keyword:
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
 | MASTER_ZSTD_COMPRESSION_LEVEL
-| MAX %prec FUNCTION_CALL_NON_KEYWORD
 | MAX_ROWS
 | MEDIUM
 | MEMORY
 | MEMBER
 | MERGE
 | MESSAGE_TEXT
-| MID %prec FUNCTION_CALL_NON_KEYWORD
-| MIN %prec FUNCTION_CALL_NON_KEYWORD
 | MIN_ROWS
 | MODE
 | MODIFY
@@ -10378,7 +10362,6 @@ non_reserved_keyword:
 | PLUGINS
 | POINT %prec FUNCTION_CALL_NON_KEYWORD
 | POLYGON %prec FUNCTION_CALL_NON_KEYWORD
-| POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCESSLIST
 | QUERIES
 | QUERY
@@ -10456,10 +10439,6 @@ non_reserved_keyword:
 | STATS_SAMPLE_PAGES
 | STATUS
 | STORAGE
-| STD %prec FUNCTION_CALL_NON_KEYWORD
-| STDDEV %prec FUNCTION_CALL_NON_KEYWORD
-| STDDEV_POP %prec FUNCTION_CALL_NON_KEYWORD
-| STDDEV_SAMP %prec FUNCTION_CALL_NON_KEYWORD
 | STREAM
 | ST_Area %prec FUNCTION_CALL_NON_KEYWORD
 | ST_AsBinary %prec FUNCTION_CALL_NON_KEYWORD
@@ -10508,10 +10487,8 @@ non_reserved_keyword:
 | ST_X %prec FUNCTION_CALL_NON_KEYWORD
 | ST_Y %prec FUNCTION_CALL_NON_KEYWORD
 | SUBCLASS_ORIGIN
-| SUBDATE %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
-| SUM %prec FUNCTION_CALL_NON_KEYWORD
 | TABLE_NAME
 | TABLES
 | TABLE_CHECKSUM
@@ -10531,7 +10508,6 @@ non_reserved_keyword:
 | TRANSACTION
 | TRANSACTIONS
 | TRIGGERS
-| TRIM %prec FUNCTION_CALL_NON_KEYWORD
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
@@ -10547,10 +10523,7 @@ non_reserved_keyword:
 | USER_RESOURCES
 | VALIDATION
 | VALUE
-| VAR_POP %prec FUNCTION_CALL_NON_KEYWORD
-| VAR_SAMP %prec FUNCTION_CALL_NON_KEYWORD
 | VARIABLES
-| VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
 | VECTOR
 | VEXPLAIN
