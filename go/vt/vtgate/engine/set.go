@@ -168,7 +168,13 @@ func (u *UserDefinedVariable) Execute(ctx context.Context, vcursor VCursor, env 
 	if err != nil {
 		return err
 	}
-	return vcursor.Session().SetUDV(u.Name, value.Value(vcursor.ConnCollation()))
+	v := value.Value(vcursor.ConnCollation())
+	if v.Type() == sqltypes.Tuple {
+		// A row value is not a scalar: MySQL rejects it here with 1241, and
+		// stored it could never be read back as a bind variable.
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", 1)
+	}
+	return vcursor.Session().SetUDV(u.Name, v)
 }
 
 var _ SetOp = (*SysVarIgnore)(nil)
@@ -408,8 +414,9 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	vcursor.Session().SetSysVar(svs.Name, storedValue)
 
 	// If the condition below is true, we want to use reserved connection instead of SET_VAR query hint.
-	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables.
-	if !svs.SupportSetVar || !vcursor.CanUseSetVar() {
+	// MySQL supports SET_VAR only in MySQL80 and for a limited set of system variables, and the
+	// hint cannot carry a value that would terminate the comment it lives in.
+	if !svs.SupportSetVar || !vcursor.CanUseSetVar() || !sysvars.IsSafeSetVarValue(storedValue) {
 		vcursor.Session().NeedsReservedConn()
 		return true, storedValue, nil
 	}

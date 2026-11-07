@@ -19,19 +19,26 @@ package tableacl
 import (
 	"errors"
 	"io"
+	"log/slog"
 	"os"
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/tableacl/acl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
 )
+
+// allTablesACLSink keeps the result of AuthorizedForAllTables on the heap
+// while its allocations are counted.
+var allTablesACLSink *ACLResult
 
 type fakeACLFactory struct{}
 
@@ -40,8 +47,39 @@ func (factory *fakeACLFactory) New(entries []string) (acl.ACL, error) {
 }
 
 func TestInitWithInvalidFilePath(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	tacl := tableACL{factory: &simpleacl.Factory{}}
-	require.Error(t, tacl.init("/invalid_file_path", func() {}), "init should fail for an invalid config file path")
+	err := tacl.init("/invalid_file_path", func() {})
+	require.Error(t, err, "init should fail for an invalid config file path")
+
+	record := logs.Record(t, "unable to read tableACL config file")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "/invalid_file_path", record["path"])
+	assert.Equal(t, err.Error(), record["error"])
+}
+
+// TestInitWithUnparsableConfig checks that the protobuf and json parse errors
+// are logged as two records, each with its own error.
+func TestInitWithUnparsableConfig(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "tableacl")
+	require.NoError(t, err)
+	_, err = f.WriteString("not a config")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	tacl := tableACL{factory: &simpleacl.Factory{}}
+	require.Error(t, tacl.init(f.Name(), func() {}))
+
+	record := logs.Record(t, "unable to parse tableACL config file as a protobuf file")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, f.Name(), record["path"])
+	assert.Equal(t, "proto: illegal wireType 6", record["error"])
+
+	record = logs.Record(t, "unable to parse tableACL config file as a json file")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, f.Name(), record["path"])
+	assert.Contains(t, record["error"], "invalid value not")
 }
 
 var aclJSON = `{
@@ -173,6 +211,48 @@ func TestTableACLAuthorize(t *testing.T) {
 	readerACL := tacl.Authorized("test_data_any", READER)
 	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should have reader permission to table test_data_any")
 	require.True(t, readerACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should have reader permission to table test_data_any")
+
+	// No group covers every table, not even one with a prefix, so no one holds
+	// every role on all of them.
+	allTablesACL := tacl.AuthorizedForAllTables()
+	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "no user should hold every role on every table without a group covering every table")
+	require.Empty(t, allTablesACL.GroupName)
+
+	// A group covering every table ("%") must be the only one, as any other
+	// entry would overlap it. Only a user holding every role in it is a member:
+	// u3 is, u1 is not a writer, and u2 is not an admin.
+	require.NoError(t, tacl.Set(&tableaclpb.Config{
+		TableGroups: []*tableaclpb.TableGroupSpec{{
+			Name:                 "all",
+			TableNamesOrPrefixes: []string{"%"},
+			Readers:              []string{"u1", "u2", "u3"},
+			Writers:              []string{"u2", "u3"},
+			Admins:               []string{"u1", "u3"},
+		}},
+	}))
+	allTablesACL = tacl.AuthorizedForAllTables()
+	require.Equal(t, "all", allTablesACL.GroupName)
+	require.True(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u3"}), "user u3 should hold every role on every table")
+	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u1"}), "user u1 should not hold every role on every table")
+	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u2"}), "user u2 should not hold every role on every table")
+
+	// Every cached plan whose tables cannot be determined holds this result,
+	// and the plan cache counts the result but not the ACL in it, as with the
+	// ACL of each role. So the ACL must be built once with the configuration
+	// and shared, leaving the result as the only allocation per call.
+	allocs := testing.AllocsPerRun(100, func() {
+		allTablesACLSink = tacl.AuthorizedForAllTables()
+	})
+	require.Equal(t, float64(1), allocs, "AuthorizedForAllTables should allocate only its ACLResult")
+
+	// The rule must not rely on ValidateProto rejecting entries that overlap
+	// "%": if a stricter group ever governed some tables alongside it, holding
+	// every role in the "%" group would no longer cover those tables.
+	denyAll := map[Role]acl.ACL{READER: acl.DenyAllACL{}, WRITER: acl.DenyAllACL{}, ADMIN: acl.DenyAllACL{}}
+	tacl.entries = append(tacl.entries, aclEntry{tableNameOrPrefix: "secret", groupName: "secret", acl: denyAll})
+	allTablesACL = tacl.AuthorizedForAllTables()
+	require.False(t, allTablesACL.IsMember(&querypb.VTGateCallerID{Username: "u3"}), "a group covering every table alongside another group must not cover every table")
+	require.Empty(t, allTablesACL.GroupName)
 }
 
 func TestFailedToCreateACL(t *testing.T) {

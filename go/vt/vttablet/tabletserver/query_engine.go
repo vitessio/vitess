@@ -63,6 +63,10 @@ type TabletPlan struct {
 	Original   string
 	Rules      *rules.Rules
 	Authorized []*tableacl.ACLResult
+	// AuthorizedUndetermined is the runtime part for 'TablesUndetermined':
+	// the ACL a caller must be a member of to run a statement whose tables
+	// cannot be determined. It is nil when the tables are determined.
+	AuthorizedUndetermined *tableacl.ACLResult
 
 	QueryCount   uint64
 	Time         uint64
@@ -98,6 +102,18 @@ func (ep *TabletPlan) buildAuthorized() {
 	ep.Authorized = make([]*tableacl.ACLResult, len(ep.Permissions))
 	for i, perm := range ep.Permissions {
 		ep.Authorized[i] = tableacl.Authorized(perm.TableName, perm.Role)
+	}
+	// Resolved with 'Authorized', so that one plan checks every table against
+	// the same configuration; a reload clears the plan cache.
+	switch {
+	case !ep.TablesUndetermined:
+	case ep.PlanID == planbuilder.PlanCallProc || ep.PlanID == planbuilder.PlanLoad:
+		// A CALL can run a SQL SECURITY DEFINER procedure with its definer's
+		// privileges, and LOAD DATA INFILE reads files on the server. Table ACL
+		// grants neither, so not even every role on every table covers them.
+		ep.AuthorizedUndetermined = &tableacl.ACLResult{ACL: tacl.DenyAllACL{}}
+	default:
+		ep.AuthorizedUndetermined = tableacl.AuthorizedForAllTables()
 	}
 }
 

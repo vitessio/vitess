@@ -1187,6 +1187,44 @@ func TestSlowQueryStatusFlagsComStmtExecute(t *testing.T) {
 	assert.Zero(t, mysqlConn.StatusFlags&mysql.ServerQueryWasSlow)
 }
 
+// TestComStmtExecuteRejectsMalformedDecimalParameter pins that a
+// binary-protocol prepared statement is covered by vtgate's bind variable
+// gate. The bind variable arrives here as mysql.Conn.parseStmtArgs builds it
+// for a MYSQL_TYPE_NEWDECIMAL parameter, the client's bytes verbatim under the
+// type the client chose, and Execute rejects it with INVALID_ARGUMENT, which
+// the handler renders as MySQL error 1105, before any tablet sees it.
+func TestComStmtExecuteRejectsMalformedDecimalParameter(t *testing.T) {
+	executor, sbc1, sbc2, _, _ := createExecutorEnv(t)
+
+	th := &testHandler{}
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), th, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	t.Cleanup(func() { listener.Close() })
+
+	mysqlConn := mysql.GetTestServerConn(listener)
+	mysqlConn.ConnectionID = 1
+	mysqlConn.UserData = &mysql.StaticUserData{}
+
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	vh.connections[1] = mysqlConn
+
+	payload := []byte(strings.Repeat("1", 80) + "; drop table user #")
+	prepare := &mysql.PrepareData{
+		PrepareStmt: "select id from user where id = :v1",
+		BindVars: map[string]*querypb.BindVariable{
+			"v1": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Decimal, payload)),
+		},
+	}
+
+	err = vh.ComStmtExecute(mysqlConn, prepare, func(*sqltypes.Result) error { return nil })
+	var sqlErr *sqlerror.SQLError
+	require.ErrorAs(t, err, &sqlErr)
+	assert.Equal(t, sqlerror.ERUnknownError, sqlErr.Number())
+	require.ErrorContains(t, err, "v1: invalid DECIMAL literal")
+	assert.Empty(t, sbc1.Queries)
+	assert.Empty(t, sbc2.Queries)
+}
+
 func TestDeferFirstOKOnlyResultForwardsRowChunksAfterFields(t *testing.T) {
 	fields := sqltypes.MakeTestFields("id", "int64")
 	input := []*sqltypes.Result{

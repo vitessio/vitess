@@ -35,7 +35,7 @@ export const VExplain = () => {
     const [clusterID, updateCluster] = React.useState<string | null | undefined>(null);
     const [keyspaceName, updateKeyspace] = React.useState<string | null | undefined>(null);
     const [sql, updateSQL] = React.useState<string | null | undefined>(null);
-    const [vexplainOption, updateVExplainOption] = React.useState<string | null | undefined>('ALL');
+    const [vexplainOption, updateVExplainOption] = React.useState<string | null | undefined>('PLAN');
 
     const fetchVExplainRequestSql = function () {
         return 'VEXPLAIN ' + vexplainOption + ' ' + sql;

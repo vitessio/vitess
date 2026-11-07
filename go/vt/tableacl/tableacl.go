@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -29,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tableaclpb "vitess.io/vitess/go/vt/proto/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/acl"
 )
@@ -43,6 +45,10 @@ type aclEntry struct {
 	tableNameOrPrefix string
 	groupName         string
 	acl               map[Role]acl.ACL
+	// allRoles admits a principal only if it holds every role in the group.
+	// It is built once per configuration, so that every plan that holds it
+	// shares it, as plans share the ACL of each role.
+	allRoles acl.ACL
 }
 
 type aclEntries []aclEntry
@@ -107,7 +113,7 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	}
 	data, err := os.ReadFile(configFile)
 	if err != nil {
-		log.Error(fmt.Sprintf("unable to read tableACL config file: %v  Error: %v", configFile, err))
+		log.Error("unable to read tableACL config file", slog.String("path", configFile), slog.Any("error", err))
 		return err
 	}
 	if len(data) == 0 {
@@ -118,7 +124,8 @@ func (tacl *tableACL) init(configFile string, aclCB func()) error {
 	if err := config.UnmarshalVT(data); err != nil {
 		// try to parse tableacl as json file
 		if jsonErr := json2.UnmarshalPB(data, config); jsonErr != nil {
-			log.Error(fmt.Sprintf("unable to parse tableACL config file as a protobuf or json file.  protobuf err: %v  json err: %v", err, jsonErr))
+			log.Error("unable to parse tableACL config file as a protobuf file", slog.String("path", configFile), slog.Any("error", err))
+			log.Error("unable to parse tableACL config file as a json file", slog.String("path", configFile), slog.Any("error", jsonErr))
 			return fmt.Errorf("unable to unmarshal Table ACL data: %s", data)
 		}
 	}
@@ -156,6 +163,7 @@ func load(config *tableaclpb.Config, newACL func([]string) (acl.ACL, error)) (en
 		if err != nil {
 			return nil, err
 		}
+		allRoles := allRolesACL{readers, writers, admins}
 		for _, tableNameOrPrefix := range group.TableNamesOrPrefixes {
 			entries = append(entries, aclEntry{
 				tableNameOrPrefix: tableNameOrPrefix,
@@ -165,6 +173,7 @@ func load(config *tableaclpb.Config, newACL func([]string) (acl.ACL, error)) (en
 					WRITER: writers,
 					ADMIN:  admins,
 				},
+				allRoles: allRoles,
 			})
 		}
 	}
@@ -269,6 +278,53 @@ func (tacl *tableACL) Authorized(table string, role Role) *ACLResult {
 		ACL:       acl.DenyAllACL{},
 		GroupName: "",
 	}
+}
+
+// AuthorizedForAllTables returns an ACL for the table group that covers every
+// table, the one whose table names or prefixes hold "%". A caller is a member
+// only if it holds every role in that group, so it may do anything to any table,
+// including the tables of a statement whose table set the planner cannot
+// determine. The roles are granted separately, so no single role implies the
+// others. Without such a group, the returned ACL denies everyone.
+func AuthorizedForAllTables() *ACLResult {
+	return currentTableACL.AuthorizedForAllTables()
+}
+
+// AuthorizedForAllTables returns an ACL for the table group that covers every
+// table, see the package function of the same name. Every role is read under
+// one lock, from one configuration, so a concurrent reload cannot combine the
+// roles of two configurations into one that neither grants.
+func (tacl *tableACL) AuthorizedForAllTables() *ACLResult {
+	tacl.RLock()
+	defer tacl.RUnlock()
+	// A "%" entry overlaps every other entry, so ValidateProto only accepts it
+	// alone. The rule is checked here as well rather than relied on: alongside
+	// any other group, some tables would be governed by that group instead.
+	if len(tacl.entries) == 1 && tacl.entries[0].tableNameOrPrefix == "%" && tacl.entries[0].allRoles != nil {
+		entry := tacl.entries[0]
+		return &ACLResult{
+			ACL:       entry.allRoles,
+			GroupName: entry.groupName,
+		}
+	}
+	return &ACLResult{
+		ACL:       acl.DenyAllACL{},
+		GroupName: "",
+	}
+}
+
+// allRolesACL holds the ACL of every role of one table group. A principal is a
+// member only if it is a member of all of them.
+type allRolesACL []acl.ACL
+
+// IsMember implements acl.ACL.
+func (roles allRolesACL) IsMember(principal *querypb.VTGateCallerID) bool {
+	for _, roleACL := range roles {
+		if !roleACL.IsMember(principal) {
+			return false
+		}
+	}
+	return len(roles) > 0
 }
 
 // GetCurrentConfig returns a copy of current tableacl configuration.

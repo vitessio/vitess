@@ -17,11 +17,13 @@ limitations under the License.
 package consultopo
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -452,4 +454,87 @@ func TestConsulWatcherStormPrevention(t *testing.T) {
 	assert.NotNil(t, vschema, "GetSrvVSchema() should continue returning cached value")
 
 	t.Log("Consul storm prevention test completed - watchers remained quiet during outage")
+}
+
+// TestConsulTopoTryLockAcrossServers checks that concurrent TryLock calls from
+// separate servers on a free lock all return without waiting: one gets the
+// lock and the others return NodeExists.
+func TestConsulTopoTryLockAcrossServers(t *testing.T) {
+	cmd, configFilename, serverAddr := startConsul(t, "")
+	t.Cleanup(func() {
+		if err := cmd.Process.Kill(); err != nil {
+			log.Error(fmt.Sprintf("cmd process kill has an error: %v", err))
+		}
+		if err := cmd.Wait(); err != nil {
+			log.Error(fmt.Sprintf("cmd wait has an error: %v", err))
+		}
+		os.Remove(configFilename)
+	})
+
+	const contenders = 10
+	root := "test-trylock-across-servers"
+	servers := make([]*Server, contenders)
+	for i := range servers {
+		s, err := NewServer("", serverAddr, root)
+		require.NoError(t, err)
+		t.Cleanup(s.Close)
+		servers[i] = s
+	}
+
+	ctx := t.Context()
+	_, err := servers[0].Create(ctx, "ks/Keyspace", []byte{})
+	require.NoError(t, err)
+
+	tryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	start := make(chan struct{})
+	locks := make([]topo.LockDescriptor, contenders)
+	errs := make([]error, contenders)
+	var wg sync.WaitGroup
+	for i, s := range servers {
+		wg.Go(func() {
+			<-start
+			locks[i], errs[i] = s.TryLock(tryCtx, "ks", fmt.Sprintf("contender-%d", i))
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	var held topo.LockDescriptor
+	holder := -1
+	for i, err := range errs {
+		if err == nil {
+			require.Nil(t, held, "more than one TryLock got the lock")
+			held, holder = locks[i], i
+			continue
+		}
+		require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+	}
+	require.NotNil(t, held, "no TryLock got the lock")
+
+	// While another server holds the lock, a TryLock returns without
+	// waiting out Consul's default LockWaitTime (15s).
+	for i, s := range servers {
+		if i == holder {
+			continue
+		}
+		heldCtx, heldCancel := context.WithTimeout(ctx, 30*time.Second)
+		start := time.Now()
+		_, err := s.TryLock(heldCtx, "ks", "held-elsewhere")
+		heldCancel()
+		require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+		require.Less(t, time.Since(start), 10*time.Second, "TryLock waited on a lock held by another server")
+	}
+	require.NoError(t, held.Unlock(ctx))
+
+	// Rejected attempts must not leave anything behind on any server.
+	for _, s := range servers {
+		lockDescriptor, err := s.TryLock(tryCtx, "ks", "after")
+		require.NoError(t, err)
+		require.NoError(t, lockDescriptor.Unlock(ctx))
+
+		lockDescriptor, err = s.Lock(tryCtx, "ks", "after")
+		require.NoError(t, err)
+		require.NoError(t, lockDescriptor.Unlock(ctx))
+	}
 }

@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -193,6 +194,12 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
 		defer cancel()
 	}
+	if _, ok := collations.MySQL8().ConnectionCharset(params.Charset); !ok {
+		// Vitess parses and escapes SQL text byte by byte, which is not safe in
+		// this character set. A tablet refuses one at startup, so only a direct
+		// caller can ask for it.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set (collation %d): use utf8mb4", params.Charset)
+	}
 	conn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		return nil, err
@@ -202,13 +209,35 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	// sql_mode, and Vitess-formatted SQL must always be lexed under the default
 	// rules it was serialized with. Strip the lexer modes from the session's
 	// current value, preserving its runtime modes — including any the server's own
-	// connection initialization applied (see sqlmode.NeutralizeSessionQuery).
+	// connection initialization applied (see sqlmode.NeutralizeSessionQuery). That
+	// initialization can also change the character set, which Vitess can only parse
+	// and escape safely in the one the connection negotiated, so the same statement
+	// restores it (see sqlmode.SessionSetupQuery).
 	//
 	// The setup stays bounded by the context like the dial and handshake are: a
 	// backend that stalls after the handshake must not hang the caller. Closing the
 	// connection when the context ends fails the pending exchange right away.
+	collation := params.Charset
+	if collation == collations.Unknown {
+		// The connection asked for no character set, so its session uses the
+		// server's default, which the server announced in its handshake and its
+		// connection initialization can still change: judge and restore that one.
+		collation = conn.CharacterSet
+		if _, ok := collations.MySQL8().ConnectionCharset(collation); !ok {
+			conn.Close()
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set (collation %d), the server's default: use utf8mb4", collation)
+		}
+	}
 	stop := context.AfterFunc(ctx, conn.Close)
-	_, err = conn.ExecuteFetch(sqlmode.NeutralizeSessionQuery, 0, false)
+	_, err = conn.ExecuteFetch(sessionSetupQuery(collation, true), 0, false)
+	if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownCollation {
+		// The collation comes from the MySQL 8 collation table, and the server may
+		// not have it: MySQL 5.7 and MariaDB lack utf8mb4_0900_ai_ci, for one. Such a
+		// server ignored the collation at the handshake and used its own default
+		// character set, so restore the character set alone, with its default
+		// collation on that server.
+		_, err = conn.ExecuteFetch(sessionSetupQuery(collation, false), 0, false)
+	}
 	if !stop() {
 		// the context ended and the connection is closed, whatever the query
 		// returned; report the context error like mysql.Connect does for the dial
@@ -216,9 +245,29 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	}
 	if err != nil {
 		conn.Close()
-		return nil, vterrors.Wrapf(err, "failed to neutralize the connection's sql_mode")
+		return nil, vterrors.Wrapf(err, "failed to set up the connection's session")
 	}
 	return conn, nil
+}
+
+// sessionSetupQuery returns the statement that sets up a new connection's session for
+// the collation it negotiated, naming the collation only when withCollation is set, or
+// only neutralizes its sql_mode when it negotiated none and so uses the server's
+// default.
+func sessionSetupQuery(collation collations.ID, withCollation bool) string {
+	if collation == collations.Unknown {
+		return sqlmode.NeutralizeSessionQuery
+	}
+	env := collations.MySQL8()
+	// Connect has refused a collation whose character set is not safe.
+	charset, _ := env.ConnectionCharset(collation)
+	var name string
+	if withCollation {
+		// A collation that Vitess does not implement has no name here, and its
+		// character set is restored alone, with its default collation.
+		name = env.LookupName(collation)
+	}
+	return sqlmode.SessionSetupQuery(charset, name)
 }
 
 // MysqlParams returns the connections params

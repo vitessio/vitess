@@ -2110,6 +2110,7 @@ func (m *BackupRequest) CloneVT() *BackupRequest {
 	r.UpgradeSafe = m.UpgradeSafe
 	r.MysqlShutdownTimeout = m.MysqlShutdownTimeout.CloneVT()
 	r.InitSql = m.InitSql.CloneVT()
+	r.IncludeBinlogs = m.IncludeBinlogs
 	if rhs := m.BackupEngine; rhs != nil {
 		tmpVal := *rhs
 		r.BackupEngine = &tmpVal
@@ -8192,6 +8193,16 @@ func (m *BackupRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.IncludeBinlogs {
+		i--
+		if m.IncludeBinlogs {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i--
+		dAtA[i] = 0x40
+	}
 	if m.InitSql != nil {
 		size, err := m.InitSql.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -13104,6 +13115,9 @@ func (m *BackupRequest) SizeVT() (n int) {
 	if m.InitSql != nil {
 		l = m.InitSql.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	if m.IncludeBinlogs {
+		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -24757,6 +24771,26 @@ func (m *BackupRequest) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IncludeBinlogs", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IncludeBinlogs = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -343,7 +343,8 @@ message RowChange {
   // the source table's columns as found in the binlog event, NOT in the
   // order of the columns emitted by the stream; the two only line up
   // when the filter does not reorder or drop columns. This layout is
-  // kept as-is for compatibility with existing consumers.
+  // kept as-is for compatibility with existing consumers; new consumers
+  // should use after_data_columns instead.
   Bitmap data_columns = 3;
   // JsonPartialValues is a bitmap of any JSON columns, where the bit
   // is set if the value in the AFTER image is a partial JSON value
@@ -361,6 +362,14 @@ message RowChange {
   // bits are in the order of the columns emitted by the stream (after
   // the filter's projection), matching the values in the before image.
   Bitmap before_data_columns = 5;
+  // AfterDataColumns is the projected counterpart of data_columns: a bitmap
+  // of the columns emitted by the stream, where the bit is set if the column
+  // is present in the after image. It is set whenever data_columns is, and
+  // like before_data_columns the bits are in the order of the columns
+  // emitted by the stream (after the filter's projection), matching the
+  // values in the after image. Consumers should prefer it over data_columns
+  // when present.
+  Bitmap after_data_columns = 6;
 }
 
 // RowEvent represent row events for one table.

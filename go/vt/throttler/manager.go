@@ -18,6 +18,7 @@ package throttler
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 
@@ -89,7 +90,7 @@ func (m *managerImpl) unregisterThrottler(name string) {
 	defer m.mu.Unlock()
 
 	if _, ok := m.throttlers[name]; !ok {
-		log.Error(fmt.Sprintf("unregisterThrottler(): throttler with name '%v' is not registered", name))
+		log.Error("unregisterThrottler(): throttler is not registered", slog.String("throttler", name))
 		return
 	}
 	delete(m.throttlers, name)

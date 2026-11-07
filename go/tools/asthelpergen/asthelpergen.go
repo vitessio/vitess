@@ -315,13 +315,10 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 
 // findTypeObject finds the types.Object for the given interface from the given scopes.
 func findTypeObject(interfaceToFind string, scopes map[string]*types.Scope) (types.Object, error) {
-	pos := strings.LastIndexByte(interfaceToFind, '.')
-	if pos < 0 {
+	pkgname, typename, ok := strings.CutLast(interfaceToFind, ".")
+	if !ok {
 		return nil, fmt.Errorf("unexpected input type: %s", interfaceToFind)
 	}
-
-	pkgname := interfaceToFind[:pos]
-	typename := interfaceToFind[pos+1:]
 
 	scope := scopes[pkgname]
 	if scope == nil {

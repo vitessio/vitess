@@ -17,7 +17,9 @@ limitations under the License.
 package cluster
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -46,7 +48,9 @@ type VtbackupProcess struct {
 	TabletAlias string
 	Server      string
 
-	ExtraArgs     []string
+	ExtraArgs []string
+	// StderrFile, if set, also receives vtbackup's stderr, so a test can follow a run's log while it runs.
+	StderrFile    string
 	initialBackup bool
 	initDBfile    string
 
@@ -85,7 +89,18 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 		vtbackup.proc.Args = append(vtbackup.proc.Args, vtbackup.ExtraArgs...)
 	}
 
-	vtbackup.proc.Stderr = os.Stderr
+	// Keep the end of stderr so a failed run's error says why it failed.
+	var stderr bytes.Buffer
+	stderrWriters := []io.Writer{os.Stderr, &stderr}
+	if vtbackup.StderrFile != "" {
+		f, err := os.Create(vtbackup.StderrFile)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		stderrWriters = append(stderrWriters, f)
+	}
+	vtbackup.proc.Stderr = io.MultiWriter(stderrWriters...)
 	vtbackup.proc.Stdout = os.Stdout
 
 	vtbackup.proc.Env = append(vtbackup.proc.Env, os.Environ()...)
@@ -94,7 +109,9 @@ func (vtbackup *VtbackupProcess) Setup() (err error) {
 
 	err = vtbackup.proc.Run()
 	if err != nil {
-		return
+		tail := stderr.Bytes()
+		tail = tail[max(0, len(tail)-4096):]
+		return fmt.Errorf("%w: %s", err, tail)
 	}
 
 	vtbackup.exit = make(chan error)

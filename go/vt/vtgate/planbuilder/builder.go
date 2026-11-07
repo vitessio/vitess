@@ -108,6 +108,10 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 		return nil, err
 	}
 
+	// Classify the statement before planning: planning may rewrite the AST in place, for
+	// example turning a REPLACE into a delete followed by an INSERT.
+	queryType := sqlparser.ASTToStatementType(stmt)
+
 	planResult, err := createInstructionFor(ctx, query, stmt, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
@@ -119,7 +123,7 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
 	}
-	return engine.NewPlan(query, stmt, primitive, bindVarNeeds, tablesUsed), nil
+	return engine.NewPlan(query, queryType, primitive, bindVarNeeds, tablesUsed), nil
 }
 
 func checkDeniedSetVarHints(stmt sqlparser.Statement, vschema plancontext.VSchema) error {

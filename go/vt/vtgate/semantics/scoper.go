@@ -277,7 +277,7 @@ func (s *scoper) up(cursor *sqlparser.Cursor) error {
 }
 
 func ValidAsMapKey(s sqlparser.SQLNode) bool {
-	return reflect.TypeOf(s).Comparable()
+	return s == nil || reflect.TypeOf(s).Comparable()
 }
 
 // createSpecialScopePostProjection is used for the special projection in ORDER BY, GROUP BY and HAVING

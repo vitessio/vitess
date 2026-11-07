@@ -88,9 +88,15 @@ func TestCloneBackup(t *testing.T) {
 		100*time.Millisecond,
 	)
 
-	// Take a backup using clone from primary.
+	// CLONE does not copy binlogs, so vtbackup refuses to include them.
+	err = vtbackupWithClone(t, "--include-binlogs")
+	require.ErrorContains(t, err, "--include-binlogs cannot be used with --restore-with-clone")
+	verifyBackupCount(t, shardKsName, 0)
+
+	// Take a backup using clone from primary, with the errant GTID checks of the
+	// cloned data and the new backup.
 	log.Info("Starting vtbackup with --clone-from-primary")
-	err = vtbackupWithClone(t)
+	err = vtbackupWithClone(t, "--enable-errant-gtid-checks")
 	require.NoError(t, err)
 
 	// Verify a backup was created.
@@ -122,7 +128,7 @@ func TestCloneBackup(t *testing.T) {
 	log.Info("Clone backup verification successful: replica2 has all data")
 }
 
-func vtbackupWithClone(t *testing.T) error {
+func vtbackupWithClone(t *testing.T, additionalArgs ...string) error {
 	mysqlSocket, err := os.CreateTemp("", "vtbackup_clone_test_mysql.sock")
 	require.NoError(t, err)
 	defer os.Remove(mysqlSocket.Name())
@@ -161,6 +167,7 @@ func vtbackupWithClone(t *testing.T) error {
 		"--db-clone-password", "",
 		"--db-clone-use-ssl=false",
 	}
+	extraArgs = append(extraArgs, additionalArgs...)
 
 	log.Info(fmt.Sprintf("Starting vtbackup with clone args: %v", extraArgs))
 	return localCluster.StartVtbackup(vtbackupInitDB, false, keyspaceName, shardName, cell, extraArgs...)

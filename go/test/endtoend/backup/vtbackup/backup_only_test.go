@@ -120,8 +120,6 @@ func TestTabletInitialBackup(t *testing.T) {
 }
 
 func prepareCluster(t *testing.T) {
-	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
-
 	dataPointReader := vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
 	verifyBackupStats(t, dataPointReader, true /* initialBackup */)
@@ -129,10 +127,8 @@ func prepareCluster(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	err := primary.VttabletProcess.CreateDB("testDB")
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-	err = replica1.VttabletProcess.CreateDB("testDB")
-	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	assertMysqldIsSuperReadOnly(t, primary)
+	assertMysqldIsSuperReadOnly(t, replica1)
 
 	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
@@ -143,7 +139,7 @@ func prepareCluster(t *testing.T) {
 	waitForRestoreComplete(t, primary.VttabletProcess, 180*time.Second)
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
-	err = localCluster.VtctldClientProcess.ExecuteCommand(
+	err := localCluster.VtctldClientProcess.ExecuteCommand(
 		"SetWritable", primary.Alias, "true",
 	)
 	require.NoError(t, err)
@@ -172,7 +168,7 @@ func TestTabletBackupOnly(t *testing.T) {
 	initTablets(t, true, true)
 	firstBackupTest(t, true)
 
-	tearDown(t, false)
+	tearDown(t, true)
 }
 
 func firstBackupTest(t *testing.T, removeBackup bool) {
@@ -226,9 +222,8 @@ func firstBackupTest(t *testing.T, removeBackup bool) {
 	err = localCluster.InitTablet(replica2, keyspaceName, shardName)
 	require.NoError(t, err)
 	restore(t, replica2, "replica", "SERVING")
-	// Replica2 takes time to serve. Sleeping for 5 sec.
-	time.Sleep(5 * time.Second)
-	// check the new replica has the data
+	// check the new replica has the data; VerifyRowsInTablet polls for up to
+	// 60s, which covers replica2's remaining catch-up time after the restore.
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	if removeBackup {
@@ -513,7 +508,9 @@ func verifyDisableEnableRedoLogs(ctx context.Context, mysqlSocket string) error 
 // flags and produces a chunked backup. It then restores the chunked backup on
 // replica2 and verifies the data is intact.
 func TestVtBackupWithChunking(t *testing.T) {
-	// Chunked backups are a v25 feature; older vttablets can't restore them.
+	// Chunked backups are a v25 feature; older vtbackups don't have the
+	// chunking flags, and older vttablets can't restore them.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtbackup")
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
 	prepareCluster(t)
 
@@ -562,6 +559,18 @@ func TestVtBackupWithChunking(t *testing.T) {
 
 	removeBackups(t)
 	tearDown(t, true)
+}
+
+// assertMysqldIsSuperReadOnly verifies that writes against the tablet's
+// mysqld fail because it runs in super-read-only mode. It uses a
+// direct connection with a single attempt: the QueryTablet helper retries
+// failing statements for ~10s each, but here the failure is the assertion.
+func assertMysqldIsSuperReadOnly(t *testing.T, tablet *cluster.Vttablet) {
+	conn, err := tablet.VttabletProcess.TabletConnWithContext(t.Context(), keyspaceName, false)
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = conn.ExecuteFetch("create database testdb_fail", 1000, true)
+	require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
 }
 
 // This helper function wait for all replicas to catch-up the replication.
@@ -668,4 +677,116 @@ func verifyBackupStats(t *testing.T, dataPointReader *opentsdb.DataPointReader, 
 
 	// Verify phase sequences.
 	require.Equal(t, expectActivePhases, activePhases)
+}
+
+// TestVtBackupWithBinlogs checks that vtbackup --include-binlogs backs up binlogs
+// when the backup it restores has none, and carries the binlog history forward when
+// it does: vtbackup restores that backup's binlogs, here from a BackupShard backup,
+// and backs them up again with the new ones. The restore keeps each binlog's
+// original mtime, so binlogs past
+// binlog_expire_logs_seconds are purged when mysqld starts and drop out of the next
+// backup. A vttablet older than v25 restores only the data of such a backup.
+func TestVtBackupWithBinlogs(t *testing.T) {
+	// --include-binlogs is a v25 feature of both vtbackup and BackupShard's vttablet.
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtbackup")
+	vttabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+	prepareCluster(t)
+
+	_, err = primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	require.NoError(t, err)
+	insertRow := func(msg string, rows int) {
+		_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (msg) values ('%s')", msg), keyspaceName, true)
+		require.NoError(t, err)
+		cluster.VerifyRowsInTablet(t, replica1, keyspaceName, rows)
+	}
+	// restoreReplica2 brings up replica2 from the latest backup, which must hold the
+	// given number of rows, and checks that it replicates from the backup's position.
+	restoreReplica2 := func(rows int) {
+		err := localCluster.InitTablet(replica2, keyspaceName, shardName)
+		require.NoError(t, err)
+		restore(t, replica2, "replica", "SERVING")
+		waitForRestoreComplete(t, replica2.VttabletProcess, 180*time.Second)
+		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, rows)
+		insertRow("after-restore", rows+1)
+		cluster.VerifyRowsInTablet(t, replica2, keyspaceName, rows+1)
+	}
+	insertRow("binlogs1", 1)
+
+	_, err = startVtBackup(t, false, false, false, "--include-binlogs")
+	require.NoError(t, err)
+	backupA := lastBackupBinlogs(t)
+	require.NotEmpty(t, backupA)
+
+	if vttabletVersion < 25 {
+		restoreReplica2(1)
+		removeBackups(t)
+		tearDown(t, true)
+		return
+	}
+
+	// Back-date replica1's oldest binlog past the default binlog_expire_logs_seconds,
+	// so it is backed up with that mtime. Shutting down a replica's mysqld for the
+	// backup first rotates its binlogs (prepareReplicaForShutdown), which would
+	// expire the binlog, so replica1 keeps it for a year until its mysqld restart
+	// after the backup restores the default.
+	insertRow("binlogs2", 2)
+	err = replica1.VttabletProcess.QueryTabletMultiple([]string{
+		"set global binlog_expire_logs_seconds = 31536000",
+		"flush binary logs",
+	}, keyspaceName, true)
+	require.NoError(t, err)
+	rs, err := replica1.VttabletProcess.QueryTablet("show binary logs", keyspaceName, true)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(rs.Rows), 2)
+	oldestBinlog := rs.Rows[0][0].ToString()
+	rs, err = replica1.VttabletProcess.QueryTablet("select @@global.log_bin_basename", keyspaceName, true)
+	require.NoError(t, err)
+	oldMtime := time.Now().Add(-30 * 24 * time.Hour)
+	require.NoError(t, os.Chtimes(path.Join(path.Dir(rs.Rows[0][0].ToString()), oldestBinlog), oldMtime, oldMtime))
+
+	err = localCluster.VtctldClientProcess.ExecuteCommand("BackupShard", "--include-binlogs", shardKsName)
+	require.NoError(t, err)
+	backupC := lastBackupBinlogs(t)
+	require.GreaterOrEqual(t, len(backupC), 2)
+	expired := backupC[0]
+	assert.Equal(t, "binlog."+strings.TrimPrefix(path.Ext(oldestBinlog), "."), expired.Name)
+	assert.WithinDuration(t, oldMtime, expired.ModTime, time.Second)
+
+	insertRow("binlogs3", 3)
+	_, err = startVtBackup(t, false, false, false, "--include-binlogs")
+	require.NoError(t, err)
+	backupD := lastBackupBinlogs(t)
+	assert.NotContains(t, binlogNames(backupD), expired.Name)
+	assert.Subset(t, binlogNames(backupD), binlogNames(backupC[1:]))
+	assert.Greater(t, backupD[len(backupD)-1].Name, backupC[len(backupC)-1].Name)
+
+	// A vttablet restores the vtbackup backup and its binlogs.
+	restoreReplica2(3)
+
+	removeBackups(t)
+	tearDown(t, true)
+}
+
+// lastBackupBinlogs returns the binlog entries in the latest backup's MANIFEST.
+func lastBackupBinlogs(t *testing.T) []mysqlctl.FileEntry {
+	backups, err := listBackups(shardKsName)
+	require.NoError(t, err)
+	require.NotEmpty(t, backups)
+	data, err := os.ReadFile(path.Join(localCluster.VtbackupProcess.FileBackupStorageRoot, keyspaceName, shardName, backups[len(backups)-1], "MANIFEST"))
+	require.NoError(t, err)
+	var manifest struct {
+		IncludesBinlogs   bool
+		BinlogFileEntries []mysqlctl.FileEntry
+	}
+	require.NoError(t, json.Unmarshal(data, &manifest))
+	require.True(t, manifest.IncludesBinlogs)
+	return manifest.BinlogFileEntries
+}
+
+func binlogNames(entries []mysqlctl.FileEntry) (names []string) {
+	for _, fe := range entries {
+		names = append(names, fe.Name)
+	}
+	return names
 }

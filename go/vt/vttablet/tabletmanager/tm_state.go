@@ -206,6 +206,12 @@ func (ts *tmState) prepareForDisableQueryService(ctx context.Context, servType t
 }
 
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
+	return ts.changeTabletType(ctx, ctx, tabletType, action)
+}
+
+// changeTabletType is ChangeTabletType with a separate context, topoCtx, for a
+// primary's topo write and its confirmation.
+func (ts *tmState) changeTabletType(ctx, topoCtx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	log.Info(fmt.Sprintf("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String()))
@@ -215,17 +221,17 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 		primaryTermStartTime = protoutil.TimeToProto(time.Now())
 
 		// Update the tablet record first.
-		_, err := topotools.ChangeType(ctx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, primaryTermStartTime)
+		_, err := topotools.ChangeType(topoCtx, ts.tm.TopoServer, ts.tm.tabletAlias, tabletType, primaryTermStartTime)
 		if err != nil {
 			log.Error(fmt.Sprintf("Error changing type in topo record for tablet %s :- %v\nWill keep trying to read from the toposerver", topoproto.TabletAliasString(ts.tm.tabletAlias), err))
 			// In case of a topo error, we aren't sure if the data has been written or not.
 			// We must read the data again and verify whether the previous write succeeded or not.
 			// The only way to guarantee safety is to keep retrying read until we succeed
 			for {
-				if ctx.Err() != nil {
-					return fmt.Errorf("context canceled updating tablet_type for %s in the topo, please retry", ts.tm.tabletAlias)
+				if topoCtx.Err() != nil {
+					return vterrors.Wrapf(topoCtx.Err(), "cannot confirm updating tablet_type for %s in the topo, which may have been committed; please retry", ts.tm.tabletAlias)
 				}
-				ti, errInReading := ts.tm.TopoServer.GetTablet(ctx, ts.tm.tabletAlias)
+				ti, errInReading := ts.tm.TopoServer.GetTablet(topoCtx, ts.tm.tabletAlias)
 				if errInReading != nil {
 					<-time.After(100 * time.Millisecond)
 					continue

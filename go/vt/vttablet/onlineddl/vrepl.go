@@ -25,13 +25,13 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -227,8 +227,8 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 		defer conn.ExecuteFetch(sqlDisableFastAnalyzeTable, 1, false)
 	}
 
-	parsed := sqlparser.BuildParsedQuery(sqlAnalyzeTableLocal, tableName)
-	if _, err := conn.ExecuteFetch(parsed.Query, 1, false); err != nil {
+	analyzeQuery := buildIdentifierQuery(sqlAnalyzeTableLocal, tableName)
+	if _, err := conn.ExecuteFetch(analyzeQuery, 1, false); err != nil {
 		return err
 	}
 	return nil
@@ -236,8 +236,8 @@ func (v *VRepl) executeAnalyzeTable(ctx context.Context, conn *dbconnpool.DBConn
 
 // readTableStatus reads table status information
 func (v *VRepl) readTableStatus(ctx context.Context, conn *dbconnpool.DBConnection, tableName string) (tableRows int64, err error) {
-	parsed := sqlparser.BuildParsedQuery(sqlShowTableStatus, tableName)
-	rs, err := conn.ExecuteFetch(parsed.Query, -1, true)
+	statusQuery := buildTableStatusQuery(tableName)
+	rs, err := conn.ExecuteFetch(statusQuery, -1, true)
 	if err != nil {
 		return 0, err
 	}
@@ -464,12 +464,19 @@ func getVreplTable(s *VReplStream) (string, error) {
 	return vreplTable, nil
 }
 
-// escapeName will escape a db/table/column/... name by wrapping with backticks.
-// It is not fool proof. I'm just trying to do the right thing here, not solving
-// SQL injection issues, which should be irrelevant for this tool.
+// escapeName escapes a db/table/column/... name so that it is exactly one
+// identifier.
+//
+// These are column and table names from the tenant's own schema, and they are
+// written into the vreplication filter query. MySQL allows a back quote inside a
+// name, so wrapping alone is not enough: a name holding a back quote closes its
+// own quoting and the rest of it is read as SQL. sqlescape.EscapeID supplies the
+// back quotes and doubles any inside the name.
+//
+// This used to run the name through strconv.Unquote first. That is Go string
+// syntax, not SQL, and it only ever matched a name that was itself wrapped in
+// back quotes or double quotes -- which it then silently renamed. Nothing here
+// passes a pre-quoted name, so it is gone.
 func escapeName(name string) string {
-	if unquoted, err := strconv.Unquote(name); err == nil {
-		name = unquoted
-	}
-	return fmt.Sprintf("`%s`", name)
+	return sqlescape.EscapeID(name)
 }
