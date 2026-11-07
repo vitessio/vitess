@@ -47,7 +47,7 @@ func TestLogs(t *testing.T) {
 		BackfillEnqueueWaitTime: -1,
 		BackfillRequestTTL:      time.Hour,
 	})
-	defer c.Close()
+	t.Cleanup(func() { _ = c.Close() })
 
 	record := logs.Record(t, "BackfillEnqueueWaitTime must be positive, defaulting")
 	assert.Equal(t, "WARN", record["level"])

@@ -46,7 +46,7 @@ func TestLogs(t *testing.T) {
 	}
 
 	c := cache.New(fill, cache.Config{})
-	defer c.Close()
+	t.Cleanup(func() { _ = c.Close() })
 	allKey := Key{ClusterID: "c1", IncludeNonServingShards: true}
 	require.NoError(t, c.Add(allKey, []*vtadminpb.Schema{{Keyspace: "ks1"}, {Keyspace: "ks2"}}, cache.DefaultExpiration))
 	_, found, err := LoadOne(c, allKey, LoadOptions{BaseRequest: &vtctldatapb.GetSchemaRequest{}})

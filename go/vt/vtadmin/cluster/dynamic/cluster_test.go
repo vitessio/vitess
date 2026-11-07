@@ -120,7 +120,7 @@ func TestUnaryServerInterceptorLogs(t *testing.T) {
 	call := func(spec string) {
 		enc := base64.StdEncoding.EncodeToString([]byte(spec))
 		encoded = append(encoded, enc)
-		ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("cluster", enc))
+		ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("cluster", enc))
 		_, _ = interceptor(ctx, &vtadminpb.GetClustersRequest{}, info, func(ctx context.Context, req any) (any, error) {
 			return nil, nil
 		})
