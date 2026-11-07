@@ -19,6 +19,7 @@ package cluster_test
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"testing"
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
@@ -1565,6 +1567,47 @@ func TestGetCellsAliases(t *testing.T) {
 			utils.MustMatch(t, tt.expected, cellsAliases)
 		})
 	}
+}
+
+func TestGetSchemasNoServingTabletLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	c := testutil.BuildCluster(t, testutil.TestClusterConfig{
+		Cluster: &vtadminpb.Cluster{Id: "c1", Name: "cluster1"},
+		Tablets: []*vtadminpb.Tablet{{
+			Tablet: &topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Keyspace: "ks1",
+				Shard:    "-",
+			},
+			State: vtadminpb.Tablet_NOT_SERVING,
+		}},
+		VtctldClient: &fakevtctldclient.VtctldClient{
+			GetKeyspacesResults: &struct {
+				Keyspaces []*vtctldatapb.Keyspace
+				Error     error
+			}{
+				Keyspaces: []*vtctldatapb.Keyspace{{Name: "ks1"}},
+			},
+		},
+	})
+	defer c.Close()
+
+	_, err := c.GetSchemas(t.Context(), cluster.GetSchemaOptions{})
+	require.NoError(t, err)
+
+	record := logs.Record(t, "no serving tablet for keyspace")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "c1", record["cluster_id"])
+	assert.Equal(t, "ks1", record["keyspace"])
+	assert.Equal(t, []any{"zone1-0000000100"}, record["searched_tablets"])
+	assert.Contains(t, record["error"], vtadminerrors.ErrNoServingTablet.Error())
+
+	record = logs.Record(t, "ignoring keyspace without any serving tablets")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "c1", record["cluster_id"])
+	assert.Equal(t, "ks1", record["keyspace"])
+	assert.Contains(t, record["error"], vtadminerrors.ErrNoServingTablet.Error())
 }
 
 func TestGetSchema(t *testing.T) {

@@ -17,7 +17,11 @@ limitations under the License.
 package grpcserver
 
 import (
+	"log/slog"
 	"net"
+	"os"
+	"os/exec"
+	"syscall"
 	"testing"
 	"time"
 
@@ -28,8 +32,68 @@ import (
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/log/logtest"
+
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
+
+// TestShutdownLogs runs in a child process, as it sends SIGTERM to itself and
+// other tests leave servers listening for it.
+func TestShutdownLogs(t *testing.T) {
+	if os.Getenv("VTADMIN_GRPCSERVER_SHUTDOWN_LOGS") != "1" {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestShutdownLogs$", "-test.v")
+		cmd.Env = append(os.Environ(), "VTADMIN_GRPCSERVER_SHUTDOWN_LOGS=1")
+		out, err := cmd.CombinedOutput()
+		assert.NoError(t, err, "child process output:\n%s", out)
+		return
+	}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	lis, err := nettest.NewLocalListener("tcp")
+	require.NoError(t, err)
+	listenFunc = func(network, address string) (net.Listener, error) {
+		return lis, nil
+	}
+
+	s := New("testservice", Options{Addr: "test-address", LameDuckDuration: time.Millisecond})
+	errCh := make(chan error, 1)
+	go func() { errCh <- s.ListenAndServe() }()
+
+	record := logs.Wait(t, "server listening")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "testservice", record["server"])
+	assert.Equal(t, "test-address", record["address"])
+
+	conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	_, err = healthpb.NewHealthClient(conn).Check(t.Context(), &healthpb.HealthCheckRequest{Service: "no-such-service"})
+	require.Error(t, err)
+
+	record = logs.Record(t, "RPC error")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "/grpc.health.v1.Health/Check", record["rpc"])
+	assert.Contains(t, record["error"], "unknown service")
+
+	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGTERM))
+	require.NoError(t, <-errCh)
+
+	record = logs.Record(t, "graceful shutdown triggered")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "received signal: terminated", record["reason"])
+	assert.NotContains(t, record, "error")
+
+	record = logs.Record(t, "entering lame duck period")
+	assert.Equal(t, "INFO", record["level"])
+	assert.InDelta(t, float64(time.Millisecond), record["lameduck_period"], 0)
+
+	// GracefulStop makes Serve return a nil error, which isn't logged.
+	record = logs.Wait(t, "grpc server stopped")
+	assert.Equal(t, "WARN", record["level"])
+	assert.NotContains(t, record, "error")
+}
 
 func TestServer(t *testing.T) {
 	lis, err := nettest.NewLocalListener("tcp")
