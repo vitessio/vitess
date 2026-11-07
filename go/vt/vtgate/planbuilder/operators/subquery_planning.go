@@ -228,6 +228,20 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 	return expr, rewritten
 }
 
+func outsideSubqueryDeps(ctx *plancontext.PlanningContext, expr sqlparser.Expr) semantics.TableSet {
+	deps := semantics.EmptyTableSet()
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Subquery:
+			return false, nil
+		case *sqlparser.ColName:
+			deps = deps.Merge(ctx.SemTable.RecursiveDeps(node))
+		}
+		return true, nil
+	}, expr)
+	return deps
+}
+
 // tryPushSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
 /*
 For this query:
@@ -279,9 +293,9 @@ func tryPushSubQueryInJoin(
 	// as possible, so that we can potentially merge them together
 	// TODO: we need to check dependencies and break apart all expressions in the subquery, not just the merge predicates
 	// The predicate that gets restored once the subquery is settled needs every table it
-	// mentions, not just the ones in the merge predicates, or it lands on a route that
-	// cannot see them.
-	deps := ctx.SemTable.RecursiveDeps(inner.Original)
+	// mentions outside its subqueries, or it lands on a route that cannot see them. The
+	// subqueries' own correlation is already covered by the merge predicates.
+	deps := outsideSubqueryDeps(ctx, inner.Original)
 	for _, predicate := range inner.GetMergePredicates() {
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
 	}

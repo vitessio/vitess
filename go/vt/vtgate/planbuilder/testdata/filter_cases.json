@@ -5701,6 +5701,248 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Correlated sibling subqueries in a projection over a join",
+    "query": "select coalesce((select ue.col from user_extra ue where ue.user_id = u.id), (select um.col from user_metadata um where um.user_id = u.id)) from user u join music m on u.col = m.col",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select coalesce((select ue.col from user_extra ue where ue.user_id = u.id), (select um.col from user_metadata um where um.user_id = u.id)) from user u join music m on u.col = m.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1,
+          "u_id": 2
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select coalesce((select ue.col from user_extra as ue where 1 != 1), (select um.col from user_metadata as um where 1 != 1)), u.col, u.id from `user` as u where 1 != 1",
+            "Query": "select coalesce((select ue.col from user_extra as ue where ue.user_id = u.id), (select um.col from user_metadata as um where um.user_id = u.id)), u.col, u.id from `user` as u"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra",
+        "user.user_metadata"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Correlated sibling EXISTS in an OR over a join",
+    "query": "select u.id from user u join music m on u.col = m.col where exists (select 1 from user_extra ue where ue.user_id = u.id) or exists (select 1 from user_metadata um where um.user_id = u.id)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u join music m on u.col = m.col where exists (select 1 from user_extra ue where ue.user_id = u.id) or exists (select 1 from user_metadata um where um.user_id = u.id)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1,
+          "u_id": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+            "Query": "select u.id, u.col from `user` as u where exists (select 1 from user_extra as ue where ue.user_id = u.id) or exists (select 1 from user_metadata as um where um.user_id = u.id)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Uncorrelated sibling subqueries in a projection over a join",
+    "query": "select (select max(ue.col) from user_extra ue) + (select max(um.col) from user_metadata um), u.id from user u join music m on u.col = m.col",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select (select max(ue.col) from user_extra ue) + (select max(um.col) from user_metadata um), u.id from user u join music m on u.col = m.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0,L:1",
+        "JoinVars": {
+          "u_col": 2
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq2"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "max(0|1) AS max(um.col)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select max(um.col), weight_string(max(um.col)) from user_metadata as um where 1 != 1",
+                    "Query": "select max(um.col), weight_string(max(um.col)) from user_metadata as um"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutValue",
+                "PulloutVars": [
+                  "__sq1"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Aggregate",
+                    "Variant": "Scalar",
+                    "Aggregates": "max(0) AS max(ue.col)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select max(ue.col) from user_extra as ue where 1 != 1",
+                        "Query": "select max(ue.col) from user_extra as ue"
+                      }
+                    ]
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select :__sq1 /* INT16 */ + :__sq2 as `(select max(ue.col) from user_extra ue) + (select max(um.col) from user_metadata um)`, u.id, u.col from `user` as u where 1 != 1",
+                    "Query": "select :__sq1 /* INT16 */ + :__sq2 as `(select max(ue.col) from user_extra ue) + (select max(um.col) from user_metadata um)`, u.id, u.col from `user` as u"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra",
+        "user.user_metadata"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Sibling IN subqueries in an OR over a join",
+    "query": "select u.id from user u join music m on u.col = m.col where u.id in (select ue.user_id from user_extra ue) or u.id in (select um.user_id from user_metadata um)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u join music m on u.col = m.col where u.id in (select ue.user_id from user_extra ue) or u.id in (select um.user_id from user_metadata um)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1,
+          "u_id": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+            "Query": "select u.id, u.col from `user` as u where u.id in (select ue.user_id from user_extra as ue) or u.id in (select um.user_id from user_metadata as um)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
