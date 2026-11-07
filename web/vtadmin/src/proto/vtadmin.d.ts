@@ -68314,6 +68314,9 @@ export namespace vtctldata {
         /** BackupShardRequest include_binlogs. */
         include_binlogs: boolean;
 
+        /** BackupShardRequest tablet_types. */
+        tablet_types: topodata.TabletType[];
+
         /** BackupShardRequest include_outcome. */
         include_outcome: boolean;
 
@@ -68427,6 +68430,9 @@ export namespace vtctldata {
 
             /** BackupShardRequest include_binlogs */
             include_binlogs?: (boolean|null);
+
+            /** BackupShardRequest tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
 
             /** BackupShardRequest include_outcome */
             include_outcome?: (boolean|null);

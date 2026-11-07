@@ -620,7 +620,11 @@ type nopWriteCloser struct{}
 func (nopWriteCloser) Write(p []byte) (int, error) { return len(p), nil }
 func (nopWriteCloser) Close() error                { return nil }
 
-func TestBackupFilesDoesNotCallEndBackup(t *testing.T) {
+// TestBackupFilesFinish tests how backupFiles finishes a backup. It verifies the
+// backup position before writing the MANIFEST, writes no MANIFEST and does not
+// retry when that check fails, and never calls EndBackup, which only the
+// top-level Backup() caller should.
+func TestBackupFilesFinish(t *testing.T) {
 	tmpDir := t.TempDir()
 	dataDir := path.Join(tmpDir, "datadir", "test1")
 	require.NoError(t, os.MkdirAll(dataDir, 0o755))
@@ -635,6 +639,9 @@ func TestBackupFilesDoesNotCallEndBackup(t *testing.T) {
 		require.NoError(t, f.Close())
 	}
 
+	var verified []replication.Position
+	var verifyErr error
+	var failManifestOnce bool
 	var addFileCalls sync.Map
 	bh := &FakeBackupHandle{
 		AddFileReturnF: func(filename string) FakeBackupHandleAddFileReturn {
@@ -649,37 +656,149 @@ func TestBackupFilesDoesNotCallEndBackup(t *testing.T) {
 			if filename == "0" && count == 1 {
 				return FakeBackupHandleAddFileReturn{WriteCloser: nil, Err: errors.New("simulated transient error")}
 			}
+			if filename == backupManifestFileName && failManifestOnce {
+				// A reparent during this attempt loses GTIDs that the backup holds.
+				failManifestOnce = false
+				verifyErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
+				return FakeBackupHandleAddFileReturn{WriteCloser: nil, Err: errors.New("simulated transient error")}
+			}
 			return FakeBackupHandleAddFileReturn{WriteCloser: nopWriteCloser{}}
 		},
 	}
 
-	be := &BuiltinBackupEngine{}
-	err := be.backupFiles(
-		t.Context(),
-		BackupParams{
-			Cnf: &Mycnf{
-				InnodbDataHomeDir:     path.Join(tmpDir, "innodb"),
-				InnodbLogGroupHomeDir: path.Join(tmpDir, "log"),
-				DataDir:               path.Join(tmpDir, "datadir"),
-			},
-			Logger:      logutil.NewMemoryLogger(),
-			Stats:       backupstats.NoStats(),
-			Concurrency: 1,
+	pos, err := replication.DecodePosition("MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-10")
+	require.NoError(t, err)
+	params := BackupParams{
+		Cnf: &Mycnf{
+			InnodbDataHomeDir:     path.Join(tmpDir, "innodb"),
+			InnodbLogGroupHomeDir: path.Join(tmpDir, "log"),
+			DataDir:               path.Join(tmpDir, "datadir"),
 		},
-		bh,
-		replication.Position{},
-		replication.Position{},
-		replication.Position{},
-		"",
-		nil,
-		"",
-		"",
-		nil,
-	)
+		Logger:      logutil.NewMemoryLogger(),
+		Stats:       backupstats.NoStats(),
+		Concurrency: 1,
+		VerifyPosition: func(ctx context.Context, p replication.Position) error {
+			verified = append(verified, p)
+			return verifyErr
+		},
+	}
+	manifestAdds := func() int {
+		v, ok := addFileCalls.Load(backupManifestFileName)
+		if !ok {
+			return 0
+		}
+		return v.(int)
+	}
+
+	be := &BuiltinBackupEngine{}
+	err = be.backupFiles(t.Context(), params, bh, pos, replication.Position{}, replication.Position{}, "", nil, "", "", nil)
 	require.NoError(t, err)
 
 	assert.Empty(t, bh.EndBackupCalls, "backupFiles must not call EndBackup; only the top-level Backup() caller should")
 	assert.Positive(t, bh.WaitCalls, "backupFiles must call Wait() to flush pending async operations")
+	require.Len(t, verified, 1)
+	assert.True(t, pos.Equal(verified[0]), "verified %v, want %v", verified[0], pos)
+	assert.Equal(t, 1, manifestAdds())
+
+	// A failed check fails the backup before its MANIFEST, and is not retried.
+	verified = nil
+	verifyErr = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
+	err = be.backupFiles(t.Context(), params, bh, pos, replication.Position{}, replication.Position{}, "", nil, "", "", nil)
+	require.ErrorContains(t, err, "errant GTIDs")
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	assert.Len(t, verified, 1)
+	assert.Equal(t, 1, manifestAdds(), "a failed check must not write the MANIFEST")
+
+	// A failed MANIFEST attempt is retried only after the position passes the check again.
+	verified = nil
+	verifyErr = nil
+	failManifestOnce = true
+	err = be.backupFiles(t.Context(), params, bh, pos, replication.Position{}, replication.Position{}, "", nil, "", "", nil)
+	require.ErrorContains(t, err, "errant GTIDs")
+	assert.Len(t, verified, 2)
+	assert.Equal(t, 2, manifestAdds(), "a failed check must not retry the MANIFEST")
+}
+
+// TestExecuteFullBackupReportsBackupError checks that a full backup that fails
+// reports its own error, with its code, and adds a failure to restore mysqld's
+// state afterwards unless that failure comes from the backup's context being
+// done.
+func TestExecuteFullBackupReportsBackupError(t *testing.T) {
+	// runBackup runs a full builtin backup whose position check calls
+	// beforeFailing and then fails with "errant GTIDs", where restoring
+	// super_read_only afterwards fails with setSuperReadOnlyErr.
+	runBackup := func(t *testing.T, ctx context.Context, setSuperReadOnlyErr error, beforeFailing func(mysqld *FakeMysqlDaemon)) (BackupResult, error) {
+		backupRoot := t.TempDir()
+		filebackupstorage.FileBackupStorageRoot = backupRoot
+		require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
+		require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
+		dataDir := path.Join(backupRoot, "datadir", "test1")
+		require.NoError(t, os.MkdirAll(dataDir, 0o755))
+		require.NoError(t, os.WriteFile(path.Join(dataDir, "0.ibd"), []byte("test data for backup"), 0o644))
+
+		ts, keyspace, shard := newBackupTestTopo(t)
+		mysqld := newBackupTestMysqld(t)
+		// super_read_only is already on, so the backup sets it only when
+		// restoring mysqld's state afterwards.
+		mysqld.SuperReadOnly.Store(true)
+		mysqld.SetSuperReadOnlyError = setSuperReadOnlyErr
+
+		be := &BuiltinBackupEngine{}
+		return be.ExecuteBackup(ctx, BackupParams{
+			Logger: logutil.NewMemoryLogger(),
+			Mysqld: mysqld,
+			Cnf: &Mycnf{
+				InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
+				InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
+				DataDir:               path.Join(backupRoot, "datadir"),
+			},
+			Stats:                backupstats.NoStats(),
+			Concurrency:          1,
+			HookExtraEnv:         map[string]string{},
+			TopoServer:           ts,
+			Keyspace:             keyspace,
+			Shard:                shard,
+			MysqlShutdownTimeout: time.Minute,
+			VerifyPosition: func(context.Context, replication.Position) error {
+				if beforeFailing != nil {
+					beforeFailing(mysqld)
+				}
+				return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
+			},
+		}, filebackupstorage.NewBackupHandle(nil, "", "", false))
+	}
+
+	t.Run("a done context reports only the backup's error", func(t *testing.T) {
+		// The run is cancelled while the position is checked, so restoring
+		// super_read_only with the backup's context fails too.
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		backupResult, err := runBackup(t, ctx, errors.New("connection pool context already expired"), func(*FakeMysqlDaemon) { cancel() })
+		require.ErrorContains(t, err, "errant GTIDs")
+		assert.NotContains(t, err.Error(), "connection pool context already expired")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		assert.Equal(t, BackupUnusable, backupResult)
+	})
+
+	t.Run("a failed restore of mysqld's state is reported with the backup's error", func(t *testing.T) {
+		backupResult, err := runBackup(t, t.Context(), errors.New("super_read_only is stuck"), nil)
+		require.EqualError(t, err, "not writing the backup MANIFEST: errant GTIDs; restoring mysqld's state afterwards also failed: super_read_only is stuck")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		assert.Equal(t, BackupUnusable, backupResult)
+	})
+
+	t.Run("a failed mysqld restart is reported even after the context is done", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		// Marking the stopped fake mysqld as running makes its restart fail.
+		backupResult, err := runBackup(t, ctx, nil, func(mysqld *FakeMysqlDaemon) {
+			mysqld.Running = true
+			cancel()
+		})
+		require.EqualError(t, err, "not writing the backup MANIFEST: errant GTIDs; restoring mysqld's state afterwards also failed: can't restart mysqld: fake mysql daemon already running")
+		assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+		assert.Equal(t, BackupUnusable, backupResult)
+	})
 }
 
 // newBackupTestTopo sets up the topo that ExecuteBackup needs for the MANIFEST

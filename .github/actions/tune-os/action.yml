@@ -6,6 +6,9 @@ runs:
     - name: Tune the OS
       shell: bash -e {0}
       run: |
+        # Before the first apt run, so that all of the job's apt runs use it.
+        "${GITHUB_ACTION_PATH}/pin-ubuntu-mirror.sh"
+
         # Install eatmydata and ensure it's used for every operation
         sudo apt-get update && sudo apt-get install -y eatmydata
         echo "/usr/\${LIB}/libeatmydata.so" | sudo tee -a /etc/ld.so.preload
