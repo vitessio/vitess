@@ -5534,6 +5534,15 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 				m.Unlock()
 				return
 			}
+			if !si.HasPrimary() {
+				errorMessage := fmt.Sprintf("no primary in shard %v/%v", keyspace, shard)
+				shardResult.Results = append(shardResult.Results, errorMessage)
+				m.Lock()
+				resp.Results = append(resp.Results, errorMessage)
+				resp.ResultsByShard[shard] = &shardResult
+				m.Unlock()
+				return
+			}
 			r := &tabletmanagerdatapb.GetSchemaRequest{ExcludeTables: req.ExcludeTables, IncludeViews: req.IncludeViews}
 			primarySchema, err := schematools.GetSchema(ctx, s.ts, s.tmc, si.PrimaryAlias, r)
 			if err != nil {

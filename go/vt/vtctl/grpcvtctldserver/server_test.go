@@ -15140,6 +15140,36 @@ func TestValidateVSchema(t *testing.T) {
 	}
 }
 
+// TestValidateVSchemaShardWithoutPrimary checks that ValidateVSchema reports a
+// shard that has no primary instead of crashing vtctld.
+func TestValidateVSchemaShardWithoutPrimary(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "ks", Keyspace: &vschemapb.Keyspace{}}))
+	// The shard has a replica but no primary.
+	testutil.AddTablets(ctx, t, ts, nil, &topodatapb.Tablet{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Type:     topodatapb.TabletType_REPLICA,
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+	})
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	resp, err := vtctld.ValidateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{Keyspace: "ks", Shards: []string{"-80"}})
+	require.NoError(t, err)
+
+	result := "no primary in shard ks/-80"
+	utils.MustMatch(t, &vtctldatapb.ValidateVSchemaResponse{
+		Results: []string{result},
+		ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+			"-80": {Results: []string{result}},
+		},
+	}, resp)
+}
+
 func TestValidateVersionKeyspace(t *testing.T) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "zone2")
