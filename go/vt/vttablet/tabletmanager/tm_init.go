@@ -193,8 +193,7 @@ type TabletManager struct {
 	// This semaphore can be held for long periods of time (hours),
 	// like in the case of a restore. This semaphore must be obtained
 	// first before other mutexes.
-	actionSema                  *semaphore.Weighted
-	replicationActionGeneration uint64
+	actionSema *semaphore.Weighted
 
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.

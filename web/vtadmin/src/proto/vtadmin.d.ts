@@ -38855,6 +38855,9 @@ export namespace tabletmanagerdata {
         /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
+        /** PrepareEmergencyReparentRequest wait_position. */
+        wait_position: string;
+
         /** PrepareEmergencyReparentRequest wait_for_position_timeout. */
         wait_for_position_timeout?: (vttime.Duration.$Properties|null);
 
@@ -38942,6 +38945,9 @@ export namespace tabletmanagerdata {
         /** Properties of a PrepareEmergencyReparentRequest. */
         interface $Properties {
 
+            /** PrepareEmergencyReparentRequest wait_position */
+            wait_position?: (string|null);
+
             /** PrepareEmergencyReparentRequest wait_for_position_timeout */
             wait_for_position_timeout?: (vttime.Duration.$Properties|null);
 
@@ -38972,17 +38978,8 @@ export namespace tabletmanagerdata {
         /** Unknown fields preserved while decoding when enabled */
         $unknowns?: Uint8Array[];
 
-        /** PrepareEmergencyReparentResponse status. */
-        status?: (replicationdata.StopReplicationStatus.$Properties|null);
-
-        /** PrepareEmergencyReparentResponse relay_log_position. */
-        relay_log_position: string;
-
         /** PrepareEmergencyReparentResponse reparent_journal_length. */
         reparent_journal_length: number;
-
-        /** PrepareEmergencyReparentResponse stop_replication_error. */
-        stop_replication_error?: (vtrpc.RPCError.$Properties|null);
 
         /** PrepareEmergencyReparentResponse wait_for_position_error. */
         wait_for_position_error?: (vtrpc.RPCError.$Properties|null);
@@ -39074,17 +39071,8 @@ export namespace tabletmanagerdata {
         /** Properties of a PrepareEmergencyReparentResponse. */
         interface $Properties {
 
-            /** PrepareEmergencyReparentResponse status */
-            status?: (replicationdata.StopReplicationStatus.$Properties|null);
-
-            /** PrepareEmergencyReparentResponse relay_log_position */
-            relay_log_position?: (string|null);
-
             /** PrepareEmergencyReparentResponse reparent_journal_length */
             reparent_journal_length?: (number|null);
-
-            /** PrepareEmergencyReparentResponse stop_replication_error */
-            stop_replication_error?: (vtrpc.RPCError.$Properties|null);
 
             /** PrepareEmergencyReparentResponse wait_for_position_error */
             wait_for_position_error?: (vtrpc.RPCError.$Properties|null);

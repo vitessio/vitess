@@ -1443,19 +1443,11 @@ func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T
 
 var (
 	testPrepareEmergencyReparentRequest = &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+		WaitPosition:           testReplicationPosition,
 		WaitForPositionTimeout: protoutil.DurationToProto(37 * time.Second),
 	}
 	testPrepareEmergencyReparentResponse = &tabletmanagerdatapb.PrepareEmergencyReparentResponse{
-		Status: &replicationdatapb.StopReplicationStatus{
-			Before: testReplicationStatus,
-			After:  testReplicationStatus,
-		},
-		RelayLogPosition:      testReplicationPosition,
 		ReparentJournalLength: 12,
-		StopReplicationError: &vtrpcpb.RPCError{
-			Code:    vtrpcpb.Code_UNAVAILABLE,
-			Message: "stop replication failed",
-		},
 		WaitForPositionError: &vtrpcpb.RPCError{
 			Code:    vtrpcpb.Code_DEADLINE_EXCEEDED,
 			Message: "relay log wait failed",

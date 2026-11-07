@@ -97250,6 +97250,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a PrepareEmergencyReparentRequest.
          * @typedef {Object} tabletmanagerdata.PrepareEmergencyReparentRequest.$Properties
+         * @property {string|null} [wait_position] PrepareEmergencyReparentRequest wait_position
          * @property {vttime.Duration.$Properties|null} [wait_for_position_timeout] PrepareEmergencyReparentRequest wait_for_position_timeout
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
@@ -97281,6 +97282,14 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     if (properties[keys[i]] != null && keys[i] !== "__proto__")
                         this[keys[i]] = properties[keys[i]];
         };
+
+        /**
+         * PrepareEmergencyReparentRequest wait_position.
+         * @member {string} wait_position
+         * @memberof tabletmanagerdata.PrepareEmergencyReparentRequest
+         * @instance
+         */
+        PrepareEmergencyReparentRequest.prototype.wait_position = "";
 
         /**
          * PrepareEmergencyReparentRequest wait_for_position_timeout.
@@ -97322,8 +97331,10 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position") && message.wait_position !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.wait_position);
             if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout"))
-                $root.vttime.Duration.encode(message.wait_for_position_timeout, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+                $root.vttime.Duration.encode(message.wait_for_position_timeout, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -97384,6 +97395,15 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
+                        if ((value = reader.stringVerify()).length)
+                            message.wait_position = value;
+                        else
+                            delete message.wait_position;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
                         message.wait_for_position_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_for_position_timeout);
                         continue;
                     }
@@ -97435,6 +97455,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
+                if (!$util.isString(message.wait_position))
+                    return "wait_position: string expected";
             if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout")) {
                 let error = $root.vttime.Duration.verify(message.wait_for_position_timeout, _depth + 1);
                 if (error)
@@ -97461,6 +97484,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let message = new $root.tabletmanagerdata.PrepareEmergencyReparentRequest();
+            if (object.wait_position != null)
+                if (typeof object.wait_position !== "string" || object.wait_position.length)
+                    message.wait_position = $String(object.wait_position);
             if (object.wait_for_position_timeout != null) {
                 if (!$util.isObject(object.wait_for_position_timeout))
                     throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentRequest.wait_for_position_timeout: object expected");
@@ -97486,8 +97512,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let object = {};
-            if (options.defaults)
+            if (options.defaults) {
+                object.wait_position = "";
                 object.wait_for_position_timeout = null;
+            }
+            if (message.wait_position != null && $Object.hasOwnProperty.call(message, "wait_position"))
+                object.wait_position = message.wait_position;
             if (message.wait_for_position_timeout != null && $Object.hasOwnProperty.call(message, "wait_for_position_timeout"))
                 object.wait_for_position_timeout = $root.vttime.Duration.toObject(message.wait_for_position_timeout, options, _depth + 1);
             return object;
@@ -97526,10 +97556,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         /**
          * Properties of a PrepareEmergencyReparentResponse.
          * @typedef {Object} tabletmanagerdata.PrepareEmergencyReparentResponse.$Properties
-         * @property {replicationdata.StopReplicationStatus.$Properties|null} [status] PrepareEmergencyReparentResponse status
-         * @property {string|null} [relay_log_position] PrepareEmergencyReparentResponse relay_log_position
          * @property {number|null} [reparent_journal_length] PrepareEmergencyReparentResponse reparent_journal_length
-         * @property {vtrpc.RPCError.$Properties|null} [stop_replication_error] PrepareEmergencyReparentResponse stop_replication_error
          * @property {vtrpc.RPCError.$Properties|null} [wait_for_position_error] PrepareEmergencyReparentResponse wait_for_position_error
          * @property {vtrpc.RPCError.$Properties|null} [read_reparent_journal_error] PrepareEmergencyReparentResponse read_reparent_journal_error
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
@@ -97564,36 +97591,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         };
 
         /**
-         * PrepareEmergencyReparentResponse status.
-         * @member {replicationdata.StopReplicationStatus.$Properties|null|undefined} status
-         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
-         * @instance
-         */
-        PrepareEmergencyReparentResponse.prototype.status = null;
-
-        /**
-         * PrepareEmergencyReparentResponse relay_log_position.
-         * @member {string} relay_log_position
-         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
-         * @instance
-         */
-        PrepareEmergencyReparentResponse.prototype.relay_log_position = "";
-
-        /**
          * PrepareEmergencyReparentResponse reparent_journal_length.
          * @member {number} reparent_journal_length
          * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
          * @instance
          */
         PrepareEmergencyReparentResponse.prototype.reparent_journal_length = 0;
-
-        /**
-         * PrepareEmergencyReparentResponse stop_replication_error.
-         * @member {vtrpc.RPCError.$Properties|null|undefined} stop_replication_error
-         * @memberof tabletmanagerdata.PrepareEmergencyReparentResponse
-         * @instance
-         */
-        PrepareEmergencyReparentResponse.prototype.stop_replication_error = null;
 
         /**
          * PrepareEmergencyReparentResponse wait_for_position_error.
@@ -97643,18 +97646,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
-                $root.replicationdata.StopReplicationStatus.encode(message.status, writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
-            if (message.relay_log_position != null && $Object.hasOwnProperty.call(message, "relay_log_position") && message.relay_log_position !== "")
-                writer.uint32(/* id 2, wireType 2 =*/18).string(message.relay_log_position);
             if (message.reparent_journal_length != null && $Object.hasOwnProperty.call(message, "reparent_journal_length") && message.reparent_journal_length !== 0)
-                writer.uint32(/* id 3, wireType 0 =*/24).int32(message.reparent_journal_length);
-            if (message.stop_replication_error != null && $Object.hasOwnProperty.call(message, "stop_replication_error"))
-                $root.vtrpc.RPCError.encode(message.stop_replication_error, writer.uint32(/* id 4, wireType 2 =*/34).fork(), _depth + 1).ldelim();
+                writer.uint32(/* id 1, wireType 0 =*/8).int32(message.reparent_journal_length);
             if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error"))
-                $root.vtrpc.RPCError.encode(message.wait_for_position_error, writer.uint32(/* id 5, wireType 2 =*/42).fork(), _depth + 1).ldelim();
+                $root.vtrpc.RPCError.encode(message.wait_for_position_error, writer.uint32(/* id 2, wireType 2 =*/18).fork(), _depth + 1).ldelim();
             if (message.read_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "read_reparent_journal_error"))
-                $root.vtrpc.RPCError.encode(message.read_reparent_journal_error, writer.uint32(/* id 6, wireType 2 =*/50).fork(), _depth + 1).ldelim();
+                $root.vtrpc.RPCError.encode(message.read_reparent_journal_error, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -97713,21 +97710,6 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 let wireType = tag & 7;
                 switch (tag >>>= 3) {
                 case 1: {
-                        if (wireType !== 2)
-                            break;
-                        message.status = $root.replicationdata.StopReplicationStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
-                        continue;
-                    }
-                case 2: {
-                        if (wireType !== 2)
-                            break;
-                        if ((value = reader.stringVerify()).length)
-                            message.relay_log_position = value;
-                        else
-                            delete message.relay_log_position;
-                        continue;
-                    }
-                case 3: {
                         if (wireType !== 0)
                             break;
                         if (value = reader.int32())
@@ -97736,19 +97718,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             delete message.reparent_journal_length;
                         continue;
                     }
-                case 4: {
-                        if (wireType !== 2)
-                            break;
-                        message.stop_replication_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.stop_replication_error);
-                        continue;
-                    }
-                case 5: {
+                case 2: {
                         if (wireType !== 2)
                             break;
                         message.wait_for_position_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_for_position_error);
                         continue;
                     }
-                case 6: {
+                case 3: {
                         if (wireType !== 2)
                             break;
                         message.read_reparent_journal_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.read_reparent_journal_error);
@@ -97802,22 +97778,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $util.recursionLimit)
                 return "max depth exceeded";
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status")) {
-                let error = $root.replicationdata.StopReplicationStatus.verify(message.status, _depth + 1);
-                if (error)
-                    return "status." + error;
-            }
-            if (message.relay_log_position != null && $Object.hasOwnProperty.call(message, "relay_log_position"))
-                if (!$util.isString(message.relay_log_position))
-                    return "relay_log_position: string expected";
             if (message.reparent_journal_length != null && $Object.hasOwnProperty.call(message, "reparent_journal_length"))
                 if (!$util.isInteger(message.reparent_journal_length))
                     return "reparent_journal_length: integer expected";
-            if (message.stop_replication_error != null && $Object.hasOwnProperty.call(message, "stop_replication_error")) {
-                let error = $root.vtrpc.RPCError.verify(message.stop_replication_error, _depth + 1);
-                if (error)
-                    return "stop_replication_error." + error;
-            }
             if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error")) {
                 let error = $root.vtrpc.RPCError.verify(message.wait_for_position_error, _depth + 1);
                 if (error)
@@ -97849,22 +97812,9 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             if (_depth > $util.recursionLimit)
                 throw $Error("max depth exceeded");
             let message = new $root.tabletmanagerdata.PrepareEmergencyReparentResponse();
-            if (object.status != null) {
-                if (!$util.isObject(object.status))
-                    throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentResponse.status: object expected");
-                message.status = $root.replicationdata.StopReplicationStatus.fromObject(object.status, _depth + 1);
-            }
-            if (object.relay_log_position != null)
-                if (typeof object.relay_log_position !== "string" || object.relay_log_position.length)
-                    message.relay_log_position = $String(object.relay_log_position);
             if (object.reparent_journal_length != null)
                 if ($Number(object.reparent_journal_length) !== 0)
                     message.reparent_journal_length = object.reparent_journal_length | 0;
-            if (object.stop_replication_error != null) {
-                if (!$util.isObject(object.stop_replication_error))
-                    throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentResponse.stop_replication_error: object expected");
-                message.stop_replication_error = $root.vtrpc.RPCError.fromObject(object.stop_replication_error, _depth + 1);
-            }
             if (object.wait_for_position_error != null) {
                 if (!$util.isObject(object.wait_for_position_error))
                     throw $TypeError(".tabletmanagerdata.PrepareEmergencyReparentResponse.wait_for_position_error: object expected");
@@ -97896,21 +97846,12 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 throw $Error("max depth exceeded");
             let object = {};
             if (options.defaults) {
-                object.status = null;
-                object.relay_log_position = "";
                 object.reparent_journal_length = 0;
-                object.stop_replication_error = null;
                 object.wait_for_position_error = null;
                 object.read_reparent_journal_error = null;
             }
-            if (message.status != null && $Object.hasOwnProperty.call(message, "status"))
-                object.status = $root.replicationdata.StopReplicationStatus.toObject(message.status, options, _depth + 1);
-            if (message.relay_log_position != null && $Object.hasOwnProperty.call(message, "relay_log_position"))
-                object.relay_log_position = message.relay_log_position;
             if (message.reparent_journal_length != null && $Object.hasOwnProperty.call(message, "reparent_journal_length"))
                 object.reparent_journal_length = message.reparent_journal_length;
-            if (message.stop_replication_error != null && $Object.hasOwnProperty.call(message, "stop_replication_error"))
-                object.stop_replication_error = $root.vtrpc.RPCError.toObject(message.stop_replication_error, options, _depth + 1);
             if (message.wait_for_position_error != null && $Object.hasOwnProperty.call(message, "wait_for_position_error"))
                 object.wait_for_position_error = $root.vtrpc.RPCError.toObject(message.wait_for_position_error, options, _depth + 1);
             if (message.read_reparent_journal_error != null && $Object.hasOwnProperty.call(message, "read_reparent_journal_error"))

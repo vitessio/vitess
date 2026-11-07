@@ -553,7 +553,7 @@ The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStr
 
 #### <a id="fused-tablet-reparent-rpcs"/>TabletManager adds fused reparent RPCs</a>
 
-vttablet now serves two additive `TabletManager` RPCs, `PrepareEmergencyReparent` and `PromoteReplicaAndJournal`. They fuse the tablet-local steps of an emergency reparent (stop the I/O thread, apply relay logs, read the reparent journal) and of promotion (promote, write the journal row) so future orchestrators need fewer round trips. Nothing calls them yet: `EmergencyReparentShard`, `PlannedReparentShard`, and VTOrc keep their existing RPCs in v25. See [#21156](https://github.com/vitessio/vitess/issues/21156) for the staged rollout.
+vttablet now serves two additive `TabletManager` RPCs, `PrepareEmergencyReparent` and `PromoteReplicaAndJournal`. They fuse the tablet-local steps of an emergency reparent (apply relay logs up to a position, then read the reparent journal) and of promotion (promote, then write the journal row), so future orchestrators make fewer round trips that can fail. Stopping the I/O thread stays a separate `StopReplicationAndGetStatus` call, and the tablet never restarts replication on its own if the caller gives up. Nothing calls them yet: `EmergencyReparentShard`, `PlannedReparentShard`, and VTOrc keep their existing RPCs in v25. See [#21156](https://github.com/vitessio/vitess/issues/21156) for the staged rollout.
 
 #### <a id="ers-lagging-relay-log-wait"/>`EmergencyReparentShard` no longer waits on replicas that cannot win the election</a>
 

@@ -221,7 +221,7 @@ type TabletManagerClient interface {
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(ctx context.Context, in *tabletmanagerdata.StopReplicationAndGetStatusRequest, opts ...grpc.CallOption) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
-	// PrepareEmergencyReparent stops the replication I/O thread, applies relay logs, and reads the reparent journal
+	// PrepareEmergencyReparent applies relay logs up to a position and reads the reparent journal
 	PrepareEmergencyReparent(ctx context.Context, in *tabletmanagerdata.PrepareEmergencyReparentRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(ctx context.Context, in *tabletmanagerdata.PromoteReplicaRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PromoteReplicaResponse, error)
@@ -1091,7 +1091,7 @@ type TabletManagerServer interface {
 	// StopReplicationAndGetStatus stops MySQL replication, and returns the
 	// replication status
 	StopReplicationAndGetStatus(context.Context, *tabletmanagerdata.StopReplicationAndGetStatusRequest) (*tabletmanagerdata.StopReplicationAndGetStatusResponse, error)
-	// PrepareEmergencyReparent stops the replication I/O thread, applies relay logs, and reads the reparent journal
+	// PrepareEmergencyReparent applies relay logs up to a position and reads the reparent journal
 	PrepareEmergencyReparent(context.Context, *tabletmanagerdata.PrepareEmergencyReparentRequest) (*tabletmanagerdata.PrepareEmergencyReparentResponse, error)
 	// PromoteReplica makes the replica the new primary
 	PromoteReplica(context.Context, *tabletmanagerdata.PromoteReplicaRequest) (*tabletmanagerdata.PromoteReplicaResponse, error)

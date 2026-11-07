@@ -37,14 +37,17 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// TestPrepareEmergencyReparent checks that PrepareEmergencyReparent waits for
+// the relay logs present when the caller stopped the I/O thread to apply, and
+// only then reads the reparent journal, so a journal row still in the relay
+// logs is counted.
 func TestPrepareEmergencyReparent(t *testing.T) {
 	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
 
@@ -68,6 +71,7 @@ func TestPrepareEmergencyReparent(t *testing.T) {
 	journalLength, err := journalResult.Rows[0][0].ToInt32()
 	require.NoError(t, err)
 
+	// Leave a new journal row in the replica's relay logs, unapplied.
 	position, err := client.PrimaryPosition(t.Context(), primaryTablet)
 	require.NoError(t, err)
 	replicaMySQLConn, err := utils.GetMySQLConn(t.Context(), replica)
@@ -77,14 +81,17 @@ func TestPrepareEmergencyReparent(t *testing.T) {
 	require.NoError(t, err)
 	err = client.PopulateReparentJournal(t.Context(), primaryTablet, time.Unix(1700000000, 123).UnixNano(), "PrepareEmergencyReparent", primaryTablet.Alias, position)
 	require.NoError(t, err)
-
 	primaryGTIDs := strings.ReplaceAll(utils.RunSQL(t.Context(), t, "SELECT @@global.gtid_executed", primary).Rows[0][0].ToString(), "\n", "")
 	waitForReceivedPosition(t, replica, primaryGTIDs)
-	journalResult = utils.RunSQL(t.Context(), t, "SELECT COUNT(*) FROM _vt.reparent_journal", replica)
-	require.Len(t, journalResult.Rows, 1)
-	journalLengthBeforeDrain, err := journalResult.Rows[0][0].ToInt32()
+
+	// The caller stops the I/O thread, as ERS does, and passes the relay log position.
+	stopStatus, err := client.StopReplicationAndGetStatus(t.Context(), replicaTablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 	require.NoError(t, err)
-	require.Equal(t, journalLength, journalLengthBeforeDrain)
+	require.NotNil(t, stopStatus.After)
+	require.NotEmpty(t, stopStatus.After.RelayLogPosition)
+	t.Cleanup(func() {
+		assert.NoError(t, client.StartReplication(context.WithoutCancel(t.Context()), replicaTablet, false))
+	})
 
 	type prepareResult struct {
 		response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
@@ -93,14 +100,13 @@ func TestPrepareEmergencyReparent(t *testing.T) {
 	resultCh := make(chan prepareResult, 1)
 	go func() {
 		response, err := client.PrepareEmergencyReparent(t.Context(), replicaTablet, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+			WaitPosition:           stopStatus.After.RelayLogPosition,
 			WaitForPositionTimeout: protoutil.DurationToProto(60 * time.Second),
 		})
 		resultCh <- prepareResult{response: response, err: err}
 	}()
 
-	require.Eventually(t, func() bool {
-		return replicaStatusField(t, replica, "Replica_IO_Running") == "No"
-	}, 30*time.Second, time.Second)
+	// The wait can only finish once the SQL thread applies the journal row.
 	_, err = replicaMySQLConn.ExecuteFetch(replicaMySQLConn.StartSQLThreadCommand(), 0, false)
 	require.NoError(t, err)
 
@@ -112,58 +118,14 @@ func TestPrepareEmergencyReparent(t *testing.T) {
 		default:
 			return false
 		}
-	}, 30*time.Second, 100*time.Millisecond)
+	}, 60*time.Second, 100*time.Millisecond)
 	require.NoError(t, result.err)
 	require.NotNil(t, result.response)
-	require.NotNil(t, result.response.Status)
-	require.NotNil(t, result.response.Status.After)
-	assert.NotEmpty(t, result.response.RelayLogPosition)
 	assert.Equal(t, journalLength+1, result.response.ReparentJournalLength)
-	assert.Nil(t, result.response.StopReplicationError)
 	assert.Nil(t, result.response.WaitForPositionError)
 	assert.Nil(t, result.response.ReadReparentJournalError)
-
-	require.NoError(t, client.StartReplication(t.Context(), replicaTablet, false))
-
-	_, err = replicaMySQLConn.ExecuteFetch(replicaMySQLConn.StopSQLThreadCommand(), 0, false)
-	require.NoError(t, err)
-	err = client.PopulateReparentJournal(t.Context(), primaryTablet, time.Unix(1700000001, 123).UnixNano(), "PrepareEmergencyReparentCancellation", primaryTablet.Alias, position)
-	require.NoError(t, err)
-	primaryGTIDs = strings.ReplaceAll(utils.RunSQL(t.Context(), t, "SELECT @@global.gtid_executed", primary).Rows[0][0].ToString(), "\n", "")
-	waitForReceivedPosition(t, replica, primaryGTIDs)
-
-	cancelCtx, cancel := context.WithCancel(t.Context())
-	t.Cleanup(cancel)
-	cancelResultCh := make(chan prepareResult, 1)
-	go func() {
-		response, err := client.PrepareEmergencyReparent(cancelCtx, replicaTablet, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
-			WaitForPositionTimeout: protoutil.DurationToProto(60 * time.Second),
-		})
-		cancelResultCh <- prepareResult{response: response, err: err}
-	}()
-
-	require.Eventually(t, func() bool {
-		return replicaStatusField(t, replica, "Replica_IO_Running") == "No" && replicaStatusField(t, replica, "Replica_SQL_Running") == "No"
-	}, 30*time.Second, time.Second)
-	cancel()
-
-	var cancelResult prepareResult
-	require.Eventually(t, func() bool {
-		select {
-		case cancelResult = <-cancelResultCh:
-			return true
-		default:
-			return false
-		}
-	}, 30*time.Second, 100*time.Millisecond)
-	assert.Nil(t, cancelResult.response)
-	require.Error(t, cancelResult.err)
-	assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(cancelResult.err))
-	require.Eventually(t, func() bool {
-		return replicaStatusField(t, replica, "Replica_IO_Running") == "Yes"
-	}, 90*time.Second, time.Second)
-	assert.Equal(t, "No", replicaStatusField(t, replica, "Replica_SQL_Running"))
-	require.NoError(t, client.StartReplication(t.Context(), replicaTablet, false))
+	// The tablet leaves the I/O thread stopped; restarting it is the caller's job.
+	assert.Equal(t, "No", replicaStatusField(t, replica, "Replica_IO_Running"))
 }
 
 func TestPromoteReplicaAndJournal(t *testing.T) {

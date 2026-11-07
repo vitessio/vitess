@@ -566,25 +566,21 @@ message StopReplicationAndGetStatusResponse {
 
 // PrepareEmergencyReparentRequest contains the parameters for preparing an emergency reparent candidate.
 message PrepareEmergencyReparentRequest {
+  // wait_position is the relay log position to apply before reading the reparent journal. An empty value skips the wait phase.
+  string wait_position = 1;
   // wait_for_position_timeout limits how long relay logs may take to apply. Zero uses the default remote operation timeout.
-  vttime.Duration wait_for_position_timeout = 1;
+  vttime.Duration wait_for_position_timeout = 2;
 }
 
 // PrepareEmergencyReparentResponse contains the completed phase results and any partial failure.
 // Phase failures are returned in the corresponding error field instead of as transport errors.
 message PrepareEmergencyReparentResponse {
-  // Output only. status contains replication state before and after stopping the I/O thread. After may be unset when stopping fails.
-  replicationdata.StopReplicationStatus status = 1;
-  // Output only. relay_log_position is set after the SQL thread applies the relay logs present when the I/O thread stopped.
-  string relay_log_position = 2;
   // Output only. reparent_journal_length is the number of reparent journal rows found after the wait phase.
-  int32 reparent_journal_length = 3;
-  // Output only. stop_replication_error describes a stop phase failure. Later phases are skipped when this is set.
-  vtrpc.RPCError stop_replication_error = 4;
+  int32 reparent_journal_length = 1;
   // Output only. wait_for_position_error describes a relay log wait failure. The journal read is still attempted when this is set.
-  vtrpc.RPCError wait_for_position_error = 5;
+  vtrpc.RPCError wait_for_position_error = 2;
   // Output only. read_reparent_journal_error describes a journal read failure.
-  vtrpc.RPCError read_reparent_journal_error = 6;
+  vtrpc.RPCError read_reparent_journal_error = 3;
 }
 
 message PromoteReplicaRequest {

@@ -579,13 +579,6 @@ func (fmd *FakeMysqlDaemon) StopIOThread(ctx context.Context) error {
 	})
 }
 
-// StartIOThread is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) StartIOThread(ctx context.Context) error {
-	return fmd.ExecuteSuperQueryList(ctx, []string{
-		"START REPLICA IO_THREAD",
-	})
-}
-
 // RestartReplicationReceiver is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) RestartReplicationReceiver(ctx context.Context, hookExtraEnv map[string]string) error {
 	if fmd.RestartReplicationReceiverError != nil {

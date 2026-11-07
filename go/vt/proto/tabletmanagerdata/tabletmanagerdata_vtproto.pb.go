@@ -2042,6 +2042,7 @@ func (m *PrepareEmergencyReparentRequest) CloneVT() *PrepareEmergencyReparentReq
 		return (*PrepareEmergencyReparentRequest)(nil)
 	}
 	r := new(PrepareEmergencyReparentRequest)
+	r.WaitPosition = m.WaitPosition
 	r.WaitForPositionTimeout = m.WaitForPositionTimeout.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -2059,10 +2060,7 @@ func (m *PrepareEmergencyReparentResponse) CloneVT() *PrepareEmergencyReparentRe
 		return (*PrepareEmergencyReparentResponse)(nil)
 	}
 	r := new(PrepareEmergencyReparentResponse)
-	r.Status = m.Status.CloneVT()
-	r.RelayLogPosition = m.RelayLogPosition
 	r.ReparentJournalLength = m.ReparentJournalLength
-	r.StopReplicationError = m.StopReplicationError.CloneVT()
 	r.WaitForPositionError = m.WaitForPositionError.CloneVT()
 	r.ReadReparentJournalError = m.ReadReparentJournalError.CloneVT()
 	if len(m.unknownFields) > 0 {
@@ -8113,6 +8111,13 @@ func (m *PrepareEmergencyReparentRequest) MarshalToSizedBufferVT(dAtA []byte) (i
 		i -= size
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
+		dAtA[i] = 0x12
+	}
+	if len(m.WaitPosition) > 0 {
+		i -= len(m.WaitPosition)
+		copy(dAtA[i:], m.WaitPosition)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.WaitPosition)))
+		i--
 		dAtA[i] = 0xa
 	}
 	return len(dAtA) - i, nil
@@ -8156,7 +8161,7 @@ func (m *PrepareEmergencyReparentResponse) MarshalToSizedBufferVT(dAtA []byte) (
 		i -= size
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x32
+		dAtA[i] = 0x1a
 	}
 	if m.WaitForPositionError != nil {
 		size, err := m.WaitForPositionError.MarshalToSizedBufferVT(dAtA[:i])
@@ -8166,39 +8171,12 @@ func (m *PrepareEmergencyReparentResponse) MarshalToSizedBufferVT(dAtA []byte) (
 		i -= size
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
 		i--
-		dAtA[i] = 0x2a
-	}
-	if m.StopReplicationError != nil {
-		size, err := m.StopReplicationError.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0x22
+		dAtA[i] = 0x12
 	}
 	if m.ReparentJournalLength != 0 {
 		i = protohelpers.EncodeVarint(dAtA, i, uint64(m.ReparentJournalLength))
 		i--
-		dAtA[i] = 0x18
-	}
-	if len(m.RelayLogPosition) > 0 {
-		i -= len(m.RelayLogPosition)
-		copy(dAtA[i:], m.RelayLogPosition)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.RelayLogPosition)))
-		i--
-		dAtA[i] = 0x12
-	}
-	if m.Status != nil {
-		size, err := m.Status.MarshalToSizedBufferVT(dAtA[:i])
-		if err != nil {
-			return 0, err
-		}
-		i -= size
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(size))
-		i--
-		dAtA[i] = 0xa
+		dAtA[i] = 0x8
 	}
 	return len(dAtA) - i, nil
 }
@@ -13370,6 +13348,10 @@ func (m *PrepareEmergencyReparentRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
+	l = len(m.WaitPosition)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
 	if m.WaitForPositionTimeout != nil {
 		l = m.WaitForPositionTimeout.SizeVT()
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
@@ -13384,20 +13366,8 @@ func (m *PrepareEmergencyReparentResponse) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.Status != nil {
-		l = m.Status.SizeVT()
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	l = len(m.RelayLogPosition)
-	if l > 0 {
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
 	if m.ReparentJournalLength != 0 {
 		n += 1 + protohelpers.SizeOfVarint(uint64(m.ReparentJournalLength))
-	}
-	if m.StopReplicationError != nil {
-		l = m.StopReplicationError.SizeVT()
-		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
 	if m.WaitForPositionError != nil {
 		l = m.WaitForPositionError.SizeVT()
@@ -24645,6 +24615,38 @@ func (m *PrepareEmergencyReparentRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field WaitPosition", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.WaitPosition = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field WaitForPositionTimeout", wireType)
 			}
 			var msglen int
@@ -24731,74 +24733,6 @@ func (m *PrepareEmergencyReparentResponse) UnmarshalVT(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.Status == nil {
-				m.Status = &replicationdata.StopReplicationStatus{}
-			}
-			if err := m.Status.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RelayLogPosition", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= uint64(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.RelayLogPosition = string(dAtA[iNdEx:postIndex])
-			iNdEx = postIndex
-		case 3:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReparentJournalLength", wireType)
 			}
@@ -24817,43 +24751,7 @@ func (m *PrepareEmergencyReparentResponse) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-		case 4:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field StopReplicationError", wireType)
-			}
-			var msglen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				msglen |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if msglen < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			postIndex := iNdEx + msglen
-			if postIndex < 0 {
-				return protohelpers.ErrInvalidLength
-			}
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			if m.StopReplicationError == nil {
-				m.StopReplicationError = &vtrpc.RPCError{}
-			}
-			if err := m.StopReplicationError.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
-				return err
-			}
-			iNdEx = postIndex
-		case 5:
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field WaitForPositionError", wireType)
 			}
@@ -24889,7 +24787,7 @@ func (m *PrepareEmergencyReparentResponse) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 6:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReadReparentJournalError", wireType)
 			}
