@@ -2804,6 +2804,28 @@
     }
   },
   {
+    "comment": "join predicate pushed into a derived union of dual selects is dropped from the branches when the join merges",
+    "query": "select user.col from user join (select 1 as c from dual union all select 2 from dual) as sub on user.id = sub.c",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select user.col from user join (select 1 as c from dual union all select 2 from dual) as sub on user.id = sub.c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select `user`.col from `user`, (select 1 as c from dual where 1 != 1 union all select 2 from dual where 1 != 1) as sub where 1 != 1",
+        "Query": "select `user`.col from `user`, (select 1 as c from dual union all select 2 from dual) as sub where `user`.id = sub.c"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "statically false dual branch merges into the other side's keyspace",
     "query": "select 42 from dual where false union select id from user",
     "plan": {
