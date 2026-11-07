@@ -87,10 +87,10 @@ var validSQL = []struct {
 	input:  "create table t3 (a int primary key, b int generated always as (-a) virtual unique default (-1 * 128))",
 	output: "create table t3 (\n\ta int primary key,\n\tb int as (-a) virtual default (-1 * 128) unique\n)",
 }, {
-	// A later DEFAULT replaces an earlier one, including whether it is a
-	// literal.
-	input:  "create table t (id char(40) default 4 default (uuid()))",
-	output: "create table t (\n\tid char(40) default (uuid())\n)",
+	// A later DEFAULT replaces an earlier one of the same kind, and a default
+	// expression wins over DEFAULT NULL, as in MySQL.
+	input:  "create table t (id char(40) default 4 default 5, b char(40) default (uuid()) default (rand()), c char(40) default (uuid()) default null)",
+	output: "create table t (\n\tid char(40) default 5,\n\tb char(40) default (rand()),\n\tc char(40) default (uuid())\n)",
 }, {
 	// CREATE TABLE takes options, partitioning and a query without a table
 	// definition, and a definition that starts with an index.
@@ -6844,6 +6844,14 @@ var invalidSQL = []struct {
 }, {
 	input:  "select get_format(year, 'internal')",
 	output: "syntax error at position 23 near 'year'",
+}, {
+	// MySQL rejects a column with both a default expression and a default
+	// constant other than NULL, in either order.
+	input:  "create table t (id char(40) default 4 default (uuid()))",
+	output: "invalid default value for 'id' at position 56",
+}, {
+	input:  "create table t (d datetime default (now()) default current_timestamp)",
+	output: "invalid default value for 'd' at position 70",
 }, {
 	// The parser keeps no text of DO and LOAD DATA, so a procedure body that
 	// holds one cannot be formatted, and is rejected rather than sent as

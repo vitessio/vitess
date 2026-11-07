@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "fmt"
+
 // A CHECK constraint can be written as an attribute of a column, as in
 // `c1 INT CHECK (c1 > 0)`. MySQL treats it as a constraint of the table, as if
 // it was written as a separate element at the column's place in the table
@@ -55,10 +57,44 @@ func (tkn *Tokenizer) enforceColumnCheck(enforced bool, attributesEnd int) bool 
 	return true
 }
 
-// endColumnDefinition takes the CHECK constraints of the column definition that
-// has just been parsed, and holds them until the column is added to its table.
-// It returns an error message for a constraint that MySQL rejects.
+// columnDefaults are the DEFAULT attributes of a column. MySQL keeps a default
+// expression, as in DEFAULT (uuid()), apart from a default constant, as in
+// DEFAULT 4 or DEFAULT CURRENT_TIMESTAMP, and a later one of either kind
+// replaces an earlier one of the same kind. It rejects a column that has both,
+// unless the constant is NULL, and the expression wins over NULL.
+type columnDefaults struct {
+	expression Expr
+	literal    Expr
+}
+
+// resolve sets the default of opts, or reports false for a column that MySQL
+// rejects.
+func (defaults *columnDefaults) resolve(opts *ColumnTypeOptions) bool {
+	_, literalIsNull := defaults.literal.(*NullVal)
+	switch {
+	case defaults.expression != nil && defaults.literal != nil && !literalIsNull:
+		return false
+	case defaults.expression != nil:
+		opts.Default = defaults.expression
+		opts.DefaultLiteral = false
+	case defaults.literal != nil:
+		opts.Default = defaults.literal
+		opts.DefaultLiteral = true
+	}
+	return true
+}
+
+// endColumnDefinition takes the DEFAULT attributes and the CHECK constraints
+// of the column definition that has just been parsed, and holds the
+// constraints until the column is added to its table. It returns an error
+// message for a default or a constraint that MySQL rejects.
 func (tkn *Tokenizer) endColumnDefinition(column *ColumnDefinition) string {
+	defaults := tkn.columnDefaults
+	tkn.columnDefaults = columnDefaults{}
+	if column.Type.Options != nil && !defaults.resolve(column.Type.Options) {
+		// MySQL reports ER_INVALID_DEFAULT.
+		return fmt.Sprintf("invalid default value for '%s'", column.Name.String())
+	}
 	checks := tkn.pendingColumnChecks
 	tkn.pendingColumnChecks = nil
 	if len(checks) == 0 {

@@ -2057,18 +2057,16 @@ column_attribute_list_opt:
     $1.NotSecondary = true
     $$ = $1
   }
-// A later DEFAULT replaces an earlier one, as in MySQL, so each one sets
-// whether the default is a literal.
+// A later DEFAULT replaces an earlier one of the same kind, as in MySQL. See
+// columnDefaults for a DEFAULT of the other kind.
 | column_attribute_list_opt DEFAULT openb expression closeb
   {
-    $1.Default = $4
-    $1.DefaultLiteral = false
+    yylex.(*Tokenizer).columnDefaults.expression = $4
     $$ = $1
   }
 | column_attribute_list_opt DEFAULT now_or_signed_literal
   {
-    $1.Default = $3
-    $1.DefaultLiteral = true
+    yylex.(*Tokenizer).columnDefaults.literal = $3
     $$ = $1
   }
 | column_attribute_list_opt ON UPDATE function_call_nonkeyword
