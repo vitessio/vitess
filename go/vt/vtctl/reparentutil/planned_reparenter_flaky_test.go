@@ -581,10 +581,22 @@ func TestPlannedReparenter_GracefulPromotionWarnsForMariaDBCandidate(t *testing.
 }
 
 func TestPlannedReparenter_InitialPromotionWarnsForMariaDB(t *testing.T) {
-	const alias = "zone1-0000000101"
+	const (
+		alias        = "zone1-0000000101"
+		replicaAlias = "zone1-0000000102"
+	)
 	tabletAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
 	tablet := &topodatapb.Tablet{
 		Alias:    tabletAlias,
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "testkeyspace",
+		Shard:    "0",
+	}
+	// The elect isn't replicating, so its position comes from PrimaryStatus. The
+	// replica is, so its position comes from ReplicationStatus, and it reports no
+	// server version, so only the position can tell that it runs MariaDB.
+	replica := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
 		Type:     topodatapb.TabletType_REPLICA,
 		Keyspace: "testkeyspace",
 		Shard:    "0",
@@ -594,14 +606,17 @@ func TestPlannedReparenter_InitialPromotionWarnsForMariaDB(t *testing.T) {
 			Statuses map[string]string
 			Error    error
 		}{
-			alias: {Statuses: map[string]string{}},
+			alias:        {Statuses: map[string]string{}},
+			replicaAlias: {Statuses: map[string]string{}},
 		},
 		ReplicationStatusResults: map[string]struct {
 			Position *replicationdatapb.Status
 			Error    error
 		}{
-			alias: {Error: mysql.ErrNotReplica},
+			alias:        {Error: mysql.ErrNotReplica},
+			replicaAlias: {Position: &replicationdatapb.Status{Position: "MariaDB/0-1-5"}},
 		},
+		SetReplicationSourceResults: map[string]error{replicaAlias: nil},
 		PrimaryStatusResults: map[string]struct {
 			Status *replicationdatapb.PrimaryStatus
 			Error  error
@@ -625,7 +640,7 @@ func TestPlannedReparenter_InitialPromotionWarnsForMariaDB(t *testing.T) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
 	t.Cleanup(ts.Close)
-	testutil.AddTablets(ctx, t, ts, nil, tablet)
+	testutil.AddTablets(ctx, t, ts, nil, tablet, replica)
 	logger := logutil.NewMemoryLogger()
 	pr := NewPlannedReparenter(ts, tmc, logger)
 
@@ -634,7 +649,8 @@ func TestPlannedReparenter_InitialPromotionWarnsForMariaDB(t *testing.T) {
 		WaitReplicasTimeout: 30 * time.Second,
 	})
 	require.NoError(t, err)
-	assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+	assert.Contains(t, logger.String(), "tablet "+alias+" uses MariaDB")
+	assert.Contains(t, logger.String(), "tablet "+replicaAlias+" uses MariaDB")
 }
 
 func TestPlannedReparenter_getLockAction(t *testing.T) {
@@ -2789,7 +2805,8 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 		tabletMap            map[string]*topo.TabletInfo
 		primaryElectExplicit bool
 
-		shouldErr bool
+		expectMariaDBWarning bool
+		shouldErr            bool
 	}{
 		{
 			name: "success",
@@ -3276,9 +3293,29 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			},
 			shouldErr: false,
 		},
+		{
+			name: "MariaDB positions warn",
+			tmc: &testutil.TabletManagerClient{
+				DemotePrimaryResults: map[string]struct {
+					Status *replicationdatapb.PrimaryStatus
+					Error  error
+				}{
+					"zone1-0000000100": {Status: &replicationdatapb.PrimaryStatus{Position: "MariaDB/0-1-10"}},
+					"zone1-0000000101": {Status: &replicationdatapb.PrimaryStatus{Position: "MariaDB/0-1-5"}},
+				},
+			},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			primaryElect: &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+			},
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+				"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+			},
+			expectMariaDBWarning: true,
+		},
 	}
-
-	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3288,6 +3325,7 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			ts := memorytopo.NewServer(ctx, "zone1")
 			defer ts.Close()
 
+			logger := logutil.NewMemoryLogger()
 			pr := NewPlannedReparenter(nil, tt.tmc, logger)
 
 			testutil.AddShards(ctx, t, ts, &vtctldatapb.Shard{
@@ -3315,6 +3353,9 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 			}
 
 			err := pr.performPotentialPromotion(ctx, tt.keyspace, tt.shard, tt.primaryElect, tt.tabletMap, tt.primaryElectExplicit)
+			if tt.expectMariaDBWarning {
+				assert.Contains(t, logger.String(), "MariaDB support for serving shards is deprecated")
+			}
 			if tt.shouldErr {
 				assert.Error(t, err)
 

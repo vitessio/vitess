@@ -244,6 +244,13 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 			return err
 		},
 	}, {
+		name:  "gtid_mode",
+		query: "select @@global.gtid_mode",
+		call: func(ctx context.Context, mysqld *Mysqld) error {
+			_, err := mysqld.GetGTIDMode(ctx)
+			return err
+		},
+	}, {
 		name:  "executed position",
 		query: "SELECT @@global.gtid_executed",
 		call: func(ctx context.Context, mysqld *Mysqld) error {

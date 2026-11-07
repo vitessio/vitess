@@ -1459,6 +1459,8 @@ type countingVersionDaemon struct {
 	// with ctx.Err() if the context is cancelled first. It simulates a slow
 	// cold-cache lookup.
 	delay time.Duration
+	// gtidModeDelay does the same for GetGTIDMode.
+	gtidModeDelay time.Duration
 }
 
 // expireMySQLVersionCache forces the next test lookup to use the daemon's current version.
@@ -1483,8 +1485,15 @@ func (d *countingVersionDaemon) GetVersionString(ctx context.Context) (string, e
 	return d.version, nil
 }
 
-func (d *countingVersionDaemon) GetGTIDMode(context.Context) (string, error) {
+func (d *countingVersionDaemon) GetGTIDMode(ctx context.Context) (string, error) {
 	d.gtidModeCalls.Add(1)
+	if d.gtidModeDelay > 0 {
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(d.gtidModeDelay):
+		}
+	}
 	return d.gtidMode, d.gtidModeErr
 }
 
@@ -1615,6 +1624,7 @@ func TestManagedFilePositionDeprecationWarning(t *testing.T) {
 		version               string
 		gtidMode              string
 		gtidModeErr           error
+		flavor                string
 		unmanaged             bool
 		expectedWarning       string
 		expectedGTIDModeCalls int64
@@ -1623,7 +1633,7 @@ func TestManagedFilePositionDeprecationWarning(t *testing.T) {
 			name:                  "managed file-position replication warns once",
 			version:               "Ver 8.0.35",
 			gtidMode:              "OFF",
-			expectedWarning:       "File-position replication for managed tablets is deprecated",
+			expectedWarning:       "Running managed tablets without gtid_mode=ON is deprecated",
 			expectedGTIDModeCalls: 1,
 		},
 		{
@@ -1636,8 +1646,23 @@ func TestManagedFilePositionDeprecationWarning(t *testing.T) {
 			name:                  "managed permissive GTID mode warns once",
 			version:               "Ver 8.0.35",
 			gtidMode:              "ON_PERMISSIVE",
-			expectedWarning:       "File-position replication for managed tablets is deprecated",
+			expectedWarning:       "Running managed tablets without gtid_mode=ON is deprecated",
 			expectedGTIDModeCalls: 1,
+		},
+		{
+			name:                  "managed FilePos flavor warns once even with gtid_mode=ON",
+			version:               "Ver 8.0.35",
+			gtidMode:              "ON",
+			flavor:                replication.FilePosFlavorID,
+			expectedWarning:       "File-position replication for managed tablets is deprecated",
+			expectedGTIDModeCalls: 0,
+		},
+		{
+			name:      "unmanaged FilePos flavor does not warn",
+			version:   "Ver 8.0.35",
+			gtidMode:  "ON",
+			flavor:    replication.FilePosFlavorID,
+			unmanaged: true,
 		},
 		{
 			name:      "unmanaged file-position replication does not warn",
@@ -1676,6 +1701,7 @@ func TestManagedFilePositionDeprecationWarning(t *testing.T) {
 			}
 			tm := &TabletManager{
 				MysqlDaemon: daemon,
+				DBConfigs:   &dbconfigs.DBConfigs{Flavor: tt.flavor},
 				tabletAlias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
 				unmanaged:   tt.unmanaged,
 			}
@@ -1691,6 +1717,37 @@ func TestManagedFilePositionDeprecationWarning(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestManagedReplicationDeprecationBoundsGTIDModeLookup checks that the startup
+// check gives up on a gtid_mode lookup that never returns, even when its
+// caller's context has no deadline, so a stalled mysqld can't hold up Start.
+func TestManagedReplicationDeprecationBoundsGTIDModeLookup(t *testing.T) {
+	daemon := &countingVersionDaemon{
+		FakeMysqlDaemon: newTestMysqlDaemon(t, 1),
+		version:         "Ver 8.0.35",
+		gtidModeDelay:   time.Hour,
+	}
+	tm := &TabletManager{
+		MysqlDaemon: daemon,
+		DBConfigs:   &dbconfigs.DBConfigs{},
+		tabletAlias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
+	}
+
+	returned := make(chan struct{})
+	go func() {
+		tm.warnManagedReplicationDeprecation(t.Context())
+		close(returned)
+	}()
+	assert.Eventually(t, func() bool {
+		select {
+		case <-returned:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "the check did not give up on a gtid_mode lookup that never returns")
+	assert.EqualValues(t, 1, daemon.gtidModeCalls.Load())
 }
 
 func TestGetMySQLVersionStringBounded(t *testing.T) {

@@ -579,6 +579,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if err != nil {
 		return err
 	}
+	// The check reads through the DBA pool, so it has to wait for the grants: a
+	// connection opened before them keeps the old privileges (#15730).
+	tm.warnManagedReplicationDeprecation(ctx)
 	tm.tmState.Open()
 
 	startSucceeded = true
@@ -914,7 +917,6 @@ func (tm *TabletManager) checkMysql(ctx context.Context) error {
 			})
 		}
 	}
-	tm.warnManagedReplicationDeprecation(ctx)
 	return nil
 }
 
@@ -1072,6 +1074,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 			log.Error(fmt.Sprintf("Failed waiting for DBA grants: %v", err))
 			os.Exit(1)
 		}
+		tm.warnManagedReplicationDeprecation(ctx)
 
 		// Open the state manager after restore is done.
 		tm.tmState.Open()

@@ -2180,6 +2180,32 @@ func TestStopReplicationAndBuildStatusMapsWarnsForDeprecatedReplication(t *testi
 	_, err = stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, 30*time.Second, sets.New[string](), nil, durability, true, logger)
 	require.NoError(t, err)
 	assert.NotContains(t, logger.String(), "will become unsupported in v26.0.0")
+
+	// A tablet that thinks it's the primary is demoted, and its position comes
+	// from DemotePrimary rather than from the replica status.
+	demotedAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}
+	demotedAliasString := topoproto.TabletAliasString(demotedAlias)
+	tmc.stopReplicationAndGetStatusResults[demotedAliasString] = &struct {
+		StopStatus *replicationdatapb.StopReplicationStatus
+		Err        error
+	}{Err: vterrors.ToGRPC(vterrors.Wrap(mysql.ErrNotReplica, "before status failed"))}
+	tmc.demotePrimaryResults = map[string]*struct {
+		PrimaryStatus *replicationdatapb.PrimaryStatus
+		Err           error
+	}{
+		demotedAliasString: {PrimaryStatus: &replicationdatapb.PrimaryStatus{Position: "MariaDB/0-1-5"}},
+	}
+	tabletMap[demotedAliasString] = &topo.TabletInfo{
+		Tablet: &topodatapb.Tablet{
+			Alias: demotedAlias,
+			Type:  topodatapb.TabletType_PRIMARY,
+		},
+	}
+	logger = logutil.NewMemoryLogger()
+	res, err := stopReplicationAndBuildStatusMaps(t.Context(), tmc, &events.Reparent{}, tabletMap, nil, 30*time.Second, sets.New[string](), nil, durability, true, logger)
+	require.NoError(t, err)
+	require.Contains(t, res.primaryStatusMap, demotedAliasString)
+	assert.Contains(t, logger.String(), "tablet "+demotedAliasString+" uses MariaDB")
 }
 
 func TestReplicaWasRunning(t *testing.T) {

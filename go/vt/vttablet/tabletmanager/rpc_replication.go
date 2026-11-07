@@ -135,6 +135,17 @@ func (tm *TabletManager) warnManagedReplicationDeprecation(ctx context.Context) 
 		return
 	}
 
+	// --db-flavor=FilePos replicates by file position even when gtid_mode=ON,
+	// so the flavour decides before the server is asked.
+	if tm.DBConfigs != nil && tm.DBConfigs.Flavor == replication.FilePosFlavorID {
+		if tm.managedReplicationDeprecationWarned.CompareAndSwap(false, true) {
+			log.Warn("File-position replication for managed tablets is deprecated and will become unsupported in v26.0.0; remove --db-flavor=FilePos and enable MySQL GTIDs for serving shards",
+				slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias)),
+			)
+		}
+		return
+	}
+
 	budget := maxVersionLookupBudget
 	if deadline, ok := ctx.Deadline(); ok {
 		budget = min(time.Until(deadline)/2, budget)
@@ -156,7 +167,7 @@ func (tm *TabletManager) warnManagedReplicationDeprecation(ctx context.Context) 
 	}
 
 	if tm.managedReplicationDeprecationWarned.CompareAndSwap(false, true) {
-		log.Warn("File-position replication for managed tablets is deprecated and will become unsupported in v26.0.0; enable MySQL GTIDs for serving shards",
+		log.Warn("Running managed tablets without gtid_mode=ON is deprecated and will become unsupported in v26.0.0; enable MySQL GTIDs for serving shards",
 			slog.String("tablet_alias", topoproto.TabletAliasString(tm.tabletAlias)),
 			slog.String("gtid_mode", gtidMode),
 		)
