@@ -70,25 +70,15 @@ func yyParsePooled(yylex yyLexer) int {
 
 // Parse2 parses the SQL in full and returns a Statement, which
 // is the AST representation of the query, and a set of BindVars, which are all the
-// bind variables that were found in the original SQL query. If a DDL statement
-// is partially parsed but still contains a syntax error, the
-// error is ignored and the DDL is returned anyway.
+// bind variables that were found in the original SQL query.
+//
+// A statement that does not parse in full is an error, DDL included. Vitess
+// sends MySQL the statement that it formats from the AST, so a statement that
+// it understood only in part would be a different statement from the one that
+// the client sent.
 func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 	tokenizer := p.NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
-		if tokenizer.partialDDL != nil {
-			if typ, val := tokenizer.Scan(); typ != 0 {
-				return nil, nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", val)
-			}
-			switch x := tokenizer.partialDDL.(type) {
-			case DBDDLStatement:
-				x.SetFullyParsed(false)
-			case DDLStatement:
-				x.SetFullyParsed(false)
-			}
-			tokenizer.ParseTrees = []Statement{tokenizer.partialDDL}
-			return tokenizer.ParseTrees[0], tokenizer.BindVars, nil
-		}
 		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
 	err := checkParseTreesError(tokenizer)
@@ -198,20 +188,6 @@ func (p *Parser) ParseExpr(sql string) (Expr, error) {
 func (p *Parser) Parse(sql string) (Statement, error) {
 	stmt, _, err := p.Parse2(sql)
 	return stmt, err
-}
-
-// ParseStrictDDL is the same as Parse except it errors on
-// partially parsed DDL statements.
-func (p *Parser) ParseStrictDDL(sql string) (Statement, error) {
-	tokenizer := p.NewStringTokenizer(sql)
-	if yyParsePooled(tokenizer) != 0 {
-		return nil, tokenizer.LastError
-	}
-	err := checkParseTreesError(tokenizer)
-	if err != nil {
-		return nil, err
-	}
-	return tokenizer.ParseTrees[0], nil
 }
 
 // ErrEmpty is a sentinel error returned when parsing empty statements.

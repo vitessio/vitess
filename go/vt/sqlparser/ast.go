@@ -112,7 +112,6 @@ type (
 	// DDLStatement represents any DDL Statement
 	DDLStatement interface {
 		iDDLStatement()
-		IsFullyParsed() bool
 		IsTemporary() bool
 		GetTable() TableName
 		GetAction() DDLAction
@@ -126,7 +125,6 @@ type (
 		AffectedTables() TableNames
 		SetTable(qualifier string, name string)
 		SetFromTables(tables TableNames)
-		SetFullyParsed(fullyParsed bool)
 		Commented
 		Statement
 	}
@@ -134,9 +132,7 @@ type (
 	// DBDDLStatement represents any DBDDL Statement
 	DBDDLStatement interface {
 		iDBDDLStatement()
-		IsFullyParsed() bool
 		GetDatabaseName() string
-		SetFullyParsed(bool)
 		Statement
 	}
 
@@ -450,7 +446,6 @@ type (
 		DBName        IdentifierCS
 		IfNotExists   bool
 		CreateOptions []DatabaseOption
-		FullyParsed   bool
 	}
 
 	// AlterDatabase represents a ALTER database statement.
@@ -459,7 +454,6 @@ type (
 		DBName              IdentifierCS
 		UpdateDataDirectory bool
 		AlterOptions        []DatabaseOption
-		FullyParsed         bool
 	}
 
 	// Flush represents a FLUSH statement.
@@ -555,7 +549,6 @@ type (
 		PartitionSpec   *PartitionSpec
 		PartitionOption *PartitionOption
 		Comments        *ParsedComments
-		FullyParsed     bool
 	}
 
 	// DropTable represents a DROP TABLE statement.
@@ -594,7 +587,6 @@ type (
 		Comments        *ParsedComments
 		IgnoreOrReplace IgnoreOrReplaceType
 		Select          TableStatement
-		FullyParsed     bool
 	}
 
 	// CreateView represents a CREATE VIEW query
@@ -1016,86 +1008,6 @@ func (*Update) iSupportOptimizerHint()  {}
 func (*VStream) iSupportOptimizerHint() {}
 func (*Select) iSupportOptimizerHint()  {}
 func (*Union) iSupportOptimizerHint()   {}
-
-// IsFullyParsed implements the DDLStatement interface
-func (*TruncateTable) IsFullyParsed() bool {
-	return true
-}
-
-// SetFullyParsed implements the DDLStatement interface
-func (*TruncateTable) SetFullyParsed(bool) {}
-
-// IsFullyParsed implements the DDLStatement interface
-func (*RenameTable) IsFullyParsed() bool {
-	return true
-}
-
-// IsFullyParsed implements the DDLStatement interface
-func (node *CreateProcedure) IsFullyParsed() bool { return true }
-
-// IsFullyParsed implements the DDLStatement interface
-func (node *DropProcedure) IsFullyParsed() bool { return true }
-
-// SetFullyParsed implements the DDL interface
-func (node *DropProcedure) SetFullyParsed(fullyParsed bool) {}
-
-// SetFullyParsed implements the DDLStatement interface
-func (node *CreateProcedure) SetFullyParsed(bool) {}
-
-// SetFullyParsed implements the DDLStatement interface
-func (node *RenameTable) SetFullyParsed(fullyParsed bool) {}
-
-// IsFullyParsed implements the DDLStatement interface
-func (node *CreateTable) IsFullyParsed() bool {
-	return node.FullyParsed
-}
-
-// SetFullyParsed implements the DDLStatement interface
-func (node *CreateTable) SetFullyParsed(fullyParsed bool) {
-	node.FullyParsed = fullyParsed
-}
-
-// IsFullyParsed implements the DDLStatement interface
-func (node *AlterTable) IsFullyParsed() bool {
-	return node.FullyParsed
-}
-
-// SetFullyParsed implements the DDLStatement interface
-func (node *AlterTable) SetFullyParsed(fullyParsed bool) {
-	node.FullyParsed = fullyParsed
-}
-
-// IsFullyParsed implements the DDLStatement interface
-func (node *CreateView) IsFullyParsed() bool {
-	return true
-}
-
-// SetFullyParsed implements the DDLStatement interface
-func (node *CreateView) SetFullyParsed(fullyParsed bool) {}
-
-// IsFullyParsed implements the DDLStatement interface
-func (node *DropView) IsFullyParsed() bool {
-	return true
-}
-
-// SetFullyParsed implements the DDLStatement interface
-func (node *DropView) SetFullyParsed(fullyParsed bool) {}
-
-// IsFullyParsed implements the DDLStatement interface
-func (node *DropTable) IsFullyParsed() bool {
-	return true
-}
-
-// SetFullyParsed implements the DDLStatement interface
-func (node *DropTable) SetFullyParsed(fullyParsed bool) {}
-
-// IsFullyParsed implements the DDLStatement interface
-func (node *AlterView) IsFullyParsed() bool {
-	return true
-}
-
-// SetFullyParsed implements the DDLStatement interface
-func (node *AlterView) SetFullyParsed(fullyParsed bool) {}
 
 // IsTemporary implements the DDLStatement interface
 func (*TruncateTable) IsTemporary() bool {
@@ -1959,34 +1871,6 @@ func (node *DropProcedure) SetTable(qualifier string, name string) {
 func (*DropDatabase) iDBDDLStatement()   {}
 func (*CreateDatabase) iDBDDLStatement() {}
 func (*AlterDatabase) iDBDDLStatement()  {}
-
-// IsFullyParsed implements the DBDDLStatement interface
-func (node *DropDatabase) IsFullyParsed() bool {
-	return true
-}
-
-// SetFullyParsed implements the DBDDLStatement interface
-func (node *DropDatabase) SetFullyParsed(fullyParsed bool) {}
-
-// IsFullyParsed implements the DBDDLStatement interface
-func (node *CreateDatabase) IsFullyParsed() bool {
-	return node.FullyParsed
-}
-
-// SetFullyParsed implements the DBDDLStatement interface
-func (node *CreateDatabase) SetFullyParsed(fullyParsed bool) {
-	node.FullyParsed = fullyParsed
-}
-
-// IsFullyParsed implements the DBDDLStatement interface
-func (node *AlterDatabase) IsFullyParsed() bool {
-	return node.FullyParsed
-}
-
-// SetFullyParsed implements the DBDDLStatement interface
-func (node *AlterDatabase) SetFullyParsed(fullyParsed bool) {
-	node.FullyParsed = fullyParsed
-}
 
 // GetDatabaseName implements the DBDDLStatement interface
 func (node *DropDatabase) GetDatabaseName() string {

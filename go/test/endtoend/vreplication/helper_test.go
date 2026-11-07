@@ -480,7 +480,7 @@ func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletPro
 				require.NotNil(t, res)
 				row := res.Named().Row()
 				tableSchema := row["Create Table"].ToString()
-				parsedDDL, err := sqlparser.NewTestParser().ParseStrictDDL(tableSchema)
+				parsedDDL, err := sqlparser.NewTestParser().Parse(tableSchema)
 				require.NoError(t, err)
 				createTable, ok := parsedDDL.(*sqlparser.CreateTable)
 				require.True(t, ok)

@@ -445,7 +445,7 @@ type CreateTableEntity struct {
 }
 
 func NewCreateTableEntityFromSQL(env *Environment, sql string) (*CreateTableEntity, error) {
-	stmt, err := env.Parser().ParseStrictDDL(sql)
+	stmt, err := env.Parser().Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -457,9 +457,6 @@ func NewCreateTableEntityFromSQL(env *Environment, sql string) (*CreateTableEnti
 }
 
 func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTableEntity, error) {
-	if !c.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Table.Name.String(), Statement: sqlparser.CanonicalString(c)}
-	}
 	entity := &CreateTableEntity{CreateTable: c, Env: env}
 	entity.normalize()
 	return entity, nil
@@ -1060,13 +1057,6 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
 func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints) (*AlterTableEntityDiff, error) {
-	if !c.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(c.CreateTable)}
-	}
-	if !other.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: other.Name(), Statement: sqlparser.CanonicalString(other.CreateTable)}
-	}
-
 	if c.identicalOtherThanName(other) {
 		return nil, nil
 	}

@@ -2364,12 +2364,12 @@ func TestCreateTableDiff(t *testing.T) {
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
+			fromStmt, err := env.Parser().Parse(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := fromStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			toStmt, err := env.Parser().ParseStrictDDL(ts.to)
+			toStmt, err := env.Parser().Parse(ts.to)
 			require.NoError(t, err)
 			toCreateTable, ok := toStmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -2398,11 +2398,11 @@ func TestCreateTableDiff(t *testing.T) {
 			}
 
 			if ts.diff != "" {
-				_, err := env.Parser().ParseStrictDDL(ts.diff)
+				_, err := env.Parser().Parse(ts.diff)
 				require.NoError(t, err)
 			}
 			if ts.cdiff != "" {
-				_, err := env.Parser().ParseStrictDDL(ts.cdiff)
+				_, err := env.Parser().Parse(ts.cdiff)
 				require.NoError(t, err)
 			}
 			if ts.errorMsg != "" {
@@ -2446,7 +2446,7 @@ func TestCreateTableDiff(t *testing.T) {
 					}
 				}
 				// validate we can parse back the statement
-				_, err := env.Parser().ParseStrictDDL(diff)
+				_, err := env.Parser().Parse(diff)
 				require.NoError(t, err)
 
 				// Validate "from/to" entities
@@ -2534,7 +2534,7 @@ func TestCreateTableDiff(t *testing.T) {
 			{
 				cdiff := alter.CanonicalStatementString()
 				assert.Equal(t, ts.cdiff, cdiff)
-				_, err := env.Parser().ParseStrictDDL(cdiff)
+				_, err := env.Parser().Parse(cdiff)
 				assert.NoError(t, err)
 			}
 		})
@@ -3134,12 +3134,12 @@ func TestValidate(t *testing.T) {
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := env.Parser().ParseStrictDDL(ts.from)
+			stmt, err := env.Parser().Parse(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = env.Parser().ParseStrictDDL(ts.alter)
+			stmt, err = env.Parser().Parse(ts.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -3149,7 +3149,7 @@ func TestValidate(t *testing.T) {
 			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
 			alterTables := []*sqlparser.AlterTable{alterTable}
 			if ts.subsequent != "" {
-				stmt, err = env.Parser().ParseStrictDDL(ts.subsequent)
+				stmt, err = env.Parser().Parse(ts.subsequent)
 				require.NoError(t, err)
 				subsequentAlterTable, ok := stmt.(*sqlparser.AlterTable)
 				require.True(t, ok)
@@ -3180,7 +3180,7 @@ func TestValidate(t *testing.T) {
 				require.True(t, ok)
 				applied = c.normalize()
 
-				stmt, err := env.Parser().ParseStrictDDL(ts.to)
+				stmt, err := env.Parser().Parse(ts.to)
 				require.NoError(t, err)
 				toCreateTable, ok := stmt.(*sqlparser.CreateTable)
 				require.True(t, ok)
@@ -3553,7 +3553,7 @@ func TestNormalize(t *testing.T) {
 	env := NewTestEnv()
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
-			stmt, err := env.Parser().ParseStrictDDL(ts.from)
+			stmt, err := env.Parser().Parse(ts.from)
 			require.NoError(t, err)
 			fromCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -3647,7 +3647,7 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 	}
 
 	env := NewTestEnv()
-	stmt, err := env.Parser().ParseStrictDDL(sql)
+	stmt, err := env.Parser().Parse(sql)
 	require.NoError(t, err)
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	require.True(t, ok)

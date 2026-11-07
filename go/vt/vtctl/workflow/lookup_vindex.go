@@ -463,7 +463,7 @@ func (lv *lookupVindex) generateCreateDDLStatement(tableSchema *tabletmanagerdat
 	createDDL := strings.Join(modified, "\n")
 
 	// Confirm that our DDL is valid before we create anything.
-	if _, err := lv.parser.ParseStrictDDL(createDDL); err != nil {
+	if _, err := lv.parser.Parse(createDDL); err != nil {
 		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error: %v; invalid lookup table definition generated: %s",
 			err, createDDL)
 	}

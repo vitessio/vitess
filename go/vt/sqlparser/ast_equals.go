@@ -1945,7 +1945,6 @@ func (cmp *Comparator) RefOfAlterDatabase(a, b *AlterDatabase) bool {
 		return false
 	}
 	return a.UpdateDataDirectory == b.UpdateDataDirectory &&
-		a.FullyParsed == b.FullyParsed &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCS(a.DBName, b.DBName) &&
 		cmp.SliceOfDatabaseOption(a.AlterOptions, b.AlterOptions)
@@ -1988,8 +1987,7 @@ func (cmp *Comparator) RefOfAlterTable(a, b *AlterTable) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return a.FullyParsed == b.FullyParsed &&
-		cmp.TableName(a.Table, b.Table) &&
+	return cmp.TableName(a.Table, b.Table) &&
 		cmp.SliceOfAlterOption(a.AlterOptions, b.AlterOptions) &&
 		cmp.RefOfPartitionSpec(a.PartitionSpec, b.PartitionSpec) &&
 		cmp.RefOfPartitionOption(a.PartitionOption, b.PartitionOption) &&
@@ -2503,7 +2501,6 @@ func (cmp *Comparator) RefOfCreateDatabase(a, b *CreateDatabase) bool {
 		return false
 	}
 	return a.IfNotExists == b.IfNotExists &&
-		a.FullyParsed == b.FullyParsed &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments) &&
 		cmp.IdentifierCS(a.DBName, b.DBName) &&
 		cmp.SliceOfDatabaseOption(a.CreateOptions, b.CreateOptions)
@@ -2536,7 +2533,6 @@ func (cmp *Comparator) RefOfCreateTable(a, b *CreateTable) bool {
 	return a.Temp == b.Temp &&
 		a.IfNotExists == b.IfNotExists &&
 		a.IgnoreOrReplace == b.IgnoreOrReplace &&
-		a.FullyParsed == b.FullyParsed &&
 		cmp.TableName(a.Table, b.Table) &&
 		cmp.RefOfTableSpec(a.TableSpec, b.TableSpec) &&
 		cmp.RefOfOptLike(a.OptLike, b.OptLike) &&

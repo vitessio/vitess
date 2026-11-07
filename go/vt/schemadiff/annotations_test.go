@@ -71,10 +71,10 @@ func TestUnifiedAnnotated(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			fromStmt, err := parser.ParseStrictDDL(tcase.from)
+			fromStmt, err := parser.Parse(tcase.from)
 			require.NoError(t, err)
 			annotatedFrom := annotatedStatement(sqlparser.CanonicalString(fromStmt), RemovedTextualAnnotationType, tcase.fromAnnotations)
-			toStmt, err := parser.ParseStrictDDL(tcase.to)
+			toStmt, err := parser.Parse(tcase.to)
 			require.NoError(t, err)
 			annotatedTo := annotatedStatement(sqlparser.CanonicalString(toStmt), AddedTextualAnnotationType, tcase.toAnnotations)
 			unified := unifiedAnnotated(annotatedFrom, annotatedTo)

@@ -64,7 +64,7 @@ func TestCompatibility(t *testing.T) {
 			word = "`" + word + "`"
 		}
 		sql := fmt.Sprintf("create table %s(c1 int)", word)
-		_, err := parser.ParseStrictDDL(sql)
+		_, err := parser.Parse(sql)
 		assert.NoErrorf(t, err, "%s is not compatible with mysql", word)
 	}
 }

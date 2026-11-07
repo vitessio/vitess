@@ -335,6 +335,6 @@
       "Role": 2
     }
   ],
-  "NeedsReservedConn": true,
-  "TablesUndetermined": true
+  "FullQuery": "create temporary table x",
+  "NeedsReservedConn": true
 }

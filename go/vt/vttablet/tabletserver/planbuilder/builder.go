@@ -238,14 +238,7 @@ func lookupSingleTable(tableExpr sqlparser.TableExpr, tables map[string]*schema.
 }
 
 func analyzeDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
-	// DDLs and some other statements below don't get fully parsed.
-	// We have to use the original query at the time of execution.
-	// We are in the process of changing this
-	var fullQuery *sqlparser.ParsedQuery
-	// If the query is fully parsed, then use the ast and store the fullQuery
-	if stmt.IsFullyParsed() {
-		fullQuery = GenerateFullQuery(stmt)
-	}
+	fullQuery := GenerateFullQuery(stmt)
 	// Only creating a temporary table needs a reserved connection to live on.
 	// Dropping one does not: a session holding the table is routed to its
 	// reserved connection by vtgate, and a session without one has no

@@ -103,7 +103,7 @@ func NewSchemaFromStatements(env *Environment, statements []sqlparser.Statement)
 func NewSchemaFromQueries(env *Environment, queries []string) (*Schema, error) {
 	statements := make([]sqlparser.Statement, 0, len(queries))
 	for _, q := range queries {
-		stmt, err := env.Parser().ParseStrictDDL(q)
+		stmt, err := env.Parser().Parse(q)
 		if err != nil {
 			return nil, err
 		}

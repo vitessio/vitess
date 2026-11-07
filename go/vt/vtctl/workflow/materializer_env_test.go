@@ -128,7 +128,7 @@ func newTestMaterializerEnv(t *testing.T, ctx context.Context, ms *vtctldatapb.M
 			fields []*querypb.Field
 		)
 		if ts.CreateDdl != "" {
-			stmt, err := env.venv.Parser().ParseStrictDDL(ts.CreateDdl)
+			stmt, err := env.venv.Parser().Parse(ts.CreateDdl)
 			require.NoError(t, err)
 			ddl, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)

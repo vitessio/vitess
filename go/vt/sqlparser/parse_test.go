@@ -38,7 +38,6 @@ import (
 var validSQL = []struct {
 	input                string
 	output               string
-	partialDDL           bool
 	ignoreNormalizerTest bool
 }{{
 	// MySQL's lexer reads these type names as the token of the type that they
@@ -214,6 +213,12 @@ var validSQL = []struct {
 }, {
 	input:  "create table t1 (f1 bit(2) not null default b'')",
 	output: "create table t1 (\n\tf1 bit(2) not null default b''\n)",
+}, {
+	// MySQL's grammar takes CREATE TABLE without anything after the name.
+	input: "create table a",
+}, {
+	input:  "CREATE TABLE `a`",
+	output: "create table a",
 }, {
 	// MySQL allows every character from U+0080 on in an unquoted identifier.
 	input:  "create table tæøå (кол int, 🐬 int, index ix_ā (кол))",
@@ -779,11 +784,6 @@ var validSQL = []struct {
 	input: "select a from t",
 }, {
 	input: "select $ from t",
-}, {
-	// shift/reduce conflict on CHARSET, should throw an error on shifting which will be ignored as it is a DDL
-	input:      "alter database charset = 'utf16';",
-	output:     "alter database",
-	partialDDL: true,
 }, {
 	input:  "alter database charset charset = 'utf16'",
 	output: "alter database `charset` character set utf16",
@@ -1899,10 +1899,6 @@ var validSQL = []struct {
 }, {
 	input: "alter table a \npartition by range (id)\n(partition p0 values less than (10),\n partition p1 values less than maxvalue)",
 }, {
-	input:      "create database a garbage values",
-	output:     "create database a",
-	partialDDL: true,
-}, {
 	input: "alter table `Post With Space` drop foreign key `Post With Space_ibfk_1`",
 }, {
 	input: "alter table a add column (id int, id2 char(23))",
@@ -2033,17 +2029,6 @@ var validSQL = []struct {
 	input:  "alter table locations add lat_long point as (point(geocode->>'$.geometry.location.lat', geocode->>'$.geometry.location.lng')) SRID 4326 after geocodes",
 	output: "alter table locations add column lat_long point as (point(json_unquote(json_extract(geocode, '$.geometry.location.lat')), json_unquote(json_extract(geocode, '$.geometry.location.lng')))) virtual srid 4326 after geocodes",
 }, {
-	input:      "create table a",
-	partialDDL: true,
-}, {
-	input:      "CREATE TABLE a",
-	output:     "create table a",
-	partialDDL: true,
-}, {
-	input:      "create table `a`",
-	output:     "create table a",
-	partialDDL: true,
-}, {
 	input:  "create table function_default (x varchar(25) default (trim(' check ')))",
 	output: "create table function_default (\n\tx varchar(25) default (trim(' check '))\n)",
 }, {
@@ -2097,14 +2082,6 @@ var validSQL = []struct {
 }, {
 	input:  "create table if not exists a (\n\t`a` int\n)",
 	output: "create table if not exists a (\n\ta int\n)",
-}, {
-	input:      "create table a ignore me this is garbage",
-	output:     "create table a",
-	partialDDL: true,
-}, {
-	input:      "create table a (a int, b char, c garbage)",
-	output:     "create table a",
-	partialDDL: true,
 }, {
 	// SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE
 	input:  "create table if not exists __drizzle_migrations (id serial primary key, hash text not null, created_at bigint)",
@@ -2314,8 +2291,8 @@ var validSQL = []struct {
 	input:  "create index a on b ((col1 + col2), (col1*col2))",
 	output: "alter table b add key a ((col1 + col2), (col1 * col2))",
 }, {
-	input:  "create fulltext index b using btree on A (col1 desc, col2) algorithm = inplace lock = none",
-	output: "alter table A add fulltext key b (col1 desc, col2) using btree, algorithm = inplace, lock none",
+	input:  "create fulltext index b on A (col1 desc, col2) algorithm = inplace lock = none",
+	output: "alter table A add fulltext key b (col1 desc, col2), algorithm = inplace, lock none",
 }, {
 	input: "create algorithm = merge sql security definer view a as select * from e",
 }, {
@@ -3313,14 +3290,6 @@ var validSQL = []struct {
 	output: "create database test_db default collate utf8mb4_general_ci collate utf8mb4_general_ci",
 }, {
 	input: "create database test_db character set geostd8",
-}, {
-	input:      "alter table corder zzzz zzzz zzzz",
-	output:     "alter table corder",
-	partialDDL: true,
-}, {
-	input:      "create database test_db character set * unparsable",
-	output:     "create database test_db",
-	partialDDL: true,
 }, {
 	input:  "CREATE DATABASE IF NOT EXISTS `mysql` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci ENCRYPTION='N';",
 	output: "create database if not exists mysql default character set utf8mb4 collate utf8mb4_0900_ai_ci encryption 'N'",
@@ -4500,15 +4469,6 @@ func TestValid(t *testing.T) {
 			out := String(tree)
 			assert.Equal(t, tcase.output, out)
 
-			// Some statements currently only have 5.7 specifications.
-			// For mysql 8.0 syntax, the query is not entirely parsed.
-			// Add more structs as we go on adding full parsing support for DDL constructs for 5.7 syntax.
-			switch x := tree.(type) {
-			case DBDDLStatement:
-				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
-			case DDLStatement:
-				assert.Equal(t, !tcase.partialDDL, x.IsFullyParsed())
-			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
 			// all its children. But we can examine code coverage and
@@ -4911,12 +4871,6 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input:  "create index b on A (col1 desc)",
 		output: "alter table A add key b (col1 desc)",
-	}, {
-		input:  "alter table A foo",
-		output: "alter table A",
-	}, {
-		input:  "alter table A convert unparsable",
-		output: "alter table A",
 	}, {
 		input: "alter view A as select * from t",
 	}, {
@@ -5620,7 +5574,7 @@ func TestCreateTable(t *testing.T) {
 	first_name varchar(10),
 	last_name varchar(10),
 	full_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci as (concat(first_name, ' ', last_name)) virtual,
-	middle_name varchar(255) character set utf8mb4 collate utf8mb4_0900_ai_ci default '' collate utf8mb4_bin
+	middle_name varchar(255) character set utf8mb4 default '' collate utf8mb4_bin
 )`,
 			output: `create table t1 (
 	first_name varchar(10),
@@ -6661,7 +6615,7 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 	for _, test := range createTableQueries {
 		sql := strings.TrimSpace(test.input)
 		t.Run(sql, func(t *testing.T) {
-			tree, err := parser.ParseStrictDDL(sql)
+			tree, err := parser.Parse(sql)
 			require.NoError(t, err)
 			got := String(tree)
 			expected := test.output
@@ -6716,12 +6670,11 @@ func TestCreateTableLike(t *testing.T) {
 	}
 	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := parser.ParseStrictDDL(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		assert.True(t, tree.(*CreateTable).FullyParsed)
 		got, want := String(tree.(*CreateTable)), tcase.output
 		assert.Equalf(t, want, got, "Parse(%s):\n%s, want\n%s", tcase.input, got, want)
 	}
@@ -6825,12 +6778,11 @@ partition by range (id)
 	}
 	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := parser.ParseStrictDDL(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
 		}
-		assert.True(t, tree.(*CreateTable).FullyParsed)
 		assert.NotNil(t, tree.(*CreateTable).Select, "Select field should not be nil")
 		got, want := String(tree.(*CreateTable)), tcase.output
 		assert.Equalf(t, want, got, "Parse(%s):\n%s, want\n%s", tcase.input, got, want)
@@ -6856,7 +6808,7 @@ func TestCreateTableEscaped(t *testing.T) {
 	}}
 	parser := NewTestParser()
 	for _, tcase := range testCases {
-		tree, err := parser.ParseStrictDDL(tcase.input)
+		tree, err := parser.Parse(tcase.input)
 		if err != nil {
 			assert.Failf(t, "parse failed", "input: %s, err: %v", tcase.input, err)
 			continue
@@ -6870,6 +6822,93 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	// MySQL takes no index type for a FULLTEXT or SPATIAL index, and no second
+	// COLLATE on a column.
+	input:  "create fulltext index b using btree on A (col1)",
+	output: "a FULLTEXT or SPATIAL index takes no index type at position 48",
+}, {
+	input:  "create table t1 (col1 text, fulltext index using btree (col1))",
+	output: "a FULLTEXT or SPATIAL index takes no index type at position 63",
+}, {
+	input:  "create table t1 (x varchar(10) collate ascii_bin collate ascii_general_ci)",
+	output: "multiple COLLATE clauses at position 75",
+}, {
+	input:  "create table t1 (x varchar(10) collate ascii_bin not null collate ascii_bin)",
+	output: "multiple COLLATE clauses at position 77",
+}, {
+	// Older MySQL versions took the first of two COLLATE clauses, and Vitess
+	// took the last, so both are rejected, as MySQL 8.4 does.
+	input:  "create table t1 (x varchar(10) collate ascii_bin generated always as (null) collate ascii_bin)",
+	output: "multiple COLLATE clauses at position 95",
+}, {
+	// MySQL reads NOW as the function when '(' follows it right away.
+	input:  "create table NOW(a int)",
+	output: "syntax error at position 17 near 'NOW'",
+}, {
+	// A statement that does not parse in full is an error, DDL included.
+	input:  "alter database charset = 'utf16';",
+	output: "syntax error at position 25",
+}, {
+	input:  "create database a garbage values",
+	output: "syntax error at position 26 near 'garbage'",
+}, {
+	input:  "create table a ignore me this is garbage",
+	output: "syntax error at position 25 near 'me'",
+}, {
+	input:  "create table a (a int, b char, c garbage)",
+	output: "syntax error at position 41 near 'garbage'",
+}, {
+	input:  "alter table corder zzzz zzzz zzzz",
+	output: "syntax error at position 24 near 'zzzz'",
+}, {
+	input:  "create database test_db character set * unparsable",
+	output: "syntax error at position 40",
+}, {
+	// MySQL rejects these in its parser too.
+	input:  "create table t (a year(2))",
+	output: "YEAR only takes a display width of 4 at position 26",
+}, {
+	input:  "create table t (a nchar(10) character set latin1)",
+	output: "syntax error at position 38 near 'character'",
+}, {
+	input:  "create table t1 (a int check (a > b))",
+	output: "a column's CHECK constraint can only refer to that column at position 38",
+}, {
+	input:  "create table t1 (a int not null enforced)",
+	output: "[NOT] ENFORCED must follow a CHECK constraint at position 41 near 'enforced'",
+}, {
+	input:  "create table t (a varchar(99999999999999999999))",
+	output: "number is out of range at position 47 near '99999999999999999999'",
+}, {
+	input:  "create table t1 (a int) pack_keys=2",
+	output: "table option value must be 0, 1 or DEFAULT at position 36 near '2'",
+}, {
+	input:  "create table t1 (a int) key_block_size 70000",
+	output: "table option value is out of range at position 45 near '70000'",
+}, {
+	input:  "create table t1 (a int) stats_sample_pages 0",
+	output: "the valid range for stats_sample_pages is [1, 65535] at position 45 near '0'",
+}, {
+	input:  "create table t1 (a int) autoextend_size 4X",
+	output: "invalid size number at position 43 near '4X'",
+}, {
+	input:  "create table t1 (a int) autoextend_size 4294967296M",
+	output: "size number overflow at position 52 near '4294967296M'",
+}, {
+	input:  "create table t (a int references t2(a) srid 4326)",
+	output: "syntax error at position 44 near 'srid'",
+}, {
+	input:  "create table t1 (key key_block_size=1024 (a))",
+	output: "syntax error at position 37",
+}, {
+	input:  "alter table t1 add key type btree (a)",
+	output: "syntax error at position 34 near 'btree'",
+}, {
+	// The grammar has no EXCEPT, so CREATE TABLE ... SELECT ... EXCEPT is
+	// rejected rather than sent to MySQL as the client's text.
+	input:  "create table ct as select id from secret except select id from other",
+	output: "syntax error at position 55 near 'select'",
+}, {
 	// SHOW PROFILE writes its types back unquoted, so only MySQL's own are accepted
 	input:  "show profile `all; insert into t values (1); -- `",
 	output: "unknown profile type at position 50",
@@ -7080,38 +7119,32 @@ func TestErrors(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range invalidSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			_, err := parser.ParseStrictDDL(tcase.input)
+			_, err := parser.Parse(tcase.input)
 			require.Error(t, err, tcase.output)
 			require.Equal(t, tcase.output, err.Error())
 		})
 	}
 }
 
-// TestSkipToEnd tests that the skip to end functionality
-// does not skip past a ';'. If any tokens exist after that, Parse
-// should return an error.
-func TestSkipToEnd(t *testing.T) {
+// TestDDLEndsAtSemicolon tests that a ';' ends a DDL statement, so that the
+// statement after it is not read as part of it.
+func TestDDLEndsAtSemicolon(t *testing.T) {
 	testcases := []struct {
 		input  string
 		output string
 	}{{
-		// This is the case where the partial ddl will be reset
-		// because of a premature ';'.
 		input:  "create table a(id; select * from t",
 		output: "syntax error at position 19",
 	}, {
-		// Partial DDL should get reset for valid DDLs also.
 		input:  "create table a(id int); select * from t",
 		output: ErrMultipleStatements.Error(),
 	}, {
-		// Partial DDL does not get reset here. But we allow the
-		// DDL only if there are no new tokens after skipping to end.
 		input:  "create table a bb cc; select * from t",
-		output: "extra characters encountered after end of DDL: 'select'",
+		output: "syntax error at position 18 near 'bb'",
 	}, {
-		// Test that we don't step at ';' inside strings.
-		input:  "create table a bb 'a;'; select * from t",
-		output: "extra characters encountered after end of DDL: 'select'",
+		// A ';' inside a string does not end the statement.
+		input:  "create table a (b varchar(10) default 'a;'); select * from t",
+		output: ErrMultipleStatements.Error(),
 	}}
 	parser := NewTestParser()
 	for _, tcase := range testcases {
@@ -7192,7 +7225,7 @@ partition by range (id)
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
 			parser, err := New(Options{MySQLServerVersion: testcase.mysqlVersion})
 			require.NoError(t, err)
-			tree, err := parser.ParseStrictDDL(testcase.input)
+			tree, err := parser.Parse(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)
 			require.Equal(t, testcase.output, out)
@@ -7309,10 +7342,6 @@ func TestParseMultiple(t *testing.T) {
 	var sql strings.Builder
 	totalCases := len(validSQL)
 	for _, tcase := range validSQL {
-		if tcase.partialDDL {
-			totalCases--
-			continue
-		}
 		sql.WriteString(tcase.input)
 		sql.WriteRune(';')
 	}
@@ -7330,9 +7359,6 @@ func TestParseMultiple(t *testing.T) {
 	require.Len(t, finalStmts, totalCases)
 	idx := 0
 	for _, tcase := range validSQL {
-		if tcase.partialDDL {
-			continue
-		}
 		want := tcase.output
 		if want == "" {
 			want = tcase.input

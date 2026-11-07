@@ -744,7 +744,7 @@ func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "in Executor.getCreateTableStatement()")
 	}
-	stmt, err := e.env.Environment().Parser().ParseStrictDDL(showCreateTable)
+	stmt, err := e.env.Environment().Parser().Parse(showCreateTable)
 	if err != nil {
 		return nil, err
 	}
@@ -1693,7 +1693,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return nil, err
 	}
 
-	stmt, err := e.env.Environment().Parser().ParseStrictDDL(onlineDDL.SQL)
+	stmt, err := e.env.Environment().Parser().Parse(onlineDDL.SQL)
 	if err != nil {
 		return nil, err
 	}
@@ -2834,7 +2834,7 @@ func (e *Executor) analyzeDropDDLActionMigration(ctx context.Context, onlineDDL 
 			}
 		}
 	}
-	stmt, err := e.env.Environment().Parser().ParseStrictDDL(originalShowCreateTable)
+	stmt, err := e.env.Environment().Parser().Parse(originalShowCreateTable)
 	if err != nil {
 		return err
 	}
@@ -5487,14 +5487,6 @@ func (e *Executor) SubmitMigration(
 	}
 
 	log.Info(fmt.Sprintf("SubmitMigration: request to submit migration with statement: %0.50s...", sqlparser.CanonicalString(stmt)))
-	if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
-		// This validation should have taken place on submission. However, the query may have mutated
-		// during transfer, and this validation is here to catch any malformed mutation.
-		if !ddlStmt.IsFullyParsed() {
-			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "error parsing statement")
-		}
-	}
-
 	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)

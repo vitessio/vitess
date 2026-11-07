@@ -76,19 +76,11 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 			permissions = buildTableNamePermissions(t, tableacl.ADMIN, nil, permissions)
 		}
 		// CREATE TABLE ... AS SELECT copies the selected rows when it runs, so
-		// the source tables are read. A CREATE TABLE the parser could only partially parse
-		// keeps just the prefix it understood and is forwarded to MySQL as the
-		// client's raw text, so its body is opaque, and some opaque bodies
-		// copy rows (`(select ...)`, `AS TABLE t`, an EXCEPT source the parser
-		// truncated). Its table set is therefore undetermined and the executor
-		// fails closed on it under strict table ACL; a valid statement in
-		// syntax the grammar lacks is denied along with them.
+		// the source tables are read. The parser parses every CREATE TABLE in
+		// full or not at all, so its query is all there is to read.
 		switch ddl := node.(type) {
 		case *sqlparser.CreateTable:
-			switch {
-			case !ddl.IsFullyParsed():
-				tablesUndetermined = true
-			case ddl.Select != nil:
+			if ddl.Select != nil {
 				permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
 			}
 		case *sqlparser.CreateView:

@@ -3636,7 +3636,6 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 	}{
 		{"subquery", "set @@sql_select_limit = (select count(*) from t where secret = '" + secret + "')", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
 		{"parse error", "set @@sql_select_limit = 1 '" + secret + "'", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
-		{"partial DDL", "create table a ignore me " + secret, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_INVALID_ARGUMENT},
 		{"not SET", "select '" + secret + "'", vtrpcpb.Code_INTERNAL, vtrpcpb.Code_INVALID_ARGUMENT},
 		{"non-constant sql_mode", "set sql_mode = concat('" + secret + "', '')", vtrpcpb.Code_UNIMPLEMENTED, vtrpcpb.Code_UNIMPLEMENTED},
 		{"invalid sql_mode", "set sql_mode = '" + secret + "'", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
@@ -3666,7 +3665,7 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 				require.Error(t, err)
 				assert.Equal(t, wantCode, vterrors.Code(err))
 				assert.NotContains(t, err.Error(), secret)
-				if tc.name == "parse error" || tc.name == "not SET" || tc.name == "partial DDL" {
+				if tc.name == "parse error" || tc.name == "not SET" {
 					assert.Contains(t, err.Error(), "position 2")
 				}
 				if tc.name == "invalid sql_mode" {

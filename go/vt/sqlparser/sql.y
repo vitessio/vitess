@@ -38,9 +38,6 @@ func setAllowComments(yylex yyLexer, allow bool) {
   yylex.(*Tokenizer).AllowComments = allow
 }
 
-func setDDL(yylex yyLexer, node Statement) {
-  yylex.(*Tokenizer).partialDDL = node
-}
 
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
@@ -1545,21 +1542,18 @@ create_statement:
   create_table_prefix table_spec
   {
     $1.TableSpec = $2
-    $1.FullyParsed = true
     $$ = $1
   }
 | create_table_prefix create_like
   {
     // Create table [name] like [name]
     $1.OptLike = $2
-    $1.FullyParsed = true
     $$ = $1
   }
 | create_table_prefix create_table_query
   {
     $1.IgnoreOrReplace = $2.IgnoreOrReplace
     $1.Select = $2.Select
-    $1.FullyParsed = true
     $$ = $1
   }
 | create_table_prefix table_spec create_table_query
@@ -1567,7 +1561,12 @@ create_statement:
     $1.TableSpec = $2
     $1.IgnoreOrReplace = $3.IgnoreOrReplace
     $1.Select = $3.Select
-    $1.FullyParsed = true
+    $$ = $1
+  }
+// MySQL's grammar takes CREATE TABLE t with nothing after it. MySQL then
+// rejects it, because a table needs a column.
+| create_table_prefix
+  {
     $$ = $1
   }
 // MySQL takes table options and partitioning without a table definition, as
@@ -1575,7 +1574,6 @@ create_statement:
 | create_table_prefix table_options_and_partitions
   {
     $1.TableSpec = $2
-    $1.FullyParsed = true
     $$ = $1
   }
 | create_table_prefix table_options_and_partitions create_table_query
@@ -1583,7 +1581,6 @@ create_statement:
     $1.TableSpec = $2
     $1.IgnoreOrReplace = $3.IgnoreOrReplace
     $1.Select = $3.Select
-    $1.FullyParsed = true
     $$ = $1
   }
 | create_procedure
@@ -1595,8 +1592,11 @@ create_statement:
     indexDef := $1.AlterOptions[0].(*AddIndexDefinition).IndexDefinition
     indexDef.Columns = $3
     indexDef.Options = append(indexDef.Options,$5...)
+    if !indexDef.hasValidIndexType() {
+      yylex.Error("a FULLTEXT or SPATIAL index takes no index type")
+      return 1
+    }
     $1.AlterOptions = append($1.AlterOptions,$6...)
-    $1.FullyParsed = true
     $$ = $1
   }
 | create_view_prefix column_list_opt AS select_statement check_option_opt
@@ -1608,7 +1608,6 @@ create_statement:
   }
 | create_database_prefix create_options_opt
   {
-    $1.FullyParsed = true
     $1.CreateOptions = $2
     $$ = $1
   }
@@ -1731,7 +1730,6 @@ create_table_prefix:
   CREATE comment_opt temp_opt TABLE not_exists_opt table_name
   {
     $$ = &CreateTable{Comments: Comments($2).Parsed(), Table: $6, IfNotExists: $5, Temp: $3}
-    setDDL(yylex, $$)
   }
 
 // We have to split the create_view_prefix into multiple elements
@@ -1762,43 +1760,36 @@ alter_table_prefix:
   ALTER comment_opt TABLE table_name
   {
     $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $4}
-    setDDL(yylex, $$)
   }
 
 create_index_prefix:
   CREATE comment_opt INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $7, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$4}, Options:$5}}}}
-    setDDL(yylex, $$)
   }
 | CREATE comment_opt FULLTEXT INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeFullText}, Options:$6}}}}
-    setDDL(yylex, $$)
   }
 | CREATE comment_opt SPATIAL INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeSpatial}, Options:$6}}}}
-    setDDL(yylex, $$)
   }
 | CREATE comment_opt UNIQUE INDEX sql_id using_opt ON table_name
   {
     $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $8, AlterOptions: []AlterOption{&AddIndexDefinition{IndexDefinition:&IndexDefinition{Info: &IndexInfo{Name:$5, Type: IndexTypeUnique}, Options:$6}}}}
-    setDDL(yylex, $$)
   }
 
 create_database_prefix:
   CREATE comment_opt database_or_schema not_exists_opt table_id
   {
     $$ = &CreateDatabase{Comments: Comments($2).Parsed(), DBName: $5, IfNotExists: $4}
-    setDDL(yylex,$$)
   }
 
 alter_database_prefix:
   ALTER comment_opt database_or_schema
   {
     $$ = &AlterDatabase{Comments: Comments($2).Parsed()}
-    setDDL(yylex,$$)
   }
 
 database_or_schema:
@@ -1984,6 +1975,10 @@ column_definition:
   sql_id column_type collate_opt column_attribute_list_opt reference_definition_opt
   {
     $2.Options = $4
+    if $3 != "" && $2.Options.Collate != "" {
+      yylex.Error("multiple COLLATE clauses")
+      return 1
+    }
     if $2.Options.Collate == "" {
         $2.Options.Collate = $3
     }
@@ -2002,6 +1997,10 @@ column_definition:
     $2.Options.As = $7
     $2.Options.Storage = $9
     $2.Options.Reference = $11
+    if $3 != "" && $2.Options.Collate != "" {
+      yylex.Error("multiple COLLATE clauses")
+      return 1
+    }
     if $2.Options.Collate == "" {
         $2.Options.Collate = $3
     }
@@ -2126,16 +2125,26 @@ column_attribute_list_opt:
     }
     $$ = $1
   }
+// MySQL rejects a second COLLATE on a column, even one that names the same
+// collation.
 | column_attribute_list_opt COLLATE STRING
   {
     if $3 == "" {
       yylex.Error("collation name cannot be empty")
       return 1
     }
+    if $1.Collate != "" {
+      yylex.Error("multiple COLLATE clauses")
+      return 1
+    }
     $1.Collate = string($3)
   }
 | column_attribute_list_opt COLLATE ci_identifier
   {
+    if $1.Collate != "" {
+      yylex.Error("multiple COLLATE clauses")
+      return 1
+    }
     $1.Collate = string($3.String())
     $$ = $1
   }
@@ -3154,6 +3163,10 @@ index_definition:
   index_info '(' index_column_list ')' index_option_list_opt
   {
     $$ = &IndexDefinition{Info: $1, Columns: $3, Options: $5}
+    if !$$.hasValidIndexType() {
+      yylex.Error("a FULLTEXT or SPATIAL index takes no index type")
+      return 1
+    }
   }
 // The index type can come before the columns, as in `KEY k USING BTREE (a)`.
 // It is written out with the options after the columns, where it means the
@@ -3161,6 +3174,10 @@ index_definition:
 | index_info USING sql_id '(' index_column_list ')' index_option_list_opt
   {
     $$ = &IndexDefinition{Info: $1, Columns: $5, Options: append([]*IndexOption{{Name: string($2), String: $3.String()}}, $7...)}
+    if !$$.hasValidIndexType() {
+      yylex.Error("a FULLTEXT or SPATIAL index takes no index type")
+      return 1
+    }
   }
 | named_index_info index_type_keyword sql_id '(' index_column_list ')' index_option_list_opt
   {
@@ -4104,28 +4121,24 @@ alter_commands_modifier:
 alter_statement:
   alter_table_prefix alter_commands_list partitions_options_opt
   {
-    $1.FullyParsed = true
     $1.AlterOptions = $2
     $1.PartitionOption = $3
     $$ = $1
   }
 | alter_table_prefix alter_commands_list REMOVE PARTITIONING
   {
-    $1.FullyParsed = true
     $1.AlterOptions = $2
     $1.PartitionSpec = &PartitionSpec{Action:RemoveAction}
     $$ = $1
   }
 | alter_table_prefix alter_commands_modifier_list ',' partition_operation
   {
-    $1.FullyParsed = true
     $1.AlterOptions = $2
     $1.PartitionSpec = $4
     $$ = $1
   }
 | alter_table_prefix partition_operation
   {
-    $1.FullyParsed = true
     $1.PartitionSpec = $2
     $$ = $1
   }
@@ -4141,14 +4154,12 @@ alter_statement:
 // behavior as well.
 | alter_database_prefix table_id_opt alter_database_options
   {
-    $1.FullyParsed = true
     $1.DBName = $2
     $1.AlterOptions = $3
     $$ = $1
   }
 | alter_database_prefix table_id UPGRADE DATA DIRECTORY NAME
   {
-    $1.FullyParsed = true
     $1.DBName = $2
     $1.UpdateDataDirectory = true
     $$ = $1
@@ -5185,9 +5196,9 @@ drop_statement:
   {
     // Change this to an alter statement
     if $4.Lowered() == "primary" {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed:true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:PrimaryKeyType}},$7...)}
     } else {
-    $$ = &AlterTable{Comments: Comments($2).Parsed(), FullyParsed: true, Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
+    $$ = &AlterTable{Comments: Comments($2).Parsed(), Table: $6,AlterOptions: append([]AlterOption{&DropKey{Type:NormalKeyType, Name:$4}},$7...)}
     }
   }
 | DROP comment_opt VIEW exists_opt view_name_list restrict_or_cascade_opt
@@ -6673,6 +6684,11 @@ table_name:
   }
 | function_keyword
   {
+    // MySQL reads the name as the function when '(' follows it right away.
+    if tkn := yylex.(*Tokenizer); @1.end < len(tkn.buf) && tkn.buf[@1.end] == '(' {
+      yylex.Error("syntax error")
+      return 1
+    }
     $$ = TableName{Name: NewIdentifierCS(string($1))}
   }
 | table_id '.' reserved_table_id

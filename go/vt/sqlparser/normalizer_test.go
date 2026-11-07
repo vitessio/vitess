@@ -498,7 +498,7 @@ func TestNormalizeValidSQL(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {
 		t.Run(tcase.input, func(t *testing.T) {
-			if tcase.partialDDL || tcase.ignoreNormalizerTest {
+			if tcase.ignoreNormalizerTest {
 				return
 			}
 			tree, err := parser.Parse(tcase.input)

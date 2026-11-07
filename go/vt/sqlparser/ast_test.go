@@ -163,9 +163,10 @@ func TestDDL(t *testing.T) {
 		output   DDLStatement
 		affected []string
 	}{{
-		query: "create table a",
+		query: "create table a engine innodb",
 		output: &CreateTable{
-			Table: TableName{Name: NewIdentifierCS("a")},
+			Table:     TableName{Name: NewIdentifierCS("a")},
+			TableSpec: &TableSpec{Options: TableOptions{{Name: "engine", String: "innodb", CaseSensitive: true}}},
 		},
 		affected: []string{"a"},
 	}, {

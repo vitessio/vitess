@@ -252,7 +252,7 @@ func parseSchema(sqlSchema string, opts *Options, parser *sqlparser.Parser) ([]s
 
 		var stmt sqlparser.Statement
 		if opts.StrictDDL {
-			stmt, err = parser.ParseStrictDDL(sql)
+			stmt, err = parser.Parse(sql)
 			if err != nil {
 				return nil, err
 			}

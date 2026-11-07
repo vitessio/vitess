@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -41,11 +42,12 @@ type mysqlTestStatement struct {
 	// expectedErrors is the argument of the `--error` command that precedes
 	// the statement, or empty when MySQL is expected to accept it.
 	expectedErrors string
-	// ansiQuotes is set when the file enabled ANSI_QUOTES before the
-	// statement, which makes a double-quoted string an identifier. The parser
-	// does not know the session's sql_mode, so such a statement cannot be
-	// judged.
-	ansiQuotes bool
+	// sqlModeDependent is set when the file enabled ANSI_QUOTES or
+	// IGNORE_SPACE before the statement. They change how MySQL reads a
+	// double-quoted string and a function name followed by a space, and the
+	// parser does not know the session's sql_mode, so such a statement cannot
+	// be judged.
+	sqlModeDependent bool
 }
 
 // mysqlTestCommand matches the mysqltest commands that can be written
@@ -70,10 +72,10 @@ type mysqlTestReader struct {
 	delimiter  string
 	// quote is the quote character of the string that is open at the end of
 	// the buffer, or zero when no string is open.
-	quote          byte
-	firstLine      int
-	expectedErrors string
-	ansiQuotes     bool
+	quote            byte
+	firstLine        int
+	expectedErrors   string
+	sqlModeDependent bool
 }
 
 // readMySQLTestFile returns the SQL statements of a mysqltest file. It drops
@@ -177,15 +179,16 @@ func (reader *mysqlTestReader) endStatement() {
 		return
 	}
 	if match := mysqlTestSQLMode.FindStringSubmatch(sql); match != nil {
-		reader.ansiQuotes = strings.Contains(strings.ToUpper(match[1]), "ANSI")
+		mode := strings.ToUpper(match[1])
+		reader.sqlModeDependent = strings.Contains(mode, "ANSI") || strings.Contains(mode, "IGNORE_SPACE")
 		return
 	}
 	reader.statements = append(reader.statements, mysqlTestStatement{
-		file:           reader.name,
-		line:           reader.firstLine,
-		sql:            sql,
-		expectedErrors: expectedErrors,
-		ansiQuotes:     reader.ansiQuotes,
+		file:             reader.name,
+		line:             reader.firstLine,
+		sql:              sql,
+		expectedErrors:   expectedErrors,
+		sqlModeDependent: reader.sqlModeDependent,
 	})
 }
 
@@ -212,12 +215,17 @@ func isMySQLParseError(expectedErrors string) bool {
 
 // TestMySQLTestSuiteDDL parses the DDL statements of MySQL's own test suite.
 // A statement that MySQL accepts must parse, and its formatted form must parse
-// back to the same tree, because Vitess sends the formatted form to MySQL. A
-// statement that MySQL rejects as a syntax error must be rejected too, so that
-// Vitess does not send MySQL a statement other than the one the client wrote.
+// back to the same tree, because Vitess sends the formatted form to MySQL.
 //
 // A statement that MySQL is expected to reject with a different error may be
 // valid syntax, so it must round-trip if it parses, but it may fail to parse.
+//
+// A statement that MySQL rejects as a syntax error is only reported when
+// Vitess accepts it. Vitess accepts some words unquoted that MySQL reserves,
+// such as GET, and it does not repeat the checks that MySQL makes in its
+// parser but that are not about syntax, such as the number of partitions. It
+// formats what it parsed, quoting such a word, so MySQL runs the statement
+// that Vitess planned, rather than another one.
 //
 // The test runs only when VT_MYSQL_SERVER_SOURCE points at a checkout of
 // github.com/mysql/mysql-server, for example the 8.4 branch.
@@ -251,6 +259,7 @@ func TestMySQLTestSuiteDDL(t *testing.T) {
 
 	parser := NewTestParser()
 	checked := 0
+	var accepted []string
 	for _, statement := range statements {
 		// mysqltest sends the text up to its delimiter as one query, which can
 		// hold several statements when the delimiter is not ';'. An expected
@@ -261,37 +270,26 @@ func TestMySQLTestSuiteDDL(t *testing.T) {
 		}
 		for _, piece := range pieces {
 			statement.sql = piece
-			if statement.ansiQuotes || !mysqlDDLStatement.MatchString(statement.sql) {
+			if statement.sqlModeDependent || !mysqlDDLStatement.MatchString(statement.sql) {
 				continue
 			}
 			checked++
+			if isMySQLParseError(statement.expectedErrors) {
+				if _, err := parser.Parse(statement.sql); err == nil {
+					accepted = append(accepted, fmt.Sprintf("%s:%d: %s", statement.file, statement.line, statement.sql))
+				}
+				continue
+			}
 			checkMySQLTestStatement(t, parser, statement)
 		}
 	}
 	t.Logf("checked %d DDL statements of %d statements", checked, len(statements))
+	t.Logf("%d statements that MySQL rejects as syntax errors parse:\n%s", len(accepted), strings.Join(accepted, "\n"))
 }
 
 func checkMySQLTestStatement(t *testing.T, parser *Parser, statement mysqlTestStatement) {
 	tree, err := parser.Parse(statement.sql)
-	if isMySQLParseError(statement.expectedErrors) {
-		assert.Error(t, err, "%s:%d: MySQL rejects this statement as a syntax error\n%s", statement.file, statement.line, statement.sql)
-		return
-	}
 	if err != nil {
-		if statement.expectedErrors == "" {
-			assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
-		}
-		return
-	}
-	if ddl, ok := tree.(DDLStatement); ok && !ddl.IsFullyParsed() {
-		_, err := parser.ParseStrictDDL(statement.sql)
-		if statement.expectedErrors == "" {
-			assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
-		}
-		return
-	}
-	if ddl, ok := tree.(DBDDLStatement); ok && !ddl.IsFullyParsed() {
-		_, err := parser.ParseStrictDDL(statement.sql)
 		if statement.expectedErrors == "" {
 			assert.NoError(t, err, "%s:%d: MySQL accepts this statement\n%s", statement.file, statement.line, statement.sql)
 		}

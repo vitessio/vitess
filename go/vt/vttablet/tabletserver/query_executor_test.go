@@ -272,15 +272,15 @@ func TestQueryExecutorPlans(t *testing.T) {
 			onlyInTxErr: true,
 			errorWant:   "DDL statement executed inside a transaction",
 		}, {
-			input: "create index a on user(id1 + id2)",
+			input: "create index a on user((id1 + id2))",
 			dbResponses: []dbResponse{{
-				query:  "create index a on user(id1 + id2)",
+				query:  "alter table `user` add key a ((id1 + id2))",
 				result: emptyResult,
 			}},
 			resultWant:  emptyResult,
 			planWant:    "DDL",
-			logWant:     "create index a on user(id1 + id2)",
-			inTxWant:    "create index a on user(id1 + id2)",
+			logWant:     "alter table `user` add key a ((id1 + id2))",
+			inTxWant:    "alter table `user` add key a ((id1 + id2))",
 			onlyInTxErr: true,
 			errorWant:   "DDL statement executed inside a transaction",
 		}, {
@@ -1254,9 +1254,9 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 // (GHSA-w6mx-2f8x-pqf4). Under strict ACL these must now be denied for a
 // non-exempt caller; an exempt caller, a dry run, and strict ACL off must
 // still run them. The one non-exempt caller that may run them is one holding
-// every role in a table group covering every table ("%"), and then only DO and
-// a partially parsed CREATE TABLE among those here: CALL and LOAD DATA can act
-// beyond any table, so they stay denied for it.
+// every role in a table group covering every table ("%"), and then only DO
+// among those here: CALL and LOAD DATA can act beyond any table, so they stay
+// denied for it.
 func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int64())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -1270,7 +1270,6 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	db.AddQueryPattern("(?is)do .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)call .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)load data .*", &sqltypes.Result{})
-	db.AddQueryPattern("(?is)create table .*", &sqltypes.Result{})
 
 	// A subquery-reading DO, a stored-procedure CALL, and a LOAD DATA: one per
 	// tablet plan type whose statement the parser leaves opaque.
@@ -1462,39 +1461,6 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 		})
 	}
 
-	// A CREATE TABLE the parser only partially parses names the table it
-	// creates, but its body is opaque and may copy rows from other tables. A
-	// caller holding every role in a group covering every table may read those
-	// tables too, so the statement runs for it.
-	t.Run("a partially parsed CREATE TABLE runs for a caller with every role on every table", func(t *testing.T) {
-		useAllTablesConfig(t)
-		const query = "create table ct as select pk from test_table except select pk from test_table"
-		tsv := newServer(t, enableStrictTableACL)
-		qre := newTestQueryExecutor(adminCtx, tsv, query, 0)
-		require.Equal(t, planbuilder.PlanDDL, qre.plan.PlanID)
-		require.True(t, qre.plan.TablesUndetermined)
-		calledBefore := db.GetQueryCalledNum(query)
-		_, err := qre.Execute()
-		require.NoError(t, err)
-		assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(query), "the statement must reach the backend")
-	})
-
-	// An ADMIN alone passes the check on the table a partially parsed CREATE
-	// TABLE names, so only the undetermined check keeps it from reading
-	// test_table through the statement's opaque body.
-	t.Run("a partially parsed CREATE TABLE is denied for a caller that is only an admin", func(t *testing.T) {
-		useAllTablesConfig(t)
-		const query = "create table ct as select pk from test_table except select pk from test_table"
-		tsv := newServer(t, enableStrictTableACL)
-		userCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: "u5"})
-		qre := newTestQueryExecutor(userCtx, tsv, query, 0)
-		require.True(t, qre.plan.TablesUndetermined)
-		calledBefore := db.GetQueryCalledNum(query)
-		_, err := qre.Execute()
-		require.EqualError(t, err, "DDL command denied to user 'u5' for a table set that cannot be determined (ACL check error)")
-		assert.Equal(t, calledBefore, db.GetQueryCalledNum(query), "the backend must not see a statement the ACL denied")
-	})
-
 	// A plan checks every table against the configuration it was built with,
 	// like the tables it names in plan.Authorized; a reload clears the plan
 	// cache instead. So a statement planned under the "%" group still runs
@@ -1569,26 +1535,22 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 	db.AddQueryPattern("(?is)show variables .*", &sqltypes.Result{})
 	db.AddQueryPattern("(?is)set @v = .*", &sqltypes.Result{})
 
-	// A fully parsed CREATE TABLE ... AS SELECT is denied on the source table.
-	// A form the parser only partially parses (it keeps the CREATE TABLE
-	// prefix and the executor forwards the raw text) is denied on the
-	// undetermined table set instead, as MySQL still copies the rows. One of
-	// each: the per-shape classification is pinned in TestBuildPermissions.
+	// A CREATE TABLE ... AS SELECT is denied on the source table. The
+	// per-shape classification is pinned in TestBuildPermissions.
 	// A SET only executes on a transaction or reserved connection, so its
 	// case runs inside a transaction.
 	cases := []struct {
-		name         string
-		query        string
-		planID       planbuilder.PlanType
-		undetermined bool
-		inTx         bool
+		name   string
+		query  string
+		planID planbuilder.PlanType
+		inTx   bool
 	}{
-		{"create table as select", "create table ct as select pk from test_table", planbuilder.PlanDDL, false, false},
-		{"explain analyze select", "explain analyze select pk from test_table", planbuilder.PlanSelect, false, false},
-		{"explain select", "explain select pk from test_table", planbuilder.PlanSelect, false, false},
-		{"create view as select", "create view ct as select pk from test_table", planbuilder.PlanDDL, false, false},
-		{"show with a subquery in its filter", "show variables where Variable_name in (select email from test_table)", planbuilder.PlanShow, false, false},
-		{"set with a subquery", "set @v = (select email from test_table limit 1)", planbuilder.PlanSet, false, true},
+		{"create table as select", "create table ct as select pk from test_table", planbuilder.PlanDDL, false},
+		{"explain analyze select", "explain analyze select pk from test_table", planbuilder.PlanSelect, false},
+		{"explain select", "explain select pk from test_table", planbuilder.PlanSelect, false},
+		{"create view as select", "create view ct as select pk from test_table", planbuilder.PlanDDL, false},
+		{"show with a subquery in its filter", "show variables where Variable_name in (select email from test_table)", planbuilder.PlanShow, false},
+		{"set with a subquery", "set @v = (select email from test_table limit 1)", planbuilder.PlanSet, true},
 	}
 
 	// test_table is readable only by "superuser". The caller "u2" has ADMIN on
@@ -1634,16 +1596,12 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 			}
 			statsKey := strings.Join([]string{"test_table", "group02", tc.planID.String(), "u2"}, ".")
 			wantErr := tc.planID.String() + " command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)"
-			if tc.undetermined {
-				statsKey = strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u2"}, ".")
-				wantErr = tc.planID.String() + " command denied to user 'u2', in groups [eng, beta], for a table set that cannot be determined (ACL check error)"
-			}
 
 			t.Run("strict table ACL denies", func(t *testing.T) {
 				tsv := newServer(t, enableStrictTableACL)
 				qre := newTestQueryExecutor(ctx, tsv, tc.query, connID(t, tsv))
 				require.Equal(t, tc.planID, qre.plan.PlanID)
-				require.Equal(t, tc.undetermined, qre.plan.TablesUndetermined)
+				require.False(t, qre.plan.TablesUndetermined)
 				deniedBefore := tsv.stats.TableaclDenied.Counts()[statsKey]
 				calledBefore := db.GetQueryCalledNum(tc.query)
 				_, err := qre.Execute()
@@ -1687,44 +1645,6 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 				_, err := qre.Execute()
 				require.NoError(t, err, "with strict table ACL off the statement must still run")
 				assert.Equal(t, calledBefore+1, db.GetQueryCalledNum(tc.query), "the statement must reach the backend")
-			})
-
-			if !tc.undetermined {
-				return
-			}
-
-			// The planner still derived ADMIN on ct for the flagged form. That
-			// permission is checked before the statement fails closed, so a
-			// caller lacking it is denied on ct by name, and a dry run records
-			// both the ct denial and the undetermined one.
-			u3 := &querypb.VTGateCallerID{Username: "u3"}
-			u3Ctx := callerid.NewContext(t.Context(), nil, u3)
-			ctKey := strings.Join([]string{"ct", "group03", tc.planID.String(), "u3"}, ".")
-			undeterminedKey := strings.Join([]string{"undetermined-table-set", "", tc.planID.String(), "u3"}, ".")
-
-			t.Run("strict table ACL denies on the derived table first", func(t *testing.T) {
-				tsv := newServer(t, enableStrictTableACL)
-				qre := newTestQueryExecutor(u3Ctx, tsv, tc.query, connID(t, tsv))
-				deniedBefore := tsv.stats.TableaclDenied.Counts()[ctKey]
-				undeterminedBefore := tsv.stats.TableaclDenied.Counts()[undeterminedKey]
-				calledBefore := db.GetQueryCalledNum(tc.query)
-				_, err := qre.Execute()
-				require.EqualError(t, err, tc.planID.String()+" command denied to user 'u3' for table 'ct' (ACL check error)")
-				assert.Equal(t, calledBefore, db.GetQueryCalledNum(tc.query), "the backend must not see a statement the ACL denied")
-				assert.Equal(t, deniedBefore+1, tsv.stats.TableaclDenied.Counts()[ctKey], "the denial must be counted against ct")
-				assert.Equal(t, undeterminedBefore, tsv.stats.TableaclDenied.Counts()[undeterminedKey], "a statement denied on a named table must not also be counted as undetermined")
-			})
-
-			t.Run("dry run records the derived table and the undetermined set", func(t *testing.T) {
-				tsv := newServer(t, enableStrictTableACL)
-				tsv.qe.enableTableACLDryRun = true
-				qre := newTestQueryExecutor(u3Ctx, tsv, tc.query, connID(t, tsv))
-				ctBefore := tsv.stats.TableaclPseudoDenied.Counts()[ctKey]
-				undeterminedBefore := tsv.stats.TableaclPseudoDenied.Counts()[undeterminedKey]
-				_, err := qre.Execute()
-				require.NoError(t, err, "a dry run must not enforce the ACL")
-				assert.Equal(t, ctBefore+1, tsv.stats.TableaclPseudoDenied.Counts()[ctKey], "a dry run must record the ct denial")
-				assert.Equal(t, undeterminedBefore+1, tsv.stats.TableaclPseudoDenied.Counts()[undeterminedKey], "a dry run must record the undetermined denial too")
 			})
 		})
 	}

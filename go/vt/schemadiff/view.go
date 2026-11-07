@@ -302,16 +302,13 @@ type CreateViewEntity struct {
 }
 
 func NewCreateViewEntity(env *Environment, c *sqlparser.CreateView) (*CreateViewEntity, error) {
-	if !c.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.ViewName.Name.String(), Statement: sqlparser.CanonicalString(c)}
-	}
 	entity := &CreateViewEntity{CreateView: c, env: env}
 	entity.normalize()
 	return entity, nil
 }
 
 func NewCreateViewEntityFromSQL(env *Environment, sql string) (*CreateViewEntity, error) {
-	stmt, err := env.Parser().ParseStrictDDL(sql)
+	stmt, err := env.Parser().Parse(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -352,13 +349,6 @@ func (c *CreateViewEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, err
 // It returns an AlterView statement if changes are found, or nil if not.
 // the other view may be of different name; its name is ignored.
 func (c *CreateViewEntity) ViewDiff(other *CreateViewEntity, _ *DiffHints) (*AlterViewEntityDiff, error) {
-	if !c.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(c.CreateView)}
-	}
-	if !other.IsFullyParsed() {
-		return nil, &NotFullyParsedError{Entity: c.Name(), Statement: sqlparser.CanonicalString(other.CreateView)}
-	}
-
 	if c.identicalOtherThanName(other) {
 		return nil, nil
 	}
