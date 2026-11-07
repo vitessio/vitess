@@ -587,12 +587,23 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
 }
 
-// JSON text takes utf8mb4_bin, which is not a CaseAwareCollation.
 func changeCaseJSON(j *evalJSON, upcase bool) []byte {
-	if upcase {
-		return bytes.ToUpper(j.ToRawBytes())
+	return colldata.ChangeCaseUTF8mb4(nil, j.ToRawBytes(), upcase)
+}
+
+func changeCase(text []byte, col collations.ID, upcase bool) ([]byte, bool) {
+	if col == collations.CollationUtf8mb4BinID {
+		// utf8mb4_bin is not a CaseAwareCollation.
+		return colldata.ChangeCaseUTF8mb4(nil, text, upcase), true
 	}
-	return bytes.ToLower(j.ToRawBytes())
+	csa, ok := colldata.Lookup(col).(colldata.CaseAwareCollation)
+	if !ok {
+		return nil, false
+	}
+	if upcase {
+		return csa.ToUpper(nil, text), true
+	}
+	return csa.ToLower(nil, text), true
 }
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
@@ -605,28 +616,25 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 	case nil:
 		return nil, nil
 
-	case evalNumeric:
-		return evalToVarchar(e, call.collate, false)
-
 	case *evalJSON:
 		return newEvalText(changeCaseJSON(e, call.upcase), collationJSON), nil
 
 	case *evalBytes:
-		coll := colldata.Lookup(e.col.Collation)
-		csa, ok := coll.(colldata.CaseAwareCollation)
+		newcase, ok := changeCase(e.bytes, e.col.Collation, call.upcase)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
-		}
-		var newcase []byte
-		if call.upcase {
-			newcase = csa.ToUpper(nil, e.bytes)
-		} else {
-			newcase = csa.ToLower(nil, e.bytes)
 		}
 		return newEvalText(newcase, e.col), nil
 
 	default:
-		return e, nil
+		text, err := evalToVarchar(e, call.collate, false)
+		if err != nil {
+			return nil, err
+		}
+		if newcase, ok := changeCase(text.bytes, text.col.Collation, call.upcase); ok {
+			text.bytes = newcase
+		}
+		return text, nil
 	}
 }
 
