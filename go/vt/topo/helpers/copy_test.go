@@ -164,7 +164,9 @@ func TestBasic(t *testing.T) {
 func TestCopyRoutingRulesLogsSaveFailure(t *testing.T) {
 	ctx := t.Context()
 	fromTS := memorytopo.NewServer(ctx, "test_cell")
+	t.Cleanup(fromTS.Close)
 	toTS, toFactory := memorytopo.NewServerAndFactory(ctx, "test_cell")
+	t.Cleanup(toTS.Close)
 	require.NoError(t, fromTS.SaveRoutingRules(ctx, &vschemapb.RoutingRules{
 		Rules: []*vschemapb.RoutingRule{{FromTable: "t1", ToTables: []string{"ks2.t1"}}},
 	}))
