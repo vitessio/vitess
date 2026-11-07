@@ -107,6 +107,8 @@ type ZkConn struct {
 	mu      sync.Mutex
 	conn    *zk.Conn
 	sockets *socketDialer
+	// closed is set by Close, after which we don't connect again.
+	closed bool
 }
 
 // Connect to the Zookeeper servers specified in addr
@@ -227,6 +229,7 @@ func (c *ZkConn) AddAuth(ctx context.Context, scheme string, auth []byte) error 
 func (c *ZkConn) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.closed = true
 	if c.conn != nil {
 		c.conn.Close()
 		c.sockets.Close()
@@ -269,6 +272,10 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 		// Get the current connection, or connect.
 		var conn *zk.Conn
 		conn, err = c.getConn(ctx)
+		if err == zk.ErrClosing {
+			// We were closed, don't try again.
+			return
+		}
 		if err != nil {
 			// We can't connect, try again.
 			continue
@@ -297,6 +304,9 @@ func (c *ZkConn) getConn(ctx context.Context) (*zk.Conn, error) {
 	defer c.mu.Unlock()
 
 	if c.conn == nil {
+		if c.closed {
+			return nil, zk.ErrClosing
+		}
 		conn, sockets, events, err := dialZk(ctx, c.addr)
 		if err != nil {
 			return nil, err
