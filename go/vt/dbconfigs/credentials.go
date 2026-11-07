@@ -213,7 +213,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 
 	if vcs.cacheValid.Load() && vcs.dbCredsCache != nil {
 		if vcs.dbCredsCache[user] == nil {
-			log.Error("Vault cache is valid, but user unknown in cache, will retry", slog.String("user", user))
+			log.Error("Vault cache is valid, but user unknown in cache, will retry", slog.String("db_user", user))
 			return "", "", ErrUnknownUser
 		}
 		return user, vcs.dbCredsCache[user][0], nil
@@ -292,7 +292,7 @@ func (vcs *VaultCredentialsServer) GetUserAndPassword(user string) (string, stri
 		return "", "", ErrUnknownUser
 	}
 	if dbCreds[user] == nil {
-		log.Warn("Vault lookup for user not found", slog.String("user", user))
+		log.Warn("Vault lookup for user not found", slog.String("db_user", user))
 		return "", "", ErrUnknownUser
 	}
 	log.Info("Vault client status", slog.String("vault_status", vcs.vaultClient.GetStatus()))
