@@ -20,11 +20,15 @@ limitations under the License.
 //
 // Messages built with fmt.Sprintf can carry row values, last primary keys,
 // binlog events and query text, and redacting the rendered string is
-// brittle. In the packages this analyzer checks, that data is only in
-// attributes, so a log pipeline can keep msg and drop the attributes it
-// doesn't want. To keep database data out of logs, keep only keys that carry
-// no data, such as msg, level, time, table, column, workflow, stream_id,
-// keyspace, shard, tablet and error_code.
+// brittle. In the packages tools/check_logcheck.sh checks, listed in
+// packages.txt, that data is only in attributes, so a log pipeline can keep
+// msg and drop the attributes it doesn't want. To keep database data out of
+// logs from those packages, keep only keys that carry no data, such as msg,
+// level, time, table, column, workflow, stream_id, keyspace, shard, tablet
+// and error_code. Table, column and workflow names are identifiers that
+// users choose in their schemas and workflows, and some operators treat them
+// as data. msg from other Vitess packages can still carry data until they are
+// converted.
 //
 // Keys that can hold data include:
 //
