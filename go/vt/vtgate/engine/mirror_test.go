@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -212,12 +213,20 @@ func TestMirror(t *testing.T) {
 			targetErr.Store(nil)
 		}()
 
-		primitiveLatency := 10 * time.Millisecond
+		// The primitive finishes only after the mirror target's hook has
+		// returned, so the target is left with the mirror's whole
+		// maxMirrorTargetLag to report its result. Fixed sleeps on both
+		// sides race on a loaded machine.
+		targetDone := make(chan struct{})
 		vc.onExecuteMultiShardFn = func(ctx context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
-			time.Sleep(primitiveLatency)
+			select {
+			case <-targetDone:
+			case <-time.After(10 * time.Second):
+				assert.Fail(t, "mirror target did not finish")
+			}
 			select {
 			case <-ctx.Done():
-				require.Fail(t, "primitive context done")
+				assert.Fail(t, "primitive context done")
 			default:
 			}
 		}
@@ -227,10 +236,10 @@ func TestMirror(t *testing.T) {
 		mirrorVC.onExecuteMultiShardFn = func(ctx context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
 			wg.Add(1)
 			defer wg.Done()
-			time.Sleep(primitiveLatency / 2)
+			defer close(targetDone)
 			select {
 			case <-ctx.Done():
-				require.Fail(t, "mirror target context done")
+				assert.Fail(t, "mirror target context done")
 			default:
 			}
 		}
@@ -251,7 +260,9 @@ func TestMirror(t *testing.T) {
 
 		wg.Wait()
 
-		require.Greater(t, *sourceExecTime.Load(), *targetExecTime.Load())
+		// The target finished on time, so the mirror recorded the target's own
+		// result rather than cancelling it.
+		require.NoError(t, *targetErr.Load())
 	})
 
 	t.Run("TryExecute slow mirror target", func(t *testing.T) {
@@ -270,7 +281,7 @@ func TestMirror(t *testing.T) {
 			time.Sleep(primitiveLatency)
 			select {
 			case <-ctx.Done():
-				require.Fail(t, "primitive context done")
+				assert.Fail(t, "primitive context done")
 			default:
 			}
 		}
@@ -280,13 +291,12 @@ func TestMirror(t *testing.T) {
 		mirrorVC.onExecuteMultiShardFn = func(ctx context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, _ []*querypb.BoundQuery, _ bool, _ bool) {
 			wg.Add(1)
 			defer wg.Done()
-			time.Sleep(primitiveLatency + maxMirrorTargetLag + (5 * time.Millisecond))
+			// Block until the mirror cancels the target. A fixed sleep here
+			// races with the mirror's own maxMirrorTargetLag timer.
 			select {
 			case <-ctx.Done():
-				require.Error(t, ctx.Err())
-				require.ErrorContains(t, ctx.Err(), "context canceled")
-			default:
-				require.Fail(t, "mirror target context not done")
+			case <-time.After(10 * time.Second):
+				assert.Fail(t, "mirror target context not done")
 			}
 		}
 
@@ -440,12 +450,20 @@ func TestMirror(t *testing.T) {
 			targetErr.Store(nil)
 		}()
 
-		primitiveLatency := 10 * time.Millisecond
+		// The primitive finishes only after the mirror target's hook has
+		// returned, so the target is left with the mirror's whole
+		// maxMirrorTargetLag to report its result. Fixed sleeps on both
+		// sides race on a loaded machine.
+		targetDone := make(chan struct{})
 		vc.onStreamExecuteMultiFn = func(ctx context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, _ []map[string]*querypb.BindVariable, _ bool, _ bool, _ func(*sqltypes.Result) error) {
-			time.Sleep(primitiveLatency)
+			select {
+			case <-targetDone:
+			case <-time.After(10 * time.Second):
+				assert.Fail(t, "mirror target did not finish")
+			}
 			select {
 			case <-ctx.Done():
-				require.Fail(t, "primitive context done")
+				assert.Fail(t, "primitive context done")
 			default:
 			}
 		}
@@ -455,10 +473,10 @@ func TestMirror(t *testing.T) {
 		mirrorVC.onStreamExecuteMultiFn = func(ctx context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, _ []map[string]*querypb.BindVariable, _ bool, _ bool, _ func(*sqltypes.Result) error) {
 			wg.Add(1)
 			defer wg.Done()
-			time.Sleep(primitiveLatency / 2)
+			defer close(targetDone)
 			select {
 			case <-ctx.Done():
-				require.Fail(t, "mirror target context done")
+				assert.Fail(t, "mirror target context done")
 			default:
 			}
 		}
@@ -485,7 +503,9 @@ func TestMirror(t *testing.T) {
 			"StreamExecuteMulti select f.bar from foo f where f.id = 1 ks2.-20: {} ",
 		})
 
-		require.Greater(t, *sourceExecTime.Load(), *targetExecTime.Load())
+		// The target finished on time, so the mirror recorded the target's own
+		// result rather than cancelling it.
+		require.NoError(t, *targetErr.Load())
 	})
 
 	t.Run("TryStreamExecute slow mirror target", func(t *testing.T) {
@@ -504,7 +524,7 @@ func TestMirror(t *testing.T) {
 			time.Sleep(primitiveLatency)
 			select {
 			case <-ctx.Done():
-				require.Fail(t, "primitive context done")
+				assert.Fail(t, "primitive context done")
 			default:
 			}
 		}
@@ -514,11 +534,12 @@ func TestMirror(t *testing.T) {
 		mirrorVC.onStreamExecuteMultiFn = func(ctx context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, _ []map[string]*querypb.BindVariable, _ bool, _ bool, _ func(*sqltypes.Result) error) {
 			wg.Add(1)
 			defer wg.Done()
-			time.Sleep(primitiveLatency + maxMirrorTargetLag + (5 * time.Millisecond))
+			// Block until the mirror cancels the target. A fixed sleep here
+			// races with the mirror's own maxMirrorTargetLag timer.
 			select {
 			case <-ctx.Done():
-			default:
-				require.Fail(t, "mirror target context not done")
+			case <-time.After(10 * time.Second):
+				assert.Fail(t, "mirror target context not done")
 			}
 		}
 

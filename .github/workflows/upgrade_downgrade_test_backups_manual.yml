@@ -81,6 +81,7 @@ jobs:
             - '.github/actions/setup-mysql/action.yml'
             - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
+            - '.github/actions/tool-downloads/**'
             - 'examples/**'
 
   # This job usually execute in ± 20 minutes
@@ -186,6 +187,9 @@ jobs:
         # This job builds two trees into the same GOMODCACHE/GOCACHE, so it
         # must not be the one saving the branch caches; restore on PRs only.
         cache: ${{ github.event_name == 'pull_request' }}
+
+    - name: Restore tool downloads
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make minimaltools
       timeout-minutes: 5
