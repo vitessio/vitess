@@ -41,6 +41,28 @@ var validSQL = []struct {
 	partialDDL           bool
 	ignoreNormalizerTest bool
 }{{
+	// MySQL allows every character from U+0080 on in an unquoted identifier.
+	input:  "create table tæøå (кол int, 🐬 int, index ix_ā (кол))",
+	output: "create table `tæøå` (\n\t`кол` int,\n\t`🐬` int,\n\tkey `ix_ā` (`кол`)\n)",
+}, {
+	input:  "alter table t1 change C Cöŀumň_TWO int",
+	output: "alter table t1 change column C `Cöŀumň_TWO` int",
+}, {
+	// An identifier can start with digits, and after a qualifier's '.' it
+	// can even consist of digits only.
+	input:  "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
+	output: "create table `2t`.`3t2` (\n\tc1 bigint not null,\n\tc2 text,\n\tprimary key (c1)\n)",
+}, {
+	input:  "select t.12, t.1e from t",
+	output: "select t.`12`, t.`1e` from t",
+}, {
+	// An `e` after digits is an exponent only when digits follow it.
+	input:  "create table 1ea10 (1a20 int, 1e int)",
+	output: "create table `1ea10` (\n\t`1a20` int,\n\t`1e` int\n)",
+}, {
+	input:  "select 1e+ 1e+10, 1e-5 from t",
+	output: "select `1e` + 1e+10, 1e-5 from t",
+}, {
 	input: "select a and b member of (c) from dual",
 }, {
 	input: "select * from foo limit 5 + 5",
@@ -6837,13 +6859,10 @@ var invalidSQL = []struct {
 	input:  "select /* aa",
 	output: "syntax error at position 13 near '/* aa'",
 }, {
-	// This is a valid MySQL query but does not yet work with Vitess.
-	// The problem is that the tokenizer takes .3 as a single token which causes parsing error
-	// We should instead be using . as a separate token and then 3t2 as an identifier.
-	// This highlights another problem, the tokenization has to be aware of the context of parsing!
-	// Since in an alternate query like `select .3e3t`, we should use .3e3 as a single token FLOAT and then t as ID.
-	input:  "create table 2t.3t2 (c1 bigint not null, c2 text, primary key(c1))",
-	output: "syntax error at position 18 near '.3'",
+	// A decimal number cannot be followed by a letter, and an `e` that no
+	// digits follow is not an exponent.
+	input:  "select 1.5e from t",
+	output: "syntax error at position 11 near '1.5'",
 }, {
 	input:  "ALTER TABLE t ADD PARTITION (PARTITION p10 VALUES LESS THAN (10)), ADD PARTITION (PARTITION p20 VALUES LESS THAN (20))",
 	output: "syntax error at position 67",
