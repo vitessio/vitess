@@ -324,9 +324,6 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.Error(t, err)
 
-	// Calling retryTransition while retrying should be a no-op.
-	sm.retryTransition(func() { t.Error("retryTransition logged while already retrying") })
-
 	// Steal the lock and wait long enough for the retry
 	// to fail, and then release it. The retry will have
 	// to keep retrying.
@@ -352,6 +349,16 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	assert.Equal(t, "PRIMARY", record["tablet_type"])
 	assert.Equal(t, "Serving", record["state"])
 	assert.Equal(t, "intentional error", record["error"])
+
+	// Calling retryTransition while retrying should be a no-op. The retry
+	// above has finished, so set the flag directly.
+	sm.mu.Lock()
+	sm.retrying = true
+	sm.mu.Unlock()
+	sm.retryTransition(func() { t.Error("retryTransition logged while already retrying") })
+	sm.mu.Lock()
+	sm.retrying = false
+	sm.mu.Unlock()
 }
 
 func TestStateManagerNotConnectedType(t *testing.T) {
