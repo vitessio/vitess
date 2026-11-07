@@ -41,7 +41,7 @@ func TestStreamTablesLogs(t *testing.T) {
 	updateStream := NewUpdateStream(nil, "ks", "cell", schema.NewEngineForTests(), sqlparser.NewTestParser())
 	updateStream.cp = dbconfigs.New(&mysql.ConnParams{UnixSocket: "/nonexistent/mysql.sock", DbName: "vt_test_keyspace"})
 	updateStream.Enable()
-	defer updateStream.Disable()
+	t.Cleanup(updateStream.Disable)
 
 	const position = "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-23"
 	err := updateStream.StreamTables(t.Context(), position, []string{"t1"}, nil, func(*binlogdatapb.BinlogTransaction) error { return nil })

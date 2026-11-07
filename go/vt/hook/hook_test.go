@@ -292,9 +292,9 @@ func TestExecuteOptional(t *testing.T) {
 	}
 
 	require.NoError(t, os.Symlink(echo, echoHookPath))
-	defer func() {
+	t.Cleanup(func() {
 		require.NoError(t, os.Remove(echoHookPath))
-	}()
+	})
 	tt := []struct {
 		name          string
 		hookName      string

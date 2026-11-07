@@ -133,13 +133,13 @@ func TestExecuteSuperQueryListMulti(t *testing.T) {
 // its password redacted, like the exec log on the happy path.
 func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
+	t.Cleanup(testMysqld.Close)
 
 	logs := logtest.Capture(t, slog.LevelInfo)
 
@@ -157,7 +157,7 @@ func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 	})
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	defer cancel()
+	t.Cleanup(cancel)
 	err := testMysqld.ExecuteSuperQueryList(ctx, []string{query})
 	// The fake returns the blocked query's result successfully once the kill
 	// releases it, so this lands in the "ExecuteFetch() may have succeeded
@@ -177,13 +177,13 @@ func TestExecuteFetchContextTimeoutRedactsQuery(t *testing.T) {
 // path of executeFetchDirectContext redacts the password in the logged query.
 func TestExecuteFetchDirectContextTimeoutRedactsQuery(t *testing.T) {
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	params := db.ConnParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
 	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
+	t.Cleanup(testMysqld.Close)
 
 	query := `START xxx USER = 'vt_repl', PASSWORD = 'secret'`
 	db.AddQuery(query, &sqltypes.Result{})
@@ -197,11 +197,11 @@ func TestExecuteFetchDirectContextTimeoutRedactsQuery(t *testing.T) {
 
 	conn, err := testMysqld.GetDbaConnection(t.Context())
 	require.NoError(t, err)
-	defer conn.Close()
+	t.Cleanup(conn.Close)
 
 	logs := logtest.Capture(t, slog.LevelInfo)
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	defer cancel()
+	t.Cleanup(cancel)
 	_, _ = testMysqld.executeFetchDirectContext(ctx, conn, query)
 
 	killed := logs.Record(t, "Mysqld.executeFetchDirectContext(): killing connection due to timeout of query")

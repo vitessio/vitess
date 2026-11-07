@@ -827,10 +827,11 @@ func TestControllerErrorLogMessages(t *testing.T) {
 // records, each under error.
 func TestControllerSetStateErrorLogs(t *testing.T) {
 	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
-	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	t.Cleanup(func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay })
 	vttablet.DefaultVReplicationConfig.RetryDelay = time.Hour
 
-	defer deleteTablet(addTablet(100))
+	tablet := addTablet(100)
+	t.Cleanup(func() { deleteTablet(tablet) })
 
 	const rowValue = "zq7rowvalue"
 	params := map[string]string{
@@ -862,7 +863,7 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	defer setTabletTypesStr("replica")()
+	t.Cleanup(setTabletTypesStr("replica"))
 
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	require.NoError(t, err)

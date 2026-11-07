@@ -129,7 +129,7 @@ func TestMiscSidecarDB(t *testing.T) {
 	ctx := t.Context()
 
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 	env := vtenv.NewTestEnv()
 	AddSchemaInitQueries(db, false, env.Parser())
 	db.AddQuery("use dbname", &sqltypes.Result{})

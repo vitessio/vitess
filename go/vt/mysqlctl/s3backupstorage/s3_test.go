@@ -2132,10 +2132,10 @@ func TestListBackupsPagination(t *testing.T) {
 
 func TestStartBackup(t *testing.T) {
 	mockServer := newMockS3Server()
-	defer mockServer.Close()
+	t.Cleanup(mockServer.Close)
 
 	originalBucket := bucket
-	defer func() { bucket = originalBucket }()
+	t.Cleanup(func() { bucket = originalBucket })
 	bucket = "test-bucket"
 
 	client := createTestS3Client(mockServer)

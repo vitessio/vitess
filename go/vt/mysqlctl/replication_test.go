@@ -3432,7 +3432,7 @@ func TestPrimaryPosition(t *testing.T) {
 
 func TestSetReplicationPosition(t *testing.T) {
 	db := fakesqldb.New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 
 	params := db.ConnParams()
 	cp := *params
@@ -3443,7 +3443,7 @@ func TestSetReplicationPosition(t *testing.T) {
 	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
-	defer testMysqld.Close()
+	t.Cleanup(testMysqld.Close)
 
 	ctx := t.Context()
 

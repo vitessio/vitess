@@ -29,10 +29,10 @@ import (
 
 func TestUnknownQueryIsLogged(t *testing.T) {
 	db := New(t)
-	defer db.Close()
+	t.Cleanup(db.Close)
 	conn, err := mysql.Connect(t.Context(), db.ConnParams())
 	require.NoError(t, err)
-	defer conn.Close()
+	t.Cleanup(conn.Close)
 
 	logs := logtest.Capture(t, slog.LevelInfo)
 	_, err = conn.ExecuteFetch("select unknown_query", 1, false)
