@@ -66,7 +66,7 @@ func updateServiceMap() {
 // (and also logs how to enable / disable it)
 func checkServiceMap(protocol, name string) bool {
 	if serviceMap[protocol+"-"+name] {
-		log.Info("Registering service for protocol, disable it with the service_map_entry service-map parameter", slog.String("service", name), slog.String("protocol", protocol), slog.String("service_map_entry", protocol+"-"+name))
+		log.Info("Registering service for protocol, disable it with the service_map_entry service-map parameter", slog.String("service", name), slog.String("protocol", protocol), slog.String("service_map_entry", "-"+protocol+"-"+name))
 		return true
 	}
 	log.Info("Not registering service for protocol, enable it with the service_map_entry service-map parameter", slog.String("service", name), slog.String("protocol", protocol), slog.String("service_map_entry", protocol+"-"+name))
