@@ -32,8 +32,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -1408,6 +1413,191 @@ func TestRace(t *testing.T) {
 
 	throttler := newTestThrottler()
 	runThrottler(t, ctx, throttler, 5*time.Second, nil)
+}
+
+// TestEnableClosedThrottler checks that Enable does nothing while the throttler isn't open.
+func TestEnableClosedThrottler(t *testing.T) {
+	throttler := newTestThrottler()
+	wg := throttler.Enable()
+	t.Cleanup(func() {
+		if throttler.Disable() {
+			wg.Wait()
+		}
+	})
+	assert.Nil(t, wg)
+	assert.False(t, throttler.IsEnabled())
+}
+
+// newMemoryTopoThrottler returns a throttler of tablet cell1-100, in shard ks/0, that reads its config from the
+// memory topo server that it also returns. The throttler is closed when the test ends.
+func newMemoryTopoThrottler(t *testing.T) (*Throttler, *topo.Server) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	t.Cleanup(ts.Close)
+	tabletAlias := &topodatapb.TabletAlias{Cell: "cell1", Uid: 100}
+	require.NoError(t, ts.CreateTablet(ctx, &topodatapb.Tablet{Alias: tabletAlias, Keyspace: "ks", Shard: "0"}))
+
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.DB = dbconfigs.NewTestDBConfigs(mysql.ConnParams{}, mysql.ConnParams{}, "")
+	env := tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, t.Name())
+	srvTopoServer := srvtopo.NewResilientServer(ctx, ts, stats.NewCountersWithSingleLabel("", "", "Operation"))
+	tabletTypeFunc := func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA }
+	throttler := NewThrottler(env, srvTopoServer, ts, tabletAlias, &FakeHeartbeatWriter{}, tabletTypeFunc, t.Name())
+	throttler.InitDBConfig("ks", "0")
+	t.Cleanup(throttler.Close)
+	return throttler, ts
+}
+
+// listenerRecorder is an srvtopo.Server that sends each SrvKeyspace listener to listeners before it starts it.
+type listenerRecorder struct {
+	srvtopo.Server
+	listeners chan func(*topodatapb.SrvKeyspace, error) bool
+}
+
+func (s *listenerRecorder) WatchSrvKeyspace(ctx context.Context, cell, keyspace string, callback func(*topodatapb.SrvKeyspace, error) bool) {
+	s.listeners <- callback
+	s.Server.WatchSrvKeyspace(ctx, cell, keyspace, callback)
+}
+
+// TestSrvKeyspaceListenerOfClosedThrottler checks that once the throttler is closed, the SrvKeyspace listener that an
+// Open started doesn't apply a change, and asks srvtopo to drop it, also after the throttler is opened again, and that
+// the next Open applies the config and starts a listener that applies changes.
+func TestSrvKeyspaceListenerOfClosedThrottler(t *testing.T) {
+	throttler, ts := newMemoryTopoThrottler(t)
+	listeners := make(chan func(*topodatapb.SrvKeyspace, error) bool, 2)
+	throttler.srvTopoServer = &listenerRecorder{Server: throttler.srvTopoServer, listeners: listeners}
+	srvKeyspace := func(threshold float64) *topodatapb.SrvKeyspace {
+		return &topodatapb.SrvKeyspace{ThrottlerConfig: &topodatapb.ThrottlerConfig{Threshold: threshold}}
+	}
+	updateThreshold := func(threshold float64) {
+		require.NoError(t, ts.UpdateSrvKeyspace(t.Context(), "cell1", "ks", srvKeyspace(threshold)))
+	}
+	thresholdIs := func(threshold float64) func() bool {
+		return func() bool { return throttler.GetMetricsThreshold() == threshold }
+	}
+	nextListener := func() (listener func(*topodatapb.SrvKeyspace, error) bool) {
+		require.Eventually(t, func() bool {
+			select {
+			case listener = <-listeners:
+				return true
+			default:
+				return false
+			}
+		}, 30*time.Second, 10*time.Millisecond, "the throttler didn't start a SrvKeyspace listener")
+		return listener
+	}
+
+	updateThreshold(2)
+	require.NoError(t, throttler.Open())
+	listener := nextListener()
+	require.Eventually(t, thresholdIs(2), 30*time.Second, 10*time.Millisecond)
+	updateThreshold(3)
+	require.Eventually(t, thresholdIs(3), 30*time.Second, 10*time.Millisecond)
+
+	throttler.Close()
+	// srvtopo can call a listener whose context is cancelled with a nil SrvKeyspace and no error.
+	assert.False(t, listener(nil, nil), "the listener of the closed throttler didn't ask srvtopo to drop it")
+	assert.False(t, listener(srvKeyspace(9), nil), "the listener of the closed throttler didn't ask srvtopo to drop it")
+	assert.Equal(t, 3.0, throttler.GetMetricsThreshold(), "the listener of the closed throttler applied the change")
+
+	updateThreshold(4)
+	require.NoError(t, throttler.Open())
+	nextListener()
+	require.Eventually(t, thresholdIs(4), 30*time.Second, 10*time.Millisecond)
+	assert.False(t, listener(srvKeyspace(9), nil), "the listener of the earlier Open didn't ask srvtopo to drop it")
+	assert.Equal(t, 4.0, throttler.GetMetricsThreshold(), "the listener of the earlier Open applied the change")
+	updateThreshold(6)
+	assert.Eventually(t, thresholdIs(6), 30*time.Second, 10*time.Millisecond)
+}
+
+// readBlockingTopoServer is a topo server whose first GetSrvKeyspace closes reading, and returns srvKeyspace once
+// release is closed. Later calls read the SrvKeyspace from the topo server that it wraps.
+type readBlockingTopoServer struct {
+	throttlerTopoService
+	reading     chan struct{}
+	release     chan struct{}
+	srvKeyspace *topodatapb.SrvKeyspace
+	readOnce    sync.Once
+	releaseOnce sync.Once
+}
+
+func newReadBlockingTopoServer(t *testing.T, ts throttlerTopoService, srvKeyspace *topodatapb.SrvKeyspace) *readBlockingTopoServer {
+	readTopo := &readBlockingTopoServer{
+		throttlerTopoService: ts,
+		reading:              make(chan struct{}),
+		release:              make(chan struct{}),
+		srvKeyspace:          srvKeyspace,
+	}
+	t.Cleanup(readTopo.releaseRead)
+	return readTopo
+}
+
+func (ts *readBlockingTopoServer) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*topodatapb.SrvKeyspace, error) {
+	blocks := false
+	ts.readOnce.Do(func() { blocks = true })
+	if !blocks {
+		return ts.throttlerTopoService.GetSrvKeyspace(ctx, cell, keyspace)
+	}
+	close(ts.reading)
+	<-ts.release
+	return ts.srvKeyspace, nil
+}
+
+// waitForRead waits for the first GetSrvKeyspace to start.
+func (ts *readBlockingTopoServer) waitForRead(t *testing.T) {
+	require.Eventually(t, func() bool {
+		select {
+		case <-ts.reading:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "the throttler didn't read the config")
+}
+
+// releaseRead lets the first GetSrvKeyspace return.
+func (ts *readBlockingTopoServer) releaseRead() {
+	ts.releaseOnce.Do(func() { close(ts.release) })
+}
+
+// TestCloseWhileOpenReadsThrottlerConfig checks that the goroutine that an Open starts doesn't apply the config that
+// it reads if the throttler is closed in the meantime, also when the throttler is opened again before the read ends.
+func TestCloseWhileOpenReadsThrottlerConfig(t *testing.T) {
+	// The first read returns a config that enables the throttler.
+	srvKeyspace := &topodatapb.SrvKeyspace{ThrottlerConfig: &topodatapb.ThrottlerConfig{Enabled: true, Threshold: 7}}
+	appliedStaleConfig := func(throttler *Throttler) func() bool {
+		return func() bool { return throttler.GetMetricsThreshold() == 7 || throttler.IsEnabled() }
+	}
+
+	t.Run("closed", func(t *testing.T) {
+		throttler, _ := newMemoryTopoThrottler(t)
+		readTopo := newReadBlockingTopoServer(t, throttler.ts, srvKeyspace)
+		throttler.ts = readTopo
+
+		require.NoError(t, throttler.Open())
+		readTopo.waitForRead(t)
+		throttler.Close()
+		readTopo.releaseRead()
+		assert.Never(t, appliedStaleConfig(throttler), time.Second, 10*time.Millisecond, "the closed throttler applied the config that it read")
+	})
+	t.Run("opened again", func(t *testing.T) {
+		throttler, ts := newMemoryTopoThrottler(t)
+		readTopo := newReadBlockingTopoServer(t, throttler.ts, srvKeyspace)
+		throttler.ts = readTopo
+		// The next Open reads this config, which doesn't enable the throttler.
+		topoSrvKeyspace := &topodatapb.SrvKeyspace{ThrottlerConfig: &topodatapb.ThrottlerConfig{Threshold: 8}}
+		require.NoError(t, ts.UpdateSrvKeyspace(t.Context(), "cell1", "ks", topoSrvKeyspace))
+
+		require.NoError(t, throttler.Open())
+		readTopo.waitForRead(t)
+		throttler.Close()
+		require.NoError(t, throttler.Open())
+		require.Eventually(t, func() bool {
+			return throttler.GetMetricsThreshold() == 8
+		}, 30*time.Second, 10*time.Millisecond)
+		readTopo.releaseRead()
+		assert.Never(t, appliedStaleConfig(throttler), time.Second, 10*time.Millisecond, "the throttler applied the config that an earlier Open read")
+	})
 }
 
 // TestProbes enables a throttler for a few seconds, and afterwards expects to find probes and metrics.
