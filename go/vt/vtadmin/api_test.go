@@ -5931,7 +5931,7 @@ func TestServeHTTPUnknownDynamicCluster(t *testing.T) {
 	api.ServeHTTP(w, req)
 
 	res := w.Result()
-	defer res.Body.Close()
+	t.Cleanup(func() { _ = res.Body.Close() })
 
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode)
 
@@ -5946,6 +5946,73 @@ func TestServeHTTPUnknownDynamicCluster(t *testing.T) {
 	assert.False(t, body.Ok)
 	assert.Equal(t, "invalid cluster", body.Error.Code)
 	assert.Contains(t, body.Error.Message, "no cluster with id dynamiccluster1")
+}
+
+// newUnresolvableCluster builds a cluster whose vtctld and vtgate hosts don't
+// resolve.
+func newUnresolvableCluster(t *testing.T, id string, vtctldHost string) *cluster.Cluster {
+	t.Helper()
+
+	c, err := cluster.Config{
+		ID:            id,
+		Name:          id,
+		DiscoveryImpl: "dynamic",
+		DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+			"dynamic": {
+				"discovery": fmt.Sprintf(`{"vtctlds": [{"host": {"hostname": %q}}], "vtgates": [{"host": {"hostname": "vtgate.invalid:15991"}}]}`, vtctldHost),
+			},
+		},
+	}.Cluster(t.Context())
+	require.NoError(t, err)
+
+	return c
+}
+
+func clusterIDs(t *testing.T, api *API) []string {
+	t.Helper()
+
+	resp, err := api.GetClusters(t.Context(), &vtadminpb.GetClustersRequest{})
+	require.NoError(t, err)
+
+	ids := make([]string, 0, len(resp.Clusters))
+	for _, c := range resp.Clusters {
+		ids = append(ids, c.Id)
+	}
+
+	return ids
+}
+
+func TestWithClusterReplacesChangedCluster(t *testing.T) {
+	t.Parallel()
+
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{
+		newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999"),
+		newUnresolvableCluster(t, "c2", "vtctld2.invalid:15999"),
+	}, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	_, err := api.WithCluster(newUnresolvableCluster(t, "c1", "vtctld3.invalid:15999"), "c1")
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"c1", "c2"}, clusterIDs(t, api))
+}
+
+func TestEjectDynamicCluster(t *testing.T) {
+	t.Parallel()
+
+	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{
+		newUnresolvableCluster(t, "a", "vtctld-a.invalid:15999"),
+		newUnresolvableCluster(t, "b", "vtctld-b.invalid:15999"),
+		newUnresolvableCluster(t, "c", "vtctld-c.invalid:15999"),
+		newUnresolvableCluster(t, "d", "vtctld-d.invalid:15999"),
+	}, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	api.EjectDynamicCluster("a", nil)
+	assert.Equal(t, []string{"b", "c", "d"}, clusterIDs(t, api))
+
+	api.EjectDynamicCluster("unknown", nil)
+	assert.Equal(t, []string{"b", "c", "d"}, clusterIDs(t, api))
 }
 
 func init() {

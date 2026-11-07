@@ -137,22 +137,43 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 		vtctldCfg = opt(vtctldCfg)
 	}
 
-	cluster.DB, err = vtsql.New(ctx, vtsqlCfg)
-	if err != nil {
-		return nil, fmt.Errorf("error creating vtsql proxy: %w", err)
-	}
-
-	cluster.Vtctld, err = vtctldclient.New(ctx, vtctldCfg)
-	if err != nil {
-		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
-	}
-
 	if cfg.TabletFQDNTmplStr != "" {
 		cluster.TabletFQDNTmpl, err = template.New(cluster.ID + "-tablet-fqdn").Parse(cfg.TabletFQDNTmplStr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse tablet fqdn template %s: %w", cfg.TabletFQDNTmplStr, err)
 		}
 	}
+
+	// The proxies dial when they are created, so close them if New fails or
+	// panics after creating them.
+	built := false
+	defer func() {
+		if built {
+			return
+		}
+
+		if cluster.DB != nil {
+			_ = cluster.DB.Close()
+		}
+
+		if cluster.Vtctld != nil {
+			_ = cluster.Vtctld.Close()
+		}
+	}()
+
+	db, err := vtsql.New(ctx, vtsqlCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtsql proxy: %w", err)
+	}
+
+	cluster.DB = db
+
+	vtctld, err := vtctldclient.New(ctx, vtctldCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
+	}
+
+	cluster.Vtctld = vtctld
 
 	cluster.backupReadPool = cfg.BackupReadPoolConfig.NewReadPool()
 	cluster.schemaReadPool = cfg.SchemaReadPoolConfig.NewReadPool()
@@ -198,6 +219,7 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 		return []*vtadminpb.Schema{schema}, nil
 	}, *cluster.cfg.SchemaCacheConfig)
 
+	built = true
 	return cluster, nil
 }
 

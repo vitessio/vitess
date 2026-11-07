@@ -178,10 +178,59 @@ func TestUnaryServerInterceptorRecoversPanic(t *testing.T) {
 	assert.Equal(t, codes.Internal, status.Code(err), "unexpected error: %v", err)
 	assert.Nil(t, resp)
 
-	record := logs.Record(t, "panic in VTAdmin handler with dynamic cluster")
+	record := logs.Record(t, "panic in dynamic cluster interceptor")
 	assert.Equal(t, "ERROR", record["level"])
 	assert.Equal(t, "/vtadmin.VTAdmin/GetClusters", record["method"])
 	assert.Equal(t, "GetClusters failed", record["panic"])
+	assert.Contains(t, record["stack"], "(*panickingAPI).GetClusters")
+}
+
+// panickingWithClusterAPI is a dynamic API whose WithCluster panics.
+type panickingWithClusterAPI struct {
+	panickingAPI
+}
+
+func (api *panickingWithClusterAPI) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) {
+	if c != nil {
+		_ = c.Close()
+	}
+
+	panic("WithCluster failed")
+}
+
+// Not parallel, because it captures the process-wide logger.
+func TestUnaryServerInterceptorRecoversWithClusterPanic(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelError)
+	interceptor := dynamic.UnaryServerInterceptor(&panickingWithClusterAPI{})
+
+	resp, err := interceptor(clusterContext(t.Context(), validSpec), &vtadminpb.GetClustersRequest{}, getClustersInfo(), staticHandler(t))
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err), "unexpected error: %v", err)
+	assert.Nil(t, resp)
+
+	record := logs.Record(t, "panic in dynamic cluster interceptor")
+	assert.Equal(t, "WithCluster failed", record["panic"])
+}
+
+// Not parallel, because it checks for leaked goroutines.
+func TestUnaryServerInterceptorInvalidTabletFQDNTemplateDoesNotLeak(t *testing.T) {
+	interceptor := dynamic.UnaryServerInterceptor(newDynamicAPI(t))
+	spec := `{
+		"id": "dynamic_cluster",
+		"discovery": "dynamic",
+		"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"vtctld.invalid:15000\", \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }",
+		"tablet-fqdn-tmpl": "{{"
+	}`
+
+	existingGoroutines := goleak.IgnoreCurrent()
+	for range 5 {
+		resp, err := interceptor(clusterContext(t.Context(), spec), &vtadminpb.GetClustersRequest{}, getClustersInfo(), staticHandler(t))
+		require.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err), "unexpected error: %v", err)
+		assert.Nil(t, resp)
+	}
+
+	goleak.VerifyNone(t, existingGoroutines)
 }
 
 func TestUnaryServerInterceptorUnknownCluster(t *testing.T) {

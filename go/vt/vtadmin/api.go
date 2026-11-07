@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"net/url"
+	"slices"
 	stdsort "sort"
 	"strings"
 	"sync"
@@ -343,10 +344,10 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) 
 					log.Error(err.Error() + "; some connections and goroutines may linger")
 				}
 
-				idx := stdsort.Search(len(api.clusters), func(i int) bool {
-					return api.clusters[i].ID == existingCluster.ID
+				idx := slices.IndexFunc(api.clusters, func(c *cluster.Cluster) bool {
+					return c.ID == existingCluster.ID
 				})
-				if idx >= 0 && idx < len(api.clusters) {
+				if idx >= 0 {
 					api.clusters = append(api.clusters[:idx], api.clusters[idx+1:]...)
 				}
 			}
@@ -570,9 +571,10 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
-	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
-	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
-		log.Error(fmt.Sprintf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters)))
+	clusterIndex := slices.IndexFunc(api.clusters, func(c *cluster.Cluster) bool { return c.ID == key })
+	if clusterIndex < 0 {
+		log.Error(fmt.Sprintf("Cannot remove cluster %s from api.clusters. Cluster not found.", key))
+		return
 	}
 
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)

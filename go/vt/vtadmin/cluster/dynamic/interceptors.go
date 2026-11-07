@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime/debug"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -46,6 +47,8 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 			return handler(srv, ss)
 		}
 
+		defer recoverPanic(info.FullMethod, &err)
+
 		c, id, ok, err := clusterFromIncomingContextMetadata(ss.Context())
 		switch { // TODO: see if it's possible to de-duplicate this somehow. Unfortunately the callbacks have different signatures which might make it impossible.
 		case !ok:
@@ -67,7 +70,6 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 			return vterrors.ToGRPC(err)
 		}
 
-		defer recoverPanic(info.FullMethod, &err)
 		return streamHandler(dynamicAPI, ss)
 	}
 }
@@ -84,6 +86,8 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 			// there is no dynamic API to redirect to.
 			return handler(ctx, req)
 		}
+
+		defer recoverPanic(info.FullMethod, &err)
 
 		c, id, ok, err := clusterFromIncomingContextMetadata(ctx)
 		switch {
@@ -110,18 +114,17 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 		// chain (but we _could_ if we wanted to add a method to the
 		// DynamicAPI interface), the interceptors after this one in
 		// the chain do not run for this request.
-		defer recoverPanic(info.FullMethod, &err)
 		return method(dynamicAPI, ctx, dec(req), nil)
 	}
 }
 
-// recoverPanic turns a panic in a VTAdmin handler called by the dynamic
-// interceptors into an INTERNAL error. It must be deferred directly, and is
-// needed because grpcserver's recovery interceptor comes later in the chain and
-// does not run for those calls.
+// recoverPanic turns a panic in a dynamic interceptor, or in the VTAdmin
+// handler it calls, into an INTERNAL error. It must be deferred directly, and
+// is needed because grpcserver's recovery interceptor comes later in the chain
+// and does not run for those calls.
 func recoverPanic(fullMethod string, err *error) {
 	if p := recover(); p != nil {
-		log.Error("panic in VTAdmin handler with dynamic cluster", slog.String("method", fullMethod), slog.Any("panic", p))
+		log.Error("panic in dynamic cluster interceptor", slog.String("method", fullMethod), slog.Any("panic", p), slog.String("stack", string(debug.Stack())))
 		*err = vterrors.ToGRPC(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "panic triggered: %v", p))
 	}
 }
