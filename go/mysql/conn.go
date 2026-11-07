@@ -1220,14 +1220,14 @@ func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool)
 	if err != nil {
 		log.Error("parseComBinlogDump failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
-			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr))
+			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr), slog.String("error_code", vterrors.Code(writeErr).String()))
 		}
 		return false
 	}
 	if err := handler.ComBinlogDump(c, logfile, binlogPos); err != nil {
 		log.Error("ComBinlogDump failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
-			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr))
+			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr), slog.String("error_code", vterrors.Code(writeErr).String()))
 		}
 		return false
 	}
@@ -1242,7 +1242,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 	if err != nil {
 		log.Error("parseComBinlogDumpGTID failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
-			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr))
+			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr), slog.String("error_code", vterrors.Code(writeErr).String()))
 		}
 		return false
 	}
@@ -1256,7 +1256,7 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet, flags); err != nil {
 		log.Error("ComBinlogDumpGTID failed", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if writeErr := c.writeErrorPacketFromError(err); writeErr != nil {
-			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr))
+			log.Error("failed to write error packet", slog.Int64("connection_id", c.ID()), slog.Any("error", writeErr), slog.String("error_code", vterrors.Code(writeErr).String()))
 		}
 		return false
 	}
@@ -1302,7 +1302,7 @@ func (c *Conn) handleComStmtReset(data []byte) bool {
 	delete(c.pendingLongDataIngressBytes, stmtID)
 
 	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-		log.Error("Error writing ComStmtReset OK packet", slog.Int64("connection_id", c.ID()), slog.Any("error", err))
+		log.Error("Error writing ComStmtReset OK packet", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 	return true
@@ -1441,7 +1441,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 			// In this case the affectedRows and lastInsertID are always 0 since it
 			// was a read operation.
 			if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
+				log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				return false
 			}
 		}
@@ -1493,7 +1493,7 @@ func (c *Conn) handleComPrepare(handler Handler, data []byte) (kontinue bool) {
 	c.PrepareData[c.StatementID] = prepare
 
 	if err := c.writePrepare(fld, prepare); err != nil {
-		log.Error("Error writing prepare data", slog.Int64("connection_id", c.ID()), slog.Any("error", err))
+		log.Error("Error writing prepare data", slog.Int64("connection_id", c.ID()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 	return true
@@ -1515,7 +1515,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 			}
 		}
 		if err := c.writeEndResult(false, 0, 0, 0); err != nil {
-			log.Error("Error writeEndResult error", slog.Any("error", err))
+			log.Error("Error writeEndResult error", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return false
 		}
 	} else {
@@ -1536,7 +1536,7 @@ func (c *Conn) handleComPing() bool {
 		}
 	} else {
 		if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-			log.Error("Error writing ComPing result", slog.String("connection", c.String()), slog.Any("error", err))
+			log.Error("Error writing ComPing result", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return false
 		}
 	}
@@ -1692,7 +1692,7 @@ func (c *Conn) execQueryMulti(query string, handler Handler) execResult {
 	// If we haven't sent the final packet for the last query, we should send that too.
 	if needsEndPacket {
 		if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
+			log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return connErr
 		}
 	}
@@ -1856,7 +1856,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	// was a read operation.
 	if !sendFinished {
 		if err := c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err))
+			log.Error("Error writing result", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return connErr
 		}
 	}
