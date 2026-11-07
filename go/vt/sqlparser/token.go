@@ -55,6 +55,9 @@ type Tokenizer struct {
 	// columnDefaults are the DEFAULT attributes of the column definition that
 	// is being parsed.
 	columnDefaults columnDefaults
+	// partitionValues are where the values of the partition that is being
+	// parsed start and end in the text. See checkPartitionValues.
+	partitionValues [][2]int
 	// columnChecks holds the CHECK constraints of each column definition
 	// until the statement that the column belongs to adds them to its table.
 	// See takeColumnChecks.
@@ -499,15 +502,23 @@ var functionKeywords = map[string]bool{
 	"variance":       true,
 }
 
-// isNameOfFunction reports whether MySQL reads the name of a generic function
-// call that starts at start as a name rather than as a keyword: when it is
-// quoted, or a function keyword, which reaches a generic call only when no
-// '(' follows it right away.
-func (tkn *Tokenizer) isNameOfFunction(start int, name IdentifierCI) bool {
+// nameOfFunction tells how MySQL reads the name of a generic function call
+// that starts at start and ends at end. quoted is set when MySQL reads it as
+// a name rather than as a keyword: when it is quoted, or when it is a
+// function keyword that no '(' follows right away. ok is unset for a function
+// keyword that a '(' follows right away, which MySQL reads as the keyword,
+// and so rejects when the call does not match the keyword's own syntax.
+func (tkn *Tokenizer) nameOfFunction(start, end int, name IdentifierCI) (quoted, ok bool) {
 	if start < len(tkn.buf) && tkn.buf[start] == '`' {
-		return true
+		return true, true
 	}
-	return isFunctionKeyword(name.String())
+	if !isFunctionKeyword(name.String()) {
+		return false, true
+	}
+	if end < len(tkn.buf) && tkn.buf[end] == '(' {
+		return false, false
+	}
+	return true, true
 }
 
 // isFunctionKeyword reports whether MySQL reads name as a keyword only when
@@ -952,6 +963,7 @@ func (tkn *Tokenizer) reset() {
 	tkn.pendingColumnChecks = nil
 	tkn.columnChecks = nil
 	tkn.columnDefaults = columnDefaults{}
+	tkn.partitionValues = nil
 }
 
 func isLetter(ch uint16) bool {

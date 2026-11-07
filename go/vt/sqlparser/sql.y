@@ -1671,6 +1671,10 @@ table_options_and_partitions:
     $3.Partitions = $4
     $3.SubPartition = $5
     $3.Definitions = $6
+    if err := checkPartitionDefinitions($3); err != "" {
+      yylex.Error(err)
+      return 1
+    }
     $$ = &TableSpec{PartitionOption: $3}
   }
 
@@ -4529,6 +4533,10 @@ partitions_options_opt:
     $3.Partitions = $4
     $3.SubPartition = $5
     $3.Definitions = $6
+    if err := checkPartitionDefinitions($3); err != "" {
+      yylex.Error(err)
+      return 1
+    }
     $$ = $3
     }
 
@@ -5089,6 +5097,10 @@ subpartition_definition_attribute_list_opt:
 partition_value_range:
   VALUES LESS THAN partition_value_tuple
   {
+    if err := yylex.(*Tokenizer).checkPartitionValues($4, false); err != "" {
+      yylex.Error(err)
+      return 1
+    }
     $$ = &PartitionValueRange{
     	Type: LessThanType,
     	Range: $4,
@@ -5109,6 +5121,10 @@ partition_value_range:
   }
 | VALUES IN partition_value_tuple
   {
+    if err := yylex.(*Tokenizer).checkPartitionValues($3, true); err != "" {
+      yylex.Error(err)
+      return 1
+    }
     $$ = &PartitionValueRange{
     	Type: InType,
     	Range: $3,
@@ -5136,8 +5152,13 @@ partition_value_list:
 
 partition_value:
   expression
+  {
+    yylex.(*Tokenizer).addPartitionValue(@1.start, @1.end)
+    $$ = $1
+  }
 | MAXVALUE
   {
+    yylex.(*Tokenizer).addPartitionValue(@1.start, @1.end)
     $$ = &MaxValue{}
   }
 
@@ -7473,7 +7494,12 @@ expression_list:
 function_call_generic:
   sql_id openb expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3, QuotedName: yylex.(*Tokenizer).isNameOfFunction(@1.start, $1)}
+    quoted, ok := yylex.(*Tokenizer).nameOfFunction(@1.start, @1.end, $1)
+    if !ok {
+      yylex.Error("syntax error")
+      return 1
+    }
+    $$ = &FuncExpr{Name: $1, Exprs: $3, QuotedName: quoted}
   }
 | table_id '.' reserved_sql_id openb expression_list_opt closeb
   {
@@ -10100,6 +10126,13 @@ non_reserved_keyword:
   AGAINST
 | ACTION
 | ACTIVE
+// MySQL reads these function names as keywords right before '(' too, but
+// takes them as names.
+| ADDDATE %prec FUNCTION_CALL_NON_KEYWORD
+| SESSION_USER %prec FUNCTION_CALL_NON_KEYWORD
+| ST_COLLECT %prec FUNCTION_CALL_NON_KEYWORD
+| SUBDATE %prec FUNCTION_CALL_NON_KEYWORD
+| SYSTEM_USER %prec FUNCTION_CALL_NON_KEYWORD
 | ADMIN
 | AFTER
 | ALGORITHM
