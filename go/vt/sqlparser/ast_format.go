@@ -1142,6 +1142,8 @@ func (idx *IndexDefinition) Format(buf *TrackedBuffer) {
 		}
 		if col.Direction == DescOrder {
 			buf.astPrintf(idx, " desc")
+		} else if col.ExplicitAscending {
+			buf.astPrintf(idx, " asc")
 		}
 	}
 	buf.astPrintf(idx, ")")

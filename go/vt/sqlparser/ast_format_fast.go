@@ -1488,6 +1488,8 @@ func (idx *IndexDefinition) FormatFast(buf *TrackedBuffer) {
 		}
 		if col.Direction == DescOrder {
 			buf.WriteString(" desc")
+		} else if col.ExplicitAscending {
+			buf.WriteString(" asc")
 		}
 	}
 	buf.WriteByte(')')

@@ -667,7 +667,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <literal> ulonglong_num ulong_num size_number
 %type <tableOptions> table_option_list table_option_list_opt space_separated_table_option_list
 %type <indexInfo> index_info named_index_info
-%type <indexColumn> index_column
+%type <indexColumn> index_column index_order_opt
 %type <indexColumns> index_column_list
 %type <indexOption> index_option using_index_type
 %type <indexOptions> index_option_list index_option_list_opt using_opt
@@ -3347,13 +3347,26 @@ index_column_list:
   }
 
 index_column:
-  sql_id length_opt asc_desc_opt
+  sql_id length_opt index_order_opt
   {
-    $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3}
+    $$ = &IndexColumn{Column: $1, Length: $2, Direction: $3.Direction, ExplicitAscending: $3.ExplicitAscending}
   }
-| openb expression closeb asc_desc_opt
+| openb expression closeb index_order_opt
   {
-    $$ = &IndexColumn{Expression: $2, Direction: $4}
+    $$ = &IndexColumn{Expression: $2, Direction: $4.Direction, ExplicitAscending: $4.ExplicitAscending}
+  }
+
+index_order_opt:
+  {
+    $$ = &IndexColumn{Direction: AscOrder}
+  }
+| ASC
+  {
+    $$ = &IndexColumn{Direction: AscOrder, ExplicitAscending: true}
+  }
+| DESC
+  {
+    $$ = &IndexColumn{Direction: DescOrder}
   }
 
 constraint_definition:
