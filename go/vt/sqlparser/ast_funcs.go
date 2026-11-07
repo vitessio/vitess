@@ -78,6 +78,10 @@ type IndexColumn struct {
 	Length     *int
 	Expression Expr
 	Direction  OrderDirection
+	// ExplicitAscending is set for a column written with ASC. MySQL takes it
+	// as the default order, except that it rejects any order on a column of
+	// a multi-valued index, so it is written out again.
+	ExplicitAscending bool
 }
 
 // LengthScaleOption is used for types that have an optional length
@@ -1203,11 +1207,14 @@ func formatID(buf *TrackedBuffer, original string, at AtCount) {
 	}
 }
 
+// writeEscapedString writes original as a quoted identifier. It copies the
+// bytes of original as they are, because the tokenizer reads bytes, and a name
+// in a character set other than UTF-8, such as latin1, is not valid UTF-8.
 func writeEscapedString(buf *TrackedBuffer, original string) {
 	buf.WriteByte('`')
-	for _, c := range original {
-		buf.WriteRune(c)
-		if c == '`' {
+	for i := range len(original) {
+		buf.WriteByte(original[i])
+		if original[i] == '`' {
 			buf.WriteByte('`')
 		}
 	}

@@ -8723,6 +8723,7 @@ func (cmp *Comparator) RefOfIndexColumn(a, b *IndexColumn) bool {
 		return false
 	}
 	return a.Direction == b.Direction &&
+		a.ExplicitAscending == b.ExplicitAscending &&
 		cmp.IdentifierCI(a.Column, b.Column) &&
 		cmp.RefOfInt(a.Length, b.Length) &&
 		cmp.Expr(a.Expression, b.Expression)

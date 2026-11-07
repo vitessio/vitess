@@ -51,6 +51,9 @@ type Tokenizer struct {
 	// attribute right before it was that constraint.
 	pendingColumnChecks []*ConstraintDefinition
 	columnCheckEnd      int
+	// columnDefaults are the DEFAULT attributes of the column definition that
+	// is being parsed.
+	columnDefaults columnDefaults
 	// columnChecks holds the CHECK constraints of each column definition
 	// until the statement that the column belongs to adds them to its table.
 	// See takeColumnChecks.
@@ -879,6 +882,7 @@ func (tkn *Tokenizer) reset() {
 	tkn.posVarIndex = 0
 	tkn.pendingColumnChecks = nil
 	tkn.columnChecks = nil
+	tkn.columnDefaults = columnDefaults{}
 }
 
 func isLetter(ch uint16) bool {
