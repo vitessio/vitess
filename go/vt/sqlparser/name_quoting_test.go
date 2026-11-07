@@ -379,16 +379,12 @@ func TestEmptyNameIsRejected(t *testing.T) {
 		"create table t (id int) charset ''",
 		"create table t (id int) character set ''",
 		"create table t (id int) collate ''",
-		// ENGINE and partition TABLESPACE take table_alias, which accepts a
-		// string. An empty engine used to print as `engine ()`, and an empty
-		// partition tablespace was dropped from the output altogether.
+		// ENGINE takes table_alias, which accepts a string. An empty engine
+		// used to print as `engine ()`.
 		"create table t (id int) engine ''",
 		"alter table t engine = ''",
 		"alter table t add partition (partition p0 values less than (1) engine '')",
 		"alter table t add partition (partition p0 values less than (1) (subpartition s0 engine ''))",
-		"alter table t add partition (partition p0 values less than (1) tablespace '')",
-		"alter table t add partition (partition p0 values less than (1) (subpartition s0 tablespace ''))",
-		"create table t (id int) partition by range (id) (partition p0 values less than (1) tablespace '')",
 	} {
 		t.Run(in, func(t *testing.T) {
 			_, err := parser.Parse(in)
@@ -715,9 +711,9 @@ func testNamesRoundTrip(t *testing.T, names []string) {
 		{"index using", "create table t (a int, key i (a) using %s)", backQuoteName},
 		{"index with parser", "create table t (a text, fulltext key i (a) with parser %s)", backQuoteName},
 		{"partition engine", "alter table t add partition (partition p0 values less than (1) engine %s)", encodeSQLString},
-		{"partition tablespace", "alter table t add partition (partition p0 values less than (1) tablespace %s)", encodeSQLString},
+		{"partition tablespace", "alter table t add partition (partition p0 values less than (1) tablespace %s)", backQuoteName},
 		{"subpartition engine", "alter table t add partition (partition p0 values less than (1) (subpartition s0 engine %s))", encodeSQLString},
-		{"subpartition tablespace", "alter table t add partition (partition p0 values less than (1) (subpartition s0 tablespace %s))", encodeSQLString},
+		{"subpartition tablespace", "alter table t add partition (partition p0 values less than (1) (subpartition s0 tablespace %s))", backQuoteName},
 		{"order by collate", "select a from t order by a collate %s", encodeSQLString},
 		{"json_value returning character set", "select a from t where json_value(a, '$' returning char character set %s) = b", encodeSQLString},
 		{"select into outfile s3 character set", "select a from t into outfile s3 'f' character set %s", encodeSQLString},

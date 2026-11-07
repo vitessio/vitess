@@ -5196,13 +5196,11 @@ partition_min_rows:
     $$ = $3
   }
 
+// MySQL takes a name here, not a string. The tokenizer rejects an empty
+// name.
 partition_tablespace_name:
-  TABLESPACE equal_opt table_alias
+  TABLESPACE equal_opt table_id
   {
-    if $3.String() == "" {
-      yylex.Error("tablespace name cannot be empty")
-      return 1
-    }
     $$ = $3.String()
   }
 

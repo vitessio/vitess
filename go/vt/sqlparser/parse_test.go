@@ -6862,6 +6862,13 @@ var invalidSQL = []struct {
 }, {
 	// MySQL reads a function name such as NOW or BIT_AND as a keyword only
 	// when a '(' follows it right away, and as a name otherwise.
+	// MySQL takes a name after a partition's TABLESPACE, not a string.
+	input:  "alter table t1 add partition (partition p1 values less than (30000) tablespace = 'innodb_system')",
+	output: "syntax error at position 97 near 'innodb_system'",
+}, {
+	input:  "create table t (id int) partition by range (id) (partition p0 values less than (1) tablespace ``)",
+	output: "syntax error at position 96",
+}, {
 	input:  "create table t (a timestamp default now)",
 	output: "syntax error at position 40 near 'now'",
 }, {
