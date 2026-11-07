@@ -1504,7 +1504,12 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 	if err != nil {
 		return "", vterrors.Wrap(err, "cannot read shard")
 	}
-	if si.PrimaryAlias == nil || topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
+	if si.PrimaryAlias == nil {
+		log.Warn(fmt.Sprintf("cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard))
+		return "", nil
+	}
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
+		log.Warn("cannot start replication during initialization: primary in shard record still points to this tablet.")
 		return "", nil
 	}
 	ctx, unlock, err := tm.lockReplicationInitialization(ctx)
