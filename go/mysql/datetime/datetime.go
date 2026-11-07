@@ -97,8 +97,13 @@ func (t Time) FormatDecimal() decimal.Decimal {
 	return dec
 }
 
+// ToDateTime places the time on now's date, in now's location. A DateTime has
+// no time zone, so the date and time are added up in UTC: in now's location, a
+// time in a daylight saving gap, such as 02:30 on the day clocks move forward,
+// would move to another hour.
 func (t Time) ToDateTime(now time.Time) (out DateTime) {
-	return NewDateTimeFromStd(t.ToStdTime(now))
+	year, month, day := now.Date()
+	return NewDateTimeFromStd(t.toStdTime(year, month, day, time.UTC))
 }
 
 func (t Time) IsZero() bool {

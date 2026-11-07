@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/vt/vthash"
@@ -191,6 +192,26 @@ func TestToDateTime(t *testing.T) {
 	got := time.ToDateTime(testGoTime)
 
 	assert.Equal(t, want, got)
+}
+
+func TestToDateTimeInDaylightSavingGap(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	// Clocks in New York moved from 02:00 to 03:00 on 2026-03-08.
+	now := time.Date(2026, 3, 8, 12, 0, 0, 0, ny)
+
+	tm, _, state := ParseTime("02:30:00", -1)
+	require.Equal(t, TimeOK, state)
+	assert.Equal(t, "2026-03-08 02:30:00", string(tm.ToDateTime(now).Format(0)))
+
+	// Times outside the day still carry over to the neighbouring days.
+	tm, _, state = ParseTime("26:30:00", -1)
+	require.Equal(t, TimeOK, state)
+	assert.Equal(t, "2026-03-09 02:30:00", string(tm.ToDateTime(now).Format(0)))
+
+	tm, _, state = ParseTime("-21:30:00", -1)
+	require.Equal(t, TimeOK, state)
+	assert.Equal(t, "2026-03-07 02:30:00", string(tm.ToDateTime(now).Format(0)))
 }
 
 func TestTimeIsZero(t *testing.T) {
