@@ -197,10 +197,15 @@ var validSQL = []struct {
 	input:  "insert into t2 table t1",
 	output: "insert into t2 select * from t1",
 }, {
+	// The first argument of GET_FORMAT is a type, which MySQL rejects as a
+	// quoted identifier, and get_format is not reserved.
+	input:  "select GET_FORMAT(DATETIME, 'internal'), get_format(date, 'usa'), get_format(time, a), get_format(timestamp, 'eur'), get_format from t",
+	output: "select get_format(datetime, 'internal'), get_format(date, 'usa'), get_format(time, a), get_format(timestamp, 'eur'), `get_format` from t",
+}, {
 	// MySQL reads an ODBC escape as a temporal literal only when its string is
 	// one, so the escape is kept as written.
-	input:  "create table t1 as select {d'2001-01-01'}, {ts '2001-01-01 10:10:10'}, {D 'x'}",
-	output: "create table t1 as select {d '2001-01-01'} as `{d'2001-01-01'}`, {ts '2001-01-01 10:10:10'}, {D 'x'} from dual",
+	input:  "select {d'2001-01-01'}, {ts '2001-01-01 10:10:10'}, {D 'x'}, {x '41'}",
+	output: "select {d'2001-01-01'}, {ts'2001-01-01 10:10:10'}, {D 'x'}, {x '41'} from dual",
 }, {
 	input:  "select t1.a from { oj t2 left outer join t1 on (t1.a=t2.a) }",
 	output: "select t1.a from t2 left join t1 on t1.a = t2.a",
@@ -6882,6 +6887,12 @@ var invalidSQL = []struct {
 	input  string
 	output string
 }{{
+	input:  "select get_format(`datetime`, 'internal')",
+	output: "syntax error at position 29 near 'datetime'",
+}, {
+	input:  "select get_format(year, 'internal')",
+	output: "syntax error at position 23 near 'year'",
+}, {
 	// SHOW PROFILE writes its types back unquoted, so only MySQL's own are accepted
 	input:  "show profile `all; insert into t values (1); -- `",
 	output: "unknown profile type at position 50",

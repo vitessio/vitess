@@ -426,7 +426,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE ANY_VALUE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
-%token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
+%token <str> GET_FORMAT GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
@@ -665,6 +665,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <expr> partition_value
 %type <orderBy> alter_order_list
 %type <literal> ulonglong_num ulong_num size_number
+%type <str> get_format_type
 %type <tableOptions> table_option_list table_option_list_opt space_separated_table_option_list
 %type <indexInfo> index_info named_index_info
 %type <indexColumn> index_column index_order_opt
@@ -7627,6 +7628,12 @@ UTC_DATE func_paren_opt
   {
     $$ = &ExtractFuncExpr{IntervalType: $3, Expr: $5}
   }
+// The first argument of GET_FORMAT is a type, which MySQL does not take as
+// a quoted identifier.
+| GET_FORMAT openb get_format_type ',' expression closeb
+  {
+    $$ = &GetFormatExpr{Type: $3, Style: $5}
+  }
 | WEIGHT_STRING openb expression convert_type_weight_string closeb
   {
     $$ = &WeightStringFuncExpr{Expr: $3, As: $4}
@@ -8515,6 +8522,24 @@ interval:
 | YEAR
   {
     $$=IntervalYear
+  }
+
+get_format_type:
+  DATE
+  {
+    $$ = "date"
+  }
+| TIME
+  {
+    $$ = "time"
+  }
+| DATETIME
+  {
+    $$ = "datetime"
+  }
+| TIMESTAMP
+  {
+    $$ = "timestamp"
   }
 
 timestampadd_interval:
@@ -10102,6 +10127,7 @@ non_reserved_keyword:
 | GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
+| GET_FORMAT %prec FUNCTION_CALL_NON_KEYWORD
 | GET_LOCK %prec FUNCTION_CALL_NON_KEYWORD
 | GET_MASTER_PUBLIC_KEY
 | GET_SOURCE_PUBLIC_KEY

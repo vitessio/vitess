@@ -272,7 +272,7 @@ INPUT
 select get_format(TIMESTAMP, 'eur') as a;
 END
 OUTPUT
-select get_format(`TIMESTAMP`, 'eur') as a from dual
+select get_format(timestamp, 'eur') as a from dual
 END
 INPUT
 select mbrwithin(ST_GeomFromText("point(2 4)"), ST_GeomFromText("point(2 4)"));
@@ -7886,7 +7886,7 @@ INPUT
 select get_format(DATE, 'TEST') as a;
 END
 OUTPUT
-select get_format(`DATE`, 'TEST') as a from dual
+select get_format(date, 'TEST') as a from dual
 END
 INPUT
 select insert('hello', 1, 4294967295, 'hi');
@@ -11258,7 +11258,7 @@ INPUT
 select get_format(DATETIME, 'eur') as a;
 END
 OUTPUT
-select get_format(`DATETIME`, 'eur') as a from dual
+select get_format(datetime, 'eur') as a from dual
 END
 INPUT
 select min(t1.a1), min(t2.a4) from t1,t2 where t1.a1 < 'KKK' and t2.a4 < 'KKK';
@@ -14066,7 +14066,7 @@ INPUT
 select str_to_date('15-01-2001 12:59:59', GET_FORMAT(DATE,'USA'));
 END
 OUTPUT
-select str_to_date('15-01-2001 12:59:59', GET_FORMAT(`DATE`, 'USA')) from dual
+select str_to_date('15-01-2001 12:59:59', get_format(date, 'USA')) from dual
 END
 INPUT
 select substring('hello', 18446744073709551617, 1);
@@ -19850,7 +19850,7 @@ INPUT
 select get_format(DATE, 'USA') as a;
 END
 OUTPUT
-select get_format(`DATE`, 'USA') as a from dual
+select get_format(date, 'USA') as a from dual
 END
 INPUT
 select substring_index('aaaaaaaaa1','aaa',-2);
@@ -22724,7 +22724,7 @@ INPUT
 select get_format(TIME, 'internal') as a;
 END
 OUTPUT
-select get_format(`TIME`, 'internal') as a from dual
+select get_format(time, 'internal') as a from dual
 END
 INPUT
 select repeat('hello', 4294967295);

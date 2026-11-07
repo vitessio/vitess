@@ -1767,7 +1767,19 @@ func (node *NullVal) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ODBCEscape) Format(buf *TrackedBuffer) {
+	// MySQL names the column of a temporal literal after its text, so it is
+	// written as it usually is, as in {d'2001-01-01'}. Another type keeps the
+	// space, which keeps x and '41' from being read as the literal x'41'.
+	if node.isTemporal() {
+		buf.astPrintf(node, "{%v%v}", node.Type, node.Expr)
+		return
+	}
 	buf.astPrintf(node, "{%v %v}", node.Type, node.Expr)
+}
+
+// Format formats the node.
+func (node *GetFormatExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "get_format(%#s, %v)", node.Type, node.Style)
 }
 
 // Format formats the node.

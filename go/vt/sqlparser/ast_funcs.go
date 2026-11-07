@@ -2805,6 +2805,10 @@ func (ae *AliasedExpr) ColumnName() string {
 		if lit, ok := node.Expr.(*Literal); ok && lit.Type == StrVal {
 			return stringColumnName(lit, ae.InputExpression)
 		}
+	case *ODBCEscape:
+		if name, ok := odbcEscapeColumnName(node); ok {
+			return name
+		}
 	case *UnaryExpr:
 		// N'hello' is named hello too.
 		if lit, ok := node.Expr.(*Literal); ok && node.Operator == NStringOp && lit.Type == StrVal {

@@ -620,6 +620,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGeomPropertyFuncExpr(a, b)
+	case *GetFormatExpr:
+		b, ok := inB.(*GetFormatExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGetFormatExpr(a, b)
 	case *GroupBy:
 		b, ok := inB.(*GroupBy)
 		if !ok {
@@ -3096,6 +3102,18 @@ func (cmp *Comparator) RefOfGeomPropertyFuncExpr(a, b *GeomPropertyFuncExpr) boo
 	}
 	return a.Property == b.Property &&
 		cmp.Expr(a.Geom, b.Geom)
+}
+
+// RefOfGetFormatExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGetFormatExpr(a, b *GetFormatExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		cmp.Expr(a.Style, b.Style)
 }
 
 // RefOfGroupBy does deep equals between the two objects.
@@ -6832,6 +6850,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfGeomPropertyFuncExpr(a, b)
+	case *GetFormatExpr:
+		b, ok := inB.(*GetFormatExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGetFormatExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {
