@@ -70,22 +70,7 @@ func checkIfOptionIsSupported(t *testing.T, variable string) bool {
 // correct: that they don't contain the missing columns and that the
 // DataColumns bitmap is sent.
 func TestNoBlob(t *testing.T) {
-	ctx := t.Context()
-	oldEngine := engine
-	engine = nil
-	oldEnv := env
-	env = nil
-	newEngine(t, ctx, "noblob")
-	defer func() {
-		if engine != nil {
-			engine.Close()
-		}
-		if env != nil {
-			env.Close()
-		}
-		engine = oldEngine
-		env = oldEnv
-	}()
+	replaceEngine(t, "noblob")
 
 	ts := &TestSpec{
 		t: t,
@@ -2309,22 +2294,7 @@ func TestJournal(t *testing.T) {
 
 // TestMinimalMode confirms that we don't support minimal binlog_row_image mode.
 func TestMinimalMode(t *testing.T) {
-	ctx := t.Context()
-	oldEngine := engine
-	engine = nil
-	oldEnv := env
-	env = nil
-	defer func() {
-		if engine != nil {
-			engine.Close()
-		}
-		if env != nil {
-			env.Close()
-		}
-		engine = oldEngine
-		env = oldEnv
-	}()
-	newEngine(t, ctx, "minimal")
+	replaceEngine(t, "minimal")
 	err := engine.Stream(context.Background(), "current", nil, nil, throttlerapp.VStreamerName, func(evs []*binlogdatapb.VEvent) error { return nil }, nil)
 	require.Error(t, err, "minimal binlog_row_image is not supported by Vitess VReplication")
 }
