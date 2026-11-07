@@ -1010,6 +1010,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfMax(a, b)
+	case *MaxValue:
+		b, ok := inB.(*MaxValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMaxValue(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {
@@ -1892,6 +1898,7 @@ func (cmp *Comparator) RefOfAlterCharset(a, b *AlterCharset) bool {
 		return false
 	}
 	return a.CharacterSet == b.CharacterSet &&
+		a.IsDefault == b.IsDefault &&
 		a.Collate == b.Collate
 }
 
@@ -1904,6 +1911,7 @@ func (cmp *Comparator) RefOfAlterCheck(a, b *AlterCheck) bool {
 		return false
 	}
 	return a.Enforced == b.Enforced &&
+		a.Constraint == b.Constraint &&
 		cmp.IdentifierCI(a.Name, b.Name)
 }
 
@@ -3855,6 +3863,17 @@ func (cmp *Comparator) RefOfMax(a, b *Max) bool {
 		cmp.RefOfOverClause(a.OverClause, b.OverClause)
 }
 
+// RefOfMaxValue does deep equals between the two objects.
+func (cmp *Comparator) RefOfMaxValue(a, b *MaxValue) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return true
+}
+
 // RefOfMemberOfExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfMemberOfExpr(a, b *MemberOfExpr) bool {
 	if a == b {
@@ -4102,7 +4121,7 @@ func (cmp *Comparator) RefOfOrderByOption(a, b *OrderByOption) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.Columns(a.Cols, b.Cols)
+	return cmp.OrderBy(a.Order, b.Order)
 }
 
 // RefOfOtherAdmin does deep equals between the two objects.
@@ -4178,6 +4197,7 @@ func (cmp *Comparator) RefOfPartitionDefinitionOptions(a, b *PartitionDefinition
 		cmp.RefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
 		cmp.RefOfInt(a.MaxRows, b.MaxRows) &&
 		cmp.RefOfInt(a.MinRows, b.MinRows) &&
+		cmp.RefOfLiteral(a.NodeGroup, b.NodeGroup) &&
 		cmp.SubPartitionDefinitions(a.SubPartitionDefinitions, b.SubPartitionDefinitions)
 }
 
@@ -4222,10 +4242,12 @@ func (cmp *Comparator) RefOfPartitionSpec(a, b *PartitionSpec) bool {
 	return a.Action == b.Action &&
 		a.IsAll == b.IsAll &&
 		a.WithoutValidation == b.WithoutValidation &&
+		a.NoWriteToBinlog == b.NoWriteToBinlog &&
 		cmp.Partitions(a.Names, b.Names) &&
 		cmp.RefOfLiteral(a.Number, b.Number) &&
 		cmp.TableName(a.TableName, b.TableName) &&
-		cmp.SliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions)
+		cmp.SliceOfRefOfPartitionDefinition(a.Definitions, b.Definitions) &&
+		cmp.SliceOfString(a.CheckTypes, b.CheckTypes)
 }
 
 // RefOfPartitionValueRange does deep equals between the two objects.
@@ -4997,7 +5019,8 @@ func (cmp *Comparator) RefOfSubPartitionDefinitionOptions(a, b *SubPartitionDefi
 		cmp.RefOfLiteral(a.DataDirectory, b.DataDirectory) &&
 		cmp.RefOfLiteral(a.IndexDirectory, b.IndexDirectory) &&
 		cmp.RefOfInt(a.MaxRows, b.MaxRows) &&
-		cmp.RefOfInt(a.MinRows, b.MinRows)
+		cmp.RefOfInt(a.MinRows, b.MinRows) &&
+		cmp.RefOfLiteral(a.NodeGroup, b.NodeGroup)
 }
 
 // SubPartitionDefinitions does deep equals between the two objects.
@@ -7013,6 +7036,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfMax(a, b)
+	case *MaxValue:
+		b, ok := inB.(*MaxValue)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMaxValue(a, b)
 	case *MemberOfExpr:
 		b, ok := inB.(*MemberOfExpr)
 		if !ok {

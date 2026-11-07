@@ -351,6 +351,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfMatchExpr(in)
 	case *Max:
 		return CloneRefOfMax(in)
+	case *MaxValue:
+		return CloneRefOfMaxValue(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
 	case *Min:
@@ -2371,6 +2373,15 @@ func CloneRefOfMax(n *Max) *Max {
 	return &out
 }
 
+// CloneRefOfMaxValue creates a deep clone of the input.
+func CloneRefOfMaxValue(n *MaxValue) *MaxValue {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneRefOfMemberOfExpr creates a deep clone of the input.
 func CloneRefOfMemberOfExpr(n *MemberOfExpr) *MemberOfExpr {
 	if n == nil {
@@ -2590,7 +2601,7 @@ func CloneRefOfOrderByOption(n *OrderByOption) *OrderByOption {
 		return nil
 	}
 	out := *n
-	out.Cols = CloneColumns(n.Cols)
+	out.Order = CloneOrderBy(n.Order)
 	return &out
 }
 
@@ -2658,6 +2669,7 @@ func CloneRefOfPartitionDefinitionOptions(n *PartitionDefinitionOptions) *Partit
 	out.IndexDirectory = CloneRefOfLiteral(n.IndexDirectory)
 	out.MaxRows = CloneRefOfInt(n.MaxRows)
 	out.MinRows = CloneRefOfInt(n.MinRows)
+	out.NodeGroup = CloneRefOfLiteral(n.NodeGroup)
 	out.SubPartitionDefinitions = CloneSubPartitionDefinitions(n.SubPartitionDefinitions)
 	return &out
 }
@@ -2694,6 +2706,7 @@ func CloneRefOfPartitionSpec(n *PartitionSpec) *PartitionSpec {
 	out.Number = CloneRefOfLiteral(n.Number)
 	out.TableName = CloneTableName(n.TableName)
 	out.Definitions = CloneSliceOfRefOfPartitionDefinition(n.Definitions)
+	out.CheckTypes = CloneSliceOfString(n.CheckTypes)
 	return &out
 }
 
@@ -3356,6 +3369,7 @@ func CloneRefOfSubPartitionDefinitionOptions(n *SubPartitionDefinitionOptions) *
 	out.IndexDirectory = CloneRefOfLiteral(n.IndexDirectory)
 	out.MaxRows = CloneRefOfInt(n.MaxRows)
 	out.MinRows = CloneRefOfInt(n.MinRows)
+	out.NodeGroup = CloneRefOfLiteral(n.NodeGroup)
 	return &out
 }
 
@@ -4388,6 +4402,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfMatchExpr(in)
 	case *Max:
 		return CloneRefOfMax(in)
+	case *MaxValue:
+		return CloneRefOfMaxValue(in)
 	case *MemberOfExpr:
 		return CloneRefOfMemberOfExpr(in)
 	case *Min:

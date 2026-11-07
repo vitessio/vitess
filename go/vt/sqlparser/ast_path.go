@@ -343,7 +343,7 @@ const (
 	RefOfOrExprRight
 	RefOfOrderExpr
 	OrderByOffset
-	RefOfOrderByOptionCols
+	RefOfOrderByOptionOrder
 	RefOfOverClauseWindowName
 	RefOfOverClauseWindowSpec
 	RefOfParenTableExprExprs
@@ -354,6 +354,7 @@ const (
 	RefOfPartitionDefinitionOptionsEngine
 	RefOfPartitionDefinitionOptionsDataDirectory
 	RefOfPartitionDefinitionOptionsIndexDirectory
+	RefOfPartitionDefinitionOptionsNodeGroup
 	RefOfPartitionDefinitionOptionsSubPartitionDefinitions
 	RefOfPartitionOptionColList
 	RefOfPartitionOptionExpr
@@ -469,6 +470,7 @@ const (
 	RefOfSubPartitionDefinitionOptionsEngine
 	RefOfSubPartitionDefinitionOptionsDataDirectory
 	RefOfSubPartitionDefinitionOptionsIndexDirectory
+	RefOfSubPartitionDefinitionOptionsNodeGroup
 	SubPartitionDefinitionsOffset
 	RefOfSubquerySelect
 	RefOfSubstrExprName
@@ -1253,8 +1255,8 @@ func (s ASTStep) DebugString() string {
 		return "(*Order).Expr"
 	case OrderByOffset:
 		return "(OrderBy)[]Offset"
-	case RefOfOrderByOptionCols:
-		return "(*OrderByOption).Cols"
+	case RefOfOrderByOptionOrder:
+		return "(*OrderByOption).Order"
 	case RefOfOverClauseWindowName:
 		return "(*OverClause).WindowName"
 	case RefOfOverClauseWindowSpec:
@@ -1275,6 +1277,8 @@ func (s ASTStep) DebugString() string {
 		return "(*PartitionDefinitionOptions).DataDirectory"
 	case RefOfPartitionDefinitionOptionsIndexDirectory:
 		return "(*PartitionDefinitionOptions).IndexDirectory"
+	case RefOfPartitionDefinitionOptionsNodeGroup:
+		return "(*PartitionDefinitionOptions).NodeGroup"
 	case RefOfPartitionDefinitionOptionsSubPartitionDefinitions:
 		return "(*PartitionDefinitionOptions).SubPartitionDefinitions"
 	case RefOfPartitionOptionColList:
@@ -1505,6 +1509,8 @@ func (s ASTStep) DebugString() string {
 		return "(*SubPartitionDefinitionOptions).DataDirectory"
 	case RefOfSubPartitionDefinitionOptionsIndexDirectory:
 		return "(*SubPartitionDefinitionOptions).IndexDirectory"
+	case RefOfSubPartitionDefinitionOptionsNodeGroup:
+		return "(*SubPartitionDefinitionOptions).NodeGroup"
 	case SubPartitionDefinitionsOffset:
 		return "(SubPartitionDefinitions)[]Offset"
 	case RefOfSubquerySelect:
@@ -2508,8 +2514,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]
 			node = node.(OrderBy)[idx]
-		case RefOfOrderByOptionCols:
-			node = node.(*OrderByOption).Cols
+		case RefOfOrderByOptionOrder:
+			node = node.(*OrderByOption).Order
 		case RefOfOverClauseWindowName:
 			node = node.(*OverClause).WindowName
 		case RefOfOverClauseWindowSpec:
@@ -2530,6 +2536,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*PartitionDefinitionOptions).DataDirectory
 		case RefOfPartitionDefinitionOptionsIndexDirectory:
 			node = node.(*PartitionDefinitionOptions).IndexDirectory
+		case RefOfPartitionDefinitionOptionsNodeGroup:
+			node = node.(*PartitionDefinitionOptions).NodeGroup
 		case RefOfPartitionDefinitionOptionsSubPartitionDefinitions:
 			node = node.(*PartitionDefinitionOptions).SubPartitionDefinitions
 		case RefOfPartitionOptionColList:
@@ -2778,6 +2786,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*SubPartitionDefinitionOptions).DataDirectory
 		case RefOfSubPartitionDefinitionOptionsIndexDirectory:
 			node = node.(*SubPartitionDefinitionOptions).IndexDirectory
+		case RefOfSubPartitionDefinitionOptionsNodeGroup:
+			node = node.(*SubPartitionDefinitionOptions).NodeGroup
 		case SubPartitionDefinitionsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]

@@ -116,6 +116,8 @@ const (
 	RepairStr            = "repair partition"
 	RemoveStr            = "remove partitioning"
 	UpgradeStr           = "upgrade partitioning"
+	SecondaryLoadStr     = "secondary_load"
+	SecondaryUnloadStr   = "secondary_unload"
 
 	// JoinTableExpr.Join
 	JoinStr             = "join"
@@ -810,6 +812,8 @@ const (
 	RepairAction
 	RemoveAction
 	UpgradeAction
+	SecondaryLoadAction
+	SecondaryUnloadAction
 )
 
 // Constant for Enum Type - ProcParameterMode

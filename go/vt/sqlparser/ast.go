@@ -217,13 +217,20 @@ type (
 	// AlterCharset is used to set the default or change the character set and collation in alter table command
 	AlterCharset struct {
 		CharacterSet string
-		Collate      string
+		// IsDefault is set by CONVERT TO CHARACTER SET DEFAULT, which converts
+		// to the database's character set. CharacterSet is then empty.
+		IsDefault bool
+		Collate   string
 	}
 
 	// AlterCheck represents the `ALTER CHECK` part in an `ALTER TABLE ALTER CHECK` command.
 	AlterCheck struct {
 		Name     IdentifierCI
 		Enforced bool
+		// Constraint is set for ALTER CONSTRAINT, which MySQL also applies to a
+		// CHECK constraint, but which fails differently for any other kind of
+		// constraint.
+		Constraint bool
 	}
 
 	// AlterIndex represents the `ALTER INDEX` part in an `ALTER TABLE ALTER INDEX` command.
@@ -269,7 +276,7 @@ type (
 
 	// OrderByOption clause is used to specify the order by in an alter table statement
 	OrderByOption struct {
-		Cols Columns
+		Order OrderBy
 	}
 
 	// RenameTableName clause is used to rename the table in an alter table statement
@@ -2139,6 +2146,11 @@ type PartitionSpec struct {
 	TableName         TableName
 	WithoutValidation bool
 	Definitions       []*PartitionDefinition
+	// NoWriteToBinlog is set by NO_WRITE_TO_BINLOG or its synonym LOCAL.
+	NoWriteToBinlog bool
+	// CheckTypes are the options of CHECK PARTITION and REPAIR PARTITION,
+	// such as QUICK or EXTENDED.
+	CheckTypes []string
 }
 
 // PartitionSpecAction is an enum for PartitionSpec.Action
@@ -2159,6 +2171,7 @@ type PartitionDefinitionOptions struct {
 	MaxRows                 *int
 	MinRows                 *int
 	TableSpace              string
+	NodeGroup               *Literal
 	SubPartitionDefinitions SubPartitionDefinitions
 }
 
@@ -2180,6 +2193,7 @@ type SubPartitionDefinitionOptions struct {
 	MaxRows        *int
 	MinRows        *int
 	TableSpace     string
+	NodeGroup      *Literal
 }
 
 // PartitionValueRangeType is an enum for PartitionValueRange.Type
@@ -2774,6 +2788,10 @@ type (
 
 	// NullVal represents a NULL value.
 	NullVal struct{}
+
+	// MaxValue is MAXVALUE among the values that bound a partition, as in
+	// VALUES LESS THAN (1, MAXVALUE). It is not an expression anywhere else.
+	MaxValue struct{}
 
 	// BoolVal is true or false.
 	BoolVal bool
@@ -3666,6 +3684,7 @@ func (*AssignmentExpr) IsExpr()                     {}
 func (*Literal) IsExpr()                            {}
 func (*Argument) IsExpr()                           {}
 func (*NullVal) IsExpr()                            {}
+func (*MaxValue) IsExpr()                           {}
 func (BoolVal) IsExpr()                             {}
 func (*ColName) IsExpr()                            {}
 func (ValTuple) IsExpr()                            {}

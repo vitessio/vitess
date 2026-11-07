@@ -350,6 +350,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfMatchExpr(in, f)
 	case *Max:
 		return VisitRefOfMax(in, f)
+	case *MaxValue:
+		return VisitRefOfMaxValue(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
 	case *Min:
@@ -3176,6 +3178,16 @@ func VisitRefOfMax(in *Max, f Visit) error {
 	return nil
 }
 
+func VisitRefOfMaxValue(in *MaxValue, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
+
 func VisitRefOfMemberOfExpr(in *MemberOfExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -3476,7 +3488,7 @@ func VisitRefOfOrderByOption(in *OrderByOption, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	if err := VisitColumns(in.Cols, f); err != nil {
+	if err := VisitOrderBy(in.Order, f); err != nil {
 		return err
 	}
 	return nil
@@ -3567,6 +3579,9 @@ func VisitRefOfPartitionDefinitionOptions(in *PartitionDefinitionOptions, f Visi
 		return err
 	}
 	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.NodeGroup, f); err != nil {
 		return err
 	}
 	if err := VisitSubPartitionDefinitions(in.SubPartitionDefinitions, f); err != nil {
@@ -4567,6 +4582,9 @@ func VisitRefOfSubPartitionDefinitionOptions(in *SubPartitionDefinitionOptions, 
 		return err
 	}
 	if err := VisitRefOfLiteral(in.IndexDirectory, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfLiteral(in.NodeGroup, f); err != nil {
 		return err
 	}
 	return nil
@@ -5831,6 +5849,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfMatchExpr(in, f)
 	case *Max:
 		return VisitRefOfMax(in, f)
+	case *MaxValue:
+		return VisitRefOfMaxValue(in, f)
 	case *MemberOfExpr:
 		return VisitRefOfMemberOfExpr(in, f)
 	case *Min:
