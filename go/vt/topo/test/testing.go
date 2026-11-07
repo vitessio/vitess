@@ -135,6 +135,11 @@ func TopoServerTestSuite(t *testing.T, ctx context.Context, factory func() *topo
 	executeTestSuite(checkFile, t, ctx, ts, ignoreList, "checkFile")
 	ts.Close()
 
+	t.Log("=== checkGetLinearizable")
+	ts = factory()
+	executeTestSuite(checkGetLinearizable, t, ctx, ts, ignoreList, "checkGetLinearizable")
+	ts.Close()
+
 	t.Log("=== checkWatch")
 	ts = factory()
 	executeTestSuite(checkWatch, t, ctx, ts, ignoreList, "checkWatch")

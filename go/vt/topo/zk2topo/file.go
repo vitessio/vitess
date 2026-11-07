@@ -87,6 +87,21 @@ func (zs *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Versio
 	return contents, ZKVersion(stat.Version), nil
 }
 
+var _ topo.LinearizableGetter = (*Server)(nil)
+
+// GetLinearizable is part of the topo.LinearizableGetter interface. A
+// ZooKeeper server can serve a read before it has applied the latest writes,
+// so this syncs the server with the leader before reading.
+func (zs *Server) GetLinearizable(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	zkPath := path.Join(zs.root, filePath)
+
+	contents, stat, err := zs.conn.SyncGet(ctx, zkPath)
+	if err != nil {
+		return nil, nil, convertError(err, zkPath)
+	}
+	return contents, ZKVersion(stat.Version), nil
+}
+
 // GetVersion is part of topo.Conn interface.
 func (zs *Server) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	return nil, topo.NewError(topo.NoImplementation, "GetVersion not supported in ZK2 topo")

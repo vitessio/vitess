@@ -38,11 +38,14 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 		if !topo.IsErrType(err, topo.NoNode) {
 			return err
 		}
-		// If the keyspace doesn't exist, we should delete the serving keyspace records.
-		// This is to ensure that the serving graph is consistent with the topo.
-		if err = deleteOrphanedFiles(ctx, ts, keyspace, cells); err != nil {
-			return err
+		// If the keyspace doesn't exist, there is nothing to rebuild. Delete
+		// the files it left behind in the cells, so that the serving graph is
+		// consistent with the topo, and return the NoNode error.
+		if cleanupErr := deleteOrphanedFiles(ctx, ts, keyspace, cells); cleanupErr != nil {
+			return cleanupErr
 		}
+		log.Infof("Keyspace %v does not exist; deleted the files it left behind", keyspace)
+		return err
 	}
 	ctx, unlock, lockErr := ts.LockKeyspace(ctx, keyspace, "RebuildKeyspace")
 	if lockErr != nil {
@@ -55,6 +58,14 @@ func RebuildKeyspace(ctx context.Context, log logutil.Logger, ts *topo.Server, k
 
 // deleteOrphanedFiles clears the residual records for a keyspace that has already been deleted.
 func deleteOrphanedFiles(ctx context.Context, ts *topo.Server, keyspace string, cells []string) error {
+	// No cells means all cells, as for the rebuild.
+	if len(cells) == 0 {
+		var err error
+		cells, err = ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	for _, cell := range cells {
 		if err := ts.DeleteOrphanedKeyspaceFiles(ctx, cell, keyspace); err != nil {
 			return err

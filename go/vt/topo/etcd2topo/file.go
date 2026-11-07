@@ -96,6 +96,15 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	return resp.Kvs[0].Value, EtcdVersion(resp.Kvs[0].ModRevision), nil
 }
 
+var _ topo.LinearizableGetter = (*Server)(nil)
+
+// GetLinearizable is part of the topo.LinearizableGetter interface. Get
+// already reads linearizably: etcd only serves stale data for a read that asks
+// for serializable consistency, which Get doesn't.
+func (s *Server) GetLinearizable(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
+	return s.Get(ctx, filePath)
+}
+
 // GetVersion is part of the topo.Conn interface.
 func (s *Server) GetVersion(ctx context.Context, filePath string, version int64) ([]byte, error) {
 	if err := s.checkClosed(); err != nil {
