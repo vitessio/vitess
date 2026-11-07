@@ -40,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -977,6 +978,8 @@ func TestSuite(ctx context.Context, t *testing.T, protocol string, tablet *topod
 		testMessageStream,
 		testMessageAck,
 		testReserveStreamExecute,
+		testVStreamRows,
+		testVStreamTables,
 
 		// error test cases
 		testBeginError,
@@ -1091,4 +1094,156 @@ func SetProtocol(name string, protocol string) {
 		msg := "failed to set flag %q to %q: %v"
 		log.Error(fmt.Sprintf(msg, tabletProtocolFlagName, protocol, err))
 	}
+}
+
+// rowPoolRows builds n two-column rows whose values are valBytes long; the row at bigSlot, if any,
+// carries a value of bigBytes instead.
+func rowPoolRows(n, valBytes, bigSlot, bigBytes int) []*querypb.Row {
+	rows := make([]*querypb.Row, n)
+	for i := range rows {
+		size := valBytes
+		if i == bigSlot {
+			size = bigBytes
+		}
+		val := make([]byte, size)
+		for j := range val {
+			val[j] = 'v'
+		}
+		rows[i] = &querypb.Row{
+			Lengths: []int64{1, int64(len(val))},
+			Values:  append([]byte("1"), val...),
+		}
+	}
+	return rows
+}
+
+// The row-pool scenario pushed through the VStreamRows and VStreamTables receive loops
+// (vitessio/vitess#20954): uniform packets, each followed by a packet without rows (a heartbeat or a
+// fields-only packet), must reuse the same rows without growing or dropping the pool; a large row moving
+// between slots must not be kept in every slot it visited.
+const (
+	rowPoolUniformPackets = 20
+	rowPoolUniformRows    = 1000
+	// rowPoolUniformBytes makes the uniform packets retain more than the 1 MiB budget floor, so a rowless
+	// packet judged on its own (no rows, floor budget) would drop the pool.
+	rowPoolUniformBytes = 1100
+	rowPoolBigPackets   = 20
+	rowPoolBigRows      = 200
+	rowPoolBigBytes     = 1 << 20
+)
+
+var rowPoolFields = []*querypb.Field{{Name: "id"}, {Name: "val"}}
+
+// rowPoolPackets returns the scenario's packets as row slices: the fields-only packet is nil, the rowless
+// packets after each uniform packet are empty.
+func rowPoolPackets() [][]*querypb.Row {
+	uniform := rowPoolRows(rowPoolUniformRows, rowPoolUniformBytes, -1, 0)
+
+	packets := make([][]*querypb.Row, 0, 1+2*rowPoolUniformPackets+2*rowPoolBigPackets)
+	packets = append(packets, nil)
+	for range rowPoolUniformPackets {
+		packets = append(packets, uniform, []*querypb.Row{})
+	}
+	for i := range rowPoolBigPackets {
+		packets = append(packets, rowPoolRows(rowPoolBigRows, 1, (i*37)%rowPoolBigRows, rowPoolBigBytes), rowPoolRows(rowPoolBigRows, 1, -1, 0))
+	}
+	return packets
+}
+
+// rowPoolSeen is what the receive callback records for a packet with rows.
+type rowPoolSeen struct {
+	rows     int
+	retained int
+	first    *querypb.Row // the first slot's *Row, the same object while the pool is reused
+}
+
+func recordRowPool(got *[]rowPoolSeen, rows []*querypb.Row) {
+	if len(rows) == 0 {
+		return
+	}
+	*got = append(*got, rowPoolSeen{rows: len(rows), retained: sqltypes.RowPoolRetained(rows), first: rows[0]})
+}
+
+// checkRowPoolReuse checks what the receive loop handed its callback over the rowPoolPackets scenario.
+func checkRowPoolReuse(t *testing.T, got []rowPoolSeen) {
+	require.Len(t, got, rowPoolUniformPackets+2*rowPoolBigPackets)
+
+	// Uniform phase: the pool is filled once and then reused as it is, rowless packets or not.
+	warm := got[0]
+	require.Greater(t, warm.retained, sqltypes.RowPoolMinBytes, "the uniform pool must exceed the budget floor for the rowless-packet check to mean anything")
+	for i := 1; i < rowPoolUniformPackets; i++ {
+		assert.Equal(t, rowPoolUniformRows, got[i].rows)
+		assert.Equal(t, warm.retained, got[i].retained, "packet %d: pool grew under uniform rows", i)
+		assert.Same(t, warm.first, got[i].first, "packet %d: pool was dropped under uniform rows (a rowless packet must not trim it)", i)
+	}
+
+	// Bounded phase: the large value visits a different slot in every other packet. Each packet sees at
+	// most the previous packet's budget plus its own rows; without the trim the pool would end up holding
+	// every slot's high-water mark, about rowPoolBigPackets MiB.
+	drops := 0
+	for i := rowPoolUniformPackets; i < len(got); i++ {
+		assert.Less(t, got[i].retained, 3*rowPoolBigBytes, "packet %d retains too much", i)
+		if got[i].first != got[i-1].first {
+			drops++
+		}
+	}
+	assert.Positive(t, drops, "the small-row packets never dropped the pool holding the large slot")
+	assert.LessOrEqual(t, got[len(got)-1].retained, sqltypes.RowPoolMinBytes+rowPoolBigRows*(2*8+64)+2*rowPoolBigRows,
+		"after a small-row packet the pool is back to the floor")
+}
+
+// testVStreamRows pushes the row-pool scenario through the real VStreamRows receive loop.
+func testVStreamRows(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testVStreamRows")
+
+	rowPackets := rowPoolPackets()
+	packets := make([]*binlogdatapb.VStreamRowsResponse, 0, len(rowPackets))
+	for i, rows := range rowPackets {
+		switch {
+		case i == 0:
+			packets = append(packets, &binlogdatapb.VStreamRowsResponse{Fields: rowPoolFields})
+		case len(rows) == 0:
+			packets = append(packets, &binlogdatapb.VStreamRowsResponse{Heartbeat: true})
+		default:
+			packets = append(packets, &binlogdatapb.VStreamRowsResponse{Rows: rows})
+		}
+	}
+	f.VStreamRowsResponses = packets
+	defer func() { f.VStreamRowsResponses = nil }()
+
+	var got []rowPoolSeen
+	ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
+	err := conn.VStreamRows(ctx, &binlogdatapb.VStreamRowsRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamRowsResponse) error {
+		recordRowPool(&got, resp.Rows)
+		return nil
+	})
+	require.NoError(t, err)
+	checkRowPoolReuse(t, got)
+}
+
+// testVStreamTables pushes the row-pool scenario through the real VStreamTables receive loop, which the
+// atomic copy reads from. A table's fields-only packet stands in for the heartbeat.
+func testVStreamTables(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testVStreamTables")
+
+	rowPackets := rowPoolPackets()
+	packets := make([]*binlogdatapb.VStreamTablesResponse, 0, len(rowPackets))
+	for _, rows := range rowPackets {
+		if len(rows) == 0 {
+			packets = append(packets, &binlogdatapb.VStreamTablesResponse{TableName: "t1", Fields: rowPoolFields})
+			continue
+		}
+		packets = append(packets, &binlogdatapb.VStreamTablesResponse{TableName: "t1", Rows: rows})
+	}
+	f.VStreamTablesResponses = packets
+	defer func() { f.VStreamTablesResponses = nil }()
+
+	var got []rowPoolSeen
+	ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
+	err := conn.VStreamTables(ctx, &binlogdatapb.VStreamTablesRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamTablesResponse) error {
+		recordRowPool(&got, resp.Rows)
+		return nil
+	})
+	require.NoError(t, err)
+	checkRowPoolReuse(t, got)
 }

@@ -23,7 +23,18 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestDynamicPacketSizerMaxSize(t *testing.T) {
+	base := 25000
+	ps := newDynamicPacketSizer(base).(*dynamicPacketSizer)
+	for range 1000 {
+		ps.growCandidate()
+	}
+	require.Equal(t, base*dynamicPacketSizerMaxGrowthFactor, ps.candidateSize)
+	require.LessOrEqual(t, ps.candidateSize, ps.maxSize)
+}
 
 type polynomial []float64
 

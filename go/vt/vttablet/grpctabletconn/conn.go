@@ -764,7 +764,13 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 		return err
 	}
 	r := binlogdatapb.VStreamRowsResponseFromVTPool()
-	defer r.ReturnToVTPool()
+	defer func() {
+		// Don't hand this stream's row pool, however large it grew, to the
+		// next stream that takes a response from the pool.
+		r.Rows = nil
+		r.ReturnToVTPool()
+	}()
+	var pool rowPoolTracker
 	for {
 		err := stream.RecvMsg(r)
 		if err != nil {
@@ -776,8 +782,55 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 		if err := send(r); err != nil {
 			return err
 		}
+		r.Rows = pool.trim(r.Rows)
 		r.ResetVT()
 	}
+}
+
+// rowPoolTracker bounds what a pooled response's reused rows retain across a
+// stream. RecvMsg decodes every packet into the same *Row slots, and the
+// generated Row.UnmarshalVT appends into Values[:0] and Lengths[:0], so each
+// slot grows to the largest row it has ever held and a long stream retains
+// the sum of those high-water marks (vitessio/vitess#20954). The tracker
+// keeps that sum incrementally: a packet only re-measures the slots it wrote,
+// so the cost per packet is its row count, not the pool's size. Once the sum
+// exceeds the budget for the packet the slots just carried, the slice is
+// dropped: an O(1) reset after which the next packet reallocates only what
+// it needs.
+type rowPoolTracker struct {
+	// caps[i] is the capacity (Values plus Lengths) last measured in slot i.
+	caps []int
+	// total is the sum of caps: what the pool retains.
+	total int
+}
+
+// trim is called after send and before ResetVT with the packet's rows. It
+// returns the rows to keep, or nil when the pool is dropped. A packet without
+// rows (a heartbeat or a throttled response) can't judge the pool and leaves
+// it alone.
+func (t *rowPoolTracker) trim(rows []*querypb.Row) []*querypb.Row {
+	if len(rows) == 0 {
+		return rows
+	}
+
+	for i, r := range rows {
+		if i >= len(t.caps) {
+			t.caps = append(t.caps, 0)
+		}
+		c := cap(r.Values) + cap(r.Lengths)*8
+		t.total += c - t.caps[i]
+		t.caps[i] = c
+	}
+
+	if t.total <= sqltypes.RowPoolPacketBudget(rows) {
+		return rows
+	}
+
+	// Drop the tracker's storage with the pool: it is sized by the largest packet seen, which is what
+	// is being reclaimed.
+	t.caps = nil
+	t.total = 0
+	return nil
 }
 
 // VStreamTables streams rows of a query from the specified starting point.
@@ -807,7 +860,11 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 		return err
 	}
 	r := binlogdatapb.VStreamTablesResponseFromVTPool()
-	defer r.ReturnToVTPool()
+	defer func() {
+		r.Rows = nil // see VStreamRows
+		r.ReturnToVTPool()
+	}()
+	var pool rowPoolTracker
 	for {
 		err := stream.RecvMsg(r)
 		if err != nil {
@@ -819,6 +876,7 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 		if err := send(r); err != nil {
 			return err
 		}
+		r.Rows = pool.trim(r.Rows)
 		r.ResetVT()
 	}
 }

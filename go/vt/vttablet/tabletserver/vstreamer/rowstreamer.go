@@ -408,6 +408,10 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	for i, fld := range rs.plan.Table.Fields {
 		charsets[i] = collations.ID(fld.Charset)
 	}
+	// Each sent row carries one length per selected column; the row pool's
+	// retention budget is derived from every packet's own footprint, see
+	// sqltypes.RowPoolBudget.
+	fieldCount := len(rs.plan.fields())
 
 	err = safeSend(rs.ctx, &binlogdatapb.VStreamRowsResponse{
 		Fields:   rs.plan.fields(),
@@ -437,10 +441,11 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	}()
 
 	var (
-		response binlogdatapb.VStreamRowsResponse
-		rows     []*querypb.Row
-		rowCount int
-		mysqlrow []sqltypes.Value
+		response  binlogdatapb.VStreamRowsResponse
+		rows      []*querypb.Row
+		rowCount  int
+		mysqlrow  []sqltypes.Value
+		poolBytes int // retained cap (Values + Lengths) across the reused rows
 	)
 
 	lastpk := make([]sqltypes.Value, len(rs.pkColumns))
@@ -490,7 +495,9 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			if rowCount >= len(rows) {
 				rows = append(rows, &querypb.Row{})
 			}
+			prevCap := cap(rows[rowCount].Values) + cap(rows[rowCount].Lengths)*8
 			byteCount += sqltypes.RowToProto3Inplace(filtered, rows[rowCount])
+			poolBytes += cap(rows[rowCount].Values) + cap(rows[rowCount].Lengths)*8 - prevCap
 			rowCount++
 		}
 
@@ -506,8 +513,13 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 				return err
 			}
 			rs.pktsize.Record(byteCount, time.Since(startSend))
+			budget := sqltypes.RowPoolBudget(byteCount, rowCount, fieldCount)
 			rowCount = 0
 			byteCount = 0
+			var dropped bool
+			if rows, poolBytes, dropped = trimRowPool(rows, poolBytes, budget); dropped {
+				response.Rows = nil // release the dropped pool's backing array
+			}
 		}
 	}
 
@@ -523,6 +535,16 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 	}
 
 	return nil
+}
+
+// trimRowPool drops the whole reused row pool once the capacity it retains
+// exceeds the budget of the packet it just carried (an O(1) reset, not a
+// walk; see sqltypes.RowPoolBudget). Call only after the packet is sent.
+func trimRowPool(rows []*querypb.Row, poolBytes, budget int) (_ []*querypb.Row, newPoolBytes int, dropped bool) {
+	if poolBytes <= budget {
+		return rows, poolBytes, false
+	}
+	return nil, 0, true
 }
 
 func GetVReplicationMaxExecutionTimeQueryHint(copyPhaseDuration time.Duration) string {

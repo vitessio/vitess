@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -36,6 +37,7 @@ import (
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // TestRowStreamerQuery validates that the correct force index hint and order by is added to the rowstreamer query.
@@ -770,4 +772,193 @@ func expectStreamError(t *testing.T, query string, want string) {
 		return nil
 	}, nil)
 	require.EqualError(t, err, want, "Got incorrect error")
+}
+
+func TestTrimRowPool(t *testing.T) {
+	rows := []*querypb.Row{{Values: make([]byte, 0, 1024)}, {Values: make([]byte, 0, 2048)}}
+
+	// Under budget: the pool and poolBytes are unchanged, not dropped.
+	kept, poolBytes, dropped := trimRowPool(rows, 3072, 4096)
+	require.False(t, dropped)
+	require.Equal(t, 3072, poolBytes)
+	require.Len(t, kept, 2)
+
+	// Over budget: the whole pool is dropped and poolBytes resets to 0.
+	kept, poolBytes, dropped = trimRowPool(rows, 5000, 4096)
+	require.True(t, dropped)
+	require.Equal(t, 0, poolBytes)
+	require.Nil(t, kept)
+}
+
+// smallColumns repeats what (a column definition or a value) for the 15 small columns of the reuse test.
+func smallColumns(what string) string {
+	parts := make([]string, 15)
+	for i := range parts {
+		parts[i] = what
+		if strings.HasPrefix(what, "varbinary") {
+			parts[i] = fmt.Sprintf("c%d %s", i+1, what)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// TestStreamRowsReusesRowPool streams tables whose packets are all alike through the engine and checks
+// in the send callback that the row pool is filled once and then reused: the same *Row objects serve
+// every packet and the pool neither grows nor is dropped (vitessio/vitess#20954). The rows are shaped so
+// that the pool's per-row overhead (Lengths and the Row structs) outweighs the values, which is what
+// catches a budget or an accounting that counts only the values.
+func TestStreamRowsReusesRowPool(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	cases := []struct {
+		name       string
+		create     string
+		rowValues  func(id int) string
+		rows       int
+		packetSize int
+		minPackets int
+	}{
+		{
+			// About 12k rows of 16 one-byte columns per 256 KiB packet: each row's Lengths outweigh its
+			// values, so the pool holds about 1.9 MB per packet, over the 1 MiB floor and over four times
+			// the values it carries. A budget or an accounting that ignores Lengths drops it.
+			name:       "many small rows",
+			create:     "create table t1(id int, " + smallColumns("varbinary(1)") + ", primary key(id))",
+			rowValues:  func(id int) string { return fmt.Sprintf("(%d, %s)", id, smallColumns("'a'")) },
+			rows:       160000,
+			packetSize: 256 << 10,
+			minPackets: 12,
+		},
+		{
+			// A large value in every row, one row per packet: a value that stays in its slot is the shape of
+			// every packet, not retention.
+			name:       "one large row per packet",
+			create:     "create table t1(id int, val longblob, primary key(id))",
+			rowValues:  func(id int) string { return fmt.Sprintf("(%d, repeat('b', %d))", id, 64<<10) },
+			rows:       60,
+			packetSize: 64 << 10,
+			minPackets: 60,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			execStatements(t, []string{tc.create})
+			defer execStatements(t, []string{"drop table t1"})
+
+			// Six-digit ids keep every row the same length, so every full packet holds the same number of rows.
+			const batch, firstID = 5000, 100000
+			var stmts []string
+			for first := firstID; first < firstID+tc.rows; first += batch {
+				var values []string
+				for id := first; id < first+batch && id < firstID+tc.rows; id++ {
+					values = append(values, tc.rowValues(id))
+				}
+				stmts = append(stmts, "insert into t1 values "+strings.Join(values, ","))
+			}
+			execStatements(t, stmts)
+
+			var options binlogdatapb.VStreamOptions
+			options.ConfigOverrides = map[string]string{
+				"vstream-dynamic-packet-size": "false",
+				"vstream-packet-size":         strconv.Itoa(tc.packetSize),
+			}
+
+			type seen struct {
+				rows     int
+				retained int
+				first    *querypb.Row
+			}
+			var got []seen
+			err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+				if len(rows.Rows) == 0 {
+					return nil
+				}
+				got = append(got, seen{rows: len(rows.Rows), retained: sqltypes.RowPoolRetained(rows.Rows), first: rows.Rows[0]})
+				return nil
+			}, &options)
+			require.NoError(t, err)
+			require.GreaterOrEqual(t, len(got), tc.minPackets)
+
+			// The first packet fills the pool and every later one is served by the same rows. The last packet
+			// is whatever is left of the table, so the full-packet checks stop before it.
+			warm := got[0]
+			for i := 1; i < len(got); i++ {
+				assert.Same(t, warm.first, got[i].first, "packet %d: the pool was dropped under uniform rows", i)
+				if i < len(got)-1 {
+					assert.Equal(t, warm.rows, got[i].rows, "packet %d: not a full packet", i)
+					assert.Equal(t, warm.retained, got[i].retained, "packet %d: the pool grew under uniform rows", i)
+				}
+			}
+		})
+	}
+}
+
+// TestStreamRowsBoundsRowPoolRetention streams a table whose one large value lands in a new slot of the
+// reused row pool in every packet, and checks in the send callback what the pool retains
+// (rows[:cap(rows)]): without the trim after each packet, every slot would keep its high-water mark and
+// the pool would grow to about packets × the large value by the end of the stream
+// (vitessio/vitess#20954).
+func TestStreamRowsBoundsRowPoolRetention(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	const (
+		packets  = 100
+		bigBytes = 64 << 10
+	)
+
+	execStatements(t, []string{
+		"create table t1(id int, val longblob, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+
+	// Packet k holds k small rows followed by the large one, so the large value sits in slot k of that
+	// packet; with a fixed packet size of bigBytes the packet closes right after it.
+	var stmts []string
+	id := 0
+	for k := range packets {
+		var values []string
+		for range k {
+			id++
+			values = append(values, fmt.Sprintf("(%d, 's')", id))
+		}
+		id++
+		values = append(values, fmt.Sprintf("(%d, repeat('b', %d))", id, bigBytes))
+		stmts = append(stmts, "insert into t1 values "+strings.Join(values, ","))
+	}
+	execStatements(t, stmts)
+
+	var options binlogdatapb.VStreamOptions
+	options.ConfigOverrides = map[string]string{
+		"vstream-dynamic-packet-size": "false",
+		"vstream-packet-size":         strconv.Itoa(bigBytes),
+	}
+
+	sent, maxRetained, lastRetained := 0, 0, 0
+	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if len(rows.Rows) == 0 {
+			return nil
+		}
+		sent++
+		retained := sqltypes.RowPoolRetained(rows.Rows)
+		maxRetained = max(maxRetained, retained)
+		lastRetained = retained
+		return nil
+	}, &options)
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, sent, packets, "every large row should have closed a packet")
+
+	// The send callback sees the pool after the packet's rows were written into it and before the trim, so
+	// it holds at most the previous packet's budget (the 1 MiB floor here, as the packets are small) plus
+	// this packet's growth. Untrimmed, the last packet would retain about packets × bigBytes.
+	bound := sqltypes.RowPoolMinBytes + 2*bigBytes + packets*(2*8+64)
+	assert.LessOrEqual(t, maxRetained, bound, "the pool retained %d bytes at some packet, untrimmed it would reach %d", maxRetained, packets*bigBytes)
+	assert.LessOrEqual(t, lastRetained, bound)
+	assert.Less(t, lastRetained, packets*bigBytes/4, "the pool kept most high-water marks: %d bytes", lastRetained)
 }
