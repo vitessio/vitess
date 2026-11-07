@@ -53,6 +53,42 @@ var replayedStatement = regexp.MustCompile(`(?is)^(insert|replace|drop\s+(tempor
 // setting, read or write files, or wait.
 var unsafeStatement = regexp.MustCompile("(?is)\\b(mysql|performance_schema|sys|information_schema)\\s*\\.|\\bglobal\\b|\\bpersist\\b|\\bpassword\\b|\\b(database|schema)\\s+(if\\s+exists\\s+)?`?(mysql|sys|performance_schema)\\b|load_file|into\\s+(out|dump)file|\\bsleep\\s*\\(|get_lock|data\\s+directory|index\\s+directory")
 
+// nondeterministicFunction matches the functions whose result differs from
+// one call to the next, so that the rows that CREATE TABLE ... SELECT copies
+// with them differ between the servers.
+var nondeterministicFunction = regexp.MustCompile(`(?i)\b(uuid|uuid_short|rand|now|sysdate|curtime|curdate|current_time|current_date|current_timestamp|localtime|localtimestamp|unix_timestamp|utc_date|utc_time|utc_timestamp|connection_id|last_insert_id|found_rows|row_count|random_bytes)\s*\(`)
+
+// spatialSynonym matches the names of spatial functions that MySQL takes for
+// another name of the same function. The parser gives each function one
+// name, and MySQL shows the name as written in a definition, so the test
+// shows both under that name.
+var spatialSynonym = regexp.MustCompile(`\bst_(?:(geomcollfromtxt)|(geomfrom|geomcollfrom|mpointfrom|linefrom|mlinefrom|polyfrom|mpolyfrom)(text|wkb)|as(wkt|wkb))\(`)
+
+var spatialNames = map[string]string{
+	"geomfrom":     "geometryfrom",
+	"geomcollfrom": "geometrycollectionfrom",
+	"mpointfrom":   "multipointfrom",
+	"linefrom":     "linestringfrom",
+	"mlinefrom":    "multilinestringfrom",
+	"polyfrom":     "polygonfrom",
+	"mpolyfrom":    "multipolygonfrom",
+	"wkt":          "text",
+	"wkb":          "binary",
+}
+
+func normalizeSpatialSynonyms(definition string) string {
+	return spatialSynonym.ReplaceAllStringFunc(definition, func(name string) string {
+		match := spatialSynonym.FindStringSubmatch(name)
+		switch {
+		case match[1] != "":
+			return "st_geometrycollectionfromtext("
+		case match[4] != "":
+			return "st_as" + spatialNames[match[4]] + "("
+		}
+		return "st_" + spatialNames[match[2]] + match[3] + "("
+	})
+}
+
 // mysqlServer is one of the two servers that the test compares.
 type mysqlServer struct {
 	params *mysql.ConnParams
@@ -150,8 +186,11 @@ func definitions(stmt sqlparser.Statement) []string {
 	case *sqlparser.CreateTable:
 		shows := []string{showTable(stmt.Table)}
 		if stmt.Select != nil {
-			// The rows that CREATE TABLE ... SELECT copies.
-			shows = append(shows, "checksum table "+sqlparser.String(stmt.Table))
+			// The rows that CREATE TABLE ... SELECT copies, unless they
+			// differ from one run to the next.
+			if !nondeterministicFunction.MatchString(sqlparser.String(stmt.Select)) {
+				shows = append(shows, "checksum table "+sqlparser.String(stmt.Table))
+			}
 		}
 		return shows
 	case *sqlparser.AlterTable:
@@ -253,7 +292,7 @@ func compareStatement(t *testing.T, parser *sqlparser.Parser, asWritten, formatt
 	where := fmt.Sprintf("%s:%d: %s", statement.File, statement.Line, sql)
 	formattedSQL := sql
 	var tree sqlparser.Statement
-	if isDDL && !statement.SQLModeDependent {
+	if isDDL && !statement.UnsupportedSession {
 		parsed, err := parser.Parse(sql)
 		if err == nil {
 			tree = parsed
@@ -288,7 +327,7 @@ func compareStatement(t *testing.T, parser *sqlparser.Parser, asWritten, formatt
 		outAsWritten, errAsWritten := asWritten.query(show)
 		outFormatted, errFormatted := formatted.query(show)
 		same = assert.Equal(t, errorCode(errAsWritten), errorCode(errFormatted), "%s\n%s", where, show) && same
-		same = assert.Equal(t, outAsWritten, outFormatted, "%s\nMySQL defined the formatted statement differently:\n%s", where, formattedSQL) && same
+		same = assert.Equal(t, normalizeSpatialSynonyms(outAsWritten), normalizeSpatialSynonyms(outFormatted), "%s\nMySQL defined the formatted statement differently:\n%s", where, formattedSQL) && same
 	}
 	return same
 }

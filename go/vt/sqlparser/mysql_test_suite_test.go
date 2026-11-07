@@ -72,7 +72,7 @@ func TestMySQLTestSuiteDDL(t *testing.T) {
 		}
 		for _, piece := range pieces {
 			statement.SQL = piece
-			if statement.SQLModeDependent || !mysqltest.IsDDL(statement.SQL) {
+			if statement.UnsupportedSession || !mysqltest.IsDDL(statement.SQL) {
 				continue
 			}
 			checked++

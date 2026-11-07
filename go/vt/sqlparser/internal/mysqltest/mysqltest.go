@@ -84,11 +84,12 @@ type Statement struct {
 	// ExpectedErrors is the argument of the `--error` command that precedes
 	// the statement, or empty when MySQL is expected to accept it.
 	ExpectedErrors string
-	// SQLModeDependent is set when the file enabled an sql_mode that changes
-	// how MySQL reads SQL text, such as ANSI_QUOTES or PIPES_AS_CONCAT, before
-	// the statement. VTGate rejects these modes, because the parser does not
-	// read SQL text under them, so such a statement cannot be judged.
-	SQLModeDependent bool
+	// UnsupportedSession is set when the file enabled an sql_mode or a
+	// connection character set that VTGate rejects before the statement.
+	// Such an sql_mode, as ANSI_QUOTES or PIPES_AS_CONCAT, changes how MySQL
+	// reads SQL text, and the parser does not read SQL text in such a
+	// character set, as gb18030 or utf16, so the statement cannot be judged.
+	UnsupportedSession bool
 }
 
 // testCommand matches the mysqltest commands that can be written
@@ -100,10 +101,18 @@ var testCommand = regexp.MustCompile(`(?i)^\s*(let|eval|connect|connection|disco
 // they change how MySQL reads SQL text. ANSI stands for several of them.
 var unsupportedSQLMode = regexp.MustCompile(`ANSI|NO_BACKSLASH_ESCAPES|PIPES_AS_CONCAT|REAL_AS_FLOAT|IGNORE_SPACE|HIGH_NOT_PRECEDENCE`)
 
+// unsupportedCharset matches the connection character sets that VTGate
+// rejects, because a byte of a multibyte character in them can be an ASCII
+// character, such as a quote, which the parser would read as one.
+var unsupportedCharset = regexp.MustCompile(`(?i)^(sjis|cp932|gb18030|gbk|big5|ucs2|utf16|utf16le|utf32)$`)
+
 var (
 	errorCommand     = regexp.MustCompile(`(?i)^--\s*error\s+(.*)$`)
 	delimiterCommand = regexp.MustCompile(`(?i)^(?:--\s*)?delimiter\s+(\S+)\s*$`)
 	sqlModeCommand   = regexp.MustCompile(`(?i)^set\s+(?:@@)?(?:session\s+|global\s+|local\s+)?(?:@@)?(?:session\.|global\.|local\.)?sql_mode\s*=\s*(.*)$`)
+	// charsetCommand matches the statements and the mysqltest command that
+	// set the character set of the connection, and captures it.
+	charsetCommand = regexp.MustCompile(`(?is)^(?:--\s*)?(?:set\s+(?:names|character\s+set|charset)\s+|set\s+(?:@@)?(?:session\s+|local\s+)?(?:@@)?(?:session\.|local\.)?character_set_client\s*=\s*|character_set\s+)['"]?(\w+)`)
 )
 
 // reader splits a mysqltest file into its SQL statements, the way
@@ -117,10 +126,13 @@ type reader struct {
 	delimiter  string
 	// quote is the quote character of the string that is open at the end of
 	// the buffer, or zero when no string is open.
-	quote            byte
-	firstLine        int
-	expectedErrors   string
-	sqlModeDependent bool
+	quote          byte
+	firstLine      int
+	expectedErrors string
+	// unsupportedSQLMode and unsupportedCharset are set while the file has
+	// enabled an sql_mode or a connection character set that VTGate rejects.
+	unsupportedSQLMode bool
+	unsupportedCharset bool
 }
 
 // ReadFile returns the SQL statements of a mysqltest file. It drops
@@ -177,6 +189,7 @@ func (reader *reader) readCommand(line string) bool {
 		return true
 	}
 	if strings.HasPrefix(trimmed, "--") {
+		reader.trackCharset(trimmed)
 		if match := errorCommand.FindStringSubmatch(trimmed); match != nil {
 			reader.expectedErrors = match[1]
 		}
@@ -220,20 +233,29 @@ func (reader *reader) endStatement() {
 	reader.quote = 0
 	expectedErrors := reader.expectedErrors
 	reader.expectedErrors = ""
+	reader.trackCharset(sql)
 	if sql == "" || testCommand.MatchString(sql) || strings.Contains(sql, "$") {
 		return
 	}
 	if match := sqlModeCommand.FindStringSubmatch(sql); match != nil {
 		mode := strings.ToUpper(match[1])
-		reader.sqlModeDependent = unsupportedSQLMode.MatchString(mode)
+		reader.unsupportedSQLMode = unsupportedSQLMode.MatchString(mode)
 	}
 	reader.statements = append(reader.statements, Statement{
-		File:             reader.name,
-		Line:             reader.firstLine,
-		SQL:              sql,
-		ExpectedErrors:   expectedErrors,
-		SQLModeDependent: reader.sqlModeDependent,
+		File:               reader.name,
+		Line:               reader.firstLine,
+		SQL:                sql,
+		ExpectedErrors:     expectedErrors,
+		UnsupportedSession: reader.unsupportedSQLMode || reader.unsupportedCharset,
 	})
+}
+
+// trackCharset follows a statement or a mysqltest command that sets the
+// character set of the connection.
+func (reader *reader) trackCharset(sql string) {
+	if match := charsetCommand.FindStringSubmatch(sql); match != nil {
+		reader.unsupportedCharset = unsupportedCharset.MatchString(match[1])
+	}
 }
 
 // ddlStatement matches the statements whose syntax Vitess must parse in
