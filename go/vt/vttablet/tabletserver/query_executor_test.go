@@ -3909,3 +3909,26 @@ func TestPlanKeepsConnOnTimeout(t *testing.T) {
 	}
 	assert.False(t, qre.keepsConnOnTimeout(), "DML with a mutating lock function must lose the connection on a query timeout")
 }
+
+// TestExecAsTransactionCommitRejected verifies that the COMMIT of a statement
+// run in its own transaction is rejected after the shutdown grace period.
+func TestExecAsTransactionCommitRejected(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("update test_table set a = 1 limit 10001", &sqltypes.Result{RowsAffected: 1})
+
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+
+	tsv.te.SetClusterAction(ClusterActionInProgress)
+	tsv.te.SetClusterAction(ClusterActionNoQueries)
+	db.ResetQueryLog()
+
+	qre := newTestQueryExecutor(ctx, tsv, "update test_table set a=1", 0)
+	_, err := qre.Execute()
+	require.ErrorContains(t, err, vterrors.ShuttingDown)
+
+	require.NotContains(t, strings.Split(db.QueryLog(), ";"), "commit")
+}
