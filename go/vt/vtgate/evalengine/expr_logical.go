@@ -654,6 +654,18 @@ func (c *CaseExpr) constant() bool {
 	return true
 }
 
+func (c *CaseExpr) constForExecution() bool {
+	if c.Else != nil && !c.Else.constForExecution() {
+		return false
+	}
+	for _, then := range c.cases {
+		if !then.when.constForExecution() || !then.then.constForExecution() {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *CaseExpr) simplify(env *ExpressionEnv) error {
 	var err error
 	for i := range c.cases {
