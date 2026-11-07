@@ -106,7 +106,13 @@ func TestPrepareEmergencyReparent(t *testing.T) {
 		resultCh <- prepareResult{response: response, err: err}
 	}()
 
-	// The wait can only finish once the SQL thread applies the journal row.
+	// Start the SQL thread only once the RPC is waiting, so the journal row can't
+	// be applied before the wait begins. The wait can only finish once it is.
+	require.Eventually(t, func() bool {
+		qr := utils.RunSQL(t.Context(), t, "SELECT COUNT(*) FROM information_schema.processlist WHERE info LIKE 'SELECT WAIT_FOR_EXECUTED_GTID_SET(%'", replica)
+		waiting, err := qr.Rows[0][0].ToInt64()
+		return err == nil && waiting > 0
+	}, 30*time.Second, 100*time.Millisecond)
 	_, err = replicaMySQLConn.ExecuteFetch(replicaMySQLConn.StartSQLThreadCommand(), 0, false)
 	require.NoError(t, err)
 
