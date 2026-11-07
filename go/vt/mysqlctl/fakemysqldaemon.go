@@ -225,6 +225,12 @@ type FakeMysqlDaemon struct {
 	SemiSyncPrimaryEnabled bool
 	// SemiSyncReplicaEnabled represents the state of rpl_semi_sync_replica_enabled.
 	SemiSyncReplicaEnabled bool
+	// RestartReplicationReceiverError is used by RestartReplicationReceiver.
+	RestartReplicationReceiverError error
+
+	// SetSemiSyncEnabledFunc, if set, is called by SetSemiSyncEnabled, which
+	// returns its error without changing the settings.
+	SetSemiSyncEnabledFunc func(primary, replica bool) error
 
 	// GlobalReadLock is used to test if a lock has been acquired already or not
 	GlobalReadLock bool
@@ -573,6 +579,17 @@ func (fmd *FakeMysqlDaemon) StopIOThread(ctx context.Context) error {
 	})
 }
 
+// RestartReplicationReceiver is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) RestartReplicationReceiver(ctx context.Context, hookExtraEnv map[string]string) error {
+	if fmd.RestartReplicationReceiverError != nil {
+		return fmd.RestartReplicationReceiverError
+	}
+	return fmd.ExecuteSuperQueryList(ctx, []string{
+		"STOP REPLICA IO_THREAD",
+		"START REPLICA IO_THREAD",
+	})
+}
+
 // SetReplicationPosition is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetReplicationPosition(ctx context.Context, pos replication.Position) error {
 	if !reflect.DeepEqual(fmd.SetReplicationPositionPos, pos) {
@@ -653,6 +670,20 @@ func (fmd *FakeMysqlDaemon) Promote(ctx context.Context, hookExtraEnv map[string
 // ExecuteSuperQuery is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) ExecuteSuperQuery(ctx context.Context, query string) error {
 	return fmd.ExecuteSuperQueryList(ctx, []string{query})
+}
+
+// ExecuteSuperQueryListMulti is part of the MysqlDaemon interface. There is no
+// connection here to allow a batch on, so an entry holding several statements is
+// checked against the expected list as it was written.
+func (fmd *FakeMysqlDaemon) ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error {
+	return fmd.ExecuteSuperQueryList(ctx, queryList)
+}
+
+// ExecuteSuperQueryListTainted is part of the MysqlDaemon interface. The fake
+// has no pool to protect, so it shares the expectations of
+// ExecuteSuperQueryList.
+func (fmd *FakeMysqlDaemon) ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error {
+	return fmd.ExecuteSuperQueryList(ctx, queryList)
 }
 
 // ExecuteSuperQueryList is part of the MysqlDaemon interface
@@ -820,6 +851,11 @@ func (fmd *FakeMysqlDaemon) GetFilteredConnection(ctx context.Context) (*dbconnp
 
 // SetSemiSyncEnabled is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
+	if fmd.SetSemiSyncEnabledFunc != nil {
+		if err := fmd.SetSemiSyncEnabledFunc(primary, replica); err != nil {
+			return err
+		}
+	}
 	fmd.SemiSyncPrimaryEnabled = primary
 	fmd.SemiSyncReplicaEnabled = replica
 	return nil

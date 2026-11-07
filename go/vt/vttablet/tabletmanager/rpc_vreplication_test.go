@@ -850,7 +850,7 @@ func TestGetOptionSetString(t *testing.T) {
 				"password": "secret",
 				"user":     "admin",
 			},
-			want: ", options = json_set(options, '$.config', json_object(), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
+			want: ", options = json_set(json_insert(options, '$.config', json_object()), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
 		},
 		{
 			name: "valid params, deleting two",
@@ -860,15 +860,31 @@ func TestGetOptionSetString(t *testing.T) {
 				"port":     "",
 				"host":     "",
 			},
-			want: ", options = json_set(json_remove(options, '$.config.\"host\"', '$.config.\"port\"'), '$.config', json_object(), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
+			want: ", options = json_set(json_insert(json_remove(options, '$.config.\"host\"', '$.config.\"port\"'), '$.config', json_object()), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
 		},
-		// Additional tests for handling escaping errors or complex scenarios can be added here
+		{
+			name: "keys and values that need escaping",
+			config: map[string]string{
+				`quote"and\backslash`: `it's a 'value' with \ and )`,
+				`it's`:                "",
+			},
+			want: `, options = json_set(json_insert(json_remove(options, '$.config."it\'s"'), '$.config', json_object()), '$.config."quote\\"and\\\\backslash"', 'it\'s a \'value\' with \\ and )')`,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getOptionSetString(tt.config)
 			require.Equal(t, tt.want, got)
+			if got == "" {
+				return
+			}
+			// The vreplication engine parses and re-renders the statement before
+			// running it, so the clause must survive that unchanged.
+			query := "update _vt.vreplication set state = 'Running'" + got + " where id = 1"
+			stmt, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+			require.Equal(t, query, sqlparser.String(stmt))
 		})
 	}
 }
@@ -1064,7 +1080,7 @@ func TestUpdateVReplicationWorkflow(t *testing.T) {
 					"password": "secret",
 				},
 			},
-			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', message = '', options = json_set(options, '$.config', json_object(), '$.config."password"', 'secret', '$.config."user"', 'admin') where id in (%d)`,
+			query: fmt.Sprintf(`update _vt.vreplication set state = 'Running', source = 'keyspace:"%s" shard:"%s" filter:{rules:{match:"corder" filter:"select * from corder"} rules:{match:"customer" filter:"select * from customer"}}', cell = '%s', tablet_types = '', message = '', options = json_set(json_insert(options, '$.config', json_object()), '$.config."password"', 'secret', '$.config."user"', 'admin') where id in (%d)`,
 				keyspace, shard, "zone2", vreplID),
 		},
 		{
@@ -1859,7 +1875,7 @@ func addInvariants(dbClient *binlogplayer.MockDBClient, vreplID, sourceTabletUID
 		"0",
 	))
 	dbClient.AddInvariant(fmt.Sprintf(updatePickedSourceTablet, cell, sourceTabletUID, vreplID), &sqltypes.Result{})
-	dbClient.AddInvariant("update _vt.vreplication set state='Running', message=left('', 1000) where id=1", &sqltypes.Result{})
+	dbClient.AddInvariant(fmt.Sprintf("update _vt.vreplication set state='Running', message=left('', 1000) where id=%d", vreplID), &sqltypes.Result{})
 	dbClient.AddInvariant(vreplication.SqlMaxAllowedPacket, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"max_allowed_packet",

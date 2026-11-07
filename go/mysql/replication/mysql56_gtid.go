@@ -18,7 +18,6 @@ package replication
 
 import (
 	"encoding/hex"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -61,20 +60,30 @@ func parseMysql56GTID(s string) (GTID, error) {
 // SID is the 16-byte unique ID of a MySQL 5.6 server.
 type SID [16]byte
 
+// sidStringLen is the length of an SID in the form used by MySQL 5.6.
+const sidStringLen = 36
+
 // String prints an SID in the form used by MySQL 5.6.
 func (sid SID) String() string {
-	dst := []byte("xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-	hex.Encode(dst, sid[:4])
-	hex.Encode(dst[9:], sid[4:6])
-	hex.Encode(dst[14:], sid[6:8])
-	hex.Encode(dst[19:], sid[8:10])
-	hex.Encode(dst[24:], sid[10:16])
-	return string(dst)
+	var buf [sidStringLen]byte
+	return string(sid.appendTo(buf[:0]))
+}
+
+// appendTo appends the SID to dst in the form used by MySQL 5.6.
+func (sid SID) appendTo(dst []byte) []byte {
+	n := len(dst)
+	dst = append(dst, "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"...)
+	hex.Encode(dst[n:], sid[:4])
+	hex.Encode(dst[n+9:], sid[4:6])
+	hex.Encode(dst[n+14:], sid[6:8])
+	hex.Encode(dst[n+19:], sid[8:10])
+	hex.Encode(dst[n+24:], sid[10:16])
+	return dst
 }
 
 // ParseSID parses an SID in the form used by MySQL 5.6.
 func ParseSID(s string) (sid SID, err error) {
-	if len(s) != 36 || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
+	if len(s) != sidStringLen || s[8] != '-' || s[13] != '-' || s[18] != '-' || s[23] != '-' {
 		return sid, vterrors.Errorf(vtrpc.Code_INTERNAL, "invalid MySQL 5.6 SID %q", s)
 	}
 
@@ -102,7 +111,12 @@ type Mysql56GTID struct {
 
 // String implements GTID.String().
 func (gtid Mysql56GTID) String() string {
-	return fmt.Sprintf("%s:%d", gtid.Server, gtid.Sequence)
+	// An SID, a colon and up to 20 characters of int64.
+	var buf [sidStringLen + 1 + 20]byte
+	b := gtid.Server.appendTo(buf[:0])
+	b = append(b, ':')
+	b = strconv.AppendInt(b, gtid.Sequence, 10)
+	return string(b)
 }
 
 // Flavor implements GTID.Flavor().

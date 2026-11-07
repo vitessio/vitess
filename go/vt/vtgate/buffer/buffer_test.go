@@ -701,6 +701,30 @@ func testShutdown1(t *testing.T, fail failover) {
 	require.NoError(t, waitForPoolSlots(b, cfg.Size))
 }
 
+// TestCreateBufferAfterConcurrentCreateKeepsStats tests that a request which
+// did not find the buffer for a shard, because a concurrent request created it
+// only afterwards, does not create a second buffer. Creating a buffer resets
+// the stats of the shard, which would drop what the first request counted.
+func TestCreateBufferAfterConcurrentCreateKeepsStats(t *testing.T) {
+	statsKeyJoinedDisabled := statsKeyJoined + "." + skippedDisabled
+
+	// Buffering is disabled, so the request is counted as skipped.
+	b := New(NewDefaultConfig())
+	t.Cleanup(b.Shutdown)
+	retryDone, err := b.WaitForFailoverEnd(t.Context(), keyspace, shard, nil, nil)
+	require.NoError(t, err)
+	require.Nil(t, retryDone)
+	require.EqualValues(t, 1, requestsSkipped.Counts()[statsKeyJoinedDisabled])
+	sb := b.getOrCreateBuffer(keyspace, shard)
+	require.NotNil(t, sb)
+
+	// The second request did not find the buffer in getOrCreateBuffer() and
+	// creates it now.
+	assert.Same(t, sb, b.createBuffer(keyspace, shard))
+	assert.EqualValues(t, 1, requestsSkipped.Counts()[statsKeyJoinedDisabled],
+		"stats were reset by creating a second buffer")
+}
+
 func TestShutdown_WaitForFailoverEndAfterShutdownIsNoop(t *testing.T) {
 	cfg := NewDefaultConfig()
 	cfg.Enabled = true

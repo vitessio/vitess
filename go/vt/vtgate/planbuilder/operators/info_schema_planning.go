@@ -99,9 +99,16 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 			}
 		}
 		isr.SysTableTableSchema = append(isr.SysTableTableSchema, out)
-	} else {
-		isr.SysTableTableName[bvName] = out
+		return isr
 	}
+	if existing, ok := isr.SysTableTableName[bvName]; ok && !sqlparser.Equals.Expr(existing, out) {
+		// Another value already owns this column's bind variable: stay a filter.
+		if cmp, ok := expr.(*sqlparser.ComparisonExpr); ok {
+			cmp.Right = out
+		}
+		return isr
+	}
+	isr.SysTableTableName[bvName] = out
 	return isr
 }
 
@@ -133,7 +140,70 @@ func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
 
 func extractInfoSchemaRoutingPredicate(ctx *plancontext.PlanningContext, in sqlparser.Expr) (bool, string, sqlparser.Expr) {
 	cmp, ok := in.(*sqlparser.ComparisonExpr)
-	if !ok || cmp.Operator != sqlparser.EqualOp {
+	if !ok {
+		return false, "", nil
+	}
+	switch cmp.Operator {
+	case sqlparser.EqualOp:
+	case sqlparser.InOp:
+		// Guard before mutating: an IN on a non-routable column stays as written.
+		col, isSchema, isTable := IsTableSchemaOrName(cmp.Left, ctx.VSchema.Environment().MySQLVersion())
+		if col == nil || (!isSchema && !isTable) {
+			return false, "", nil
+		}
+		translates := func(e sqlparser.Expr) bool {
+			_, err := evalengine.Translate(e, &evalengine.Config{
+				Collation:     collations.SystemCollation.Collation,
+				ResolveColumn: NotImplementedSchemaInfoResolver,
+				Environment:   ctx.VSchema.Environment(),
+			})
+			return err == nil
+		}
+		switch rhs := cmp.Right.(type) {
+		case sqlparser.ValTuple:
+			if len(rhs) == 1 {
+				// A one-element IN is an equality (mirrors ShardedRouting.planInOp).
+				if !shouldRewrite(rhs[0]) || !translates(rhs[0]) {
+					return false, "", nil
+				}
+				cmp.Operator = sqlparser.EqualOp
+				cmp.Right = rhs[0]
+				break
+			}
+			// Multi-element schema lists are resolved at execution. table_name
+			// lists already work as pushed-down filters. Lists containing
+			// database()/schema() stay with the tablet, like = database().
+			if !isSchema || !translates(rhs) || slices.ContainsFunc(rhs, func(e sqlparser.Expr) bool { return !shouldRewrite(e) }) {
+				return false, "", nil
+			}
+			cmp.Operator = sqlparser.EqualOp
+			cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
+			return true, sqltypes.BvSchemaName, rhs
+		case sqlparser.ListArg:
+			// The list's length is only known at execution.
+			if isSchema {
+				cmp.Operator = sqlparser.EqualOp
+				cmp.Right = sqlparser.NewTypedArgument(sqltypes.BvSchemaName, sqltypes.VarChar)
+				return true, sqltypes.BvSchemaName, rhs
+			}
+			// The normalizer shares list bindvars between identical IN tuples, so
+			// the engine writes a dedicated variable. On replay (resetRoutingLogic)
+			// recognize it and recover the client's list (#20972).
+			for original, name := range ctx.ReservedArguments {
+				if name != string(rhs) {
+					continue
+				}
+				if clientList, ok := original.(sqlparser.ListArg); ok {
+					return false, name, clientList
+				}
+			}
+			bvName := ctx.GetReservedArgumentFor(rhs)
+			cmp.Right = sqlparser.ListArg(bvName)
+			return false, bvName, rhs
+		default:
+			return false, "", nil
+		}
+	default:
 		return false, "", nil
 	}
 

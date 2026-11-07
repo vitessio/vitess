@@ -216,7 +216,7 @@ func (tpc *TwoPC) SaveRedo(ctx context.Context, conn *StatefulConnection, dtid s
 	if err != nil {
 		return err
 	}
-	_, err = conn.Exec(ctx, q, 1, false)
+	_, err = conn.Exec(ctx, q, 1, false, false /* keepConnOnTimeout */)
 	return err
 }
 
@@ -337,7 +337,7 @@ func (tpc *TwoPC) CreateTransaction(ctx context.Context, conn *StatefulConnectio
 	if err != nil {
 		return err
 	}
-	_, err = conn.Exec(ctx, q, 1, false)
+	_, err = conn.Exec(ctx, q, 1, false, false /* keepConnOnTimeout */)
 	return err
 }
 
@@ -514,7 +514,7 @@ func (tpc *TwoPC) exec(ctx context.Context, conn *StatefulConnection, pq *sqlpar
 	if err != nil {
 		return nil, err
 	}
-	return conn.Exec(ctx, q, 1, false)
+	return conn.Exec(ctx, q, 1, false, false /* keepConnOnTimeout */)
 }
 
 func (tpc *TwoPC) read(ctx context.Context, conn *connpool.Conn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

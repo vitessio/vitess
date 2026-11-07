@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/crane"
-	gocr "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/hashicorp/go-version"
 	"github.com/spf13/cobra"
 )
@@ -40,10 +39,12 @@ import (
 const (
 	goDevAPI = "https://go.dev/dl/?mode=json"
 
-	// dockerPlatformOS is the target OS for the Go base image.
-	dockerPlatformOS = "linux"
+	// golangImageRepository is the Docker Hub repository of the official Go images.
+	golangImageRepository = "golang"
 
-	// dockerPlatformArch is the target architecture for the Go base image.
+	// dockerPlatformOS and dockerPlatformArch identify the only explicit --platform
+	// the Go image rewrite recognizes in FROM lines.
+	dockerPlatformOS   = "linux"
 	dockerPlatformArch = "amd64"
 
 	// regexpFindBootstrapVersion greps the current bootstrap version from the Makefile. The bootstrap
@@ -59,11 +60,9 @@ const (
 	// Example going from go1.20 to go1.20: `go 1.20` -> `go 1.21`
 	regexpReplaceGoModGoVersion = `go[[:space:]]([0-9.]+)\.([0-9.]+)`
 
-	// The regular expressions below match the entire bootstrap_version declaration in Dockerfiles and Makefile
-	// A bootstrap version declaration is usually: 'ARG bootstrap_version = 18' in Dockerfile, and
-	// 'BOOTSTRAP_VERSION=18' in the Makefile. Note that the value 18 can also be a float.
-	regexpReplaceDockerfileBootstrapVersion = "ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+"
-	regexpReplaceMakefileBootstrapVersion   = "BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+"
+	// The regular expression below matches the entire bootstrap_version declaration in the Makefile:
+	// 'BOOTSTRAP_VERSION=18'. Note that the value 18 can also be a float.
+	regexpReplaceMakefileBootstrapVersion = "BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+"
 
 	// The regular expression below matches the bootstrap_version we are using in the test.go file.
 	// In test.go, there is a flag named 'bootstrap-version' that has a default value. We are looking
@@ -373,7 +372,7 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 	}
 
 	explore := []string{
-		"./docker/bootstrap/Dockerfile.common",
+		"./docker/bootstrap/Dockerfile",
 		"./docker/lite/Dockerfile",
 		"./docker/lite/Dockerfile.mysql80",
 		"./docker/lite/Dockerfile.mysql84",
@@ -474,7 +473,7 @@ func replaceGolangImageReferences(content string, goVersion *version.Version) (s
 			continue
 		}
 
-		digest, err := resolveGolangImageDigest(goVersion, distro)
+		digest, err := resolveGolangImageDigest(golangImageRepository, goVersion, distro)
 		if err != nil {
 			return "", err
 		}
@@ -512,10 +511,15 @@ func replaceGolangImageReferences(content string, goVersion *version.Version) (s
 }
 
 // resolveGolangImageDigest resolves the pinned digest for the given Go version and distro.
-func resolveGolangImageDigest(goVersion *version.Version, distro string) (string, error) {
-	ref := "golang:" + golangDockerTag(goVersion, distro)
+//
+// The digest is the one the tag itself points to, which for the official Go images is a
+// multi-platform index. Pinning the index keeps the Dockerfiles buildable on every
+// architecture, whereas pinning a single platform's manifest would break native builds
+// on the others.
+func resolveGolangImageDigest(repository string, goVersion *version.Version, distro string) (string, error) {
+	ref := repository + ":" + golangDockerTag(goVersion, distro)
 
-	digest, err := crane.Digest(ref, crane.WithPlatform(&gocr.Platform{OS: dockerPlatformOS, Architecture: dockerPlatformArch}))
+	digest, err := crane.Digest(ref)
 	if err != nil {
 		return "", fmt.Errorf("resolve golang digest for %s: %w", ref, err)
 	}
@@ -532,28 +536,13 @@ func updateBootstrapVersionInCodebase(old, new string, newGoVersion *version.Ver
 	if old == new {
 		return nil
 	}
-	files, err := getListOfFilesInPaths([]string{
+	err := replaceInFile(
+		[]*regexp.Regexp{regexp.MustCompile(regexpReplaceMakefileBootstrapVersion)},
+		[]string{"BOOTSTRAP_VERSION=" + new},
 		"./Makefile",
-	})
+	)
 	if err != nil {
 		return err
-	}
-
-	for _, file := range files {
-		err = replaceInFile(
-			[]*regexp.Regexp{
-				regexp.MustCompile(regexpReplaceDockerfileBootstrapVersion), // Dockerfile
-				regexp.MustCompile(regexpReplaceMakefileBootstrapVersion),   // Makefile
-			},
-			[]string{
-				"ARG bootstrap_version=" + new, // Dockerfile
-				"BOOTSTRAP_VERSION=" + new,     // Makefile
-			},
-			file,
-		)
-		if err != nil {
-			return err
-		}
 	}
 
 	err = replaceInFile(

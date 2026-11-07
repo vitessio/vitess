@@ -18,9 +18,12 @@ package semisyncmonitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -31,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -54,9 +58,15 @@ func createFakeDBAndMonitor(t *testing.T) (*fakesqldb.DB, *Monitor) {
 		},
 	}
 	monitor := NewMonitor(config, exporter)
+	// The exporter hands the same counter to every monitor it creates, so
+	// tests that look at it need to start from a clean slate.
+	monitor.errorCount.Reset()
 	monitor.mu.Lock()
 	defer monitor.mu.Unlock()
 	monitor.isOpen = true
+	// The pool is opened on the connector the monitor uses in production, which
+	// does not negotiate multi statement support, so a monitor that started
+	// batching again would fail these tests.
 	monitor.appPool.Open(config.DB.AppWithDB())
 	return db, monitor
 }
@@ -431,13 +441,35 @@ func TestMonitorClearAllData(t *testing.T) {
 		waitUntilWritingStopped(t, m)
 	}()
 	db.SetNeverFail(true)
-	// ExecuteFetchMulti will execute each statement separately, so we need to add both queries.
 	db.AddQuery("SET SESSION lock_wait_timeout=5", &sqltypes.Result{})
 	db.AddQuery("truncate table _vt.semisync_heartbeat", &sqltypes.Result{})
 	m.clearAllData()
-	ql := db.QueryLog()
-	require.Contains(t, ql, "set session lock_wait_timeout=5")
-	require.Contains(t, ql, "truncate table _vt.semisync_heartbeat")
+	// The lock wait timeout is set before, and as a statement of its own, the
+	// TRUNCATE it is meant to bound. A batch would be counted under the joined
+	// query instead.
+	require.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout=5"))
+	require.Equal(t, 1, db.GetQueryCalledNum("truncate table _vt.semisync_heartbeat"))
+	require.Contains(t, db.QueryLog(), "set session lock_wait_timeout=5;truncate table _vt.semisync_heartbeat")
+}
+
+// TestMonitorClearAllDataLockWaitTimeoutFails tests that the table is not
+// cleared if the lock wait timeout could not be set.
+func TestMonitorClearAllDataLockWaitTimeoutFails(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	db, m := createFakeDBAndMonitor(t)
+	defer db.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
+	db.SetNeverFail(true)
+	db.AddRejectedQuery("SET SESSION lock_wait_timeout=5", errors.New("session is gone"))
+	db.AddQuery("truncate table _vt.semisync_heartbeat", &sqltypes.Result{})
+
+	m.clearAllData()
+
+	require.NotContains(t, db.QueryLog(), "truncate table _vt.semisync_heartbeat")
+	require.EqualValues(t, 1, m.errorCount.Get())
 }
 
 // TestMonitorWaitMechanism tests that the wait mechanism works as intended.
@@ -625,7 +657,6 @@ func TestMonitorWrite(t *testing.T) {
 				waitUntilWritingStopped(t, m)
 			}()
 			db.SetNeverFail(true)
-			// ExecuteFetchMulti will execute each statement separately, so we need to add both queries.
 			db.AddQuery("SET SESSION lock_wait_timeout=5", &sqltypes.Result{})
 			db.AddQuery("insert into _vt.semisync_heartbeat (ts) values (now())", &sqltypes.Result{})
 			m.mu.Lock()
@@ -639,13 +670,43 @@ func TestMonitorWrite(t *testing.T) {
 			m.mu.Unlock()
 			queryLog := db.QueryLog()
 			if tt.shouldWrite {
-				require.Contains(t, queryLog, "set session lock_wait_timeout=5")
-				require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat (ts) values (now())")
+				// The lock wait timeout is set before, and as a statement of
+				// its own, the write it is meant to bound. A batch would be
+				// counted under the joined query instead.
+				require.Equal(t, 1, db.GetQueryCalledNum("SET SESSION lock_wait_timeout=5"))
+				require.Equal(t, 1, db.GetQueryCalledNum("insert into _vt.semisync_heartbeat (ts) values (now())"))
+				require.Contains(t, queryLog, "set session lock_wait_timeout=5;insert into _vt.semisync_heartbeat (ts) values (now())")
 			} else {
 				require.Empty(t, queryLog)
 			}
 		})
 	}
+}
+
+// TestMonitorWriteLockWaitTimeoutFails tests that no heartbeat is written if
+// the lock wait timeout could not be set, since it is what keeps the write from
+// blocking on a lock instead of on a semi-sync ACK.
+func TestMonitorWriteLockWaitTimeoutFails(t *testing.T) {
+	defer utils.EnsureNoLeaks(t)
+	db, m := createFakeDBAndMonitor(t)
+	defer db.Close()
+	defer func() {
+		m.Close()
+		waitUntilWritingStopped(t, m)
+	}()
+	db.SetNeverFail(true)
+	db.AddRejectedQuery("SET SESSION lock_wait_timeout=5", errors.New("session is gone"))
+	db.AddQuery("insert into _vt.semisync_heartbeat (ts) values (now())", &sqltypes.Result{})
+	m.setIsBlocked(true)
+
+	m.write()
+
+	require.NotContains(t, db.QueryLog(), "insert into _vt.semisync_heartbeat (ts) values (now())")
+	require.EqualValues(t, 1, m.errorCount.Get())
+	// A write that never ran says nothing about being blocked on semi-sync.
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	require.True(t, m.isBlocked)
 }
 
 // TestMonitorWriteBlocked tests the write function when the writes are blocked.
@@ -665,7 +726,7 @@ func TestMonitorWriteBlocked(t *testing.T) {
 	require.Equal(t, 0, m.inProgressWriteCount)
 	m.mu.Unlock()
 
-	// ExecuteFetchMulti will execute each statement separately, so we need to add SET query and INSERT query.
+	// The monitor sends the SET and the INSERT as separate statements.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
 	// Block the INSERT so we have a deterministic window in which write() is in
@@ -752,15 +813,21 @@ func TestIsWriting(t *testing.T) {
 }
 
 func TestStartWrites(t *testing.T) {
-	defer utils.EnsureNoLeaks(t)
+	// Cleanups run in reverse order of registration, so the leak check runs
+	// after the monitor and the fake DB are closed.
+	t.Cleanup(func() { utils.EnsureNoLeaks(t) })
 	db, m := createFakeDBAndMonitor(t)
 	m.actionDelay = 10 * time.Millisecond
 	m.actionTimeout = 1 * time.Second
-	defer db.Close()
-	defer func() {
+	t.Cleanup(db.Close)
+	t.Cleanup(func() {
 		m.Close()
-		waitUntilWritingStopped(t, m)
-	}()
+		// waitUntilWritingStopped waits on t.Context(), which is already
+		// canceled by the time cleanups run.
+		require.Eventually(t, func() bool {
+			return !m.isWriting.Load()
+		}, 30*time.Second, 10*time.Millisecond, "writing did not stop")
+	})
 
 	// Set up semi-sync stats query to return blocked state (waiting sessions > 0, no progress).
 	// This is what isSemiSyncBlocked will check inside startWrites.
@@ -769,7 +836,7 @@ func TestStartWrites(t *testing.T) {
 		"Rpl_semi_sync_source_wait_sessions|2",
 		"Rpl_semi_sync_source_yes_tx|100"))
 
-	// ExecuteFetchMulti will execute each statement separately.
+	// The monitor sends the SET and the INSERT as separate statements.
 	// Use patterns for both SET and INSERT since they can be called multiple times.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
@@ -778,32 +845,62 @@ func TestStartWrites(t *testing.T) {
 	m.startWrites()
 	require.Empty(t, db.QueryLog())
 
+	// Block the INSERT so that the writes stay in progress until the test has
+	// seen them. Otherwise the first write can succeed, unblock the monitor and
+	// finish before the assertion below ever observes inProgressWriteCount > 0.
+	// The release is registered after the teardown above, so it runs first and
+	// a failing assertion cannot leave a write stuck inside BeforeFunc.
+	unblock := make(chan struct{})
+	var unblockOnce sync.Once
+	release := func() { unblockOnce.Do(func() { close(unblock) }) }
+	t.Cleanup(release)
+	db.SetBeforeFunc("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", func() {
+		<-unblock
+	})
+
 	// Now we set the monitor to be blocked.
 	m.setIsBlocked(true)
 
-	// Start writes and wait for them to complete.
-	m.startWrites()
+	// startWrites keeps going for as long as the monitor is blocked, so it runs
+	// in the background.
+	startWritesDone := make(chan struct{})
+	go func() {
+		defer close(startWritesDone)
+		m.startWrites()
+	}()
 
 	// Check that some writes are in progress.
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount > 0
-	}, 2*time.Second, 5*time.Microsecond)
+	}, 30*time.Second, time.Millisecond)
 
-	// Verify the query log shows the writes were executed.
-	queryLog := db.QueryLog()
-	require.Contains(t, queryLog, "insert into _vt.semisync_heartbeat")
+	// A write is counted before it reaches the server, so wait for the INSERT
+	// to show up in the query log. It is held there until release.
+	require.Eventually(t, func() bool {
+		return strings.Contains(db.QueryLog(), "insert into _vt.semisync_heartbeat")
+	}, 30*time.Second, time.Millisecond)
 
-	// Make the monitor unblocked. This should stop the writes.
+	// Make the monitor unblocked. This should stop the writes, even though the
+	// ones already sent have not come back yet.
 	m.setIsBlocked(false)
+	require.Eventually(t, func() bool {
+		select {
+		case <-startWritesDone:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond, "startWrites did not stop after the monitor was unblocked")
 
-	// Check that no writes are in progress anymore.
+	// Let the writes in flight finish, and check that none are left.
+	release()
 	require.Eventually(t, func() bool {
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		return m.inProgressWriteCount == 0
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 30*time.Second, 10*time.Millisecond)
 }
 
 func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
@@ -824,7 +921,7 @@ func TestCheckAndFixSemiSyncBlocked(t *testing.T) {
 		"Rpl_semi_sync_source_wait_sessions|0",
 		"Rpl_semi_sync_source_yes_tx|10"))
 
-	// ExecuteFetchMulti will execute each statement separately.
+	// The monitor sends the SET and the INSERT as separate statements.
 	// Use patterns for both SET and INSERT since they can be called multiple times.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
@@ -936,7 +1033,7 @@ func TestWaitUntilSemiSyncUnblocked(t *testing.T) {
 	handler.semisyncBlocked.Store(false) // Initially unblocked
 	db.Handler = handler
 
-	// ExecuteFetchMulti will execute each statement separately
+	// The monitor sends the SET and the INSERT as separate statements.
 	// Use patterns for both SET and INSERT since they can be called multiple times
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})
@@ -1071,6 +1168,205 @@ func TestDeadlockOnClose(t *testing.T) {
 	}
 }
 
+// TestCloseInterruptsStalledQuery checks that Close returns while a timer
+// callback's query gets no answer: callers close the monitor while holding the
+// tablet's action lock.
+func TestCloseInterruptsStalledQuery(t *testing.T) {
+	db := fakesqldb.New(t)
+	release := make(chan struct{})
+	t.Cleanup(func() {
+		close(release)
+		db.Close()
+	})
+	params := db.ConnParams()
+	cp := *params
+	m := NewMonitor(&tabletenv.TabletConfig{
+		DB:              dbconfigs.NewTestDBConfigs(cp, cp, ""),
+		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{Interval: time.Hour},
+	}, exporter)
+	query := fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds())
+	db.AddQuery(query, &sqltypes.Result{})
+	entered := make(chan struct{})
+	db.SetBeforeFunc(query, func() {
+		close(entered)
+		<-release
+	})
+
+	m.errorCount.Reset()
+
+	m.Open()
+	m.ticks.Trigger()
+	select {
+	case <-entered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the monitor did not query the semi-sync stats")
+	}
+
+	requireCloseReturns(t, m)
+	require.Zero(t, m.errorCount.Get(), "an error caused by Close was counted")
+}
+
+// TestCloseInterruptsHeartbeatQueries checks that Close interrupts a heartbeat
+// INSERT waiting for a semi-sync ACK, and a stalled heartbeat cleanup, instead
+// of the pool giving up waiting for its connection.
+func TestCloseInterruptsHeartbeatQueries(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		query string
+		run   func(*Monitor)
+	}{
+		{name: "write", query: semiSyncHeartbeatWrite, run: (*Monitor).write},
+		{name: "clear", query: semiSyncHeartbeatClear, run: (*Monitor).clearAllData},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			release := make(chan struct{})
+			t.Cleanup(func() {
+				close(release)
+				db.Close()
+			})
+			previous := smartconnpool.PoolCloseTimeout
+			smartconnpool.PoolCloseTimeout = time.Hour
+			t.Cleanup(func() { smartconnpool.PoolCloseTimeout = previous })
+			params := db.ConnParams()
+			cp := *params
+			m := NewMonitor(&tabletenv.TabletConfig{
+				DB:              dbconfigs.NewTestDBConfigs(cp, cp, ""),
+				SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{Interval: time.Hour},
+			}, exporter)
+			db.AddQuery(fmt.Sprintf(setLockWaitTimeoutQuery, int(m.actionTimeout.Seconds())), &sqltypes.Result{})
+			query := m.bindSideCarDBName(tc.query)
+			db.AddQuery(query, &sqltypes.Result{})
+			entered := make(chan struct{})
+			db.SetBeforeFunc(query, func() {
+				close(entered)
+				<-release
+			})
+			m.errorCount.Reset()
+
+			m.Open()
+			done := make(chan struct{})
+			go func() {
+				tc.run(m)
+				close(done)
+			}()
+			select {
+			case <-entered:
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "the monitor did not run the heartbeat query")
+			}
+
+			requireCloseReturns(t, m)
+			select {
+			case <-done:
+			case <-time.After(30 * time.Second):
+				require.FailNow(t, "the heartbeat query did not return")
+			}
+			require.Zero(t, m.errorCount.Get(), "an error caused by Close was counted")
+		})
+	}
+}
+
+// TestProgressCheckOutlivesAcquisitionTimeout checks that a blocked check whose
+// first stats read finishes after the acquisition timeout still makes its
+// second read while the monitor is open.
+func TestProgressCheckOutlivesAcquisitionTimeout(t *testing.T) {
+	db, m := createFakeDBAndMonitor(t)
+	t.Cleanup(db.Close)
+	t.Cleanup(m.appPool.Close)
+	m.ticks.SetInterval(100 * time.Millisecond)
+	m.actionDelay = 10 * time.Millisecond
+	query := fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds())
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1", "Rpl_semi_sync_source_yes_tx|5"))
+	var first sync.Once
+	db.SetBeforeFunc(query, func() {
+		first.Do(func() { <-time.After(2 * m.ticks.Interval()) })
+	})
+
+	blocked, err := m.isSemiSyncBlocked()
+	require.NoError(t, err)
+	require.True(t, blocked)
+}
+
+// TestCloseInterruptsConnect checks that Close does not wait for a monitor
+// callback's connect to a server that never sends its greeting.
+func TestCloseInterruptsConnect(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	accepted := make(chan net.Conn, 1)
+	go func() {
+		if conn, err := listener.Accept(); err == nil {
+			accepted <- conn
+		}
+	}()
+	host, port, err := net.SplitHostPort(listener.Addr().String())
+	require.NoError(t, err)
+	portNum, err := strconv.Atoi(port)
+	require.NoError(t, err)
+	cp := mysql.ConnParams{Host: host, Port: portNum, Uname: "user"}
+	m := NewMonitor(&tabletenv.TabletConfig{
+		DB:              dbconfigs.NewTestDBConfigs(cp, cp, ""),
+		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{Interval: time.Hour},
+	}, exporter)
+
+	m.Open()
+	m.ticks.Trigger()
+	select {
+	case conn := <-accepted:
+		t.Cleanup(func() { _ = conn.Close() })
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the monitor did not connect")
+	}
+
+	requireCloseReturns(t, m)
+}
+
+// TestCloseInterruptsProgressDelay checks that Close does not wait for the
+// delay between the two semi-sync stats reads.
+func TestCloseInterruptsProgressDelay(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	params := db.ConnParams()
+	cp := *params
+	m := NewMonitor(&tabletenv.TabletConfig{
+		DB:              dbconfigs.NewTestDBConfigs(cp, cp, ""),
+		SemiSyncMonitor: tabletenv.SemiSyncMonitorConfig{Interval: time.Hour},
+	}, exporter)
+	query := fmt.Sprintf(semiSyncStatsQuery, m.actionTimeout.Milliseconds())
+	db.AddQuery(query, sqltypes.MakeTestResult(sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar"), "Rpl_semi_sync_source_wait_sessions|1", "Rpl_semi_sync_source_yes_tx|5"))
+	delaying := make(chan struct{})
+	var once sync.Once
+	beforeProgressDelay = func() { once.Do(func() { close(delaying) }) }
+	t.Cleanup(func() { beforeProgressDelay = func() {} })
+	m.errorCount.Reset()
+
+	m.Open()
+	m.ticks.Trigger()
+	select {
+	case <-delaying:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the monitor did not wait between the semi-sync stats reads")
+	}
+
+	requireCloseReturns(t, m)
+	require.Zero(t, m.errorCount.Get(), "an error caused by Close was counted")
+}
+
+func requireCloseReturns(t *testing.T, m *Monitor) {
+	t.Helper()
+	closed := make(chan struct{})
+	go func() {
+		m.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "Close waited for the monitor's callback")
+	}
+}
+
 // TestSemiSyncMonitor tests the semi-sync monitor as a black box.
 // It only calls the exported methods to see they work as intended.
 func TestSemiSyncMonitor(t *testing.T) {
@@ -1112,7 +1408,7 @@ func TestSemiSyncMonitor(t *testing.T) {
 	handler.semisyncBlocked.Store(false) // Initially unblocked
 	db.Handler = handler
 
-	// ExecuteFetchMulti will execute each statement separately
+	// The monitor sends the SET and the INSERT as separate statements.
 	// Use patterns for both SET and INSERT since they can be called multiple times.
 	db.AddQuery("SET SESSION lock_wait_timeout=1", &sqltypes.Result{})
 	db.AddQuery("INSERT INTO _vt.semisync_heartbeat (ts) VALUES (NOW())", &sqltypes.Result{})

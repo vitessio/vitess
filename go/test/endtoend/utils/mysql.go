@@ -110,6 +110,10 @@ func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) 
 		Uname:      "root",
 		DbName:     dbName,
 	}
+	// prepareMySQLWithSchema runs one statement per connection -- ExecuteFetch
+	// rejects a query that returns more than one result -- and NewMySQL splits
+	// what it is given into single statements first, so nothing here needs to
+	// be able to send a batch.
 	for _, sql := range schemaSQL {
 		err = prepareMySQLWithSchema(ctx, params, sql)
 		if err != nil {

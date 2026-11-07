@@ -34,6 +34,14 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	// ensure that the vschema and the tables have been created before running any tests
 	_ = utils.WaitForAuthoritative(t, keyspaceName, "t1", clusterInstance.VtgateProcess.ReadVSchema)
 
+	return startWithoutSchemaTracking(t)
+}
+
+// startWithoutSchemaTracking must be used by tests that run vtgate with
+// --schema-change-signal=false: with schema tracking disabled the tables
+// never become authoritative in the vschema, so waiting for that would
+// always burn the full WaitForAuthoritative timeout.
+func startWithoutSchemaTracking(t *testing.T) (utils.MySQLCompare, func()) {
 	mcmp, err := utils.NewMySQLCompare(t, vtParams, mysqlParams)
 	require.NoError(t, err)
 
@@ -531,7 +539,7 @@ func TestScalarAggregate(t *testing.T) {
 		vtParams = clusterInstance.GetVTParams(keyspaceName)
 	}()
 
-	mcmp, closer := start(t)
+	mcmp, closer := startWithoutSchemaTracking(t)
 	defer closer()
 
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
@@ -598,6 +606,23 @@ func TestComplexAggregation(t *testing.T) {
 	mcmp.Run("Average in sharded query", func(mcmp *utils.MySQLCompare) {
 		mcmp.Exec(`SELECT COUNT(t1_id)+MAX(shardkey)+AVG(t1_id) FROM t1`)
 	})
+}
+
+// TestAggregateInValueList tests an aggregate compared against an IN value
+// list, which vtgate evaluates itself over the merged shard results. The
+// comparison must keep MySQL's three-valued logic, so a list containing NULL
+// yields NULL when no other member matches.
+func TestAggregateInValueList(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'b',1), (3,'c',3), (4,'d',null)")
+
+	mcmp.AssertMatches("select count(*) in (3, 4) from aggr_test", `[[INT64(1)]]`)
+	mcmp.AssertMatches("select count(*) in (1, 2) from aggr_test", `[[INT64(0)]]`)
+	mcmp.AssertMatches("select count(val2) in (3, null) from aggr_test", `[[INT64(1)]]`)
+	mcmp.AssertMatches("select count(val2) in (1, null) from aggr_test", `[[NULL]]`)
+	mcmp.AssertMatches("select count(*) not in (1, null) from aggr_test", `[[NULL]]`)
 }
 
 func TestJoinAggregation(t *testing.T) {

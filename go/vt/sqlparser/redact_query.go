@@ -21,7 +21,7 @@ import querypb "vitess.io/vitess/go/vt/proto/query"
 // RedactSQLQuery returns a sql string with the params stripped out for display
 func (p *Parser) RedactSQLQuery(sql string) (string, error) {
 	bv := map[string]*querypb.BindVariable{}
-	sqlStripped, comments := SplitMarginComments(sql)
+	sqlStripped, comments := p.SplitMarginComments(sql)
 
 	stmt, reservedVars, err := p.Parse2(sqlStripped)
 	if err != nil {

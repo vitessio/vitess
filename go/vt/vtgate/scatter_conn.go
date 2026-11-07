@@ -158,9 +158,72 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] got mismatched number of queries and shards")}
 	}
 
-	// mu protects qr
-	var mu sync.Mutex
 	qr = new(sqltypes.Result)
+	allErrors := stc.executeMultiShard(ctx, primitive, rss, queries, session, autocommit, resultsObserver, fetchLastInsertID,
+		func(_ int, innerqr *sqltypes.Result) {
+			// Don't append more rows if row count is exceeded.
+			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
+				qr.AppendResult(innerqr)
+			}
+		},
+	)
+
+	if !ignoreMaxMemoryRows && len(qr.Rows) > maxMemoryRows {
+		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", maxMemoryRows)}
+	}
+
+	return qr, allErrors.GetErrors()
+}
+
+// ExecuteMultiShardPerShard is like ExecuteMultiShard but returns each shard's
+// result separately, aligned by index to rss, instead of merging them into one
+// result. It reuses the same concurrent fan-out, retry, transaction and session
+// machinery; the only difference is that per-shard results are preserved so the
+// caller can attribute each to its shard (used by VEXPLAIN MYSQLPLAN, which keys
+// per-shard EXPLAIN output by shard). A shard whose query errored has a nil entry.
+func (stc *ScatterConn) ExecuteMultiShardPerShard(
+	ctx context.Context,
+	primitive engine.Primitive,
+	rss []*srvtopo.ResolvedShard,
+	queries []*querypb.BoundQuery,
+	session *econtext.SafeSession,
+	autocommit bool,
+	resultsObserver econtext.ResultsObserver,
+	fetchLastInsertID bool,
+) (results []*sqltypes.Result, errs []error) {
+	if len(rss) != len(queries) {
+		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] got mismatched number of queries and shards")}
+	}
+
+	results = make([]*sqltypes.Result, len(rss))
+	allErrors := stc.executeMultiShard(ctx, primitive, rss, queries, session, autocommit, resultsObserver, fetchLastInsertID,
+		func(i int, innerqr *sqltypes.Result) {
+			results[i] = innerqr
+		},
+	)
+
+	return results, allErrors.GetErrors()
+}
+
+// executeMultiShard runs one query per shard concurrently against rss, handling
+// transactions, reserved connections and retries. For each shard whose query
+// succeeds it calls collect with the shard's index into rss and the shard's
+// result; collect is serialized across shards, so implementations do not need
+// their own locking. It is the shared core of ExecuteMultiShard (which merges the
+// per-shard results) and ExecuteMultiShardPerShard (which keeps them separate).
+func (stc *ScatterConn) executeMultiShard(
+	ctx context.Context,
+	primitive engine.Primitive,
+	rss []*srvtopo.ResolvedShard,
+	queries []*querypb.BoundQuery,
+	session *econtext.SafeSession,
+	autocommit bool,
+	resultsObserver econtext.ResultsObserver,
+	fetchLastInsertID bool,
+	collect func(i int, innerqr *sqltypes.Result),
+) *concurrency.AllErrorRecorder {
+	// mu serializes the results observer and the collect callback across shards.
+	var mu sync.Mutex
 
 	if session.InLockSession() && triggerLockHeartBeat(session) {
 		go stc.runLockQuery(ctx, session)
@@ -179,7 +242,7 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
-	allErrors := stc.multiGoTransaction(
+	return stc.multiGoTransaction(
 		ctx,
 		"Execute",
 		rss,
@@ -287,19 +350,10 @@ func (stc *ScatterConn) ExecuteMultiShard(
 				resultsObserver.Observe(innerqr)
 			}
 
-			// Don't append more rows if row count is exceeded.
-			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
-				qr.AppendResult(innerqr)
-			}
+			collect(i, innerqr)
 			return newInfo, nil
 		},
 	)
-
-	if !ignoreMaxMemoryRows && len(qr.Rows) > maxMemoryRows {
-		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", maxMemoryRows)}
-	}
-
-	return qr, allErrors.GetErrors()
 }
 
 func triggerLockHeartBeat(session *econtext.SafeSession) bool {

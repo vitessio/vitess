@@ -227,7 +227,9 @@ func BenchmarkSetVarsMultipleSets(b *testing.B) {
 
 func BenchmarkSetVarsMultipleSetsInSameStmt(b *testing.B) {
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &connParams)
+	params := connParams
+	params.EnableMultiStatements = true
+	conn, err := mysql.Connect(ctx, &params)
 	if err != nil {
 		b.Fatal(err)
 	}

@@ -757,6 +757,61 @@ func TestPlanBuilder(t *testing.T) {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 1+1, '-80')"},
 		outErr:  `unsupported: 1 + 1`,
+	}, {
+		// VDiff converts a datetime column between time zones in this form, and
+		// the plan keeps a call built from its checked parts.
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(val, '+00:00', 'America/New_York') as val from t1"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 0,
+				Field: &querypb.Field{
+					Name:    "id",
+					Type:    sqltypes.Int64,
+					Charset: collations.CollationBinaryID,
+					Flags:   uint32(querypb.MySqlFlag_NUM_FLAG),
+				},
+			}, {
+				ColNum: 1,
+				Field: &querypb.Field{
+					Name:    "val",
+					Type:    sqltypes.VarChar,
+					Charset: collations.CollationUtf8mb4ID,
+				},
+			}},
+			columnFuncExprs: map[string]*sqlparser.FuncExpr{
+				"val": sqlparser.NewFuncExpr("convert_tz", sqlparser.NewColName("val"), sqlparser.NewStrLiteral("+00:00"), sqlparser.NewStrLiteral("America/New_York")),
+			},
+			env: vtenv.NewTestEnv(),
+		},
+	}, {
+		// The copy query runs with the privileges of the filtered user, so a
+		// convert_tz in any other form could read data outside the filter.
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz((select authentication_string from mysql.user limit 1), '+00:00', '+00:00') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz((select authentication_string from mysql.`user` limit 1), '+00:00', '+00:00'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(val, load_file('/etc/passwd'), 'UTC') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz(val, load_file('/etc/passwd'), 'UTC'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(id, '+00:00', 'UTC') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz(id, '+00:00', 'UTC'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(t1.val, '+00:00', 'UTC') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz(t1.val, '+00:00', 'UTC'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
+	}, {
+		// A time zone is written into the copy query as a string literal, so it
+		// must not hold anything that needs escaping.
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(val, 'UTC'' union select 1 #', 'UTC') as val from t1"},
+		outErr:  `unsupported convert_tz: convert_tz(val, 'UTC\' union select 1 #', 'UTC'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported`,
+	}, {
+		inTable: t1,
+		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, convert_tz(val, '+00:00') as val from t1"},
+		outErr:  "unsupported convert_tz: convert_tz(val, '+00:00'); only convert_tz(<column>, '<time zone>', '<time zone>') as <column> is supported",
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.inRule.String(), func(t *testing.T) {
@@ -1008,5 +1063,137 @@ func TestFindColumn(t *testing.T) {
 			}
 			require.NotNil(t, fields)
 		})
+	}
+}
+
+// TestPlanUnreconstructibleAfterColumn confirms which emitted column, if any,
+// cannot be produced from a partial after image: only emitted columns count,
+// whatever the image omits elsewhere; keyspace_id() needs all its vindex
+// inputs; a JSON column sent as a PARTIAL_JSON diff needs the previous value.
+func TestPlanUnreconstructibleAfterColumn(t *testing.T) {
+	hash, err := vindexes.CreateVindex("hash", "hash", nil)
+	require.NoError(t, err)
+
+	// Source table columns: 0 id, 1 blb, 2 val, 3 j1, 4 j2 (two JSON columns,
+	// so j1 is JSON ordinal 0 and j2 ordinal 1 in the partial-JSON bitmap).
+	table := &Table{Name: "t", Fields: []*querypb.Field{
+		{Name: "id", Type: querypb.Type_INT32},
+		{Name: "blb", Type: querypb.Type_BLOB},
+		{Name: "val", Type: querypb.Type_VARBINARY},
+		{Name: "j1", Type: querypb.Type_JSON},
+		{Name: "j2", Type: querypb.Type_JSON},
+	}}
+	col := func(i int) ColExpr { return ColExpr{ColNum: i, Field: table.Fields[i]} }
+	ksid := func(cols ...int) ColExpr {
+		return ColExpr{Vindex: hash, VindexColumns: cols, Field: &querypb.Field{Name: "keyspace_id"}}
+	}
+	bits := func(set ...int) *mysql.Bitmap {
+		bm := mysql.NewServerBitmap(len(table.Fields))
+		for _, i := range set {
+			bm.Set(i, true)
+		}
+		return &bm
+	}
+	jsonBits := func(set ...int) *mysql.Bitmap {
+		bm := mysql.NewServerBitmap(2)
+		for _, i := range set {
+			bm.Set(i, true)
+		}
+		return &bm
+	}
+	noJSON := &mysql.Bitmap{}
+
+	blobOmitted := bits(0, 2, 3, 4) // NOBLOB left blb out
+	full := bits(0, 1, 2, 3, 4)
+
+	testCases := []struct {
+		name     string
+		colExprs []ColExpr
+		data     *mysql.Bitmap
+		json     *mysql.Bitmap
+		want     string
+	}{{
+		name:     "full image",
+		colExprs: []ColExpr{col(0), col(1), col(2), col(3)},
+		data:     full,
+		json:     noJSON,
+	}, {
+		name:     "omitted blob is not emitted",
+		colExprs: []ColExpr{col(0), col(2)},
+		data:     blobOmitted,
+		json:     noJSON,
+	}, {
+		name:     "omitted blob is emitted",
+		colExprs: []ColExpr{col(0), col(1), col(2)},
+		data:     blobOmitted,
+		json:     noJSON,
+		want:     "blb",
+	}, {
+		name:     "constant is always present",
+		colExprs: []ColExpr{col(0), {ColNum: -1, FixedValue: sqltypes.NewInt64(1), Field: &querypb.Field{Name: "1"}}},
+		data:     blobOmitted,
+		json:     noJSON,
+	}, {
+		name:     "keyspace_id over a present column",
+		colExprs: []ColExpr{col(0), ksid(0)},
+		data:     blobOmitted,
+		json:     noJSON,
+	}, {
+		name:     "keyspace_id over an omitted column",
+		colExprs: []ColExpr{col(0), ksid(0, 1)},
+		data:     blobOmitted,
+		json:     noJSON,
+		want:     "keyspace_id",
+	}, {
+		name:     "partial JSON diff on an emitted column",
+		colExprs: []ColExpr{col(0), col(4)},
+		data:     full,
+		json:     jsonBits(1), // j2 is partial
+		want:     "j2",
+	}, {
+		name:     "partial JSON diff on a column that is not emitted",
+		colExprs: []ColExpr{col(0), col(3)},
+		data:     full,
+		json:     jsonBits(1), // j2 is partial, j1 is complete
+	}}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := &Plan{Table: table, ColExprs: tc.colExprs}
+			assert.Equal(t, tc.want, plan.unreconstructibleAfterColumn(tc.data, tc.json))
+		})
+	}
+}
+
+// TestPlanMapBitmap confirms that a column presence bitmap in the source table's
+// column order is projected onto the plan's emitted columns: plain columns take
+// the bit of the source column they copy, fixed values are always present, and
+// keyspace_id() is only present when all of its vindex columns are.
+func TestPlanMapBitmap(t *testing.T) {
+	hash, err := vindexes.CreateVindex("hash", "hash", nil)
+	require.NoError(t, err)
+
+	// Source table columns: 0 id, 1 blb, 2 val, 3 txt. The BLOB and TEXT
+	// columns are omitted from the row image, as with binlog_row_image=NOBLOB.
+	source := mysql.NewServerBitmap(4)
+	source.Set(0, true)
+	source.Set(2, true)
+
+	plan := &Plan{
+		ColExprs: []ColExpr{
+			{ColNum: 2}, // val: present, reordered
+			{ColNum: 1}, // blb: omitted
+			{ColNum: 0}, // id: present
+			{ColNum: -1, FixedValue: sqltypes.NewInt64(1)}, // constant: always present
+			{Vindex: hash, VindexColumns: []int{0}},        // keyspace_id() over a present column
+			{Vindex: hash, VindexColumns: []int{1}},        // keyspace_id() over an omitted column
+			{Vindex: hash, VindexColumns: []int{0, 3}},     // keyspace_id() with one omitted column
+		},
+	}
+
+	got := plan.mapBitmap(&source)
+	require.EqualValues(t, len(plan.ColExprs), got.Count)
+	want := []bool{true, false, true, true, true, false, false}
+	for i, w := range want {
+		assert.Equal(t, w, got.Cols[i/8]&(1<<(i%8)) != 0, "bit %d", i)
 	}
 }

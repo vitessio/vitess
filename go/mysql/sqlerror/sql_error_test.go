@@ -221,3 +221,33 @@ func TestNewSQLErrorFromError(t *testing.T) {
 		})
 	}
 }
+
+func TestVtRpcErrorCodeLockErrors(t *testing.T) {
+	tCases := []struct {
+		name string
+		err  *SQLError
+		want vtrpc.Code
+	}{
+		{
+			name: "lock wait timeout",
+			err:  NewSQLError(ERLockWaitTimeout, SSUnknownSQLState, "Lock wait timeout exceeded; try restarting transaction"),
+			want: vtrpc.Code_DEADLINE_EXCEEDED,
+		},
+		{
+			name: "lock nowait",
+			err:  NewSQLError(ERLockNowait, SSUnknownSQLState, "Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set."),
+			want: vtrpc.Code_DEADLINE_EXCEEDED,
+		},
+		{
+			name: "deadlock",
+			err:  NewSQLError(ERLockDeadlock, SSLockDeadlock, "Deadlock found when trying to get lock; try restarting transaction"),
+			want: vtrpc.Code_ABORTED,
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.err.VtRpcErrorCode())
+		})
+	}
+}

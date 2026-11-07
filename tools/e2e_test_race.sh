@@ -41,9 +41,11 @@ all_e2e_tests=$(echo "$packages_with_tests" | cut -d" " -f1)
 set -exo pipefail
 
 # Run all endtoend tests.
-echo "$all_e2e_tests" | xargs go test $VT_GO_PARALLEL -race 2>&1 | tee $temp_log_file
-if [ ${PIPESTATUS[1]} -ne 0 ]; then
-  if grep "WARNING: DATA RACE" -q $temp_log_file; then
+# VT_GO_PARALLEL is empty or "-p N", so it must split into words.
+# shellcheck disable=SC2086
+echo "$all_e2e_tests" | xargs go test $VT_GO_PARALLEL -race -trimpath 2>&1 | tee "$temp_log_file"
+if [ "${PIPESTATUS[1]}" -ne 0 ]; then
+  if grep "WARNING: DATA RACE" -q "$temp_log_file"; then
     echo
     echo "ERROR: go test -race found a data race. See log above."
     exit 2

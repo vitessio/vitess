@@ -314,7 +314,7 @@ func TestDiffTables(t *testing.T) {
 		},
 		{
 			name: "error on unknown charset",
-			from: "create table t (a varchar(64)) default charset=latin_nonexisting collate=''",
+			from: "create table t (a varchar(64) charset latin_nonexisting)",
 			to:   "create table t (a varchar(64) CHARACTER SET latin1 COLLATE latin1_bin)",
 			hints: &DiffHints{
 				AlterTableAlgorithmStrategy: AlterTableAlgorithmStrategyCopy,

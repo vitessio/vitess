@@ -32,6 +32,7 @@ import (
 	"context"
 	"expvar"
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -233,7 +234,7 @@ func RegisterPushBackend(name string, backend PushBackend) {
 	pushBackendsLock.Lock()
 	defer pushBackendsLock.Unlock()
 	if _, ok := pushBackends[name]; ok {
-		log.Error(fmt.Sprintf("PushBackend %s already exists; can't register the same name multiple times", name))
+		log.Error("PushBackend already exists; can't register the same name multiple times", slog.String("stats_backend", name))
 		os.Exit(1)
 	}
 	pushBackends[name] = backend
@@ -256,7 +257,7 @@ func emitToBackend(emitPeriod *time.Duration) {
 	for range ticker.C {
 		if err := pushAll(); err != nil {
 			// TODO(aaijazi): This might cause log spam...
-			log.Warn(fmt.Sprintf("Pushing stats to backend %v failed: %v", statsBackend, err))
+			log.Warn("Pushing stats to backend failed", slog.String("stats_backend", statsBackend), slog.Any("error", err))
 		}
 	}
 }
@@ -382,6 +383,21 @@ func IsDimensionCombined(name string) bool {
 		}
 	}
 	return combinedDimensions[name]
+}
+
+// CombinedLabels reports, for each label name, whether its dimension is combined.
+func CombinedLabels(labelNames []string) []bool {
+	combinedLabels := make([]bool, len(labelNames))
+	for i, name := range labelNames {
+		combinedLabels[i] = IsDimensionCombined(name)
+	}
+	return combinedLabels
+}
+
+// JoinLabels returns the key that multi-label stats use for the given label
+// values, with the values of combined labels replaced by StatsAllStr.
+func JoinLabels(labels []string, combinedLabels []bool) string {
+	return safeJoinLabels(labels, combinedLabels)
 }
 
 // safeJoinLabels joins the label values with ".", but first replaces any existing

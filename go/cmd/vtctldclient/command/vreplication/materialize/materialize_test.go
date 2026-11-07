@@ -19,7 +19,6 @@ package materialize
 import (
 	"testing"
 
-	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,10 +27,7 @@ import (
 // explicitly asks for it. The request must always carry keep_data, because an
 // omitted keep_data is resolved server-side to false and drops the data.
 func TestCancelKeepData(t *testing.T) {
-	root := &cobra.Command{Use: "test"}
-	registerCommands(root)
-
-	cancelCmd, _, err := root.Find([]string{"Materialize", "cancel"})
+	cancelCmd, _, err := testCommands().Find([]string{"Materialize", "cancel"})
 	require.NoError(t, err)
 
 	keepDataFlag := cancelCmd.Flags().Lookup("keep-data")

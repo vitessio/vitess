@@ -21,14 +21,14 @@ import { stringify } from '../../util/queryString';
 import { PaginationNav } from './PaginationNav';
 
 interface Props<T> {
-    // When passing a JSX.Element, note that the column element
+    // When passing a React.JSX.Element, note that the column element
     // will be rendered *inside* a <th> tag. (Note: I don't love this
     // abstraction + we'll likely want to revisit this when we add
     // table sorting.)
-    columns: Array<string | JSX.Element>;
+    columns: Array<string | React.JSX.Element>;
     data: T[];
     pageSize?: number;
-    renderRows: (rows: T[]) => JSX.Element[];
+    renderRows: (rows: T[]) => React.JSX.Element[];
     title?: string;
     // Pass a unique `pageKey` for each DataTable, in case multiple
     // DataTables access the same URL. This will be used to

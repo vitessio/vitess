@@ -32,6 +32,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	shardedKs       = "ks"
+	unshardedKs     = "uks"
 
 	shardedKsShards = []string{"-40", "40-80", "80-c0", "c0-"}
 	Cell            = "test"
@@ -40,6 +41,12 @@ var (
 
 	//go:embed vschema.json
 	shardedVSchema string
+
+	//go:embed unsharded_schema.sql
+	unshardedSchemaSQL string
+
+	//go:embed unsharded_vschema.json
+	unshardedVSchema string
 )
 
 func TestMain(m *testing.M) {
@@ -51,6 +58,20 @@ func TestMain(m *testing.M) {
 
 		// Start topo server
 		err := clusterInstance.StartTopo()
+		if err != nil {
+			return 1
+		}
+
+		// Start unsharded keyspace. VEXPLAIN MYSQLPLAN's reserved-connection test
+		// creates a temporary table, which Vitess only allows on an unsharded
+		// keyspace.
+		uKs := &cluster.Keyspace{
+			Name:      unshardedKs,
+			SchemaSQL: unshardedSchemaSQL,
+			VSchema:   unshardedVSchema,
+		}
+
+		err = clusterInstance.StartUnshardedKeyspace(*uKs, 0, false, clusterInstance.Cell)
 		if err != nil {
 			return 1
 		}

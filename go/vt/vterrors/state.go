@@ -127,6 +127,8 @@ const (
 
 	VectorConversion
 
+	UnsupportedSQLMode
+
 	// No state should be added below NumOfStates
 	NumOfStates
 )

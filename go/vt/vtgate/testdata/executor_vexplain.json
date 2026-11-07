@@ -117,6 +117,12 @@
     }
   },
   {
+    "query": "replace into user (id, name) values (1, 'Jane Doe')",
+    "expected": {
+      "statementType": "REPLACE"
+    }
+  },
+  {
     "query": "select * from user where name between 'A' and 'C'",
     "expected": {
       "statementType": "SELECT",

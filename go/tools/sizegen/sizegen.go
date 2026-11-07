@@ -669,13 +669,10 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 	}
 
 	for _, gen := range typePatterns {
-		pos := strings.LastIndexByte(gen, '.')
-		if pos < 0 {
+		pkgname, typename, ok := strings.CutLast(gen, ".")
+		if !ok {
 			return nil, fmt.Errorf("unexpected input type: %s", gen)
 		}
-
-		pkgname := gen[:pos]
-		typename := gen[pos+1:]
 
 		scope := scopes[pkgname]
 		if scope == nil {

@@ -302,17 +302,20 @@ func FindPositionsOfAllCandidates(
 	return positionMap, isGTIDBased, nil
 }
 
-func buildERSCandidates(snapshot *replicationSnapshot, tabletMap map[string]*topo.TabletInfo) ([]*ersCandidate, bool, error) {
+// buildERSCandidates returns the promotion candidates and the positions of every
+// reachable tablet, keyed by alias. The positions include tablets that can't be
+// promoted, and are shared with the candidates.
+func buildERSCandidates(snapshot *replicationSnapshot, tabletMap map[string]*topo.TabletInfo) ([]*ersCandidate, map[string]*RelayLogPositions, bool, error) {
 	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(snapshot.statusMap, snapshot.primaryStatusMap)
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 
 	candidates := make([]*ersCandidate, 0, len(positionMap))
 	for alias, positions := range positionMap {
 		candidateInfo, ok := tabletMap[alias]
 		if !ok {
-			return nil, false, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", alias)
+			return nil, nil, false, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", alias)
 		}
 		if topoproto.IsTypeInList(candidateInfo.Type, []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED}) {
 			continue
@@ -332,7 +335,7 @@ func buildERSCandidates(snapshot *replicationSnapshot, tabletMap map[string]*top
 		candidates = append(candidates, candidate)
 	}
 
-	return candidates, isGTIDBased, nil
+	return candidates, positionMap, isGTIDBased, nil
 }
 
 // ReplicaWasRunning returns true if a StopReplicationStatus indicates that the
@@ -574,7 +577,10 @@ func stopReplicationAndBuildStatusMaps(
 	for alias, tabletInfo := range tabletMap {
 		allTablets = append(allTablets, tabletInfo.Tablet)
 		if !ignoredTablets.Has(alias) {
-			mustWaitFor := tabletAliasToWaitFor == alias
+			// Only the primary may be left behind: any other tablet may be the most
+			// advanced one, and if it's cancelled, its position is lost.
+			isPrimary := primaryAlias != nil && topoproto.TabletAliasEqual(primaryAlias, tabletInfo.Alias)
+			mustWaitFor := tabletAliasToWaitFor == alias || !isPrimary
 			// If this is a tablet that we must wait for
 			// we increment numErrorsToWaitFor and pass in this to the
 			// fillStatus function to indicate we must send this with the boolean

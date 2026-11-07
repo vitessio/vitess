@@ -1873,7 +1873,7 @@
     "query": "replace into u_tbl1 (id, col1) values (1, 2)",
     "plan": {
       "Type": "Complex",
-      "QueryType": "INSERT",
+      "QueryType": "REPLACE",
       "Original": "replace into u_tbl1 (id, col1) values (1, 2)",
       "Instructions": {
         "OperatorType": "Sequential",

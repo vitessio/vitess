@@ -177,7 +177,7 @@ sqlparser:
 codegen: sqlparser sizegen
 
 demo:
-	go install ./examples/demo/demo.go
+	CGO_ENABLED=0 go install -trimpath ./examples/demo/demo.go
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
@@ -243,7 +243,9 @@ site_integration_test:
 	go run test.go -docker=false -tag=site_test
 
 java_test:
-	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
+	# Into the bin/ the tests start it from, with the CGO_ENABLED=0 and
+	# -trimpath of "make build", whose compiled packages this then reuses.
+	CGO_ENABLED=0 go build -trimpath -o ${PWD}/bin/ ./go/cmd/vtgateclienttest
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 PROTO_SRCS = $(wildcard proto/*.proto)
@@ -276,9 +278,8 @@ $(PROTO_GO_OUTS): minimaltools proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=60
+BOOTSTRAP_VERSION=63
 ensure_bootstrap_version:
-	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
 
 docker_bootstrap:
@@ -366,11 +367,11 @@ dependency_check:
 
 # Checks for formatting and linting errors.
 lint:
-	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run ./go/...
+	go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint run ./go/...
 
 # Applies autofixes for formatting and linting errors if supported.
 lint-fix:
-	go tool -modfile=tools/golangci-lint/go.mod golangci-lint run --fix ./go/...
+	go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint run --fix ./go/...
 
 vtadmin_web_install:
 	cd web/vtadmin && npm install
@@ -383,7 +384,7 @@ vtadmin_web_proto_types: vtadmin_web_install
 
 vtadmin_authz_testgen:
 	go generate ./go/vt/vtadmin/
-	go tool -modfile=tools/gofumpt/go.mod gofumpt -w ./go/vt/vtadmin/
+	go run -trimpath -modfile=tools/gofumpt/go.mod mvdan.cc/gofumpt -w ./go/vt/vtadmin/
 
 generate-flag-testdata:
 	./tools/generate_flag_testdata.sh

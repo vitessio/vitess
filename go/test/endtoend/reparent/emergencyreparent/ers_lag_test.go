@@ -57,7 +57,7 @@ func waitForReceivedPosition(t *testing.T, tablet *cluster.Vttablet, position st
 		}
 		res := utils.RunSQL(t.Context(), t, fmt.Sprintf(`select gtid_subset('%s', concat(@@global.gtid_executed, ',', '%s'))`, position, retrieved), tablet)
 		return len(res.Rows) == 1 && res.Rows[0][0].ToString() == "1"
-	}, 30*time.Second, time.Second)
+	}, 30*time.Second, 100*time.Millisecond)
 }
 
 // waitForReplicationSource waits until the tablet's replication source is the given
@@ -65,7 +65,7 @@ func waitForReceivedPosition(t *testing.T, tablet *cluster.Vttablet, position st
 func waitForReplicationSource(t *testing.T, tablet, source *cluster.Vttablet) {
 	require.Eventually(t, func() bool {
 		return replicaStatusField(t, tablet, "Source_Port") == strconv.Itoa(source.MySQLPort)
-	}, 30*time.Second, time.Second)
+	}, 30*time.Second, 100*time.Millisecond)
 }
 
 // TestERSSucceedsWithLaggingSQLThreadReplica checks that a replica that has received all
@@ -191,7 +191,7 @@ func TestERSFiltersReplicaBehindOnRelayLogReceipt(t *testing.T) {
 	// behind on received relay logs and cannot win the election.
 	insertedVal := utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[2], tablets[3]})
 
-	utils.StopTablet(t, tablets[0], true)
+	utils.KillTablet(t, tablets[0])
 
 	out, err := utils.Ers(clusterInstance, nil, "120s", "30s")
 	require.NoError(t, err, out)
@@ -242,7 +242,8 @@ func TestERSFailsWhenNoCandidateAppliesRelayLogs(t *testing.T) {
 	utils.StopTablet(t, tablets[0], false)
 
 	// No candidate can finish applying its relay logs, so the reparent must fail.
-	out, err := utils.Ers(clusterInstance, nil, "120s", "30s")
+	// It fails only once the wait-replicas-timeout expires.
+	out, err := utils.Ers(clusterInstance, nil, "120s", "10s")
 	require.Error(t, err)
 	assert.Contains(t, out, "all candidates failed to apply relay logs")
 
@@ -341,7 +342,7 @@ func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
 	utils.RunSQL(t.Context(), t, "create table vt_nontx (id bigint primary key, msg varchar(64)) engine=MyISAM", tablets[0])
 	require.Eventually(t, func() bool {
 		return len(utils.RunSQL(t.Context(), t, "show tables like 'vt_nontx'", tablets[1]).Rows) == 1
-	}, 30*time.Second, time.Second)
+	}, 30*time.Second, 100*time.Millisecond)
 
 	// Hold a read lock on the table on tablets[1] so its applier wedges on the write.
 	lockConn, err := utils.GetMySQLConn(t.Context(), tablets[1])
@@ -355,12 +356,13 @@ func TestERSWaitsForAckerRepointBeforePromotion(t *testing.T) {
 	primaryPosition := strings.ReplaceAll(utils.RunSQL(t.Context(), t, `select @@global.gtid_executed`, tablets[0]).Rows[0][0].ToString(), "\n", "")
 	waitForReceivedPosition(t, tablets[1], primaryPosition)
 
-	utils.StopTablet(t, tablets[0], true)
+	utils.KillTablet(t, tablets[0])
 
 	// tablets[2] wins the election, but its sole acker tablets[1] cannot finish
 	// SetReplicationSource while its applier is pinned: ERS must fail before the
 	// promotion instead of leaving a read-write primary wedged on the journal write.
-	out, err := utils.Ers(clusterInstance, nil, "120s", "30s")
+	// It fails only once the wait-replicas-timeout expires.
+	out, err := utils.Ers(clusterInstance, nil, "120s", "10s")
 	require.Error(t, err, out)
 	require.Contains(t, out, "not enough semi-sync ackers were reachable to guarantee the promotion")
 

@@ -5305,8 +5305,11 @@ type BackupRequest struct {
 	// before taking the backup. If not set, the default value is used.
 	MysqlShutdownTimeout *vttime.Duration       `protobuf:"bytes,6,opt,name=mysql_shutdown_timeout,json=mysqlShutdownTimeout,proto3" json:"mysql_shutdown_timeout,omitempty"`
 	InitSql              *BackupRequest_InitSQL `protobuf:"bytes,7,opt,name=init_sql,json=initSql,proto3" json:"init_sql,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// IncludeBinlogs includes the source's binary logs in a full builtin backup.
+	// Restores use them automatically.
+	IncludeBinlogs bool `protobuf:"varint,8,opt,name=include_binlogs,json=includeBinlogs,proto3" json:"include_binlogs,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *BackupRequest) Reset() {
@@ -5386,6 +5389,13 @@ func (x *BackupRequest) GetInitSql() *BackupRequest_InitSQL {
 		return x.InitSql
 	}
 	return nil
+}
+
+func (x *BackupRequest) GetIncludeBinlogs() bool {
+	if x != nil {
+		return x.IncludeBinlogs
+	}
+	return false
 }
 
 type BackupResponse struct {
@@ -6335,7 +6345,7 @@ func (*ValidateVReplicationPermissionsRequest) Descriptor() ([]byte, []int) {
 
 type ValidateVReplicationPermissionsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// The --db_filtered_user on the tablet.
+	// The --db-filtered-user on the tablet.
 	User string `protobuf:"bytes,1,opt,name=user,proto3" json:"user,omitempty"`
 	// Does the user have the minimum privileges needed to manage
 	// vreplication metadata.
@@ -6610,8 +6620,12 @@ type VDiffReportOptions struct {
 	Format                  string                 `protobuf:"bytes,3,opt,name=format,proto3" json:"format,omitempty"`
 	MaxSampleRows           int64                  `protobuf:"varint,4,opt,name=max_sample_rows,json=maxSampleRows,proto3" json:"max_sample_rows,omitempty"`
 	RowDiffColumnTruncateAt int64                  `protobuf:"varint,5,opt,name=row_diff_column_truncate_at,json=rowDiffColumnTruncateAt,proto3" json:"row_diff_column_truncate_at,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// no_samples strips the row-sample arrays from the per-table diff report
+	// (keeping the scalar counters), avoiding gRPC message-size limits on diffs
+	// with large blob/JSON rows.
+	NoSamples     bool `protobuf:"varint,6,opt,name=no_samples,json=noSamples,proto3" json:"no_samples,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VDiffReportOptions) Reset() {
@@ -6677,6 +6691,13 @@ func (x *VDiffReportOptions) GetRowDiffColumnTruncateAt() int64 {
 		return x.RowDiffColumnTruncateAt
 	}
 	return 0
+}
+
+func (x *VDiffReportOptions) GetNoSamples() bool {
+	if x != nil {
+		return x.NoSamples
+	}
+	return false
 }
 
 type VDiffCoreOptions struct {
@@ -8869,7 +8890,7 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x15PromoteReplicaRequest\x12\x1a\n" +
 	"\bsemiSync\x18\x01 \x01(\bR\bsemiSync\"4\n" +
 	"\x16PromoteReplicaResponse\x12\x1a\n" +
-	"\bposition\x18\x01 \x01(\tR\bposition\"\xa3\x04\n" +
+	"\bposition\x18\x01 \x01(\tR\bposition\"\xcc\x04\n" +
 	"\rBackupRequest\x12 \n" +
 	"\vconcurrency\x18\x01 \x01(\x05R\vconcurrency\x12#\n" +
 	"\rallow_primary\x18\x02 \x01(\bR\fallowPrimary\x120\n" +
@@ -8877,7 +8898,8 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\fupgrade_safe\x18\x04 \x01(\bR\vupgradeSafe\x12(\n" +
 	"\rbackup_engine\x18\x05 \x01(\tH\x00R\fbackupEngine\x88\x01\x01\x12F\n" +
 	"\x16mysql_shutdown_timeout\x18\x06 \x01(\v2\x10.vttime.DurationR\x14mysqlShutdownTimeout\x12C\n" +
-	"\binit_sql\x18\a \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x1a\xac\x01\n" +
+	"\binit_sql\x18\a \x01(\v2(.tabletmanagerdata.BackupRequest.InitSQLR\ainitSql\x12'\n" +
+	"\x0finclude_binlogs\x18\b \x01(\bR\x0eincludeBinlogs\x1a\xac\x01\n" +
 	"\aInitSQL\x12\x18\n" +
 	"\aqueries\x18\x01 \x03(\tR\aqueries\x127\n" +
 	"\ftablet_types\x18\x02 \x03(\x0e2\x14.topodata.TabletTypeR\vtabletTypes\x12*\n" +
@@ -8997,14 +9019,16 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\vsource_cell\x18\x02 \x01(\tR\n" +
 	"sourceCell\x12\x1f\n" +
 	"\vtarget_cell\x18\x03 \x01(\tR\n" +
-	"targetCell\"\xce\x01\n" +
+	"targetCell\"\xed\x01\n" +
 	"\x12VDiffReportOptions\x12\x19\n" +
 	"\bonly_pks\x18\x01 \x01(\bR\aonlyPks\x12\x1f\n" +
 	"\vdebug_query\x18\x02 \x01(\bR\n" +
 	"debugQuery\x12\x16\n" +
 	"\x06format\x18\x03 \x01(\tR\x06format\x12&\n" +
 	"\x0fmax_sample_rows\x18\x04 \x01(\x03R\rmaxSampleRows\x12<\n" +
-	"\x1brow_diff_column_truncate_at\x18\x05 \x01(\x03R\x17rowDiffColumnTruncateAt\"\x8d\x03\n" +
+	"\x1brow_diff_column_truncate_at\x18\x05 \x01(\x03R\x17rowDiffColumnTruncateAt\x12\x1d\n" +
+	"\n" +
+	"no_samples\x18\x06 \x01(\bR\tnoSamples\"\x8d\x03\n" +
 	"\x10VDiffCoreOptions\x12\x16\n" +
 	"\x06tables\x18\x01 \x01(\tR\x06tables\x12\x1d\n" +
 	"\n" +

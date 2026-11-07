@@ -81,6 +81,13 @@ type EmergencyReparentOptions struct {
 	PreventCrossCellPromotion bool
 	ExpectedPrimaryAlias      *topodatapb.TabletAlias
 
+	// RequiredPosition is the minimum combined position that the promoted tablet
+	// must have. This includes both applied transactions and received transactions
+	// still in the relay log. The zero value means no requirement. An empty GTID
+	// set is rejected. Only MySQL GTID shards are supported, and the shard type is
+	// checked after replication is stopped and a reachable primary is demoted.
+	RequiredPosition replication.Position
+
 	// Private options managed internally. We use value passing to avoid leaking
 	// these details back out.
 	lockAction string
@@ -241,6 +248,10 @@ func (erp *EmergencyReparenter) getLockAction(newPrimaryAlias *topodatapb.Tablet
 }
 
 func validateEmergencyReparentOptions(opts EmergencyReparentOptions) error {
+	if err := validateRequiredPositionFlavor(opts.RequiredPosition); err != nil {
+		return err
+	}
+
 	if !opts.AllowSplitBrainPromotion {
 		return nil
 	}
@@ -266,6 +277,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 		shardInfo                  *topo.ShardInfo
 		prevPrimary                *topodatapb.Tablet
 		tabletMap                  map[string]*topo.TabletInfo
+		reachablePositions         map[string]*RelayLogPositions
 		candidates                 []*ersCandidate
 		intermediateSource         *ersCandidate
 		validReplacementCandidates []*ersCandidate
@@ -365,10 +377,15 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	}
 
 	// Find the positions of all the valid candidates.
-	candidates, isGTIDBased, err = buildERSCandidates(stoppedReplicationSnapshot, tabletMap)
+	candidates, reachablePositions, isGTIDBased, err = buildERSCandidates(stoppedReplicationSnapshot, tabletMap)
 	if err != nil {
 		return err
 	}
+
+	if err := validateRequiredPositionShard(opts.RequiredPosition, isGTIDBased); err != nil {
+		return err
+	}
+
 	if len(candidates) == 0 {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent")
 	}
@@ -383,12 +400,13 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	waitCandidates := candidates
 	requireAll := true
 	splitBrainOverrideActive := false
+	var leadingPositions string
 	var suspectedSplitBrainCandidates []*ersCandidate
 	if isGTIDBased {
 		waitCandidates = filterToMostAdvancedCombined(candidates, erp.logger)
 		requireAll = !hasUniformCombinedPosition(waitCandidates)
 		if requireAll {
-			leadingPositions := describeCombinedPositions(waitCandidates)
+			leadingPositions = describeCombinedPositions(waitCandidates)
 			if !opts.AllowSplitBrainPromotion {
 				suspectedSplitBrainCandidates = slices.Clone(waitCandidates)
 			} else {
@@ -410,6 +428,17 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				waitCandidates = candidates
 			}
 		}
+	}
+
+	// Check the candidates before the first relay log wait. A wait cannot give a
+	// candidate a position that it did not receive.
+	if err := checkRequiredPosition(opts.RequiredPosition, candidates, "candidate"); err != nil {
+		// Report the leaders the override discarded. One of them may have the position.
+		if splitBrainOverrideActive {
+			return vterrors.Wrapf(err, "requested primary %s does not have the required position and the split-brain override discarded the other leading candidates (%s)", topoproto.TabletAliasString(opts.NewPrimaryAlias), leadingPositions)
+		}
+
+		return err
 	}
 
 	// The wait budget also covers the possible second wait after errant GTID detection
@@ -463,6 +492,16 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return err
 		}
 		starvedAliases := ersCandidateAliases(starved)
+
+		// Check the required position before the rescue wait. The first detection
+		// pass can remove the only candidate that has it. Skip the check while a
+		// split-brain is suspected. The split-brain error lists the leaders, and
+		// one of them can have the position.
+		if len(suspectedSplitBrainCandidates) == 0 {
+			if err := checkRequiredPosition(opts.RequiredPosition, candidates, "remaining candidate"); err != nil {
+				return err
+			}
+		}
 
 		// A candidate accepted without any evidence may be a blind spot of our own
 		// making: reparent journal counts only advance when relay logs are applied, so
@@ -538,6 +577,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "no valid candidates for emergency reparent: all candidates have errant GTIDs")
 		}
 
+		// Check the required position before the rewait. The second detection
+		// pass or the skipped check above can leave only candidates that lack it.
+		if err := checkRequiredPosition(opts.RequiredPosition, candidates, "remaining candidate"); err != nil {
+			return err
+		}
+
 		// If errant GTID detection removed every tablet that applied its relay logs, the
 		// surviving candidates may still have relay logs to apply. Wait on the leading
 		// survivors before electing one; we never promote a tablet that hasn't applied
@@ -591,7 +636,21 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 	if err != nil {
 		return err
 	}
+
 	erp.logger.Infof("intermediate source selected - %s", intermediateSource.alias())
+
+	// The new primary ends up at the intermediate source's position, and SetReplicationSource
+	// refuses to repoint a tablet holding GTIDs the new primary lacks, so such a tablet can't ACK
+	if isGTIDBased {
+		intermediateSourceAlias := intermediateSource.alias()
+		sourcePosition := intermediateSource.positions.Combined
+		for alias, positions := range reachablePositions {
+			if !sourcePosition.AtLeast(positions.Combined) {
+				erp.logger.Warningf("%s has GTIDs that the intermediate source %s lacks, so it can't be repointed and doesn't count as a semi-sync acker", alias, intermediateSourceAlias)
+				nonAckers = append(nonAckers, alias)
+			}
+		}
+	}
 
 	// After finding the intermediate source, we want to filter the valid candidate list by the following criteria -
 	// 1. Only keep the tablets which can make progress after being promoted (have sufficient reachable semi-sync ackers)

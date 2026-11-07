@@ -271,3 +271,22 @@ func TestLockWaitOnConnTimeoutWithTxNext(t *testing.T) {
 	utils.AssertMatches(t, conn, `select id, val1 from test where val1 = 'msg'`, `[[INT64(1) VARCHAR("msg")]]`)
 	_ = utils.Exec(t, conn, `commit`)
 }
+
+// TestTargetedSetEvaluatesLockFunctionOnReservedConn checks that a targeted
+// session's SET whose expression is a lock function is evaluated on the
+// reserved connection the SET is then applied to: the tablet refuses get_lock()
+// outside a reserved connection, and the lock has to be held by the connection
+// the session keeps, so that the session can release it.
+func TestTargetedSetEvaluatesLockFunctionOnReservedConn(t *testing.T) {
+	conn, err := mysql.Connect(t.Context(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "use `ks:-80`")
+	// group_concat_max_len is applied through a reserved connection, unlike
+	// the Vitess-aware settings such as sql_select_limit.
+	utils.Exec(t, conn, `set @@group_concat_max_len = get_lock('targeted set', 2)`)
+	utils.AssertMatches(t, conn, `select @@group_concat_max_len`, `[[INT64(1)]]`)
+	utils.AssertMatches(t, conn, `select is_free_lock('targeted set')`, `[[INT64(0)]]`)
+	utils.AssertMatches(t, conn, `select release_lock('targeted set')`, `[[INT64(1)]]`)
+}

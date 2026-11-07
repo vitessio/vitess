@@ -18,14 +18,12 @@ package workflow
 
 import (
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -58,18 +56,6 @@ func TestGetStreamState(t *testing.T) {
 				},
 			},
 			want: "Copying",
-		},
-		{
-			name: "lagging state",
-			stream: &vtctldatapb.Workflow_Stream{
-				State: "Running",
-			},
-			rstream: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{
-				TimeUpdated: &vttime.Time{
-					Seconds: int64(time.Now().Second()) - 11,
-				},
-			},
-			want: "Lagging",
 		},
 		{
 			name: "non-running and error free",

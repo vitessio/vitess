@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"runtime"
 	"slices"
@@ -30,6 +31,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 var (
@@ -761,6 +764,36 @@ func TestCloseWithContextAfterSetCapacityZeroClosesPool(t *testing.T) {
 	require.False(t, p.IsOpen())
 }
 
+func TestReopenAndCloseTimeoutsAreLogged(t *testing.T) {
+	old := PoolCloseTimeout
+	PoolCloseTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { PoolCloseTimeout = old })
+
+	var state TestState
+	p := NewPool(&Config[*TestConn]{
+		Capacity: 1,
+		LogWait:  state.LogWait,
+	})
+	p.Name = "test_pool"
+	p.Open(newConnector(&state), nil)
+
+	conn, err := p.Get(t.Context(), nil)
+	require.NoError(t, err)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	p.reopen()
+	p.Close()
+	conn.Recycle()
+
+	for _, msg := range []string{"failed to reopen pool", "failed to close pool"} {
+		record := logs.Record(t, msg)
+		assert.Equal(t, "ERROR", record["level"])
+		assert.Equal(t, "test_pool", record["pool"])
+		assert.Contains(t, record["error"], "timed out while waiting for connections to be returned to the pool")
+		assert.Equal(t, "ABORTED", record["error_code"])
+	}
+}
+
 // TestCloseWithContextDrainsAfterTimedOutSetCapacityZero guards against an
 // early return in setCapacity that previously caused CloseWithContext to
 // return nil despite active conns being out, when a prior SetCapacity(0)
@@ -833,6 +866,40 @@ func TestSetCapacityRejectedOnClosedPool(t *testing.T) {
 	err = p.SetCapacity(t.Context(), 8)
 	require.ErrorIs(t, err, ErrConnPoolClosed)
 	require.EqualValues(t, 0, p.Capacity())
+}
+
+// TestReserveSlotAfterCapacityDrop covers a Get whose getNew compared active
+// with capacity before a SetCapacity or Close lowered capacity to 0, and whose
+// reservation lands after that drain already saw no active connections: the
+// drain does not wait for the slot, so the reservation must not claim it.
+func TestReserveSlotAfterCapacityDrop(t *testing.T) {
+	lowerCapacity := map[string]func(t *testing.T, p *ConnPool[*TestConn]){
+		"SetCapacity": func(t *testing.T, p *ConnPool[*TestConn]) {
+			require.NoError(t, p.SetCapacity(t.Context(), 0))
+		},
+		"CloseWithContext": func(t *testing.T, p *ConnPool[*TestConn]) {
+			require.NoError(t, p.CloseWithContext(t.Context()))
+		},
+	}
+	for name, lower := range lowerCapacity {
+		t.Run(name, func(t *testing.T) {
+			var state TestState
+			p := NewPool(&Config[*TestConn]{Capacity: 1}).Open(newConnector(&state), nil)
+			t.Cleanup(p.Close)
+
+			// the Get loaded active (0) and saw it below capacity (1)
+			open := p.Active()
+			require.Less(t, open, p.Capacity())
+
+			lower(t, p)
+
+			if p.reserveSlot(open) {
+				p.closedConn() // give the slot back so the pool can close
+				assert.Fail(t, "claimed a slot the drain did not wait for")
+			}
+			assert.Zero(t, p.Active())
+		})
+	}
 }
 
 func TestConnReopen(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math"
 	"sort"
@@ -72,6 +73,12 @@ const (
 // stop replicating.
 var waitRetryTime = 1 * time.Second
 
+// waitForPosRetryTime is how long WaitForPos waits before it first checks the
+// stream's position again. The wait doubles after each check, up to
+// waitRetryTime, so a short wait returns soon after the stream saves the
+// position, while a long one still checks only once per waitRetryTime.
+var waitForPosRetryTime = 100 * time.Millisecond
+
 // How frequently vcopier will update _vt.vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
 
@@ -107,7 +114,7 @@ type Engine struct {
 	journaler map[string]*journalEvent
 	ec        *externalConnector
 
-	throttlerClient *throttle.Client
+	throttlerClient throttleChecker
 
 	// This should only be set in Test Engines in order to short
 	// circuit functions as needed in unit tests. It's automatically
@@ -125,6 +132,14 @@ type journalEvent struct {
 }
 
 type (
+	// throttleChecker is what the engine needs from the tablet throttler:
+	// a single check that either passes or briefly waits and denies. It
+	// is an interface -- rather than the *throttle.Client that production
+	// always installs -- so that tests can inject throttler behavior.
+	throttleChecker interface {
+		ThrottleCheckOKOrWaitAppName(ctx context.Context, appName throttlerapp.Name) (checkResult *throttle.CheckResult, throttleCheckOK bool)
+	}
+
 	PostCopyActionType int
 	PostCopyAction     struct {
 		Type PostCopyActionType `json:"type"`
@@ -178,6 +193,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 	}
 	return vre
 }
@@ -197,6 +213,7 @@ func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaem
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(env, externalConfig),
+		throttlerClient:         throttle.NewBackgroundClient(nil, throttlerapp.VReplicationName, base.UndefinedScope),
 		shortcircuit:            true,
 	}
 	return vre
@@ -224,7 +241,7 @@ func (vre *Engine) Open(ctx context.Context) {
 	}
 
 	if err := vre.openLocked(ctx); err != nil {
-		log.Info(fmt.Sprintf("openLocked error: %s", err))
+		log.Info("openLocked error", slog.Any("error", err))
 		ctx, cancel := context.WithCancel(ctx)
 		vre.cancelRetry = cancel
 		go vre.retry(ctx, err)
@@ -232,8 +249,15 @@ func (vre *Engine) Open(ctx context.Context) {
 	log.Info("VReplication engine opened successfully")
 }
 
+// ThrottlerClient returns the engine's throttle client when it is backed
+// by one. The internal field is a throttleChecker so tests can inject
+// throttler behavior; a non-Client checker maps to nil here, which is safe
+// for callers as *throttle.Client methods accept a nil receiver.
 func (vre *Engine) ThrottlerClient() *throttle.Client {
-	return vre.throttlerClient
+	if client, ok := vre.throttlerClient.(*throttle.Client); ok {
+		return client
+	}
+	return nil
 }
 
 func (vre *Engine) openLocked(ctx context.Context) error {
@@ -256,7 +280,7 @@ func init() {
 }
 
 func (vre *Engine) retry(ctx context.Context, err error) {
-	log.Error(fmt.Sprintf("Error starting vreplication engine: %v, will keep retrying.", err))
+	log.Error("Error starting vreplication engine, will keep retrying.", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	for {
 		timer := time.NewTimer(time.Duration(openRetryInterval.Load()))
 		select {
@@ -291,7 +315,7 @@ func (vre *Engine) initControllers(rows []map[string]string) {
 	for _, row := range rows {
 		ct, err := newController(vre.ctx, row, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
-			log.Error(fmt.Sprintf("Controller could not be initialized for stream: %v: %v", row, err))
+			log.Error("Controller could not be initialized for stream", slog.String("row", fmt.Sprint(row)), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 		vre.controllers[ct.id] = ct
@@ -593,10 +617,16 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int32) erro
 	}
 	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
 	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
-	log.Info(fmt.Sprintf("Journal encountered for (%s %s): %v", key, ks, journal))
+	log.Info("Journal encountered",
+		slog.String("workflow", workflow),
+		slog.Int("stream_id", int(id)),
+		slog.String("journal_key", key),
+		slog.String("participant", ks),
+		slog.String("journal", fmt.Sprint(journal)),
+	)
 	je, ok := vre.journaler[key]
 	if !ok {
-		log.Info(fmt.Sprintf("First stream for workflow %s has joined, creating journaler entry", workflow))
+		log.Info("First stream for workflow has joined, creating journaler entry", slog.String("workflow", workflow), slog.Int("stream_id", int(id)))
 		je = &journalEvent{
 			journal:      journal,
 			participants: make(map[string]int32),
@@ -617,14 +647,19 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int32) erro
 	for _, jks := range journal.Participants {
 		ks := fmt.Sprintf("%s:%s", jks.Keyspace, jks.Shard)
 		if _, ok := controllerSources[ks]; !ok {
-			log.Error(fmt.Sprintf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks))
+			log.Error("cannot redirect on journal: not all sources are present in this workflow", slog.String("workflow", workflow), slog.Int("stream_id", int(id)), slog.String("missing_source", ks))
 			return fmt.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
 		}
 		if _, ok := je.participants[ks]; !ok {
-			log.Info(fmt.Sprintf("New participant %s found for workflow %s", ks, workflow))
+			log.Info("New participant found for workflow", slog.String("workflow", workflow), slog.Int("stream_id", int(id)), slog.String("participant", ks))
 			je.participants[ks] = 0
 		} else {
-			log.Info(fmt.Sprintf("Participant %s:%d already exists for workflow %s", ks, je.participants[ks], workflow))
+			log.Info("Participant already exists for workflow",
+				slog.String("workflow", workflow),
+				slog.Int("stream_id", int(id)),
+				slog.String("participant", ks),
+				slog.Int("participant_stream_id", int(je.participants[ks])),
+			)
 		}
 	}
 	for _, gtid := range journal.ShardGtids {
@@ -636,7 +671,7 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int32) erro
 	for ks, pid := range je.participants {
 		if pid == 0 {
 			// Still need to wait.
-			log.Info("Not all participants have joined, including " + ks)
+			log.Info("Not all participants have joined", slog.String("workflow", workflow), slog.Int("stream_id", int(id)), slog.String("participant", ks))
 			return nil
 		}
 	}
@@ -655,7 +690,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		return
 	}
 
-	log.Info(fmt.Sprintf("Transitioning for journal:workload %v", je))
+	log.Info("Transitioning for journal:workload", slog.String("journal", fmt.Sprint(je)))
 
 	// sort both participants and shardgtids
 	participants := make([]string, 0)
@@ -663,7 +698,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		participants = append(participants, ks)
 	}
 	sort.Sort(ShardSorter(participants))
-	log.Info(fmt.Sprintf("Participants %+v, oldParticipants %+v", participants, je.participants))
+	log.Info("Participants", slog.String("participants", fmt.Sprint(participants)), slog.String("old_participants", fmt.Sprint(je.participants)))
 	shardGTIDs := make([]string, 0)
 	for shard := range je.shardGTIDs {
 		shardGTIDs = append(shardGTIDs, shard)
@@ -681,20 +716,20 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 
 	dbClient := vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
-		log.Error(fmt.Sprintf("transitionJournal: unable to connect to the database: %v", err))
+		log.Error("transitionJournal: unable to connect to the database", slog.Any("error", err))
 		return
 	}
 	defer dbClient.Close()
 
 	if err := dbClient.Begin(); err != nil {
-		log.Error(fmt.Sprintf("transitionJournal: %v", err))
+		log.Error("transitionJournal", slog.Any("error", err))
 		return
 	}
 
 	// Use the reference row to copy other fields like cell, tablet_types, etc.
 	params, err := readRow(dbClient, refid)
 	if err != nil {
-		log.Error(fmt.Sprintf("transitionJournal: %v", err))
+		log.Error("transitionJournal", slog.Any("error", err))
 		return
 	}
 	var newids []int32
@@ -707,16 +742,18 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 32)
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogdatapb.VReplicationWorkflowState_Running, vre.dbName)
+		// The replacement is the same workflow: it keeps the stream's
+		// options (its per-workflow configuration overrides).
 		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
-			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, "")
+			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys, params["options"])
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
 		if err != nil {
-			log.Error(fmt.Sprintf("transitionJournal: %v", err))
+			log.Error("transitionJournal", slog.Any("error", err))
 			return
 		}
-		log.Info(fmt.Sprintf("Created stream: %v for %v", qr.InsertID, sgtid))
+		log.Info("Created stream", slog.Uint64("stream_id", qr.InsertID), slog.String("shard_gtid", fmt.Sprint(sgtid)))
 		if qr.InsertID > math.MaxInt32 {
-			log.Error(fmt.Sprintf("transitionJournal: InsertID %v too large", qr.InsertID))
+			log.Error("transitionJournal: InsertID too large", slog.Uint64("stream_id", qr.InsertID))
 			return
 		}
 		newids = append(newids, int32(qr.InsertID))
@@ -725,13 +762,13 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		id := je.participants[ks]
 		_, err := dbClient.ExecuteFetch(binlogplayer.DeleteVReplication(id), maxRows)
 		if err != nil {
-			log.Error(fmt.Sprintf("transitionJournal: %v", err))
+			log.Error("transitionJournal", slog.Any("error", err))
 			return
 		}
-		log.Info(fmt.Sprintf("Deleted stream: %v", id))
+		log.Info("Deleted stream", slog.Int("stream_id", int(id)))
 	}
 	if err := dbClient.Commit(); err != nil {
-		log.Error(fmt.Sprintf("transitionJournal: %v", err))
+		log.Error("transitionJournal", slog.Any("error", err))
 		return
 	}
 
@@ -744,17 +781,17 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	for _, id := range newids {
 		params, err := readRow(dbClient, id)
 		if err != nil {
-			log.Error(fmt.Sprintf("transitionJournal: %v", err))
+			log.Error("transitionJournal", slog.Any("error", err))
 			return
 		}
 		ct, err := newController(vre.ctx, params, vre.dbClientFactoryFiltered, vre.mysqld, vre.ts, vre.cell, nil, vre, discovery.TabletPickerOptions{})
 		if err != nil {
-			log.Error(fmt.Sprintf("transitionJournal: %v", err))
+			log.Error("transitionJournal", slog.Any("error", err))
 			return
 		}
 		vre.controllers[id] = ct
 	}
-	log.Info(fmt.Sprintf("Completed transition for journal:workload %v", je))
+	log.Info("Completed transition for journal:workload", slog.String("journal", fmt.Sprint(je)))
 }
 
 // WaitForPos waits for the replication to reach the specified position.
@@ -790,8 +827,9 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 	}
 	defer dbClient.Close()
 
-	tkr := time.NewTicker(waitRetryTime)
-	defer tkr.Stop()
+	retryTime := waitForPosRetryTime
+	retry := time.NewTimer(retryTime)
+	defer retry.Stop()
 	for {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(id), 10)
 		switch {
@@ -802,7 +840,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			// Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)
 			// Docs: https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html#error_er_lock_deadlock
 			if sqlErr, ok := err.(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERLockDeadlock {
-				log.Info(fmt.Sprintf("Deadlock detected waiting for pos %s: %v; will retry", pos, err))
+				log.Info("Deadlock detected waiting for pos; will retry", slog.Int("stream_id", int(id)), slog.String("position", pos), slog.Any("error", err))
 			} else {
 				return err
 			}
@@ -822,7 +860,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 			}
 
 			if current.AtLeast(mPos) {
-				log.Info(fmt.Sprintf("position: %s reached, wait time: %v", pos, time.Since(start)))
+				log.Info("position reached", slog.Int("stream_id", int(id)), slog.String("position", pos), slog.Duration("wait_time", time.Since(start)))
 				return nil
 			}
 
@@ -842,12 +880,14 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int32, pos string) error {
 					pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start),
 					"possibly no tablets are available to stream in the source keyspace for your cell and tablet_types setting")
 			}
-			log.Error(doneErr.Error())
+			log.Error("error waiting for pos", slog.Int("stream_id", int(id)), slog.Any("error", doneErr))
 			return doneErr
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
-		case <-tkr.C:
+		case <-retry.C:
 		}
+		retryTime = min(2*retryTime, max(waitRetryTime, waitForPosRetryTime))
+		retry.Reset(retryTime)
 	}
 }
 

@@ -143,7 +143,9 @@ func (c *ColumnDefinitionEntity) InferCharsetCollate() (collateName, charsetName
 			// Charset defined without collation. Assign the default collation for that charset.
 			collation = c.Env.CollationEnv().DefaultCollationForCharset(charsetName)
 			if collation == collations.Unknown {
-				return &UnknownColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: c.tableCharsetCollate.charset}
+				// charsetName, not the table's: this branch is reached because the
+				// column names a charset of its own.
+				return &UnknownColumnCharsetCollationError{Column: c.ColumnDefinition.Name.String(), Charset: charsetName}
 			}
 			collateName = c.Env.CollationEnv().LookupName(collation)
 		}
