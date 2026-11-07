@@ -345,7 +345,13 @@ func obtainQueueLock(ctx context.Context, conn *ZkConn, zkPath string, wait bool
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-watch:
+		case event := <-watch:
+			// If the watch failed, the connection our node was
+			// created on was closed, so the node goes away with its
+			// session: give up, and let the caller clean up.
+			if event.Err != nil {
+				return vterrors.Wrapf(event.Err, "obtainQueueLock: watch on queued node %v failed", zkPrevLock)
+			}
 			// Something happened to the previous lock.
 			// It doesn't matter what, read again.
 		}

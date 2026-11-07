@@ -104,8 +104,11 @@ type ZkConn struct {
 	sem *semaphore.Weighted
 
 	// mu protects the following fields.
-	mu   sync.Mutex
-	conn *zk.Conn
+	mu      sync.Mutex
+	conn    *zk.Conn
+	sockets *socketDialer
+	// closed is set by Close, after which we don't connect again.
+	closed bool
 }
 
 // Connect to the Zookeeper servers specified in addr
@@ -226,8 +229,10 @@ func (c *ZkConn) AddAuth(ctx context.Context, scheme string, auth []byte) error 
 func (c *ZkConn) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	c.closed = true
 	if c.conn != nil {
 		c.conn.Close()
+		c.sockets.Close()
 	}
 	return nil
 }
@@ -267,6 +272,10 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 		// Get the current connection, or connect.
 		var conn *zk.Conn
 		conn, err = c.getConn(ctx)
+		if err == zk.ErrClosing {
+			// We were closed, don't try again.
+			return
+		}
 		if err != nil {
 			// We can't connect, try again.
 			continue
@@ -282,13 +291,8 @@ func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error
 
 		// We got an error, because the connection was closed.
 		// Let's clear up our errored connection and try again.
-		c.mu.Lock()
-		if c.conn == conn {
-			c.conn = nil
-		}
-		c.mu.Unlock()
 		log.Info(fmt.Sprintf("zk conn: got ErrConnectionClosed for addr %v: closing", c.addr))
-		conn.Close()
+		c.dropConn(conn)
 	}
 	return
 }
@@ -300,11 +304,15 @@ func (c *ZkConn) getConn(ctx context.Context) (*zk.Conn, error) {
 	defer c.mu.Unlock()
 
 	if c.conn == nil {
-		conn, events, err := dialZk(ctx, c.addr)
+		if c.closed {
+			return nil, zk.ErrClosing
+		}
+		conn, sockets, events, err := dialZk(ctx, c.addr)
 		if err != nil {
 			return nil, err
 		}
 		c.conn = conn
+		c.sockets = sockets
 		go c.handleSessionEvents(conn, events)
 		c.maybeAddAuth(ctx)
 	}
@@ -334,6 +342,78 @@ func (c *ZkConn) maybeAddAuth(ctx context.Context) {
 	}
 }
 
+// dropConn closes conn. If the ZkConn still references it, it clears the
+// reference, so the next call connects again, and closes its socket.
+func (c *ZkConn) dropConn(conn *zk.Conn) {
+	c.mu.Lock()
+	var sockets *socketDialer
+	if c.conn == conn {
+		c.conn = nil
+		sockets = c.sockets
+		c.sockets = nil
+	}
+	c.mu.Unlock()
+	conn.Close()
+	if sockets != nil {
+		sockets.Close()
+	}
+}
+
+// errSocketDialerClosed is returned when dialing with a closed socketDialer.
+var errSocketDialerClosed = errors.New("zk conn: connection was closed")
+
+// socketDialer dials the sockets of a zk.Conn, and can close them.
+//
+// We can't rely on zk.Conn.Close to end the session: if the client is
+// reconnecting at that time, it can resume the session on another server
+// after Close gave up on sending the close request. The session then stays
+// alive, but the client can no longer set its watches again on the server,
+// and never fires them. Closing the socket, and refusing to dial new ones,
+// makes the client stop, which fails all its watches. The server then
+// expires the session after the session timeout.
+type socketDialer struct {
+	dial zk.Dialer
+
+	// mu protects the following fields.
+	mu     sync.Mutex
+	socket net.Conn
+	closed bool
+}
+
+// Dial is a zk.Dialer.
+func (d *socketDialer) Dial(network, address string, timeout time.Duration) (net.Conn, error) {
+	d.mu.Lock()
+	closed := d.closed
+	d.mu.Unlock()
+	if closed {
+		return nil, errSocketDialerClosed
+	}
+
+	socket, err := d.dial(network, address, timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.closed {
+		socket.Close()
+		return nil, errSocketDialerClosed
+	}
+	d.socket = socket
+	return socket, nil
+}
+
+// Close closes the current socket, and makes Dial fail from now on.
+func (d *socketDialer) Close() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.closed = true
+	if d.socket != nil {
+		d.socket.Close()
+	}
+}
+
 // handleSessionEvents is processing events from the session channel.
 // When it detects that the connection is not working any more, it
 // clears out the connection record.
@@ -342,14 +422,7 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 		zkConnState.Add(event.State.String(), 1)
 		switch event.State {
 		case zk.StateDisconnected, zk.StateExpired, zk.StateConnecting:
-			c.mu.Lock()
-			if c.conn == conn {
-				// The ZkConn still references this
-				// connection, let's nil it.
-				c.conn = nil
-			}
-			c.mu.Unlock()
-			conn.Close()
+			c.dropConn(conn)
 			log.Info(fmt.Sprintf("zk conn: session for addr %v ended: %v", c.addr, event))
 			return
 		}
@@ -358,9 +431,9 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 }
 
 // dialZk dials the server, and waits until connection.
-func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error) {
+func dialZk(ctx context.Context, addr string) (*zk.Conn, *socketDialer, <-chan zk.Event, error) {
 	servers := strings.Split(addr, ",")
-	dialer := zk.WithDialer(net.DialTimeout)
+	var dial zk.Dialer = net.DialTimeout
 	ctx, cancel := context.WithTimeout(ctx, baseTimeout)
 	defer cancel()
 	// If TLS is enabled use a TLS enabled dialer option
@@ -394,20 +467,21 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			ServerName:   serverName,
 		}
 
-		dialer = zk.WithDialer(func(network, address string, timeout time.Duration) (net.Conn, error) {
+		dial = func(network, address string, timeout time.Duration) (net.Conn, error) {
 			d := net.Dialer{Timeout: timeout}
 
 			return tls.DialWithDialer(&d, network, address, tlsConfig)
-		})
+		}
 	}
+	sockets := &socketDialer{dial: dial}
 	// Make sure we re-resolve the DNS name every time we reconnect to a server
 	// In environments where DNS changes such as Kubernetes we can't cache the IP address
 	hostProvider := zk.WithHostProvider(&zk.SimpleDNSHostProvider{})
 
 	// zk.Connect automatically shuffles the servers
-	zconn, session, err := zk.Connect(servers, baseTimeout, dialer, hostProvider)
+	zconn, session, err := zk.Connect(servers, baseTimeout, zk.WithDialer(sockets.Dial), hostProvider)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Wait for connection, skipping transition states.
@@ -415,17 +489,19 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 		select {
 		case <-ctx.Done():
 			zconn.Close()
-			return nil, nil, ctx.Err()
+			sockets.Close()
+			return nil, nil, nil, ctx.Err()
 		case event := <-session:
 			switch event.State {
 			case zk.StateConnected:
 				// success
-				return zconn, session, nil
+				return zconn, sockets, session, nil
 
 			case zk.StateAuthFailed:
 				// fast fail this one
 				zconn.Close()
-				return nil, nil, errors.New("zk connect failed: StateAuthFailed")
+				sockets.Close()
+				return nil, nil, nil, errors.New("zk connect failed: StateAuthFailed")
 			}
 		}
 	}
