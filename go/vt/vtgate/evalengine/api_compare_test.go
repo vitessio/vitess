@@ -871,11 +871,12 @@ func TestCompareDates(t *testing.T) {
 			row: []sqltypes.Value{sqltypes.NewDate("2021-10-22"), sqltypes.NewTimestamp("2021-10-22 16:00:00")},
 		},
 		{
-			// The TIME is placed on the current date before comparing.
+			// The TIME is placed on the current date before comparing. The test
+			// session is in UTC, so the date is the current date in UTC.
 			name: "date equal time",
 			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.EqualOp,
-			row: []sqltypes.Value{sqltypes.NewDate(time.Now().Format("2006-01-02")), sqltypes.NewTime("00:00:00")},
+			row: []sqltypes.Value{sqltypes.NewDate(time.Now().UTC().Format("2006-01-02")), sqltypes.NewTime("00:00:00")},
 		},
 		{
 			name: "zero datetime not equal first datetime",
@@ -893,7 +894,7 @@ func TestCompareDates(t *testing.T) {
 			name: "date not equal time",
 			v1:   newColumn(0, NewType(sqltypes.Date, collations.CollationBinaryID)), v2: newColumn(1, NewType(sqltypes.Time, collations.CollationBinaryID)),
 			out: &T, op: sqlparser.NotEqualOp,
-			row: []sqltypes.Value{sqltypes.NewDate(time.Now().Format("2006-01-02")), sqltypes.NewTime("12:00:00")},
+			row: []sqltypes.Value{sqltypes.NewDate(time.Now().UTC().Format("2006-01-02")), sqltypes.NewTime("12:00:00")},
 		},
 		{
 			name: "string equal datetime",
