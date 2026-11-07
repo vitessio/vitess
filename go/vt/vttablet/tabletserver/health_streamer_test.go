@@ -399,7 +399,7 @@ func TestReloadView(t *testing.T) {
 		sqltypes.MakeTestFields("table_name | column_name", "varchar|varchar"),
 	))
 	db.AddQueryPattern(".*SELECT table_name, view_definition.*views.*", &sqltypes.Result{})
-	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables`", &sqltypes.Result{})
+	db.AddQuery("SELECT TABLE_NAME, CREATE_TIME FROM _vt.`tables` WHERE TABLE_SCHEMA = DATABASE()", &sqltypes.Result{})
 	// adding query pattern for udfs
 	db.AddQueryPattern("SELECT name.*", &sqltypes.Result{})
 	db.AddQuery(mysql.ShowPartitons, &sqltypes.Result{})
