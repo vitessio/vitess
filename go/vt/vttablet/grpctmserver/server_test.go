@@ -42,6 +42,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -116,6 +117,7 @@ func TestBackupTerminalMessage(t *testing.T) {
 		includeBinlogs bool
 		wantStatus     tabletmanagerdatapb.BackupResponse_Status
 		wantErr        string
+		wantErrAfter   string
 	}{
 		{
 			// Without the flag the stream is log events only, as before the
@@ -157,6 +159,21 @@ func TestBackupTerminalMessage(t *testing.T) {
 			backupErr: errors.New("boom"),
 			wantErr:   "boom",
 		},
+		{
+			// The backup is in storage, so it is reported before the error.
+			name:         "stored, then a later step fails",
+			outcome:      mysqlctl.BackupOutcome{Name: "b1", Manifest: `{"BackupName":"b1"}`, Result: mysqlctl.BackupUsable},
+			backupErr:    errors.New("backup completed, but tablet restoration failed"),
+			wantStatus:   tabletmanagerdatapb.BackupResponse_USABLE,
+			wantErrAfter: "tablet restoration failed",
+		},
+		{
+			// Nothing was stored, so only the error is reported.
+			name:      "empty, then a later step fails",
+			outcome:   mysqlctl.BackupOutcome{Result: mysqlctl.BackupEmpty},
+			backupErr: errors.New("backup completed, but tablet restoration failed"),
+			wantErr:   "tablet restoration failed",
+		},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -188,6 +205,10 @@ func TestBackupTerminalMessage(t *testing.T) {
 			assert.Equal(t, tc.outcome.Manifest, term.Manifest)
 
 			_, err = stream.Recv()
+			if tc.wantErrAfter != "" {
+				require.ErrorContains(t, err, tc.wantErrAfter)
+				return
+			}
 			assert.ErrorIs(t, err, io.EOF)
 		})
 	}
@@ -208,16 +229,24 @@ func TestBackupTerminalMessageTooLarge(t *testing.T) {
 	defer log.SwapLogger(oldLogger)
 	setMaxMessageSize(t, 1024)
 
-	// servenv applies the same flag as the server's send limit.
+	// servenv applies the same flag as the server's send limit. The MANIFEST
+	// alone fits that limit, but the message carrying it does not.
 	tablet := startServer(t, &backupOutcomeTM{
 		RPCTM:   tmrpctest.NewFakeRPCTM(t),
-		outcome: mysqlctl.BackupOutcome{Name: "b1", Manifest: strings.Repeat("x", 4096), Result: mysqlctl.BackupUsable},
+		outcome: mysqlctl.BackupOutcome{Name: "b1", Manifest: strings.Repeat("x", 1020), Result: mysqlctl.BackupUsable},
 	}, grpc.MaxSendMsgSize(grpccommon.MaxMessageSize()))
 	stream, err := grpctmclient.NewClient().Backup(t.Context(), tablet, &tabletmanagerdatapb.BackupRequest{IncludeOutcome: true})
 	require.NoError(t, err)
 
 	_, err = stream.Recv()
 	require.NoError(t, err)
+
+	// The caller is told why the manifest will be missing.
+	warning, err := stream.Recv()
+	require.NoError(t, err)
+	require.NotNil(t, warning.Event)
+	assert.Equal(t, logutilpb.Level_WARNING, warning.Event.Level)
+	assert.Contains(t, warning.Event.Value, "--grpc-max-message-size")
 
 	// The backup is stored, so it is reported without its manifest rather than
 	// failing the RPC.

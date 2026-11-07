@@ -2496,7 +2496,10 @@ type BackupResponse struct {
 	Event       *logutil.Event        `protobuf:"bytes,4,opt,name=event,proto3" json:"event,omitempty"`
 	// Manifest, Status and BackupName are only set on the terminal message,
 	// which is sent only when the request set include_outcome. See the
-	// tabletmanagerdata.BackupResponse fields of the same names.
+	// tabletmanagerdata.BackupResponse fields of the same names, and
+	// tabletmanagerdata.BackupRequest.include_outcome for when an error follows
+	// it. If vtctld drops the MANIFEST to stay under its gRPC message size
+	// limit, it puts a warning in this message's event.
 	Manifest      string                                  `protobuf:"bytes,5,opt,name=manifest,proto3" json:"manifest,omitempty"`
 	Status        tabletmanagerdata.BackupResponse_Status `protobuf:"varint,6,opt,name=status,proto3,enum=tabletmanagerdata.BackupResponse_Status" json:"status,omitempty"`
 	BackupName    string                                  `protobuf:"bytes,7,opt,name=backup_name,json=backupName,proto3" json:"backup_name,omitempty"`

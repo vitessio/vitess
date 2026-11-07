@@ -835,6 +835,7 @@ func TestBackup(t *testing.T) {
 				require.Len(t, responses, 3, "expected 2 log events + 1 terminal message")
 				term := responses[len(responses)-1]
 				assert.Equal(t, `{"BackupName":"test-backup"}`, term.Manifest)
+				assert.Equal(t, "zone1-0000000100", term.BackupName)
 				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 			},
 		},
@@ -1057,7 +1058,7 @@ func TestBackupTabletSendFailure(t *testing.T) {
 			Status        tabletmanagerdatapb.BackupResponse_Status
 		}{
 			"zone1-0000000100": {
-				Events:   []*logutilpb.Event{{}},
+				Events:   []*logutilpb.Event{{Value: "progress-event"}},
 				Manifest: `{"BackupName":"secret-manifest-body"}`,
 				Status:   tabletmanagerdatapb.BackupResponse_USABLE,
 			},
@@ -1080,8 +1081,15 @@ func TestBackupTabletSendFailure(t *testing.T) {
 	assert.Equal(t, 2, stream.sent, "expected 1 log event + 1 terminal message")
 
 	out := logBuf.String()
-	assert.Contains(t, out, "failed to send stream response")
-	assert.Contains(t, out, "status=USABLE")
+	// Each failed Send is logged with main's line: the response without its
+	// MANIFEST, then the error.
+	for _, want := range []*vtctldatapb.BackupResponse{
+		{TabletAlias: tablet.Alias, Keyspace: "ks", Shard: "-", Event: &logutilpb.Event{Value: "progress-event"}},
+		{TabletAlias: tablet.Alias, Keyspace: "ks", Shard: "-", Status: tabletmanagerdatapb.BackupResponse_USABLE, BackupName: "zone1-0000000100"},
+	} {
+		line := fmt.Sprintf("failed to send stream response %+v: %v", want, errors.New("grpc: message larger than max"))
+		assert.Contains(t, out, "msg="+strconv.Quote(line))
+	}
 	assert.NotContains(t, out, "secret-manifest-body", "manifest must not be logged")
 }
 
@@ -1099,13 +1107,10 @@ func (s *recordingBackupSendStream) Send(resp *vtctldatapb.BackupResponse) error
 // TestBackupTabletManifestTooLarge verifies that a manifest which would push the
 // forwarded message over --grpc-max-message-size is dropped, keeping the status.
 func TestBackupTabletManifestTooLarge(t *testing.T) {
-	fs := pflag.NewFlagSet(t.Name(), pflag.ContinueOnError)
-	grpccommon.RegisterFlags(fs)
-	orig := grpccommon.MaxMessageSize()
-	require.NoError(t, fs.Set("grpc-max-message-size", "1024"))
-	t.Cleanup(func() { _ = fs.Set("grpc-max-message-size", strconv.Itoa(orig)) })
+	setMaxMessageSize(t, 1024)
 
 	ctx := t.Context()
+	// The MANIFEST alone fits the limit, but the message carrying it does not.
 	tmc := &testutil.TabletManagerClient{
 		Backups: map[string]struct {
 			Events        []*logutilpb.Event
@@ -1117,7 +1122,7 @@ func TestBackupTabletManifestTooLarge(t *testing.T) {
 		}{
 			"zone1-0000000100": {
 				Events:   []*logutilpb.Event{{}},
-				Manifest: strings.Repeat("x", 4096),
+				Manifest: strings.Repeat("x", 1020),
 				Status:   tabletmanagerdatapb.BackupResponse_USABLE,
 			},
 		},
@@ -1137,6 +1142,91 @@ func TestBackupTabletManifestTooLarge(t *testing.T) {
 	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 	assert.Empty(t, term.Manifest)
 	assert.LessOrEqual(t, term.SizeVT(), grpccommon.MaxMessageSize())
+	// The caller is told why the manifest is missing.
+	require.NotNil(t, term.Event)
+	assert.Equal(t, logutilpb.Level_WARNING, term.Event.Level)
+	assert.Contains(t, term.Event.Value, "--grpc-max-message-size")
+}
+
+// TestBackupTabletForwardsOutcomeThenError verifies that a stored backup's
+// terminal message is forwarded and the tablet's later error still fails the RPC.
+func TestBackupTabletForwardsOutcomeThenError(t *testing.T) {
+	ctx := t.Context()
+	tmc := &testutil.TabletManagerClient{
+		Backups: map[string]struct {
+			Events        []*logutilpb.Event
+			EventInterval time.Duration
+			EventJitter   time.Duration
+			ErrorAfter    time.Duration
+			Manifest      string
+			Status        tabletmanagerdatapb.BackupResponse_Status
+		}{
+			"zone1-0000000100": {
+				Events:     []*logutilpb.Event{{}},
+				Status:     tabletmanagerdatapb.BackupResponse_USABLE,
+				ErrorAfter: 200 * time.Millisecond,
+			},
+		},
+	}
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "ks",
+		Shard:    "-",
+	}
+	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
+	stream := &recordingBackupSendStream{}
+
+	err := s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{IncludeOutcome: true}, stream)
+	require.ErrorContains(t, err, "error triggered after")
+	require.Len(t, stream.resps, 2, "expected 1 log event + 1 terminal message")
+	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, stream.resps[1].Status)
+}
+
+// TestBackupTabletForwardsOversizedEvent verifies that only a MANIFEST is
+// dropped for size: an oversized log event is forwarded unchanged, as on main.
+func TestBackupTabletForwardsOversizedEvent(t *testing.T) {
+	setMaxMessageSize(t, 1024)
+
+	ctx := t.Context()
+	big := strings.Repeat("y", 4096)
+	tmc := &testutil.TabletManagerClient{
+		Backups: map[string]struct {
+			Events        []*logutilpb.Event
+			EventInterval time.Duration
+			EventJitter   time.Duration
+			ErrorAfter    time.Duration
+			Manifest      string
+			Status        tabletmanagerdatapb.BackupResponse_Status
+		}{
+			"zone1-0000000100": {
+				Events: []*logutilpb.Event{{Value: big}},
+			},
+		},
+	}
+	tablet := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Type:     topodatapb.TabletType_REPLICA,
+		Keyspace: "ks",
+		Shard:    "-",
+	}
+	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
+	for _, req := range []*vtctldatapb.BackupRequest{{}, {IncludeOutcome: true}} {
+		stream := &recordingBackupSendStream{}
+		require.NoError(t, s.backupTablet(ctx, tablet, req, stream))
+		require.NotEmpty(t, stream.resps)
+		require.NotNil(t, stream.resps[0].Event)
+		assert.Equal(t, big, stream.resps[0].Event.Value, "include_outcome=%v", req.IncludeOutcome)
+	}
+}
+
+// setMaxMessageSize sets --grpc-max-message-size for the rest of the test.
+func setMaxMessageSize(t *testing.T, size int) {
+	fs := pflag.NewFlagSet(t.Name(), pflag.ContinueOnError)
+	grpccommon.RegisterFlags(fs)
+	orig := grpccommon.MaxMessageSize()
+	require.NoError(t, fs.Set("grpc-max-message-size", strconv.Itoa(size)))
+	t.Cleanup(func() { _ = fs.Set("grpc-max-message-size", strconv.Itoa(orig)) })
 }
 
 // TestBackupShard verifies shard tablet selection and backup stream forwarding
@@ -1368,6 +1458,7 @@ func TestBackupShard(t *testing.T) {
 				require.Len(t, responses, 3, "expected 2 log events + 1 terminal message")
 				term := responses[len(responses)-1]
 				assert.Equal(t, `{"BackupName":"test-backup"}`, term.Manifest)
+				assert.Equal(t, "zone1-0000000101", term.BackupName)
 				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, term.Status)
 			},
 		},

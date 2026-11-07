@@ -152,15 +152,19 @@ func TestBackupKeepsPrimaryDrainedWhenSemiSyncRestoreFails(t *testing.T) {
 				return nil
 			}
 
-			_, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
+			outcome, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{AllowPrimary: true, BackupEngine: new(primaryDrainEngine)})
 			require.ErrorContains(t, err, tt.wantErr)
 			if tt.backedUp {
 				require.ErrorContains(t, err, "backup completed, but")
 				assert.Len(t, handle.EndBackupCalls, 1)
 				assert.Empty(t, handle.AbortBackupCalls)
+				// The backup is stored, so it is reported alongside the error.
+				assert.Equal(t, mysqlctl.BackupUsable, outcome.Result)
+				assert.NotEmpty(t, outcome.Name)
 			} else {
 				assert.NotContains(t, err.Error(), "backup completed")
 				require.NotErrorIs(t, err, restoreErr)
+				assert.Empty(t, outcome.Name)
 			}
 			assert.Equal(t, topodatapb.TabletType_BACKUP, tm.Tablet().Type)
 			ti, err := tm.TopoServer.GetTablet(ctx, tm.Tablet().Alias)
@@ -669,17 +673,23 @@ func TestBackupPrimaryWithoutReplicationConfiguration(t *testing.T) {
 
 // TestBackupReturnsMysqlctlOutcome checks that the tablet manager hands back
 // mysqlctl.Backup's outcome unchanged, since the gRPC server builds the terminal
-// Backup message from it.
+// Backup message from it, and asks the engine for the MANIFEST only when the
+// request asks for the outcome.
 func TestBackupReturnsMysqlctlOutcome(t *testing.T) {
 	const engineName = "test-backup-outcome"
+	const manifest = `{"BackupName":"x"}`
 
 	tcs := []struct {
-		name     string
-		result   mysqlctl.BackupResult
-		manifest string
+		name           string
+		result         mysqlctl.BackupResult
+		engineErr      error
+		includeOutcome bool
+		wantManifest   string
 	}{
-		{name: "usable", result: mysqlctl.BackupUsable, manifest: `{"BackupName":"x"}`},
-		{name: "empty", result: mysqlctl.BackupEmpty},
+		{name: "usable", result: mysqlctl.BackupUsable, includeOutcome: true, wantManifest: manifest},
+		{name: "usable without the outcome", result: mysqlctl.BackupUsable},
+		{name: "empty", result: mysqlctl.BackupEmpty, includeOutcome: true},
+		{name: "stored, then the engine fails", result: mysqlctl.BackupUsable, engineErr: errors.New("can't restart mysqld"), includeOutcome: true, wantManifest: manifest},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
@@ -695,8 +705,8 @@ func TestBackupReturnsMysqlctlOutcome(t *testing.T) {
 			tm.Cnf = &mysqlctl.Mycnf{}
 
 			engine := &mysqlctl.FakeBackupEngine{
-				ExecuteBackupReturn:   mysqlctl.FakeBackupEngineExecuteBackupReturn{Res: tc.result},
-				ExecuteBackupManifest: tc.manifest,
+				ExecuteBackupReturn:   mysqlctl.FakeBackupEngineExecuteBackupReturn{Res: tc.result, Err: tc.engineErr},
+				ExecuteBackupManifest: manifest,
 			}
 			storage := &mysqlctl.FakeBackupStorage{
 				StartBackupReturn: mysqlctl.FakeBackupStorageStartBackupReturn{BackupHandle: &mysqlctl.FakeBackupHandle{}},
@@ -713,16 +723,22 @@ func TestBackupReturnsMysqlctlOutcome(t *testing.T) {
 			})
 
 			backupEngine := engineName
-			outcome, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: &backupEngine})
-			require.NoError(t, err)
+			outcome, err := tm.Backup(ctx, logutil.NewMemoryLogger(), &tabletmanagerdatapb.BackupRequest{BackupEngine: &backupEngine, IncludeOutcome: tc.includeOutcome})
+			if tc.engineErr != nil {
+				require.ErrorIs(t, err, tc.engineErr)
+			} else {
+				require.NoError(t, err)
+			}
 			assert.Equal(t, tc.result, outcome.Result)
-			assert.Equal(t, tc.manifest, outcome.Manifest)
+			assert.Equal(t, tc.wantManifest, outcome.Manifest)
 			if tc.result == mysqlctl.BackupUsable {
 				assert.Contains(t, outcome.Name, "cell1-0000000100")
 			} else {
 				assert.Empty(t, outcome.Name)
 			}
-			assert.Len(t, engine.ExecuteBackupCalls, 1)
+			require.Len(t, engine.ExecuteBackupCalls, 1)
+			assert.Equal(t, tc.includeOutcome, engine.ExecuteBackupCalls[0].BackupParams.ManifestOut != nil,
+				"the engine should be asked for the MANIFEST only with IncludeOutcome")
 			assert.False(t, tm.IsBackupRunning())
 		})
 	}

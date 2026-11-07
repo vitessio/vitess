@@ -103,8 +103,9 @@ type BackupParams struct {
 	VerifyPosition func(ctx context.Context, pos replication.Position) error
 	// ManifestOut, when non-nil, is set by the backup engine to the raw JSON of the
 	// MANIFEST it wrote, so callers can surface it without reading it back from
-	// backup storage. It is optional: for an engine that leaves it unset, the
-	// backup outcome simply has no manifest.
+	// backup storage. Callers set it only when they need the MANIFEST, since the
+	// engine then keeps a copy of it. It is optional for engines: for one that
+	// leaves it unset, the backup outcome simply has no manifest.
 	ManifestOut *string
 }
 
@@ -115,8 +116,8 @@ type BackupOutcome struct {
 	// later restore. Empty when no backup was stored.
 	Name string
 	// Manifest is the raw JSON of the backup's MANIFEST, exactly as written to
-	// storage. Empty when no backup was stored, or if the engine did not report
-	// it through BackupParams.ManifestOut.
+	// storage. Empty when no backup was stored, when the caller did not set
+	// BackupParams.ManifestOut, or if the engine did not report it there.
 	Manifest string
 	// Result classifies the outcome of the backup.
 	Result BackupResult

@@ -45,11 +45,13 @@ const (
 
 // Backup takes a db backup and sends it to the BackupStorage.
 //
-// On success it returns a mysqlctl.BackupOutcome carrying the backup's Result
+// It returns a mysqlctl.BackupOutcome carrying the backup's Result
 // (mysqlctl.BackupUsable or mysqlctl.BackupEmpty) and, for a usable backup, its
-// Name and the raw JSON contents of its MANIFEST file, so callers can identify
-// and log the backup without scraping log lines. Name and Manifest are empty for
-// an empty (no-op incremental) backup.
+// Name and, if req.IncludeOutcome is set, the raw JSON contents of its MANIFEST
+// file, so callers can identify and log the backup without scraping log lines.
+// Name and Manifest are empty for an empty (no-op incremental) backup. A backup
+// that was stored is reported even if a later step fails, such as restoring the
+// tablet, alongside that error.
 func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) (outcome mysqlctl.BackupOutcome, retErr error) {
 	if tm.Cnf == nil {
 		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, errors.New("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
@@ -103,6 +105,11 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		BackupEngine:         backupEngine,
 		InitSQL:              req.InitSql.CloneVT(),
 		IncludeBinlogs:       req.IncludeBinlogs,
+	}
+	// Only a caller that asked for the outcome is sent the MANIFEST, so only then
+	// does the engine need to keep a copy of it.
+	if req.IncludeOutcome {
+		backupParams.ManifestOut = new(string)
 	}
 	// Refuse an invalid IncludeBinlogs request before the init SQL queries run.
 	if err := mysqlctl.ValidateIncludeBinlogs(backupParams); err != nil {

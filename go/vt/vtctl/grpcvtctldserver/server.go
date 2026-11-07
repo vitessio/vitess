@@ -584,17 +584,22 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 			}
 			// This message is slightly larger than the tablet's, so a manifest that
 			// just fit there can overflow here and fail the whole RPC. Drop it the
-			// same way the tablet does.
-			if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
-				logger.Warningf("backup MANIFEST exceeds --grpc-max-message-size (%d bytes); forwarding backup %v from %v without it",
-					maxSize, resp.BackupName, topoproto.TabletAliasString(resp.TabletAlias))
-				resp.Manifest = ""
+			// same way the tablet does, and tell the caller why it is missing in
+			// the Event, which the tablet leaves empty on its terminal message.
+			if tmResp.Manifest != "" {
+				if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
+					warning := logutil.NewMemoryLogger()
+					warning.Warningf("backup %v: its MANIFEST (%d bytes) would put the message over vtctld's --grpc-max-message-size (%d bytes), so it is reported without it; raise --grpc-max-message-size on vttablet, vtctld and the client to include it",
+						resp.BackupName, len(resp.Manifest), maxSize)
+					logutil.LogEvent(logger, warning.Events[0])
+					resp.Manifest = ""
+					resp.Event = warning.Events[0]
+				}
 			}
 			if err := stream.Send(resp); err != nil {
-				// resp.Manifest is deliberately omitted: it can be megabytes, and
-				// an oversized message is a likely reason Send failed here.
-				logger.Errorf("failed to send stream response (tablet=%v keyspace=%v shard=%v status=%v backup_name=%v): %v",
-					topoproto.TabletAliasString(resp.TabletAlias), resp.Keyspace, resp.Shard, resp.Status, resp.BackupName, err)
+				// The MANIFEST can be megabytes; keep it out of the log.
+				resp.Manifest = ""
+				logger.Errorf("failed to send stream response %+v: %v", resp, err)
 			}
 		case io.EOF:
 			return nil

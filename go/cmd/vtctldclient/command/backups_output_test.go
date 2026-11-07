@@ -19,6 +19,8 @@ package command
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"testing"
 
@@ -34,11 +36,15 @@ import (
 // fakeBackupStream is an in-memory backupResponseStream for tests.
 type fakeBackupStream struct {
 	resps []*vtctldatapb.BackupResponse
+	err   error // returned after resps instead of io.EOF, if set
 	i     int
 }
 
 func (f *fakeBackupStream) Recv() (*vtctldatapb.BackupResponse, error) {
 	if f.i >= len(f.resps) {
+		if f.err != nil {
+			return nil, f.err
+		}
 		return nil, io.EOF
 	}
 	r := f.resps[f.i]
@@ -150,41 +156,126 @@ func TestConsumeBackupStream_JSONManifestNotJSON(t *testing.T) {
 	assert.Contains(t, errOut.String(), "not valid JSON")
 }
 
-// TestConsumeBackupStream_TextUsable verifies text mode retains progress output
-// without printing the machine-readable MANIFEST.
-func TestConsumeBackupStream_TextUsable(t *testing.T) {
-	manifest := `{"BackupName":"2026-01-01.000000.zone1-0000000100"}`
+// TestConsumeBackupStream_JSONManifestDropped verifies that the warning vtctld
+// puts on the terminal message when it drops the MANIFEST goes to stderr, and
+// that the outcome is still printed with a null manifest.
+func TestConsumeBackupStream_JSONManifestDropped(t *testing.T) {
+	warning := &logutilpb.Event{Level: logutilpb.Level_WARNING, Value: "its MANIFEST would put the message over vtctld's --grpc-max-message-size"}
 	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
 		eventResp(),
-		{Manifest: manifest, Status: tabletmanagerdatapb.BackupResponse_USABLE},
+		{Event: warning, BackupName: "2026-01-01.000000.zone1-0000000100", Status: tabletmanagerdatapb.BackupResponse_USABLE},
 	}}
 
 	var out, errOut bytes.Buffer
-	err := consumeBackupStream(stream, false /* outputJSON */, &out, &errOut)
-	require.NoError(t, err)
+	require.NoError(t, consumeBackupStream(stream, true /* outputJSON */, &out, &errOut))
+	assert.Contains(t, errOut.String(), "--grpc-max-message-size")
+	assert.NotContains(t, out.String(), "--grpc-max-message-size")
 
-	// In text mode, progress goes to stdout but the MANIFEST is NOT printed --
-	// it is surfaced only via --json, so text output matches prior releases.
-	assert.Contains(t, out.String(), "backing up")
-	assert.NotContains(t, out.String(), manifest)
+	var got struct {
+		Status     string          `json:"status"`
+		BackupName string          `json:"backup_name"`
+		Manifest   json.RawMessage `json:"manifest"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got))
+	assert.Equal(t, "USABLE", got.Status)
+	assert.Equal(t, "2026-01-01.000000.zone1-0000000100", got.BackupName)
+	assert.Equal(t, "null", string(got.Manifest))
+}
+
+// TestConsumeBackupStream_TextUsable verifies that text mode prints exactly the
+// progress events, as it did before --json, even if a terminal message arrives.
+func TestConsumeBackupStream_TextUsable(t *testing.T) {
+	event := eventResp()
+	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{
+		event,
+		{
+			Manifest:   `{"BackupName":"2026-01-01.000000.zone1-0000000100"}`,
+			BackupName: "2026-01-01.000000.zone1-0000000100",
+			Status:     tabletmanagerdatapb.BackupResponse_USABLE,
+		},
+	}}
+
+	var out, errOut bytes.Buffer
+	require.NoError(t, consumeBackupStream(stream, false /* outputJSON */, &out, &errOut))
+	assert.Equal(t, fmt.Sprintf("ks/- (zone1-0000000100): %v\n", event.Event), out.String())
 	assert.Empty(t, errOut.String())
 }
 
-// TestConsumeBackupStream_Error verifies a terminal stream error is returned to
-// the command caller.
-func TestConsumeBackupStream_Error(t *testing.T) {
-	stream := &erroringBackupStream{}
+// TestConsumeBackupStream_JSONStoredThenError verifies that when the stream fails
+// after reporting a stored backup, the outcome is printed and the error returned.
+func TestConsumeBackupStream_JSONStoredThenError(t *testing.T) {
+	stream := &fakeBackupStream{
+		resps: []*vtctldatapb.BackupResponse{
+			eventResp(),
+			{BackupName: "2026-01-01.000000.zone1-0000000100", Status: tabletmanagerdatapb.BackupResponse_USABLE},
+		},
+		err: errors.New("backup completed, but tablet restoration failed"),
+	}
+
 	var out, errOut bytes.Buffer
-	err := consumeBackupStream(stream, false, &out, &errOut)
-	require.Error(t, err)
+	err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
+	require.ErrorContains(t, err, "tablet restoration failed")
+
+	var got struct {
+		Status     string `json:"status"`
+		BackupName string `json:"backup_name"`
+	}
+	require.NoError(t, json.Unmarshal(out.Bytes(), &got))
+	assert.Equal(t, "USABLE", got.Status)
+	assert.Equal(t, "2026-01-01.000000.zone1-0000000100", got.BackupName)
 }
 
-type erroringBackupStream struct{}
+// TestConsumeBackupStream_TextStoredThenError verifies that text mode prints only
+// the progress events, and returns the error, when the stream fails after a
+// stored backup's outcome.
+func TestConsumeBackupStream_TextStoredThenError(t *testing.T) {
+	event := eventResp()
+	stream := &fakeBackupStream{
+		resps: []*vtctldatapb.BackupResponse{
+			event,
+			{BackupName: "2026-01-01.000000.zone1-0000000100", Status: tabletmanagerdatapb.BackupResponse_USABLE},
+		},
+		err: errors.New("backup completed, but tablet restoration failed"),
+	}
 
-func (e *erroringBackupStream) Recv() (*vtctldatapb.BackupResponse, error) {
-	return nil, errStreamClosed
+	var out, errOut bytes.Buffer
+	err := consumeBackupStream(stream, false /* outputJSON */, &out, &errOut)
+	require.ErrorContains(t, err, "tablet restoration failed")
+	assert.Equal(t, fmt.Sprintf("ks/- (zone1-0000000100): %v\n", event.Event), out.String())
+	assert.Empty(t, errOut.String())
 }
 
-// errStreamClosed is the error erroringBackupStream reports from Recv, standing
-// in for any transport-level failure mid-stream.
-var errStreamClosed = io.ErrClosedPipe
+// TestConsumeBackupStream_Error verifies that a stream error before any outcome
+// is returned, in both output modes, without printing a result.
+func TestConsumeBackupStream_Error(t *testing.T) {
+	for _, outputJSON := range []bool{false, true} {
+		stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{eventResp()}, err: io.ErrClosedPipe}
+		var out, errOut bytes.Buffer
+		err := consumeBackupStream(stream, outputJSON, &out, &errOut)
+		require.ErrorIs(t, err, io.ErrClosedPipe, "outputJSON=%v", outputJSON)
+		assert.NotContains(t, out.String(), `"status"`, "outputJSON=%v", outputJSON)
+	}
+}
+
+// failingWriter fails every write, like stdout on a full disk.
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) {
+	return 0, errors.New("no space left on device")
+}
+
+// TestConsumeBackupStream_WriteError verifies that a failed write of the JSON
+// object is returned, also after a stored backup's stream error, so the command
+// doesn't exit 0 without its result.
+func TestConsumeBackupStream_WriteError(t *testing.T) {
+	stored := &vtctldatapb.BackupResponse{BackupName: "2026-01-01.000000.zone1-0000000100", Status: tabletmanagerdatapb.BackupResponse_USABLE}
+
+	stream := &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{stored}}
+	err := consumeBackupStream(stream, true /* outputJSON */, failingWriter{}, io.Discard)
+	require.ErrorContains(t, err, "no space left on device")
+
+	stream = &fakeBackupStream{resps: []*vtctldatapb.BackupResponse{stored}, err: errors.New("tablet restoration failed")}
+	err = consumeBackupStream(stream, true /* outputJSON */, failingWriter{}, io.Discard)
+	require.ErrorContains(t, err, "tablet restoration failed")
+	require.ErrorContains(t, err, "no space left on device")
+}

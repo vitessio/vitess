@@ -698,7 +698,10 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	})
 
 	outcome, err := s.tm.Backup(ctx, logger, request)
-	if err != nil || !request.IncludeOutcome {
+	// A backup that was stored is reported even if a later step failed, such as
+	// restoring the tablet, so the caller knows it exists and does not retry it.
+	// The error still fails the RPC once the terminal message is sent.
+	if !request.IncludeOutcome || (err != nil && outcome.Result != mysqlctl.BackupUsable) {
 		return err
 	}
 	// The caller asked for the outcome, so end the stream with a terminal message
@@ -712,13 +715,16 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	}
 	// A message over the gRPC limit fails the whole RPC, not just this Send, so
 	// the caller would see an error for a backup that is already stored. Drop
-	// the manifest instead; the name and status still identify the backup.
+	// the manifest instead; the name and status still identify the backup, and
+	// the warning tells the caller why the manifest is missing.
 	if maxSize := grpccommon.MaxMessageSize(); resp.SizeVT() > maxSize {
 		log.Warn("backup MANIFEST exceeds --grpc-max-message-size; sending the terminal Backup message without it",
 			slog.String("backup_name", resp.BackupName),
 			slog.Int("manifest_bytes", len(resp.Manifest)),
 			slog.Int("max_message_size", maxSize),
 		)
+		logger.Warningf("backup %v: its MANIFEST (%d bytes) would put the message over vttablet's --grpc-max-message-size (%d bytes), so it is reported without it; raise --grpc-max-message-size on vttablet, vtctld and the client to include it",
+			resp.BackupName, len(resp.Manifest), maxSize)
 		resp.Manifest = ""
 	}
 	if sendErr := stream.Send(resp); sendErr != nil {
@@ -730,7 +736,7 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 			slog.Any("error", sendErr),
 		)
 	}
-	return nil
+	return err
 }
 
 // backupResultToStatus maps the mysqlctl backup classification to the proto

@@ -516,8 +516,9 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 
 		if req.IncludeOutcome {
 			stream.ch <- &tabletmanagerdatapb.BackupResponse{
-				Manifest: testdata.Manifest,
-				Status:   testdata.Status,
+				Manifest:   testdata.Manifest,
+				Status:     testdata.Status,
+				BackupName: key,
 			}
 		}
 

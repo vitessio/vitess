@@ -495,7 +495,10 @@ message BackupResponse {
 
   // Manifest, Status and BackupName are only set on the terminal message,
   // which is sent only when the request set include_outcome. See the
-  // tabletmanagerdata.BackupResponse fields of the same names.
+  // tabletmanagerdata.BackupResponse fields of the same names, and
+  // tabletmanagerdata.BackupRequest.include_outcome for when an error follows
+  // it. If vtctld drops the MANIFEST to stay under its gRPC message size
+  // limit, it puts a warning in this message's event.
   string manifest = 5;
   tabletmanagerdata.BackupResponse.Status status = 6;
   string backup_name = 7;

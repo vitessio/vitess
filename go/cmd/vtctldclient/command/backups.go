@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -42,8 +41,10 @@ import (
 const backupOutputHelp = `With --json, log events are written to stderr and, once the backup completes, a JSON
 object with its outcome status ("USABLE", "EMPTY", or "UNKNOWN"), its name, and its
 MANIFEST is printed to stdout. An incremental backup that finds no new data to back up
-reports "EMPTY"; it is still a success. The status is "UNKNOWN" if the vtctld or tablet
-predates this output. Without --json, log events are written to stdout.`
+reports "EMPTY"; it is still a success. If a later step fails, such as restoring the
+tablet, the command exits non-zero, and the object is printed only if the backup was stored.
+The status is "UNKNOWN" if the vtctld or tablet predates this output. Without --json, log
+events are written to stdout.`
 
 // backupJSONFlagHelp is the --json flag usage, shared by Backup and BackupShard.
 const backupJSONFlagHelp = "Output, on completion, the backup's outcome status, name and MANIFEST as JSON on stdout (log events go to stderr)."
@@ -173,7 +174,7 @@ func commandBackup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return consumeBackupStream(stream, backupOptions.OutputJSON, os.Stdout, os.Stderr)
+	return consumeBackupStream(stream, backupOptions.OutputJSON, cmd.OutOrStdout(), cmd.ErrOrStderr())
 }
 
 var backupShardOptions = struct {
@@ -220,7 +221,7 @@ func commandBackupShard(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	return consumeBackupStream(stream, backupShardOptions.OutputJSON, os.Stdout, os.Stderr)
+	return consumeBackupStream(stream, backupShardOptions.OutputJSON, cmd.OutOrStdout(), cmd.ErrOrStderr())
 }
 
 // backupResponseStream is the common Recv interface of the Backup and
@@ -238,14 +239,17 @@ type backupJSONOutput struct {
 	// not record a name in their MANIFEST at all. Empty for an empty backup.
 	BackupName string `json:"backup_name"`
 	// Manifest is null for an empty backup, for an engine that does not report
-	// it, or when talking to an older server that does not return it.
+	// it, when talking to an older server that does not return it, when it is
+	// too large to send (a warning goes to stderr), or when it is not valid JSON.
 	Manifest json.RawMessage `json:"manifest"`
 }
 
 // consumeBackupStream reads all messages from a backup stream. Log events are
 // written to errOut in JSON mode (keeping out clean for the final JSON object)
 // and to out otherwise. On completion, in JSON mode, it prints the outcome
-// carried by the terminal message.
+// carried by the terminal message. A stored backup's outcome is printed even when
+// the stream then fails, for example because the tablet could not be restored,
+// and the error is still returned.
 func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errOut io.Writer) error {
 	var (
 		manifest   string
@@ -277,6 +281,9 @@ func consumeBackupStream(stream backupResponseStream, outputJSON bool, out, errO
 		case io.EOF:
 			return printBackupResult(out, errOut, outputJSON, manifest, backupName, status)
 		default:
+			if status != tabletmanagerdatapb.BackupResponse_STATUS_UNSPECIFIED {
+				return errors.Join(err, printBackupResult(out, errOut, outputJSON, manifest, backupName, status))
+			}
 			return err
 		}
 	}
@@ -292,10 +299,10 @@ func printBackupResult(out, errOut io.Writer, outputJSON bool, manifest, backupN
 	}
 
 	// The manifest is inlined as raw JSON so engine-specific fields survive
-	// verbatim. If it is not valid JSON -- a corrupt or truncated read, or a
-	// third-party engine that does not write JSON -- inlining it would make
-	// MarshalIndent fail and turn a successful backup into a failed command.
-	// Fall back to a null manifest so the outcome status is still reported.
+	// verbatim. If it is not valid JSON -- for example from a third-party
+	// engine that does not write JSON -- inlining it would make MarshalIndent
+	// fail and turn a successful backup into a failed command. Fall back to a
+	// null manifest so the outcome status is still reported.
 	raw := json.RawMessage("null")
 	if json.Valid([]byte(manifest)) {
 		raw = json.RawMessage(manifest)
@@ -310,8 +317,9 @@ func printBackupResult(out, errOut io.Writer, outputJSON bool, manifest, backupN
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "%s\n", data)
-	return nil
+	// The caller relies on this object, so a failed write must not exit 0.
+	_, err = fmt.Fprintf(out, "%s\n", data)
+	return err
 }
 
 // backupStatusString renders a backup status for human/JSON output.

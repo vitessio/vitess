@@ -129,9 +129,11 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 // - remember if we were replicating, restore the exact same state
 //
 // On success it returns a BackupOutcome describing the backup: its name, the raw
-// JSON contents of its MANIFEST, and its classification (BackupUsable or
-// BackupEmpty). This lets callers identify and log the backup without scraping log
-// lines. For an empty backup the name and manifest are "".
+// JSON contents of its MANIFEST if params.ManifestOut is set, and its
+// classification (BackupUsable or BackupEmpty). This lets callers identify and
+// log the backup without scraping log lines. For an empty backup the name and
+// manifest are "". A backup that was stored is reported as BackupUsable even if
+// a later step fails, such as restarting mysqld, alongside that error.
 func Backup(ctx context.Context, params BackupParams) (BackupOutcome, error) {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
@@ -174,10 +176,6 @@ func Backup(ctx context.Context, params BackupParams) (BackupOutcome, error) {
 		backupstats.Component(backupstats.BackupEngine),
 		backupstats.Implementation(textutil.Title(backupEngineImplementation)),
 	)
-	// Ask the engine for the MANIFEST it writes. Engines that do not report it
-	// leave it empty; it is not read back from storage.
-	var engineManifest string
-	beParams.ManifestOut = &engineManifest
 	var be BackupEngine
 	if isIncrementalBackup(beParams) {
 		// Incremental backups are always done via 'builtin' engine, which copies
@@ -214,6 +212,12 @@ func Backup(ctx context.Context, params BackupParams) (BackupOutcome, error) {
 			// to finish the backup: just log the backup
 			// finish error, return the backup error.
 			logger.Errorf2(finishErr, "failed to finish backup: %v")
+			return BackupOutcome{Result: BackupUnusable}, err
+		}
+		if backupResult == BackupUsable {
+			// The engine stored the backup and then failed, for example to restart
+			// mysqld, so report the stored backup along with the error.
+			return usableOutcome(name, params), err
 		}
 		return BackupOutcome{Result: backupResult}, err
 	}
@@ -229,14 +233,21 @@ func Backup(ctx context.Context, params BackupParams) (BackupOutcome, error) {
 		return BackupOutcome{Result: BackupUnusable}, finishErr
 	}
 
-	outcome := BackupOutcome{Result: backupResult}
 	if backupResult != BackupUsable {
 		// An empty backup stores nothing, so it has neither a name nor a manifest.
-		return outcome, nil
+		return BackupOutcome{Result: backupResult}, nil
 	}
-	outcome.Name = name
-	outcome.Manifest = engineManifest
-	return outcome, nil
+	return usableOutcome(name, params), nil
+}
+
+// usableOutcome describes a stored backup. Its manifest is the one the engine
+// reported through params.ManifestOut, if the caller asked for it.
+func usableOutcome(name string, params BackupParams) BackupOutcome {
+	outcome := BackupOutcome{Name: name, Result: BackupUsable}
+	if params.ManifestOut != nil {
+		outcome.Manifest = *params.ManifestOut
+	}
+	return outcome
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to

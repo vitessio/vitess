@@ -17,7 +17,10 @@ limitations under the License.
 package command
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -29,6 +32,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -268,7 +272,9 @@ func TestBackupCommand_BuildsCorrectRequest(t *testing.T) {
 	}
 }
 
-// fakeBackupServer records the Backup and BackupShard request flags, then returns err.
+// fakeBackupServer records the Backup and BackupShard request flags and, like a
+// tablet, ends the stream with the outcome if the request asked for it. If err is
+// set, it returns err instead.
 type fakeBackupServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
 	includeOutcome bool
@@ -276,25 +282,42 @@ type fakeBackupServer struct {
 	err            error
 }
 
-func (s *fakeBackupServer) Backup(req *vtctldatapb.BackupRequest, _ vtctlservicepb.Vtctld_BackupServer) error {
+func (s *fakeBackupServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservicepb.Vtctld_BackupServer) error {
 	s.includeOutcome = req.IncludeOutcome
 	s.includeBinlogs = req.IncludeBinlogs
-	return s.err
+	return s.finish(stream)
 }
 
-func (s *fakeBackupServer) BackupShard(req *vtctldatapb.BackupShardRequest, _ vtctlservicepb.Vtctld_BackupShardServer) error {
+func (s *fakeBackupServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream vtctlservicepb.Vtctld_BackupShardServer) error {
 	s.includeOutcome = req.IncludeOutcome
 	s.includeBinlogs = req.IncludeBinlogs
-	return s.err
+	return s.finish(stream)
+}
+
+func (s *fakeBackupServer) finish(stream vtctlservicepb.Vtctld_BackupServer) error {
+	if err := stream.Send(eventResp()); err != nil {
+		return err
+	}
+	if s.err != nil || !s.includeOutcome {
+		return s.err
+	}
+	return stream.Send(&vtctldatapb.BackupResponse{
+		Status:     tabletmanagerdatapb.BackupResponse_USABLE,
+		BackupName: "2026-01-01.000000.zone1-0000000100",
+	})
 }
 
 // TestBackupCommands_JSONOutputWiring runs Backup and BackupShard against a local
-// server to check that --json and --include-binlogs set independent request flags.
+// server to check that --json and --include-binlogs set independent request flags,
+// that each command prints the outcome only with its own --json, and that log
+// events go to stderr with --json and to stdout without it.
 func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 	originalProtocol := VtctldClientProtocol
 	VtctldClientProtocol = "local"
 	t.Cleanup(func() {
 		Root.SetArgs(nil)
+		Root.SetOut(nil)
+		Root.SetErr(nil)
 		VtctldClientProtocol = originalProtocol
 		backupOptions.OutputJSON = false
 		backupShardOptions.OutputJSON = false
@@ -383,6 +406,9 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 			server := &fakeBackupServer{err: tc.streamErr}
 			localvtctldclient.SetServer(server)
 			Root.SetArgs(tc.args)
+			var out, errOut bytes.Buffer
+			Root.SetOut(&out)
+			Root.SetErr(&errOut)
 
 			err := Root.Execute()
 			if tc.wantErr != "" {
@@ -392,6 +418,16 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantIncludeOutcome, server.includeOutcome)
 			assert.Equal(t, tc.wantIncludeBinlogs, server.includeBinlogs)
+			event := fmt.Sprintf("ks/- (zone1-0000000100): %v\n", eventResp().Event)
+			if tc.wantIncludeOutcome {
+				assert.Equal(t, event, errOut.String())
+				assert.Contains(t, out.String(), `"status": "USABLE"`)
+				var got backupJSONOutput
+				require.NoError(t, json.Unmarshal(out.Bytes(), &got), "stdout must be one JSON object: %q", out.String())
+			} else {
+				assert.Equal(t, event, out.String())
+				assert.Empty(t, errOut.String())
+			}
 		})
 	}
 }

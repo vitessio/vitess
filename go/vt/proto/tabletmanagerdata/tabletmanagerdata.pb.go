@@ -165,7 +165,8 @@ type BackupResponse_Status int32
 const (
 	BackupResponse_STATUS_UNSPECIFIED BackupResponse_Status = 0
 	// USABLE indicates the backup was created and stored successfully and
-	// can be used for a subsequent restore.
+	// can be used for a subsequent restore. A later step, such as restoring
+	// the tablet, can still fail the RPC after it is sent.
 	BackupResponse_USABLE BackupResponse_Status = 1
 	// EMPTY indicates an incremental backup completed without any new data
 	// to back up. No manifest was persisted and no follow-up work needs to
@@ -5368,7 +5369,11 @@ type BackupRequest struct {
 	IncludeBinlogs bool `protobuf:"varint,8,opt,name=include_binlogs,json=includeBinlogs,proto3" json:"include_binlogs,omitempty"`
 	// IncludeOutcome asks the tablet to end the stream with a terminal message
 	// carrying the backup's status, name and MANIFEST. Tablets that predate it
-	// ignore it.
+	// ignore it. If the backup was stored but a later step fails, such as
+	// restarting mysqld or restoring the tablet, the USABLE terminal message is
+	// still sent and the RPC then fails with that error. Otherwise a failed
+	// backup, including an empty one followed by such an error, gets no terminal
+	// message.
 	IncludeOutcome bool `protobuf:"varint,9,opt,name=include_outcome,json=includeOutcome,proto3" json:"include_outcome,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache

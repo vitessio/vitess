@@ -66,7 +66,11 @@ func init() {
 // of logutil.EventStream so the manifest and status can be surfaced to callers.
 // Each message is a log event emitted during the backup, except that a request
 // with IncludeOutcome set ends with a terminal message carrying the backup's
-// raw MANIFEST JSON, its name and its Status, and no Event.
+// raw MANIFEST JSON, its name and its Status, and no Event. A backup that was
+// stored before a later step failed, such as restoring the tablet, gets the
+// terminal message, and Recv then returns that error instead of io.EOF. Any
+// other failed backup, including an empty one followed by an error, ends with
+// its error and no terminal message.
 type BackupStream interface {
 	Recv() (*tabletmanagerdatapb.BackupResponse, error)
 }
