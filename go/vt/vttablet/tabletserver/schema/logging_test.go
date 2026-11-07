@@ -58,7 +58,8 @@ func TestGetTableForPosNotFoundLogNoTables(t *testing.T) {
 }
 
 // TestResetSequencesLog checks that the sequence cache is logged as its two
-// values rather than the whole struct, mutex included.
+// values in their own attributes, rather than in the message as
+// SequenceInfo.String() printed them.
 func TestResetSequencesLog(t *testing.T) {
 	se := NewEngineForTests()
 	table := NewTable("seq", Sequence)

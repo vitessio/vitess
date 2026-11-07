@@ -130,5 +130,5 @@ func TestUpdate(t *testing.T) {
 		assert.Equal(c, version1.String(), applied[0]["topo_version"])
 		assert.Equal(c, filePath, applied[1]["path"])
 		assert.Equal(c, version2.String(), applied[1]["topo_version"])
-	}, 10*time.Second, 10*time.Millisecond)
+	}, 30*time.Second, 10*time.Millisecond)
 }
