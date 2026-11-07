@@ -156,6 +156,14 @@ type (
 		ctxErr   chan error
 	}
 
+	// cancelOnJournalMysqlDaemon cancels the caller as the journal write starts
+	// and records whether the write's own context was cancelled with it.
+	cancelOnJournalMysqlDaemon struct {
+		*mysqlctl.FakeMysqlDaemon
+		cancel context.CancelFunc
+		ctxErr chan error
+	}
+
 	deadlineRecordingMysqlDaemon struct {
 		*mysqlctl.FakeMysqlDaemon
 		waitDeadline    chan time.Time
@@ -230,6 +238,12 @@ func (d *blockingWaitSourcePosMysqlDaemon) WaitSourcePos(ctx context.Context, _ 
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (d *cancelOnJournalMysqlDaemon) ExecuteSuperQueryList(ctx context.Context, queries []string) error {
+	d.cancel()
+	d.ctxErr <- ctx.Err()
+	return d.FakeMysqlDaemon.ExecuteSuperQueryList(ctx, queries)
 }
 
 func (d *blockingPromoteMysqlDaemon) Promote(ctx context.Context, _ map[string]string) (replication.Position, error) {
@@ -2226,6 +2240,38 @@ func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
 		require.ErrorIs(t, <-daemon.ctxErr, context.Canceled)
 		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 		assert.True(t, fakeMysqlDaemon.ReadOnly)
+		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
+	})
+
+	// Once the tablet is writable, a caller that gives up must not leave it
+	// without a journal row, so the journal write runs on regardless.
+	t.Run("after promotion completes", func(t *testing.T) {
+		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
+		fakeMysqlDaemon.PromoteResult = promotionPosition
+		ctx, cancel := context.WithCancel(t.Context())
+		t.Cleanup(cancel)
+		daemon := &cancelOnJournalMysqlDaemon{
+			FakeMysqlDaemon: fakeMysqlDaemon,
+			cancel:          cancel,
+			ctxErr:          make(chan error, 1),
+		}
+		tm := newPromoteReplicaAndJournalTestTM(t, daemon)
+		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
+		}
+
+		response, err := tm.PromoteReplicaAndJournal(ctx, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+			TimeCreated: protoutil.TimeToProto(created),
+			ActionName:  "EmergencyReparentShard",
+		})
+
+		require.NoError(t, err)
+		require.NoError(t, receive(t, daemon.ctxErr))
+		require.ErrorIs(t, ctx.Err(), context.Canceled)
+		assert.Equal(t, replication.EncodePosition(promotionPosition), response.Position)
+		assert.Nil(t, response.PromoteReplicaError)
+		assert.Nil(t, response.PopulateReparentJournalError)
+		assert.Equal(t, topodatapb.TabletType_PRIMARY, tm.Tablet().Type)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
 }
