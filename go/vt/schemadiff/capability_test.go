@@ -188,6 +188,12 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			expectCapableOfInstantDDL: false,
 		},
 		{
+			name:                      "add column fails with SERIAL DEFAULT VALUE",
+			create:                    "create table t(id int, i1 int not null, primary key(id))",
+			alter:                     "alter table t add column s int serial default value",
+			expectCapableOfInstantDDL: false,
+		},
+		{
 			name:                      "add column fails with inline unique key",
 			create:                    "create table t(id int, i1 int not null, primary key(id))",
 			alter:                     "alter table t add column s int unique",

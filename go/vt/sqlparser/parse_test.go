@@ -1920,6 +1920,23 @@ var validSQL = []struct {
 }, {
 	input: "alter table t add column s serial",
 }, {
+	input:  "create table t (id int serial default value)",
+	output: "create table t (\n\tid int serial default value\n)",
+}, {
+	// SERIAL DEFAULT VALUE is kept apart from an inline key
+	input:  "create table t (id int unsigned not null serial default value primary key)",
+	output: "create table t (\n\tid int unsigned serial default value not null primary key\n)",
+}, {
+	// a NULL after SERIAL DEFAULT VALUE makes the column nullable
+	input:  "create table t (id int serial default value null)",
+	output: "create table t (\n\tid int serial default value null\n)",
+}, {
+	// SERIAL DEFAULT VALUE overrides an earlier NULL, as in MySQL
+	input:  "create table t (id int null serial default value)",
+	output: "create table t (\n\tid int serial default value\n)",
+}, {
+	input: "alter table t add column id bigint serial default value",
+}, {
 	input: "alter table t modify column id serial first",
 }, {
 	input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
