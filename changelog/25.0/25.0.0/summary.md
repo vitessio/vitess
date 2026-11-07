@@ -266,6 +266,8 @@ The parser used to accept many words that MySQL 8.4 reserves as unquoted names, 
 
 **Migration**: quote such names with back quotes, as in `` CREATE TABLE t (`keys` INT) ``.
 
+One difference remains: the parser takes every byte from 0x80 on as part of an unquoted name, while MySQL decides by the connection's character set. In latin1, for example, MySQL rejects a name that starts with byte 0x84, which is not a letter there. Vitess accepts such a name and quotes it byte for byte in the statement it sends MySQL, so MySQL creates or uses the name rather than rejecting the statement.
+
 #### <a id="mysql-function-names"/>`COUNT (a)` with a space calls a stored function, as in MySQL</a>
 
 MySQL reads a function name such as `COUNT`, `SUM`, `MAX`, `NOW`, `CAST`, `TRIM` or `SUBSTR` as a keyword only when a `(` follows it right away, and as a name otherwise. `SELECT now FROM t` names a column, `COUNT (a)` and `` `count`(a) `` call a stored function named `count`, and `CREATE TABLE bit_and(a INT)` is a syntax error. Vitess read all of them as the built-in functions, so it ran `COUNT (a)` as the aggregate and `DEFAULT NOW` as `DEFAULT NOW()`. The parser now reads them as MySQL does, and quotes the name of a call that MySQL reads as a stored function, so that MySQL reads it the same way. A word right before a `.` and a name, as in `int.t`, is a name, as in MySQL.
