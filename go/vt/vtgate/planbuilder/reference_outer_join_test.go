@@ -27,10 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-// A reference table on the preserved side of an outer join is only merged into the shards when
-// the route is single-shard, because a multi-shard route returns each unmatched preserved row
-// once per shard. These tests cover what has to hold for the rows of such a route: it must run
-// even when the routing resolves to no destination, and no later merge may widen it again.
+// A reference table on the preserved side of an outer join is only merged with other reference
+// tables, because a route that reads more than one shard returns each unmatched preserved row once
+// per shard. These tests cover where such a route can and cannot be merged afterwards.
 
 func planReferenceOuterJoin(t *testing.T, query string) engine.Primitive {
 	t.Helper()
@@ -42,47 +41,6 @@ func planReferenceOuterJoin(t *testing.T, query string) engine.Primitive {
 	plan, err := TestBuilder(query, vw, vw.CurrentDb())
 	require.NoError(t, err)
 	return plan.Instructions
-}
-
-func TestReferencePreservedByOuterJoinRunsWithoutADestination(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col")
-
-	route, ok := primitive.(*engine.Route)
-	require.True(t, ok, "the join is expected to be merged into a single route, got %T", primitive)
-	require.Equal(t, engine.EqualUnique, route.Opcode)
-	require.True(t, route.NoRoutesSpecialHandling,
-		"a route that owes the preserved reference rows cannot return an empty result when the routing finds no destination")
-}
-
-func TestReferencePreservedByOuterJoinRunsWithoutADestinationAfterAnotherMerge(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col join ref_with_source as r2 on r2.col = ref_with_source.col")
-
-	route, ok := primitive.(*engine.Route)
-	require.True(t, ok, "the joins are expected to be merged into a single route, got %T", primitive)
-	require.Equal(t, engine.EqualUnique, route.Opcode)
-	require.True(t, route.NoRoutesSpecialHandling,
-		"merging the route with another one must not drop what the outer join owes the preserved rows")
-}
-
-func TestReferencePreservedByOuterJoinRunsWithoutADestinationAfterASubqueryMerge(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col where exists (select 1 from ref_with_source as r2)")
-
-	route, ok := primitive.(*engine.Route)
-	require.True(t, ok, "the subquery is expected to be merged into the route, got %T", primitive)
-	require.Equal(t, engine.EqualUnique, route.Opcode)
-	require.True(t, route.NoRoutesSpecialHandling,
-		"merging a subquery into the route must not drop what the outer join owes the preserved rows")
-}
-
-func TestReferencePreservedByOuterJoinIsNotWidenedByAUnion(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"select ref_with_source.col from ref_with_source left join (select * from `user` where id = :id) as u on ref_with_source.col = u.col union all select col from `user`")
-
-	require.IsType(t, &engine.Concatenate{}, primitive,
-		"merging the route into the scatter branch would return each unmatched preserved row once per shard")
 }
 
 // A refused merge has to leave the plan as it was. The CTE merger rewrites the recursion definition
@@ -100,10 +58,8 @@ func TestRefusedCTEMergeLeavesAWorkingPlan(t *testing.T) {
 	require.Equal(t, "select u.col from `user` as u where u.col = :c_col", term.Query)
 }
 
-// Refusing the merge after the routing has been reset must not leave the inputs behind changed:
-// the reset rewrites a ShardedRouting in place, and the plan falls back to the route it came from.
-// The preserved rows have to stay on the preserved side of the outer join with `user`, or the
-// merge is a safe one and nothing is refused.
+// A refused merge must leave the probed side as it was. The preserved rows have to stay on the
+// preserved side of the outer join with `user`, or the merge is a safe one and nothing is refused.
 func TestRefusedJoinMergeLeavesTheProbeSingleShard(t *testing.T) {
 	primitive := planReferenceOuterJoin(t,
 		"select r1.col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col left join `user` as u on u.id = r1.col")
@@ -116,28 +72,6 @@ func TestRefusedJoinMergeLeavesTheProbeSingleShard(t *testing.T) {
 		"the probe is routed by the value coming from the left, so it reads one shard per row, not every shard")
 }
 
-// A merged CTE carries the invariant on to whatever merges next, so the seed keeps owing its
-// preserved rows once the recursion is behind it.
-func TestReferenceRowsSurviveIntoAMergedCTE(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"with recursive c as (select r1.col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col union all select col + 1 from c where col < 5) select col from c union all select col from `user`")
-
-	require.IsType(t, &engine.Concatenate{}, primitive,
-		"merging the CTE route into the scatter branch would return each unmatched r1 row once per shard")
-}
-
-// Only the recursive term's routing is the one rebuilt from a predicate that gets restored, so a
-// seed that is single-shard on its own keeps its merge. Rejecting it does more than cost RPCs: the
-// recursion counts every frontier row against its step limit, which the merged route does not.
-func TestReferenceRowsAreMergedIntoACTERoutedByItsSeed(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"with recursive c as (select r.col as col from ref_with_source as r left join (select * from `user` where id = 1) as u on r.col = u.col union all select col + 1 from c where col < 5) select col from c")
-
-	route, ok := primitive.(*engine.Route)
-	require.True(t, ok, "the seed already reads one shard, so the recursion belongs on it, got %T", primitive)
-	require.Equal(t, engine.EqualUnique, route.Opcode)
-}
-
 // The recursion's own predicate can make the term look single-shard, and the CTE merger restores it
 // to its cross-table shape without recomputing the routing afterwards.
 func TestReferenceRowsAreNotMergedIntoACTERoutedByTheRecursion(t *testing.T) {
@@ -146,18 +80,6 @@ func TestReferenceRowsAreNotMergedIntoACTERoutedByTheRecursion(t *testing.T) {
 
 	require.IsType(t, &engine.RecurseCTE{}, primitive,
 		"the merged route would be routed by a predicate that no longer exists once the recursion is restored")
-}
-
-// A dual on the preserved side owes its row for the same reason a reference table does, and its
-// routing reports the same opcode.
-func TestDualPreservedByOuterJoinRunsWithoutADestination(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"select 1 from (select 1 from dual) as d left join (select * from `user` where id = :id) as u on u.col = 1")
-
-	route, ok := primitive.(*engine.Route)
-	require.True(t, ok, "the join is expected to be merged into a single route, got %T", primitive)
-	require.True(t, route.NoRoutesSpecialHandling,
-		"the preserved dual row cannot go missing because the other side routes nowhere")
 }
 
 // A multi-table DML whose only target is the sharded side never reads the rows the outer join
@@ -196,28 +118,6 @@ func TestDeleteOfThePreservedReferenceTableIsStillMerged(t *testing.T) {
 	require.Equal(t, engine.Scatter, del.Opcode)
 }
 
-// Both sides of the outer join can be reference tables, which routes to any single shard. That
-// route is single-shard, so nothing blocks it on its own, but a later merge can still widen it.
-func TestReferenceJoinedToReferenceIsNotWidenedByAUnion(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"select r1.col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col union all select col from `user`")
-
-	require.IsType(t, &engine.Concatenate{}, primitive,
-		"merging the reference route into the scatter branch would return each unmatched r1 row once per shard")
-}
-
-// The recursive term can be single-shard on its own, and then restoring the recursion's predicate
-// leaves that routing untouched. Only a routing selected by the recursion's own predicate goes
-// away with it.
-func TestReferenceRowsAreMergedIntoACTERoutedByItsOwnTerm(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"with recursive c as (select 1 as col from dual union all select r.col from ref as r left join (select * from `user` where id = 1) as u on r.col = u.col join c on c.col = r.col) select col from c")
-
-	route, ok := primitive.(*engine.Route)
-	require.True(t, ok, "the term reads one shard whatever the recursion adds, so the recursion belongs on it, got %T", primitive)
-	require.Equal(t, engine.EqualUnique, route.Opcode)
-}
-
 // The preserved rows can come from a route built before the DML target joins it, and the target is
 // still what this join writes through: an unmatched reference row has no `user` row to update.
 func TestMultiTableUpdateThroughANestedReferenceOuterJoinIsStillMerged(t *testing.T) {
@@ -240,37 +140,12 @@ func TestPreservedRowsConsumedByASubqueryDoNotBlockAScatterOuter(t *testing.T) {
 	require.Equal(t, engine.Scatter, route.Opcode)
 }
 
-// The outer route can be single-shard on its own, and then nothing of the subquery's is riding on
-// it: a destination it does not find is one where there was no outer row to ask the question. The
-// merged route keeps its own reach, and a later union is free to widen it.
-func TestPreservedRowsConsumedByASubqueryDoNotBlockASingleShardOuter(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"select u.id from `user` u where u.id = 1 and exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col) union all select col from `user`")
-
-	route, ok := primitive.(*engine.Route)
-	require.True(t, ok, "the union is expected to be merged into a single route, got %T", primitive)
-	require.Equal(t, engine.Scatter, route.Opcode)
-}
-
-// When the subquery is the one routing the merged route, its preserved rows are riding on that
-// routing: the outer predicate is answered by rows the subquery only returns if the route runs.
-func TestSubqueryRoutingTheMergedRouteKeepsItsPreservedRows(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"select r.col from ref r where r.col in (select r1.col from ref r1 left join (select * from `user` where id = :id) as u on r1.col = u.col)")
-
-	route, ok := primitive.(*engine.Route)
-	require.True(t, ok, "the subquery is expected to be merged into the outer route, got %T", primitive)
-	require.Equal(t, engine.EqualUnique, route.Opcode)
-	require.True(t, route.NoRoutesSpecialHandling,
-		"the outer rows are selected by the preserved rows, so they go missing with them")
-}
-
 // Pairing the preserved rows with the rows of a sharded table pins each pairing to the shard that
 // row lives on, so the route can read every shard again. Whatever the outer join kept now only
 // comes back next to a `user` row, once.
 func TestPreservedRowsJoinedToAShardedTableAreMergedIntoTheScatter(t *testing.T) {
 	primitive := planReferenceOuterJoin(t,
-		"select u.id, r1.col, r2.col from `user` u join (ref_with_source r1 left join ref r2 on r1.col = r2.col) on u.col = r1.col")
+		"select u.id, t.col from `user` u join (select r1.col from ref r1 left join ref r2 on r1.col = r2.col) as t on u.col = t.col")
 
 	route, ok := primitive.(*engine.Route)
 	require.True(t, ok, "the reference join is expected to be merged into the scatter, got %T", primitive)
@@ -279,7 +154,7 @@ func TestPreservedRowsJoinedToAShardedTableAreMergedIntoTheScatter(t *testing.T)
 
 func TestPreservedRowsOnTheNullExtendedSideAreMergedIntoTheScatter(t *testing.T) {
 	primitive := planReferenceOuterJoin(t,
-		"select u.id, r1.col, r2.col from `user` u left join (ref_with_source r1 left join ref r2 on r1.col = r2.col) on u.col = r1.col")
+		"select u.id, t.col from `user` u left join (select r1.col from ref r1 left join ref r2 on r1.col = r2.col) as t on u.col = t.col")
 
 	route, ok := primitive.(*engine.Route)
 	require.True(t, ok, "the reference join is expected to be merged into the scatter, got %T", primitive)
@@ -309,4 +184,86 @@ func TestReferenceRowsReadByADMLWithInputAreNotMergedIntoTheScatter(t *testing.T
 	require.True(t, ok, "`u.id is null` is expected to be tested against every shard's users, got %T", limit.Input)
 	require.IsType(t, &engine.Join{}, filter.Input,
 		"merging the reference route into the scatter would read each unmatched r row once per shard")
+}
+
+// Every row of the recursive term is paired with a row of the CTE, which the seed placed on one
+// shard, so what the term preserved comes back once from a sharded seed's route.
+func TestReferenceRowsInARecursiveTermAreMergedIntoAShardedSeed(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select id as col from `user` union all select r.col from ref as r left join ref as r2 on r.col = r2.col join c on c.col = r.col where r.col < 5) select col from c")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the recursion is expected to be merged into the seed's scatter, got %T", primitive)
+	require.Equal(t, engine.Scatter, route.Opcode)
+}
+
+// The rows the inner outer join preserved reach the join with `user` on its preserved side, and
+// that join is the row source of an update that only writes `user`.
+func TestMultiTableUpdateThroughANestedReferenceLeftJoinIsStillMerged(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"update ref r1 left join ref r2 on r1.col = r2.col left join `user` u on u.col = r1.col set u.foo = 4")
+
+	upd, ok := primitive.(*engine.Update)
+	require.True(t, ok, "the update is expected to be sent to the shards as it is, got %T", primitive)
+	require.Equal(t, engine.Scatter, upd.Opcode)
+}
+
+// A delete with more than one target reads its rows through a SELECT and deletes them by primary
+// key. A scatter would test `u.id is null` against one shard's users at a time and delete a
+// reference row that another shard has a match for.
+func TestReferenceRowsReadByAMultiTargetDeleteAreNotMergedIntoTheScatter(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	id := sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
+	vschema.Keyspaces["user"].Tables["ref"].PrimaryKey = id
+	vschema.Keyspaces["user"].Tables["user"].PrimaryKey = id
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	require.NoError(t, err)
+
+	plan, err := TestBuilder("delete r, u from ref r left join `user` u on r.col = u.col where u.id is null", vw, vw.CurrentDb())
+	require.NoError(t, err)
+
+	dml, ok := plan.Instructions.(*engine.DMLWithInput)
+	require.True(t, ok, "the rows are expected to be read before they are deleted, got %T", plan.Instructions)
+	filter, ok := dml.Input.(*engine.Filter)
+	require.True(t, ok, "`u.id is null` is expected to be tested against every shard's users, got %T", dml.Input)
+	require.IsType(t, &engine.Join{}, filter.Input,
+		"merging the reference route into the scatter would read each unmatched r row once per shard")
+}
+
+// A subquery that is not a top level predicate keeps the outer routing, and the merged route still
+// owes the rows the outer join preserved: the later IN cannot route it to the one shard of `user`.
+func TestPreservedRowsSurviveANonTopLevelSubqueryMerge(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select r1.col from ref r1 left join ref r2 on r1.col = r2.col where (r1.col = 1 or exists (select 1 from ref r3)) and r1.col in (select u.col from `user` u where u.id = 5)")
+
+	sq, ok := primitive.(*engine.UncorrelatedSubquery)
+	require.True(t, ok, "the IN subquery is expected to stay apart from the reference route, got %T", primitive)
+	outer, ok := sq.Outer.(*engine.Route)
+	require.True(t, ok, "expected the outer side to be a route, got %T", sq.Outer)
+	require.Equal(t, engine.Reference, outer.Opcode)
+}
+
+// A top level subquery merged into the reference route keeps the rows the outer join preserved
+// owed, so the later IN cannot route the route to the one shard of `user`.
+func TestPreservedRowsSurviveATopLevelSubqueryMerge(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select r1.col from ref r1 left join ref r2 on r1.col = r2.col where r1.col in (select r3.col from ref r3) and r1.col in (select u.col from `user` u where u.id = 5)")
+
+	sq, ok := primitive.(*engine.UncorrelatedSubquery)
+	require.True(t, ok, "the IN subquery on `user` is expected to stay apart from the reference route, got %T", primitive)
+	outer, ok := sq.Outer.(*engine.Route)
+	require.True(t, ok, "expected the outer side to be a route, got %T", sq.Outer)
+	require.Equal(t, engine.Reference, outer.Opcode)
+}
+
+// A merged CTE still owes the rows its seed preserved to whatever merges with it next.
+func TestPreservedRowsSurviveIntoAMergedCTE(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select r1.col as col from ref r1 left join ref r2 on r1.col = r2.col union all select col + 1 from c where col < 5) select col from c where col in (select u.col from `user` u where u.id = 5)")
+
+	sq, ok := primitive.(*engine.UncorrelatedSubquery)
+	require.True(t, ok, "the IN subquery on `user` is expected to stay apart from the CTE route, got %T", primitive)
+	outer, ok := sq.Outer.(*engine.Route)
+	require.True(t, ok, "expected the outer side to be a route, got %T", sq.Outer)
+	require.Equal(t, engine.Reference, outer.Opcode)
 }

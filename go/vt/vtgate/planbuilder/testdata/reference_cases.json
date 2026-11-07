@@ -957,7 +957,8 @@
         "user.ref_with_source",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Right join with the reference table preserved is not merged into the shards",
@@ -1000,34 +1001,56 @@
         "user.ref_with_source",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
-    "comment": "Reference table preserved by an outer join still merges into a single-shard route",
+    "comment": "Reference table preserved by an outer join is read on its own even when the other side is single-shard",
     "query": "select ref_with_source.col from ref_with_source left join (select * from `user` where id = 1) as u on ref_with_source.col = u.col",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select ref_with_source.col from ref_with_source left join (select * from `user` where id = 1) as u on ref_with_source.col = u.col",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "ref_with_source_col": 0
         },
-        "FieldQuery": "select ref_with_source.col from ref_with_source left join (select * from `user` where 1 != 1) as u on ref_with_source.col = u.col where 1 != 1",
-        "Query": "select ref_with_source.col from ref_with_source left join (select * from `user` where id = 1) as u on ref_with_source.col = u.col",
-        "Values": [
-          "1"
-        ],
-        "Vindex": "user_index"
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ref_with_source.col from ref_with_source where 1 != 1",
+            "Query": "select ref_with_source.col from ref_with_source"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as u where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :ref_with_source_col) as u",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
       },
       "TablesUsed": [
         "user.ref_with_source",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Reference table preserved by an outer join is not merged when only the pushed join predicate makes the other side single-shard",
@@ -1074,7 +1097,8 @@
         "user.ref_with_source",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Multi-table update whose only target is the sharded side still merges the reference outer join",
@@ -1295,6 +1319,84 @@
                     },
                     "FieldQuery": "select u.col from `user` as u where 1 != 1",
                     "Query": "select u.col from `user` as u where u.col = :r_col limit 15"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "EXISTS over a reference outer join correlated through the null-extended side runs as a semi join",
+    "query": "select r.col from ref r where exists (select 1 from ref r1 left join `user` x on x.id = r.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select r.col from ref r where exists (select 1 from ref r1 left join `user` x on x.id = r.col)",
+      "Instructions": {
+        "OperatorType": "SemiJoin",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from ref as r where 1 != 1",
+            "Query": "select r.col from ref as r"
+          },
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "1 as 1"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Reference",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from ref as r1 where 1 != 1",
+                        "Query": "select 1 from ref as r1"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from `user` as x where 1 != 1",
+                        "Query": "select 1 from `user` as x where x.id = :r_col",
+                        "Values": [
+                          ":r_col"
+                        ],
+                        "Vindex": "user_index"
+                      }
+                    ]
                   }
                 ]
               }

@@ -256,8 +256,6 @@ func createDeleteOperator(ctx *plancontext.PlanningContext, del *sqlparser.Delet
 	}
 
 	if del.Limit != nil {
-		// Unless the rows end up on one shard, the limit is applied above the route.
-		ctx.DMLReadsItsRows = true
 		delOp.Source = newLimit(addOrdering(ctx, op, del.OrderBy), del.Limit, false)
 	} else {
 		delOp.Source = op

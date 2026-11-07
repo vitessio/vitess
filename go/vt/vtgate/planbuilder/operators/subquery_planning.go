@@ -691,16 +691,10 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	}
 	// The subquery's rows are consumed by its predicate instead of returned, so a wider route
 	// cannot duplicate them into the result: each outer row lives on one shard and asks the
-	// question there. What they still need is the route to run when the routing they contributed
-	// finds no destination, and only a single-shard route can find none. A merge that keeps the
-	// outer routing has taken nothing from them: a destination it does not find is one where
-	// there was no outer row to ask the question.
-	preserved, canMerge := referenceRowsInvariant(routing, false, outer)
-	if inner.PreservesReferenceRows && routing != outer.Routing && routing.OpCode().IsSingleShard() {
-		preserved = true
-	}
-	if !canMerge {
-		debugNoRewrite("subquery merge blocked: %s routing would widen a route that has to stay single-shard", routing.OpCode().String())
+	// question there. Only the rows the outer route preserved are owed.
+	preserved := outer.PreservesReferenceRows
+	if preserved && !canCarryReferenceRows(routing) {
+		debugNoRewrite("subquery merge blocked: the reference rows an outer join preserves cannot be read through %s routing", routing.OpCode().String())
 		return nil
 	}
 

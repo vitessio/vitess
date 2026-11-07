@@ -66,19 +66,6 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
-		// Except when the merge owes the rows a reference table keeps on the preserved side
-		// of an outer join: only a single-shard route returns each of them once.
-		if owesReferenceRows(ctx, jm.joinType, lhsRoute, rhsRoute) {
-			if !routingB.OpCode().IsSingleShard() {
-				debugNoRewrite("apply join merge blocked: reference table on the preserved side of a %s", jm.joinType.ToString())
-				return nil
-			}
-			// The opcode can come from a join predicate that the caller restores to its
-			// cross-table shape, so anyone resetting the routing has to check it again.
-			// The merge gets a copy of the routing, so that re-checking it cannot damage
-			// the RHS if we end up not merging after all.
-			return jm.merge(ctx, lhsRoute, rhsRoute, routingB.Clone())
-		}
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
@@ -118,23 +105,20 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 // owesReferenceRows reports whether a merge of these two routes has to produce the rows that an
 // outer join preserves on a reference side exactly once. A reference table has the same rows on
-// every shard, so a multi-shard route returns each unmatched preserved row once per shard.
-// Checking the opcode rather than the routing type leaves unsharded routes out: there is only one
-// shard to read them from.
-func owesReferenceRows(ctx *plancontext.PlanningContext, joinType sqlparser.JoinType, preserved, other *Route) bool {
-	if joinType.IsInner() || preserved.Routing.OpCode() != engine.Reference {
-		return false
-	}
-
-	return !isDirectDMLRowSource(ctx, preserved, other)
+// every shard, so a route that reads more than one returns each unmatched preserved row once per
+// shard. Checking the opcode leaves unsharded routes out, and the routing type leaves out dual,
+// whose own merge rule only lets a single-shard route take it.
+func owesReferenceRows(joinType sqlparser.JoinType, preserved *Route) bool {
+	return !joinType.IsInner() && canCarryReferenceRows(preserved.Routing)
 }
 
 // isDirectDMLRowSource reports whether a merge of these routes is the row source of a multi-table
 // DML sent to the shards as it is, rather than something that reads it. Nothing returns the
 // preserved rows then: an unmatched one has no row to update or delete on the other side. A target
 // among these routes is what says the DML writes through this join rather than reading it from
-// further down, where an outer join in a subquery does have its rows read. A DML that reads its
-// rows first does so through a SELECT, which is never the row source.
+// further down, where an outer join in a subquery does have its rows read. A DML that is known to
+// read its rows first, through a SELECT, has no row source. findDMLAboveRoute can still turn a DML
+// into one that reads its rows after the joins are planned, and that SELECT keeps the exemption.
 func isDirectDMLRowSource(ctx *plancontext.PlanningContext, routes ...*Route) bool {
 	targets := ctx.SemTable.DMLTargets
 	if targets.IsEmpty() || ctx.DMLReadsItsRows {
@@ -300,25 +284,14 @@ func mergeShardedRouting(r1 *ShardedRouting, r2 *ShardedRouting) *ShardedRouting
 	return tr
 }
 
-// passesOnReferenceRows reports whether the reference rows an input preserved can still reach the
-// output of this join without a row of a sharded table next to them. Only those can come back once
-// per shard. An input made of reference tables alone returns the same rows on every shard, and a
-// row of a sharded table lives on one, so a join that pairs every preserved row with such a row,
-// as an inner join does and as the null-extended side of an outer join does, returns each pairing
-// once wherever it runs. An input that reads a sharded table returns different rows on each shard,
-// so the shard a pairing lands on decides what it returns, and the invariant has to stay.
-func (jm *joinMerger) passesOnReferenceRows(input, other *Route, isLHS bool) bool {
-	if !input.PreservesReferenceRows {
-		return false
-	}
-	if isLHS && !jm.joinType.IsInner() {
-		return true
-	}
-	if _, referenceOnly := input.Routing.(*AnyShardRouting); !referenceOnly {
-		return true
-	}
+// passesOnReferenceRows reports whether the reference rows an input preserved still have to come
+// back once from this merge. Only a reference route carries them, and it returns the same rows on
+// every shard, so pairing each of them with a row of a sharded table, which lives on one shard,
+// returns each pairing once wherever the route runs. The preserved side of an outer join pairs its
+// rows with nothing, and owesReferenceRows already covers it.
+func passesOnReferenceRows(input, other *Route) bool {
 	_, sharded := other.Routing.(*ShardedRouting)
-	return !sharded || other.PreservesReferenceRows
+	return input.PreservesReferenceRows && !sharded
 }
 
 func getKeyspaceName(routing Routing) string {
@@ -329,15 +302,15 @@ func getKeyspaceName(routing Routing) string {
 }
 
 func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r Routing, conditions ...engine.Condition) *Route {
-	// The rows a join further down preserved are not read either when this merge is the DML's row
-	// source, so the target exempts them the same way it exempts the ones this join preserves.
-	owed := owesReferenceRows(ctx, jm.joinType, op1, op2) || jm.passesOnReferenceRows(op1, op2, true) || jm.passesOnReferenceRows(op2, op1, false)
-	preserved, canMerge := referenceRowsInvariant(r, owed)
-	if preserved && isDirectDMLRowSource(ctx, op1, op2) {
-		preserved, canMerge = false, true
+	// Only a reference routing returns the preserved rows once, so the merge keeps them on one. A
+	// sharded routing would have to stay single-shard through every later reset and find a
+	// destination even when its predicates match none, so the rows are read on their own instead.
+	owed := owesReferenceRows(jm.joinType, op1) || passesOnReferenceRows(op1, op2) || passesOnReferenceRows(op2, op1)
+	if owed && isDirectDMLRowSource(ctx, op1, op2) {
+		owed = false
 	}
-	if !canMerge {
-		debugNoRewrite("apply join merge blocked: %s routing would widen a route that has to stay single-shard", r.OpCode().String())
+	if owed && !canCarryReferenceRows(r) {
+		debugNoRewrite("apply join merge blocked: the reference rows an outer join preserves cannot be read through %s routing", r.OpCode().String())
 		return nil
 	}
 
@@ -353,6 +326,6 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 		MergedWith:             []*Route{op2},
 		Routing:                r,
 		Conditions:             conditions,
-		PreservesReferenceRows: preserved,
+		PreservesReferenceRows: owed,
 	}
 }
