@@ -1,5 +1,454 @@
 [
   {
+    "comment": "UNION ALL after a reference EXISTS predicate can merge into a scatter route",
+    "query": "select * from (select u.* from user u where exists (select 1 from ref r where r.id = u.id) union all select * from user) as t",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select u.* from user u where exists (select 1 from ref r where r.id = u.id) union all select * from user) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {"Name": "user", "Sharded": true},
+        "FieldQuery": "select * from (select u.* from `user` as u where 1 != 1 union all select * from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select * from (select u.* from `user` as u where exists (select 1 from ref as r where r.id = u.id) union all select * from `user`) as t"
+      },
+      "TablesUsed": ["user.user"]
+    }
+  },
+  {
+    "comment": "UNION ALL after a reference EXISTS predicate in OR can merge into a scatter route",
+    "query": "select * from (select u.* from user u where u.id = 1 or exists (select 1 from ref r where r.id = u.id) union all select * from user) as t",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select u.* from user u where u.id = 1 or exists (select 1 from ref r where r.id = u.id) union all select * from user) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {"Name": "user", "Sharded": true},
+        "FieldQuery": "select * from (select u.* from `user` as u where 1 != 1 union all select * from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select * from (select u.* from `user` as u where u.id = 1 or exists (select 1 from ref as r where r.id = u.id) union all select * from `user`) as t"
+      },
+      "TablesUsed": ["user.user"]
+    }
+  },
+  {
+    "comment": "UNION ALL keeps reference rows when an aggregate join can return rows on every shard",
+    "query": "select r.id from ref r join (select count(*) as n from user where id = 1) a on 1 = 1 union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select r.id from ref r join (select count(*) as n from user where id = 1) a on 1 = 1 union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.id from (select count(*) as n from `user` where 1 != 1) as a, ref as r where 1 != 1",
+            "Query": "select r.id from (select count(*) as n from `user` where id = 1) as a, ref as r where 1 = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL after an inner reference join can merge into a scatter route",
+    "query": "select * from (select u.* from user u join ref r on u.id = r.id union all select * from user) as t",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select * from (select u.* from user u join ref r on u.id = r.id union all select * from user) as t",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select * from (select u.* from `user` as u, ref as r where 1 != 1 union all select * from `user` where 1 != 1) as t where 1 != 1",
+        "Query": "select * from (select u.* from `user` as u, ref as r where u.id = r.id union all select * from `user`) as t"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL keeps reference rows from a left outer join separate",
+    "query": "select id from (select r.id from ref r left join user u on u.id = r.id union all select id from user) as t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from (select r.id from ref r left join user u on u.id = r.id union all select id from user) as t",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.id from ref as r left join `user` as u on u.id = r.id where 1 != 1",
+            "Query": "select r.id from ref as r left join `user` as u on u.id = r.id"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL preserves single-shard merging with a reference arm before ORDER BY",
+    "query": "select *, id from user where id = 1 union all select *, id from ref order by id",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select *, id from user where id = 1 union all select *, id from ref order by id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select *, id from `user` where 1 != 1 union all select *, id from ref where 1 != 1",
+        "Query": "select *, id from `user` where id = 1 union all select *, id from ref order by id asc",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL preserves single-shard merging with a reference arm after ORDER BY",
+    "query": "select *, id from ref union all select *, id from user where id = 1 order by id",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select *, id from ref union all select *, id from user where id = 1 order by id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select *, id from ref where 1 != 1 union all select *, id from `user` where 1 != 1",
+        "Query": "select *, id from ref union all select *, id from `user` where id = 1 order by id asc",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL preserves single-shard merging with a source-of-reference arm",
+    "query": "select *, id from user where id = 1 union all select *, id from ref_with_source order by id",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select *, id from user where id = 1 union all select *, id from ref_with_source order by id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select *, id from `user` where 1 != 1 union all select *, id from ref_with_source where 1 != 1",
+        "Query": "select *, id from `user` where id = 1 union all select *, id from ref_with_source order by id asc",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL preserves single-shard merging with a source-of-reference arm first",
+    "query": "select *, id from ref_with_source union all select *, id from user where id = 1 order by id",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select *, id from ref_with_source union all select *, id from user where id = 1 order by id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select *, id from ref_with_source where 1 != 1 union all select *, id from `user` where 1 != 1",
+        "Query": "select *, id from ref_with_source union all select *, id from `user` where id = 1 order by id asc",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL does not merge a reference arm into a multi-shard IN route",
+    "query": "select id from ref union all select id from user where id in (1, 2)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from ref union all select id from user where id in (1, 2)",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from ref where 1 != 1",
+            "Query": "select id from ref"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where id in ::__vals",
+            "Values": [
+              "(1, 2)"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL does not widen a mixed UNION DISTINCT prefix containing a reference arm",
+    "query": "select id from ref union select id from user where id = 1 union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from ref union select id from user where id = 1 union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from ref where 1 != 1 union select id from `user` where 1 != 1",
+            "Query": "select id from ref union select id from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL does not widen a mixed UNION DISTINCT prefix containing a dual arm",
+    "query": "select 1 from dual union select id from user where id = 1 union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from dual union select id from user where id = 1 union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1 union select id from `user` where 1 != 1",
+            "Query": "select 1 from dual union select id from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL does not widen a single-shard route containing a dual arm",
+    "query": "select 1 from dual union all select id from user where id = 1 union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from dual union all select id from user where id = 1 union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1 union all select id from `user` where 1 != 1",
+            "Query": "select 1 from dual union all select id from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL does not repeat a dual row for every shard",
+    "query": "select 1 from dual union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 1 from dual union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "union all between two scatter selects",
     "query": "select id from user union all select id from music",
     "plan": {
