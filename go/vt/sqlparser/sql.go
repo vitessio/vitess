@@ -13894,7 +13894,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:1054
 		{
-			yyLOCAL = &OtherAdmin{}
+			yyLOCAL = &OtherAdmin{Exprs: yyDollar[2].exprs()}
 		}
 		yyVAL.setstatement(yyLOCAL)
 	case 107:

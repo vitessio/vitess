@@ -344,6 +344,7 @@ const (
 	RefOfOrderExpr
 	OrderByOffset
 	RefOfOrderByOptionCols
+	RefOfOtherAdminExprsOffset
 	RefOfOverClauseWindowName
 	RefOfOverClauseWindowSpec
 	RefOfParenTableExprExprs
@@ -1255,6 +1256,8 @@ func (s ASTStep) DebugString() string {
 		return "(OrderBy)[]Offset"
 	case RefOfOrderByOptionCols:
 		return "(*OrderByOption).Cols"
+	case RefOfOtherAdminExprsOffset:
+		return "(*OtherAdmin).ExprsOffset"
 	case RefOfOverClauseWindowName:
 		return "(*OverClause).WindowName"
 	case RefOfOverClauseWindowSpec:
@@ -2510,6 +2513,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(OrderBy)[idx]
 		case RefOfOrderByOptionCols:
 			node = node.(*OrderByOption).Cols
+		case RefOfOtherAdminExprsOffset:
+			idx, bytesRead := path.nextPathOffset()
+			path = path[bytesRead:]
+			node = node.(*OtherAdmin).Exprs[idx]
 		case RefOfOverClauseWindowName:
 			node = node.(*OverClause).WindowName
 		case RefOfOverClauseWindowSpec:

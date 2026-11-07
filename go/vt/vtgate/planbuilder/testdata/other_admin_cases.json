@@ -55,5 +55,24 @@
         "SingleShardOnly": true
       }
     }
+  },
+  {
+    "comment": "DO statement with a lock function that only reads lock state",
+    "query": "DO is_free_lock('foo'), is_used_lock('foo')",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "OTHER",
+      "Original": "DO is_free_lock('foo'), is_used_lock('foo')",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "DO is_free_lock('foo'), is_used_lock('foo')",
+        "SingleShardOnly": true
+      }
+    }
   }
 ]
