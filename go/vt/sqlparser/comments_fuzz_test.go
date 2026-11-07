@@ -59,6 +59,9 @@ func FuzzSplitMarginComments(f *testing.F) {
 		"/*! select 1 */",
 		"/*b*/ /*a*/",
 		"select 1;",
+		"select 1 /*a*/;",
+		"select 1 /*a*/ ; /*b*/",
+		"select 1 -- a;",
 		"select 'a\\' /*x*/ union select 2 -- */",
 		"select \"a *\" /*x*/, 1 -- */",
 		"select 1 // x\n/*b*/",
@@ -169,11 +172,15 @@ func isCommentsAndWhitespaceOnly(parser *Parser, text string) bool {
 	}
 }
 
-// FuzzSplitMarginCommentsSkipsTokenizer checks that SplitMarginComments, which
-// reads only the leading comments of text that does not end with '*/', splits
-// every input the tokenizer accepts exactly where tokenizedMarginBounds does.
-// SplitMarginComments first removes the Unicode spaces at both ends of the
-// input, so tokenizedMarginBounds reads the input without them too.
+// FuzzSplitMarginCommentsSkipsTokenizer checks that marginBounds, which reads
+// only the leading comments of text that does not end with '*/', splits every
+// input the tokenizer accepts exactly where tokenizedMarginBounds does.
+// SplitMarginComments removes the Unicode spaces at both ends of the input
+// before it calls marginBounds, so both read the input without them.
+//
+// It checks marginBounds rather than SplitMarginComments, because
+// SplitMarginComments splits again without a statement terminator at the end,
+// and the tokenizer alone does not.
 func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
 	seeds := []string{
 		"/* a */ select 1",
@@ -205,9 +212,16 @@ func FuzzSplitMarginCommentsSkipsTokenizer(f *testing.F) {
 		if newlineFirst {
 			want.Trailing = "\n" + want.Trailing
 		}
-		query, comments := parser.SplitMarginComments(input)
-		require.Equal(t, strings.Trim(sql[start:end], sqlSpaceChars+";"), query,
-			"query differs from the tokenizer's (from %q)", input)
-		require.Equal(t, want, comments, "margins differ from the tokenizer's (from %q)", input)
+		gotStart, gotEnd, gotNewlineFirst := parser.marginBounds(sql)
+		got := MarginComments{
+			Leading:  strings.TrimLeft(sql[:gotStart], sqlSpaceChars),
+			Trailing: strings.TrimRight(sql[gotEnd:], sqlSpaceChars),
+		}
+		if gotNewlineFirst {
+			got.Trailing = "\n" + got.Trailing
+		}
+		require.Equal(t, strings.Trim(sql[start:end], sqlSpaceChars+";"), trimQuery(sql[gotStart:gotEnd]),
+			"query differs from the tokenizer's (from %q)", sql)
+		require.Equal(t, want, got, "margins differ from the tokenizer's (from %q)", sql)
 	})
 }
