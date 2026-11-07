@@ -515,8 +515,7 @@ func TestVersionedCommentParsing(t *testing.T) {
 
 // TestVersionedCommentSixDigitVersions tests six-digit versions in versioned
 // comments, which MySQL reads from 8.1.0 on when whitespace follows the sixth
-// digit. The MySQL 8.0 expectations are validated against MySQL 8.0.43, and the
-// others follow the lexer of MySQL 8.4 (sql/sql_lex.cc).
+// digit. The expectations are validated against MySQL 8.0.43 and 8.4.8.
 func TestVersionedCommentSixDigitVersions(t *testing.T) {
 	tests := []struct {
 		name     string
