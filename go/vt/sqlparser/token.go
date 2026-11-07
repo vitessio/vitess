@@ -757,9 +757,13 @@ func (tkn *Tokenizer) scanCommentType2() (int, string) {
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 	start := tkn.Pos - 3
 
-	// Read up to 5 version digits inline.
+	// Read up to 5 version digits inline. From 8.1.0 on, MySQL reads a sixth
+	// digit as part of the version when whitespace follows it.
 	versionStart := tkn.Pos
 	for i := 0; i < 5 && isDigit(tkn.cur()); i++ {
+		tkn.skip(1)
+	}
+	if tkn.Pos-versionStart == 5 && tkn.parser.readsSixDigitCommentVersions() && isDigit(tkn.cur()) && isSpace(tkn.peek(1)) {
 		tkn.skip(1)
 	}
 	versionStr := tkn.buf[versionStart:tkn.Pos]
@@ -769,7 +773,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 		tkn.Pos = versionStart
 	}
 
-	if tkn.parser.version >= versionStr {
+	if tkn.parser.commentVersionApplies(versionStr) {
 		// Version satisfied — Scan() will read inner tokens and detect
 		// the closing */ via the inVersionedComment flag.
 		tkn.inVersionedComment = true
@@ -846,4 +850,8 @@ func digitVal(ch uint16) int {
 
 func isDigit(ch uint16) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+func isSpace(ch uint16) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\v' || ch == '\f' || ch == '\r'
 }
