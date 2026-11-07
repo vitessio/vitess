@@ -23,8 +23,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 func TestRecurseDualQuery(t *testing.T) {
@@ -203,4 +205,47 @@ func TestRecurseCTEStreamConcurrentDelivery(t *testing.T) {
 	res, err := wrapStreamExecute(cte, &noopVCursor{}, bv, true)
 	require.NoError(t, err)
 	require.Len(t, res.Rows, seedChunks)
+}
+
+// TestRecurseCTEDistinct checks that UNION DISTINCT discards rows already
+// produced, so a cycle terminates instead of hitting the recursion limit.
+func TestRecurseCTEDistinct(t *testing.T) {
+	fields := sqltypes.MakeTestFields("name|id", "varchar|int64")
+
+	// "A" duplicates "a" under the case-insensitive collation.
+	seed := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "a|1", "A|1")},
+		noLog:   true,
+	}
+	// (a,1) leads to (b,2) and back to itself; (b,2) leads only to seen rows.
+	termResults := []*sqltypes.Result{
+		sqltypes.MakeTestResult(fields, "b|2", "a|1"),
+		sqltypes.MakeTestResult(fields, "B|2", "a|1"),
+	}
+	for range maxRecurseDepth {
+		termResults = append(termResults, sqltypes.MakeTestResult(fields, "a|1"))
+	}
+	term := &fakePrimitive{results: termResults, noLog: true}
+
+	cte := &RecurseCTE{
+		Seed: seed,
+		Term: term,
+		Vars: map[string]int{"cte_id": 1},
+		CheckCols: []CheckCol{
+			{Col: 0, Type: evalengine.NewType(sqltypes.VarChar, collations.CollationUtf8mb4ID)},
+			{Col: 1, Type: evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)},
+		},
+	}
+	bv := map[string]*querypb.BindVariable{}
+	want := sqltypes.MakeTestResult(fields, "a|1", "b|2").Rows
+
+	res, err := cte.TryExecute(t.Context(), &noopVCursor{}, bv, true)
+	require.NoError(t, err)
+	require.Equal(t, want, res.Rows)
+
+	seed.rewind()
+	term.rewind()
+	res, err = wrapStreamExecute(cte, &noopVCursor{}, bv, true)
+	require.NoError(t, err)
+	require.Equal(t, want, res.Rows)
 }

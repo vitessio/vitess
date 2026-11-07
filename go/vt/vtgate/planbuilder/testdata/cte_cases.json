@@ -2178,6 +2178,59 @@
     }
   },
   {
+    "comment": "Recursive CTE with UNION DISTINCT that cannot be merged",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, id from user where manager_id is null union select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as `name`, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select `name`, id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as `name`, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select `name`, id from `user` where manager_id is null) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.`name`, e.id, weight_string(e.`name`), weight_string(e.id) from `user` as e where 1 != 1",
+                "Query": "select e.`name`, e.id, weight_string(e.`name`), weight_string(e.id) from `user` as e where e.manager_id = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Merge into a single dual route",
     "query": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
     "plan": {

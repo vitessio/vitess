@@ -34,6 +34,9 @@ type RecurseCTE struct {
 	Seed, Term Primitive
 
 	Vars map[string]int
+
+	// CheckCols is set for UNION DISTINCT, to discard rows already produced.
+	CheckCols []CheckCol
 }
 
 var _ Primitive = (*RecurseCTE)(nil)
@@ -44,6 +47,12 @@ const maxRecurseDepth = 1000
 
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields)
+	if err != nil {
+		return nil, err
+	}
+
+	pt := r.newProbeTable(vcursor)
+	res.Rows, err = pt.filter(res.Rows)
 	if err != nil {
 		return nil, err
 	}
@@ -72,8 +81,12 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err != nil {
 				return nil, err
 			}
-			recurseRows = append(recurseRows, rresult.Rows...)
-			res.Rows = append(res.Rows, rresult.Rows...)
+			newRows, err := pt.filter(rresult.Rows)
+			if err != nil {
+				return nil, err
+			}
+			recurseRows = append(recurseRows, newRows...)
+			res.Rows = append(res.Rows, newRows...)
 		}
 	}
 	return res, nil
@@ -92,16 +105,25 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// per shard, so both the shared frontier and the downstream callback must be
 	// serialized.
 	var mu sync.Mutex
+	var recurseRows []sqltypes.Row
+	pt := r.newProbeTable(vcursor)
+	emit := func(result *sqltypes.Result) error {
+		mu.Lock()
+		defer mu.Unlock()
+		if pt != nil {
+			rows, err := pt.filter(result.Rows)
+			if err != nil {
+				return err
+			}
+			result = &sqltypes.Result{Fields: result.Fields, Rows: rows}
+		}
+		recurseRows = append(recurseRows, result.Rows...)
+		return callback(result)
+	}
 
 	// Stream the seed, emitting its rows and collecting them to drive the first
 	// recursion level.
-	var recurseRows []sqltypes.Row
-	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
-		mu.Lock()
-		defer mu.Unlock()
-		recurseRows = append(recurseRows, result.Rows...)
-		return callback(result)
-	})
+	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, emit)
 	if err != nil {
 		return err
 	}
@@ -127,18 +149,21 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			if loops > maxRecurseDepth {
 				return vterrors.VT09030("")
 			}
-			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
-				mu.Lock()
-				defer mu.Unlock()
-				recurseRows = append(recurseRows, result.Rows...)
-				return callback(result)
-			})
+			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, emit)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+// newProbeTable returns nil for UNION ALL.
+func (r *RecurseCTE) newProbeTable(vcursor VCursor) *probeTable {
+	if len(r.CheckCols) == 0 {
+		return nil
+	}
+	return newProbeTable(r.CheckCols, vcursor.Environment().CollationEnv())
 }
 
 func (r *RecurseCTE) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
@@ -156,6 +181,13 @@ func (r *RecurseCTE) Inputs() ([]Primitive, []map[string]any) {
 func (r *RecurseCTE) description() PrimitiveDescription {
 	other := map[string]any{
 		"JoinVars": orderedStringIntMap(r.Vars),
+	}
+	if len(r.CheckCols) > 0 {
+		colls := make([]string, 0, len(r.CheckCols))
+		for _, checkCol := range r.CheckCols {
+			colls = append(colls, checkCol.String())
+		}
+		other["Collations"] = colls
 	}
 
 	return PrimitiveDescription{
