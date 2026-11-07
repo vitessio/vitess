@@ -95,6 +95,37 @@ func TestSubqueriesExists(t *testing.T) {
 	mcmp.AssertMatches(`select * from (select 1) as tmp where exists(select 1 from t1 where id1 = 1)`, `[[INT32(1)]]`)
 }
 
+// TestExistsKeepsTheRestOfThePredicate checks that an EXISTS that can't be merged keeps the rest of its predicate,
+// both when the subquery returns rows and when it doesn't.
+func TestExistsKeepsTheRestOfThePredicate(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,1),(1,2),(2,3),(3,4),(4,5),(5,6)")
+
+	queries := []string{
+		`select id2 from t1 where id1 = 1 or exists (select 1 from t2) order by id2`,
+		`select id2 from t1 where id1 = 1 or not exists (select 1 from t2) order by id2`,
+		`select id2 from t1 where (case when exists (select 1 from t2) then id1 = 1 else id1 = 2 end) order by id2`,
+		`select t1.id2 from t1 join t2 on t1.id2 = t2.id4 or exists (select 1 from t2 where id3 = 7) order by t1.id2, t2.id3`,
+	}
+	for _, query := range queries {
+		mcmp.Exec(query)
+	}
+
+	mcmp.Exec("insert into t2(id3, id4) values (1, 2), (3, 4), (7, 8)")
+	for _, query := range queries {
+		mcmp.Exec(query)
+	}
+
+	mcmp.Exec("insert into user(id, name) values (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd')")
+	mcmp.Exec("delete from user where id = 1 or exists (select 1 from t2 where id3 > 100)")
+	mcmp.AssertMatches("select id from user order by id", `[[INT32(2)] [INT32(3)] [INT32(4)]]`)
+	mcmp.Exec("update user set name = 'x' where id = 2 or not exists (select 1 from t2)")
+	mcmp.AssertMatches("select id, name from user order by id", `[[INT32(2) VARCHAR("x")] [INT32(3) VARCHAR("c")] [INT32(4) VARCHAR("d")]]`)
+}
+
 func TestQueryAndSubQWithLimit(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
