@@ -1202,7 +1202,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				analyzeQuery := buildIdentifierQuery(sqlAnalyzeTable, vreplTable)
 				if _, err := preparationsConn.Conn.Exec(ctx, analyzeQuery, -1, false); err != nil {
 					// Best effort only. Do not fail the mgiration if this fails.
-					_ = e.updateMigrationMessage(ctx, "failed ANALYZE shadow table", s.workflow)
+					_ = e.updateMigrationMessage(ctx, s.workflow, "failed ANALYZE shadow table")
 				} else {
 					_ = e.updateMigrationTimestamp(ctx, "shadow_analyzed_timestamp", s.workflow)
 				}
