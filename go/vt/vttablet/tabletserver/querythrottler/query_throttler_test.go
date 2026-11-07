@@ -20,12 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
@@ -132,7 +134,7 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 		throttleDecision          registry.ThrottleDecision
 		expectError               bool
 		expectDryRunLog           bool
-		expectedLogMsg            string
+		expectedLogAttrs          map[string]any
 		expectedTotalRequests     int64
 		expectedThrottledRequests int64
 	}{
@@ -199,9 +201,17 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				Threshold:          80.0,
 				ThrottlePercentage: 1.0,
 			},
-			expectError:               false,
-			expectDryRunLog:           true,
-			expectedLogMsg:            "[DRY-RUN] Query throttled: metric=cpu value=95.0 threshold=80.0, metric name: cpu, metric value: 95.000000",
+			expectError:     false,
+			expectDryRunLog: true,
+			expectedLogAttrs: map[string]any{
+				"strategy":         "MockStrategy",
+				"workload":         "test-workload",
+				"priority":         "50",
+				"decision_message": "Query throttled: metric=cpu value=95.0 threshold=80.0",
+				"metric_name":      "cpu",
+				"metric_value":     95.0,
+				"threshold":        80.0,
+			},
 			expectedTotalRequests:     1,
 			expectedThrottledRequests: 1,
 		},
@@ -248,14 +258,7 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			iqt.stats.requestsTotal.ResetAll()
 			iqt.stats.requestsThrottled.ResetAll()
 
-			// Capture log output.
-			logCapture := &testLogCapture{}
-			originalLogWarn := log.Warn
-			defer func() {
-				log.Warn = originalLogWarn
-			}()
-
-			log.Warn = logCapture.captureLog
+			logs := logtest.Capture(t, slog.LevelWarn)
 
 			// Test the enforcement
 			err := iqt.Throttle(
@@ -277,11 +280,16 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			}
 
 			// Verify log expectation
+			records := logs.Records(t)
 			if tt.expectDryRunLog {
-				require.Len(t, logCapture.logs, 1, "Expected exactly one log message")
-				require.Equal(t, tt.expectedLogMsg, logCapture.logs[0], "Log message should match expected")
+				require.Len(t, records, 1, "Expected exactly one log message")
+				assert.Equal(t, "[DRY-RUN] query would have been throttled", records[0]["msg"])
+				assert.Equal(t, "WARN", records[0]["level"])
+				for key, want := range tt.expectedLogAttrs {
+					assert.Equal(t, want, records[0][key], key)
+				}
 			} else {
-				require.Empty(t, logCapture.logs, "Expected no log messages")
+				require.Empty(t, records, "Expected no log messages")
 			}
 
 			// Verify stats expectation

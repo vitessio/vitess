@@ -17,14 +17,17 @@ limitations under the License.
 package schema
 
 import (
+	"log/slog"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -157,8 +160,13 @@ func TestHistorian(t *testing.T) {
 		PKColumns: []int64{0},
 	}
 	gtidBeforeEarliest := gtidPrefix + "1-05"
+	logs := logtest.Capture(t, slog.LevelInfo)
 	_, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtidBeforeEarliest)
 	require.Equal(t, "table t1 not found in vttablet schema", err.Error())
+	notCached := logs.Record(t, "Schema not found in cache because the position is older than the oldest cached schema")
+	assert.Equal(t, "t1", notCached["table"])
+	assert.Equal(t, gtidPrefix+"1-5", notCached["position"])
+	assert.Equal(t, gtid1, notCached["oldest_cached_position"])
 
 	tab, err = se.GetTableForPos(ctx, sqlparser.NewIdentifierCS("t1"), gtid1)
 	require.NoError(t, err)

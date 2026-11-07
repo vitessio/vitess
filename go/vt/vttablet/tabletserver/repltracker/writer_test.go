@@ -19,6 +19,7 @@ package repltracker
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -269,9 +271,15 @@ func TestWriteHeartbeatError(t *testing.T) {
 	writes.Reset()
 	writeErrors.Reset()
 
+	logs := logtest.Capture(t, slog.LevelError)
 	tw.writeHeartbeat()
 	assert.Equal(t, int64(0), writes.Get())
 	assert.Equal(t, int64(1), writeErrors.Get())
+
+	record := logs.Record(t, "failed to write heartbeat")
+	assert.Equal(t, "HeartbeatWriter", record["logger"])
+	assert.Contains(t, record["error"], "heartbeatWriter failed to execute fetch on app connection")
+	assert.Equal(t, "UNKNOWN", record["error_code"])
 }
 
 // TestCloseWhileStuckWriting tests that Close shouldn't get stuck even if the heartbeat writer is stuck waiting for a semi-sync ACK.

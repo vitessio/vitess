@@ -20,11 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/proto/vttime"
 
 	"github.com/stretchr/testify/assert"
@@ -49,6 +51,7 @@ func TestShardSync(t *testing.T) {
 	defer cancel()
 	ts := memorytopo.NewServer(ctx, "cell1")
 	statsTabletTypeCount.ResetAll()
+	logs := logtest.Capture(t, slog.LevelInfo)
 	tm := newTestTM(t, ts, 100, keyspace, shard, nil)
 	defer tm.Stop()
 
@@ -93,6 +96,15 @@ func TestShardSync(t *testing.T) {
 
 	// verify that the tablet record has been updated
 	checkTabletRecordWithTimeout(ctx, t, ts, tm.tabletAlias, topodata.TabletType_REPLICA, nil)
+
+	record := logs.Wait(t, "Updating shard record")
+	assert.Equal(t, "cell1-0000000100", record["tablet"])
+	termStart, err := time.Parse(time.RFC3339Nano, fmt.Sprint(record["primary_term_start_time"]))
+	require.NoError(t, err)
+	assert.False(t, termStart.IsZero())
+	record = logs.Wait(t, "Another tablet has won primary election. Stepping down.")
+	assert.NotContains(t, record, "primary_tablet")
+	assert.Equal(t, "REPLICA", record["tablet_type"])
 }
 
 // waitForShardWatchToStart waits for shard watch to have started.

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -33,6 +34,7 @@ import (
 	"vitess.io/vitess/go/pools/smartconnpool"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -253,9 +255,22 @@ func TestDBConnKill(t *testing.T) {
 	newKillQuery := fmt.Sprintf("kill %d", dbConn.ID())
 	// Kill failed because "kill query_id" failed
 	db.AddRejectedQuery(newKillQuery, errors.New("rejected"))
-	err = dbConn.Kill("test kill", 0)
+	logs := logtest.Capture(t, slog.LevelInfo)
+	current := "select sleep(10)"
+	dbConn.current.Store(&current)
+	err = dbConn.Kill("test kill", time.Second)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "rejected")
+
+	killing := logs.Record(t, "Killing connection")
+	assert.Equal(t, "test kill", killing["reason"])
+	assert.Equal(t, float64(time.Second), killing["duration"])
+	failed := logs.Record(t, "Could not kill connection")
+	assert.Contains(t, failed["error"], "rejected")
+	for _, record := range []map[string]any{killing, failed} {
+		assert.Equal(t, float64(dbConn.ID()), record["connection_id"])
+		assert.Equal(t, dbConn.CurrentForLogging(), record["query"])
+	}
 }
 
 func TestDBKillWithContext(t *testing.T) {
@@ -768,6 +783,7 @@ func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	// The call must return (not hang) once ctx expires, and the connection
 	// kill must have been attempted.
@@ -782,6 +798,18 @@ func TestDBExecOnceNotInTxnFallsBackToConnKill(t *testing.T) {
 		require.FailNow(t, "ExecOnce hung after ctx expired despite the KILL QUERY failure")
 	}
 	assert.True(t, connKilled.Load(), "connection kill must be attempted when KILL QUERY fails")
+
+	connID := float64(dbConn.conn.ID())
+	redacted := "select :redacted1 /* INT64 */ from dual"
+	record := logs.Record(t, "Killing query")
+	assert.Equal(t, connID, record["connection_id"])
+	assert.Equal(t, redacted, record["query"])
+	assert.NotEmpty(t, record["reason"])
+	assert.Contains(t, record, "duration")
+	record = logs.Record(t, "Could not kill query")
+	assert.Equal(t, connID, record["connection_id"])
+	assert.Equal(t, redacted, record["query"])
+	assert.Contains(t, record["error"], "kill query not permitted")
 }
 
 // TestDBExecOnceNotInTxnEscalatesWhenKillQueryDoesNotUnblock verifies that a

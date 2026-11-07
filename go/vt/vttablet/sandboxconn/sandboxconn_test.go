@@ -18,6 +18,8 @@ package sandboxconn
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -25,6 +27,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -93,4 +97,19 @@ func TestStreamExecuteHonorsCanceledContextDuringExecDelay(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.True(t, retryCallbackCalled)
+}
+
+func TestVStreamUnexpectedStartPos(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	sbc := NewSandboxConn(&topodatapb.Tablet{Type: topodatapb.TabletType_PRIMARY})
+	sbc.StartPos = "MySQL56/a:1-5"
+	target := &querypb.Target{Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+
+	err := sbc.VStream(t.Context(), &binlogdatapb.VStreamRequest{Target: target, Position: "MySQL56/a:1-3"}, nil)
+	require.EqualError(t, err, fmt.Sprintf("startPos(%v): MySQL56/a:1-3, want MySQL56/a:1-5", target))
+
+	record := logs.Record(t, "unexpected startPos")
+	assert.Equal(t, fmt.Sprint(target), record["target"])
+	assert.Equal(t, "MySQL56/a:1-3", record["start_position"])
+	assert.Equal(t, "MySQL56/a:1-5", record["expected_start_position"])
 }

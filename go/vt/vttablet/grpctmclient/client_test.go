@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -33,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerservicepb "vitess.io/vitess/go/vt/proto/tabletmanagerservice"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -94,6 +96,32 @@ func TestExecuteMultiFetchAsDbaSessionVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, rpcClient.request)
 	assert.Equal(t, sessionVariables, rpcClient.request.SessionVariables)
+}
+
+type vdiffClient struct {
+	tabletmanagerservicepb.TabletManagerClient
+}
+
+func (vdiffClient) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRequest, opts ...grpc.CallOption) (*tabletmanagerdatapb.VDiffResponse, error) {
+	return &tabletmanagerdatapb.VDiffResponse{}, nil
+}
+
+// TestVDiffLogsRequest verifies the VDiff request is logged as an attribute,
+// not in the message.
+func TestVDiffLogsRequest(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	client := &Client{dialer: &executeMultiFetchDialer{client: vdiffClient{}}}
+	tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+	req := &tabletmanagerdatapb.VDiffRequest{Keyspace: "commerce", Workflow: "wf1", Action: "create"}
+
+	_, err := client.VDiff(t.Context(), tablet, req)
+	require.NoError(t, err)
+
+	record := logs.Record(t, "VDiff for tablet")
+	assert.Equal(t, "zone1-0000000100", record["tablet"])
+	assert.Equal(t, "commerce", record["keyspace"])
+	assert.Equal(t, "wf1", record["workflow"])
+	assert.Equal(t, fmt.Sprintf("%+v", req), record["request"])
 }
 
 func TestDialDedicatedPool(t *testing.T) {

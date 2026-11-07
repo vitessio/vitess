@@ -45,6 +45,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand/v2"
 	"strings"
@@ -373,7 +374,11 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 		if ti, err := throttler.ts.GetTablet(ctx, throttler.tabletAlias); err == nil {
 			throttler.tabletInfo.Store(ti)
 		} else {
-			log.Error(fmt.Sprintf("Throttler: error reading tablet info: %v", err))
+			log.Error("Throttler: error reading tablet info",
+				slog.String("tablet", topoproto.TabletAliasString(throttler.tabletAlias)),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
+			)
 		}
 	}
 
@@ -410,7 +415,11 @@ func (throttler *Throttler) normalizeThrottlerConfig(throttlerConfig *topodatapb
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
 	if err != nil {
 		if !topo.IsErrType(err, topo.Interrupted) && !errors.Is(err, context.Canceled) {
-			log.Error(fmt.Sprintf("WatchSrvKeyspaceCallback error: %v", err))
+			log.Error("WatchSrvKeyspaceCallback error",
+				slog.String("keyspace", throttler.keyspace),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
+			)
 		}
 		return true
 	}
@@ -454,7 +463,7 @@ func (throttler *Throttler) convergeMetricThresholds() {
 // This may cause the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
 // Note: you should be holding the initMutex when calling this function.
 func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
-	log.Info(fmt.Sprintf("Throttler: applying topo config: %+v", throttlerConfig))
+	log.Info("Throttler: applying topo config", slog.String("throttler_config", fmt.Sprintf("%+v", throttlerConfig)))
 	throttler.customMetricsQuery.Store(throttlerConfig.CustomQuery)
 	if throttlerConfig.Threshold > 0 || throttlerConfig.CustomQuery != "" {
 		// We do not allow Threshold=0, unless there is a custom query.
@@ -612,7 +621,7 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 		defer requestCancel()
 		throttlerConfig, err := throttler.readThrottlerConfig(requestCtx)
 		if err == nil {
-			log.Info(fmt.Sprintf("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config: %+v", throttlerConfig))
+			log.Info("Throttler.retryReadAndApplyThrottlerConfig(): success reading throttler config", slog.String("throttler_config", fmt.Sprintf("%+v", throttlerConfig)))
 			// It's possible that during a retry-sleep, the throttler is closed and opened again, leading
 			// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
 			// attempt to read the throttler config; but we just want to ensure they don't step on each other
@@ -627,7 +636,11 @@ func (throttler *Throttler) retryReadAndApplyThrottlerConfig(ctx context.Context
 			})
 			return
 		}
-		log.Error(fmt.Sprintf("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry in %v. Err=%+v", retryInterval, err))
+		log.Error("Throttler.retryReadAndApplyThrottlerConfig(): error reading throttler config. Will retry",
+			slog.Duration("retry_delay", retryInterval),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		select {
 		case <-ctx.Done():
 			// Throttler is not open so no need to keep retrying.
@@ -709,7 +722,7 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 
 	primary, err := throttler.primaryTablet(ctx)
 	if err != nil {
-		stimulationErrorLogger.Errorf("stimulatePrimaryThrottler failed to find the primary: %v", err)
+		stimulationErrorLogger.Error("stimulatePrimaryThrottler failed to find the primary", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 	if primary == nil {
@@ -720,7 +733,11 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	if err != nil {
 		// The primary may have moved: read it from the topo on the next stimulation.
 		throttler.cachedPrimary.Store(nil)
-		stimulationErrorLogger.Errorf("stimulatePrimaryThrottler failed to check %v: %v", topoproto.TabletAliasString(primary.Alias), err)
+		stimulationErrorLogger.Error("stimulatePrimaryThrottler failed to check the primary",
+			slog.String("primary_tablet", topoproto.TabletAliasString(primary.Alias)),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 	}
 	return err
 }
@@ -1097,17 +1114,17 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	addProbe := func(alias string, tablet *topodatapb.Tablet, scope base.Scope, mysqlSettings *config.MySQLConfigurationSettings, probes base.Probes) bool {
 		for _, ignore := range mysqlSettings.IgnoreHosts {
 			if strings.Contains(alias, ignore) {
-				log.Info(fmt.Sprintf("Throttler: tablet ignored: %+v", alias))
+				log.Info("Throttler: tablet ignored", slog.String("probe_tablet", alias))
 				return false
 			}
 		}
 		if scope != base.SelfScope {
 			if alias == "" {
-				log.Error(fmt.Sprintf("Throttler: got empty alias for scope: %+v", scope))
+				log.Error("Throttler: got empty alias for scope", slog.String("scope", scope.String()))
 				return false
 			}
 			if tablet == nil {
-				log.Error(fmt.Sprintf("Throttler: got nil tablet for alias: %v in scope: %+v", alias, scope))
+				log.Error("Throttler: got nil tablet for alias in scope", slog.String("probe_tablet", alias), slog.String("scope", scope.String()))
 				return false
 			}
 		}
@@ -1184,7 +1201,7 @@ func (throttler *Throttler) refreshInventory(ctx context.Context) error {
 	}
 	go func() {
 		if err := collect(); err != nil {
-			log.Error(fmt.Sprintf("refreshInventory: %+v", err))
+			log.Error("refreshInventory failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}()
 	return nil

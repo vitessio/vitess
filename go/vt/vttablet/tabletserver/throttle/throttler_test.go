@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math"
 	"slices"
@@ -33,6 +34,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -2509,4 +2512,60 @@ func TestStimulatePrimaryThrottler(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestStimulatePrimaryThrottlerLogs verifies the failed stimulations of the primary are logged with the error, and,
+// once the primary is known, with its alias.
+func TestStimulatePrimaryThrottlerLogs(t *testing.T) {
+	primary := &topodatapb.TabletAlias{Cell: "fakezone1", Uid: 101}
+	tcases := []struct {
+		name         string
+		shardErr     error
+		checkErr     error
+		expectMsg    string
+		expectTablet any
+		expectCode   string
+	}{
+		{
+			name:       "shard read fails",
+			shardErr:   vterrors.New(vtrpcpb.Code_UNAVAILABLE, "topo unavailable"),
+			expectMsg:  "stimulatePrimaryThrottler failed to find the primary",
+			expectCode: "UNAVAILABLE",
+		},
+		{
+			name:         "check on the primary fails",
+			checkErr:     vterrors.New(vtrpcpb.Code_DEADLINE_EXCEEDED, "primary unreachable"),
+			expectMsg:    "stimulatePrimaryThrottler failed to check the primary",
+			expectTablet: "fakezone1-0000000101",
+			expectCode:   "DEADLINE_EXCEEDED",
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			saved := stimulationErrorLogger
+			stimulationErrorLogger = logutil.NewThrottledLogger("ThrottlerStimulation", time.Minute)
+			t.Cleanup(func() { stimulationErrorLogger = saved })
+			logs := logtest.Capture(t, slog.LevelError)
+
+			throttler := &Throttler{
+				keyspace: "ks",
+				shard:    "-80",
+				ts: &stimulateTopoServer{
+					primaryAlias: primary,
+					tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_PRIMARY},
+					shardErr:     tcase.shardErr,
+				},
+				dormantPeriod:  time.Minute,
+				tabletTypeFunc: func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA },
+			}
+			err := throttler.stimulatePrimaryThrottler(t.Context(), &stimulateTMClient{checkErr: tcase.checkErr})
+			require.Error(t, err)
+
+			record := logs.Record(t, tcase.expectMsg)
+			assert.Equal(t, "ThrottlerStimulation", record["logger"])
+			assert.Equal(t, tcase.expectTablet, record["primary_tablet"])
+			assert.Equal(t, err.Error(), record["error"])
+			assert.Equal(t, tcase.expectCode, record["error_code"])
+		})
+	}
 }

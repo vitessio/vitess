@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -172,4 +174,24 @@ func TestStartReplicationKeepsRestoredBinlogs(t *testing.T) {
 	fake.ExpectedExecuteSuperQueryCurrent = 0
 	require.NoError(t, tm.startReplication(t.Context(), pos, topodatapb.TabletType_REPLICA, false))
 	assert.Equal(t, len(fake.ExpectedExecuteSuperQueryList), fake.ExpectedExecuteSuperQueryCurrent)
+}
+
+// TestInvokeRestoreDoneHookFailureLogs checks that a failing hook's exit
+// status and stderr are logged as attributes.
+func TestInvokeRestoreDoneHookFailureLogs(t *testing.T) {
+	vtroot := t.TempDir()
+	t.Setenv("VTROOT", vtroot)
+	hookDir := filepath.Join(vtroot, "vthook")
+	require.NoError(t, os.MkdirAll(hookDir, 0o755))
+	script := "#!/bin/bash\necho zq7hookerror >&2\nexit 1\n"
+	require.NoError(t, os.WriteFile(filepath.Join(hookDir, "vttablet_restore_done"), []byte(script), 0o755))
+	tm := newTestTabletManager(t)
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	tm.invokeRestoreDoneHook(time.Now(), nil, "builtin")
+
+	record := logs.Record(t, "vttablet_restore_done hook failed")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, float64(1), record["exit_status"])
+	assert.Contains(t, record["stderr"], "zq7hookerror")
 }

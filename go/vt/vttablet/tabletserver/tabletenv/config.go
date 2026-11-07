@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -297,7 +298,7 @@ func Init() {
 	case streamlog.QueryLogFormatText:
 	case streamlog.QueryLogFormatJSON:
 	default:
-		log.Error(fmt.Sprintf("Invalid querylog-format value %v: must be either text or json", logFormat))
+		log.Error("Invalid querylog-format value: must be either text or json", slog.String("querylog_format", logFormat))
 		os.Exit(1)
 	}
 

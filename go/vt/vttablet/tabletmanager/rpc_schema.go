@@ -18,7 +18,7 @@ package tabletmanager
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -49,7 +49,7 @@ func (tm *TabletManager) ReloadSchema(ctx context.Context, waitPosition string) 
 		if err != nil {
 			return vterrors.Wrapf(err, "ReloadSchema: can't parse wait position (%q)", waitPosition)
 		}
-		log.Info(fmt.Sprintf("ReloadSchema: waiting for replication position: %v", waitPosition))
+		log.Info("ReloadSchema: waiting for replication position", slog.String("position", waitPosition))
 		if err := tm.MysqlDaemon.WaitSourcePos(ctx, pos); err != nil {
 			return err
 		}

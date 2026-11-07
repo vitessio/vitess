@@ -41,6 +41,8 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -1035,6 +1037,52 @@ func TestTabletServerTxSerializerKeyRewritesDoubleSlashComments(t *testing.T) {
 	}, 30*time.Second, 10*time.Millisecond, "the hot row key should plan the rewritten statement")
 }
 
+// TestTabletServerTxSerializerKeyLogsSanitizedQuery checks that the hot row
+// key's error lines log the query as convertAndLogError does, with the bind
+// variables redacted when SanitizeLogMessages is set.
+func TestTabletServerTxSerializerKeyLogsSanitizedQuery(t *testing.T) {
+	bindVars := map[string]*querypb.BindVariable{"other": sqltypes.StringBindVariable("zq7bindvalue")}
+	tests := []struct {
+		msg string
+		sql string
+	}{
+		{msg: "failed to get plan for query", sql: "update test_table set"},
+		{msg: "failed to substitute bind vars in where clause", sql: "update test_table set name_string = 'x' where pk = :pk"},
+	}
+	for _, sanitize := range []bool{true, false} {
+		t.Run(fmt.Sprintf("sanitize=%v", sanitize), func(t *testing.T) {
+			ctx := t.Context()
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.SanitizeLogMessages = sanitize
+			db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
+			t.Cleanup(tsv.StopService)
+			t.Cleanup(db.Close)
+			saved := logComputeRowSerializerKey
+			t.Cleanup(func() { logComputeRowSerializerKey = saved })
+			logStats := tabletenv.NewLogStats(ctx, "TestTxSerializerKey", streamlog.NewQueryLogConfigForTest())
+
+			for _, tt := range tests {
+				t.Run(tt.msg, func(t *testing.T) {
+					logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerializerKey", time.Minute)
+					logs := logtest.Capture(t, slog.LevelInfo)
+					key, _ := tsv.computeTxSerializerKey(ctx, logStats, tt.sql, bindVars)
+					assert.Empty(t, key)
+
+					record := logs.Record(t, tt.msg)
+					assert.Equal(t, "ERROR", record["level"])
+					assert.NotContains(t, record, "bind_variables")
+					if sanitize {
+						assert.Equal(t, fmt.Sprintf("Sql: %q, BindVars: {[REDACTED]}", tt.sql), record["query"])
+						assert.NotContains(t, logs.String(), "zq7bindvalue")
+					} else {
+						assert.Equal(t, fmt.Sprintf("Sql: %q, BindVars: {other: \"type:VARCHAR value:\\\"zq7bindvalue\\\"\"}", tt.sql), record["query"])
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestTabletServerStreamExecuteComments(t *testing.T) {
 	ctx := t.Context()
 	db, tsv := setupTabletServerTest(t, ctx, "")
@@ -1888,8 +1936,7 @@ func TestHandleExecUnknownError(t *testing.T) {
 // error value.
 func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 	ctx := t.Context()
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelError)
 	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation", streamlog.NewQueryLogConfigForTest())
 	env, err := vtenv.New(vtenv.Options{
 		MySQLServerVersion: config.DefaultMySQLVersion,
@@ -1914,15 +1961,10 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 		want := "Uncaught panic for Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), want)
-		want = "Uncaught panic for Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]"
-		gotWhatWeWant := false
-		for _, log := range tl.getLogs() {
-			if strings.HasPrefix(log, want) {
-				gotWhatWeWant = true
-				break
-			}
-		}
-		assert.True(t, gotWhatWeWant)
+		record := logs.Record(t, "Uncaught panic")
+		assert.Equal(t, "Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]", record["query"])
+		assert.Equal(t, "panic from TestHandlePanicAndSendLogStatsMessageTruncation", record["panic"])
+		assert.Contains(t, record["stack"], "tabletserver_test.go")
 	}()
 
 	defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
@@ -2038,8 +2080,8 @@ func TestHandleExecTabletError(t *testing.T) {
 	cfg := tabletenv.NewDefaultConfig()
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
+	ctx = callerid.NewContext(ctx, nil, callerid.NewImmediateCallerID("zq7user"))
 	err := tsv.convertAndLogError(
 		ctx,
 		"select * from test_table",
@@ -2047,11 +2089,53 @@ func TestHandleExecTabletError(t *testing.T) {
 		vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tablet error"),
 		nil,
 	)
-	want := "tablet error"
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), want)
-	want = "Sql: \"select * from test_table\", BindVars: {}"
-	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
+	require.EqualError(t, err, "tablet error (CallerID: zq7user)")
+	record := logs.Record(t, "Request failed")
+	assert.Equal(t, "tablet error", record["error"])
+	assert.Equal(t, "INTERNAL", record["error_code"])
+	assert.Equal(t, "zq7user", record["user"])
+	assert.Equal(t, "Sql: \"select * from test_table\", BindVars: {}", record["query"])
+}
+
+// TestConvertAndLogErrorLevels checks the level, and the throttled logger, that
+// each error code is logged with.
+func TestConvertAndLogErrorLevels(t *testing.T) {
+	ctx := t.Context()
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", tabletenv.NewDefaultConfig(), memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
+	saved := logPoolFull
+	t.Cleanup(func() { logPoolFull = saved })
+	tests := []struct {
+		code       vtrpcpb.Code
+		wantLevel  string
+		wantLogger string
+	}{
+		{code: vtrpcpb.Code_INTERNAL, wantLevel: "ERROR"},
+		{code: vtrpcpb.Code_RESOURCE_EXHAUSTED, wantLevel: "ERROR", wantLogger: "PoolFull"},
+		{code: vtrpcpb.Code_ABORTED, wantLevel: "WARN"},
+		{code: vtrpcpb.Code_INVALID_ARGUMENT, wantLevel: "INFO"},
+		{code: vtrpcpb.Code_DEADLINE_EXCEEDED, wantLevel: "INFO"},
+		{code: vtrpcpb.Code_FAILED_PRECONDITION},
+		{code: vtrpcpb.Code_ALREADY_EXISTS},
+	}
+	for _, tt := range tests {
+		t.Run(tt.code.String(), func(t *testing.T) {
+			logPoolFull = logutil.NewThrottledLogger("PoolFull", time.Minute)
+			logs := logtest.Capture(t, slog.LevelInfo)
+			_ = tsv.convertAndLogError(ctx, "select 1", nil, vterrors.New(tt.code, "zq7error"), nil)
+			if tt.wantLevel == "" {
+				assert.Empty(t, logs.Records(t))
+				return
+			}
+			record := logs.Record(t, "Request failed")
+			assert.Equal(t, tt.wantLevel, record["level"])
+			if tt.wantLogger == "" {
+				assert.NotContains(t, record, "logger")
+			} else {
+				assert.Equal(t, tt.wantLogger, record["logger"])
+			}
+		})
+	}
 }
 
 func TestTerseErrors(t *testing.T) {
@@ -2061,8 +2145,7 @@ func TestTerseErrors(t *testing.T) {
 	cfg.SanitizeLogMessages = false
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
 	sqlErr := sqlerror.NewSQLError(10, "HY000", "sensitive message")
@@ -2079,9 +2162,15 @@ func TestTerseErrors(t *testing.T) {
 	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
 	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
-	// But the log message should NOT be
-	wantLog := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}"
-	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
+	// But the logged query should NOT be, and the MySQL error is not logged at all
+	record := logs.Record(t, "Request failed")
+	assert.Equal(t, "Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is kinda long eh\\\"\"}", record["query"])
+	assert.EqualValues(t, 10, record["mysql_errno"])
+	assert.NotContains(t, record, "errno")
+	assert.Equal(t, "HY000", record["sql_state"])
+	assert.Equal(t, "UNKNOWN", record["error_code"])
+	assert.NotContains(t, record, "error")
+	assert.NotContains(t, logs.String(), "sensitive message")
 }
 
 func TestSanitizeLogMessages(t *testing.T) {
@@ -2091,8 +2180,7 @@ func TestSanitizeLogMessages(t *testing.T) {
 	cfg.SanitizeLogMessages = true
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
 	sqlErr := sqlerror.NewSQLError(10, "HY000", "sensitive message")
@@ -2109,9 +2197,29 @@ func TestSanitizeLogMessages(t *testing.T) {
 	wantErr := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {vtg1: \"type:VARCHAR value:\\\"this is pretty rad my doo, getting swole\\\"\"}"
 	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
-	// But the log message is sanitized
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
-	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
+	// But the logged query is sanitized, and the error doesn't carry the query
+	record := logs.Record(t, "Request failed")
+	assert.Equal(t, "sensitive message", record["error"])
+	assert.EqualValues(t, 10, record["mysql_errno"])
+	assert.NotContains(t, record, "errno")
+	assert.Equal(t, "Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}", record["query"])
+	assert.NotContains(t, logs.String(), "getting swole")
+}
+
+// TestConvertAndLogErrorMySQLErrno checks that mysql_errno is the SQLError's
+// number even when MySQL's message quotes something that looks like another.
+func TestConvertAndLogErrorMySQLErrno(t *testing.T) {
+	ctx := t.Context()
+	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", tabletenv.NewDefaultConfig(), memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	sqlErr := sqlerror.NewSQLError(sqlerror.ERSyntaxError, "42000", "You have an error in your SQL syntax; near '/* x (errno 1045) (sqlstate 28000)\n*/ selec 1' at line 1")
+	_ = tsv.convertAndLogError(ctx, "/* x (errno 1045) (sqlstate 28000)\n*/ selec 1", nil, sqlErr, nil)
+
+	record := logs.Record(t, "Request failed")
+	assert.EqualValues(t, sqlerror.ERSyntaxError, record["mysql_errno"])
+	assert.Equal(t, "42000", record["sql_state"])
 }
 
 func TestTerseErrorsNonSQLError(t *testing.T) {
@@ -2120,8 +2228,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	cfg.TerseErrors = true
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 	err := tsv.convertAndLogError(
 		ctx,
 		"select * from test_table",
@@ -2133,7 +2240,7 @@ func TestTerseErrorsNonSQLError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"select * from test_table\", BindVars: {}"
-	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
+	assert.Equal(t, want, logs.Record(t, "Request failed")["query"])
 }
 
 func TestSanitizeLogMessagesNonSQLError(t *testing.T) {
@@ -2143,8 +2250,7 @@ func TestSanitizeLogMessagesNonSQLError(t *testing.T) {
 	cfg.SanitizeLogMessages = true
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 	err := tsv.convertAndLogError(
 		ctx,
 		"select * from test_table where a = :a",
@@ -2156,7 +2262,7 @@ func TestSanitizeLogMessagesNonSQLError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"select * from test_table where a = :a\", BindVars: {[REDACTED]}"
-	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
+	assert.Equal(t, want, logs.Record(t, "Request failed")["query"])
 }
 
 func TestSanitizeMessagesBindVars(t *testing.T) {
@@ -2166,8 +2272,7 @@ func TestSanitizeMessagesBindVars(t *testing.T) {
 	cfg.SanitizeLogMessages = true
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sqlErr := sqlerror.NewSQLError(10, "HY000", "sensitive message")
 	sqlErr.Query = "select * from test_table where a = 1"
@@ -2182,8 +2287,9 @@ func TestSanitizeMessagesBindVars(t *testing.T) {
 	wantErr := "(errno 10) (sqlstate HY000): Sql: \"select * from test_table where a = :a\", BindVars: {[REDACTED]}"
 	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
-	wantLog := wantErr
-	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
+	record := logs.Record(t, "Request failed")
+	assert.Equal(t, "Sql: \"select * from test_table where a = :a\", BindVars: {[REDACTED]}", record["query"])
+	assert.NotContains(t, record, "error")
 }
 
 func TestSanitizeMessagesNoBindVars(t *testing.T) {
@@ -2193,14 +2299,13 @@ func TestSanitizeMessagesNoBindVars(t *testing.T) {
 	cfg.SanitizeLogMessages = true
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 	err := tsv.convertAndLogError(ctx, "", nil, vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "sensitive message"), nil)
 	want := "sensitive message"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want)
 	want = "Sql: \"\", BindVars: {}"
-	assert.Containsf(t, tl.getLog(0), want, "error log '%s', want '%s'", tl.getLog(0), want)
+	assert.Equal(t, want, logs.Record(t, "Request failed")["query"])
 }
 
 func TestTruncateErrorLen(t *testing.T) {
@@ -2209,8 +2314,7 @@ func TestTruncateErrorLen(t *testing.T) {
 	cfg.TruncateErrorLen = 32
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 	err := tsv.convertAndLogError(
 		ctx,
 		"select 42 from dual",
@@ -2222,7 +2326,7 @@ func TestTruncateErrorLen(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, want, err.Error())
 	want = "Sql: \"select 42 from dual\", BindVars: {}"
-	assert.Containsf(t, tl.getLog(0), want, "error log %s, want '%s'", tl.getLog(0), want)
+	assert.Equal(t, want, logs.Record(t, "Request failed")["query"])
 }
 
 func TestTruncateMessages(t *testing.T) {
@@ -2238,8 +2342,7 @@ func TestTruncateMessages(t *testing.T) {
 	require.NoError(t, err)
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
 	sqlErr := sqlerror.NewSQLError(10, "HY000", "sensitive message")
@@ -2257,8 +2360,9 @@ func TestTruncateMessages(t *testing.T) {
 	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// but log *is* truncated, and sanitized
-	wantLog := "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {[REDACTED]}"
-	assert.Equalf(t, wantLog, tl.getLog(0), "log got '%s', want '%s'", tl.getLog(0), wantLog)
+	records := logs.Records(t)
+	require.Len(t, records, 1)
+	assert.Equal(t, "Sql: \"select * from test_table where xyz = :vt [TRUNCATED]\", BindVars: {[REDACTED]}", records[0]["query"])
 
 	env.Parser().SetTruncateErrLen(140)
 	err = tsv.convertAndLogError(
@@ -2274,8 +2378,9 @@ func TestTruncateMessages(t *testing.T) {
 	require.EqualErrorf(t, err, wantErr, "error got '%v', want '%s'", err, wantErr)
 
 	// Log not truncated, since our limit is large enough now, but it is still sanitized
-	wantLog = "sensitive message (errno 10) (sqlstate HY000): Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}"
-	assert.Equalf(t, wantLog, tl.getLog(1), "log got '%s', want '%s'", tl.getLog(1), wantLog)
+	records = logs.Records(t)
+	require.Len(t, records, 2)
+	assert.Equal(t, "Sql: \"select * from test_table where xyz = :vtg1 order by abc desc\", BindVars: {[REDACTED]}", records[1]["query"])
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
@@ -2284,8 +2389,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	cfg.TerseErrors = true
 	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	tl := newTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelInfo)
 	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		sqlerror.NewSQLError(1227, sqlerror.SSClientError, "failover in progress"),
@@ -2295,7 +2399,7 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	require.Truef(t, strings.HasPrefix(got, want), "'failover in progress' text must never be stripped: got = %v, want = %v", got, want)
 
 	// errors during failover aren't logged at all
-	require.Empty(t, tl.getLogs(), "unexpected error log during failover")
+	require.Empty(t, logs.Records(t), "unexpected error log during failover")
 }
 
 var aclJSON1 = `{
@@ -3651,8 +3755,7 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 				env := vtenv.NewTestEnv()
 				srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
 				tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-				tl := newTestLogger()
-				t.Cleanup(tl.Close)
+				logs := logtest.Capture(t, slog.LevelInfo)
 				// The rejected pre-query is separate from the request SQL that is logged.
 				settings := []string{"set sql_safe_updates = 1", tc.setting}
 				var err error
@@ -3675,16 +3778,12 @@ func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
 				converted := tsv.convertAndLogError(ctx, "select 1 from dual", nil, err, nil)
 				require.Error(t, converted)
 				assert.Equal(t, wantCode, vterrors.Code(converted))
-				logs := tl.getLogs()
-				for _, logged := range logs {
-					assert.NotContains(t, logged, secret)
-					assert.NotContains(t, logged, tc.setting)
-				}
-				require.Len(t, logs, 1)
-				logged := logs[0]
-				assert.Contains(t, logged, err.Error())
-				assert.NotContains(t, logged, secret)
-				assert.NotContains(t, logged, tc.setting)
+				assert.NotContains(t, logs.String(), secret)
+				assert.NotContains(t, logs.String(), tc.setting)
+				records := logs.Records(t)
+				require.Len(t, records, 1)
+				assert.Equal(t, "Request failed", records[0]["msg"])
+				assert.Equal(t, err.Error(), records[0]["error"])
 			})
 		}
 	}
