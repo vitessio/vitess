@@ -132,6 +132,16 @@ const (
 	ColKey
 )
 
+// withInlineKey returns the key option after next follows k. A UNIQUE after
+// PRIMARY KEY or KEY keeps k. A column holds one key option, so the separate
+// unique key MySQL also creates is still dropped.
+func (k ColumnKeyOption) withInlineKey(next ColumnKeyOption) ColumnKeyOption {
+	if (k == ColKeyPrimary || k == ColKey) && (next == ColKeyUnique || next == ColKeyUniqueKey) {
+		return k
+	}
+	return next
+}
+
 // ReferenceAction indicates the action takes by a referential constraint e.g.
 // the `CASCADE` in a `FOREIGN KEY .. ON DELETE CASCADE` table definition.
 type ReferenceAction int

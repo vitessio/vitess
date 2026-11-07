@@ -960,6 +960,12 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 		if ct.Options.Collate != "" {
 			buf.astPrintf(ct, " %s %#s", keywordStrings[COLLATE], encodeSQLName(ct.Options.Collate))
 		}
+		if ct.Options.NullBeforeSerialDefaultValue {
+			buf.astPrintf(ct, " %s", keywordStrings[NULL])
+		}
+		if ct.Options.SerialDefaultValue {
+			buf.astPrintf(ct, " %s %s %s", keywordStrings[SERIAL], keywordStrings[DEFAULT], keywordStrings[VALUE])
+		}
 		if ct.Options.Null != nil && ct.Options.As == nil {
 			if *ct.Options.Null {
 				buf.astPrintf(ct, " %s", keywordStrings[NULL])
