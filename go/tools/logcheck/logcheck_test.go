@@ -17,13 +17,16 @@ limitations under the License.
 package logcheck
 
 import (
+	"go/types"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/analysis/analysistest"
+	"golang.org/x/tools/go/packages"
 )
 
 // TestAnalyzer checks that the analyzer reports exactly the findings marked
@@ -83,6 +86,63 @@ func TestDiagnosticRanges(t *testing.T) {
 		"(*log.PrefixedLogger).Error",
 		"name", "name", "name", "name", "name", "name", "name", "name", "name", "name",
 	}, got)
+}
+
+// TestRealLoggingFunctions checks that messageParam matches the logging
+// functions of the real go/vt/log and go/vt/logutil, which TestAnalyzer
+// doesn't see, so that a change to their signatures can't turn the message
+// rule off unnoticed. log.V(n).Info is left out because removing glog
+// support removes it.
+func TestRealLoggingFunctions(t *testing.T) {
+	pkgs, err := packages.Load(&packages.Config{
+		Context: t.Context(),
+		Mode:    packages.NeedName | packages.NeedTypes,
+	}, logPkgPath, logutilPkgPath)
+	require.NoError(t, err)
+	byPath := make(map[string]*types.Package)
+	for _, pkg := range pkgs {
+		require.Empty(t, pkg.Errors, pkg.PkgPath)
+		byPath[pkg.PkgPath] = pkg.Types
+	}
+
+	for path, names := range map[string][]string{
+		logPkgPath: {
+			"Debug", "Info", "Warn", "Error",
+			"DebugDepth", "InfoDepth", "WarnDepth", "ErrorDepth",
+			"PrefixedLogger.Info", "PrefixedLogger.Warn", "PrefixedLogger.Error",
+			"PrefixedLogger.InfoDepth", "PrefixedLogger.WarnDepth", "PrefixedLogger.ErrorDepth",
+		},
+		logutilPkgPath: {
+			"ThrottledLogger.Info", "ThrottledLogger.Warn", "ThrottledLogger.Error",
+		},
+	} {
+		pkg := byPath[path]
+		require.NotNil(t, pkg, path)
+		for _, name := range names {
+			obj := lookup(pkg, name)
+			if assert.NotNil(t, obj, "%s.%s not found", path, name) {
+				assert.GreaterOrEqual(t, messageParam(obj), 0, "%s.%s is not a logging function", path, name)
+			}
+		}
+	}
+
+	obj := lookup(byPath[logPkgPath], "NewPrefixedLogger")
+	assert.True(t, obj != nil && isNewPrefixedLogger(obj), "log.NewPrefixedLogger not found")
+}
+
+// lookup returns the package-level object name, or the method of *T for a
+// name of the form T.M.
+func lookup(pkg *types.Package, name string) types.Object {
+	typeName, method, ok := strings.Cut(name, ".")
+	if !ok {
+		return pkg.Scope().Lookup(name)
+	}
+	tn, _ := pkg.Scope().Lookup(typeName).(*types.TypeName)
+	if tn == nil {
+		return nil
+	}
+	obj, _, _ := types.LookupFieldOrMethod(types.NewPointer(tn.Type()), false, pkg, method)
+	return obj
 }
 
 // TestAnalyzerWithoutGlog runs against a go/vt/log without glog's V, Verbose
