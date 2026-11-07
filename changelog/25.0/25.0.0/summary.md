@@ -81,6 +81,7 @@
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v24.21.0 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
+        - [Administrative operations now honor caller cancellation](#general-context-cancellation)
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
         - [Optional gRPC TLS: connections are counted by transport](#grpc-optional-tls-connections)
@@ -922,6 +923,10 @@ Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tab
 Building `vtadmin-web` now requires node v24.15.0 or newer on the 24 line, or v26 and above, with npm v11.12.1 or newer, up from node v22.13.0 and npm v10.9.2; node 22 is no longer supported. `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v24.21.0. The node range is what jsdom 30, a test dependency, supports on those lines. npm 11 is required because `npm ci` on npm 10 fails against the lock file that npm 11 writes. Full details on the node v24.21.0 release can be found at https://nodejs.org/en/blog/release/v24.21.0.
 
 ### <a id="minor-changes-general"/>General</a>
+
+#### <a id="general-context-cancellation"/>Administrative operations now honor caller cancellation</a>
+
+Several control-plane operations now stop when their caller disconnects or its deadline expires. This includes VTAdmin requests and discovery, MySQL hooks, binlog streamer connection setup, S3 backup-storage initialization, database transaction startup, and workflow progress queries. Lifecycle maintenance and recovery work that must finish remains detached from caller cancellation.
 
 #### <a id="build-info-from-vcs"/>Build version metadata now sourced from VCS stamping</a>
 

@@ -111,7 +111,7 @@ func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir, fileSize
 		require.NoError(t, os.RemoveAll(backupRoot))
 	})
 
-	needIt, err := NeedInnoDBRedoLogSubdir()
+	needIt, err := NeedInnoDBRedoLogSubdirWithContext(ctx)
 	require.NoError(t, err)
 	if needIt {
 		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
@@ -154,7 +154,12 @@ func SetupCluster(ctx context.Context, t *testing.T, dirs, filesPerDir, fileSize
 //
 //	https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
 func NeedInnoDBRedoLogSubdir() (needIt bool, err error) {
-	mysqldVersionStr, err := mysqlctl.GetVersionString()
+	return NeedInnoDBRedoLogSubdirWithContext(context.Background())
+}
+
+// NeedInnoDBRedoLogSubdirWithContext bounds MySQL version detection by ctx.
+func NeedInnoDBRedoLogSubdirWithContext(ctx context.Context) (needIt bool, err error) {
+	mysqldVersionStr, err := mysqlctl.GetVersionStringWithContext(ctx)
 	if err != nil {
 		return needIt, err
 	}
