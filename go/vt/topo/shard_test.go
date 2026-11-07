@@ -160,7 +160,14 @@ func TestUpdatePrimaryDeniedTablesLogsTables(t *testing.T) {
 	require.NoError(t, addToDenyList(ctx, si, primary, nil, []string{"t3", "t1"}))
 	record := logs.Record(t, dlTablesAlreadyPresent)
 	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, []any{"t3", "t1"}, record["tables"])
+	assert.Equal(t, []any{"t1"}, record["tables"])
+	assert.Equal(t, []any{"t3"}, record["added_tables"])
+
+	logs = logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, addToDenyList(ctx, si, primary, nil, []string{"t2"}))
+	record = logs.Record(t, dlTablesAlreadyPresent)
+	assert.Equal(t, []any{"t2"}, record["tables"])
+	assert.Equal(t, []any{}, record["added_tables"])
 }
 
 func TestUpdateSourceDeniedTables(t *testing.T) {

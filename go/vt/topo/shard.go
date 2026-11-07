@@ -518,7 +518,15 @@ func (si *ShardInfo) updatePrimaryTabletControl(tc *topodatapb.Shard_TabletContr
 	if len(newTables) != len(tables) {
 		// Some of the tables already existed in the DeniedTables list so we don't
 		// need to add them.
-		log.Warn(dlTablesAlreadyPresent, slog.Any("tables", tables))
+		presentTables := make([]string, 0, len(tables)-len(newTables))
+		for _, table := range tables {
+			if !slices.Contains(newTables, table) {
+				presentTables = append(presentTables, table)
+			}
+		}
+		log.Warn(dlTablesAlreadyPresent,
+			slog.Any("tables", presentTables),
+			slog.Any("added_tables", append([]string{}, newTables...)))
 		// We do need to merge the lists, however.
 		tables = append(tables, newTables...)
 		tc.DeniedTables = append(tc.DeniedTables, tables...)
