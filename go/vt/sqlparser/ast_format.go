@@ -880,27 +880,34 @@ func (node *SubPartition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (ts *TableSpec) Format(buf *TrackedBuffer) {
-	buf.astPrintf(ts, "(\n")
-	for i, col := range ts.Columns {
-		if i == 0 {
-			buf.astPrintf(ts, "\t%v", col)
-		} else {
-			buf.astPrintf(ts, ",\n\t%v", col)
-		}
+	// A table definition can start with an index or a constraint, as in
+	// `CREATE TABLE t (PRIMARY KEY (a)) SELECT 1 AS a`, and it can have no
+	// elements at all, as in `CREATE TABLE t ENGINE = InnoDB SELECT 1 AS a`.
+	separator := "(\n\t"
+	for _, col := range ts.Columns {
+		buf.astPrintf(ts, "%s%v", separator, col)
+		separator = ",\n\t"
 	}
 	for _, idx := range ts.Indexes {
-		buf.astPrintf(ts, ",\n\t%v", idx)
+		buf.astPrintf(ts, "%s%v", separator, idx)
+		separator = ",\n\t"
 	}
 	for _, c := range ts.Constraints {
-		buf.astPrintf(ts, ",\n\t%v", c)
+		buf.astPrintf(ts, "%s%v", separator, c)
+		separator = ",\n\t"
 	}
-
-	buf.astPrintf(ts, "\n)")
+	hasElements := len(ts.Columns)+len(ts.Indexes)+len(ts.Constraints) > 0
+	if hasElements {
+		buf.astPrintf(ts, "\n)")
+	}
 	for i, opt := range ts.Options {
 		if i != 0 {
 			buf.literal(",\n ")
 		}
-		buf.astPrintf(ts, " %s", opt.Name)
+		if hasElements || i != 0 {
+			buf.literal(" ")
+		}
+		buf.astPrintf(ts, "%s", opt.Name)
 		if opt.String != "" {
 			if opt.CaseSensitive {
 				buf.astPrintf(ts, " %#s%s", encodeTableOptionValue(opt.Name, opt.String), opt.Storage)
@@ -909,7 +916,7 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 			}
 		} else if opt.Value != nil {
 			buf.astPrintf(ts, " %v", opt.Value)
-		} else {
+		} else if opt.Tables != nil {
 			buf.astPrintf(ts, " (%v)", opt.Tables)
 		}
 	}
@@ -956,91 +963,95 @@ func (ct *ColumnType) Format(buf *TrackedBuffer) {
 	if ct.Charset.Binary {
 		buf.astPrintf(ct, " %#s", keywordStrings[BINARY])
 	}
-	if ct.Options != nil {
-		if ct.Options.Collate != "" {
-			buf.astPrintf(ct, " %s %#s", keywordStrings[COLLATE], encodeSQLName(ct.Options.Collate))
+	if ct.Options == nil {
+		return
+	}
+	// MySQL takes a generated column's expression and its VIRTUAL or STORED
+	// right after the type and collation, and every other attribute after
+	// them, and it takes REFERENCES only at the end.
+	opts := ct.Options
+	if opts.Collate != "" {
+		buf.astPrintf(ct, " %s %#s", keywordStrings[COLLATE], encodeSQLName(opts.Collate))
+	}
+	if opts.As != nil {
+		buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], opts.As)
+		switch opts.Storage {
+		case VirtualStorage:
+			buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
+		case StoredStorage:
+			buf.astPrintf(ct, " %s", keywordStrings[STORED])
 		}
-		if ct.Options.Null != nil && ct.Options.As == nil {
-			if *ct.Options.Null {
-				buf.astPrintf(ct, " %s", keywordStrings[NULL])
-			} else {
-				buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
-			}
+	}
+	if opts.Null != nil {
+		if *opts.Null {
+			buf.astPrintf(ct, " %s", keywordStrings[NULL])
+		} else {
+			buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
 		}
-		if ct.Options.Default != nil {
-			buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
-			if ct.Options.DefaultLiteral {
-				buf.astPrintf(ct, " %v", ct.Options.Default)
-			} else {
-				buf.astPrintf(ct, " (%v)", ct.Options.Default)
-			}
+	}
+	if opts.Default != nil {
+		buf.astPrintf(ct, " %s", keywordStrings[DEFAULT])
+		if opts.DefaultLiteral {
+			buf.astPrintf(ct, " %v", opts.Default)
+		} else {
+			buf.astPrintf(ct, " (%v)", opts.Default)
 		}
-		if ct.Options.OnUpdate != nil {
-			buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], ct.Options.OnUpdate)
+	}
+	if opts.OnUpdate != nil {
+		buf.astPrintf(ct, " %s %s %v", keywordStrings[ON], keywordStrings[UPDATE], opts.OnUpdate)
+	}
+	if opts.Autoincrement {
+		buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
+	}
+	if opts.Comment != nil {
+		buf.astPrintf(ct, " %s %v", keywordStrings[COMMENT_KEYWORD], opts.Comment)
+	}
+	if opts.Invisible != nil {
+		if *opts.Invisible {
+			buf.astPrintf(ct, " %s", keywordStrings[INVISIBLE])
+		} else {
+			buf.astPrintf(ct, " %s", keywordStrings[VISIBLE])
 		}
-		if ct.Options.As != nil {
-			buf.astPrintf(ct, " %s (%v)", keywordStrings[AS], ct.Options.As)
-
-			switch ct.Options.Storage {
-			case VirtualStorage:
-				buf.astPrintf(ct, " %s", keywordStrings[VIRTUAL])
-			case StoredStorage:
-				buf.astPrintf(ct, " %s", keywordStrings[STORED])
-			}
-			if ct.Options.Null != nil {
-				if *ct.Options.Null {
-					buf.astPrintf(ct, " %s", keywordStrings[NULL])
-				} else {
-					buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[NULL])
-				}
-			}
-		}
-		if ct.Options.Autoincrement {
-			buf.astPrintf(ct, " %s", keywordStrings[AUTO_INCREMENT])
-		}
-		if ct.Options.Comment != nil {
-			buf.astPrintf(ct, " %s %v", keywordStrings[COMMENT_KEYWORD], ct.Options.Comment)
-		}
-		if ct.Options.Invisible != nil {
-			if *ct.Options.Invisible {
-				buf.astPrintf(ct, " %s", keywordStrings[INVISIBLE])
-			} else {
-				buf.astPrintf(ct, " %s", keywordStrings[VISIBLE])
-			}
-		}
-		if ct.Options.Format != UnspecifiedFormat {
-			buf.astPrintf(ct, " %s %s", keywordStrings[COLUMN_FORMAT], ct.Options.Format.ToString())
-		}
-		if ct.Options.EngineAttribute != nil {
-			buf.astPrintf(ct, " %s %v", keywordStrings[ENGINE_ATTRIBUTE], ct.Options.EngineAttribute)
-		}
-		if ct.Options.SecondaryEngineAttribute != nil {
-			buf.astPrintf(ct, " %s %v", keywordStrings[SECONDARY_ENGINE_ATTRIBUTE], ct.Options.SecondaryEngineAttribute)
-		}
-		if ct.Options.KeyOpt == ColKeyPrimary {
-			buf.astPrintf(ct, " %s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
-		}
-		if ct.Options.KeyOpt == ColKeyUnique {
-			buf.astPrintf(ct, " %s", keywordStrings[UNIQUE])
-		}
-		if ct.Options.KeyOpt == ColKeyUniqueKey {
-			buf.astPrintf(ct, " %s %s", keywordStrings[UNIQUE], keywordStrings[KEY])
-		}
-		if ct.Options.KeyOpt == ColKeySpatialKey {
-			buf.astPrintf(ct, " %s %s", keywordStrings[SPATIAL], keywordStrings[KEY])
-		}
-		if ct.Options.KeyOpt == ColKeyFulltextKey {
-			buf.astPrintf(ct, " %s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
-		}
-		if ct.Options.KeyOpt == ColKey {
-			buf.astPrintf(ct, " %s", keywordStrings[KEY])
-		}
-		if ct.Options.Reference != nil {
-			buf.astPrintf(ct, " %v", ct.Options.Reference)
-		}
-		if ct.Options.SRID != nil {
-			buf.astPrintf(ct, " %s %v", keywordStrings[SRID], ct.Options.SRID)
-		}
+	}
+	if opts.Format != UnspecifiedFormat {
+		buf.astPrintf(ct, " %s %s", keywordStrings[COLUMN_FORMAT], opts.Format.ToString())
+	}
+	switch opts.StorageMedia {
+	case DiskStorageMedia:
+		buf.astPrintf(ct, " %s %s", keywordStrings[STORAGE], keywordStrings[DISK])
+	case MemoryStorageMedia:
+		buf.astPrintf(ct, " %s %s", keywordStrings[STORAGE], keywordStrings[MEMORY])
+	}
+	if opts.NotSecondary {
+		buf.astPrintf(ct, " %s %s", keywordStrings[NOT], keywordStrings[SECONDARY])
+	}
+	if opts.EngineAttribute != nil {
+		buf.astPrintf(ct, " %s %v", keywordStrings[ENGINE_ATTRIBUTE], opts.EngineAttribute)
+	}
+	if opts.SecondaryEngineAttribute != nil {
+		buf.astPrintf(ct, " %s %v", keywordStrings[SECONDARY_ENGINE_ATTRIBUTE], opts.SecondaryEngineAttribute)
+	}
+	switch opts.KeyOpt {
+	case ColKeyPrimary:
+		buf.astPrintf(ct, " %s %s", keywordStrings[PRIMARY], keywordStrings[KEY])
+	case ColKeyUnique:
+		buf.astPrintf(ct, " %s", keywordStrings[UNIQUE])
+	case ColKeyUniqueKey:
+		buf.astPrintf(ct, " %s %s", keywordStrings[UNIQUE], keywordStrings[KEY])
+	case ColKeySpatialKey:
+		buf.astPrintf(ct, " %s %s", keywordStrings[SPATIAL], keywordStrings[KEY])
+	case ColKeyFulltextKey:
+		buf.astPrintf(ct, " %s %s", keywordStrings[FULLTEXT], keywordStrings[KEY])
+	case ColKey:
+		buf.astPrintf(ct, " %s", keywordStrings[KEY])
+	case ColKeyPrimaryUnique:
+		buf.astPrintf(ct, " %s %s %s %s", keywordStrings[PRIMARY], keywordStrings[KEY], keywordStrings[UNIQUE], keywordStrings[KEY])
+	}
+	if opts.SRID != nil {
+		buf.astPrintf(ct, " %s %v", keywordStrings[SRID], opts.SRID)
+	}
+	if opts.Reference != nil {
+		buf.astPrintf(ct, " %v", opts.Reference)
 	}
 }
 
@@ -2924,7 +2935,7 @@ func (node TableOptions) Format(buf *TrackedBuffer) {
 			}
 		case option.Value != nil:
 			buf.astPrintf(node, " %v", option.Value)
-		default:
+		case option.Tables != nil:
 			buf.astPrintf(node, " (%v)", option.Tables)
 		}
 	}

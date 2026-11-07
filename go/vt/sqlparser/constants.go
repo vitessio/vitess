@@ -993,6 +993,13 @@ const (
 	StoredStorage
 )
 
+// ColumnStorageMedia constants
+const (
+	UnspecifiedStorageMedia ColumnStorageMedia = iota
+	DiskStorageMedia
+	MemoryStorageMedia
+)
+
 // ColumnFormat constants
 const (
 	UnspecifiedFormat ColumnFormat = iota

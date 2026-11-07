@@ -3503,6 +3503,13 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
 		},
 		{
+			// MySQL keeps both indexes of a column that is both PRIMARY KEY and
+			// UNIQUE.
+			name: "normalize primary key unique key",
+			from: "create table t (id int primary key unique key)",
+			to:   "CREATE TABLE `t` (\n\t`id` int UNIQUE KEY,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
 			name: "normalize serial primary key",
 			from: "create table t (id serial primary key)",
 			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tPRIMARY KEY (`id`),\n\tUNIQUE KEY `id` (`id`)\n)",

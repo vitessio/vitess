@@ -2282,6 +2282,10 @@ type ColumnStorage int
 // ColumnFormat is an enum that defines the type of storage.
 type ColumnFormat int
 
+// ColumnStorageMedia is the STORAGE attribute of a column, which NDB uses
+// and other engines ignore.
+type ColumnStorageMedia int
+
 // ColumnTypeOptions are generic field options for a column type
 type ColumnTypeOptions struct {
 	/* We need Null to be *bool to distinguish 3 cases -
@@ -2328,6 +2332,13 @@ type ColumnTypeOptions struct {
 	//
 	// https://dev.mysql.com/doc/refman/8.0/en/spatial-type-overview.html
 	SRID *Literal
+
+	// StorageMedia is the STORAGE DISK or STORAGE MEMORY attribute.
+	StorageMedia ColumnStorageMedia
+
+	// NotSecondary is set by NOT SECONDARY, which excludes the column from
+	// a secondary engine.
+	NotSecondary bool
 }
 
 // IndexDefinition describes an index in a CREATE TABLE statement

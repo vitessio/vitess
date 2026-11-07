@@ -45,10 +45,20 @@ type Tokenizer struct {
 	// identifier, where MySQL reads what comes next as an identifier even
 	// when it starts with a digit, as in `t1.1a`.
 	qualifiedNameFollows bool
-	posVarIndex          int
-	partialDDL           Statement
-	multi                bool
-	inVersionedComment   bool // true when scanning inside a MySQL versioned comment (/*!...*/)
+	// pendingColumnChecks are the CHECK constraints among the attributes of
+	// the column definition that is being parsed, and columnCheckEnd is the
+	// end of the last one, so that an ENFORCED attribute can tell whether the
+	// attribute right before it was that constraint.
+	pendingColumnChecks []*ConstraintDefinition
+	columnCheckEnd      int
+	// columnChecks holds the CHECK constraints of each column definition
+	// until the statement that the column belongs to adds them to its table.
+	// See takeColumnChecks.
+	columnChecks       map[*ColumnDefinition][]*ConstraintDefinition
+	posVarIndex        int
+	partialDDL         Statement
+	multi              bool
+	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
 
 	Pos       int
 	buf       string
@@ -862,6 +872,8 @@ func (tkn *Tokenizer) peek(dist int) uint16 {
 // reset clears posVarIndex to reset the index count we assign to variables for a new query.
 func (tkn *Tokenizer) reset() {
 	tkn.posVarIndex = 0
+	tkn.pendingColumnChecks = nil
+	tkn.columnChecks = nil
 }
 
 func isLetter(ch uint16) bool {

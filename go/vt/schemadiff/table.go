@@ -903,9 +903,14 @@ func (c *CreateTableEntity) normalizePrimaryKeyColumns() {
 	// `create table t (id int, primary key (id))`
 	// Also, PRIMARY KEY must come first before all other keys
 	for _, col := range c.TableSpec.Columns {
-		if col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+		switch col.Type.Options.KeyOpt {
+		case sqlparser.ColKeyPrimary:
 			c.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(col.Name)}, c.TableSpec.Indexes...)
 			col.Type.Options.KeyOpt = sqlparser.ColKeyNone
+		case sqlparser.ColKeyPrimaryUnique:
+			// The column is also unique, and MySQL keeps that index too.
+			c.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(col.Name)}, c.TableSpec.Indexes...)
+			col.Type.Options.KeyOpt = sqlparser.ColKeyUniqueKey
 		}
 	}
 }
@@ -2421,6 +2426,11 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					return &ApplyDuplicateColumnError{Table: c.Name(), Column: addedCol.Name.String()}
 				}
 			}
+			if addedCol.Type.Options.KeyOpt == sqlparser.ColKeyPrimaryUnique {
+				// A column that is both PRIMARY KEY and UNIQUE adds two indexes,
+				// which applying the column alone does not model.
+				return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}
+			}
 			// if this column has the PRIMARY KEY option, verify there isn't already a PRIMARY KEY
 			if addedCol.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
 				if cols := c.primaryKeyColumns(); cols != nil {
@@ -2449,6 +2459,10 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			}
 			if !found {
 				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.NewColDefinition.Name.String()}
+			}
+			if opt.NewColDefinition.Type.Options.KeyOpt == sqlparser.ColKeyPrimaryUnique {
+				// See the same check for an added column.
+				return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}
 			}
 			// if this column has the PRIMARY KEY option:
 			// - validate there isn't already a PRIMARY KEY for other columns

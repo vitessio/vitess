@@ -130,7 +130,38 @@ const (
 	ColKeyUnique
 	ColKeyUniqueKey
 	ColKey
+	// ColKeyPrimaryUnique is a column that has both a PRIMARY KEY and a
+	// UNIQUE attribute. MySQL creates both indexes for it.
+	ColKeyPrimaryUnique
 )
+
+// isPrimary reports whether the key attribute makes the column the primary
+// key. In a column definition, KEY on its own means PRIMARY KEY.
+func (key ColumnKeyOption) isPrimary() bool {
+	return key == ColKeyPrimary || key == ColKey || key == ColKeyPrimaryUnique
+}
+
+// isUnique reports whether the key attribute gives the column a unique index.
+func (key ColumnKeyOption) isUnique() bool {
+	return key == ColKeyUnique || key == ColKeyUniqueKey || key == ColKeyPrimaryUnique
+}
+
+// combineColumnKeys returns the key attribute of a column that has the key
+// attribute current and then also next. MySQL keeps one primary key and one
+// unique index per column however often the attributes are repeated, so
+// repeating one kind keeps the first spelling, and combining the two kinds
+// keeps both.
+func combineColumnKeys(current, next ColumnKeyOption) ColumnKeyOption {
+	if current == ColKeyNone {
+		return next
+	}
+	primary := current.isPrimary() || next.isPrimary()
+	unique := current.isUnique() || next.isUnique()
+	if primary && unique {
+		return ColKeyPrimaryUnique
+	}
+	return current
+}
 
 // ReferenceAction indicates the action takes by a referential constraint e.g.
 // the `CASCADE` in a `FOREIGN KEY .. ON DELETE CASCADE` table definition.

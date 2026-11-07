@@ -208,7 +208,6 @@ func markBindVariable(yylex yyLexer, bvar string) {
   txAccessModes []TxAccessMode
   txAccessMode TxAccessMode
   killType KillType
-  ignoreOrReplaceType IgnoreOrReplaceType
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -279,10 +278,6 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // When we see '(', we can either reduce partition_definitions_opt to empty or shift '(' to parse partition definitions.
 // We want shifting to take precedence, so we add lower precedence to the reduce rule.
 %nonassoc EMPTY_PARTITION_DEFINITIONS
-// EMPTY_IGNORE_OR_REPLACE is used to resolve shift-reduce conflicts occurring due to '(' in CREATE TABLE ... SELECT statements.
-// When we see '(', we can either reduce ignore_or_replace_opt to empty or shift '(' to parse table_spec.
-// We want shifting to take precedence, so we add lower precedence to the reduce rule.
-%nonassoc EMPTY_IGNORE_OR_REPLACE
 
 %token LEX_ERROR
 %left <str> UNION
@@ -437,6 +432,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COLUMN_FORMAT COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GET_MASTER_PUBLIC_KEY GET_SOURCE_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PARTIAL PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
+%token <str> TABLE_CHECKSUM
 %token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SIMPLE SKIP
 %token <str> SOURCE_COMPRESSION_ALGORITHMS SOURCE_PUBLIC_KEY_PATH SOURCE_TLS_CIPHERSUITES SOURCE_ZSTD_COMPRESSION_LEVEL SRID
 %token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
@@ -481,7 +477,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <cte> common_table_expr
 %type <ctes> with_list
 %type <renameTablePairs> rename_list
-%type <createTable> create_table_prefix
+%type <createTable> create_table_prefix create_table_query
 %type <createProcedure> create_procedure
 %type <createView> create_view_prefix
 %type <alterTable> alter_table_prefix
@@ -589,7 +585,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <orderDirection> asc_desc_opt
 %type <limit> limit_opt limit_clause
 %type <selectInto> into_clause
-%type <columnTypeOptions> column_attribute_list_opt generated_column_attribute_list_opt column_type_default_opt
+%type <columnTypeOptions> column_attribute_list_opt column_type_default_opt
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
@@ -606,8 +602,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> for_from from_or_on
 %type <str> default_opt value_or_values
 %type <ignore> ignore_opt
-%type <ignoreOrReplaceType> ignore_or_replace_opt
-%type <str> columns_or_fields extended_opt storage_opt
+%type <str> columns_or_fields extended_opt
 %type <showFilter> like_or_where_opt like_opt
 %type <boolean> exists_opt not_exists_opt enforced enforced_opt temp_opt full_opt
 %type <empty> to_opt for_opt
@@ -646,10 +641,11 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <str> index_or_key index_symbols from_or_in index_or_key_opt
 %type <str> name_opt constraint_name_opt
 %type <str> equal_opt partition_tablespace_name
-%type <tableSpec> table_spec table_column_list
+%type <tableSpec> table_spec table_column_list table_options_and_partitions
 %type <optLike> create_like
 %type <str> table_opt_value
-%type <tableOption> table_option
+%type <tableOption> table_option ternary_option
+%type <literal> ulonglong_num ulong_num size_number
 %type <tableOptions> table_option_list table_option_list_opt space_separated_table_option_list
 %type <indexInfo> index_info
 %type <indexColumn> index_column
@@ -677,7 +673,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <tableAndLockType> lock_table
 %type <lockType> lock_type
 %type <empty> session_or_local_opt
-%type <columnStorage> column_storage
+%type <columnStorage> column_storage column_storage_opt
 %type <columnFormat> column_format
 %type <colKeyOpt> keys
 %type <referenceDefinition> reference_definition reference_definition_opt
@@ -712,6 +708,12 @@ multiple_commands:
 comment_command_opt:
   comment_opt command_opt
   {
+    if len(yylex.(*Tokenizer).columnChecks) > 0 {
+      // Every statement that contains a column definition adds the column's
+      // CHECK constraints to its table. One that did not would drop them.
+      yylex.Error("[BUG] column CHECK constraints were not added to their table")
+      return 1
+    }
     $$ = $2
     // If the statement is empty and we have comments
     // then we create a special struct which stores them.
@@ -1529,18 +1531,34 @@ create_statement:
     $1.FullyParsed = true
     $$ = $1
   }
-| create_table_prefix ignore_or_replace_opt as_opt select_statement
+| create_table_prefix create_table_query
   {
-    $1.IgnoreOrReplace = $2
-    $1.Select = $4
+    $1.IgnoreOrReplace = $2.IgnoreOrReplace
+    $1.Select = $2.Select
     $1.FullyParsed = true
     $$ = $1
   }
-| create_table_prefix table_spec ignore_or_replace_opt as_opt select_statement
+| create_table_prefix table_spec create_table_query
   {
     $1.TableSpec = $2
-    $1.IgnoreOrReplace = $3
-    $1.Select = $5
+    $1.IgnoreOrReplace = $3.IgnoreOrReplace
+    $1.Select = $3.Select
+    $1.FullyParsed = true
+    $$ = $1
+  }
+// MySQL takes table options and partitioning without a table definition, as
+// in `CREATE TABLE t ENGINE = InnoDB SELECT 1 AS a`.
+| create_table_prefix table_options_and_partitions
+  {
+    $1.TableSpec = $2
+    $1.FullyParsed = true
+    $$ = $1
+  }
+| create_table_prefix table_options_and_partitions create_table_query
+  {
+    $1.TableSpec = $2
+    $1.IgnoreOrReplace = $3.IgnoreOrReplace
+    $1.Select = $3.Select
     $1.FullyParsed = true
     $$ = $1
   }
@@ -1569,6 +1587,41 @@ create_statement:
     $1.FullyParsed = true
     $1.CreateOptions = $2
     $$ = $1
+  }
+
+// create_table_query is the query that CREATE TABLE copies rows from. Each
+// alternative starts with a token, so that a '(' after the table name can
+// start either the table definition or a parenthesized query, and the token
+// after it tells which.
+create_table_query:
+  select_statement
+  {
+    $$ = &CreateTable{Select: $1}
+  }
+| AS select_statement
+  {
+    $$ = &CreateTable{Select: $2}
+  }
+| IGNORE as_opt select_statement
+  {
+    $$ = &CreateTable{IgnoreOrReplace: IgnoreType, Select: $3}
+  }
+| REPLACE as_opt select_statement
+  {
+    $$ = &CreateTable{IgnoreOrReplace: ReplaceType, Select: $3}
+  }
+
+table_options_and_partitions:
+  table_option_list partitions_options_opt
+  {
+    $$ = &TableSpec{Options: $1, PartitionOption: $2}
+  }
+| PARTITION BY partitions_options_beginning partitions_opt subpartition_opt partition_definitions_opt
+  {
+    $3.Partitions = $4
+    $3.SubPartition = $5
+    $3.Definitions = $6
+    $$ = &TableSpec{PartitionOption: $3}
   }
 
 replace:
@@ -1840,8 +1893,19 @@ table_column_list:
   {
     $$ = &TableSpec{}
     $$.AddColumn($1)
+    yylex.(*Tokenizer).addColumnChecksToTable($$, $1)
   }
 | check_constraint_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddConstraint($1)
+  }
+| index_definition
+  {
+    $$ = &TableSpec{}
+    $$.AddIndex($1)
+  }
+| constraint_definition
   {
     $$ = &TableSpec{}
     $$.AddConstraint($1)
@@ -1849,11 +1913,7 @@ table_column_list:
 | table_column_list ',' column_definition
   {
     $$.AddColumn($3)
-  }
-| table_column_list ',' column_definition check_constraint_definition
-  {
-    $$.AddColumn($3)
-    $$.AddConstraint($4)
+    yylex.(*Tokenizer).addColumnChecksToTable($$, $3)
   }
 | table_column_list ',' index_definition
   {
@@ -1882,14 +1942,27 @@ column_definition:
     }
     $2.Options.Reference = $5
     $$ = &ColumnDefinition{Name: $1, Type: $2}
+    if err := yylex.(*Tokenizer).endColumnDefinition($$); err != "" {
+      yylex.Error(err)
+      return 1
+    }
   }
-| sql_id column_type collate_opt generated_always_opt AS '(' expression ')' generated_column_attribute_list_opt reference_definition_opt
+// A generated column takes VIRTUAL or STORED right after its expression, and
+// then the same attributes as any other column.
+| sql_id column_type collate_opt generated_always_opt AS '(' expression ')' column_storage_opt column_attribute_list_opt reference_definition_opt
   {
-    $2.Options = $9
+    $2.Options = $10
     $2.Options.As = $7
-    $2.Options.Reference = $10
-    $2.Options.Collate = $3
+    $2.Options.Storage = $9
+    $2.Options.Reference = $11
+    if $2.Options.Collate == "" {
+        $2.Options.Collate = $3
+    }
     $$ = &ColumnDefinition{Name: $1, Type: $2}
+    if err := yylex.(*Tokenizer).endColumnDefinition($$); err != "" {
+      yylex.Error(err)
+      return 1
+    }
   }
 
 generated_always_opt:
@@ -1919,9 +1992,17 @@ column_attribute_list_opt:
     $1.Null = ptr.Of(false)
     $$ = $1
   }
+| column_attribute_list_opt NOT SECONDARY
+  {
+    $1.NotSecondary = true
+    $$ = $1
+  }
+// A later DEFAULT replaces an earlier one, as in MySQL, so each one sets
+// whether the default is a literal.
 | column_attribute_list_opt DEFAULT openb expression closeb
   {
     $1.Default = $4
+    $1.DefaultLiteral = false
     $$ = $1
   }
 | column_attribute_list_opt DEFAULT now_or_signed_literal
@@ -1947,7 +2028,49 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt keys
   {
-    $1.KeyOpt = $2
+    $1.KeyOpt = combineColumnKeys($1.KeyOpt, $2)
+    $$ = $1
+  }
+// SERIAL DEFAULT VALUE stands for NOT NULL AUTO_INCREMENT UNIQUE.
+| column_attribute_list_opt SERIAL DEFAULT VALUE
+  {
+    $1.Null = ptr.Of(false)
+    $1.Autoincrement = true
+    $1.KeyOpt = combineColumnKeys($1.KeyOpt, ColKeyUnique)
+    $$ = $1
+  }
+| column_attribute_list_opt STORAGE DISK
+  {
+    $1.StorageMedia = DiskStorageMedia
+    $$ = $1
+  }
+| column_attribute_list_opt STORAGE MEMORY
+  {
+    $1.StorageMedia = MemoryStorageMedia
+    $$ = $1
+  }
+// A CHECK constraint among the attributes of a column is added to the table
+// once the column is, at its place among the table's CHECK constraints. See
+// takeColumnChecks.
+| column_attribute_list_opt CHECK '(' expression ')'
+  {
+    yylex.(*Tokenizer).addColumnCheck(IdentifierCI{}, $4, @$.end)
+    $$ = $1
+  }
+| column_attribute_list_opt CONSTRAINT sql_id_opt CHECK '(' expression ')'
+  {
+    yylex.(*Tokenizer).addColumnCheck($3, $6, @$.end)
+    $$ = $1
+  }
+// [NOT] ENFORCED applies to the CHECK constraint right before it. As in
+// MySQL, it is a separate attribute, because NOT could also start NOT NULL,
+// and it is an error after any other attribute.
+| column_attribute_list_opt enforced
+  {
+    if !yylex.(*Tokenizer).enforceColumnCheck($2, @1.end) {
+      yylex.Error("[NOT] ENFORCED must follow a CHECK constraint")
+      return 1
+    }
     $$ = $1
   }
 | column_attribute_list_opt COLLATE STRING
@@ -2019,50 +2142,11 @@ column_storage:
     $$ = StoredStorage
 }
 
-generated_column_attribute_list_opt:
+column_storage_opt:
   {
-    $$ = &ColumnTypeOptions{}
+    $$ = VirtualStorage
   }
-| generated_column_attribute_list_opt column_storage
-  {
-    $1.Storage = $2
-    $$ = $1
-  }
-| generated_column_attribute_list_opt NULL
-  {
-    $1.Null = ptr.Of(true)
-    $$ = $1
-  }
-| generated_column_attribute_list_opt NOT NULL
-  {
-    $1.Null = ptr.Of(false)
-    $$ = $1
-  }
-| generated_column_attribute_list_opt COMMENT_KEYWORD STRING
-  {
-    $1.Comment = NewStrLiteral($3)
-    $$ = $1
-  }
-| generated_column_attribute_list_opt keys
-  {
-    $1.KeyOpt = $2
-    $$ = $1
-  }
-| generated_column_attribute_list_opt SRID INTEGRAL
-  {
-    $1.SRID = NewIntLiteral($3)
-    $$ = $1
-  }
-| generated_column_attribute_list_opt VISIBLE
-  {
-    $1.Invisible = ptr.Of(false)
-    $$ = $1
-  }
-| generated_column_attribute_list_opt INVISIBLE
-  {
-    $1.Invisible = ptr.Of(true)
-    $$ = $1
-  }
+| column_storage
 
 now_or_signed_literal:
 now
@@ -3348,17 +3432,21 @@ space_separated_table_option_list:
   }
 
 table_option:
-  AUTO_INCREMENT equal_opt INTEGRAL
+  AUTO_INCREMENT equal_opt ulonglong_num
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:$3}
   }
-| AUTOEXTEND_SIZE equal_opt INTEGRAL
+| AUTOEXTEND_SIZE equal_opt size_number
   {
-    $$ = &TableOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = &TableOption{Name: string($1), Value: $3}
   }
-| AVG_ROW_LENGTH equal_opt INTEGRAL
+| AVG_ROW_LENGTH equal_opt ulonglong_num
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    // MySQL stores AVG_ROW_LENGTH in four bytes.
+    if checkTableOptionMaximum(yylex, $3, maxAvgRowLength) == nil {
+      return 1
+    }
+    $$ = &TableOption{Name:string($1), Value:$3}
   }
 | default_optional charset_or_character_set equal_opt charset
   {
@@ -3368,9 +3456,14 @@ table_option:
   {
     $$ = &TableOption{Name:string($2), String:$4, CaseSensitive: true}
   }
-| CHECKSUM equal_opt INTEGRAL
+| CHECKSUM equal_opt ulong_num
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:$3}
+  }
+| TABLE_CHECKSUM equal_opt ulong_num
+  {
+    // TABLE_CHECKSUM is a synonym of CHECKSUM.
+    $$ = &TableOption{Name:"checksum", Value:$3}
   }
 | COMMENT_KEYWORD equal_opt STRING
   {
@@ -3392,9 +3485,9 @@ table_option:
   {
     $$ = &TableOption{Name:(string($1)+" "+string($2)), Value:NewStrLiteral($4)}
   }
-| DELAY_KEY_WRITE equal_opt INTEGRAL
+| DELAY_KEY_WRITE equal_opt ulong_num
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:$3}
   }
 | ENCRYPTION equal_opt STRING
   {
@@ -3416,25 +3509,26 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), String:string($3)}
   }
-| KEY_BLOCK_SIZE equal_opt INTEGRAL
+| KEY_BLOCK_SIZE equal_opt ulonglong_num
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    // MySQL stores KEY_BLOCK_SIZE in two bytes.
+    if checkTableOptionMaximum(yylex, $3, maxKeyBlockSize) == nil {
+      return 1
+    }
+    $$ = &TableOption{Name:string($1), Value:$3}
   }
-| MAX_ROWS equal_opt INTEGRAL
+| MAX_ROWS equal_opt ulonglong_num
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:$3}
   }
-| MIN_ROWS equal_opt INTEGRAL
+| MIN_ROWS equal_opt ulonglong_num
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), Value:$3}
   }
-| PACK_KEYS equal_opt INTEGRAL
+| PACK_KEYS equal_opt ternary_option
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
-  }
-| PACK_KEYS equal_opt DEFAULT
-  {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = $3
+    $$.Name = string($1)
   }
 | PASSWORD equal_opt STRING
   {
@@ -3444,50 +3538,133 @@ table_option:
   {
     $$ = &TableOption{Name:string($1), String:string($3)}
   }
+| SECONDARY_ENGINE equal_opt NULL
+  {
+    $$ = &TableOption{Name:string($1), String:string($3)}
+  }
+| SECONDARY_ENGINE equal_opt table_alias
+  {
+    if $3.String() == "" {
+      yylex.Error("engine name cannot be empty")
+      return 1
+    }
+    $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
+  }
 | SECONDARY_ENGINE_ATTRIBUTE equal_opt STRING
   {
     $$ = &TableOption{Name: string($1), Value: NewStrLiteral($3)}
   }
-| STATS_AUTO_RECALC equal_opt INTEGRAL
+| START TRANSACTION
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    // START TRANSACTION makes CREATE TABLE ... SELECT atomic. It has no
+    // value.
+    $$ = &TableOption{Name:string($1) + " " + string($2)}
   }
-| STATS_AUTO_RECALC equal_opt DEFAULT
+| STATS_AUTO_RECALC equal_opt ternary_option
+  {
+    $$ = $3
+    $$.Name = string($1)
+  }
+| STATS_PERSISTENT equal_opt ternary_option
+  {
+    $$ = $3
+    $$.Name = string($1)
+  }
+| STATS_SAMPLE_PAGES equal_opt ulong_num
+  {
+    // MySQL stores STATS_SAMPLE_PAGES in two bytes, and 0 stands for
+    // DEFAULT.
+    if checkTableOptionMaximum(yylex, $3, maxStatsSamplePgs) == nil {
+      return 1
+    }
+    if $3.Val == "0" {
+      yylex.Error("the valid range for stats_sample_pages is [1, 65535]")
+      return 1
+    }
+    $$ = &TableOption{Name:string($1), Value:$3}
+  }
+| STATS_SAMPLE_PAGES equal_opt DEFAULT
   {
     $$ = &TableOption{Name:string($1), String:string($3)}
   }
-| STATS_PERSISTENT equal_opt INTEGRAL
+| STORAGE DISK
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
+    $$ = &TableOption{Name:string($1), String:string($2)}
   }
-| STATS_PERSISTENT equal_opt DEFAULT
+| STORAGE MEMORY
   {
-    $$ = &TableOption{Name:string($1), String:string($3)}
+    $$ = &TableOption{Name:string($1), String:string($2)}
   }
-| STATS_SAMPLE_PAGES equal_opt INTEGRAL
+| TABLESPACE equal_opt sql_id
   {
-    $$ = &TableOption{Name:string($1), Value:NewIntLiteral($3)}
-  }
-| TABLESPACE equal_opt sql_id storage_opt
-  {
-    $$ = &TableOption{Name:string($1), String:$3.String(), Storage:$4, CaseSensitive: true}
+    $$ = &TableOption{Name:string($1), String:$3.String(), CaseSensitive: true}
   }
 | UNION equal_opt '(' table_name_list ')'
   {
     $$ = &TableOption{Name:string($1), Tables: $4}
   }
+| UNION equal_opt '(' ')'
+  {
+    $$ = &TableOption{Name:string($1), Tables: TableNames{}}
+  }
 
-storage_opt:
+// The numbers below are read the way MySQL reads them. See
+// mysqlUnsignedOption.
+ulonglong_num:
+  INTEGRAL
   {
-    $$ = ""
+    if $$ = tableOptionNumberOrError(yylex, INTEGRAL, $1); $$ == nil {
+      return 1
+    }
   }
-| STORAGE DISK
+| DECIMAL
   {
-    $$ = " " + string($1) + " " + string($2)
+    if $$ = tableOptionNumberOrError(yylex, DECIMAL, $1); $$ == nil {
+      return 1
+    }
   }
-| STORAGE MEMORY
+| FLOAT
   {
-    $$ = " " + string($1) + " " + string($2)
+    if $$ = tableOptionNumberOrError(yylex, FLOAT, $1); $$ == nil {
+      return 1
+    }
+  }
+
+ulong_num:
+  ulonglong_num
+| HEXNUM
+  {
+    if $$ = tableOptionNumberOrError(yylex, HEXNUM, $1); $$ == nil {
+      return 1
+    }
+  }
+
+ternary_option:
+  ulong_num
+  {
+    if $1.Val != "0" && $1.Val != "1" {
+      yylex.Error("table option value must be 0, 1 or DEFAULT")
+      return 1
+    }
+    $$ = &TableOption{Value: $1}
+  }
+| DEFAULT
+  {
+    $$ = &TableOption{String: string($1)}
+  }
+
+// size_number is a number of bytes, or a number with a K, M or G suffix,
+// which the tokenizer reads as an identifier.
+size_number:
+  ulonglong_num
+| ID
+  {
+    size, err := tableOptionSize($1)
+    if err != "" {
+      yylex.Error(err)
+      return 1
+    }
+    $$ = size
   }
 
 row_format_options:
@@ -3595,11 +3772,11 @@ alter_commands_list:
 alter_options:
   alter_option
   {
-    $$ = []AlterOption{$1}
+    $$ = yylex.(*Tokenizer).appendAlterOption(nil, $1)
   }
 | alter_options ',' alter_option
   {
-    $$ = append($1,$3)
+    $$ = yylex.(*Tokenizer).appendAlterOption($1, $3)
   }
 | alter_options ',' alter_commands_modifier
   {
@@ -9070,14 +9247,6 @@ ignore_opt:
 | IGNORE
   { $$ = true }
 
-ignore_or_replace_opt:
-  %prec EMPTY_IGNORE_OR_REPLACE
-  { $$ = NoIgnoreOrReplace }
-| IGNORE
-  { $$ = IgnoreType }
-| REPLACE
-  { $$ = ReplaceType }
-
 to_opt:
   { $$ = struct{}{} }
 | TO
@@ -9797,6 +9966,7 @@ non_reserved_keyword:
 | SUM %prec FUNCTION_CALL_NON_KEYWORD
 | TABLE_NAME
 | TABLES
+| TABLE_CHECKSUM
 | TABLESAMPLE
 | TABLESPACE
 | TEMPORARY

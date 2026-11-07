@@ -86,7 +86,7 @@ func TestQuotedNamesDoNotSmuggleSQL(t *testing.T) {
 	}, {
 		name:   "table option tablespace",
 		input:  "create table t (id int) tablespace `ts, comment=\"x\"` storage disk",
-		output: "create table t (\n\tid int\n) tablespace `ts, comment=\"x\"` storage disk",
+		output: "create table t (\n\tid int\n) tablespace `ts, comment=\"x\"`,\n  storage disk",
 	}, {
 		// ALTER TABLE's options are written by TableOptions, not TableSpec.
 		name:   "alter table option engine",
@@ -212,7 +212,7 @@ func TestBareNamesAreNotQuoted(t *testing.T) {
 		{input: "alter table t convert to character set utf8mb4 collate utf8mb4_bin"},
 		{input: "create table t (\n\tid int\n) charset utf8mb4,\n  collate utf8mb4_bin"},
 		{input: "create table t (\n\tid int\n) engine InnoDB"},
-		{input: "create table t (\n\tid int\n) tablespace innodb_system storage disk"},
+		{input: "create table t (\n\tid int\n) tablespace innodb_system,\n  storage disk"},
 		{input: "create table t (\n\tid int\n) engine MyISAM"},
 		{input: "create table t (\n\ta varchar(10) character set utf8mb4 collate utf8mb4_bin\n)"},
 		{input: "create database d character set utf8mb4"},

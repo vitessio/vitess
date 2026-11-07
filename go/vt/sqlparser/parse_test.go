@@ -69,6 +69,58 @@ var validSQL = []struct {
 	input:  "create table t (a enum(0xc3a6, x'c3b8', b'1001001', 0b101, 'x'), b set(0xE4))",
 	output: "create table t (\n\ta enum(0xc3a6, X'c3b8', B'1001001', 0b101, 'x'),\n\tb set(0xE4)\n)",
 }, {
+	// A CHECK constraint among a column's attributes is added to the table at
+	// the column's place, so that MySQL names unnamed constraints the same.
+	// [NOT] ENFORCED applies to the constraint right before it.
+	input:  "create table t1 (check (f1 > 0), f1 int check (f1 < 10) not enforced, f2 int constraint t1_f2_ck check (f2 < 10) enforced not null)",
+	output: "create table t1 (\n\tf1 int,\n\tf2 int not null,\n\tcheck (f1 > 0),\n\tcheck (f1 < 10) not enforced,\n\tconstraint t1_f2_ck check (f2 < 10)\n)",
+}, {
+	input:  "alter table t1 add f4 int constraint t1_f4_chk check (f4 < 10) not enforced, modify f5 int check (f5 > 0)",
+	output: "alter table t1 add column f4 int, add constraint t1_f4_chk check (f4 < 10) not enforced, modify column f5 int, add check (f5 > 0)",
+}, {
+	// MySQL creates both indexes for a column that is both PRIMARY KEY and
+	// UNIQUE, and SERIAL DEFAULT VALUE stands for NOT NULL AUTO_INCREMENT
+	// UNIQUE.
+	input:  "create table t (c1 decimal primary key unique key storage memory not null, c2 int not secondary serial default value)",
+	output: "create table t (\n\tc1 decimal not null storage memory primary key unique key,\n\tc2 int not null auto_increment not secondary unique\n)",
+}, {
+	// A generated column takes every attribute after its expression.
+	input:  "create table t3 (a int primary key, b int generated always as (-a) virtual unique default (-1 * 128))",
+	output: "create table t3 (\n\ta int primary key,\n\tb int as (-a) virtual default (-1 * 128) unique\n)",
+}, {
+	// A later DEFAULT replaces an earlier one, including whether it is a
+	// literal.
+	input:  "create table t (id char(40) default 4 default (uuid()))",
+	output: "create table t (\n\tid char(40) default (uuid())\n)",
+}, {
+	// CREATE TABLE takes options, partitioning and a query without a table
+	// definition, and a definition that starts with an index.
+	input:  "create table t1 engine=innodb select 1 as i",
+	output: "create table t1 engine innodb as select 1 as i from dual",
+}, {
+	input:  "create table t2 partition by key (c1) partitions 3 as select * from t1",
+	output: "create table t2 \npartition by key (c1) partitions 3 as select * from t1",
+}, {
+	input:  "create table t2 (primary key (b)) ignore select * from t1",
+	output: "create table t2 (\n\tprimary key (b)\n) ignore as select * from t1",
+}, {
+	input:  "create table t4 (select a, b from t1) union (select a, b from t2) limit 2",
+	output: "create table t4 as select a, b from t1 union select a, b from t2 limit 2",
+}, {
+	input:  "create table t (like t2)",
+	output: "create table t like t2",
+}, {
+	// MySQL reads the number of a numeric table option up to its first
+	// character that is not a digit, and AUTOEXTEND_SIZE takes a size suffix.
+	input:  "create table t1 (a int) checksum 0x1 table_checksum=1 delay_key_write=1.5 autoextend_size 4M",
+	output: "create table t1 (\n\ta int\n) checksum 1,\n  checksum 1,\n  delay_key_write 1,\n  autoextend_size 4194304",
+}, {
+	input:  "create table t1 (a int) stats_sample_pages=default pack_keys=default secondary_engine=null storage memory start transaction",
+	output: "create table t1 (\n\ta int\n) stats_sample_pages default,\n  pack_keys default,\n  secondary_engine null,\n  storage memory,\n  start transaction",
+}, {
+	input:  "alter table t1 union=()",
+	output: "alter table t1 union ()",
+}, {
 	// MySQL allows every character from U+0080 on in an unquoted identifier.
 	input:  "create table tæøå (кол int, 🐬 int, index ix_ā (кол))",
 	output: "create table `tæøå` (\n\t`кол` int,\n\t`🐬` int,\n\tkey `ix_ā` (`кол`)\n)",
@@ -5688,7 +5740,8 @@ func TestCreateTable(t *testing.T) {
   stats_auto_recalc default,
   stats_persistent 0,
   stats_sample_pages 1,
-  tablespace ` + "`tablespace_name`" + ` storage disk,
+  tablespace ` + "`tablespace_name`" + `,
+  storage disk,
   union (a, b, c),
   tablespace ` + "`tablespace_name`",
 		},
