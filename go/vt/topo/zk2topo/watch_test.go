@@ -392,6 +392,32 @@ func TestSocketDialerRefusesSocketsOnceClosed(t *testing.T) {
 	require.EqualValues(t, 1, dials.Load(), "dialed again after Close")
 }
 
+// TestDropConnIgnoresReplacedConnection checks that dropping a connection
+// that was already dropped and replaced keeps the new connection. Both
+// handleSessionEvents and withRetry can drop the same connection, and the
+// second call can come after another caller connected again: it must not
+// end the new, healthy session.
+func TestDropConnIgnoresReplacedConnection(t *testing.T) {
+	fake := startFakeZkServer(t, 1)
+	conn := Connect(fake.addr())
+	t.Cleanup(func() { conn.Close() })
+
+	old, err := conn.getConn(t.Context())
+	require.NoError(t, err)
+	conn.dropConn(old)
+	current, err := conn.getConn(t.Context())
+	require.NoError(t, err)
+	require.NotSame(t, old, current)
+
+	conn.dropConn(old)
+
+	got, err := conn.getConn(t.Context())
+	require.NoError(t, err)
+	require.Same(t, current, got, "dropping the old connection replaced the new one")
+	_, _, err = conn.Get(t.Context(), "/")
+	require.NoError(t, err, "the new connection does not work")
+}
+
 // TestObtainQueueLockFailsWhenConnectionDrops checks that waiting for a
 // queue lock fails when the connection drops, instead of reading the queue
 // again on a new connection: our node belongs to the session of the dropped
@@ -448,10 +474,11 @@ func TestLeaderDeletesProposalWhenConnectionDrops(t *testing.T) {
 }
 
 // TestLeaderDeletesProposalWhenWatchCannotBeSet checks that a new leader
-// that cannot watch its proposal stops leading and deletes it.
+// that cannot watch its proposal stops leading, and only then deletes it.
 func TestLeaderDeletesProposalWhenWatchCannotBeSet(t *testing.T) {
 	fake := startFakeZkServer(t, 2)
 	fake.getDataErr.Store(fakeErrNoNode)
+	fake.releaseDeletes = make(chan struct{})
 	zs := NewServer(fake.addr(), "/")
 	t.Cleanup(zs.Close)
 
@@ -464,9 +491,11 @@ func TestLeaderDeletesProposalWhenWatchCannotBeSet(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	go mp.watchLeadership(ctx, zs.conn, "/election/proposal", cancel)
 
+	// The server holds its reply to the delete, so that leadership can only
+	// have been canceled before the delete.
 	require.Equal(t, "/election/proposal", fake.waitForRequest(fakeOpDelete))
-	require.Eventually(t, func() bool { return ctx.Err() != nil }, 30*time.Second, 10*time.Millisecond,
-		"leadership was not canceled")
+	require.Error(t, ctx.Err(), "leadership was not canceled before deleting the proposal")
+	close(fake.releaseDeletes)
 }
 
 // TestWaitForLeadershipDeletesProposalWhenConnectionDrops checks that a
