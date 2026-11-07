@@ -173,3 +173,22 @@ func TestDMLReferenceUsingShardedKS(t *testing.T) {
 	utils.Exec(t, conn, "use sks")
 	utils.Exec(t, conn, "update zip_detail set zip_id = 1 where id = 1")
 }
+
+// TestReferenceRowsPreservedByAnOuterJoinComeBackOnce checks that a reference table on the preserved
+// side of an outer join with a sharded table returns each of its rows once, whether or not it has a
+// match, and also when the sharded side reads a single shard.
+func TestReferenceRowsPreservedByAnOuterJoinComeBackOnce(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	conn, closer := start(t)
+	defer closer()
+
+	utils.AssertMatches(t, conn,
+		"select z.id, f.id from "+shardedKeyspaceName+".zip_detail z left join "+shardedKeyspaceName+".delivery_failure f on f.zip_detail_id = z.id and f.reason = 'no such reason' where z.id <= 2 order by z.id",
+		`[[INT64(1) NULL] [INT64(2) NULL]]`)
+	utils.AssertMatches(t, conn,
+		"select z.id, f.id from "+shardedKeyspaceName+".zip_detail z left join "+shardedKeyspaceName+".delivery_failure f on f.zip_detail_id = z.id where z.id <= 2 order by z.id",
+		`[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
+	utils.AssertMatches(t, conn,
+		"select z.id, f.id from "+shardedKeyspaceName+".zip_detail z left join (select id, zip_detail_id from "+shardedKeyspaceName+".delivery_failure where id = 1) as f on f.zip_detail_id = z.id where z.id <= 2 order by z.id",
+		`[[INT64(1) INT64(1)] [INT64(2) NULL]]`)
+}
