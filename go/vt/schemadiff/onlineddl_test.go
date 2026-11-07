@@ -225,7 +225,7 @@ func TestGetAlterTableAnalysis(t *testing.T) {
 			if tcase.drops == nil {
 				tcase.drops = make(map[string]bool)
 			}
-			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(tcase.alter)
+			stmt, err := sqlparser.NewTestParser().Parse(tcase.alter)
 			require.NoError(t, err)
 			alter, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -1092,7 +1092,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	env := NewTestEnv()
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			stmt, err := env.Parser().ParseStrictDDL(tc.query)
+			stmt, err := env.Parser().Parse(tc.query)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
@@ -1230,7 +1230,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			if tc.capableOf == nil {
 				tc.capableOf = capableOf
 			}
-			stmt, err := env.Parser().ParseStrictDDL(tc.alter)
+			stmt, err := env.Parser().Parse(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -1275,7 +1275,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 	env := NewTestEnv()
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
-			stmt, err := env.Parser().ParseStrictDDL(tc.alter)
+			stmt, err := env.Parser().Parse(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -1285,7 +1285,7 @@ func TestAddInstantAlgorithm(t *testing.T) {
 
 			assert.Equal(t, tc.expect, alterInstant)
 
-			stmt, err = env.Parser().ParseStrictDDL(alterInstant)
+			stmt, err = env.Parser().Parse(alterInstant)
 			require.NoError(t, err)
 			_, ok = stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -1336,7 +1336,7 @@ func TestDuplicateCreateTable(t *testing.T) {
 	env := NewTestEnv()
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
-			stmt, err := env.Parser().ParseStrictDDL(tcase.sql)
+			stmt, err := env.Parser().Parse(tcase.sql)
 			require.NoError(t, err)
 			originalCreateTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)

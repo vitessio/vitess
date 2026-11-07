@@ -187,8 +187,8 @@ type Plan struct {
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
 	// TablesUndetermined is set for a statement whose tables the parser
-	// discards or leaves opaque (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA, a
-	// partially parsed CREATE TABLE): Permissions does not cover everything
+	// discards or leaves opaque (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA):
+	// Permissions does not cover everything
 	// the statement touches, whether it is empty or names the tables the
 	// parser did keep. Under strict table ACL the executor denies such a
 	// statement rather than skip the check.

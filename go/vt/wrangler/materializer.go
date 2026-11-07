@@ -1278,7 +1278,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 }
 
 func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error) {
-	ast, err := parser.ParseStrictDDL(ddl)
+	ast, err := parser.Parse(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -1307,7 +1307,7 @@ func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error)
 }
 
 func stripTableConstraints(ddl string, parser *sqlparser.Parser) (string, error) {
-	ast, err := parser.ParseStrictDDL(ddl)
+	ast, err := parser.Parse(ddl)
 	if err != nil {
 		return "", err
 	}

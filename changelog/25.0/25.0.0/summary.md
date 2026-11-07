@@ -20,6 +20,7 @@
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
+        - [DDL that Vitess cannot parse in full is rejected](#partial-ddl-removed)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -244,6 +245,16 @@ VTGate used to report a planned `REPLACE` statement with the `INSERT` statement 
 **Impact**: dashboards, alerts and query-log parsing that count `INSERT` no longer include `REPLACE` statements. Planning, routing, transactions and results are unchanged.
 
 **Migration**: match `REPLACE` as well as `INSERT` wherever `REPLACE` statements should be included.
+
+#### <a id="partial-ddl-removed"/>DDL that Vitess cannot parse in full is rejected</a>
+
+Vitess used to accept a `CREATE TABLE`, `ALTER TABLE`, `CREATE INDEX`, `CREATE DATABASE` or `ALTER DATABASE` statement that it could parse only in part, and send the client's text to MySQL as it was. Vitess could then plan, check table ACLs for, and route a statement other than the one that MySQL ran. It now rejects such a statement with a syntax error, as it does any other statement it cannot parse, and sends MySQL the statement that it formats from the parsed statement.
+
+To make this possible, the parser now accepts every form of these statements that MySQL 8.4's own test suite uses, including `CREATE TABLE ... SELECT` with table options or a parenthesized query, `TABLE t`, column `CHECK` constraints, index types before the column list, partitioning with `MAXVALUE` in value lists, `NODEGROUP`, `ADD PARTITION PARTITIONS n` and `ALTER TABLE ... ORDER BY`, type synonyms such as `NCHAR`, `DOUBLE PRECISION` and `INT4`, and unquoted identifiers with characters from U+0080 on.
+
+**Impact**: a DDL statement in syntax that MySQL rejects, which used to reach MySQL and fail there, now fails in Vitess with a syntax error. A DDL statement that relies on `ANSI_QUOTES` to read a double-quoted string as an identifier is rejected, because the parser does not know the session's `sql_mode`. `CREATE TABLE ... SELECT` with `EXCEPT` or `INTERSECT` is rejected, because the parser does not support them yet.
+
+**Migration**: quote identifiers with back quotes rather than double quotes in DDL.
 
 ### <a id="deprecations"/>Deprecations</a>
 

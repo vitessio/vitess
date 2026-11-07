@@ -934,9 +934,9 @@ func (qre *QueryExecutor) checkPermissions() error {
 	}
 
 	// Fail closed for a statement whose table set the planner could not
-	// determine (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA, a partially parsed
-	// CREATE TABLE). It is forwarded to MySQL as opaque text and can still
-	// read or modify tables the permissions above do not name, so the
+	// determine (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA). It is forwarded to
+	// MySQL as opaque text and can still read or modify tables the
+	// permissions above do not name, so the
 	// per-table loop alone would let any authenticated caller run it under
 	// strict table ACL. It runs after the loop so that a caller is denied on
 	// a table the planner did derive by name, and a dry run records it. The

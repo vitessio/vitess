@@ -453,12 +453,12 @@ func TestAlterTableCapableOfInstantDDL(t *testing.T) {
 			if tcase.capableOf == nil {
 				tcase.capableOf = capableOf
 			}
-			createTable, err := parser.ParseStrictDDL(tcase.create)
+			createTable, err := parser.Parse(tcase.create)
 			require.NoError(t, err, "failed to parse a CREATE TABLE statement from %q", tcase.create)
 			createTableStmt, ok := createTable.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			alterTable, err := parser.ParseStrictDDL(tcase.alter)
+			alterTable, err := parser.Parse(tcase.alter)
 			require.NoError(t, err, "failed to parse a ALTER TABLE statement from %q", tcase.alter)
 			alterTableStmt, ok := alterTable.(*sqlparser.AlterTable)
 			require.True(t, ok)
@@ -478,9 +478,9 @@ func TestAlterTableCapableOfInstantDDLLogsCapabilityError(t *testing.T) {
 		return false, capabilities.ErrUnspecifiedServerVersion
 	}
 	parser := sqlparser.NewTestParser()
-	createTable, err := parser.ParseStrictDDL("create table t1 (id int, i1 int)")
+	createTable, err := parser.Parse("create table t1 (id int, i1 int)")
 	require.NoError(t, err)
-	alterTable, err := parser.ParseStrictDDL("alter table t1 add column i2 int first")
+	alterTable, err := parser.Parse("alter table t1 add column i2 int first")
 	require.NoError(t, err)
 
 	logs := logtest.Capture(t, slog.LevelInfo)

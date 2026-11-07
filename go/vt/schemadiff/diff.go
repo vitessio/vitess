@@ -77,7 +77,7 @@ func DiffCreateTablesQueries(env *Environment, query1 string, query2 string, hin
 	var fromCreateTable *sqlparser.CreateTable
 	var ok bool
 	if query1 != "" {
-		stmt, err := env.Parser().ParseStrictDDL(query1)
+		stmt, err := env.Parser().Parse(query1)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +88,7 @@ func DiffCreateTablesQueries(env *Environment, query1 string, query2 string, hin
 	}
 	var toCreateTable *sqlparser.CreateTable
 	if query2 != "" {
-		stmt, err := env.Parser().ParseStrictDDL(query2)
+		stmt, err := env.Parser().Parse(query2)
 		if err != nil {
 			return nil, err
 		}
@@ -139,7 +139,7 @@ func DiffCreateViewsQueries(env *Environment, query1 string, query2 string, hint
 	var fromCreateView *sqlparser.CreateView
 	var ok bool
 	if query1 != "" {
-		stmt, err := env.Parser().ParseStrictDDL(query1)
+		stmt, err := env.Parser().Parse(query1)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +150,7 @@ func DiffCreateViewsQueries(env *Environment, query1 string, query2 string, hint
 	}
 	var toCreateView *sqlparser.CreateView
 	if query2 != "" {
-		stmt, err := env.Parser().ParseStrictDDL(query2)
+		stmt, err := env.Parser().Parse(query2)
 		if err != nil {
 			return nil, err
 		}

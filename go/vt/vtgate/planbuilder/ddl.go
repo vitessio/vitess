@@ -103,7 +103,7 @@ func buildGeneralDDLPlan(ctx context.Context, sql string, ddlStatement sqlparser
 		}
 		return newPlanResult(eddl), nil
 	}
-	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(ctx, sql, ddlStatement, reservedVars, vschema, cfg)
+	normalDDLPlan, onlineDDLPlan, err := buildDDLPlans(ctx, ddlStatement, reservedVars, vschema, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func buildByPassPlan(sql string, vschema plancontext.VSchema, isDDL bool) (*plan
 	return newPlanResult(send), nil
 }
 
-func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*engine.Send, *engine.OnlineDDL, error) {
+func buildDDLPlans(ctx context.Context, ddlStatement sqlparser.DDLStatement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, cfg dynamicconfig.DDL) (*engine.Send, *engine.OnlineDDL, error) {
 	var destination key.ShardDestination
 	var keyspace *vindexes.Keyspace
 	var err error
@@ -193,11 +193,9 @@ func buildDDLPlans(ctx context.Context, sql string, ddlStatement sqlparser.DDLSt
 		destination = key.DestinationAllShards{}
 	}
 
-	query := sql
-	// If the query is fully parsed, generate the query from the ast. Otherwise, use the original query
-	if ddlStatement.IsFullyParsed() {
-		query = sqlparser.String(ddlStatement)
-	}
+	// The query is generated from the AST, which the planning above may have
+	// changed, for example to remove the keyspace qualifier.
+	query := sqlparser.String(ddlStatement)
 
 	send := &engine.Send{
 		Keyspace:          keyspace,

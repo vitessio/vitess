@@ -314,9 +314,9 @@ func TestNewOnlineDDLs(t *testing.T) {
 	}
 	// These queries are long enough that keeping them in the aligned map literal
 	// above makes it unreadable.
-	tests["alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)"] = expect{isError: true, expectErrorText: "syntax error"}
+	tests["alter table corder add FOREIGN KEY my_fk(customer_id) reference customer(customer_id)"] = expect{parseError: true}
 	tests["alter table corder add FOREIGN KEY my_fk(customer_id) references customer(customer_id)"] = expect{isError: true, expectErrorText: "foreign key constraints are not supported"}
-	tests["CREATE TABLE if not exists t (id bigint unsigned NOT NULL AUTO_INCREMENT, ts datetime(6) DEFAULT NULL, error_column NO_SUCH_TYPE NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB"] = expect{isError: true, expectErrorText: "near"}
+	tests["CREATE TABLE if not exists t (id bigint unsigned NOT NULL AUTO_INCREMENT, ts datetime(6) DEFAULT NULL, error_column NO_SUCH_TYPE NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB"] = expect{parseError: true}
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	parser := sqlparser.NewTestParser()
 	for query, expect := range tests {

@@ -56,7 +56,6 @@ type Tokenizer struct {
 	// See takeColumnChecks.
 	columnChecks       map[*ColumnDefinition][]*ConstraintDefinition
 	posVarIndex        int
-	partialDDL         Statement
 	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
 
@@ -118,13 +117,6 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 			break
 		}
 		typ, val = tkn.Scan()
-	}
-	if typ == 0 || typ == ';' || typ == LEX_ERROR {
-		// If encounter end of statement or invalid token,
-		// we should not accept partially parsed DDLs. They
-		// should instead result in parser errors. See the
-		// Parse function to see how this is handled.
-		tkn.partialDDL = nil
 	}
 	lval.yyloc.start = tkn.currStart
 	lval.yyloc.end = tkn.Pos

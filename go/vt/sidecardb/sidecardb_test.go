@@ -396,7 +396,7 @@ func TestTableSchemaDiff(t *testing.T) {
 func TestVDiffTableLastPKIsBlob(t *testing.T) {
 	schema, err := schemaLocation.ReadFile("schema/vdiff/vdiff_table.sql")
 	require.NoError(t, err)
-	stmt, err := sqlparser.NewTestParser().ParseStrictDDL(string(schema))
+	stmt, err := sqlparser.NewTestParser().Parse(string(schema))
 	require.NoError(t, err)
 	ct, ok := stmt.(*sqlparser.CreateTable)
 	require.True(t, ok)

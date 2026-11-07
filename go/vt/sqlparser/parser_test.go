@@ -70,7 +70,7 @@ func TestEmptyErrorAndComments(t *testing.T) {
 		})
 
 		t.Run(testcase.input+"-Strict DDL", func(t *testing.T) {
-			res, err := parser.ParseStrictDDL(testcase.input)
+			res, err := parser.Parse(testcase.input)
 			if testcase.err != nil {
 				require.Equal(t, testcase.err, err)
 			} else {
@@ -210,7 +210,10 @@ func (b *parserLogBuffer) contents() string {
 	return b.String()
 }
 
-func TestPartialDDLDoesNotLogSensitiveInput(t *testing.T) {
+// TestUnparsableDDLDoesNotLogSensitiveInput tests that a DDL statement that
+// does not parse in full is an error that the parser does not log, because
+// the statement's text can hold a secret.
+func TestUnparsableDDLDoesNotLogSensitiveInput(t *testing.T) {
 	const secret = "fake_secret_21253"
 	parser := NewTestParser()
 	for _, sql := range []string{
@@ -219,41 +222,20 @@ func TestPartialDDLDoesNotLogSensitiveInput(t *testing.T) {
 		"create table t (id int default :value) " + secret,
 	} {
 		t.Run(sql, func(t *testing.T) {
-			// The first unexpected token is sensitive too: logging only LastError
-			// would still expose it even if the full SQL were removed.
-			tokenizer := parser.NewStringTokenizer(sql)
-			require.NotZero(t, yyParsePooled(tokenizer))
-			require.ErrorContains(t, tokenizer.LastError, secret)
-
 			for _, method := range []string{"Parse", "Parse2"} {
 				t.Run(method, func(t *testing.T) {
 					var logs parserLogBuffer
 					saved := log.SwapLogger(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
 					t.Cleanup(func() { log.SwapLogger(saved) })
 
-					var stmt Statement
 					var err error
 					if method == "Parse" {
-						stmt, err = parser.Parse(sql)
+						_, err = parser.Parse(sql)
 					} else {
-						var bindVars BindVars
-						stmt, bindVars, err = parser.Parse2(sql)
-						if strings.Contains(sql, ":value") {
-							require.Contains(t, bindVars, "value")
-						} else {
-							require.Empty(t, bindVars)
-						}
+						_, _, err = parser.Parse2(sql)
 					}
-					require.NoError(t, err)
-					switch ddl := stmt.(type) {
-					case DDLStatement:
-						require.False(t, ddl.IsFullyParsed())
-					case DBDDLStatement:
-						require.False(t, ddl.IsFullyParsed())
-					default:
-						t.Fatalf("expected partial DDL, got %T", stmt)
-					}
-					require.Empty(t, logs.contents(), "partial DDL must not emit SQL or parser-token diagnostics")
+					require.Error(t, err)
+					require.Empty(t, logs.contents(), "a statement that does not parse must not emit SQL or parser-token diagnostics")
 				})
 			}
 		})

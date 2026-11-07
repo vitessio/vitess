@@ -134,14 +134,6 @@ func ParseOnlineDDLStatement(sql string, parser *sqlparser.Parser) (ddlStmt sqlp
 
 func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, parser *sqlparser.Parser) error {
 	// SQL statement sanity checks:
-	if !ddlStmt.IsFullyParsed() {
-		if _, err := parser.ParseStrictDDL(sql); err != nil {
-			// More information about the reason why the statement is not fully parsed:
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "%v", err)
-		}
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "cannot parse statement: %v", sql)
-	}
-
 	walkFunc := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		return validateWalk(node, ddlStrategySetting.IsAllowForeignKeysFlag())
 	}
