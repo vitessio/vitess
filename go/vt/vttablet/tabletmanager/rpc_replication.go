@@ -1414,6 +1414,9 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	if timeCreated.UnixNano() <= 0 {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "time_created must be positive")
 	}
+	if request.ActionName == "" {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "action_name is required")
+	}
 	if len(request.ActionName) > 255 {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "action_name must not exceed 255 bytes")
 	}
@@ -1435,10 +1438,11 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 		response.PromoteReplicaError = reparentPhaseError(err)
 		return response, nil
 	}
-	operationCtx := context.WithoutCancel(ctx)
+	// Promotion honours the caller's context, so a caller that gives up (and may
+	// release the shard lock) never leaves this tablet going read-write later.
 	response.Position, err = func() (string, error) {
 		defer tm.unlock()
-		promoteCtx, promoteCancel := context.WithTimeout(operationCtx, topo.RemoteOperationTimeout)
+		promoteCtx, promoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 		defer promoteCancel()
 		return tm.promoteReplicaLocked(promoteCtx, request.SemiSync)
 	}()
@@ -1448,7 +1452,9 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 		return response, nil
 	}
 
-	journalCtx, journalCancel := context.WithTimeout(operationCtx, journalTimeout)
+	// Once the tablet is writable, a missing journal row is the torn state we want
+	// to avoid, so the journal write outlives the caller's cancellation.
+	journalCtx, journalCancel := context.WithTimeout(context.WithoutCancel(ctx), journalTimeout)
 	err = tm.PopulateReparentJournal(journalCtx, timeCreated.UnixNano(), request.ActionName, tm.tabletAlias, response.Position)
 	journalCancel()
 	if err != nil {

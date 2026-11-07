@@ -97340,7 +97340,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrepareEmergencyReparentRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -97361,7 +97361,17 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.tabletmanagerdata.PrepareEmergencyReparentRequest(), value;
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.PrepareEmergencyReparentRequest();
             while (reader.pos < end) {
                 let start = reader.pos;
                 let tag = reader.tag();
@@ -97383,6 +97393,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
                 }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
             }
             if (_end !== $undefined)
                 throw $Error("missing end group");
@@ -97656,7 +97671,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PrepareEmergencyReparentResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -97677,7 +97692,17 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.tabletmanagerdata.PrepareEmergencyReparentResponse(), value;
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.PrepareEmergencyReparentResponse();
             while (reader.pos < end) {
                 let start = reader.pos;
                 let tag = reader.tag();
@@ -97735,6 +97760,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
                 }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
             }
             if (_end !== $undefined)
                 throw $Error("missing end group");
@@ -98594,7 +98624,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PromoteReplicaAndJournalRequest.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -98615,7 +98645,17 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.tabletmanagerdata.PromoteReplicaAndJournalRequest(), value;
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.PromoteReplicaAndJournalRequest();
             while (reader.pos < end) {
                 let start = reader.pos;
                 let tag = reader.tag();
@@ -98661,6 +98701,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
                 }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
             }
             if (_end !== $undefined)
                 throw $Error("missing end group");
@@ -98933,7 +98978,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
          * @returns {$protobuf.Writer} Writer
          */
         PromoteReplicaAndJournalResponse.encodeDelimited = function(message, writer) {
-            return this.encode(message, writer && writer.len ? writer.fork() : writer).ldelim();
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
         };
 
         /**
@@ -98954,7 +98999,17 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 _depth = 0;
             if (_depth > $Reader.recursionLimit)
                 throw $Error("max depth exceeded");
-            let end = length === $undefined ? reader.len : reader.pos + length, message = _target || new $root.tabletmanagerdata.PromoteReplicaAndJournalResponse(), value;
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.tabletmanagerdata.PromoteReplicaAndJournalResponse();
             while (reader.pos < end) {
                 let start = reader.pos;
                 let tag = reader.tag();
@@ -98991,6 +99046,11 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     $util.makeProp(message, "$unknowns", false);
                     (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
                 }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
             }
             if (_end !== $undefined)
                 throw $Error("missing end group");

@@ -260,7 +260,11 @@ func (d *blockingWaitSourcePosMysqlDaemon) WaitSourcePos(ctx context.Context, _ 
 func (d *blockingPromoteMysqlDaemon) Promote(ctx context.Context, _ map[string]string) (replication.Position, error) {
 	close(d.entered)
 	<-d.release
-	d.ctxErr <- ctx.Err()
+	err := ctx.Err()
+	d.ctxErr <- err
+	if err != nil {
+		return replication.Position{}, err
+	}
 	return d.position, nil
 }
 
@@ -2584,10 +2588,8 @@ func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
 			}
 		})
 
+		fakeMysqlDaemon.ReadOnly = true
 		tm := newPromoteReplicaAndJournalTestTM(t, daemon)
-		fakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
-		}
 		ctx, cancel := context.WithCancel(t.Context())
 		resultCh := make(chan promoteResult, 1)
 		go func() {
@@ -2604,8 +2606,13 @@ func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
 
 		result := receive(t, resultCh)
 		require.NoError(t, result.err)
-		assert.Equal(t, replication.EncodePosition(promotionPosition), result.response.Position)
-		assert.NoError(t, <-daemon.ctxErr)
+		require.NotNil(t, result.response.PromoteReplicaError)
+		assert.Contains(t, result.response.PromoteReplicaError.Message, context.Canceled.Error())
+		assert.Empty(t, result.response.Position)
+		assert.Nil(t, result.response.PopulateReparentJournalError)
+		require.ErrorIs(t, <-daemon.ctxErr, context.Canceled)
+		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+		assert.True(t, fakeMysqlDaemon.ReadOnly)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
 }
@@ -2640,6 +2647,11 @@ func TestPromoteReplicaAndJournalRejectsInvalidRequest(t *testing.T) {
 			name:      "zero timestamp",
 			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{TimeCreated: &vttimepb.Time{}, ActionName: "EmergencyReparentShard"},
 			expectErr: "time_created must be positive",
+		},
+		{
+			name:      "empty action",
+			request:   &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{TimeCreated: protoutil.TimeToProto(created)},
+			expectErr: "action_name is required",
 		},
 		{
 			name:      "oversized action",
