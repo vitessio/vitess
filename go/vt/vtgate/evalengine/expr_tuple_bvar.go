@@ -72,7 +72,12 @@ func (bv *TupleBindVariable) eval(env *ExpressionEnv) (eval, error) {
 				return
 			}
 			found = true
-			e, err := valueToEval(val, typedCoercionCollation(val.Type(), collations.CollationForType(val.Type(), bv.Collation)), nil)
+			valType := val.Type()
+			if valType == sqltypes.TypeJSON {
+				valType = sqltypes.VarChar
+				val = sqltypes.MakeTrusted(valType, val.Raw())
+			}
+			e, err := valueToEval(val, typedCoercionCollation(valType, collations.CollationForType(valType, bv.Collation)), nil)
 			if err != nil {
 				evalErr = err
 				return
