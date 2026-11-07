@@ -423,7 +423,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> COUNT AVG MAX MIN SUM GROUP_CONCAT BIT_AND BIT_OR BIT_XOR STD STDDEV STDDEV_POP STDDEV_SAMP VAR_POP VAR_SAMP VARIANCE ANY_VALUE
 %token <str> REGEXP_INSTR REGEXP_LIKE REGEXP_REPLACE REGEXP_SUBSTR
 %token <str> ExtractValue UpdateXML
-%token <str> GET_FORMAT GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
+%token <str> MASTER_BIND REPEAT GET_FORMAT GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 %token <str> LOCATE POSITION
 %token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 %token <str> ST_GeometryCollectionFromWKB ST_GeometryFromWKB ST_LineStringFromWKB ST_MultiLineStringFromWKB ST_MultiPointFromWKB ST_MultiPolygonFromWKB ST_PointFromWKB ST_PolygonFromWKB
@@ -1453,6 +1453,23 @@ set_expression:
 | set_variable '=' expression
   {
     $$ = &SetExpr{Var: $1, Expr: $3}
+  }
+// MySQL takes these reserved words as the strings they spell.
+| set_variable '=' ALL
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("ALL")}
+  }
+| set_variable '=' BINARY
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("binary")}
+  }
+| set_variable '=' ROW
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("ROW")}
+  }
+| set_variable '=' SYSTEM
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("SYSTEM")}
   }
 | charset_or_character_set_or_names charset_value collate_opt
   {
@@ -8677,6 +8694,16 @@ function_call_conflict:
   {
     $$ = &FuncExpr{Name: NewIdentifierCI("replace"), Exprs: $3}
   }
+// MySQL reserves REPEAT and GROUPING, but takes them as the names of these
+// functions.
+| REPEAT openb expression ',' expression closeb
+  {
+    $$ = &FuncExpr{Name: NewIdentifierCI("repeat"), Exprs: []Expr{$3, $5}}
+  }
+| GROUPING openb expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewIdentifierCI("grouping"), Exprs: $3}
+  }
 
 match_option:
 /*empty*/
@@ -9822,32 +9849,44 @@ kill_type_opt:
 
 
 /*
-  These are not all necessarily reserved in MySQL, but some are.
+  Every word that MySQL reserves is here, so that the parser rejects it as a
+  name, as MySQL does, rather than accept a statement that MySQL rejects. UNUSED
+  stands for the words that MySQL reserves and the grammar does not use.
 
-  These are more importantly reserved because they may conflict with our grammar.
-  If you want to move one that is not reserved in MySQL (i.e. ESCAPE) to the
-  non_reserved_keywords, you'll need to deal with any conflicts.
+  Some words that MySQL does not reserve are here too, because they conflict
+  with the grammar, such as ESCAPE. To move one to non_reserved_keyword, deal
+  with the conflicts.
+
+  A reserved word is still a name after a dot, as in t.int, as in MySQL.
 
   Sorted alphabetically
 */
 reserved_keyword:
   ADD
 | ALL
+| ALTER
+| ANALYZE
 | AND
 | AS
 | ASC
+| BEFORE
 | BETWEEN
+| BIGINT
 | BINARY
+| BLOB
 | BOTH
 | BY
-| CASE
 | CALL
+| CASCADE
+| CASE
 | CHANGE
+| CHAR %prec FUNCTION_CALL_NON_KEYWORD
 | CHARACTER
 | CHECK
 | COLLATE
 | COLUMN
 | CONDITION
+| CONSTRAINT
 | CONTINUE
 | CONVERT
 | CREATE
@@ -9856,21 +9895,16 @@ reserved_keyword:
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
-| CURTIME
 | CURRENT_USER
-| DEC
-| INT1
-| INT2
-| INT3
-| INT4
-| INT8
-| LONG
-| MIDDLEINT
-| PRECISION
-| SUBSTR
-| SUBSTRING
+| CURTIME
 | DATABASE
 | DATABASES
+| DAY_HOUR
+| DAY_MICROSECOND
+| DAY_MINUTE
+| DAY_SECOND
+| DEC
+| DECIMAL_TYPE
 | DECLARE
 | DEFAULT
 | DELETE
@@ -9880,29 +9914,39 @@ reserved_keyword:
 | DISTINCT
 | DISTINCTROW
 | DIV
+| DOUBLE
 | DROP
 | DUAL
 | ELSE
 | ELSEIF
 | EMPTY
+| ENCLOSED
 | ESCAPE
+| ESCAPED
 | EXISTS
 | EXIT
 | EXPLAIN
 | EXTRACT
 | FALSE
 | FIRST_VALUE
+| FLOAT4_TYPE
+| FLOAT8_TYPE
+| FLOAT_TYPE
 | FOR
 | FORCE
 | FOREIGN
 | FROM
 | FULLTEXT
+| FUNCTION
 | GENERATED
 | GROUP
 | GROUPING
 | GROUPS
 | HAVING
 | HIGH_PRIORITY
+| HOUR_MICROSECOND
+| HOUR_MINUTE
+| HOUR_SECOND
 | IF
 | IGNORE
 | IN
@@ -9910,12 +9954,20 @@ reserved_keyword:
 | INNER
 | INOUT
 | INSERT
+| INT
+| INT1
+| INT2
+| INT3
+| INT4
+| INT8
+| INTEGER
 | INTERVAL
 | INTO
 | IS
 | JOIN
 | JSON_TABLE
 | KEY
+| KEYS
 | KILL
 | LAG
 | LAST_VALUE
@@ -9926,25 +9978,40 @@ reserved_keyword:
 | LIKE
 | LIMIT
 | LINEAR
+| LINES
+| LOAD
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
+| LONG
+| LONGBLOB
+| LONGTEXT
 | LOW_PRIORITY
 | MATCH
 | MAXVALUE
+| MEDIUMBLOB
+| MEDIUMINT
+| MEDIUMTEXT
+| MIDDLEINT
+| MINUTE_MICROSECOND
+| MINUTE_SECOND
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
-| NO_WRITE_TO_BINLOG
 | NOT
 | NOW
+| NO_WRITE_TO_BINLOG
 | NTH_VALUE
 | NTILE
 | NULL
+| NUMERIC
 | OF
 | OFF
 | ON
+| OPTIMIZE
 | OPTIMIZER_COSTS
+| OPTION
+| OPTIONALLY
 | OR
 | ORDER
 | OUT
@@ -9953,45 +10020,71 @@ reserved_keyword:
 | OVER
 | PARTITION
 | PERCENT_RANK
+| PRECISION
 | PRIMARY
+| PROCEDURE
+| PURGE
+| QUALIFY
 | RANGE
 | RANK
 | READ
+| REAL
 | RECURSIVE
+| REFERENCES
 | REGEXP
+| RELEASE
 | RENAME
+| REPEAT
 | REPLACE
+| RESTRICT
 | RIGHT
 | RLIKE
 | ROW
-| ROW_NUMBER
 | ROWS
+| ROW_NUMBER
+| SAVEPOINT
 | SCHEMA
 | SCHEMAS
+| SECOND_MICROSECOND
 | SELECT
 | SEPARATOR
 | SET
 | SHOW
 | SIGNAL
+| SMALLINT
 | SPATIAL
-| SQL_BIG_RESULT
-| SQL_SMALL_RESULT
+| SQL
 | SQLEXCEPTION
 | SQLSTATE
 | SQLWARNING
+| SQL_BIG_RESULT
+| SQL_CALC_FOUND_ROWS
+| SQL_NO_CACHE
+| SQL_SMALL_RESULT
+| STARTING
 | STORED
 | STRAIGHT_JOIN
+| SUBSTR
+| SUBSTRING
 | SYSDATE
 | SYSTEM
 | TABLE
+| TABLESAMPLE
+| TERMINATED
 | THEN
+| TINYBLOB
+| TINYINT
+| TINYTEXT
 | TO
 | TRAILING
+| TRIGGER
 | TRUE
 | UNDO
 | UNION
 | UNIQUE
 | UNLOCK
+| UNSIGNED
+| UNUSED
 | UPDATE
 | USE
 | USING
@@ -9999,15 +10092,19 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VARBINARY
+| VARCHAR
 | VARCHARACTER
 | VARYING
 | VIRTUAL
-| WITH
 | WHEN
 | WHERE
 | WINDOW
+| WITH
 | WRITE
 | XOR
+| YEAR_MONTH
+| ZEROFILL
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -10033,26 +10130,21 @@ non_reserved_keyword:
 | AUTOEXTEND_SIZE
 | AVG %prec FUNCTION_CALL_NON_KEYWORD
 | AVG_ROW_LENGTH
-| BEFORE
 | BEGIN
-| BIGINT
 | BIT
 | BINLOG
 | BIT_AND %prec FUNCTION_CALL_NON_KEYWORD
 | BIT_OR %prec FUNCTION_CALL_NON_KEYWORD
 | BIT_XOR %prec FUNCTION_CALL_NON_KEYWORD
-| BLOB
 | BOOL
 | BOOLEAN
 | BUCKETS
 | BYTE
 | CANCEL
-| CASCADE
 | CASCADED
 | CATALOG_NAME
 | CHANGED
 | CHANNEL
-| CHAR %prec FUNCTION_CALL_NON_KEYWORD
 | CHARSET
 | CHECKSUM
 | CLASS_ORIGIN
@@ -10090,7 +10182,6 @@ non_reserved_keyword:
 | DATE_SUB %prec FUNCTION_CALL_NON_KEYWORD
 | DATETIME
 | DEALLOCATE
-| DECIMAL_TYPE
 | DELAY_KEY_WRITE
 | DEFINER
 | DEFINITION
@@ -10100,12 +10191,10 @@ non_reserved_keyword:
 | DISCARD
 | DISK
 | DO
-| DOUBLE
 | DUMPFILE
 | DUPLICATE
 | DYNAMIC
 | ENABLE
-| ENCLOSED
 | ENCRYPTION
 | END
 | ENFORCED
@@ -10115,7 +10204,6 @@ non_reserved_keyword:
 | ENUM
 | ERROR
 | ERRORS
-| ESCAPED
 | EVENT
 | EVENTS
 | EXCHANGE
@@ -10128,7 +10216,6 @@ non_reserved_keyword:
 | EXTENDED
 | ExtractValue %prec FUNCTION_CALL_NON_KEYWORD
 | FAST
-| FLOAT_TYPE
 | FIELDS
 | FIRST
 | FIXED
@@ -10140,7 +10227,6 @@ non_reserved_keyword:
 | FORMAT_PICO_TIME %prec FUNCTION_CALL_NON_KEYWORD
 | FOUND
 | FULL
-| FUNCTION
 | GENERAL
 | GEOMCOLLECTION
 | GEOMETRY
@@ -10166,8 +10252,6 @@ non_reserved_keyword:
 | INPLACE
 | INSERT_METHOD
 | INSTANT
-| INT
-| INTEGER
 | INVISIBLE
 | INVOKER
 | INDEXES
@@ -10206,7 +10290,6 @@ non_reserved_keyword:
 | JSON_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_UNQUOTE %prec FUNCTION_CALL_NON_KEYWORD
 | KEY_BLOCK_SIZE
-| KEYS
 | KEYSPACES
 | LANGUAGE
 | LAST
@@ -10214,21 +10297,20 @@ non_reserved_keyword:
 | LAUNCH
 | LESS
 | LEVEL
-| LINES
 | LINESTRING %prec FUNCTION_CALL_NON_KEYWORD
 | LIST
-| LOAD
 | LOCAL
 | LOCATE %prec FUNCTION_CALL_NON_KEYWORD
 | LOCKED
 | LOG
 | LOGS
-| LONGBLOB
-| LONGTEXT
 | LTRIM %prec FUNCTION_CALL_NON_KEYWORD
 | MANUAL
 | MANIFEST
 | MASTER
+// MySQL 8.4 has no MASTER_BIND, but MySQL 8.0 reserves it, so that it is
+// quoted as a name.
+| MASTER_BIND
 | MASTER_COMPRESSION_ALGORITHMS
 | MASTER_PUBLIC_KEY_PATH
 | MASTER_TLS_CIPHERSUITES
@@ -10236,9 +10318,6 @@ non_reserved_keyword:
 | MAX %prec FUNCTION_CALL_NON_KEYWORD
 | MAX_ROWS
 | MEDIUM
-| MEDIUMBLOB
-| MEDIUMINT
-| MEDIUMTEXT
 | MEMORY
 | MEMBER
 | MERGE
@@ -10266,18 +10345,14 @@ non_reserved_keyword:
 | NO
 | NONE
 | NULLS
-| NUMERIC
 | OFFSET
 | OJ
 | OLD
 | OPEN
-| OPTION
 | OPTIONAL
-| OPTIONALLY
 | ORDINALITY
 | ORGANIZATION
 | ONLY
-| OPTIMIZE
 | OTHERS
 | OVERWRITE
 | PACK_KEYS
@@ -10304,20 +10379,15 @@ non_reserved_keyword:
 | POINT %prec FUNCTION_CALL_NON_KEYWORD
 | POLYGON %prec FUNCTION_CALL_NON_KEYWORD
 | POSITION %prec FUNCTION_CALL_NON_KEYWORD
-| PROCEDURE
 | PROCESSLIST
-| PURGE
-| QUALIFY
 | QUERIES
 | QUERY
 | QUICK
 | RANDOM
 | RATIO
-| REAL
 | REBUILD
 | REDUNDANT
 | REFERENCE
-| REFERENCES
 | REGEXP_INSTR %prec FUNCTION_CALL_NON_KEYWORD
 | REGEXP_LIKE %prec FUNCTION_CALL_NON_KEYWORD
 | REGEXP_REPLACE %prec FUNCTION_CALL_NON_KEYWORD
@@ -10332,7 +10402,6 @@ non_reserved_keyword:
 | REPLICA
 | REPLICAS
 | REPEATABLE
-| RESTRICT
 | REQUIRE_ROW_FORMAT
 | RESOURCE
 | RESPECT
@@ -10365,14 +10434,12 @@ non_reserved_keyword:
 | SKIP
 | SLAVE
 | SLOW
-| SMALLINT
 | SNAPSHOT
 | SOME %prec ANY_SOME
 | SOURCE_COMPRESSION_ALGORITHMS
 | SOURCE_PUBLIC_KEY_PATH
 | SOURCE_TLS_CIPHERSUITES
 | SOURCE_ZSTD_COMPRESSION_LEVEL
-| SQL
 | SQL_BUFFER_RESULT
 | SQL_TSI_DAY
 | SQL_TSI_HOUR
@@ -10384,7 +10451,6 @@ non_reserved_keyword:
 | SQL_TSI_YEAR
 | SRID
 | START
-| STARTING
 | STATS_AUTO_RECALC
 | STATS_PERSISTENT
 | STATS_SAMPLE_PAGES
@@ -10449,11 +10515,9 @@ non_reserved_keyword:
 | TABLE_NAME
 | TABLES
 | TABLE_CHECKSUM
-| TABLESAMPLE
 | TABLESPACE
 | TEMPORARY
 | TEMPTABLE
-| TERMINATED
 | TEXT
 | THAN
 | THREAD_PRIORITY
@@ -10463,13 +10527,9 @@ non_reserved_keyword:
 | TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TIMESTAMPADD %prec FUNCTION_CALL_NON_KEYWORD
 | TIMESTAMPDIFF %prec FUNCTION_CALL_NON_KEYWORD
-| TINYBLOB
-| TINYINT
-| TINYTEXT
 | TRACE
 | TRANSACTION
 | TRANSACTIONS
-| TRIGGER
 | TRIGGERS
 | TRIM %prec FUNCTION_CALL_NON_KEYWORD
 | TRUNCATE
@@ -10479,9 +10539,7 @@ non_reserved_keyword:
 | UNICODE
 | UNKNOWN
 | UNRESOLVED
-| UNSIGNED
 | UNTHROTTLE
-| UNUSED
 | USE_FRM
 | UpdateXML %prec FUNCTION_CALL_NON_KEYWORD
 | UPGRADE
@@ -10491,8 +10549,6 @@ non_reserved_keyword:
 | VALUE
 | VAR_POP %prec FUNCTION_CALL_NON_KEYWORD
 | VAR_SAMP %prec FUNCTION_CALL_NON_KEYWORD
-| VARBINARY
-| VARCHAR
 | VARIABLES
 | VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
@@ -10523,25 +10579,13 @@ non_reserved_keyword:
 | WITHOUT
 | WORK
 | YEAR
-| ZEROFILL
 | DAY
-| DAY_HOUR
-| DAY_MICROSECOND
-| DAY_MINUTE
-| DAY_SECOND
 | HOUR
-| HOUR_MICROSECOND
-| HOUR_MINUTE
-| HOUR_SECOND
 | MICROSECOND
 | MINUTE
-| MINUTE_MICROSECOND
-| MINUTE_SECOND
 | MONTH
 | QUARTER
 | SECOND
-| SECOND_MICROSECOND
-| YEAR_MONTH
 | WEIGHT_STRING %prec FUNCTION_CALL_NON_KEYWORD
 
 

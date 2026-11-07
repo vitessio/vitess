@@ -196,6 +196,11 @@ var validSQL = []struct {
 	input:  "insert into t2 table t1",
 	output: "insert into t2 select * from t1",
 }, {
+	// MySQL reserves these words, but takes them as the strings they spell
+	// as the value of a variable.
+	input:  "set @@time_zone = SYSTEM, @@a = ALL, @@b = BINARY, @@c = ROW",
+	output: "set @@time_zone = 'SYSTEM', @@a = 'ALL', @@b = 'binary', @@c = 'ROW'",
+}, {
 	// The first argument of GET_FORMAT is a type, which MySQL rejects as a
 	// quoted identifier, and get_format is not reserved.
 	input:  "select GET_FORMAT(DATETIME, 'internal'), get_format(date, 'usa'), get_format(time, a), get_format(timestamp, 'eur'), get_format from t",
@@ -6028,10 +6033,10 @@ func TestCreateTable(t *testing.T) {
 ) ENGINE MEMORY`,
 		},
 		{
-			input: `create table non_reserved_keyword (id int(11)) ENGINE = MEDIUMTEXT`,
+			input: `create table non_reserved_keyword (id int(11)) ENGINE = TEXT`,
 			output: `create table non_reserved_keyword (
 	id int(11)
-) ENGINE ` + "`MEDIUMTEXT`",
+) ENGINE ` + "`TEXT`",
 		},
 		{
 			input: `create table t1 (id int(11)) ENGINE = FOOBAR`,
@@ -6947,7 +6952,7 @@ var invalidSQL = []struct {
 	// The grammar has no EXCEPT, so CREATE TABLE ... SELECT ... EXCEPT is
 	// rejected rather than sent to MySQL as the client's text.
 	input:  "create table ct as select id from secret except select id from other",
-	output: "syntax error at position 55 near 'select'",
+	output: "syntax error at position 48 near 'except'",
 }, {
 	// SHOW PROFILE writes its types back unquoted, so only MySQL's own are accepted
 	input:  "show profile `all; insert into t values (1); -- `",
