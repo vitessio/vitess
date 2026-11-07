@@ -1116,6 +1116,22 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 	}
 }
 
+// TestRestartAfterRestoreRejectsBadBackupTimestamp checks that a restart that
+// finds data still fails on an unparsable --restore-from-backup-ts, as on main,
+// before changing replication.
+func TestRestartAfterRestoreRejectsBadBackupTimestamp(t *testing.T) {
+	tm, md, _, _ := newReplicationInitializationTM(t)
+	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
+	md.ExpectedExecuteSuperQueryList = nil
+	previousRestore, previousTs := restoreFromBackup, restoreFromBackupTsStr
+	restoreFromBackup, restoreFromBackupTsStr = true, "not-a-timestamp"
+	t.Cleanup(func() { restoreFromBackup, restoreFromBackupTsStr = previousRestore, previousTs })
+
+	err := tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger())
+	require.ErrorContains(t, err, "unable to parse the backup timestamp")
+	assert.False(t, md.Replicating)
+}
+
 // TestFormerPrimaryIsFencedWithoutPrimaryHostname covers a former primary whose
 // shard primary has no MySQL hostname yet: initialization cannot replicate,
 // but must still fence it.

@@ -1171,6 +1171,28 @@ func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (con
 // reset. A point-in-time restore keeps the replication it set up, which it
 // disabled.
 func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Logger) error {
+	// Parse the flags before checking for data, so a bad value fails every
+	// start, as on main.
+	// Zero date will cause us to use the latest, which is the default
+	backupTime := time.Time{}
+	restoreToTimestamp := time.Time{}
+	if restoreFromBackup {
+		// Or if a backup timestamp was specified then we use the last backup taken at or before that time
+		if restoreFromBackupTsStr != "" {
+			var err error
+			backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
+			if err != nil {
+				return fmt.Errorf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr)
+			}
+		}
+		if restoreToTimestampStr != "" {
+			var err error
+			restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
+			if err != nil {
+				return fmt.Errorf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err)
+			}
+		}
+	}
 	if restoreToPos == "" && restoreToTimestampStr == "" {
 		restore, err := mysqlctl.ShouldRestore(ctx, logger, tm.Cnf, tm.MysqlDaemon, topoproto.TabletDbName(tm.Tablet()), false)
 		if err == nil && !restore {
@@ -1202,26 +1224,6 @@ func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Lo
 	}
 	switch {
 	case restoreFromBackup:
-		// Zero date will cause us to use the latest, which is the default
-		backupTime := time.Time{}
-		// Or if a backup timestamp was specified then we use the last backup taken at or before that time
-		if restoreFromBackupTsStr != "" {
-			var err error
-			backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
-			if err != nil {
-				return fmt.Errorf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr)
-			}
-		}
-
-		restoreToTimestamp := time.Time{}
-		if restoreToTimestampStr != "" {
-			var err error
-			restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
-			if err != nil {
-				return fmt.Errorf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err)
-			}
-		}
-
 		// restoreFromBackup will just be a regular action
 		// (same as if it was triggered remotely)
 		if err := tm.RestoreBackup(ctx, logger, waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
