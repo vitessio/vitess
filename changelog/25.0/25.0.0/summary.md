@@ -22,6 +22,7 @@
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [DDL that Vitess cannot parse in full is rejected](#partial-ddl-removed)
         - [Words that MySQL reserves are rejected as unquoted names](#mysql-reserved-words)
+        - [`COUNT (a)` with a space calls a stored function, as in MySQL](#mysql-function-names)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -264,6 +265,14 @@ The parser used to accept many words that MySQL 8.4 reserves as unquoted names, 
 **Impact**: a statement that uses one of these words as an unquoted name, as in `CREATE TABLE t (keys INT)` or `SELECT 1 AS option`, now fails with a syntax error in Vitess, as it does in MySQL.
 
 **Migration**: quote such names with back quotes, as in `` CREATE TABLE t (`keys` INT) ``.
+
+#### <a id="mysql-function-names"/>`COUNT (a)` with a space calls a stored function, as in MySQL</a>
+
+MySQL reads a function name such as `COUNT`, `SUM`, `MAX`, `NOW`, `CAST`, `TRIM` or `SUBSTR` as a keyword only when a `(` follows it right away, and as a name otherwise. `SELECT now FROM t` names a column, `COUNT (a)` and `` `count`(a) `` call a stored function named `count`, and `CREATE TABLE bit_and(a INT)` is a syntax error. Vitess read all of them as the built-in functions, so it ran `COUNT (a)` as the aggregate and `DEFAULT NOW` as `DEFAULT NOW()`. The parser now reads them as MySQL does, and quotes the name of a call that MySQL reads as a stored function, so that MySQL reads it the same way. A word right before a `.` and a name, as in `int.t`, is a name, as in MySQL.
+
+**Impact**: a query that relies on the old reading, such as `SELECT COUNT (*) FROM t`, `DEFAULT NOW` or `ON UPDATE NOW`, now fails as it does in MySQL, and `COUNT (a)` calls a stored function.
+
+**Migration**: write the `(` right after the function name, as in `COUNT(a)` and `DEFAULT NOW()`.
 
 ### <a id="deprecations"/>Deprecations</a>
 

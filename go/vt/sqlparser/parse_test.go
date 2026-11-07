@@ -196,6 +196,21 @@ var validSQL = []struct {
 	input:  "insert into t2 table t1",
 	output: "insert into t2 select * from t1",
 }, {
+	// MySQL reads a function name such as COUNT or NOW as a keyword only when
+	// a '(' follows it right away, and as a name otherwise, which calls a
+	// stored function when a '(' follows later, as a quoted name does. The
+	// formatter quotes such a name, so that MySQL reads it the same way.
+	input:  "select count, now, substr, count (a), `count`(a), `left`(a), left(a, 1), `concat`(a), db.count(a), count(*), now(), session_user(), system_user(), st_collect(g) from t",
+	output: "select `count`, `now`, `substr`, `count`(a), `count`(a), `left`(a), left(a, 1), `concat`(a), db.count(a), count(*), now(), session_user(), system_user(), st_collect(g) from t",
+}, {
+	// MySQL reads a word right before a '.' and a name as a name, and the
+	// name after a '.' too, even when they are keywords.
+	input:  "select int.a, t.select, t.1a from int.t",
+	output: "select `int`.a, t.`select`, t.`1a` from `int`.t",
+}, {
+	input:  "create table now (a int)",
+	output: "create table `now` (\n\ta int\n)",
+}, {
 	// MySQL reserves these words, but takes them as the strings they spell
 	// as the value of a variable.
 	input:  "set @@time_zone = SYSTEM, @@a = ALL, @@b = BINARY, @@c = ROW",
@@ -5835,7 +5850,6 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	s3 varchar default null,
 	s4 timestamp default current_timestamp,
-	s41 timestamp default now,
 	s5 bit(1) default B'0'
 )`,
 			output: `create table t (
@@ -5846,7 +5860,6 @@ func TestCreateTable(t *testing.T) {
 	s2 varchar default 'this is a string',
 	` + "`" + `s3` + "`" + ` varchar default null,
 	s4 timestamp default current_timestamp(),
-	s41 timestamp default now(),
 	s5 bit(1) default 0b0
 )`,
 		},
@@ -5896,20 +5909,17 @@ func TestCreateTable(t *testing.T) {
 )`,
 		},
 		{
-			// test now with and without ()
+			// test now with (), which MySQL requires, as it reads now as a
+			// name without
 			input: `create table t (
-	time1 timestamp default now,
 	time2 timestamp default now(),
 	time3 timestamp default (now()),
-	time4 timestamp default now on update now,
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
 )`,
 			output: `create table t (
-	time1 timestamp default now(),
 	time2 timestamp default now(),
 	time3 timestamp default (now()),
-	time4 timestamp default now() on update now(),
 	time5 timestamp default now() on update now(),
 	time6 timestamp(3) default now(3) on update now(3)
 )`,
@@ -6849,6 +6859,20 @@ var invalidSQL = []struct {
 }, {
 	input:  "select get_format(year, 'internal')",
 	output: "syntax error at position 23 near 'year'",
+}, {
+	// MySQL reads a function name such as NOW or BIT_AND as a keyword only
+	// when a '(' follows it right away, and as a name otherwise.
+	input:  "create table t (a timestamp default now)",
+	output: "syntax error at position 40 near 'now'",
+}, {
+	input:  "create table t (a timestamp default now() on update now)",
+	output: "syntax error at position 56 near 'now'",
+}, {
+	input:  "create table bit_and(a int)",
+	output: "syntax error at position 21 near 'bit_and'",
+}, {
+	input:  "select count (*) from t",
+	output: "syntax error at position 16",
 }, {
 	// MySQL rejects a column with both a default expression and a default
 	// constant other than NULL, in either order.

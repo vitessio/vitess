@@ -43,7 +43,8 @@ type Tokenizer struct {
 	lastTokenEnd  int
 	// qualifiedNameFollows is set after a '.' that directly follows an
 	// identifier, where MySQL reads what comes next as an identifier even
-	// when it starts with a digit, as in `t1.1a`.
+	// when it starts with a digit, as in `t1.1a`, or is a keyword, as in
+	// `t1.select`.
 	qualifiedNameFollows bool
 	// pendingColumnChecks are the CHECK constraints among the attributes of
 	// the column definition that is being parsed, and columnCheckEnd is the
@@ -180,7 +181,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		tkn.currStart = tkn.Pos
 		if tkn.qualifiedNameFollows {
 			tkn.qualifiedNameFollows = false
-			if isDigit(tkn.cur()) {
+			if isIdentifierCharacter(tkn.cur()) || isDigit(tkn.cur()) {
 				return tkn.scanQualifiedName()
 			}
 		}
@@ -258,10 +259,10 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			}
 			return 0, ""
 		default:
-			if ch == '.' && isDigit(tkn.peek(1)) {
-				if tkn.lastTokenType != ID || tkn.lastTokenEnd != tkn.Pos {
-					return tkn.scanNumber()
-				}
+			if ch == '.' && isDigit(tkn.peek(1)) && (tkn.lastTokenType != ID || tkn.lastTokenEnd != tkn.Pos) {
+				return tkn.scanNumber()
+			}
+			if ch == '.' && tkn.lastTokenType == ID && tkn.lastTokenEnd == tkn.Pos && (isIdentifierCharacter(tkn.peek(1)) || isDigit(tkn.peek(1))) {
 				tkn.qualifiedNameFollows = true
 			}
 
@@ -442,10 +443,77 @@ func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 		tkn.skip(1)
 	}
 	keywordName := tkn.buf[start:tkn.Pos]
+	if !isVariable && tkn.cur() == '.' && (isIdentifierCharacter(tkn.peek(1)) || isDigit(tkn.peek(1))) {
+		// MySQL reads a word right before a '.' and a name as the name of a
+		// table or a database, even when it is a keyword, as in int.a.
+		return ID, keywordName
+	}
 	if keywordID, found := keywordLookupTable.LookupString(keywordName); found {
+		if !isVariable && tkn.cur() != '(' && isFunctionKeyword(keywordName) {
+			// MySQL reads a function name such as COUNT as a keyword only
+			// when a '(' follows it right away, and as a name otherwise.
+			return ID, keywordName
+		}
 		return keywordID, keywordName
 	}
 	return ID, keywordName
+}
+
+// functionKeywords are the function names that MySQL reads as keywords only
+// when a '(' follows them right away: the SYM_FN symbols of its sql/lex.h.
+var functionKeywords = map[string]bool{
+	"adddate":        true,
+	"bit_and":        true,
+	"bit_or":         true,
+	"bit_xor":        true,
+	"cast":           true,
+	"count":          true,
+	"curdate":        true,
+	"curtime":        true,
+	"date_add":       true,
+	"date_sub":       true,
+	"extract":        true,
+	"group_concat":   true,
+	"json_arrayagg":  true,
+	"json_objectagg": true,
+	"max":            true,
+	"mid":            true,
+	"min":            true,
+	"now":            true,
+	"position":       true,
+	"session_user":   true,
+	"st_collect":     true,
+	"std":            true,
+	"stddev":         true,
+	"stddev_pop":     true,
+	"stddev_samp":    true,
+	"subdate":        true,
+	"substr":         true,
+	"substring":      true,
+	"sum":            true,
+	"sysdate":        true,
+	"system_user":    true,
+	"trim":           true,
+	"var_pop":        true,
+	"var_samp":       true,
+	"variance":       true,
+}
+
+// isNameOfFunction reports whether MySQL reads the name of a generic function
+// call that starts at start as a name rather than as a keyword: when it is
+// quoted, or a function keyword, which reaches a generic call only when no
+// '(' follows it right away.
+func (tkn *Tokenizer) isNameOfFunction(start int, name IdentifierCI) bool {
+	if start < len(tkn.buf) && tkn.buf[start] == '`' {
+		return true
+	}
+	return isFunctionKeyword(name.String())
+}
+
+// isFunctionKeyword reports whether MySQL reads name as a keyword only when
+// a '(' follows it right away.
+func isFunctionKeyword(name string) bool {
+	return functionKeywords[strings.ToLower(name)]
 }
 
 // scanHex scans a hex numeral; assumes x' or X' has already been scanned
@@ -660,7 +728,8 @@ exit:
 
 // scanQualifiedName scans the name that follows a '.' after an identifier.
 // It can start with a digit and consist only of digits, so `t1.1a` and `t1.12`
-// name the columns `1a` and `12` of table `t1`, as in MySQL.
+// name the columns `1a` and `12` of table `t1`, as in MySQL, and it is a name
+// even when it is a keyword.
 func (tkn *Tokenizer) scanQualifiedName() (int, string) {
 	start := tkn.Pos
 	for isIdentifierCharacter(tkn.cur()) || isDigit(tkn.cur()) {
