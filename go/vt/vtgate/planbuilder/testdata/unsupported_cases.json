@@ -538,5 +538,20 @@
     "comment": "a DELETE with row comparisons against two subqueries that can't be merged in one predicate is refused",
     "query": "delete from user where (col, name) in (select user_id, col from music where user_id = 3) or (col, name) = (select user_id, col from music where user_id = 8)",
     "plan": "VT12001: unsupported: row comparison with an unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "EXISTS beside another subquery that can't be merged in one predicate is refused, since only the first subquery would run",
+    "query": "select id from user where id = 5 or exists (select 1 from user_extra ue where ue.col = 1) or exists (select 1 from music m where m.col = 2)",
+    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "NOT EXISTS beside another subquery that can't be merged in one predicate is refused",
+    "query": "select id from user where id = 5 or not exists (select 1 from user_extra ue where ue.col = 1) or exists (select 1 from music m where m.col = 2)",
+    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "a DELETE with EXISTS beside another subquery that can't be merged in one predicate is refused",
+    "query": "delete from user where id = 5 or exists (select 1 from user_extra ue where ue.col = 1) or exists (select 1 from music m where m.col = 2)",
+    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
   }
 ]

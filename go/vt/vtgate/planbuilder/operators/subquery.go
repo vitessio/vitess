@@ -232,6 +232,7 @@ var (
 	subqueryNotAtTopErr   = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
 	rowSubqueryAmongOthersErr = vterrors.VT12001("row comparison with an unmergable subquery in a predicate with other subqueries")
+	existsAmongOthersErr      = vterrors.VT12001("EXISTS with an unmergable subquery in a predicate with other subqueries")
 )
 
 func (sq *SubQuery) addLimit() {
@@ -267,9 +268,11 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		panic(rowSubqueryAmongOthersErr)
 	}
 
-	// With several subqueries in one predicate there is no single has-values argument to
-	// rebuild it from, so those keep the previous behaviour rather than a broken plan.
-	rebuildPredicate := sq.FilterType.NeedsExistsArg() && countSubqueries(sq.Original) == 1
+	// With several subqueries in one predicate there is no single has-values argument to rebuild it from, and the
+	// bare argument would stand in for all of them (#21638).
+	if sq.FilterType.NeedsExistsArg() && countSubqueries(sq.Original) > 1 {
+		panic(existsAmongOthersErr)
+	}
 
 	hasValuesArg := func() string {
 		s := ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
@@ -295,7 +298,7 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		// EXISTS is a predicate in its own right, so the has-values argument
 		// replaces the whole ExistsExpr. Replacing only the inner Subquery
 		// would leave an EXISTS around a bind variable behind.
-		if _, isExists := node.(*sqlparser.ExistsExpr); isExists && rebuildPredicate {
+		if _, isExists := node.(*sqlparser.ExistsExpr); isExists && sq.FilterType.NeedsExistsArg() {
 			cursor.Replace(sqlparser.NewArgument(hasValuesArg()))
 			return
 		}
@@ -321,19 +324,11 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	switch sq.FilterType {
 	case opcode.PulloutExists:
 		sq.addLimit()
-		if rebuildPredicate {
-			predicates = append(predicates, rhsPred)
-		} else {
-			predicates = append(predicates, sqlparser.NewArgument(hasValuesArg()))
-		}
+		predicates = append(predicates, rhsPred)
 	case opcode.PulloutNotExists:
 		sq.addLimit()
 		sq.FilterType = opcode.PulloutExists // it's the same pullout as EXISTS, just with a NOT in front of the predicate
-		if rebuildPredicate {
-			predicates = append(predicates, rhsPred)
-		} else {
-			predicates = append(predicates, sqlparser.NewNotExpr(sqlparser.NewArgument(hasValuesArg())))
-		}
+		predicates = append(predicates, rhsPred)
 	case opcode.PulloutIn:
 		// Because we replace the comparison expression with an AND expression, it might be the top level construct there.
 		// In this case, it is better to send the two sides of the AND expression separately in the predicates because it can
