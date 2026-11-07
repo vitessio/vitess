@@ -78,6 +78,10 @@ type IndexColumn struct {
 	Length     *int
 	Expression Expr
 	Direction  OrderDirection
+	// ExplicitAscending is set for a column written with ASC. MySQL takes it
+	// as the default order, except that it rejects any order on a column of
+	// a multi-valued index, so it is written out again.
+	ExplicitAscending bool
 }
 
 // LengthScaleOption is used for types that have an optional length
