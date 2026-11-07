@@ -662,7 +662,7 @@ INPUT
 SELECT id, CHAR_LENGTH(GROUP_CONCAT(body)) AS l FROM (SELECT 'a' AS id, REPEAT('foo bar', 100) AS body UNION ALL SELECT 'a' AS id, REPEAT('bla bla', 100) AS body) t1 GROUP BY id ORDER BY l DESC;
 END
 OUTPUT
-select id, CHAR_LENGTH(group_concat(body)) as l from (select 'a' as id, REPEAT('foo bar', 100) as body from dual union all select 'a' as id, REPEAT('bla bla', 100) as body from dual) as t1 group by id order by l desc
+select id, CHAR_LENGTH(group_concat(body)) as l from (select 'a' as id, repeat('foo bar', 100) as body from dual union all select 'a' as id, repeat('bla bla', 100) as body from dual) as t1 group by id order by l desc
 END
 INPUT
 SELECT '00' UNION SELECT '10' INTO OUTFILE 'tmpp.txt';
@@ -890,7 +890,7 @@ INPUT
 SELECT a, SUM(a), SUM(a)+1, CONCAT(SUM(a),'x'), SUM(a)+SUM(a), SUM(a)   FROM (SELECT 1 a, 2 b UNION SELECT 2,3 UNION SELECT 5,6 ) d       GROUP BY a WITH ROLLUP ORDER BY GROUPING(a),a;
 END
 OUTPUT
-select a, sum(a), sum(a) + 1, CONCAT(sum(a), 'x'), sum(a) + sum(a), sum(a) from (select 1 as a, 2 as b from dual union select 2, 3 from dual union select 5, 6 from dual) as d group by a with rollup order by GROUPING(a) asc, a asc
+select a, sum(a), sum(a) + 1, CONCAT(sum(a), 'x'), sum(a) + sum(a), sum(a) from (select 1 as a, 2 as b from dual union select 2, 3 from dual union select 5, 6 from dual) as d group by a with rollup order by grouping(a) asc, a asc
 END
 INPUT
 SELECT ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())))'))) as geom;

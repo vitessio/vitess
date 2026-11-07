@@ -21,6 +21,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [DDL that Vitess cannot parse in full is rejected](#partial-ddl-removed)
+        - [Words that MySQL reserves are rejected as unquoted names](#mysql-reserved-words)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -255,6 +256,14 @@ To make this possible, the parser now accepts every form of these statements tha
 **Impact**: a DDL statement in syntax that MySQL rejects, which used to reach MySQL and fail there, now fails in Vitess with a syntax error. A DDL statement that relies on `ANSI_QUOTES` to read a double-quoted string as an identifier is rejected, because the parser does not know the session's `sql_mode`. `CREATE TABLE ... SELECT` with `EXCEPT` or `INTERSECT` is rejected, because the parser does not support them yet.
 
 **Migration**: quote identifiers with back quotes rather than double quotes in DDL.
+
+#### <a id="mysql-reserved-words"/>Words that MySQL reserves are rejected as unquoted names</a>
+
+The parser used to accept many words that MySQL 8.4 reserves as unquoted names, such as `INT`, `CHAR`, `FLOAT`, `KEYS`, `OPTION`, `SQL`, `SYSTEM`, `GET`, `FUNCTION`, `CUBE`, `QUALIFY` and the interval units such as `DAY_HOUR`. Vitess quoted such a name in the statement that it sent MySQL, so it ran a statement that MySQL rejects as written. The parser now reserves every word that MySQL 8.4 reserves, by `INFORMATION_SCHEMA.KEYWORDS`, and rejects such a word as a name unless it is quoted with back quotes or follows a dot, as MySQL does.
+
+**Impact**: a statement that uses one of these words as an unquoted name, as in `CREATE TABLE t (keys INT)` or `SELECT 1 AS option`, now fails with a syntax error in Vitess, as it does in MySQL.
+
+**Migration**: quote such names with back quotes, as in `` CREATE TABLE t (`keys` INT) ``.
 
 ### <a id="deprecations"/>Deprecations</a>
 

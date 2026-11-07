@@ -1385,7 +1385,7 @@ func getInfoSchema8() map[string][]vindexes.Column {
 	cols = append(cols, createCol(parser, "ROUTINE_BODY", 6165, "utf8mb3_general_ci", "", 8, 0, true, ""))
 	cols = append(cols, createCol(parser, "ROUTINE_DEFINITION", 6163, "utf8mb3_general_ci", "", 0, 0, false, ""))
 	cols = append(cols, createCol(parser, "EXTERNAL_NAME", 10264, "utf8mb3_general_ci", "", 0, 0, false, ""))
-	cols = append(cols, createCol(parser, "EXTERNAL_LANGUAGE", 6165, "utf8mb3_general_ci", "SQL", 64, 0, true, ""))
+	cols = append(cols, createCol(parser, "EXTERNAL_LANGUAGE", 6165, "utf8mb3_general_ci", "'SQL'", 64, 0, true, ""))
 	cols = append(cols, createCol(parser, "PARAMETER_STYLE", 6165, "utf8mb3_general_ci", "", 3, 0, true, ""))
 	cols = append(cols, createCol(parser, "IS_DETERMINISTIC", 6165, "utf8mb3_general_ci", "", 3, 0, true, ""))
 	cols = append(cols, createCol(parser, "SQL_DATA_ACCESS", 2074, "utf8mb3_general_ci", "", 0, 0, true, "'CONTAINS SQL','NO SQL','READS SQL DATA','MODIFIES SQL DATA'"))
