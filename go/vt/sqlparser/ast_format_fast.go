@@ -1124,31 +1124,36 @@ func (node *SubPartition) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (ts *TableSpec) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("(\n")
-	for i, col := range ts.Columns {
-		if i == 0 {
-			buf.WriteByte('\t')
-			col.FormatFast(buf)
-		} else {
-			buf.WriteString(",\n\t")
-			col.FormatFast(buf)
-		}
+	// A table definition can start with an index or a constraint, as in
+	// `CREATE TABLE t (PRIMARY KEY (a)) SELECT 1 AS a`, and it can have no
+	// elements at all, as in `CREATE TABLE t ENGINE = InnoDB SELECT 1 AS a`.
+	separator := "(\n\t"
+	for _, col := range ts.Columns {
+		buf.WriteString(separator)
+		col.FormatFast(buf)
+		separator = ",\n\t"
 	}
 	for _, idx := range ts.Indexes {
-		buf.WriteString(",\n\t")
+		buf.WriteString(separator)
 		idx.FormatFast(buf)
+		separator = ",\n\t"
 	}
 	for _, c := range ts.Constraints {
-		buf.WriteString(",\n\t")
+		buf.WriteString(separator)
 		c.FormatFast(buf)
+		separator = ",\n\t"
 	}
-
-	buf.WriteString("\n)")
+	hasElements := len(ts.Columns)+len(ts.Indexes)+len(ts.Constraints) > 0
+	if hasElements {
+		buf.WriteString("\n)")
+	}
 	for i, opt := range ts.Options {
 		if i != 0 {
 			buf.WriteString(",\n ")
 		}
-		buf.WriteByte(' ')
+		if hasElements || i != 0 {
+			buf.WriteString(" ")
+		}
 		buf.WriteString(opt.Name)
 		if opt.String != "" {
 			if opt.CaseSensitive {
@@ -1162,7 +1167,7 @@ func (ts *TableSpec) FormatFast(buf *TrackedBuffer) {
 		} else if opt.Value != nil {
 			buf.WriteByte(' ')
 			opt.Value.FormatFast(buf)
-		} else {
+		} else if opt.Tables != nil {
 			buf.WriteString(" (")
 			opt.Tables.FormatFast(buf)
 			buf.WriteByte(')')
@@ -1227,150 +1232,166 @@ func (ct *ColumnType) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[BINARY])
 	}
-	if ct.Options != nil {
-		if ct.Options.Collate != "" {
+	if ct.Options == nil {
+		return
+	}
+	// MySQL takes a generated column's expression and its VIRTUAL or STORED
+	// right after the type and collation, and every other attribute after
+	// them, and it takes REFERENCES only at the end.
+	opts := ct.Options
+	if opts.Collate != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[COLLATE])
+		buf.WriteByte(' ')
+		buf.WriteString(encodeSQLName(opts.Collate))
+	}
+	if opts.As != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[AS])
+		buf.WriteString(" (")
+		opts.As.FormatFast(buf)
+		buf.WriteByte(')')
+		switch opts.Storage {
+		case VirtualStorage:
 			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[COLLATE])
+			buf.WriteString(keywordStrings[VIRTUAL])
+		case StoredStorage:
 			buf.WriteByte(' ')
-			buf.WriteString(encodeSQLName(ct.Options.Collate))
+			buf.WriteString(keywordStrings[STORED])
 		}
-		if ct.Options.Null != nil && ct.Options.As == nil {
-			if *ct.Options.Null {
-				buf.WriteByte(' ')
-				buf.WriteString(keywordStrings[NULL])
-			} else {
-				buf.WriteByte(' ')
-				buf.WriteString(keywordStrings[NOT])
-				buf.WriteByte(' ')
-				buf.WriteString(keywordStrings[NULL])
-			}
+	}
+	if opts.Null != nil {
+		if *opts.Null {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[NULL])
+		} else {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[NOT])
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[NULL])
 		}
-		if ct.Options.Default != nil {
+	}
+	if opts.Default != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[DEFAULT])
+		if opts.DefaultLiteral {
 			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[DEFAULT])
-			if ct.Options.DefaultLiteral {
-				buf.WriteByte(' ')
-				ct.Options.Default.FormatFast(buf)
-			} else {
-				buf.WriteString(" (")
-				ct.Options.Default.FormatFast(buf)
-				buf.WriteByte(')')
-			}
-		}
-		if ct.Options.OnUpdate != nil {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[ON])
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[UPDATE])
-			buf.WriteByte(' ')
-			ct.Options.OnUpdate.FormatFast(buf)
-		}
-		if ct.Options.As != nil {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[AS])
+			opts.Default.FormatFast(buf)
+		} else {
 			buf.WriteString(" (")
-			ct.Options.As.FormatFast(buf)
+			opts.Default.FormatFast(buf)
 			buf.WriteByte(')')
-
-			switch ct.Options.Storage {
-			case VirtualStorage:
-				buf.WriteByte(' ')
-				buf.WriteString(keywordStrings[VIRTUAL])
-			case StoredStorage:
-				buf.WriteByte(' ')
-				buf.WriteString(keywordStrings[STORED])
-			}
-			if ct.Options.Null != nil {
-				if *ct.Options.Null {
-					buf.WriteByte(' ')
-					buf.WriteString(keywordStrings[NULL])
-				} else {
-					buf.WriteByte(' ')
-					buf.WriteString(keywordStrings[NOT])
-					buf.WriteByte(' ')
-					buf.WriteString(keywordStrings[NULL])
-				}
-			}
 		}
-		if ct.Options.Autoincrement {
+	}
+	if opts.OnUpdate != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ON])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[UPDATE])
+		buf.WriteByte(' ')
+		opts.OnUpdate.FormatFast(buf)
+	}
+	if opts.Autoincrement {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[AUTO_INCREMENT])
+	}
+	if opts.Comment != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[COMMENT_KEYWORD])
+		buf.WriteByte(' ')
+		opts.Comment.FormatFast(buf)
+	}
+	if opts.Invisible != nil {
+		if *opts.Invisible {
 			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[AUTO_INCREMENT])
+			buf.WriteString(keywordStrings[INVISIBLE])
+		} else {
+			buf.WriteByte(' ')
+			buf.WriteString(keywordStrings[VISIBLE])
 		}
-		if ct.Options.Comment != nil {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[COMMENT_KEYWORD])
-			buf.WriteByte(' ')
-			ct.Options.Comment.FormatFast(buf)
-		}
-		if ct.Options.Invisible != nil {
-			if *ct.Options.Invisible {
-				buf.WriteByte(' ')
-				buf.WriteString(keywordStrings[INVISIBLE])
-			} else {
-				buf.WriteByte(' ')
-				buf.WriteString(keywordStrings[VISIBLE])
-			}
-		}
-		if ct.Options.Format != UnspecifiedFormat {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[COLUMN_FORMAT])
-			buf.WriteByte(' ')
-			buf.WriteString(ct.Options.Format.ToString())
-		}
-		if ct.Options.EngineAttribute != nil {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[ENGINE_ATTRIBUTE])
-			buf.WriteByte(' ')
-			ct.Options.EngineAttribute.FormatFast(buf)
-		}
-		if ct.Options.SecondaryEngineAttribute != nil {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[SECONDARY_ENGINE_ATTRIBUTE])
-			buf.WriteByte(' ')
-			ct.Options.SecondaryEngineAttribute.FormatFast(buf)
-		}
-		if ct.Options.KeyOpt == ColKeyPrimary {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[PRIMARY])
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[KEY])
-		}
-		if ct.Options.KeyOpt == ColKeyUnique {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[UNIQUE])
-		}
-		if ct.Options.KeyOpt == ColKeyUniqueKey {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[UNIQUE])
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[KEY])
-		}
-		if ct.Options.KeyOpt == ColKeySpatialKey {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[SPATIAL])
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[KEY])
-		}
-		if ct.Options.KeyOpt == ColKeyFulltextKey {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[FULLTEXT])
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[KEY])
-		}
-		if ct.Options.KeyOpt == ColKey {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[KEY])
-		}
-		if ct.Options.Reference != nil {
-			buf.WriteByte(' ')
-			ct.Options.Reference.FormatFast(buf)
-		}
-		if ct.Options.SRID != nil {
-			buf.WriteByte(' ')
-			buf.WriteString(keywordStrings[SRID])
-			buf.WriteByte(' ')
-			ct.Options.SRID.FormatFast(buf)
-		}
+	}
+	if opts.Format != UnspecifiedFormat {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[COLUMN_FORMAT])
+		buf.WriteByte(' ')
+		buf.WriteString(opts.Format.ToString())
+	}
+	switch opts.StorageMedia {
+	case DiskStorageMedia:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[STORAGE])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[DISK])
+	case MemoryStorageMedia:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[STORAGE])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[MEMORY])
+	}
+	if opts.NotSecondary {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[NOT])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[SECONDARY])
+	}
+	if opts.EngineAttribute != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[ENGINE_ATTRIBUTE])
+		buf.WriteByte(' ')
+		opts.EngineAttribute.FormatFast(buf)
+	}
+	if opts.SecondaryEngineAttribute != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[SECONDARY_ENGINE_ATTRIBUTE])
+		buf.WriteByte(' ')
+		opts.SecondaryEngineAttribute.FormatFast(buf)
+	}
+	switch opts.KeyOpt {
+	case ColKeyPrimary:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[PRIMARY])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+	case ColKeyUnique:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[UNIQUE])
+	case ColKeyUniqueKey:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[UNIQUE])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+	case ColKeySpatialKey:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[SPATIAL])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+	case ColKeyFulltextKey:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[FULLTEXT])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+	case ColKey:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+	case ColKeyPrimaryUnique:
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[PRIMARY])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[UNIQUE])
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[KEY])
+	}
+	if opts.SRID != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[SRID])
+		buf.WriteByte(' ')
+		opts.SRID.FormatFast(buf)
+	}
+	if opts.Reference != nil {
+		buf.WriteByte(' ')
+		opts.Reference.FormatFast(buf)
 	}
 }
 
@@ -3758,7 +3779,7 @@ func (node TableOptions) FormatFast(buf *TrackedBuffer) {
 		case option.Value != nil:
 			buf.WriteByte(' ')
 			option.Value.FormatFast(buf)
-		default:
+		case option.Tables != nil:
 			buf.WriteString(" (")
 			option.Tables.FormatFast(buf)
 			buf.WriteByte(')')

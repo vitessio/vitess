@@ -1468,7 +1468,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	// tables too, so the statement runs for it.
 	t.Run("a partially parsed CREATE TABLE runs for a caller with every role on every table", func(t *testing.T) {
 		useAllTablesConfig(t)
-		const query = "create table ct (select pk from test_table)"
+		const query = "create table ct as table test_table"
 		tsv := newServer(t, enableStrictTableACL)
 		qre := newTestQueryExecutor(adminCtx, tsv, query, 0)
 		require.Equal(t, planbuilder.PlanDDL, qre.plan.PlanID)
@@ -1484,7 +1484,7 @@ func TestQueryExecutorTableAclPassthroughDenied(t *testing.T) {
 	// test_table through the statement's opaque body.
 	t.Run("a partially parsed CREATE TABLE is denied for a caller that is only an admin", func(t *testing.T) {
 		useAllTablesConfig(t)
-		const query = "create table ct (select pk from test_table)"
+		const query = "create table ct as table test_table"
 		tsv := newServer(t, enableStrictTableACL)
 		userCtx := callerid.NewContext(t.Context(), nil, &querypb.VTGateCallerID{Username: "u5"})
 		qre := newTestQueryExecutor(userCtx, tsv, query, 0)
@@ -1584,7 +1584,6 @@ func TestQueryExecutorTableAclEmbeddedReads(t *testing.T) {
 		inTx         bool
 	}{
 		{"create table as select", "create table ct as select pk from test_table", planbuilder.PlanDDL, false, false},
-		{"create table with a parenthesized select", "create table ct (select pk from test_table)", planbuilder.PlanDDL, true, false},
 		{"explain analyze select", "explain analyze select pk from test_table", planbuilder.PlanSelect, false, false},
 		{"explain select", "explain select pk from test_table", planbuilder.PlanSelect, false, false},
 		{"create view as select", "create view ct as select pk from test_table", planbuilder.PlanDDL, false, false},

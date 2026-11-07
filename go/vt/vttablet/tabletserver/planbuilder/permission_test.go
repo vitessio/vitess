@@ -797,15 +797,22 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
+		// A parenthesized query after the table name is the source of the
+		// rows, not the table definition.
+		input: "create table ct (select id from secret)",
+		output: []Permission{{
+			TableName: "ct",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		// A CREATE TABLE the parser could not fully parse is forwarded to
 		// MySQL as the client's raw text, so its source tables are unknown:
 		// it must be flagged like any other opaque statement, not derived from
 		// the prefix the parser kept. MySQL accepts each of these and copies
 		// the rows.
-		input:        "create table ct (select id from secret)",
-		output:       []Permission{{TableName: "ct", Role: tableacl.ADMIN}},
-		undetermined: true,
-	}, {
 		input:        "create table ct as table secret",
 		output:       []Permission{{TableName: "ct", Role: tableacl.ADMIN}},
 		undetermined: true,
@@ -816,13 +823,10 @@ func TestBuildPermissions(t *testing.T) {
 		output:       []Permission{{TableName: "ct", Role: tableacl.ADMIN}},
 		undetermined: true,
 	}, {
-		// A valid CREATE TABLE in syntax the grammar lacks (MySQL 8.0.21's
-		// START TRANSACTION clause) is the same prefix-only parse, so it is
-		// flagged too: the tablet cannot tell it from a row-copying form. The
-		// exempt ACL is the way to run it under strict table ACL.
-		input:        "create table t (id int) start transaction",
-		output:       []Permission{{TableName: "t", Role: tableacl.ADMIN}},
-		undetermined: true,
+		// MySQL 8.0.21's START TRANSACTION clause is a table option, and it
+		// copies no rows.
+		input:  "create table t (id int) start transaction",
+		output: []Permission{{TableName: "t", Role: tableacl.ADMIN}},
 	}, {
 		// A SERIAL column is parsed, so its CREATE TABLE is fully parsed and its
 		// table set is known: drizzle-kit creates its migrations table this way.
