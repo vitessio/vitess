@@ -41,7 +41,8 @@ type memoryTopoLockDescriptor struct {
 	dirPath string
 }
 
-// TryLock is part of the topo.Conn interface. Its implementation is same as Lock
+// TryLock is part of the topo.Conn interface. It returns NodeExists instead
+// of waiting for a held lock.
 func (c *Conn) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	c.factory.callstats.Add([]string{"TryLock"}, 1)
 
@@ -52,7 +53,7 @@ func (c *Conn) TryLock(ctx context.Context, dirPath, contents string) (topo.Lock
 		return nil, err
 	}
 
-	return c.Lock(ctx, dirPath, contents)
+	return c.lock(ctx, dirPath, contents, false, false)
 }
 
 // Lock is part of the topo.Conn interface.
@@ -66,7 +67,7 @@ func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDes
 		return nil, err
 	}
 
-	return c.lock(ctx, dirPath, contents, false)
+	return c.lock(ctx, dirPath, contents, false, true)
 }
 
 // LockWithTTL is part of the topo.Conn interface. It behaves the same as Lock
@@ -81,17 +82,17 @@ func (c *Conn) LockWithTTL(ctx context.Context, dirPath, contents string, _ time
 		return nil, err
 	}
 
-	return c.lock(ctx, dirPath, contents, false)
+	return c.lock(ctx, dirPath, contents, false, true)
 }
 
 // LockName is part of the topo.Conn interface.
 func (c *Conn) LockName(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	c.factory.callstats.Add([]string{"LockName"}, 1)
-	return c.lock(ctx, dirPath, contents, true)
+	return c.lock(ctx, dirPath, contents, true, true)
 }
 
 // Lock is part of the topo.Conn interface.
-func (c *Conn) lock(ctx context.Context, dirPath, contents string, named bool) (topo.LockDescriptor, error) {
+func (c *Conn) lock(ctx context.Context, dirPath, contents string, named, wait bool) (topo.LockDescriptor, error) {
 	for {
 		if err := c.dial(ctx); err != nil {
 			return nil, err
@@ -118,6 +119,9 @@ func (c *Conn) lock(ctx context.Context, dirPath, contents string, named bool) (
 		if l := n.lock; l != nil {
 			// Someone else has the lock. Just wait for it.
 			c.factory.mu.Unlock()
+			if !wait {
+				return nil, topo.NewError(topo.NodeExists, "lock already exists at path "+dirPath)
+			}
 			select {
 			case <-l:
 				// Node was unlocked, try again to grab it.
