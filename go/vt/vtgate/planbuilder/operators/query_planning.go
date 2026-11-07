@@ -288,13 +288,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 	needsOrdering := len(qp.OrderExprs) > 0
 	hasHaving := isSel && sel.Having != nil
 
-	canPush := isRoute &&
-		!hasHaving &&
-		!needsOrdering &&
-		!qp.NeedsAggregation() &&
-		!qp.HasWindow &&
-		!isDistinctAST(in.selectStatement()) &&
-		in.selectStatement().GetLimit() == nil
+	canPush := isRoute && in.computesRowByRow(ctx)
 
 	if canPush {
 		return Swap(in, rb, "push horizon into route")
