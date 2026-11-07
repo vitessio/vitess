@@ -5769,6 +5769,7 @@ func TestDynamicClusterReplaceLogs(t *testing.T) {
 
 	record = logs.Record(t, "failed to close cluster; some connections and goroutines may linger")
 	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "1", record["existing_cluster_id"])
 	assert.Equal(t, "true", record["cluster_id"])
 	assert.Contains(t, record["error"], assert.AnError.Error())
 

@@ -337,7 +337,10 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 		if shouldAddCluster {
 			if existingCluster != nil {
 				if err := existingCluster.Close(); err != nil {
-					log.Error("failed to close cluster; some connections and goroutines may linger", slog.String("cluster_id", id), slog.Any("error", err))
+					log.Error("failed to close cluster; some connections and goroutines may linger",
+						slog.String("existing_cluster_id", existingCluster.ID),
+						slog.String("cluster_id", id),
+						slog.Any("error", err))
 				}
 
 				idx := stdsort.Search(len(api.clusters), func(i int) bool {
@@ -356,7 +359,7 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
-			log.Info("API already has cluster with id, using that instead", slog.String("cluster_id", id))
+			log.Info("API already has an equal cluster, using that instead", slog.String("cluster_id", id))
 		}
 	}
 
@@ -862,7 +865,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 				}
 			}
 
-			log.Info("cluster has no tables named", slog.String("cluster_id", c.ID), slog.String("table", req.Table))
+			log.Info("cluster has no table with the requested name", slog.String("cluster_id", c.ID), slog.String("table", req.Table))
 		}(c)
 	}
 
