@@ -220,6 +220,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfGeomFromWKBExpr(in, f)
 	case *GeomPropertyFuncExpr:
 		return VisitRefOfGeomPropertyFuncExpr(in, f)
+	case *GetFormatExpr:
+		return VisitRefOfGetFormatExpr(in, f)
 	case *GroupBy:
 		return VisitRefOfGroupBy(in, f)
 	case *GroupConcatExpr:
@@ -2188,6 +2190,19 @@ func VisitRefOfGeomPropertyFuncExpr(in *GeomPropertyFuncExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Geom, f); err != nil {
+		return err
+	}
+	return nil
+}
+
+func VisitRefOfGetFormatExpr(in *GetFormatExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.Style, f); err != nil {
 		return err
 	}
 	return nil
@@ -5793,6 +5808,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfGeomFromWKBExpr(in, f)
 	case *GeomPropertyFuncExpr:
 		return VisitRefOfGeomPropertyFuncExpr(in, f)
+	case *GetFormatExpr:
+		return VisitRefOfGetFormatExpr(in, f)
 	case *GroupConcatExpr:
 		return VisitRefOfGroupConcatExpr(in, f)
 	case *InsertExpr:

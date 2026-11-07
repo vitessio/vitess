@@ -42,6 +42,12 @@ func TestPreserveColumnNames(t *testing.T) {
 		input:  "create table t2 as select x'41', b'1', TRUE, 'abc', \"def\", N'nn', _utf8mb4'xyz', 1.50, null from t1",
 		output: "create table t2 as select X'41' as `x'41'`, 0b1 as `b'1'`, true as `TRUE`, 'abc', 'def', N'nn', _utf8mb4 'xyz', 1.50, null from t1",
 	}, {
+		// MySQL reads an ODBC escape whose string is not a temporal literal
+		// of its type as the string, and names it after the value.
+		name:   "an ODBC escape is named as written, but a string after its value",
+		input:  "create table t2 as select {d'2001-01-01'}, {d '2001-01-02'}, {ts '2001-01-01 10:10:10'}, {t '10:20:30'}, {d '2001-01-01 10:10:10'}, {t 'x'}, {D 'y'} from t1",
+		output: "create table t2 as select {d'2001-01-01'}, {d'2001-01-02'} as `{d '2001-01-02'}`, {ts'2001-01-01 10:10:10'} as `{ts '2001-01-01 10:10:10'}`, {t'10:20:30'} as `{t '10:20:30'}`, {d'2001-01-01 10:10:10'}, {t'x'}, {D 'y'} from t1",
+	}, {
 		name:   "strings in a row are named after the first one",
 		input:  "create table t2 as select 'a' 'b' from t1",
 		output: "create table t2 as select 'ab' as a from t1",

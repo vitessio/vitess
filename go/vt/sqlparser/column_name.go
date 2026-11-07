@@ -21,6 +21,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"vitess.io/vitess/go/mysql/datetime"
 )
 
 // MySQL names a column that a query makes from a select expression without an
@@ -259,6 +261,71 @@ func truncateRunes(s string, limit int) string {
 		count++
 	}
 	return s
+}
+
+// maxTemporalEscapeLength is the length below which MySQL reads the string of
+// an ODBC escape as a temporal literal: four times MAX_DATE_STRING_REP_LENGTH.
+const maxTemporalEscapeLength = 4 * len("YYYY-MM-DD AM HH:MM:SS.FFFFFF+HH:MM\x00")
+
+// isTemporal reports whether escape has the form of a temporal literal, as in
+// {d'2001-01-01'}, {t'10:20:30'} or {ts'2001-01-01 10:20:30'}. MySQL takes
+// the type in lowercase only.
+func (escape *ODBCEscape) isTemporal() bool {
+	literal, ok := escape.Expr.(*Literal)
+	if !ok || literal.Type != StrVal {
+		return false
+	}
+	switch escape.Type.String() {
+	case "d", "t", "ts":
+		return true
+	}
+	return false
+}
+
+// odbcEscapeColumnName returns the name of the column that MySQL makes from an
+// ODBC escape that it reads as the string inside, the way PTI_odbc_date does:
+// when the escape is not a temporal literal, or its string is not one. It
+// reports false for a temporal literal, which MySQL names after its text, and
+// for an escape of anything but a string.
+//
+// MySQL rejects a zero date or a zero in a date only in some sql_modes, which
+// the parser does not know, and this takes them as dates. That matters only
+// for an escape written otherwise than as Vitess writes it, as with a space
+// before the string, because MySQL names both the same way otherwise.
+func odbcEscapeColumnName(escape *ODBCEscape) (string, bool) {
+	literal, ok := escape.Expr.(*Literal)
+	if !ok || literal.Type != StrVal {
+		return "", false
+	}
+	if escape.isTemporal() && isTemporalLiteral(escape.Type.String(), literal.Val) {
+		return "", false
+	}
+	return literal.Val, true
+}
+
+// isTemporalLiteral reports whether MySQL reads value as a temporal literal of
+// the type of an ODBC escape: d, t or ts.
+func isTemporalLiteral(typ, value string) bool {
+	if len(value) >= maxTemporalEscapeLength {
+		return false
+	}
+	for i := range len(value) {
+		if value[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	switch typ {
+	case "d":
+		_, ok := datetime.ParseDate(value)
+		return ok
+	case "t":
+		_, _, state := datetime.ParseTime(value, -1)
+		return state == datetime.TimeOK
+	case "ts":
+		_, _, ok := datetime.ParseDateTime(value, -1)
+		return ok
+	}
+	return false
 }
 
 // stringColumnName returns the name of the column that MySQL makes from a

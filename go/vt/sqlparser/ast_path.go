@@ -207,6 +207,7 @@ const (
 	RefOfGeomFromWKBExprSrid
 	RefOfGeomFromWKBExprAxisOrderOpt
 	RefOfGeomPropertyFuncExprGeom
+	RefOfGetFormatExprStyle
 	RefOfGroupByExprsOffset
 	RefOfGroupConcatExprExprsOffset
 	RefOfGroupConcatExprOrderBy
@@ -985,6 +986,8 @@ func (s ASTStep) DebugString() string {
 		return "(*GeomFromWKBExpr).AxisOrderOpt"
 	case RefOfGeomPropertyFuncExprGeom:
 		return "(*GeomPropertyFuncExpr).Geom"
+	case RefOfGetFormatExprStyle:
+		return "(*GetFormatExpr).Style"
 	case RefOfGroupByExprsOffset:
 		return "(*GroupBy).ExprsOffset"
 	case RefOfGroupConcatExprExprsOffset:
@@ -2200,6 +2203,8 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*GeomFromWKBExpr).AxisOrderOpt
 		case RefOfGeomPropertyFuncExprGeom:
 			node = node.(*GeomPropertyFuncExpr).Geom
+		case RefOfGetFormatExprStyle:
+			node = node.(*GetFormatExpr).Style
 		case RefOfGroupByExprsOffset:
 			idx, bytesRead := path.nextPathOffset()
 			path = path[bytesRead:]

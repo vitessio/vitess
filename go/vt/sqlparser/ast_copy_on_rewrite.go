@@ -220,6 +220,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
 	case *GeomPropertyFuncExpr:
 		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
+	case *GetFormatExpr:
+		return c.copyOnRewriteRefOfGetFormatExpr(n, parent)
 	case *GroupBy:
 		return c.copyOnRewriteRefOfGroupBy(n, parent)
 	case *GroupConcatExpr:
@@ -3061,6 +3063,29 @@ func (c *cow) copyOnRewriteRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr, pa
 		if changedGeom {
 			res := *n
 			res.Geom, _ = _Geom.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
+func (c *cow) copyOnRewriteRefOfGetFormatExpr(n *GetFormatExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_Style, changedStyle := c.copyOnRewriteExpr(n.Style, n)
+		if changedStyle {
+			res := *n
+			res.Style, _ = _Style.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -8411,6 +8436,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfGeomFromWKBExpr(n, parent)
 	case *GeomPropertyFuncExpr:
 		return c.copyOnRewriteRefOfGeomPropertyFuncExpr(n, parent)
+	case *GetFormatExpr:
+		return c.copyOnRewriteRefOfGetFormatExpr(n, parent)
 	case *GroupConcatExpr:
 		return c.copyOnRewriteRefOfGroupConcatExpr(n, parent)
 	case *InsertExpr:
