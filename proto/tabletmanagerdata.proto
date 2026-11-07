@@ -564,12 +564,55 @@ message StopReplicationAndGetStatusResponse {
   replicationdata.StopReplicationStatus status = 2;
 }
 
+// PrepareEmergencyReparentRequest contains the parameters for preparing an emergency reparent candidate.
+message PrepareEmergencyReparentRequest {
+  // wait_position is the relay log position to apply before reading the reparent journal. An empty value skips the wait phase.
+  string wait_position = 1;
+  // wait_for_position_timeout limits how long relay logs may take to apply. Zero uses the default remote operation timeout.
+  vttime.Duration wait_for_position_timeout = 2;
+}
+
+// PrepareEmergencyReparentResponse contains the completed phase results and any partial failure.
+// Phase failures are returned in the corresponding error field instead of as transport errors.
+message PrepareEmergencyReparentResponse {
+  // Output only. reparent_journal_length is the number of reparent journal rows found after the wait phase.
+  int32 reparent_journal_length = 1;
+  // Output only. wait_for_position_error describes a relay log wait failure. The journal read is still attempted when this is set.
+  vtrpc.RPCError wait_for_position_error = 2;
+  // Output only. read_reparent_journal_error describes a journal read failure.
+  vtrpc.RPCError read_reparent_journal_error = 3;
+}
+
 message PromoteReplicaRequest {
   bool semiSync = 1;
 }
 
 message PromoteReplicaResponse {
   string position = 1;
+}
+
+// PromoteReplicaAndJournalRequest contains the parameters for promoting a replica and writing its reparent journal row.
+message PromoteReplicaAndJournalRequest {
+  // semi_sync controls whether semi-sync is enabled on the promoted tablet.
+  bool semi_sync = 1;
+  // Required. time_created is the positive creation time stored in the reparent journal row.
+  vttime.Time time_created = 2;
+  // Required. action_name is the non-empty action stored in the reparent journal row and must not exceed 255 bytes.
+  string action_name = 3;
+  // populate_reparent_journal_timeout limits the journal write phase, including after the caller cancels. Zero uses the default remote operation timeout.
+  // Under semi-sync the write waits for a replica ACK, so it should leave time for repointed replicas to connect.
+  vttime.Duration populate_reparent_journal_timeout = 4;
+}
+
+// PromoteReplicaAndJournalResponse contains the completed phase results and any partial failure.
+// Phase failures are returned in the corresponding error field instead of as transport errors.
+message PromoteReplicaAndJournalResponse {
+  // Output only. position is set once MySQL has been promoted, including when a later step fails. A non-empty position alone does not mean the tablet is writable.
+  string position = 1;
+  // Output only. promote_replica_error describes a promotion failure. The journal write is skipped when this is set.
+  vtrpc.RPCError promote_replica_error = 2;
+  // Output only. populate_reparent_journal_error describes a journal write failure after promotion.
+  vtrpc.RPCError populate_reparent_journal_error = 3;
 }
 
 // Backup / Restore related messages
