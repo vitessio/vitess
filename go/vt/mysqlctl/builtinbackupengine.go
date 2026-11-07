@@ -41,6 +41,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"vitess.io/vitess/go/fileutil"
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -72,6 +73,10 @@ const (
 	// returns a vtrpc.Code_FAILED_PRECONDITION error is considered fatal and we will
 	// not retry.
 	maxRetriesPerFile = 1
+
+	// Values of --builtinbackup-restore-write-mode.
+	restoreWriteModeBuffered = "buffered"
+	restoreWriteModeDirect   = "direct"
 )
 
 var (
@@ -80,6 +85,7 @@ var (
 	// not retry.
 	maxFileCloseRetries = 20
 	openFile            = os.OpenFile
+	fallocate           = fallocateFile
 
 	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
 	// It can later be extended for other calls to mysqld during backup functions.
@@ -104,6 +110,9 @@ var (
 	// The path should exist.
 	// When empty, the default OS temp dir is assumed.
 	builtinIncrementalRestorePath = ""
+
+	// Controls how chunks of chunked files are written to disk during restores.
+	builtinBackupRestoreWriteMode = flagutil.NewStringEnum("builtinbackup-restore-write-mode", restoreWriteModeBuffered, []string{restoreWriteModeBuffered, restoreWriteModeDirect})
 
 	backupFileChunkThreshold uint64                          // 0 means chunking is disabled
 	backupFileChunkSize      uint64 = 1 * 1024 * 1024 * 1024 // 1 GiB
@@ -272,6 +281,7 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
 	fs.Uint64Var(&backupFileChunkThreshold, "builtinbackup-file-chunk-threshold", backupFileChunkThreshold, "Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.")
 	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore.")
+	fs.Var(builtinBackupRestoreWriteMode, "builtinbackup-restore-write-mode", "How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 4096; otherwise the restore fails before any data is downloaded.")
 }
 
 // errInvalidBinlogEntry is returned for a stripped binlog whose name is not binlog.<seq>.
@@ -340,6 +350,11 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 
 	if backupFileChunkThreshold > 0 && backupFileChunkSize < minBackupFileChunkSize {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be >= %d", minBackupFileChunkSize)
+	}
+	// Chunks start at multiples of the chunk size, and restores can only write them with O_DIRECT when
+	// those offsets are aligned.
+	if backupFileChunkThreshold > 0 && backupFileChunkSize%directIOAlignment != 0 {
+		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size must be a multiple of %d", directIOAlignment)
 	}
 	if backupFileChunkThreshold > 0 && backupFileChunkSize > math.MaxInt64 {
 		return BackupUnusable, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "builtinbackup-file-chunk-size exceeds maximum allowed value of %d", int64(math.MaxInt64))
@@ -1536,6 +1551,8 @@ func validateChunkMetadata(fe *FileEntry, fileIndex int) (int64, error) {
 // entries. This is called once before any restore pass so that restoreFileEntries can
 // always open them with O_WRONLY (no truncation), making retries safe.
 func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf, createdDir string, logger logutil.Logger) error {
+	// In direct write mode, the requirements are checked here, before any chunk is downloaded.
+	direct := builtinBackupRestoreWriteMode.String() == restoreWriteModeDirect
 	for i := range fes {
 		fe := &fes[i]
 		if len(fe.Chunks) == 0 {
@@ -1548,12 +1565,23 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 		if err != nil {
 			return err
 		}
+		if direct {
+			if err := checkChunksAligned(fe); err != nil {
+				return err
+			}
+		}
 
 		dest, err := fe.open(cnf, false)
 		if err != nil {
 			return vterrors.Wrapf(err, "can't create destination for chunked file %v", fe.Name)
 		}
-		if err := dest.Truncate(totalSize); err != nil {
+		if direct {
+			if err := checkDirectIO(dest.Name()); err != nil {
+				closeWithRetry(ctx, logger, dest, fe.Name)
+				return vterrors.Wrapf(err, "can't open chunked file %v with O_DIRECT", fe.Name)
+			}
+		}
+		if err := sizeChunkedDestination(dest, totalSize, direct); err != nil {
 			closeWithRetry(ctx, logger, dest, fe.Name)
 			return vterrors.Wrapf(err, "can't pre-size chunked file %v", fe.Name)
 		}
@@ -1562,6 +1590,50 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 		}
 	}
 	return nil
+}
+
+// directModeErrorf returns the error of a restore that can't be done in direct write mode. It is
+// a FAILED_PRECONDITION, so that the restore is not retried.
+func directModeErrorf(format string, args ...any) error {
+	return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "can't restore with --builtinbackup-restore-write-mode=direct, use --builtinbackup-restore-write-mode=buffered instead: %s", fmt.Sprintf(format, args...))
+}
+
+// checkChunksAligned checks that every chunk of fe starts at an offset that O_DIRECT can write at,
+// which is the case for backups taken with a chunk size that is a multiple of directIOAlignment.
+func checkChunksAligned(fe *FileEntry) error {
+	for _, c := range fe.Chunks {
+		if c.Offset%directIOAlignment != 0 {
+			return directModeErrorf("chunk %v of %v starts at offset %d, which is not a multiple of %d", c.StorageName, fe.Name, c.Offset, directIOAlignment)
+		}
+	}
+	return nil
+}
+
+// checkDirectIO checks that the file at path can be opened with O_DIRECT.
+func checkDirectIO(path string) error {
+	f, err := openForDirectWrite(path)
+	if vterrors.Code(err) == vtrpcpb.Code_UNIMPLEMENTED {
+		return directModeErrorf("%v", err)
+	}
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
+// sizeChunkedDestination extends the destination of a chunked file to its final size. In direct
+// write mode the blocks are preallocated, because ext4 only lets O_DIRECT writes to the same file
+// run concurrently when they land on allocated blocks; writes into holes serialize on the inode
+// lock.
+func sizeChunkedDestination(dest *os.File, size int64, direct bool) error {
+	if !direct {
+		return dest.Truncate(size)
+	}
+	err := fallocate(dest, size)
+	if vterrors.Code(err) == vtrpcpb.Code_UNIMPLEMENTED {
+		return directModeErrorf("%v", err)
+	}
+	return err
 }
 
 // restoreWorkItem represents a single unit of restore work: either a chunk of a
@@ -1807,6 +1879,21 @@ func (w *offsetWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
+// flushWriter is a buffered writer, either a bufio.Writer or a directIOWriter.
+type flushWriter interface {
+	io.Writer
+	Flush() error
+}
+
+// openChunkDestination opens the pre-sized destination file of a chunk for writing, with O_DIRECT
+// when direct is set.
+func openChunkDestination(destPath string, direct bool) (*os.File, error) {
+	if direct {
+		return openForDirectWrite(destPath)
+	}
+	return openFile(destPath, os.O_WRONLY, 0o644)
+}
+
 // restoreFileChunk restores a single chunk of a large file. The destination
 // file has been pre-created and pre-sized by createChunkedDestinations; this
 // function opens it for pwrite and closes it when done.
@@ -1814,8 +1901,10 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// createChunkedDestinations already checked that direct write mode can be used.
+	direct := builtinBackupRestoreWriteMode.String() == restoreWriteModeDirect
 	openDestAt := time.Now()
-	dest, err := openFile(destPath, os.O_WRONLY, 0o644)
+	dest, err := openChunkDestination(destPath, direct)
 	if err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "can't open destination for chunk %v: %v", chunk.StorageName, err)
 	}
@@ -1879,7 +1968,12 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 	ow := &offsetWriter{f: dest, offset: chunk.Offset}
 	writeStats := params.Stats.Scope(stats.Operation("Destination:Write"))
 	timedDest := ioutil.NewMeteredWriter(ow, writeStats.TimedIncrementBytes)
-	bufferedDest := bufio.NewWriterSize(timedDest, int(builtinBackupFileWriteBufferSize))
+	var bufferedDest flushWriter
+	if direct {
+		bufferedDest = newDirectIOWriter(dest, timedDest, int(builtinBackupFileWriteBufferSize))
+	} else {
+		bufferedDest = bufio.NewWriterSize(timedDest, int(builtinBackupFileWriteBufferSize))
+	}
 
 	if _, err := io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrapf(err, "failed to copy chunk %v", chunk.StorageName)

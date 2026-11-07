@@ -606,6 +606,23 @@ func TestExecuteBackupRejectsOversizedChunkSize(t *testing.T) {
 	require.ErrorContains(t, err, "exceeds maximum allowed value")
 }
 
+func TestExecuteBackupRejectsUnalignedChunkSize(t *testing.T) {
+	oldThreshold := backupFileChunkThreshold
+	oldSize := backupFileChunkSize
+	t.Cleanup(func() {
+		backupFileChunkThreshold = oldThreshold
+		backupFileChunkSize = oldSize
+	})
+
+	// Above the minimum chunk size, but not a multiple of the O_DIRECT alignment.
+	backupFileChunkThreshold = 2_000_000_000
+	backupFileChunkSize = 1_000_000_000
+
+	be := &BuiltinBackupEngine{}
+	_, err := be.ExecuteBackup(t.Context(), BackupParams{Logger: logutil.NewMemoryLogger()}, nil)
+	require.ErrorContains(t, err, "must be a multiple of 4096")
+}
+
 func TestShouldDrainForBackupBuiltIn(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 
@@ -845,6 +862,17 @@ func newBackupTestMysqld(t *testing.T) *FakeMysqlDaemon {
 // fan-out without requiring the large file sizes that the 4MiB minimum would
 // impose.
 func TestBackupRestoreWithManyChunks(t *testing.T) {
+	backupRoot := t.TempDir()
+	bm := backupRestoreWithManyChunks(t, backupRoot)
+
+	// A backup without binlogs restores none and writes no binlog index.
+	assert.False(t, bm.IncludesBinlogs)
+	assert.NoFileExists(t, path.Join(backupRoot, "binlog.index"))
+}
+
+// backupRestoreWithManyChunks backs up a 16MiB file in 256 chunks to file backup storage under
+// backupRoot, restores it, checks that the restored file matches and returns the manifest.
+func backupRestoreWithManyChunks(t *testing.T, backupRoot string) *BackupManifest {
 	ctx := context.Background()
 
 	const (
@@ -867,7 +895,6 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	minBackupFileChunkSize = chunkSize
 
 	// Create a single 16MiB file filled with random (incompressible) data.
-	backupRoot := t.TempDir()
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
 	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
@@ -951,10 +978,7 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	restoredData, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
-
-	// A backup without binlogs restores none and writes no binlog index.
-	assert.False(t, bm.IncludesBinlogs)
-	assert.NoFileExists(t, path.Join(backupRoot, "binlog.index"))
+	return bm
 }
 
 // TestBackupRestoreWithBinlogs backs up a source with binlogs and checks that
@@ -1310,4 +1334,16 @@ func TestHasErrorCode(t *testing.T) {
 			assert.Equal(t, tc.expected, hasErrorCode(tc.err, tc.code))
 		})
 	}
+}
+
+func TestRestoreWriteModeDefaultsToBuffered(t *testing.T) {
+	assert.Equal(t, restoreWriteModeBuffered, builtinBackupRestoreWriteMode.String())
+}
+
+// setRestoreWriteMode sets --builtinbackup-restore-write-mode for the duration of the test.
+func setRestoreWriteMode(t *testing.T, mode string) {
+	t.Helper()
+	old := builtinBackupRestoreWriteMode.String()
+	t.Cleanup(func() { require.NoError(t, builtinBackupRestoreWriteMode.Set(old)) })
+	require.NoError(t, builtinBackupRestoreWriteMode.Set(mode))
 }
