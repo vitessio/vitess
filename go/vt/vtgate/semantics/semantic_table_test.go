@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -978,4 +979,20 @@ func TestHasNonLiteralForeignKeyUpdate(t *testing.T) {
 			require.EqualValues(t, tt.hasNonLiteral, got)
 		})
 	}
+}
+
+// TestTypeForExprUnhashable tests that type lookups for expressions of
+// unhashable types, such as the value list of an IN comparison, report no
+// type instead of panicking on the ExprTypes map access, and that a nil
+// expression still reports no type rather than panicking in the guard.
+func TestTypeForExprUnhashable(t *testing.T) {
+	st := EmptySemTable()
+	tuple := sqlparser.ValTuple{sqlparser.NewIntLiteral("1"), sqlparser.NewIntLiteral("2")}
+	typ, found := st.TypeForExpr(tuple)
+	assert.False(t, found)
+	assert.Equal(t, sqltypes.Unknown, typ.Type())
+
+	typ, found = st.TypeForExpr(nil)
+	assert.False(t, found)
+	assert.Equal(t, sqltypes.Unknown, typ.Type())
 }
