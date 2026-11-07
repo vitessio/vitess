@@ -577,7 +577,16 @@ func (node *OptLike) Format(buf *TrackedBuffer) {
 func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case ReorganizeAction:
-		buf.astPrintf(node, "%s ", ReorganizeStr)
+		buf.astPrintf(node, "%s", ReorganizeStr)
+		if node.NoWriteToBinlog {
+			buf.literal(" no_write_to_binlog")
+		}
+		// Without names, REORGANIZE PARTITION rebuilds the partitions of a
+		// table partitioned by HASH or KEY.
+		if len(node.Names) == 0 {
+			break
+		}
+		buf.literal(" ")
 		for i, n := range node.Names {
 			if i != 0 {
 				buf.literal(", ")
@@ -593,7 +602,25 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 		}
 		buf.astPrintf(node, ")")
 	case AddAction:
-		buf.astPrintf(node, "%s (%v)", AddStr, node.Definitions[0])
+		buf.astPrintf(node, "%s", AddStr)
+		if node.NoWriteToBinlog {
+			buf.literal(" no_write_to_binlog")
+		}
+		// Without definitions, ADD PARTITION adds one partition, or Number
+		// partitions, to a table partitioned by HASH or KEY.
+		if node.Number != nil {
+			buf.astPrintf(node, " partitions %v", node.Number)
+		}
+		if len(node.Definitions) > 0 {
+			buf.literal(" (")
+			for i, pd := range node.Definitions {
+				if i != 0 {
+					buf.literal(", ")
+				}
+				buf.astPrintf(node, "%v", pd)
+			}
+			buf.literal(")")
+		}
 	case DropAction:
 		buf.astPrintf(node, "%s ", DropPartitionStr)
 		for i, n := range node.Names {
@@ -638,7 +665,11 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 			}
 		}
 	case CoalesceAction:
-		buf.astPrintf(node, "%s %v", CoalesceStr, node.Number)
+		buf.astPrintf(node, "%s", CoalesceStr)
+		if node.NoWriteToBinlog {
+			buf.literal(" no_write_to_binlog")
+		}
+		buf.astPrintf(node, " %v", node.Number)
 	case ExchangeAction:
 		buf.astPrintf(node, "%s %v with table %v", ExchangeStr, node.Names[0], node.TableName)
 		if node.WithoutValidation {
@@ -646,6 +677,9 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 		}
 	case AnalyzeAction:
 		buf.astPrintf(node, "%s ", AnalyzePartitionStr)
+		if node.NoWriteToBinlog {
+			buf.literal("no_write_to_binlog ")
+		}
 		if node.IsAll {
 			buf.literal("all")
 		} else {
@@ -666,8 +700,14 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 				prefix = ", "
 			}
 		}
+		for _, checkType := range node.CheckTypes {
+			buf.astPrintf(node, " %s", checkType)
+		}
 	case OptimizeAction:
 		buf.astPrintf(node, "%s ", OptimizeStr)
+		if node.NoWriteToBinlog {
+			buf.literal("no_write_to_binlog ")
+		}
 		if node.IsAll {
 			buf.literal("all")
 		} else {
@@ -679,6 +719,9 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 		}
 	case RebuildAction:
 		buf.astPrintf(node, "%s ", RebuildStr)
+		if node.NoWriteToBinlog {
+			buf.literal("no_write_to_binlog ")
+		}
 		if node.IsAll {
 			buf.literal("all")
 		} else {
@@ -690,6 +733,9 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 		}
 	case RepairAction:
 		buf.astPrintf(node, "%s ", RepairStr)
+		if node.NoWriteToBinlog {
+			buf.literal("no_write_to_binlog ")
+		}
 		if node.IsAll {
 			buf.literal("all")
 		} else {
@@ -699,10 +745,28 @@ func (node *PartitionSpec) Format(buf *TrackedBuffer) {
 				prefix = ", "
 			}
 		}
+		for _, checkType := range node.CheckTypes {
+			buf.astPrintf(node, " %s", checkType)
+		}
 	case RemoveAction:
 		buf.literal(RemoveStr)
 	case UpgradeAction:
 		buf.literal(UpgradeStr)
+	case SecondaryLoadAction, SecondaryUnloadAction:
+		if node.Action == SecondaryLoadAction {
+			buf.literal(SecondaryLoadStr)
+		} else {
+			buf.literal(SecondaryUnloadStr)
+		}
+		if len(node.Names) > 0 {
+			buf.literal(" partition (")
+			prefix := ""
+			for _, n := range node.Names {
+				buf.astPrintf(node, "%s%v", prefix, n)
+				prefix = ", "
+			}
+			buf.literal(")")
+		}
 	default:
 		panic("unimplemented")
 	}
@@ -739,6 +803,9 @@ func (node *PartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	}
 	if node.TableSpace != "" {
 		buf.astPrintf(node, " tablespace %#s", encodeObjectName(node.TableSpace))
+	}
+	if node.NodeGroup != nil {
+		buf.astPrintf(node, " nodegroup %v", node.NodeGroup)
 	}
 	if node.SubPartitionDefinitions != nil {
 		buf.astPrintf(node, " (%v)", node.SubPartitionDefinitions)
@@ -782,6 +849,9 @@ func (node *SubPartitionDefinitionOptions) Format(buf *TrackedBuffer) {
 	}
 	if node.TableSpace != "" {
 		buf.astPrintf(node, " tablespace %#s", encodeObjectName(node.TableSpace))
+	}
+	if node.NodeGroup != nil {
+		buf.astPrintf(node, " nodegroup %v", node.NodeGroup)
 	}
 }
 
@@ -1683,6 +1753,11 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *NullVal) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "null")
+}
+
+// Format formats the node.
+func (node *MaxValue) Format(buf *TrackedBuffer) {
+	buf.literal("maxvalue")
 }
 
 // Format formats the node.
@@ -2743,7 +2818,11 @@ func (node *AddConstraintDefinition) Format(buf *TrackedBuffer) {
 }
 
 func (node *AlterCheck) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "alter check %v", node.Name)
+	if node.Constraint {
+		buf.astPrintf(node, "alter constraint %v", node.Name)
+	} else {
+		buf.astPrintf(node, "alter check %v", node.Name)
+	}
 	if node.Enforced {
 		buf.astPrintf(node, " %s", keywordStrings[ENFORCED])
 	} else {
@@ -2843,7 +2922,11 @@ func (node *RenameColumn) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *AlterCharset) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "convert to character set %#s", encodeSQLName(node.CharacterSet))
+	if node.IsDefault {
+		buf.literal("convert to character set default")
+	} else {
+		buf.astPrintf(node, "convert to character set %#s", encodeSQLName(node.CharacterSet))
+	}
 	if node.Collate != "" {
 		buf.astPrintf(node, " collate %#s", encodeSQLName(node.Collate))
 	}
@@ -2894,8 +2977,12 @@ func (node *LockOption) Format(buf *TrackedBuffer) {
 func (node *OrderByOption) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "order by ")
 	prefix := ""
-	for _, n := range node.Cols {
-		buf.astPrintf(node, "%s%v", prefix, n)
+	for _, n := range node.Order {
+		// ASC is the default, so only DESC is written out.
+		buf.astPrintf(node, "%s%v", prefix, n.Expr)
+		if n.Direction == DescOrder {
+			buf.literal(" desc")
+		}
 		prefix = ", "
 	}
 }

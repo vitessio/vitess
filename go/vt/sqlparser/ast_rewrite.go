@@ -351,6 +351,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *Max:
 		return a.rewriteRefOfMax(parent, node, replacer)
+	case *MaxValue:
+		return a.rewriteRefOfMaxValue(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *Min:
@@ -8554,6 +8556,37 @@ func (a *application) rewriteRefOfMax(parent SQLNode, node *Max, replacer replac
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfMaxValue(parent SQLNode, node *MaxValue, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfMemberOfExpr(parent SQLNode, node *MemberOfExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9483,10 +9516,10 @@ func (a *application) rewriteRefOfOrderByOption(parent SQLNode, node *OrderByOpt
 		}
 	}
 	if a.collectPaths {
-		a.cur.current.AddStep(uint16(RefOfOrderByOptionCols))
+		a.cur.current.AddStep(uint16(RefOfOrderByOptionOrder))
 	}
-	if !a.rewriteColumns(node, node.Cols, func(newNode, parent SQLNode) {
-		parent.(*OrderByOption).Cols = newNode.(Columns)
+	if !a.rewriteOrderBy(node, node.Order, func(newNode, parent SQLNode) {
+		parent.(*OrderByOption).Order = newNode.(OrderBy)
 	}) {
 		return false
 	}
@@ -9763,6 +9796,15 @@ func (a *application) rewriteRefOfPartitionDefinitionOptions(parent SQLNode, nod
 	}
 	if !a.rewriteRefOfLiteral(node, node.IndexDirectory, func(newNode, parent SQLNode) {
 		parent.(*PartitionDefinitionOptions).IndexDirectory = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfPartitionDefinitionOptionsNodeGroup))
+	}
+	if !a.rewriteRefOfLiteral(node, node.NodeGroup, func(newNode, parent SQLNode) {
+		parent.(*PartitionDefinitionOptions).NodeGroup = newNode.(*Literal)
 	}) {
 		return false
 	}
@@ -12864,6 +12906,15 @@ func (a *application) rewriteRefOfSubPartitionDefinitionOptions(parent SQLNode, 
 	}
 	if a.collectPaths {
 		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfSubPartitionDefinitionOptionsNodeGroup))
+	}
+	if !a.rewriteRefOfLiteral(node, node.NodeGroup, func(newNode, parent SQLNode) {
+		parent.(*SubPartitionDefinitionOptions).NodeGroup = newNode.(*Literal)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer
@@ -15630,6 +15681,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfMatchExpr(parent, node, replacer)
 	case *Max:
 		return a.rewriteRefOfMax(parent, node, replacer)
+	case *MaxValue:
+		return a.rewriteRefOfMaxValue(parent, node, replacer)
 	case *MemberOfExpr:
 		return a.rewriteRefOfMemberOfExpr(parent, node, replacer)
 	case *Min:

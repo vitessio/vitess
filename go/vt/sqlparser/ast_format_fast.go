@@ -758,7 +758,15 @@ func (node *PartitionSpec) FormatFast(buf *TrackedBuffer) {
 	switch node.Action {
 	case ReorganizeAction:
 		buf.WriteString(ReorganizeStr)
-		buf.WriteByte(' ')
+		if node.NoWriteToBinlog {
+			buf.WriteString(" no_write_to_binlog")
+		}
+		// Without names, REORGANIZE PARTITION rebuilds the partitions of a
+		// table partitioned by HASH or KEY.
+		if len(node.Names) == 0 {
+			break
+		}
+		buf.WriteString(" ")
 		for i, n := range node.Names {
 			if i != 0 {
 				buf.WriteString(", ")
@@ -775,9 +783,25 @@ func (node *PartitionSpec) FormatFast(buf *TrackedBuffer) {
 		buf.WriteByte(')')
 	case AddAction:
 		buf.WriteString(AddStr)
-		buf.WriteString(" (")
-		node.Definitions[0].FormatFast(buf)
-		buf.WriteByte(')')
+		if node.NoWriteToBinlog {
+			buf.WriteString(" no_write_to_binlog")
+		}
+		// Without definitions, ADD PARTITION adds one partition, or Number
+		// partitions, to a table partitioned by HASH or KEY.
+		if node.Number != nil {
+			buf.WriteString(" partitions ")
+			node.Number.FormatFast(buf)
+		}
+		if len(node.Definitions) > 0 {
+			buf.WriteString(" (")
+			for i, pd := range node.Definitions {
+				if i != 0 {
+					buf.WriteString(", ")
+				}
+				pd.FormatFast(buf)
+			}
+			buf.WriteString(")")
+		}
 	case DropAction:
 		buf.WriteString(DropPartitionStr)
 		buf.WriteByte(' ')
@@ -830,6 +854,9 @@ func (node *PartitionSpec) FormatFast(buf *TrackedBuffer) {
 		}
 	case CoalesceAction:
 		buf.WriteString(CoalesceStr)
+		if node.NoWriteToBinlog {
+			buf.WriteString(" no_write_to_binlog")
+		}
 		buf.WriteByte(' ')
 		node.Number.FormatFast(buf)
 	case ExchangeAction:
@@ -844,6 +871,9 @@ func (node *PartitionSpec) FormatFast(buf *TrackedBuffer) {
 	case AnalyzeAction:
 		buf.WriteString(AnalyzePartitionStr)
 		buf.WriteByte(' ')
+		if node.NoWriteToBinlog {
+			buf.WriteString("no_write_to_binlog ")
+		}
 		if node.IsAll {
 			buf.WriteString("all")
 		} else {
@@ -867,9 +897,16 @@ func (node *PartitionSpec) FormatFast(buf *TrackedBuffer) {
 				prefix = ", "
 			}
 		}
+		for _, checkType := range node.CheckTypes {
+			buf.WriteByte(' ')
+			buf.WriteString(checkType)
+		}
 	case OptimizeAction:
 		buf.WriteString(OptimizeStr)
 		buf.WriteByte(' ')
+		if node.NoWriteToBinlog {
+			buf.WriteString("no_write_to_binlog ")
+		}
 		if node.IsAll {
 			buf.WriteString("all")
 		} else {
@@ -883,6 +920,9 @@ func (node *PartitionSpec) FormatFast(buf *TrackedBuffer) {
 	case RebuildAction:
 		buf.WriteString(RebuildStr)
 		buf.WriteByte(' ')
+		if node.NoWriteToBinlog {
+			buf.WriteString("no_write_to_binlog ")
+		}
 		if node.IsAll {
 			buf.WriteString("all")
 		} else {
@@ -896,6 +936,9 @@ func (node *PartitionSpec) FormatFast(buf *TrackedBuffer) {
 	case RepairAction:
 		buf.WriteString(RepairStr)
 		buf.WriteByte(' ')
+		if node.NoWriteToBinlog {
+			buf.WriteString("no_write_to_binlog ")
+		}
 		if node.IsAll {
 			buf.WriteString("all")
 		} else {
@@ -906,10 +949,30 @@ func (node *PartitionSpec) FormatFast(buf *TrackedBuffer) {
 				prefix = ", "
 			}
 		}
+		for _, checkType := range node.CheckTypes {
+			buf.WriteByte(' ')
+			buf.WriteString(checkType)
+		}
 	case RemoveAction:
 		buf.WriteString(RemoveStr)
 	case UpgradeAction:
 		buf.WriteString(UpgradeStr)
+	case SecondaryLoadAction, SecondaryUnloadAction:
+		if node.Action == SecondaryLoadAction {
+			buf.WriteString(SecondaryLoadStr)
+		} else {
+			buf.WriteString(SecondaryUnloadStr)
+		}
+		if len(node.Names) > 0 {
+			buf.WriteString(" partition (")
+			prefix := ""
+			for _, n := range node.Names {
+				buf.WriteString(prefix)
+				n.FormatFast(buf)
+				prefix = ", "
+			}
+			buf.WriteString(")")
+		}
 	default:
 		panic("unimplemented")
 	}
@@ -955,6 +1018,10 @@ func (node *PartitionDefinitionOptions) FormatFast(buf *TrackedBuffer) {
 	if node.TableSpace != "" {
 		buf.WriteString(" tablespace ")
 		buf.WriteString(encodeObjectName(node.TableSpace))
+	}
+	if node.NodeGroup != nil {
+		buf.WriteString(" nodegroup ")
+		node.NodeGroup.FormatFast(buf)
 	}
 	if node.SubPartitionDefinitions != nil {
 		buf.WriteString(" (")
@@ -1009,6 +1076,10 @@ func (node *SubPartitionDefinitionOptions) FormatFast(buf *TrackedBuffer) {
 	if node.TableSpace != "" {
 		buf.WriteString(" tablespace ")
 		buf.WriteString(encodeObjectName(node.TableSpace))
+	}
+	if node.NodeGroup != nil {
+		buf.WriteString(" nodegroup ")
+		node.NodeGroup.FormatFast(buf)
 	}
 }
 
@@ -2159,6 +2230,11 @@ func (node *Argument) FormatFast(buf *TrackedBuffer) {
 // FormatFast formats the node.
 func (node *NullVal) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("null")
+}
+
+// FormatFast formats the node.
+func (node *MaxValue) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("maxvalue")
 }
 
 // FormatFast formats the node.
@@ -3547,8 +3623,13 @@ func (node *AddConstraintDefinition) FormatFast(buf *TrackedBuffer) {
 }
 
 func (node *AlterCheck) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("alter check ")
-	node.Name.FormatFast(buf)
+	if node.Constraint {
+		buf.WriteString("alter constraint ")
+		node.Name.FormatFast(buf)
+	} else {
+		buf.WriteString("alter check ")
+		node.Name.FormatFast(buf)
+	}
 	if node.Enforced {
 		buf.WriteByte(' ')
 		buf.WriteString(keywordStrings[ENFORCED])
@@ -3672,8 +3753,12 @@ func (node *RenameColumn) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node
 func (node *AlterCharset) FormatFast(buf *TrackedBuffer) {
-	buf.WriteString("convert to character set ")
-	buf.WriteString(encodeSQLName(node.CharacterSet))
+	if node.IsDefault {
+		buf.WriteString("convert to character set default")
+	} else {
+		buf.WriteString("convert to character set ")
+		buf.WriteString(encodeSQLName(node.CharacterSet))
+	}
 	if node.Collate != "" {
 		buf.WriteString(" collate ")
 		buf.WriteString(encodeSQLName(node.Collate))
@@ -3729,9 +3814,13 @@ func (node *LockOption) FormatFast(buf *TrackedBuffer) {
 func (node *OrderByOption) FormatFast(buf *TrackedBuffer) {
 	buf.WriteString("order by ")
 	prefix := ""
-	for _, n := range node.Cols {
+	for _, n := range node.Order {
+		// ASC is the default, so only DESC is written out.
 		buf.WriteString(prefix)
-		n.FormatFast(buf)
+		n.Expr.FormatFast(buf)
+		if n.Direction == DescOrder {
+			buf.WriteString(" desc")
+		}
 		prefix = ", "
 	}
 }

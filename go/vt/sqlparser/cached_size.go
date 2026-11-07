@@ -132,7 +132,7 @@ func (cached *AlterCharset) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field CharacterSet string
 	size += hack.RuntimeAllocSize(int64(len(cached.CharacterSet)))
@@ -813,7 +813,7 @@ func (cached *ColumnTypeOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(176)
 	}
 	// field Null *bool
 	if cached.Null != nil {
@@ -3564,11 +3564,11 @@ func (cached *OrderByOption) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field Cols vitess.io/vitess/go/vt/sqlparser.Columns
+	// field Order vitess.io/vitess/go/vt/sqlparser.OrderBy
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Cols)) * int64(32))
-		for _, elem := range cached.Cols {
-			size += elem.CachedSize(false)
+		size += hack.RuntimeAllocSize(int64(cap(cached.Order)) * int64(8))
+		for _, elem := range cached.Order {
+			size += elem.CachedSize(true)
 		}
 	}
 	return size
@@ -3680,7 +3680,7 @@ func (cached *PartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(112)
 	}
 	// field ValueRange *vitess.io/vitess/go/vt/sqlparser.PartitionValueRange
 	size += cached.ValueRange.CachedSize(true)
@@ -3702,6 +3702,8 @@ func (cached *PartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	}
 	// field TableSpace string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableSpace)))
+	// field NodeGroup *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.NodeGroup.CachedSize(true)
 	// field SubPartitionDefinitions vitess.io/vitess/go/vt/sqlparser.SubPartitionDefinitions
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.SubPartitionDefinitions)) * int64(8))
@@ -3762,7 +3764,7 @@ func (cached *PartitionSpec) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(144)
 	}
 	// field Names vitess.io/vitess/go/vt/sqlparser.Partitions
 	{
@@ -3780,6 +3782,13 @@ func (cached *PartitionSpec) CachedSize(alloc bool) int64 {
 		size += hack.RuntimeAllocSize(int64(cap(cached.Definitions)) * int64(8))
 		for _, elem := range cached.Definitions {
 			size += elem.CachedSize(true)
+		}
+	}
+	// field CheckTypes []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.CheckTypes)) * int64(16))
+		for _, elem := range cached.CheckTypes {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
 	return size
@@ -4885,7 +4894,7 @@ func (cached *SubPartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Comment *vitess.io/vitess/go/vt/sqlparser.Literal
 	size += cached.Comment.CachedSize(true)
@@ -4905,6 +4914,8 @@ func (cached *SubPartitionDefinitionOptions) CachedSize(alloc bool) int64 {
 	}
 	// field TableSpace string
 	size += hack.RuntimeAllocSize(int64(len(cached.TableSpace)))
+	// field NodeGroup *vitess.io/vitess/go/vt/sqlparser.Literal
+	size += cached.NodeGroup.CachedSize(true)
 	return size
 }
 

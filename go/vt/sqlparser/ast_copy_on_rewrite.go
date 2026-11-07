@@ -350,6 +350,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfMatchExpr(n, parent)
 	case *Max:
 		return c.copyOnRewriteRefOfMax(n, parent)
+	case *MaxValue:
+		return c.copyOnRewriteRefOfMaxValue(n, parent)
 	case *MemberOfExpr:
 		return c.copyOnRewriteRefOfMemberOfExpr(n, parent)
 	case *Min:
@@ -4638,6 +4640,19 @@ func (c *cow) copyOnRewriteRefOfMax(n *Max, parent SQLNode) (out SQLNode, change
 	return
 }
 
+func (c *cow) copyOnRewriteRefOfMaxValue(n *MaxValue, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+
 func (c *cow) copyOnRewriteRefOfMemberOfExpr(n *MemberOfExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -5129,10 +5144,10 @@ func (c *cow) copyOnRewriteRefOfOrderByOption(n *OrderByOption, parent SQLNode) 
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		_Cols, changedCols := c.copyOnRewriteColumns(n.Cols, n)
-		if changedCols {
+		_Order, changedOrder := c.copyOnRewriteOrderBy(n.Order, n)
+		if changedOrder {
 			res := *n
-			res.Cols, _ = _Cols.(Columns)
+			res.Order, _ = _Order.(OrderBy)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -5256,14 +5271,16 @@ func (c *cow) copyOnRewriteRefOfPartitionDefinitionOptions(n *PartitionDefinitio
 		_Engine, changedEngine := c.copyOnRewriteRefOfPartitionEngine(n.Engine, n)
 		_DataDirectory, changedDataDirectory := c.copyOnRewriteRefOfLiteral(n.DataDirectory, n)
 		_IndexDirectory, changedIndexDirectory := c.copyOnRewriteRefOfLiteral(n.IndexDirectory, n)
+		_NodeGroup, changedNodeGroup := c.copyOnRewriteRefOfLiteral(n.NodeGroup, n)
 		_SubPartitionDefinitions, changedSubPartitionDefinitions := c.copyOnRewriteSubPartitionDefinitions(n.SubPartitionDefinitions, n)
-		if changedValueRange || changedComment || changedEngine || changedDataDirectory || changedIndexDirectory || changedSubPartitionDefinitions {
+		if changedValueRange || changedComment || changedEngine || changedDataDirectory || changedIndexDirectory || changedNodeGroup || changedSubPartitionDefinitions {
 			res := *n
 			res.ValueRange, _ = _ValueRange.(*PartitionValueRange)
 			res.Comment, _ = _Comment.(*Literal)
 			res.Engine, _ = _Engine.(*PartitionEngine)
 			res.DataDirectory, _ = _DataDirectory.(*Literal)
 			res.IndexDirectory, _ = _IndexDirectory.(*Literal)
+			res.NodeGroup, _ = _NodeGroup.(*Literal)
 			res.SubPartitionDefinitions, _ = _SubPartitionDefinitions.(SubPartitionDefinitions)
 			out = &res
 			if c.cloned != nil {
@@ -6774,12 +6791,14 @@ func (c *cow) copyOnRewriteRefOfSubPartitionDefinitionOptions(n *SubPartitionDef
 		_Engine, changedEngine := c.copyOnRewriteRefOfPartitionEngine(n.Engine, n)
 		_DataDirectory, changedDataDirectory := c.copyOnRewriteRefOfLiteral(n.DataDirectory, n)
 		_IndexDirectory, changedIndexDirectory := c.copyOnRewriteRefOfLiteral(n.IndexDirectory, n)
-		if changedComment || changedEngine || changedDataDirectory || changedIndexDirectory {
+		_NodeGroup, changedNodeGroup := c.copyOnRewriteRefOfLiteral(n.NodeGroup, n)
+		if changedComment || changedEngine || changedDataDirectory || changedIndexDirectory || changedNodeGroup {
 			res := *n
 			res.Comment, _ = _Comment.(*Literal)
 			res.Engine, _ = _Engine.(*PartitionEngine)
 			res.DataDirectory, _ = _DataDirectory.(*Literal)
 			res.IndexDirectory, _ = _IndexDirectory.(*Literal)
+			res.NodeGroup, _ = _NodeGroup.(*Literal)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
@@ -8439,6 +8458,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfMatchExpr(n, parent)
 	case *Max:
 		return c.copyOnRewriteRefOfMax(n, parent)
+	case *MaxValue:
+		return c.copyOnRewriteRefOfMaxValue(n, parent)
 	case *MemberOfExpr:
 		return c.copyOnRewriteRefOfMemberOfExpr(n, parent)
 	case *Min:

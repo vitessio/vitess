@@ -121,6 +121,52 @@ var validSQL = []struct {
 	input:  "alter table t1 union=()",
 	output: "alter table t1 union ()",
 }, {
+	// The index type can come before the columns, and TYPE stands for USING
+	// after a name.
+	input:  "create table t1 (c1 varchar(33), key using btree (c1) using hash, unique u type hash (c1))",
+	output: "create table t1 (\n\tc1 varchar(33),\n\tkey (c1) using btree using hash,\n\tunique key u (c1) using hash\n)",
+}, {
+	input:  "create index type type btree on t1(f)",
+	output: "alter table t1 add key type (f) using btree",
+}, {
+	input:  "alter table t1 order by t1.id, b desc",
+	output: "alter table t1 order by t1.id, b desc",
+}, {
+	input:  "alter table t1 algorithm=inplace, add partition (partition p4 values less than (2010), partition p5 values less than (2015))",
+	output: "alter table t1 algorithm = inplace, add partition (partition p4 values less than (2010), partition p5 values less than (2015))",
+}, {
+	input: "alter table t1 add partition partitions 2",
+}, {
+	input: "alter table t1 add partition",
+}, {
+	input: "alter table t1 reorganize partition",
+}, {
+	// LOCAL is a synonym of NO_WRITE_TO_BINLOG.
+	input:  "alter table t1 analyze partition local p1",
+	output: "alter table t1 analyze partition no_write_to_binlog p1",
+}, {
+	input: "alter table t1 check partition p1 quick changed",
+}, {
+	input: "alter table t1 repair partition all use_frm",
+}, {
+	input: "alter table t1 secondary_load partition (p1, p2)",
+}, {
+	// MAXVALUE can bound one column of a RANGE COLUMNS partition, and
+	// (MAXVALUE) alone means MAXVALUE.
+	input:  "create table t1 (a int, b int) partition by range columns(a,b) (partition p0 values less than (maxvalue, 10), partition p1 values less than (maxvalue))",
+	output: "create table t1 (\n\ta int,\n\tb int\n)\npartition by range columns (a, b)\n(partition p0 values less than (maxvalue, 10),\n partition p1 values less than maxvalue)",
+}, {
+	input:  "create table t1 (a int) partition by key (a) partitions 3 (partition x1 nodegroup 0, partition x2 nodegroup = 1)",
+	output: "create table t1 (\n\ta int\n)\npartition by key (a) partitions 3\n(partition x1 nodegroup 0,\n partition x2 nodegroup 1)",
+}, {
+	input: "alter table t1 convert to character set default collate cp1251_bin",
+}, {
+	input: "alter table t1 alter constraint c not enforced",
+}, {
+	// MySQL ignores RESTRICT and CASCADE.
+	input:  "alter table t1 rename = t2, drop column a cascade",
+	output: "alter table t1 rename t2, drop column a",
+}, {
 	// MySQL allows every character from U+0080 on in an unquoted identifier.
 	input:  "create table tæøå (кол int, 🐬 int, index ix_ā (кол))",
 	output: "create table `tæøå` (\n\t`кол` int,\n\t`🐬` int,\n\tkey `ix_ā` (`кол`)\n)",
