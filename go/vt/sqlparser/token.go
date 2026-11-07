@@ -272,7 +272,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 
 			tkn.skip(1)
 			switch ch {
-			case '=', ',', '(', ')', '+', '*', '%', '^', '~':
+			case '=', ',', '(', ')', '+', '*', '%', '^', '~', '{', '}':
 				return int(ch), ""
 			case '&':
 				if tkn.cur() == '&' {
@@ -605,13 +605,24 @@ func (tkn *Tokenizer) scanNumber() (int, string) {
 		if tkn.cur() == 'x' || tkn.cur() == 'X' {
 			token = HEXNUM
 			tkn.skip(1)
+			digits := tkn.Pos
 			tkn.scanMantissa(16)
+			if tkn.Pos == digits {
+				// MySQL reads `0x` without hexadecimal digits as an identifier.
+				return tkn.scanIdentifierRest(start)
+			}
 			goto exit
 		}
 		if tkn.cur() == 'b' || tkn.cur() == 'B' {
 			token = BITNUM
 			tkn.skip(1)
+			digits := tkn.Pos
 			tkn.scanMantissa(2)
+			if tkn.Pos == digits || isDigit(tkn.cur()) {
+				// MySQL reads `0b` without binary digits, or followed by a
+				// digit other than 0 and 1, as in `0b02`, as an identifier.
+				return tkn.scanIdentifierRest(start)
+			}
 			goto exit
 		}
 	}
@@ -646,14 +657,7 @@ exit:
 		}
 		// A letter seen after a few numbers means that we should parse this
 		// as an identifier and not a number.
-		for {
-			ch := tkn.cur()
-			if !isIdentifierCharacter(ch) && !isDigit(ch) {
-				break
-			}
-			tkn.skip(1)
-		}
-		return ID, tkn.buf[start:tkn.Pos]
+		return tkn.scanIdentifierRest(start)
 	}
 
 	return token, tkn.buf[start:tkn.Pos]
@@ -664,6 +668,15 @@ exit:
 // name the columns `1a` and `12` of table `t1`, as in MySQL.
 func (tkn *Tokenizer) scanQualifiedName() (int, string) {
 	start := tkn.Pos
+	for isIdentifierCharacter(tkn.cur()) || isDigit(tkn.cur()) {
+		tkn.skip(1)
+	}
+	return ID, tkn.buf[start:tkn.Pos]
+}
+
+// scanIdentifierRest scans the rest of an identifier that starts at start
+// with what looked like a number.
+func (tkn *Tokenizer) scanIdentifierRest(start int) (int, string) {
 	for isIdentifierCharacter(tkn.cur()) || isDigit(tkn.cur()) {
 		tkn.skip(1)
 	}

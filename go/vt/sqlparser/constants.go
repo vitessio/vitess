@@ -255,9 +255,10 @@ const (
 	NStringStr  = "N"
 
 	// DatabaseOption.Type
-	CharacterSetStr = " character set"
-	CollateStr      = " collate"
-	EncryptionStr   = " encryption"
+	CharacterSetStr     = " character set"
+	CollateStr          = " collate"
+	EncryptionStr       = " encryption"
+	DatabaseReadOnlyStr = " read only"
 
 	// MatchExpr.Option
 	NoOptionStr                              = ""
@@ -892,6 +893,9 @@ const (
 	CollateType DatabaseOptionType = iota
 	CharacterSetType
 	EncryptionType
+	// ReadOnlyType is ALTER DATABASE's READ ONLY option. Its value is 0, 1
+	// or default.
+	ReadOnlyType
 )
 
 // LockType constants

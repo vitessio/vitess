@@ -381,6 +381,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfNullTreatmentClause(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
+	case *ODBCEscape:
+		return a.rewriteRefOfODBCEscape(parent, node, replacer)
 	case *Offset:
 		return a.rewriteRefOfOffset(parent, node, replacer)
 	case OnDup:
@@ -9233,6 +9235,55 @@ func (a *application) rewriteRefOfNullVal(parent SQLNode, node *NullVal, replace
 }
 
 // Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfODBCEscape(parent SQLNode, node *ODBCEscape, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfODBCEscapeType))
+	}
+	if !a.rewriteIdentifierCS(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*ODBCEscape).Type = newNode.(IdentifierCS)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+		a.cur.current.AddStep(uint16(RefOfODBCEscapeExpr))
+	}
+	if !a.rewriteExpr(node, node.Expr, func(newNode, parent SQLNode) {
+		parent.(*ODBCEscape).Expr = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
 func (a *application) rewriteRefOfOffset(parent SQLNode, node *Offset, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -15703,6 +15754,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *NullVal:
 		return a.rewriteRefOfNullVal(parent, node, replacer)
+	case *ODBCEscape:
+		return a.rewriteRefOfODBCEscape(parent, node, replacer)
 	case *Offset:
 		return a.rewriteRefOfOffset(parent, node, replacer)
 	case *OrExpr:

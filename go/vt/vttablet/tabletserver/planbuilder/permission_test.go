@@ -808,15 +808,20 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
+		// TABLE secret is SELECT * FROM secret.
+		input: "create table ct as table secret",
+		output: []Permission{{
+			TableName: "ct",
+			Role:      tableacl.ADMIN,
+		}, {
+			TableName: "secret",
+			Role:      tableacl.READER,
+		}},
+	}, {
 		// A CREATE TABLE the parser could not fully parse is forwarded to
 		// MySQL as the client's raw text, so its source tables are unknown:
 		// it must be flagged like any other opaque statement, not derived from
-		// the prefix the parser kept. MySQL accepts each of these and copies
-		// the rows.
-		input:        "create table ct as table secret",
-		output:       []Permission{{TableName: "ct", Role: tableacl.ADMIN}},
-		undetermined: true,
-	}, {
+		// the prefix the parser kept. MySQL accepts it and copies the rows.
 		// The parser keeps a truncated SELECT here (the first arm only), which
 		// would derive READER on secret and miss other; flagged instead.
 		input:        "create table ct as select id from secret except select id from other",
