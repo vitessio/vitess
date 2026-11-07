@@ -15140,8 +15140,6 @@ func TestValidateVSchema(t *testing.T) {
 	}
 }
 
-// TestValidateVSchemaShardWithoutPrimary checks that ValidateVSchema reports a
-// shard that has no primary instead of crashing vtctld.
 func TestValidateVSchemaShardWithoutPrimary(t *testing.T) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1")
