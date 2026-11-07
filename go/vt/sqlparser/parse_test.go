@@ -6631,6 +6631,12 @@ partition by range (YEAR(purchased)) subpartition by hash (TO_DAYS(purchased))
 			output: "create table t (\n\tid int,\n\tinfo JSON,\n\tkey zips ((cast(json_extract(info, '$.field') as unsigned array)))\n)",
 		},
 		{
+			// A name and a string in a character set other than UTF-8 keep
+			// their bytes, which are not valid UTF-8.
+			input:  "create table `t\xe9` (`c\xe9` char(1) character set latin1 default '\xe9')",
+			output: "create table `t\xe9` (\n\t`c\xe9` char(1) character set latin1 default '\xe9'\n)",
+		},
+		{
 			input:  "create table t (id int, s varchar(255) default 'foo\"bar')",
 			output: "create table t (\n\tid int,\n\ts varchar(255) default 'foo\"bar'\n)",
 		},

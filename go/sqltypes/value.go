@@ -1131,20 +1131,22 @@ func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
 }
 
 // BufEncodeStringSQL encodes the string into a strings.Builder
+//
+// It copies every byte that needs no escape as it is. A string in a character
+// set other than UTF-8, such as latin1, is not valid UTF-8, and reading it as
+// UTF-8 would replace such a byte with U+FFFD, changing the string. Every byte
+// that is escaped is ASCII, and no byte of a multibyte UTF-8 character is.
 func BufEncodeStringSQL(buf *strings.Builder, val string) {
 	buf.WriteByte('\'')
-	for idx, ch := range val {
-		if ch > 255 {
-			buf.WriteRune(ch)
-			continue
-		}
+	for idx := range len(val) {
+		ch := val[idx]
 		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
 		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
-			buf.WriteRune(ch)
+			buf.WriteByte(ch)
 			continue
 		}
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			buf.WriteRune(ch)
+			buf.WriteByte(ch)
 		} else {
 			buf.WriteByte('\\')
 			buf.WriteByte(encodedChar)
