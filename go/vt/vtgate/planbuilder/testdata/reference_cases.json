@@ -1194,5 +1194,119 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "a paginated reference outer join pushes the limit and offset to both sides",
+    "query": "select r.col, u.col from ref r left join user u on r.col = u.col limit 10 offset 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col, u.col from ref r left join user u on r.col = u.col limit 10 offset 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "10",
+        "Offset": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "r_col": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref as r where 1 != 1",
+                "Query": "select r.col from ref as r limit 15"
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "15",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col from `user` as u where 1 != 1",
+                    "Query": "select u.col from `user` as u where u.col = :r_col limit 15"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a paginated and ordered reference outer join pushes the limit and offset to both sides",
+    "query": "select r.col, u.col from ref r left join user u on r.col = u.col order by r.col limit 10 offset 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col, u.col from ref r left join user u on r.col = u.col order by r.col limit 10 offset 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "10",
+        "Offset": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "r_col": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref as r where 1 != 1",
+                "Query": "select r.col from ref as r order by r.col asc limit 15"
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "15",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col from `user` as u where 1 != 1",
+                    "Query": "select u.col from `user` as u where u.col = :r_col limit 15"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]

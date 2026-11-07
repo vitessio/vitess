@@ -546,9 +546,10 @@ func getLimitExpression(ctx *plancontext.PlanningContext, expr sqlparser.Expr) s
 	if err != nil {
 		panic(vterrors.VT13001("failed to translate expression: " + err.Error()))
 	}
-	_, isLit := translated.(*evalengine.Literal)
-	if isLit {
-		return translated
+	// The literal goes back into the AST, which has to be cloneable: sqlparser.CloneExpr
+	// returns nil for an evalengine type.
+	if lit, isLit := translated.(*evalengine.Literal); isLit {
+		return sqlparser.NewIntLiteral(sqlparser.String(lit))
 	}
 
 	// we were not able to calculate the expression, so we can't push it down

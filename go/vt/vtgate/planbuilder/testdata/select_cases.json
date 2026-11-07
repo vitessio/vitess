@@ -7786,5 +7786,62 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "a paginated join with a scatter right side pushes the limit and offset to the right side",
+    "query": "select u.col, m.col from user u join music m on u.col = m.col limit 10 offset 5",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.col, m.col from user u join music m on u.col = m.col limit 10 offset 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "10",
+        "Offset": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "u_col": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.col from `user` as u where 1 != 1",
+                "Query": "select u.col from `user` as u"
+              },
+              {
+                "OperatorType": "Limit",
+                "Count": "15",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select m.col from music as m where 1 != 1",
+                    "Query": "select m.col from music as m where m.col = :u_col /* INT16 */ limit 15"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
