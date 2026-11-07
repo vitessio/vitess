@@ -698,15 +698,12 @@ func (mysqld *Mysqld) WaitForDBAGrants(ctx context.Context, waitTime time.Durati
 	if waitTime == 0 {
 		return nil
 	}
-	params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
-	if err != nil {
-		return err
-	}
+	connector := mysqld.dbcfgs.DbaConnector()
 	timer := time.NewTimer(waitTime)
 	ctx, cancel := context.WithTimeout(ctx, waitTime)
 	defer cancel()
 	for {
-		conn, connErr := mysql.Connect(ctx, params)
+		conn, connErr := connector.Connect(ctx)
 		if connErr == nil {
 			res, fetchErr := conn.ExecuteFetch("SHOW GRANTS", 1000, false)
 			conn.Close()
@@ -1345,7 +1342,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
 	if err = mysqld.startNoWait(ctx, cnf); err != nil {
-		log.Error(fmt.Sprintf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+		log.Error(fmt.Sprintf("failed starting mysqld: %v\n%v", err, ReadTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 		return err
 	}
 
@@ -1356,7 +1353,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
-		log.Error(fmt.Sprintf("failed starting mysqld in time: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+		log.Error(fmt.Sprintf("failed starting mysqld in time: %v\n%v", err, ReadTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 		return err
 	}
 	if initDBSQLFile == "" { // default to built-in
@@ -1388,11 +1385,12 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	return nil
 }
 
-// For debugging purposes show the last few lines of the MySQL error log.
+// ReadTailOfMysqldErrorLog returns the last few KB of the MySQL error log, for
+// debugging.
 // Return a suggestion (string) if the file is non regular or can not be opened.
 // This helps prevent cases where the error log is symlinked to /dev/stderr etc,
 // In which case the user can manually open the file.
-func readTailOfMysqldErrorLog(fileName string) string {
+func ReadTailOfMysqldErrorLog(fileName string) string {
 	fileInfo, err := os.Stat(fileName)
 	if err != nil {
 		return fmt.Sprintf("could not stat mysql error log (%v): %v", fileName, err)
@@ -1440,7 +1438,7 @@ func (mysqld *Mysqld) installDataDir(ctx context.Context, cnf *Mycnf) error {
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
 		if _, _, err = execCmdWithContext(ctx, mysqldPath, args, nil, mysqlRoot, nil); err != nil {
-			log.Error(fmt.Sprintf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+			log.Error(fmt.Sprintf("mysqld --initialize-insecure failed: %v\n%v", err, ReadTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 			return err
 		}
 		return nil
@@ -1459,7 +1457,7 @@ func (mysqld *Mysqld) installDataDir(ctx context.Context, cnf *Mycnf) error {
 		return err
 	}
 	if _, _, err = execCmdWithContext(ctx, cmdPath, args, nil, mysqlRoot, nil); err != nil {
-		log.Error(fmt.Sprintf("mysql_install_db failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath)))
+		log.Error(fmt.Sprintf("mysql_install_db failed: %v\n%v", err, ReadTailOfMysqldErrorLog(cnf.ErrorLogPath)))
 		return err
 	}
 	return nil
@@ -1760,6 +1758,16 @@ func (mysqld *Mysqld) executeMysqlScript(ctx context.Context, connParams *mysql.
 	}
 	defer conn.Close()
 
+	// A script is a batch of statements, so this is where the connection that
+	// runs one is given the ability to send a batch, whichever configuration it
+	// was built from. A caller that already negotiated the capability at
+	// handshake time is left alone rather than charged a round trip for it.
+	if conn.Capabilities&mysql.CapabilityClientMultiStatements == 0 {
+		if err := conn.SetMultiStatements(true); err != nil {
+			return err
+		}
+	}
+
 	_, more, err := conn.ExecuteFetchMulti(sql, -1, false)
 	if err != nil {
 		return err
@@ -1996,6 +2004,12 @@ func mysqlbinlogEnviron(baseEnv []string) []string {
 	return append(env, "TZ=UTC")
 }
 
+// mysqlApplyArgs returns the arguments for the mysql client that ApplyBinlogFile
+// replays mysqlbinlog's output through. The replay is deliberately binlogged.
+func mysqlApplyArgs(defaultsExtraFile string) []string {
+	return []string{"--defaults-extra-file=" + defaultsExtraFile}
+}
+
 // ApplyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
 // $ mysqlbinlog --include-gtids binlog.file | mysql
 func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.ApplyBinlogFileRequest) error {
@@ -2075,9 +2089,7 @@ func (mysqld *Mysqld) ApplyBinlogFile(ctx context.Context, req *mysqlctlpb.Apply
 			return vterrors.Wrapf(err, "failed to create defaults extra file")
 		}
 		defer os.Remove(cnf)
-		args := []string{
-			"--defaults-extra-file=" + cnf,
-		}
+		args := mysqlApplyArgs(cnf)
 
 		mysqlErrFile, err = os.CreateTemp("", "err-mysql-")
 		if err != nil {

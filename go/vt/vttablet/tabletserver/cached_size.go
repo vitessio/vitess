@@ -40,5 +40,7 @@ func (cached *TabletPlan) CachedSize(alloc bool) int64 {
 			size += elem.CachedSize(true)
 		}
 	}
+	// field AuthorizedUndetermined *vitess.io/vitess/go/vt/tableacl.ACLResult
+	size += cached.AuthorizedUndetermined.CachedSize(true)
 	return size
 }

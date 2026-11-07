@@ -13,13 +13,15 @@ on:
 jobs:
   build:
     name: Create Release
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
     permissions:
       contents: write
       actions: read
     runs-on: ubuntu-24.04
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
       with:
         egress-policy: audit
 
@@ -36,7 +38,7 @@ jobs:
 
     - name: Tune the OS
       timeout-minutes: 5
-      uses: ./.github/actions/tune-os
+      uses: $/.github/actions/tune-os
 
     - name: Get dependencies
       timeout-minutes: 5
@@ -73,7 +75,8 @@ jobs:
         ./tools/make-release-packages.sh
 
     - name: Upload Files
-      uses: csexton/release-asset-action@3567794e918fa3068116688122a76cdeb57b5f09 # v3
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        pattern: "releases/*.{tar.gz,rpm,deb}"
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ github.event.release.tag_name }}
+      run: |
+        gh release upload "$TAG" releases/*.{tar.gz,rpm,deb} --repo "$GITHUB_REPOSITORY"

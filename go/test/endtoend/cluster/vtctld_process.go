@@ -50,7 +50,7 @@ type VtctldProcess struct {
 }
 
 // Setup starts vtctld process with required arguements
-func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
+func (vtctld *VtctldProcess) Setup(extraArgs ...string) (err error) {
 	_ = createDirectory(vtctld.LogDir, 0o700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0o700)
 	vtctld.proc = exec.Command(
@@ -58,7 +58,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"--topo-implementation", vtctld.TopoImplementation,
 		"--topo-global-server-address", vtctld.TopoGlobalAddress,
 		"--topo-global-root", vtctld.TopoGlobalRoot,
-		"--cell", cell,
 		"--service-map", vtctld.ServiceMap,
 		"--backup-storage-implementation", vtctld.BackupStorageImplementation,
 		"--file-backup-storage-root", vtctld.FileBackupStorageRoot,

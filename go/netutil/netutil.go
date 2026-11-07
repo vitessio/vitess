@@ -34,12 +34,11 @@ func SplitHostPort(addr string) (string, int, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		// If the above proper parsing fails, fall back on a naive split.
-		i := strings.LastIndex(addr, ":")
-		if i < 0 {
+		var ok bool
+		host, port, ok = strings.CutLast(addr, ":")
+		if !ok {
 			return "", 0, fmt.Errorf("SplitHostPort: missing port in %q", addr)
 		}
-		host = addr[:i]
-		port = addr[i+1:]
 	}
 	p, err := strconv.ParseUint(port, 10, 16)
 	if err != nil {

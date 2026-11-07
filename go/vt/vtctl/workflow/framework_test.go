@@ -280,8 +280,11 @@ type testTMClient struct {
 	updateVReplicationWorklowRequests  map[uint32][]*updateVReplicationWorkflowRequestResponse
 	applySchemaRequests                map[uint32][]*applySchemaRequestResponse
 	primaryPositions                   map[uint32]string
+	primaryPositionErrors              map[uint32]error
 	vdiffRequests                      map[uint32]*vdiffRequestResponse
 	refreshStateErrors                 map[uint32]error
+	// How long each RefreshState call takes. Set it before use.
+	refreshStateDelay time.Duration
 
 	// Stack of ReadVReplicationWorkflowsResponse to return, in order, for each shard
 	readVReplicationWorkflowsResponses       map[string][]*tabletmanagerdatapb.ReadVReplicationWorkflowsResponse
@@ -566,9 +569,8 @@ func (tmc *testTMClient) expectValidateVReplicationPermissionsResponse(tabletID 
 // Note: ONLY breaks up change.SQL into individual statements and executes it. Does NOT fully implement ApplySchema.
 func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tablet, change *tmutils.SchemaChange) (*tabletmanagerdatapb.SchemaChangeResult, error) {
 	tmc.mu.Lock()
-	defer tmc.mu.Unlock()
-
 	if requests, ok := tmc.applySchemaRequests[tablet.Alias.Uid]; ok {
+		defer tmc.mu.Unlock()
 		if len(requests) == 0 {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected ApplySchema request on tablet %s: got %+v",
 				topoproto.TabletAliasString(tablet.Alias), change)
@@ -592,6 +594,8 @@ func (tmc *testTMClient) ApplySchema(ctx context.Context, tablet *topodatapb.Tab
 		tmc.applySchemaRequests[tablet.Alias.Uid] = tmc.applySchemaRequests[tablet.Alias.Uid][1:]
 		return expect.res, expect.err
 	}
+	// ExecuteFetchAsDba takes the lock too.
+	tmc.mu.Unlock()
 
 	stmts := strings.SplitSeq(change.SQL, ";")
 
@@ -817,9 +821,21 @@ func (tmc *testTMClient) setPrimaryPosition(tablet *topodatapb.Tablet, position 
 	tmc.primaryPositions[tablet.Alias.Uid] = position
 }
 
+func (tmc *testTMClient) setPrimaryPositionError(tablet *topodatapb.Tablet, err error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+	if tmc.primaryPositionErrors == nil {
+		tmc.primaryPositionErrors = make(map[uint32]error)
+	}
+	tmc.primaryPositionErrors[tablet.Alias.Uid] = err
+}
+
 func (tmc *testTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
+	if err := tmc.primaryPositionErrors[tablet.Alias.Uid]; err != nil {
+		return "", err
+	}
 	if tmc.primaryPositions != nil && tmc.primaryPositions[tablet.Alias.Uid] != "" {
 		return tmc.primaryPositions[tablet.Alias.Uid], nil
 	}
@@ -845,6 +861,13 @@ func (tmc *testTMClient) SetRefreshStateError(tablet *topodatapb.Tablet, err err
 }
 
 func (tmc *testTMClient) RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error {
+	if tmc.refreshStateDelay > 0 {
+		select {
+		case <-time.After(tmc.refreshStateDelay):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	tmc.mu.Lock()
 	defer tmc.mu.Unlock()
 
@@ -890,6 +913,9 @@ func (tmc *testTMClient) ReloadSchema(ctx context.Context, tablet *topodatapb.Ta
 }
 
 func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateSequenceTablesRequest) (*tabletmanagerdatapb.UpdateSequenceTablesResponse, error) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	expect := tmc.updateSequenceTablesRequests[tablet.Alias.Uid]
 	if expect == nil {
 		return nil, nil
@@ -909,6 +935,10 @@ func (tmc *testTMClient) UpdateSequenceTables(ctx context.Context, tablet *topod
 }
 
 func (tmc *testTMClient) GetMaxValueForSequences(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetMaxValueForSequencesRequest) (*tabletmanagerdatapb.GetMaxValueForSequencesResponse, error) {
+	// The targets are asked concurrently, and share the request.
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
 	expect := tmc.getMaxValueForSequencesRequests[tablet.Alias.Uid]
 	if expect == nil {
 		return &tabletmanagerdatapb.GetMaxValueForSequencesResponse{

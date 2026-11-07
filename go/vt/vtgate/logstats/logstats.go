@@ -61,6 +61,9 @@ type LogStats struct {
 	MirrorTargetExecuteTime time.Duration
 	MirrorTargetError       error
 	SlowQuery               bool
+	// DoubleSlashComment is set once the statement has been counted as
+	// using a deprecated // comment.
+	DoubleSlashComment bool
 }
 
 // NewLogStats constructs a new LogStats with supplied Method and ctx

@@ -26,6 +26,12 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 )
 
+// ConnCheckSupported reports whether ConnCheck is a real liveness check on this
+// platform. It is false where ConnCheck is only a stub (see conn_windows.go), so
+// callers that must distinguish "verified alive" from "cannot tell" don't treat
+// an unconditional success as proof of life.
+const ConnCheckSupported = true
+
 // ConnCheck ensures that this connection to the MySQL server hasn't been broken.
 // This is a fast, non-blocking check. For details on its implementation, please read
 // "Three Bugs in the Go MySQL Driver" (Vicent Marti, GitHub, 2020)

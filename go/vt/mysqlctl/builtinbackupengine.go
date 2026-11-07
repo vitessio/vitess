@@ -30,6 +30,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -155,6 +156,12 @@ type builtinBackupManifest struct {
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
 
+	// BinlogFileEntries contains the source's binlogs, when the backup includes them.
+	// They are kept out of FileEntries so that older versions, which fail on an
+	// unknown Base, restore the data and ignore them. Their storage names continue
+	// FileEntries' indices.
+	BinlogFileEntries []FileEntry `json:",omitempty"`
+
 	// SkipCompress is true if the backup files were NOT run through gzip.
 	// The field is expressed as a negative because it will come through as
 	// false for backups that were created before the field existed, and those
@@ -199,6 +206,10 @@ type FileEntry struct {
 	// Chunks, when non-empty, indicates this file was split into chunks for
 	// parallel backup/restore. Each chunk is independently compressed and hashed.
 	Chunks []FileChunk `json:",omitempty"`
+
+	// ModTime is the source file's modification time. It is only set for binlogs,
+	// which mysqld expires by mtime (binlog_expire_logs_seconds).
+	ModTime time.Time `json:",omitzero"`
 
 	// RetryCount specifies how many times we retried restoring/backing up this FileEntry.
 	// If we fail to restore/backup this FileEntry, we will retry up to maxRetriesPerFile times.
@@ -263,6 +274,9 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore.")
 }
 
+// errInvalidBinlogEntry is returned for a stripped binlog whose name is not binlog.<seq>.
+var errInvalidBinlogEntry = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid binlog entry name")
+
 // fullPath returns the full path of the entry, based on its type.
 // It validates that the resolved path does not escape the base directory
 // via path traversal (e.g. "../../" sequences in fe.Name).
@@ -278,6 +292,16 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 		root = cnf.DataDir
 	case backupBinlogDir:
 		root = filepath.Dir(cnf.BinLogPath)
+	case backupBinlogStripped:
+		seq, ok := strings.CutPrefix(fe.Name, "binlog.")
+		if !ok || !binlogSeqRE.MatchString(seq) {
+			return "", errInvalidBinlogEntry
+		}
+		basename, _, err := binlogLocation(cnf)
+		if err != nil {
+			return "", err
+		}
+		return path.Join(fe.ParentPath, basename+"."+seq), nil
 	default:
 		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
@@ -526,6 +550,12 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return BackupUnusable, vterrors.Wrap(err, "can't get replica status")
 	}
 
+	if params.IncludeBinlogs {
+		if err := checkBinlogsBackupable(ctx, params.Mysqld, params.Cnf); err != nil {
+			return BackupUnusable, err
+		}
+	}
+
 	// get the read-only flag
 	readOnly, err := params.Mysqld.IsReadOnly(ctx)
 	if err != nil {
@@ -610,16 +640,45 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		backupResult = BackupUsable
 	}
 
+	// alsoFailed returns a new error with the backup's code that reports the
+	// backup's error and then a failure to restore mysqld's state, so that the
+	// backup's error doesn't read as the restore failure's cause.
+	alsoFailed := func(err error) error {
+		return vterrors.Errorf(vterrors.Code(backupErr), "%s; restoring mysqld's state afterwards also failed: %s", backupErr, err)
+	}
+
+	// restoreErr reports a failure to restore mysqld's state after the backup.
+	// If the backup failed too, the restore's failure is reported with its
+	// error, except when ctx is done: the steps below that use it then fail
+	// because of that, so only the backup's error, usually the reason ctx is
+	// done, is returned, and the restore's is logged.
+	restoreErr := func(err error) error {
+		switch {
+		case backupErr == nil:
+			return err
+		case ctx.Err() != nil:
+			params.Logger.Errorf("failed to restore mysqld's state after the backup failed: %v", err)
+			return backupErr
+		default:
+			return alsoFailed(err)
+		}
+	}
+
 	// Try to restart mysqld, use background context in case we timed out the original context
 	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
-		return backupResult, vterrors.Wrap(err, "can't restart mysqld")
+		err = vterrors.Wrap(err, "can't restart mysqld")
+		// The restart doesn't use ctx, so its failure is always reported.
+		if backupErr != nil {
+			return backupResult, alsoFailed(err)
+		}
+		return backupResult, err
 	}
 
 	// Resetting super_read_only back to its original value
 	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
 	if _, err := params.Mysqld.SetSuperReadOnly(ctx, superReadOnly); err != nil {
-		return backupResult, err
+		return backupResult, restoreErr(err)
 	}
 
 	// Restore original mysqld state that we saved above.
@@ -630,18 +689,18 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			semiSyncSource, semiSyncReplica)
 		err := params.Mysqld.SetSemiSyncEnabled(ctx, semiSyncSource, semiSyncReplica)
 		if err != nil {
-			return backupResult, err
+			return backupResult, restoreErr(err)
 		}
 	}
 	if replicaStartRequired {
 		params.Logger.Infof("restarting mysql replication")
 		if err := params.Mysqld.StartReplication(ctx, params.HookExtraEnv); err != nil {
-			return backupResult, vterrors.Wrap(err, "cannot restart replica")
+			return backupResult, restoreErr(vterrors.Wrap(err, "cannot restart replica"))
 		}
 
 		// this should be quick, but we might as well just wait
 		if err := WaitForReplicationStart(ctx, params.Mysqld, replicationStartDeadline); err != nil {
-			return backupResult, vterrors.Wrap(err, "replica is not restarting")
+			return backupResult, restoreErr(vterrors.Wrap(err, "replica is not restarting"))
 		}
 
 		// Wait for a reliable value for ReplicationLagSeconds from ReplicationStatus()
@@ -659,16 +718,16 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		pos, err := getPrimaryPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
 		// If we are unable to get the primary's position, return error.
 		if err != nil {
-			return backupResult, err
+			return backupResult, restoreErr(err)
 		}
 		if !replicationPosition.Equal(pos) {
 			for {
 				if err := ctx.Err(); err != nil {
-					return backupResult, err
+					return backupResult, restoreErr(err)
 				}
 				status, err := params.Mysqld.ReplicationStatus(ctx)
 				if err != nil {
-					return backupResult, err
+					return backupResult, restoreErr(err)
 				}
 				newPos := status.Position
 				if !newPos.Equal(replicationPosition) {
@@ -709,6 +768,12 @@ func (be *BuiltinBackupEngine) backupFiles(
 		fes, _, err = binlogFilesToBackup(params.Cnf, binlogFiles)
 	} else {
 		fes, _, err = findFilesToBackup(params.Cnf)
+		if err == nil && params.IncludeBinlogs {
+			// Appended last, so their indices (storage names) follow the data files'.
+			var binlogs []FileEntry
+			binlogs, err = binlogFilesForFullBackup(params.Cnf)
+			fes = append(fes, binlogs...)
+		}
 	}
 	if err != nil {
 		return vterrors.Wrap(err, "can't find files to backup")
@@ -788,6 +853,12 @@ func (be *BuiltinBackupEngine) backupFiles(
 	// Backup the MANIFEST file and apply retry logic.
 	var manifestErr error
 	for currentRetry := 0; currentRetry <= maxRetriesPerFile; currentRetry++ {
+		// Verify the position before each attempt makes the backup complete, since a
+		// reparent during a failed attempt can lose GTIDs that the backup holds. A
+		// failed check is not retried.
+		if err := params.verifyPosition(ctx, backupPosition); err != nil {
+			return err
+		}
 		manifestErr = be.backupManifest(ctx, params, bh, backupPosition, purgedPosition, fromPosition, fromBackupName, serverUUID, mysqlVersion, incrDetails, fes, currentRetry)
 		if manifestErr == nil || hasErrorCode(manifestErr, vtrpcpb.Code_FAILED_PRECONDITION) {
 			break
@@ -1192,6 +1263,13 @@ func (be *BuiltinBackupEngine) backupManifest(
 			hostname = ""
 		}
 
+		// Binlog entries were appended after the data files; keep them out of
+		// FileEntries so that older versions can still restore the data.
+		n := len(fes)
+		for n > 0 && fes[n-1].Base == backupBinlogStripped {
+			n--
+		}
+
 		// JSON-encode and write the MANIFEST
 		bm := &builtinBackupManifest{
 			// Common base fields
@@ -1212,9 +1290,11 @@ func (be *BuiltinBackupEngine) backupManifest(
 			MySQLVersion:       mysqlVersion,
 			UpgradeSafe:        params.UpgradeSafe,
 			IncrementalDetails: incrDetails,
+			IncludesBinlogs:    n < len(fes),
 
 			// Builtin-specific fields
-			FileEntries:          fes,
+			FileEntries:          fes[:n],
+			BinlogFileEntries:    fes[n:],
 			SkipCompress:         !backupStorageCompress,
 			CompressionEngine:    CompressionEngineName,
 			ExternalDecompressor: ManifestExternalDecompressorCmd,
@@ -1301,6 +1381,14 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	if err != nil {
 		return nil, err
 	}
+	// Copying the binlogs follows BinlogFileEntries, while what the restore does after
+	// mysqld starts follows IncludesBinlogs, and only a full backup includes binlogs.
+	// Refuse a corrupt or hand-edited manifest that disagrees, rather than install
+	// binlogs that the restore then removes, or points mysqld's index at.
+	if bm.IncludesBinlogs != (len(bm.BinlogFileEntries) > 0) || (bm.Incremental && bm.IncludesBinlogs) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "invalid %s: IncludesBinlogs is %t with %d binlog entries, in an incremental backup: %t",
+			backupManifestFileName, bm.IncludesBinlogs, len(bm.BinlogFileEntries), bm.Incremental)
+	}
 
 	// mark restore as in progress
 	if err := createStateFile(params.Cnf); err != nil {
@@ -1359,6 +1447,11 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	fes := bm.FileEntries
+	if len(bm.BinlogFileEntries) > 0 {
+		// Binlog entries were stored after the data files, so their storage names
+		// continue FileEntries' indices; restore them in the same pass.
+		fes = append(slices.Clip(bm.FileEntries), bm.BinlogFileEntries...)
+	}
 
 	// For chunked files, we pre-create the files at the right size, each chunk then only writes to the right offset.
 	// This is done to prevent them from being truncated when retries happen.
@@ -1398,6 +1491,11 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 		err = be.restoreFileEntries(ctx, newFEs, bh, bm, params, createdDir)
 		if err != nil {
+			return "", err
+		}
+	}
+	if len(bm.BinlogFileEntries) > 0 {
+		if err := finishBinlogRestore(params.Cnf, fes[len(bm.FileEntries):]); err != nil {
 			return "", err
 		}
 	}

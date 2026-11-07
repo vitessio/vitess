@@ -18,9 +18,16 @@ limitations under the License.
 
 package servenv
 
+import "errors"
+
 func getCpuUsage() float64 {
-	if value, err := getCgroupCpuUsage(); err == nil {
+	value, err := getCgroupCpuUsage()
+	if err == nil {
 		return value
+	}
+	// The first cgroup sample is only a baseline; host CPU would measure something else.
+	if errors.Is(err, errNoPreviousCpuSample) {
+		return -1
 	}
 	if value, err := getHostCpuUsage(); err == nil {
 		return value

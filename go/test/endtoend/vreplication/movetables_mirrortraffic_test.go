@@ -17,13 +17,20 @@ limitations under the License.
 package vreplication
 
 import (
-	"fmt"
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/grpcclient"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/vtgate/executorcontext"
+	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 )
 
 func testMoveTablesMirrorTraffic(t *testing.T, flavor workflowFlavor) {
@@ -165,29 +172,43 @@ func TestMoveTablesMirrorTraffic_AllowReads(t *testing.T) {
 	mt.MirrorTraffic()
 	confirmMirrorRulesExist(t)
 
-	// Use shard-targeted queries to bypass vtgate routing rules and test
-	// vttablet-level denied tables behavior directly.
-	vtgateConn := getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
-	defer vtgateConn.Close()
-	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("use `%s:-80`", defaultTargetKs), 0, false)
-	require.NoError(t, err)
+	// Probe the target shard primary's queryservice directly to test
+	// vttablet-level denied tables behavior. Going through vtgate (even
+	// shard-targeted) would entangle the probes with its failover resilience:
+	// the expect-error DMLs get buffered or retried for the full buffer
+	// window / retry deadline before the denied-tables error surfaces.
+	execOnTargetShardPrimary := func(query string) (*sqltypes.Result, error) {
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+		defer cancel()
+		tablet, err := vc.VtctldClient.GetTablet(targetTab1.Name)
+		require.NoError(t, err)
+		conn, err := tabletconn.GetDialer()(ctx, tablet, grpcclient.FailFast(false))
+		require.NoError(t, err)
+		defer conn.Close(ctx)
+		session := executorcontext.NewSafeSession(&vtgatepb.Session{})
+		return conn.Execute(ctx, session, &querypb.Target{
+			Keyspace:   tablet.Keyspace,
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		}, query, nil, 0, 0, nil)
+	}
 
 	// Test 1: SELECT queries should succeed on denied tables when allow_reads=true
-	qr, err := vtgateConn.ExecuteFetch("SELECT count(*) FROM customer", 1, false)
+	qr, err := execOnTargetShardPrimary("SELECT count(*) FROM customer")
 	require.NoError(t, err, "SELECT should succeed on denied table when allow_reads=true")
 	require.NotEmpty(t, qr.Rows)
 
 	// Test 2: INSERT should be blocked on denied tables
-	_, err = vtgateConn.ExecuteFetch("INSERT INTO customer(cid, name) VALUES (999, 'test')", 1, false)
-	require.Error(t, err, "INSERT should fail on denied table even with allow_reads=true")
+	_, err = execOnTargetShardPrimary("INSERT INTO customer(cid, name) VALUES (999, 'test')")
+	require.ErrorContains(t, err, "disallowed due to rule", "INSERT should fail on denied table even with allow_reads=true")
 
 	// Test 3: UPDATE should be blocked on denied tables
-	_, err = vtgateConn.ExecuteFetch("UPDATE customer SET name = 'test' WHERE cid = 1", 1, false)
-	require.Error(t, err, "UPDATE should fail on denied table even with allow_reads=true")
+	_, err = execOnTargetShardPrimary("UPDATE customer SET name = 'test' WHERE cid = 1")
+	require.ErrorContains(t, err, "disallowed due to rule", "UPDATE should fail on denied table even with allow_reads=true")
 
 	// Test 4: DELETE should be blocked on denied tables
-	_, err = vtgateConn.ExecuteFetch("DELETE FROM customer WHERE cid = 999", 1, false)
-	require.Error(t, err, "DELETE should fail on denied table even with allow_reads=true")
+	_, err = execOnTargetShardPrimary("DELETE FROM customer WHERE cid = 999")
+	require.ErrorContains(t, err, "disallowed due to rule", "DELETE should fail on denied table even with allow_reads=true")
 
 	// Clean up: switch traffic and verify mirror rules are removed
 	mt.SwitchReadsAndWrites()

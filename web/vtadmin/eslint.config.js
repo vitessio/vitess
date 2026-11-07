@@ -16,9 +16,9 @@
 import js from '@eslint/js';
 import { defineConfig } from 'eslint/config'
 import tseslint from 'typescript-eslint';
-import react from 'eslint-plugin-react';
+import eslintReact from '@eslint-react/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
-import jsxA11y from 'eslint-plugin-jsx-a11y';
+import jsxA11yX from 'eslint-plugin-jsx-a11y-x';
 import globals from 'globals';
 
 export default defineConfig(
@@ -27,11 +27,10 @@ export default defineConfig(
     },
     js.configs.recommended,
     ...tseslint.configs.recommended,
-    react.configs.flat.recommended,
-    react.configs.flat['jsx-runtime'],
-    jsxA11y.flatConfigs.recommended,
+    jsxA11yX.configs.recommended,
     {
         plugins: {
+            '@eslint-react': eslintReact,
             'react-hooks': reactHooks,
         },
         rules: reactHooks.configs.recommended.rules,
@@ -49,7 +48,7 @@ export default defineConfig(
             },
         },
         settings: {
-            react: {
+            'react-x': {
                 version: 'detect',
             },
         },
@@ -79,17 +78,26 @@ export default defineConfig(
             'no-var': 'error',
             'no-case-declarations': 'error',
 
-            // React
-            'react/prop-types': 'off', // TypeScript handles prop validation
-            'react/display-name': 'off',
-            'react/jsx-key': 'error',
-            'react/jsx-no-target-blank': 'error',
-            'react/no-unescaped-entities': 'off',
+            // React: the rules from eslint-plugin-react's recommended preset that still
+            // apply under TypeScript, the automatic JSX runtime and React 19, mapped onto
+            // their @eslint-react equivalents. No preset, so this list is the full set.
+            '@eslint-react/no-missing-key': 'error',
+            '@eslint-react/dom-no-unsafe-target-blank': 'error',
+            '@eslint-react/jsx-no-comment-textnodes': 'error',
+            '@eslint-react/jsx-no-children-prop': 'error',
+            '@eslint-react/dom-no-dangerously-set-innerhtml-with-children': 'error',
+            '@eslint-react/no-direct-mutation-state': 'error',
+            '@eslint-react/dom-no-find-dom-node': 'error',
+            '@eslint-react/dom-no-render-return-value': 'error',
+            '@eslint-react/dom-no-unknown-property': 'error',
+            '@eslint-react/no-unsafe-component-will-mount': 'error',
+            '@eslint-react/no-unsafe-component-will-receive-props': 'error',
+            '@eslint-react/no-unsafe-component-will-update': 'error',
 
             // Accessibility: match eslint-config-react-app (warn, not error)
-            'jsx-a11y/no-autofocus': 'error',
-            'jsx-a11y/click-events-have-key-events': 'error',
-            'jsx-a11y/no-static-element-interactions': 'error',
+            'jsx-a11y-x/no-autofocus': 'error',
+            'jsx-a11y-x/click-events-have-key-events': 'error',
+            'jsx-a11y-x/no-static-element-interactions': 'error',
 
             // react-hooks plugin v7 added these; not in eslint-config-react-app
             'react-hooks/immutability': 'off',

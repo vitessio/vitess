@@ -25,7 +25,7 @@ RUN apt-get update && \
    rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt
+ENV VTROOT=/vt
 
 # Prepare directory structure.
 RUN mkdir -p /vt/bin && mkdir -p /vtdataroot

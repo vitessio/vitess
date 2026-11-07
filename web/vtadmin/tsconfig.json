@@ -20,7 +20,7 @@
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "allowJs": false,
     "skipLibCheck": true,
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
@@ -31,8 +31,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["vite/client"]
+    "types": ["vitest/globals", "@testing-library/jest-dom/vitest"]
   },
-  "include": ["src", "vite.config.*"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src", "vite-env.d.ts"]
 }

@@ -122,7 +122,7 @@ Flags:
       --action-timeout duration                  timeout to use for the command (default 1h0m0s)
       --alsologtostderr                          log to standard error as well as files
       --compact                                  use compact format for otherwise verbose outputs
-      --grpc-auth-static-client-creds string     When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
+      --grpc-auth-static-client-creds string     When using --grpc-auth-mode=static in the server, this file provides the credentials to use to authenticate with server.
       --grpc-compression string                  Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
       --grpc-enable-tracing                      Enable gRPC tracing.
       --grpc-initial-conn-window-size int        gRPC initial connection window size

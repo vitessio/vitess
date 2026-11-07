@@ -117,6 +117,7 @@ const (
 	ERSubqueryNo1Row                = ErrorCode(1242)
 	ERUnknownStmtHandler            = ErrorCode(1243)
 	ERWarnDataOutOfRange            = ErrorCode(1264)
+	ERWarnDeprecatedSyntax          = ErrorCode(1287)
 	ERNonUpdateableTable            = ErrorCode(1288)
 	ERFeatureDisabled               = ErrorCode(1289)
 	EROptionPreventsStatement       = ErrorCode(1290)
@@ -298,6 +299,8 @@ const (
 	ERRegexpPatternTooBig                 = ErrorCode(3700)
 	ERRegexpInvalidCaptureGroup           = ErrorCode(3887)
 	ERRegexpInvalidFlag                   = ErrorCode(3900)
+
+	ERUnsupportedSQLMode = ErrorCode(3899)
 
 	ERCharacterSetMismatch = ErrorCode(3995)
 

@@ -85,6 +85,23 @@ var (
 	}
 )
 
+// IsCoverage reports whether this is a coverage run (-is-coverage). Binaries
+// then write their coverage profiles on a graceful exit, so teardown must not
+// kill them.
+func IsCoverage() bool {
+	return *isCoverage
+}
+
+// KillDiscardedMySQL reports whether a mysqld whose data is never read again
+// is killed instead of shut down gracefully. On CI the data directory is
+// discarded after the test run, so nothing needs to be flushed to disk and a
+// graceful shutdown buys nothing: killing skips the shutdown ack wait that
+// can stall a semi-sync primary for many seconds. Coverage runs still shut
+// down gracefully so that the mysqlctl shutdown path stays exercised.
+func KillDiscardedMySQL() bool {
+	return os.Getenv("CI") == "true" && !*isCoverage
+}
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
 	Keyspaces          []Keyspace
@@ -152,6 +169,9 @@ type Vttablet struct {
 	MysqlctlProcess  MysqlctlProcess
 	MysqlctldProcess MysqlctldProcess
 	VttabletProcess  *VttabletProcess
+
+	// MysqlctlInit is the mysqlctl command that AddShard started to initialize MySQL.
+	MysqlctlInit *exec.Cmd
 }
 
 // GetAlias returns the tablet alias.
@@ -170,6 +190,10 @@ type Keyspace struct {
 	SidecarDBName    string
 	DurabilityPolicy string
 	Shards           []Shard
+
+	// startFailed is set when a shard failed to start. The keyspace stays registered
+	// so that Teardown stops its tablets, but it is never initialized.
+	startFailed bool
 }
 
 // Shard with associated vttablets
@@ -265,7 +289,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port: %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
-	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
+	if err = cluster.VtctldProcess.Setup(cluster.VtctldExtraArgs...); err != nil {
 		log.Error(err.Error())
 		return
 	}
@@ -394,29 +418,45 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	log.Info(fmt.Sprintf("Starting keyspace: %v", keyspace.Name))
+	for _, ks := range cluster.Keyspaces {
+		if ks.Name == keyspace.Name && ks.startFailed {
+			return fmt.Errorf("keyspace %s failed to start, so it cannot be started again", keyspace.Name)
+		}
+	}
 	if keyspace.SidecarDBName == "" {
 		keyspace.SidecarDBName = sidecar.DefaultName
 	}
 	// Create the keyspace if it doesn't already exist.
 	_ = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName, keyspace.DurabilityPolicy)
+	var shardErr error
 	for _, shardName := range shardNames {
 		shard, err := cluster.AddShard(keyspace.Name, shardName, totalTabletsRequired, rdonly, customizers)
-		if err != nil {
-			return err
+		if shard != nil {
+			keyspace.Shards = append(keyspace.Shards, *shard)
 		}
-		keyspace.Shards = append(keyspace.Shards, *shard)
+		if err != nil {
+			shardErr = err
+			break
+		}
 	}
-	// if the keyspace is present then append the shard info
+	// if the keyspace is present then append the shard info. A failed shard's
+	// tablets are registered too, so that Teardown stops them.
 	existingKeyspace := false
 	for idx, ks := range cluster.Keyspaces {
 		if ks.Name == keyspace.Name {
 			cluster.Keyspaces[idx].Shards = append(cluster.Keyspaces[idx].Shards, keyspace.Shards...)
+			cluster.Keyspaces[idx].startFailed = shardErr != nil
 			existingKeyspace = true
 		}
 	}
 	if !existingKeyspace {
+		keyspace.startFailed = shardErr != nil
 		cluster.Keyspaces = append(cluster.Keyspaces, keyspace)
-
+	}
+	if shardErr != nil {
+		return shardErr
+	}
+	if !existingKeyspace {
 		// Apply Schema SQL
 		if keyspace.SchemaSQL != "" {
 			if err = cluster.VtctldClientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
@@ -445,6 +485,9 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	return
 }
 
+// AddShard starts a shard's tablets. On error, the returned shard holds the
+// tablets started so far. Customizers of type func(*MysqlctlProcess) apply to
+// each tablet's MySQL initialization only, not to its MysqlctlProcess.
 func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName string, totalTabletsRequired int, rdonly bool, customizers []any) (*Shard, error) {
 	shard := &Shard{
 		Name: shardName,
@@ -472,7 +515,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
 		mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
 		if err != nil {
-			return nil, err
+			return shard, err
 		}
 		switch tablet.Type {
 		case "primary":
@@ -482,11 +525,17 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		}
 
 		tablet.MysqlctlProcess = *mysqlctlProcess
-		proc, err := tablet.MysqlctlProcess.StartProcess()
+		for _, customizer := range customizers {
+			if f, ok := customizer.(func(*MysqlctlProcess)); ok {
+				f(mysqlctlProcess)
+			}
+		}
+		proc, err := mysqlctlProcess.StartProcess()
 		if err != nil {
 			log.Error(fmt.Sprintf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err))
-			return nil, err
+			return shard, err
 		}
+		tablet.MysqlctlInit = proc
 		mysqlctlProcessList = append(mysqlctlProcessList, proc)
 
 		// start vttablet process
@@ -517,10 +566,12 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 		shard.Vttablets = append(shard.Vttablets, tablet)
 		// Apply customizations
 		for _, customizer := range customizers {
-			if f, ok := customizer.(func(*VttabletProcess)); ok {
+			switch f := customizer.(type) {
+			case func(*VttabletProcess):
 				f(tablet.VttabletProcess)
-			} else {
-				return nil, fmt.Errorf("type mismatch on customizer: %T", customizer)
+			case func(*MysqlctlProcess):
+			default:
+				return shard, fmt.Errorf("type mismatch on customizer: %T", customizer)
 			}
 		}
 	}
@@ -529,7 +580,7 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 	for _, proc := range mysqlctlProcessList {
 		if err := proc.Wait(); err != nil {
 			log.Error(fmt.Sprintf("unable to start mysql process %v: %v", proc, err))
-			return nil, err
+			return shard, err
 		}
 	}
 	for _, tablet := range shard.Vttablets {
@@ -537,14 +588,14 @@ func (cluster *LocalProcessCluster) AddShard(keyspaceName string, shardName stri
 
 		if err := tablet.VttabletProcess.Setup(); err != nil {
 			log.Error(fmt.Sprintf("error starting vttablet for tablet uid %d, grpc port %d: %v", tablet.TabletUID, tablet.GrpcPort, err))
-			return nil, err
+			return shard, err
 		}
 	}
 
 	// Make first tablet as primary
 	if err := cluster.VtctldClientProcess.InitializeShard(keyspaceName, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 		log.Error(fmt.Sprintf("error running InitializeShard on keyspace %v, shard %v: %v", keyspaceName, shardName, err))
-		return nil, err
+		return shard, err
 	}
 	return shard, nil
 }
@@ -1063,13 +1114,19 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Error(fmt.Sprintf("Error in vtadmin teardown: %v", err))
 	}
 
+	killMySQL := KillDiscardedMySQL()
+
 	var mysqlctlProcessList []*exec.Cmd
 	var mysqlctlTabletUIDs []int
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
 				if tablet.MysqlctlProcess.TabletUID > 0 {
-					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+					if killMySQL {
+						if err := tablet.MysqlctlProcess.Kill(); err != nil {
+							log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
+						}
+					} else if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
 						log.Error(fmt.Sprintf("Error in mysqlctl teardown: %v", err))
 					} else {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)

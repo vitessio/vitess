@@ -4,7 +4,7 @@ import { Menu, Transition } from '@headlessui/react';
 import style from './Dropdown.module.scss';
 import cx from 'classnames';
 
-interface DropdownProps {
+interface DropdownProps extends React.PropsWithChildren {
     // Optionally pass in your own button if you don't want it styled like DropdownButton
     dropdownButton: React.FC | Icons;
     position?: 'top-left' | 'top-right' | 'bottom-right' | 'bottom-left';
@@ -67,7 +67,6 @@ const Dropdown: React.FC<DropdownProps> = ({ children, dropdownButton, position,
                     className={`py-2 z-10 origin-top-right absolute ${
                         positions[position as string] || positions.default
                     } mt-2 w-max rounded-lg shadow-lg bg-white ring-1 ring-black ring-opacity-5 divide-y divide-gray-100 focus:outline-none`}
-                    role="menu"
                     aria-orientation="vertical"
                     aria-labelledby="menu-button"
                 >

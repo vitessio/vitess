@@ -670,7 +670,7 @@ func TestStreamExecuteCompat_SavepointViaStreamExecute(t *testing.T) {
 	// Rolling back to the savepoint must prune the transaction's recorded
 	// queries like Execute does, so 2PC recovery replay doesn't re-apply the
 	// rolled-back DML.
-	conn, err := tsv.te.txPool.GetAndLock(state.TransactionID, "for test inspection")
+	conn, err := tsv.te.txPool.GetAndLock(ctx, state.TransactionID, "for test inspection")
 	require.NoError(t, err)
 	recorded := slices.Clone(conn.TxProperties().Queries)
 	conn.Unlock()
@@ -987,7 +987,7 @@ func TestStreamExecuteCompat_AppliedSettingRecordedForReplay(t *testing.T) {
 	qre.setting = smartconnpool.NewSetting(applyQuery, "set @@sql_mode = default")
 	require.NoError(t, qre.Stream(func(*sqltypes.Result) error { return nil }))
 
-	conn, err := tsv.te.txPool.GetAndLock(txID, "for query inspection")
+	conn, err := tsv.te.txPool.GetAndLock(ctx, txID, "for query inspection")
 	require.NoError(t, err)
 	defer conn.Unlock()
 	recorded := make([]string, 0, len(conn.TxProperties().Queries))

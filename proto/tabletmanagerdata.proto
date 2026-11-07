@@ -599,6 +599,9 @@ message BackupRequest {
   // before taking the backup. If not set, the default value is used.
   vttime.Duration mysql_shutdown_timeout = 6;
   InitSQL init_sql = 7;
+  // IncludeBinlogs includes the source's binary logs in a full builtin backup.
+  // Restores use them automatically.
+  bool include_binlogs = 8;
 }
 
 message BackupResponse {
@@ -731,7 +734,7 @@ message ValidateVReplicationPermissionsRequest {
 }
 
 message ValidateVReplicationPermissionsResponse {
-  // The --db_filtered_user on the tablet.
+  // The --db-filtered-user on the tablet.
   string user = 1;
   // Does the user have the minimum privileges needed to manage
   // vreplication metadata.

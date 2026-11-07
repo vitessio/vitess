@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
-	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 )
@@ -102,8 +101,16 @@ func TestPRSWithDrainedLaggingTablet(t *testing.T) {
 	res := utils.RunSQL(t.Context(), t, `select msg from vt_insert_test`, tablets[1])
 	assert.Len(t, res.Rows, 1)
 
-	// Perform a graceful reparent operation
-	utils.Prs(t, clusterInstance, tablets[2])
+	// Perform a graceful reparent operation. The drained tablet can't reach
+	// the reparent journal within the wait-replicas-timeout because of its
+	// replication delay, so PRS may report it as failed, but no other tablet.
+	out, err := utils.PrsWithTimeout(t, clusterInstance, tablets[2], false, "", "5s")
+	if err != nil {
+		assert.Contains(t, out, fmt.Sprintf("tablet %s failed to SetReplicationSource", tablets[1].Alias))
+		for _, tablet := range []*cluster.Vttablet{tablets[0], tablets[3]} {
+			assert.NotContains(t, out, fmt.Sprintf("tablet %s failed", tablet.Alias))
+		}
+	}
 	utils.ValidateTopology(t, clusterInstance, false)
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[2])
 }
@@ -168,7 +175,7 @@ func TestReparentAvoid(t *testing.T) {
 	utils.CheckPrimaryTablet(t, clusterInstance, tablets[1])
 
 	// If we kill the tablet in the same cell as primary then reparent --avoid-tablet will fail.
-	utils.StopTablet(t, tablets[0], true)
+	utils.KillTablet(t, tablets[0])
 	out, err := utils.PrsAvoid(t, clusterInstance, tablets[1])
 	require.Error(t, err)
 	assert.Contains(t, out, "rpc error: code = Unknown desc = tablet is shutdown")
@@ -199,20 +206,8 @@ func TestReparentFromOutside(t *testing.T) {
 func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
 	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	reparentFromOutside(t, clusterInstance, true)
-
-	// FIXME: @Deepthi: is this needed, since we teardown the cluster, does this achieve any additional test coverage?
-	// We will have to restart mysql to avoid hanging/locks due to external Reparent
-	for _, tablet := range tablets {
-		log.Info(fmt.Sprintf("Restarting MySql for tablet %v", tablet.Alias))
-		err := tablet.MysqlctlProcess.Stop()
-		require.NoError(t, err)
-		tablet.MysqlctlProcess.InitMysql = false
-		err = tablet.MysqlctlProcess.Start()
-		require.NoError(t, err)
-	}
 }
 
 func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, downPrimary bool) {

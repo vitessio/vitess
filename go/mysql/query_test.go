@@ -97,25 +97,124 @@ func TestComInitDB(t *testing.T) {
 	assert.Equal(t, "my_db", db, "parseComInitDB returned unexpected data: %v", db)
 }
 
-func TestComSetOption(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
-	defer func() {
-		listener.Close()
-		sConn.Close()
-		cConn.Close()
-	}()
+// expectComSetOption reads a COM_SET_OPTION packet on sConn, checks that it
+// carries the expected operand, and then sends the given response.
+func expectComSetOption(t *testing.T, sConn *Conn, operand uint16, respond func() error) {
+	t.Helper()
 
-	// Write ComSetOption packet, read it, compare.
-	if err := cConn.writeComSetOption(1); err != nil {
-		require.NoError(t, err)
-	}
+	// A server starts a new packet sequence for every command it reads.
+	sConn.sequence = 0
+
 	data, err := sConn.ReadPacket()
 	require.NoErrorf(t, err, "sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
 	require.NotEmptyf(t, data, "sConn.ReadPacket - ComSetOption failed: %v", data)
 	require.Equalf(t, byte(ComSetOption), data[0], "sConn.ReadPacket - ComSetOption failed: %v", data)
 	operation, ok := sConn.parseComSetOption(data)
 	require.True(t, ok, "parseComSetOption failed unexpectedly")
-	assert.Equal(t, uint16(1), operation, "parseComSetOption returned unexpected data: %v", operation)
+	require.Equal(t, operand, operation, "parseComSetOption returned unexpected data: %v", operation)
+	require.NoError(t, respond())
+}
+
+func TestSetMultiStatements(t *testing.T) {
+	t.Run("toggles the capability", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+
+		for _, on := range []bool{true, true, false, true} {
+			operand := multiStatementsOff
+			if on {
+				operand = multiStatementsOn
+			}
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- cConn.SetMultiStatements(on)
+			}()
+			expectComSetOption(t, sConn, operand, func() error {
+				return sConn.writeEndResult(false, 0, 0, 0)
+			})
+			require.NoError(t, <-errCh)
+
+			if on {
+				require.NotZero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must be set after enabling it")
+			} else {
+				require.Zero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must be cleared after disabling it")
+			}
+		}
+	})
+
+	t.Run("starts a new packet sequence", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+
+		// Simulate a connection on which a command has already been run.
+		cConn.sequence = 5
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cConn.SetMultiStatements(true)
+		}()
+		// The server rejects the packet if it does not start a new sequence.
+		expectComSetOption(t, sConn, multiStatementsOn, func() error {
+			return sConn.writeEndResult(false, 0, 0, 0)
+		})
+		require.NoError(t, <-errCh)
+	})
+
+	t.Run("keeps the connection usable when the server refuses", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cConn.SetMultiStatements(true)
+		}()
+		expectComSetOption(t, sConn, multiStatementsOn, func() error {
+			return sConn.writeErrorPacket(sqlerror.ERUnknownComError, sqlerror.SSNetError, "unknown command")
+		})
+
+		err := <-errCh
+		require.ErrorContains(t, err, "unknown command")
+		require.Zero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must stay unset when the server refuses")
+		require.False(t, cConn.IsClosed(), "connection must stay usable when the server refuses")
+	})
+
+	t.Run("closes the connection when the response is lost", func(t *testing.T) {
+		listener, sConn, cConn := createSocketPair(t)
+		t.Cleanup(func() {
+			listener.Close()
+			sConn.Close()
+			cConn.Close()
+		})
+
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- cConn.SetMultiStatements(true)
+		}()
+
+		data, err := sConn.ReadPacket()
+		require.NoErrorf(t, err, "sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
+		require.Equalf(t, byte(ComSetOption), data[0], "sConn.ReadPacket - ComSetOption failed: %v", data)
+		// Drop the connection instead of answering: the client cannot know
+		// whether the server applied the option.
+		sConn.Close()
+
+		require.Error(t, <-errCh)
+		require.Zero(t, cConn.Capabilities&CapabilityClientMultiStatements, "MultiStatements capability must stay unset when the response is lost")
+		require.True(t, cConn.IsClosed(), "connection must be closed when the response is lost")
+	})
 }
 
 func TestComStmtPrepare(t *testing.T) {
@@ -243,6 +342,56 @@ func TestComStmtExecute(t *testing.T) {
 	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
 	require.NoError(t, err, "parseComStmtExeute failed: %v", err)
 	require.Equal(t, uint32(18), stmtID, "Parsed incorrect values")
+}
+
+// TestComStmtExecuteDecimalParameterIsValidated pins that a binary-protocol
+// prepared statement is covered by vtgate's bind variable gate. The client
+// picks each parameter's type, and a MYSQL_TYPE_NEWDECIMAL parameter's bytes
+// are copied verbatim into a DECIMAL bind variable, a type the encoders write
+// into a statement unquoted. Before the gate rejected over-long decimals this
+// payload passed sqltypes.NewValue and reached the tablet as SQL text, so a
+// MySQL-protocol client had the same splice as a gRPC caller.
+func TestComStmtExecuteDecimalParameterIsValidated(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	t.Cleanup(func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	})
+
+	prepare := &PrepareData{
+		StatementID: 1,
+		PrepareStmt: "select * from test_table where id = :v1",
+		ParamsCount: 1,
+		ParamsType:  make([]int32, 1),
+		BindVars:    map[string]*querypb.BindVariable{},
+	}
+	payload := []byte(strings.Repeat("1", 80) + "; drop table test_table #")
+	data := []byte{
+		ComStmtExecute,
+		1, 0, 0, 0, // statement id
+		0,          // cursor flags
+		1, 0, 0, 0, // iteration count
+		0,       // null bitmap
+		1,       // new params bound
+		0xf6, 0, // MYSQL_TYPE_NEWDECIMAL, no flags
+		byte(len(payload)), // length-encoded string
+	}
+	data = append(data, payload...)
+
+	stmtID, _, err := sConn.parseComStmtExecute(map[uint32]*PrepareData{1: prepare}, data)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, stmtID)
+
+	// The client's bytes, unparsed, under the type the client chose.
+	bv := prepare.BindVars["v1"]
+	require.NotNil(t, bv)
+	assert.Equal(t, querypb.Type_DECIMAL, bv.Type)
+	assert.Equal(t, payload, bv.Value)
+
+	// vtgate.Execute runs this before anything else.
+	err = sqltypes.ValidateBindVariables(prepare.BindVars)
+	require.ErrorContains(t, err, "v1: invalid DECIMAL literal")
 }
 
 func TestComStmtExecuteUpdStmt(t *testing.T) {

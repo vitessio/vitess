@@ -31,7 +31,6 @@ echo "Starting vtctld..."
 # shellcheck disable=SC2086
 exec vtctld \
   ${TOPOLOGY_FLAGS} \
-  --cell "${cell}" \
   --service-map 'grpc-vtctl,grpc-vtctld' \
   --backup-storage-implementation file \
   --file-backup-storage-root /vt/vtdataroot/backups \

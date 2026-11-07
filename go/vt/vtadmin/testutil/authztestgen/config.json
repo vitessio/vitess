@@ -122,6 +122,11 @@
                     "value": "\"test\": {\nResponse: &vtctldatapb.ReloadSchemaKeyspaceResponse{\nEvents: []*logutilpb.Event{{}, {}, {}}},\n},"
                 },
                 {
+                    "field": "ReloadSchemaShardResults",
+                    "type": "map[string]struct{\nResponse *vtctldatapb.ReloadSchemaShardResponse\nError error\n}",
+                    "value": "\"test/-\": {\nResponse: &vtctldatapb.ReloadSchemaShardResponse{\nEvents: []*logutilpb.Event{{}}},\n},"
+                },
+                {
                     "field": "ReparentTabletResults",
                     "type": "map[string]struct{\nResponse *vtctldatapb.ReparentTabletResponse\nError error\n}",
                     "value": "\"zone1-0000000100\": {\nResponse: &vtctldatapb.ReparentTabletResponse{},\n},"
@@ -1776,6 +1781,54 @@
                     "is_permitted": true,
                     "assertions": [
                         "assert.NotEmpty(t, resp.KeyspaceResults, $$)"
+                    ]
+                }
+            ]
+        },
+        {
+            "method": "ReloadSchemaShard",
+            "rules": [
+                {
+                    "resource": "Schema",
+                    "actions": ["reload"],
+                    "subjects": ["user:allowed-all"],
+                    "clusters": ["*"]
+                },
+                {
+                    "resource": "Schema",
+                    "actions": ["reload"],
+                    "subjects": ["user:allowed-other"],
+                    "clusters": ["other"]
+                }
+            ],
+            "request": "&vtadminpb.ReloadSchemaShardRequest{\nClusterId: \"test\",\nKeyspace: \"test\",\nShard: \"-\",\n}",
+            "cases": [
+                {
+                    "name": "unauthorized actor",
+                    "actor": {"name": "unauthorized"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.ErrorContains(t, err, \"unauthorized\", $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "actor authorized only for another cluster",
+                    "actor": {"name": "allowed-other"},
+                    "include_error_var": true,
+                    "assertions": [
+                        "assert.ErrorContains(t, err, \"unauthorized\", $$)",
+                        "assert.Nil(t, resp, $$)"
+                    ]
+                },
+                {
+                    "name": "authorized actor",
+                    "actor": {"name": "allowed-all"},
+                    "include_error_var": true,
+                    "is_permitted": true,
+                    "assertions": [
+                        "require.NoError(t, err)",
+                        "assert.NotEmpty(t, resp.Events, $$)"
                     ]
                 }
             ]

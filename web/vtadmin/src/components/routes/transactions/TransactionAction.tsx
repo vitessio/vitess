@@ -12,7 +12,7 @@ interface TransactionActionProps {
     errorText: string;
     loadingText: string;
     description?: string;
-    body?: JSX.Element;
+    body?: React.JSX.Element;
     refetchTransactions: Function;
     closeDialog: () => void;
 }
