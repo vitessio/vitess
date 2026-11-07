@@ -211,6 +211,28 @@ func definitions(stmt sqlparser.Statement) []string {
 	return nil
 }
 
+// sameSourceRows reports whether the tables that query reads hold the same
+// rows on both servers.
+func sameSourceRows(asWritten, formatted *mysqlServer, query sqlparser.TableStatement) bool {
+	var tables []string
+	// The walk cannot fail, because the function never returns an error.
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if table, ok := node.(*sqlparser.AliasedTableExpr); ok {
+			if name, ok := table.Expr.(sqlparser.TableName); ok {
+				tables = append(tables, sqlparser.String(name))
+			}
+		}
+		return true, nil
+	}, query)
+	if len(tables) == 0 {
+		return true
+	}
+	show := "checksum table " + strings.Join(tables, ", ")
+	outAsWritten, errAsWritten := asWritten.query(show)
+	outFormatted, errFormatted := formatted.query(show)
+	return errorCode(errAsWritten) == errorCode(errFormatted) && outAsWritten == outFormatted
+}
+
 // TestMySQLTestSuiteDDLOnMySQL runs each test file of MySQL's own test suite
 // on two MySQL servers. The first server gets each DDL statement as written,
 // and the second gets the statement that Vitess formats from it, which is what
@@ -323,7 +345,14 @@ func compareStatement(t *testing.T, parser *sqlparser.Parser, asWritten, formatt
 		return true
 	}
 	same := true
-	for _, show := range definitions(tree) {
+	shows := definitions(tree)
+	if create, ok := tree.(*sqlparser.CreateTable); ok && create.Select != nil && !sameSourceRows(asWritten, formatted, create.Select) {
+		// The rows that the query copies differ between the servers
+		// already, as when an earlier INSERT used uuid(), so only the
+		// definition of the table can be compared.
+		shows = shows[:1]
+	}
+	for _, show := range shows {
 		outAsWritten, errAsWritten := asWritten.query(show)
 		outFormatted, errFormatted := formatted.query(show)
 		same = assert.Equal(t, errorCode(errAsWritten), errorCode(errFormatted), "%s\n%s", where, show) && same
