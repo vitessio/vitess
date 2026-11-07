@@ -151,9 +151,28 @@ var validSQL = []struct {
 	input: "alter table t1 secondary_load partition (p1, p2)",
 }, {
 	// MAXVALUE can bound one column of a RANGE COLUMNS partition, and
-	// (MAXVALUE) alone means MAXVALUE.
-	input:  "create table t1 (a int, b int) partition by range columns(a,b) (partition p0 values less than (maxvalue, 10), partition p1 values less than (maxvalue))",
-	output: "create table t1 (\n\ta int,\n\tb int\n)\npartition by range columns (a, b)\n(partition p0 values less than (maxvalue, 10),\n partition p1 values less than maxvalue)",
+	// (MAXVALUE) alone means MAXVALUE, which bounds a partition of one column.
+	input:  "create table t1 (a int, b int) partition by range columns(a,b) (partition p0 values less than (maxvalue, 10), partition p1 values less than (maxvalue, maxvalue))",
+	output: "create table t1 (\n\ta int,\n\tb int\n)\npartition by range columns (a, b)\n(partition p0 values less than (maxvalue, 10),\n partition p1 values less than (maxvalue, maxvalue))",
+}, {
+	input:  "create table t1 (a int) partition by range columns(a) (partition p0 values less than (10), partition p1 values less than ((20)), partition p2 values less than (maxvalue))",
+	output: "create table t1 (\n\ta int\n)\npartition by range columns (a)\n(partition p0 values less than (10),\n partition p1 values less than (20),\n partition p2 values less than maxvalue)",
+}, {
+	// VALUES IN takes a list of values, whose first value cannot start with
+	// '(', or a list of tuples, each of as many values as the partitioning
+	// takes columns, which ADD PARTITION does not say.
+	input:  "create table t (a int, b int) partition by list columns (a, b) (partition p0 values in ((1, 2), (3, 4)), partition p1 values in (/* c */ (5, 6)))",
+	output: "create table t (\n\ta int,\n\tb int\n)\npartition by list columns (a, b)\n(partition p0 values in ((1, 2), (3, 4)),\n partition p1 values in ((5, 6)))",
+}, {
+	input:  "create table t (a int) partition by list (a) (partition p0 values in (1, (2)), partition p1 values in (3))",
+	output: "create table t (\n\ta int\n)\npartition by list (a)\n(partition p0 values in (1, 2),\n partition p1 values in (3))",
+}, {
+	// MySQL rejects a row as a bound, but not as a syntax error.
+	input:  "create table t (a int, b int) partition by range columns (a, b) (partition p0 values less than ((10, 20)))",
+	output: "create table t (\n\ta int,\n\tb int\n)\npartition by range columns (a, b)\n(partition p0 values less than ((10, 20)))",
+}, {
+	input:  "alter table t add partition (partition p1 values in ((11, 12), (13, 14)), partition p2 values in (15, 16))",
+	output: "alter table t add partition (partition p1 values in ((11, 12), (13, 14)), partition p2 values in (15, 16))",
 }, {
 	input:  "create table t1 (a int) partition by key (a) partitions 3 (partition x1 nodegroup 0, partition x2 nodegroup = 1)",
 	output: "create table t1 (\n\ta int\n)\npartition by key (a) partitions 3\n(partition x1 nodegroup 0,\n partition x2 nodegroup 1)",
@@ -6862,6 +6881,44 @@ var invalidSQL = []struct {
 }, {
 	// MySQL reads a function name such as NOW or BIT_AND as a keyword only
 	// when a '(' follows it right away, and as a name otherwise.
+	// MySQL reads a '(' after VALUES IN ( as the start of a list of tuples,
+	// each of at least two values, as many in each.
+	input:  "create table t1 (a int) partition by list columns(a) (partition p0 values in (2, 1), partition p1 values in ((4), (NULL), (3)))",
+	output: "Row expressions in VALUES IN only allowed for multi-field column partitioning at position 127",
+}, {
+	input:  "alter table t1 add partition (partition p2 values in ((71), (72)))",
+	output: "Row expressions in VALUES IN only allowed for multi-field column partitioning at position 66",
+}, {
+	input:  "alter table t1 add partition (partition p2 values in ((1, 2), (3)))",
+	output: "Row expressions in VALUES IN only allowed for multi-field column partitioning at position 67",
+}, {
+	input:  "create table t (a int) partition by list (a) (partition p0 values in ((1) + 1, 3))",
+	output: "Row expressions in VALUES IN only allowed for multi-field column partitioning at position 82",
+}, {
+	// The formatter would write these as tuples of the partition.
+	input:  "create table t (a int, b int) partition by list columns (a, b) (partition p0 values in ((1, 2), row(3, 4)))",
+	output: "a row in partition values is not supported at position 107",
+}, {
+	input:  "create table t (a int, b int) partition by list columns (a, b) (partition p0 values in (((1, 2)), ((3, 4))))",
+	output: "a row in partition values is not supported at position 108",
+}, {
+	// A partitioning of more than one column takes tuples of as many values,
+	// and one of one column takes none.
+	input:  "create table t (a int, b int) partition by list columns (a, b) (partition p0 values in (1, 2))",
+	output: "Inconsistency in usage of column lists for partitioning at position 95",
+}, {
+	input:  "create table t (a int, b int, c int) partition by list columns (a, b, c) (partition p0 values in ((1, 2)))",
+	output: "Inconsistency in usage of column lists for partitioning at position 107",
+}, {
+	input:  "create table t (a int) partition by list (a) (partition p0 values in ((1, 2), (3, 4)))",
+	output: "Row expressions in VALUES IN only allowed for multi-field column partitioning at position 87",
+}, {
+	input:  "create table t (a int, b int) partition by range columns (a, b) (partition p0 values less than (10))",
+	output: "Inconsistency in usage of column lists for partitioning at position 101",
+}, {
+	input:  "create table t (a int, b int) partition by range columns (a, b) (partition p0 values less than maxvalue)",
+	output: "Inconsistency in usage of column lists for partitioning at position 105",
+}, {
 	// MySQL takes a name after a partition's TABLESPACE, not a string.
 	input:  "alter table t1 add partition (partition p1 values less than (30000) tablespace = 'innodb_system')",
 	output: "syntax error at position 97 near 'innodb_system'",
