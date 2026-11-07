@@ -365,7 +365,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 
 func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	for tableName, tableDef := range res {
-		stmt, err := t.parser.ParseStrictDDL(tableDef)
+		stmt, err := t.parser.Parse(tableDef)
 		if err != nil {
 			log.Warn(fmt.Sprintf("error parsing table definition for %s: %v", tableName, err))
 			continue
@@ -548,7 +548,7 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		m = make(map[tableNameStr]sqlparser.TableStatement)
 		vm.m[ks] = m
 	}
-	stmt, err := vm.parser.ParseStrictDDL(sql)
+	stmt, err := vm.parser.Parse(sql)
 	if err != nil {
 		log.Warn(fmt.Sprintf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql))
 		return

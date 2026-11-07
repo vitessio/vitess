@@ -66,15 +66,6 @@ func (e *UnsupportedEntityError) Error() string {
 	return fmt.Sprintf("entity %s is not supported: %s", sqlescape.EscapeID(e.Entity), e.Statement)
 }
 
-type NotFullyParsedError struct {
-	Entity    string
-	Statement string
-}
-
-func (e *NotFullyParsedError) Error() string {
-	return fmt.Sprintf("entity %s is not fully parsed: %s", sqlescape.EscapeID(e.Entity), e.Statement)
-}
-
 type UnsupportedTableOptionError struct {
 	Table  string
 	Option string

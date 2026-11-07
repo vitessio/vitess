@@ -171,7 +171,7 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 }
 
 func stripTableConstraints(ddl string, parser *sqlparser.Parser) (string, error) {
-	ast, err := parser.ParseStrictDDL(ddl)
+	ast, err := parser.Parse(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -193,7 +193,7 @@ func stripTableConstraints(ddl string, parser *sqlparser.Parser) (string, error)
 }
 
 func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error) {
-	ast, err := parser.ParseStrictDDL(ddl)
+	ast, err := parser.Parse(ddl)
 	if err != nil {
 		return "", err
 	}
@@ -226,7 +226,7 @@ func stripTableForeignKeys(ddl string, parser *sqlparser.Parser) (string, error)
 // callback will be used to e.g. replace the MySQL clause with a Vitess
 // VSchema AutoIncrement definition.
 func stripAutoIncrement(ddl string, parser *sqlparser.Parser, replace func(columnName string) error) (string, error) {
-	newDDL, err := parser.ParseStrictDDL(ddl)
+	newDDL, err := parser.Parse(ddl)
 	if err != nil {
 		return "", err
 	}

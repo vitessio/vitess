@@ -85,7 +85,7 @@ func ParseAlterTableOptions(alterStatement string) (explicitSchema, explicitTabl
 func parseEnumOrSetTokens(env *vtenv.Environment, enumOrSetValues string) ([]string, error) {
 	// sqlparser cannot directly parse enum/set values, so we create a dummy query to parse it.
 	dummyQuery := fmt.Sprintf("alter table t add column e enum(%s)", enumOrSetValues)
-	ddlStmt, err := env.Parser().ParseStrictDDL(dummyQuery)
+	ddlStmt, err := env.Parser().Parse(dummyQuery)
 	if err != nil {
 		return nil, err
 	}

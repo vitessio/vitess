@@ -212,12 +212,12 @@ func TestAnalyzeInstantDDL(t *testing.T) {
 	for _, tc := range tt {
 		name := tc.version + " " + tc.create
 		t.Run(name, func(t *testing.T) {
-			stmt, err := parser.ParseStrictDDL(tc.create)
+			stmt, err := parser.Parse(tc.create)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = parser.ParseStrictDDL(tc.alter)
+			stmt, err = parser.Parse(tc.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)

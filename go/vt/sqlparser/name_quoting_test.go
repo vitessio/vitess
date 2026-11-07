@@ -247,14 +247,12 @@ func TestBareNamesAreNotQuoted(t *testing.T) {
 // accepts. ENCRYPTION's value is written back out as a string literal, because
 // that is the only spelling MySQL takes. If Vitess kept parsing the unquoted
 // spelling it would now rewrite a statement MySQL rejects into one MySQL accepts,
-// so it must not parse it: leaving the statement not fully parsed forwards the
-// client's original text, and MySQL still rejects it.
+// so it must reject it, as MySQL does.
 func TestEncryptionRequiresQuotedString(t *testing.T) {
 	parser := NewTestParser()
 
 	stmt, err := parser.Parse("create database d encryption 'N'")
 	require.NoError(t, err)
-	require.True(t, stmt.(DBDDLStatement).IsFullyParsed())
 	assert.Equal(t, "create database d encryption 'N'", String(stmt))
 
 	for _, unquoted := range []string{
@@ -262,9 +260,8 @@ func TestEncryptionRequiresQuotedString(t *testing.T) {
 		"create database d encryption `Y, comment 'x'`",
 		"alter database d encryption Y",
 	} {
-		stmt, err := parser.Parse(unquoted)
-		require.NoError(t, err)
-		assert.False(t, stmt.(DBDDLStatement).IsFullyParsed(), unquoted)
+		_, err := parser.Parse(unquoted)
+		assert.Error(t, err, unquoted)
 	}
 }
 
@@ -366,13 +363,12 @@ func TestEmptyNameIsRejected(t *testing.T) {
 		t.Run(in, func(t *testing.T) {
 			stmt, err := parser.Parse(in)
 			require.NoError(t, err)
-			require.True(t, isFullyParsed(stmt))
 			assert.Equal(t, in, String(stmt))
 		})
 	}
 
-	// DDL falls back to a partial parse, so the client's original text is
-	// forwarded and MySQL rejects it. The strict path errors outright.
+	// An empty name in a column or table option is an error, because the
+	// clause cannot be written back out.
 	for _, in := range []string{
 		"create table t (a varchar(10) character set '')",
 		"create table t (a varchar(10) collate '')",
@@ -395,12 +391,7 @@ func TestEmptyNameIsRejected(t *testing.T) {
 		"create table t (id int) partition by range (id) (partition p0 values less than (1) tablespace '')",
 	} {
 		t.Run(in, func(t *testing.T) {
-			stmt, err := parser.Parse(in)
-			require.NoError(t, err)
-			assert.False(t, stmt.(DDLStatement).IsFullyParsed(),
-				"must not be fully parsed, or the clause would be silently dropped")
-
-			_, err = parser.ParseStrictDDL(in)
+			_, err := parser.Parse(in)
 			assert.ErrorContains(t, err, "cannot be empty")
 		})
 	}
@@ -471,7 +462,6 @@ func TestKeywordNamesAreQuoted(t *testing.T) {
 		t.Run(tc.input, func(t *testing.T) {
 			stmt, err := parser.Parse(tc.input)
 			require.NoError(t, err)
-			require.True(t, isFullyParsed(stmt))
 			assert.Equal(t, tc.output, String(stmt))
 			assert.Equal(t, tc.output, UnescapedString(stmt), "Format and FormatFast must agree")
 		})
@@ -756,7 +746,6 @@ func testNamesRoundTrip(t *testing.T, names []string) {
 				in := fmt.Sprintf(pos.sql, pos.quote(name))
 				stmt, err := parser.Parse(in)
 				require.NoError(t, err, in)
-				require.True(t, isFullyParsed(stmt), "precondition: %q is fully parsed", in)
 
 				// String must read back as an equal AST. CanonicalString
 				// upper-cases the table option names the AST keeps, so its
@@ -773,8 +762,6 @@ func testNamesRoundTrip(t *testing.T, names []string) {
 					switch {
 					case err != nil:
 						failures = append(failures, fmt.Sprintf("%q: %q does not parse: %v", name, out, err))
-					case !isFullyParsed(reparsed):
-						failures = append(failures, fmt.Sprintf("%q: %q is not fully parsed", name, out))
 					case !format.same(stmt, reparsed):
 						failures = append(failures, fmt.Sprintf("%q: %q reads back as %q", name, out, format.print(reparsed)))
 					}
@@ -783,16 +770,4 @@ func testNamesRoundTrip(t *testing.T, names []string) {
 			assert.Empty(t, failures, "%d of %d names do not round-trip", len(failures), 2*len(names))
 		})
 	}
-}
-
-// isFullyParsed reports whether stmt is a statement the parser understood in
-// full, rather than DDL it fell back to forwarding verbatim.
-func isFullyParsed(stmt Statement) bool {
-	switch stmt := stmt.(type) {
-	case DDLStatement:
-		return stmt.IsFullyParsed()
-	case DBDDLStatement:
-		return stmt.IsFullyParsed()
-	}
-	return true
 }

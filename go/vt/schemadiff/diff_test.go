@@ -430,7 +430,7 @@ func TestDiffTables(t *testing.T) {
 				env = ts.env
 			}
 			if ts.from != "" {
-				fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
+				fromStmt, err := env.Parser().Parse(ts.from)
 				require.NoError(t, err)
 				var ok bool
 				fromCreateTable, ok = fromStmt.(*sqlparser.CreateTable)
@@ -438,7 +438,7 @@ func TestDiffTables(t *testing.T) {
 			}
 			var toCreateTable *sqlparser.CreateTable
 			if ts.to != "" {
-				toStmt, err := env.Parser().ParseStrictDDL(ts.to)
+				toStmt, err := env.Parser().Parse(ts.to)
 				require.NoError(t, err)
 				var ok bool
 				toCreateTable, ok = toStmt.(*sqlparser.CreateTable)
@@ -477,7 +477,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = env.Parser().ParseStrictDDL(diff)
+					_, err = env.Parser().Parse(diff)
 					require.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -496,7 +496,7 @@ func TestDiffTables(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
+					_, err = env.Parser().Parse(canonicalDiff)
 					assert.NoError(t, err)
 				})
 				t.Run("annotations", func(t *testing.T) {
@@ -585,7 +585,7 @@ func TestDiffViews(t *testing.T) {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateView *sqlparser.CreateView
 			if ts.from != "" {
-				fromStmt, err := env.Parser().ParseStrictDDL(ts.from)
+				fromStmt, err := env.Parser().Parse(ts.from)
 				require.NoError(t, err)
 				var ok bool
 				fromCreateView, ok = fromStmt.(*sqlparser.CreateView)
@@ -593,7 +593,7 @@ func TestDiffViews(t *testing.T) {
 			}
 			var toCreateView *sqlparser.CreateView
 			if ts.to != "" {
-				toStmt, err := env.Parser().ParseStrictDDL(ts.to)
+				toStmt, err := env.Parser().Parse(ts.to)
 				require.NoError(t, err)
 				var ok bool
 				toCreateView, ok = toStmt.(*sqlparser.CreateView)
@@ -632,7 +632,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = env.Parser().ParseStrictDDL(diff)
+					_, err = env.Parser().Parse(diff)
 					require.NoError(t, err)
 
 					eFrom, eTo := d.Entities()
@@ -651,7 +651,7 @@ func TestDiffViews(t *testing.T) {
 					assert.Equal(t, ts.action, action)
 
 					// validate we can parse back the statement
-					_, err = env.Parser().ParseStrictDDL(canonicalDiff)
+					_, err = env.Parser().Parse(canonicalDiff)
 					require.NoError(t, err)
 				}
 				if ts.annotated == nil {
@@ -1271,11 +1271,11 @@ func TestDiffSchemas(t *testing.T) {
 
 				// validate we can parse back the diff statements
 				for _, s := range statements {
-					_, err := env.Parser().ParseStrictDDL(s)
+					_, err := env.Parser().Parse(s)
 					assert.NoError(t, err)
 				}
 				for _, s := range cstatements {
-					_, err := env.Parser().ParseStrictDDL(s)
+					_, err := env.Parser().Parse(s)
 					assert.NoError(t, err)
 				}
 				// Validate Clone() works
@@ -1446,7 +1446,7 @@ func TestEntityDiffByStatement(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.query, func(t *testing.T) {
-			stmt, err := env.Parser().ParseStrictDDL(tcase.query)
+			stmt, err := env.Parser().Parse(tcase.query)
 			require.NoError(t, err)
 			entityDiff := EntityDiffByStatement(stmt)
 			if !tcase.valid {

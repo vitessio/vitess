@@ -2902,6 +2902,20 @@ func AddKeyspace(in SQLNode, ks string) {
 	}, nil)
 }
 
+// hasValidIndexType reports whether the index takes the index type it names,
+// if any. MySQL takes no USING or TYPE clause for a FULLTEXT or SPATIAL index.
+func (idx *IndexDefinition) hasValidIndexType() bool {
+	if idx.Info.Type != IndexTypeFullText && idx.Info.Type != IndexTypeSpatial {
+		return true
+	}
+	for _, option := range idx.Options {
+		if strings.EqualFold(option.Name, "using") {
+			return false
+		}
+	}
+	return true
+}
+
 // integerPart returns the integer that MySQL reads from a decimal where it
 // takes an integer, such as the length in FLOAT(10.3): the digits before the
 // point.

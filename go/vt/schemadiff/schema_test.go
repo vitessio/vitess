@@ -302,7 +302,7 @@ func TestGetViewDependentTableNames(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.view, func(t *testing.T) {
-			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.view)
+			stmt, err := sqlparser.NewTestParser().Parse(ts.view)
 			require.NoError(t, err)
 			createView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
@@ -343,7 +343,7 @@ func TestGetForeignKeyParentTableNames(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.table, func(t *testing.T) {
-			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(ts.table)
+			stmt, err := sqlparser.NewTestParser().Parse(ts.table)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)

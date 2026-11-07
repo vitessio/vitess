@@ -199,15 +199,12 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
-		// A bare CREATE TABLE is a partial parse (the grammar keeps only the
-		// prefix), indistinguishable from `create table t (select ...)`, so it
-		// is flagged; MySQL rejects the bare form anyway.
+		// A bare CREATE TABLE copies no rows. MySQL rejects it anyway.
 		input: "create table t",
 		output: []Permission{{
 			TableName: "t",
 			Role:      tableacl.ADMIN,
 		}},
-		undetermined: true,
 	}, {
 		input: "rename table t1 to t2",
 		output: []Permission{{
@@ -818,16 +815,6 @@ func TestBuildPermissions(t *testing.T) {
 			Role:      tableacl.READER,
 		}},
 	}, {
-		// A CREATE TABLE the parser could not fully parse is forwarded to
-		// MySQL as the client's raw text, so its source tables are unknown:
-		// it must be flagged like any other opaque statement, not derived from
-		// the prefix the parser kept. MySQL accepts it and copies the rows.
-		// The parser keeps a truncated SELECT here (the first arm only), which
-		// would derive READER on secret and miss other; flagged instead.
-		input:        "create table ct as select id from secret except select id from other",
-		output:       []Permission{{TableName: "ct", Role: tableacl.ADMIN}},
-		undetermined: true,
-	}, {
 		// MySQL 8.0.21's START TRANSACTION clause is a table option, and it
 		// copies no rows.
 		input:  "create table t (id int) start transaction",
@@ -837,13 +824,6 @@ func TestBuildPermissions(t *testing.T) {
 		// table set is known: drizzle-kit creates its migrations table this way.
 		input:  "create table if not exists __drizzle_migrations (id serial primary key, hash text not null, created_at bigint)",
 		output: []Permission{{TableName: "__drizzle_migrations", Role: tableacl.ADMIN}},
-	}, {
-		// A partially parsed DDL other than CREATE TABLE stays as it was.
-		input: "alter table t bogus",
-		output: []Permission{{
-			TableName: "t",
-			Role:      tableacl.ADMIN,
-		}},
 	}, {
 		// CREATE VIEW reads nothing at creation time, but the view reads its
 		// source tables as the tablet's MySQL user whenever it is queried,

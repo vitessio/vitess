@@ -65,12 +65,12 @@ func TestAlterTableRotatesRangePartition(t *testing.T) {
 			if tcase.create == "" {
 				tcase.create = "CREATE TABLE t (id int PRIMARY KEY) PARTITION BY RANGE (id) (PARTITION p0 VALUES LESS THAN (10))"
 			}
-			stmt, err := sqlparser.NewTestParser().ParseStrictDDL(tcase.create)
+			stmt, err := sqlparser.NewTestParser().Parse(tcase.create)
 			require.NoError(t, err)
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			stmt, err = sqlparser.NewTestParser().ParseStrictDDL(tcase.alter)
+			stmt, err = sqlparser.NewTestParser().Parse(tcase.alter)
 			require.NoError(t, err)
 			alterTable, ok := stmt.(*sqlparser.AlterTable)
 			require.True(t, ok)
