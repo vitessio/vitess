@@ -92,6 +92,9 @@ type Route struct {
 	// merge-sorted.
 	OrderBy evalengine.Comparison
 
+	// HiddenColumnNames are trailing columns added only to support ordering.
+	HiddenColumnNames []string
+
 	// TruncateColumnCount specifies the number of columns to return
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
@@ -208,7 +211,7 @@ func (route *Route) executeShards(
 		}
 	}
 
-	return result.Truncate(route.TruncateColumnCount), nil
+	return route.trimHiddenColumns(result.Truncate(route.TruncateColumnCount)), nil
 }
 
 func filterOutNilErrors(errs []error) []error {
@@ -259,7 +262,7 @@ func (route *Route) streamExecuteShards(
 				if err != nil {
 					return err
 				}
-				return callback(r)
+				return callback(route.trimHiddenColumns(r))
 			}
 			return nil
 		}
@@ -280,7 +283,7 @@ func (route *Route) streamExecuteShards(
 
 	if len(route.OrderBy) == 0 || len(rss) == 1 {
 		errs := vcursor.StreamExecuteMulti(ctx, route, route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, route.FetchLastInsertID, func(qr *sqltypes.Result) error {
-			return callback(qr.Truncate(route.TruncateColumnCount))
+			return callback(route.trimHiddenColumns(qr.Truncate(route.TruncateColumnCount)))
 		})
 		if len(errs) > 0 {
 			if !route.ScatterErrorsAsWarnings || len(errs) == len(rss) {
@@ -335,7 +338,7 @@ func (route *Route) mergeSort(
 
 	ms := createMergeSort(prims, route.OrderBy, route.ScatterErrorsAsWarnings, route.FetchLastInsertID)
 	return vcursor.StreamExecutePrimitive(ctx, ms, bindVars, wantfields, func(qr *sqltypes.Result) error {
-		return callback(qr.Truncate(route.TruncateColumnCount))
+		return callback(route.trimHiddenColumns(qr.Truncate(route.TruncateColumnCount)))
 	})
 }
 
@@ -385,6 +388,28 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 
 	err := orderBy.SortResult(out)
 	return out, err
+}
+
+func (route *Route) trimHiddenColumns(in *sqltypes.Result) *sqltypes.Result {
+	if len(route.HiddenColumnNames) == 0 || route.TruncateColumnCount > 0 {
+		return in
+	}
+	count := len(route.HiddenColumnNames)
+	out := in.ShallowCopy()
+	if in.Fields != nil && len(in.Fields) >= count {
+		out.Fields = in.Fields[:len(in.Fields)-count]
+	}
+	if in.Rows != nil {
+		out.Rows = make([][]sqltypes.Value, len(in.Rows))
+		for idx, row := range in.Rows {
+			if len(row) >= count {
+				out.Rows[idx] = row[:len(row)-count]
+			} else {
+				out.Rows[idx] = row
+			}
+		}
+	}
+	return out
 }
 
 func (route *Route) description() PrimitiveDescription {

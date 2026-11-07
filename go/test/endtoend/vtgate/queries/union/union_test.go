@@ -144,6 +144,17 @@ from (
 	})
 }
 
+func TestUnionAllWildcardOrdering(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2)")
+	mcmp.AssertMatches(
+		"select t.marker as x from (select *, id1 as marker from t1 union all select *, id1 as marker from t1) t order by t.marker",
+		`[[INT64(1)] [INT64(1)] [INT64(2)] [INT64(2)]]`,
+	)
+}
+
 func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()

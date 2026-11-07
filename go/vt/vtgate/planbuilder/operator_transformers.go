@@ -642,13 +642,17 @@ func buildRoutePrimitive(ctx *plancontext.PlanningContext, op *operators.Route, 
 	for _, order := range op.Ordering {
 		typ, _ := ctx.TypeForExpr(order.AST)
 		eroute.OrderBy = append(eroute.OrderBy, evalengine.OrderByParams{
-			Col:             order.Offset,
-			ColumnName:      order.ColumnName,
-			WeightStringCol: order.WOffset,
-			Desc:            order.Direction == sqlparser.DescOrder,
-			Type:            typ,
-			CollationEnv:    ctx.VSchema.Environment().CollationEnv(),
+			Col:                    order.Offset,
+			ColumnName:             order.ColumnName,
+			WeightStringColumnName: order.WeightStringColumnName,
+			WeightStringCol:        order.WOffset,
+			Desc:                   order.Direction == sqlparser.DescOrder,
+			Type:                   typ,
+			CollationEnv:           ctx.VSchema.Environment().CollationEnv(),
 		})
+		if order.WeightStringColumnName != "" {
+			eroute.HiddenColumnNames = append(eroute.HiddenColumnNames, order.WeightStringColumnName)
+		}
 	}
 
 	prepareTheAST(stmt)

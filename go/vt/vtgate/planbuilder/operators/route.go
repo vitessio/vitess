@@ -21,7 +21,9 @@ import (
 	"maps"
 	"slices"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -61,8 +63,9 @@ type (
 	}
 
 	RouteOrdering struct {
-		AST        sqlparser.Expr
-		ColumnName string
+		AST                    sqlparser.Expr
+		ColumnName             string
+		WeightStringColumnName string
 		// Offset and WOffset will contain the offset to the column (and the weightstring column). -1 if it's missing
 		Offset, WOffset int
 		Direction       sqlparser.OrderDirection
@@ -797,18 +800,30 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 		offset := -1
 		columnName := ""
-		if col, ok := order.SimplifiedExpr.(*sqlparser.ColName); ok && hasUnresolvedUnionStar(r.Source) {
-			columnName = col.Name.String()
+		weightStringColumnName := ""
+		if hasUnionOperator(r.Source) {
+			if knownOffset, found := knownOutputOffset(ctx, r.Source, order.SimplifiedExpr); found {
+				offset = knownOffset
+			} else if col, ok := order.SimplifiedExpr.(*sqlparser.ColName); ok && hasUnresolvedUnionStar(r.Source) {
+				columnName = col.Name.String()
+				typ, found := ctx.TypeForExpr(order.SimplifiedExpr)
+				if found && sqltypes.IsText(typ.Type()) && typ.Collation() != collations.Unknown && ctx.NeedsWeightString(order.SimplifiedExpr) {
+					weightStringColumnName, _ = addRuntimeWeightStringColumn(r.Source, col)
+				}
+			} else {
+				offset = r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
+			}
 		} else {
 			offset = r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		}
 
 		o := RouteOrdering{
-			AST:        order.Inner.Expr,
-			ColumnName: columnName,
-			Offset:     offset,
-			WOffset:    -1,
-			Direction:  order.Inner.Direction,
+			AST:                    order.Inner.Expr,
+			ColumnName:             columnName,
+			WeightStringColumnName: weightStringColumnName,
+			Offset:                 offset,
+			WOffset:                -1,
+			Direction:              order.Inner.Direction,
 		}
 		if columnName == "" && ctx.NeedsWeightString(order.SimplifiedExpr) {
 			ws := weightStringFor(order.SimplifiedExpr)

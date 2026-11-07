@@ -174,6 +174,39 @@ func (u *Union) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underR
 	return outputOffset
 }
 
+func (u *Union) addRuntimeWeightStringColumn(expr *sqlparser.ColName) (string, bool) {
+	if u.distinct {
+		return "", false
+	}
+	aliasIdx := 0
+	for {
+		alias := fmt.Sprintf("__vtgate_orderby_weight_string_%d", aliasIdx)
+		found := false
+		for i := range u.Sources {
+			for _, selectExpr := range u.GetSelectFor(i).SelectExprs.Exprs {
+				if aliased, ok := selectExpr.(*sqlparser.AliasedExpr); ok && aliased.As.EqualString(alias) {
+					found = true
+					break
+				}
+			}
+			if found {
+				break
+			}
+		}
+		if !found {
+			break
+		}
+		aliasIdx++
+	}
+	alias := fmt.Sprintf("__vtgate_orderby_weight_string_%d", aliasIdx)
+	weightString := &sqlparser.WeightStringFuncExpr{Expr: &sqlparser.ColName{Name: expr.Name}}
+	aliased := &sqlparser.AliasedExpr{Expr: weightString, As: sqlparser.NewIdentifierCI(alias)}
+	for i := range u.Sources {
+		u.GetSelectFor(i).AddSelectExpr(sqlparser.Clone(aliased))
+	}
+	return alias, true
+}
+
 func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool, expr *sqlparser.AliasedExpr) int {
 	if reuse {
 		offset := u.FindCol(ctx, expr.Expr, false)

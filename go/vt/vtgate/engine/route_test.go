@@ -1302,6 +1302,17 @@ func TestRouteSortWeightStrings(t *testing.T) {
 	})
 }
 
+func TestRouteTrimsHiddenOrderColumns(t *testing.T) {
+	route := &Route{HiddenColumnNames: []string{"__vtgate_orderby_weight_string_1"}}
+	result := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|__vtgate_orderby_weight_string_1", "int64|varbinary"),
+		"1|weight",
+	)
+
+	got := route.trimHiddenColumns(result)
+	require.Equal(t, sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"), got)
+}
+
 func TestRouteSortCollation(t *testing.T) {
 	sel := NewRoute(
 		Scatter,

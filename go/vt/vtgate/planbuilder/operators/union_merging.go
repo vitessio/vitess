@@ -192,13 +192,133 @@ func routeContainsGlobalAggregate(ctx *plancontext.PlanningContext, route *Route
 }
 
 func hasUnresolvedUnionStar(op Operator) bool {
-	if union, ok := op.(*Union); ok {
-		return slices.ContainsFunc(union.unionColumns, func(expr sqlparser.SelectExpr) bool {
+	switch op := op.(type) {
+	case *Union:
+		return slices.ContainsFunc(op.unionColumns, func(expr sqlparser.SelectExpr) bool {
 			_, isStar := expr.(*sqlparser.StarExpr)
 			return isStar
 		})
+	case *Filter:
+		return hasUnresolvedUnionStar(op.Source)
+	case *Distinct:
+		return hasUnresolvedUnionStar(op.Source)
+	case *Limit:
+		return hasUnresolvedUnionStar(op.Source)
+	case *Ordering:
+		return hasUnresolvedUnionStar(op.Source)
+	case *LockAndComment:
+		return hasUnresolvedUnionStar(op.Source)
+	case *Horizon:
+		return queryHasStarProjection(op.Query)
+	case *Projection:
+		_, hasStar := op.Columns.(StarProjections)
+		return hasStar
+	default:
+		return slices.ContainsFunc(op.Inputs(), hasUnresolvedUnionStar)
 	}
-	return slices.ContainsFunc(op.Inputs(), hasUnresolvedUnionStar)
+}
+
+func hasUnionOperator(op Operator) bool {
+	if op == nil {
+		return false
+	}
+	if _, ok := op.(*Union); ok {
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), hasUnionOperator)
+}
+
+func knownOutputOffset(ctx *plancontext.PlanningContext, op Operator, expr sqlparser.Expr) (int, bool) {
+	selectExprs, ok := outputSelectExprs(ctx, op)
+	if !ok {
+		return -1, false
+	}
+	for offset, selectExpr := range selectExprs {
+		switch selectExpr := selectExpr.(type) {
+		case *sqlparser.StarExpr:
+			return -1, false
+		case *sqlparser.AliasedExpr:
+			if sqlparser.Equals.Expr(expr, selectExpr.Expr) || ctx.SemTable.EqualsExprWithDeps(expr, selectExpr.Expr) {
+				return offset, true
+			}
+			if col, isColumn := expr.(*sqlparser.ColName); isColumn && col.Name.EqualString(selectExpr.ColumnName()) {
+				return offset, true
+			}
+		}
+	}
+	return -1, false
+}
+
+func outputSelectExprs(ctx *plancontext.PlanningContext, op Operator) ([]sqlparser.SelectExpr, bool) {
+	switch op := op.(type) {
+	case *Projection:
+		return op.GetSelectExprs(ctx), true
+	case *Horizon:
+		return queryOutputSelectExprs(op.Query)
+	case *Union:
+		return op.unionColumns, true
+	case *Filter:
+		return outputSelectExprs(ctx, op.Source)
+	case *Distinct:
+		return outputSelectExprs(ctx, op.Source)
+	case *Limit:
+		return outputSelectExprs(ctx, op.Source)
+	case *Ordering:
+		return outputSelectExprs(ctx, op.Source)
+	case *LockAndComment:
+		return outputSelectExprs(ctx, op.Source)
+	}
+	return nil, false
+}
+
+func queryOutputSelectExprs(query sqlparser.TableStatement) ([]sqlparser.SelectExpr, bool) {
+	switch query := query.(type) {
+	case *sqlparser.Select:
+		if query.SelectExprs == nil {
+			return nil, false
+		}
+		return query.SelectExprs.Exprs, true
+	case *sqlparser.Union:
+		return queryOutputSelectExprs(query.Left)
+	default:
+		return nil, false
+	}
+}
+
+func queryHasStarProjection(query sqlparser.TableStatement) bool {
+	switch query := query.(type) {
+	case *sqlparser.Select:
+		if query.SelectExprs == nil {
+			return false
+		}
+		return slices.ContainsFunc(query.SelectExprs.Exprs, func(expr sqlparser.SelectExpr) bool {
+			_, isStar := expr.(*sqlparser.StarExpr)
+			return isStar
+		})
+	case *sqlparser.Union:
+		return queryHasStarProjection(query.Left)
+	default:
+		return false
+	}
+}
+
+func addRuntimeWeightStringColumn(op Operator, expr *sqlparser.ColName) (string, bool) {
+	switch op := op.(type) {
+	case *Union:
+		return op.addRuntimeWeightStringColumn(expr)
+	case *Filter:
+		return addRuntimeWeightStringColumn(op.Source, expr)
+	case *Distinct:
+		return addRuntimeWeightStringColumn(op.Source, expr)
+	case *Limit:
+		return addRuntimeWeightStringColumn(op.Source, expr)
+	case *Ordering:
+		return addRuntimeWeightStringColumn(op.Source, expr)
+	case *LockAndComment:
+		return addRuntimeWeightStringColumn(op.Source, expr)
+	default:
+		return "", false
+	}
 }
 
 func markSpecialUnionInput(op Operator, contains bool) {
@@ -208,31 +328,150 @@ func markSpecialUnionInput(op Operator, contains bool) {
 }
 
 func hasGlobalAggregate(ctx *plancontext.PlanningContext, op Operator) bool {
-	if op == nil {
-		return false
-	}
-	if agg, ok := op.(*Aggregator); ok && len(agg.Grouping) == 0 && len(agg.Aggregations) > 0 {
-		return true
-	}
-	switch op := op.(type) {
-	case *Horizon:
-		return hasGlobalAggregateQuery(ctx, op.Query)
-	case *Join:
-		return hasGlobalAggregateJoin(ctx, op.JoinType, op.LHS, op.RHS)
-	case *ApplyJoin:
-		return hasGlobalAggregateJoin(ctx, op.JoinType, op.LHS, op.RHS)
-	}
-	return slices.ContainsFunc(op.Inputs(), func(input Operator) bool {
-		return hasGlobalAggregate(ctx, input)
-	})
+	return classifyUnionInput(ctx, op).globalAggregate
 }
 
-func hasGlobalAggregateJoin(ctx *plancontext.PlanningContext, joinType sqlparser.JoinType, lhs, rhs Operator) bool {
-	lhsAggregate := hasGlobalAggregate(ctx, lhs)
-	rhsAggregate := hasGlobalAggregate(ctx, rhs)
-	lhsShardedRows := hasOrdinaryShardedOperator(ctx, lhs)
-	rhsShardedRows := hasOrdinaryShardedOperator(ctx, rhs)
-	return hasGlobalAggregateAcrossJoin(joinType, lhsAggregate, rhsAggregate, lhsShardedRows, rhsShardedRows)
+type unionInputProperties struct {
+	globalAggregate     bool
+	ordinaryShardedRows bool
+}
+
+func classifyUnionInput(ctx *plancontext.PlanningContext, op Operator) unionInputProperties {
+	if op == nil {
+		return unionInputProperties{}
+	}
+	if agg, ok := op.(*Aggregator); ok && len(agg.Grouping) == 0 && len(agg.Aggregations) > 0 {
+		return unionInputProperties{globalAggregate: true}
+	}
+	switch op := op.(type) {
+	case *Route:
+		props := classifyUnionInput(ctx, op.Source)
+		_, sharded := op.Routing.(*ShardedRouting)
+		props.ordinaryShardedRows = sharded && !routeContainsSpecialUnionInput(op) && !props.globalAggregate
+		return props
+	case *Horizon:
+		return classifyUnionQuery(ctx, op.Query)
+	case *Join:
+		return combineUnionInputProperties(op.JoinType, classifyUnionInput(ctx, op.LHS), classifyUnionInput(ctx, op.RHS))
+	case *ApplyJoin:
+		return combineUnionInputProperties(op.JoinType, classifyUnionInput(ctx, op.LHS), classifyUnionInput(ctx, op.RHS))
+	}
+
+	var props unionInputProperties
+	for _, input := range op.Inputs() {
+		child := classifyUnionInput(ctx, input)
+		props.globalAggregate = props.globalAggregate || child.globalAggregate
+		props.ordinaryShardedRows = props.ordinaryShardedRows || child.ordinaryShardedRows
+	}
+	if props.globalAggregate {
+		props.ordinaryShardedRows = false
+	}
+	return props
+}
+
+func combineUnionInputProperties(joinType sqlparser.JoinType, lhs, rhs unionInputProperties) unionInputProperties {
+	props := unionInputProperties{
+		globalAggregate: hasGlobalAggregateAcrossJoin(joinType, lhs.globalAggregate, rhs.globalAggregate, lhs.ordinaryShardedRows, rhs.ordinaryShardedRows),
+	}
+	if !props.globalAggregate {
+		if joinType.IsInner() {
+			props.ordinaryShardedRows = lhs.ordinaryShardedRows || rhs.ordinaryShardedRows
+		} else if joinType == sqlparser.LeftJoinType || joinType == sqlparser.NaturalLeftJoinType {
+			props.ordinaryShardedRows = lhs.ordinaryShardedRows
+		}
+	}
+	return props
+}
+
+func classifyUnionQuery(ctx *plancontext.PlanningContext, query sqlparser.SQLNode) unionInputProperties {
+	switch query := query.(type) {
+	case *sqlparser.Select:
+		if query.GroupBy == nil && (ctx.ContainsAggr(query.SelectExprs) || ctx.ContainsAggr(query.Having)) {
+			return unionInputProperties{globalAggregate: true}
+		}
+		if query.With != nil {
+			for _, cte := range query.With.CTEs {
+				if classifyUnionQuery(ctx, cte.Subquery).globalAggregate {
+					return unionInputProperties{globalAggregate: true}
+				}
+			}
+		}
+		for _, expression := range []sqlparser.SQLNode{query.SelectExprs, query.Where, query.Having, query.GroupBy, query.OrderBy} {
+			if hasGlobalAggregateSubquery(ctx, expression) {
+				return unionInputProperties{globalAggregate: true}
+			}
+		}
+		return classifyUnionTableExprs(ctx, query.From)
+	case *sqlparser.Union:
+		if query.With != nil {
+			for _, cte := range query.With.CTEs {
+				if classifyUnionQuery(ctx, cte.Subquery).globalAggregate {
+					return unionInputProperties{globalAggregate: true}
+				}
+			}
+		}
+		if hasGlobalAggregateSubquery(ctx, query.OrderBy) || hasGlobalAggregateSubquery(ctx, query.Limit) {
+			return unionInputProperties{globalAggregate: true}
+		}
+		lhs := classifyUnionQuery(ctx, query.Left)
+		rhs := classifyUnionQuery(ctx, query.Right)
+		props := unionInputProperties{globalAggregate: lhs.globalAggregate || rhs.globalAggregate}
+		if !props.globalAggregate {
+			props.ordinaryShardedRows = lhs.ordinaryShardedRows || rhs.ordinaryShardedRows
+		}
+		return props
+	default:
+		return unionInputProperties{}
+	}
+}
+
+func hasGlobalAggregateSubquery(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) bool {
+	if node == nil {
+		return false
+	}
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if subquery, ok := node.(*sqlparser.Subquery); ok {
+			found = classifyUnionQuery(ctx, subquery.Select).globalAggregate
+			return false, nil
+		}
+		return !found, nil
+	}, node)
+	return found
+}
+
+func classifyUnionTableExprs(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) unionInputProperties {
+	var props unionInputProperties
+	for _, expr := range exprs {
+		props = combineUnionInputProperties(sqlparser.NormalJoinType, props, classifyUnionTableExpr(ctx, expr))
+	}
+	return props
+}
+
+func classifyUnionTableExpr(ctx *plancontext.PlanningContext, expr sqlparser.TableExpr) unionInputProperties {
+	switch expr := expr.(type) {
+	case *sqlparser.AliasedTableExpr:
+		if derived, ok := expr.Expr.(*sqlparser.DerivedTable); ok {
+			return classifyUnionQuery(ctx, derived.Select)
+		}
+		tableSet := ctx.SemTable.TableSetFor(expr)
+		if tableSet.NumberOfTables() != 1 {
+			return unionInputProperties{}
+		}
+		tableInfo, err := ctx.SemTable.TableInfoFor(tableSet)
+		if err != nil {
+			return unionInputProperties{}
+		}
+		table := tableInfo.GetVindexTable()
+		if table != nil && table.Keyspace != nil && table.Keyspace.Sharded && table.Type != vindexes.TypeReference {
+			return unionInputProperties{ordinaryShardedRows: true}
+		}
+	case *sqlparser.JoinTableExpr:
+		return combineUnionInputProperties(expr.Join, classifyUnionTableExpr(ctx, expr.LeftExpr), classifyUnionTableExpr(ctx, expr.RightExpr))
+	case *sqlparser.ParenTableExpr:
+		return classifyUnionTableExprs(ctx, expr.Exprs)
+	}
+	return unionInputProperties{}
 }
 
 func hasGlobalAggregateAcrossJoin(joinType sqlparser.JoinType, lhsAggregate, rhsAggregate, lhsShardedRows, rhsShardedRows bool) bool {
@@ -243,124 +482,6 @@ func hasGlobalAggregateAcrossJoin(joinType sqlparser.JoinType, lhsAggregate, rhs
 		return lhsAggregate || (rhsAggregate && !lhsShardedRows)
 	}
 	return lhsAggregate || rhsAggregate
-}
-
-func hasOrdinaryShardedOperator(ctx *plancontext.PlanningContext, op Operator) bool {
-	switch op := op.(type) {
-	case *Route:
-		return isOrdinaryShardedRoute(ctx, op)
-	case *Horizon:
-		return hasOrdinaryShardedRowsQuery(ctx, op.Query)
-	}
-	if hasGlobalAggregate(ctx, op) {
-		return false
-	}
-	return slices.ContainsFunc(op.Inputs(), func(input Operator) bool {
-		return hasOrdinaryShardedOperator(ctx, input)
-	})
-}
-
-func hasGlobalAggregateQuery(ctx *plancontext.PlanningContext, query sqlparser.SQLNode) bool {
-	switch query := query.(type) {
-	case *sqlparser.Select:
-		if query.GroupBy == nil && (ctx.ContainsAggr(query.SelectExprs) || ctx.ContainsAggr(query.Having)) {
-			return true
-		}
-		return hasGlobalAggregateInTableExprs(ctx, query.From)
-	case *sqlparser.Union:
-		return hasGlobalAggregateQuery(ctx, query.Left) || hasGlobalAggregateQuery(ctx, query.Right)
-	default:
-		return false
-	}
-}
-
-func hasGlobalAggregateInTableExprs(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) bool {
-	var hasAggregate, hasShardedRows bool
-	for _, expr := range exprs {
-		hasAggregate = hasAggregate || hasGlobalAggregateInTableExpr(ctx, expr)
-		hasShardedRows = hasShardedRows || hasOrdinaryShardedRowsTableExpr(ctx, expr)
-	}
-	return hasAggregate && !hasShardedRows
-}
-
-func hasGlobalAggregateInTableExpr(ctx *plancontext.PlanningContext, expr sqlparser.TableExpr) bool {
-	switch expr := expr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		if derived, ok := expr.Expr.(*sqlparser.DerivedTable); ok {
-			return hasGlobalAggregateQuery(ctx, derived.Select)
-		}
-	case *sqlparser.JoinTableExpr:
-		lhsAggregate := hasGlobalAggregateInTableExpr(ctx, expr.LeftExpr)
-		rhsAggregate := hasGlobalAggregateInTableExpr(ctx, expr.RightExpr)
-		lhsShardedRows := hasOrdinaryShardedRowsTableExpr(ctx, expr.LeftExpr)
-		rhsShardedRows := hasOrdinaryShardedRowsTableExpr(ctx, expr.RightExpr)
-		return hasGlobalAggregateAcrossJoin(expr.Join, lhsAggregate, rhsAggregate, lhsShardedRows, rhsShardedRows)
-	case *sqlparser.ParenTableExpr:
-		return hasGlobalAggregateInTableExprs(ctx, expr.Exprs)
-	}
-	return false
-}
-
-func hasOrdinaryShardedRowsQuery(ctx *plancontext.PlanningContext, query sqlparser.SQLNode) bool {
-	if hasGlobalAggregateQuery(ctx, query) {
-		return false
-	}
-	switch query := query.(type) {
-	case *sqlparser.Select:
-		return hasOrdinaryShardedRowsTableExprs(ctx, query.From)
-	case *sqlparser.Union:
-		return hasOrdinaryShardedRowsQuery(ctx, query.Left) || hasOrdinaryShardedRowsQuery(ctx, query.Right)
-	default:
-		return false
-	}
-}
-
-func hasOrdinaryShardedRowsTableExprs(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) bool {
-	for _, expr := range exprs {
-		if hasOrdinaryShardedRowsTableExpr(ctx, expr) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasOrdinaryShardedRowsTableExpr(ctx *plancontext.PlanningContext, expr sqlparser.TableExpr) bool {
-	switch expr := expr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		if derived, ok := expr.Expr.(*sqlparser.DerivedTable); ok {
-			if hasGlobalAggregateQuery(ctx, derived.Select) {
-				return false
-			}
-			return hasOrdinaryShardedRowsQuery(ctx, derived.Select)
-		}
-		tableSet := ctx.SemTable.TableSetFor(expr)
-		if tableSet.NumberOfTables() != 1 {
-			return false
-		}
-		tableInfo, err := ctx.SemTable.TableInfoFor(tableSet)
-		if err != nil {
-			return false
-		}
-		table := tableInfo.GetVindexTable()
-		return table != nil && table.Keyspace != nil && table.Keyspace.Sharded && table.Type != vindexes.TypeReference
-	case *sqlparser.JoinTableExpr:
-		lhsAggregate := hasGlobalAggregateInTableExpr(ctx, expr.LeftExpr)
-		rhsAggregate := hasGlobalAggregateInTableExpr(ctx, expr.RightExpr)
-		lhsShardedRows := hasOrdinaryShardedRowsTableExpr(ctx, expr.LeftExpr)
-		rhsShardedRows := hasOrdinaryShardedRowsTableExpr(ctx, expr.RightExpr)
-		if hasGlobalAggregateAcrossJoin(expr.Join, lhsAggregate, rhsAggregate, lhsShardedRows, rhsShardedRows) {
-			return false
-		}
-		if expr.Join.IsInner() {
-			return lhsShardedRows || rhsShardedRows
-		}
-		if expr.Join == sqlparser.LeftJoinType || expr.Join == sqlparser.NaturalLeftJoinType {
-			return lhsShardedRows
-		}
-	case *sqlparser.ParenTableExpr:
-		return hasOrdinaryShardedRowsTableExprs(ctx, expr.Exprs)
-	}
-	return false
 }
 
 // tryMergeNoneUnion merges a union pairing in which at least one side has a
