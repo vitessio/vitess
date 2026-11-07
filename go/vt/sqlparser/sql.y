@@ -16,7 +16,11 @@ limitations under the License.
 %{
 package sqlparser
 
-import "vitess.io/vitess/go/ptr"
+import (
+  "strings"
+
+  "vitess.io/vitess/go/ptr"
+)
 
 func setParseTrees(yylex yyLexer, stmts []Statement) {
   if len(stmts) > 1 && stmts[len(stmts)-1] == nil {
@@ -278,6 +282,11 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // When we see '(', we can either reduce partition_definitions_opt to empty or shift '(' to parse partition definitions.
 // We want shifting to take precedence, so we add lower precedence to the reduce rule.
 %nonassoc EMPTY_PARTITION_DEFINITIONS
+// LOCAL after PARTITION in ALTER TABLE can be NO_WRITE_TO_BINLOG or the name
+// of a partition. Like MySQL, we read it as NO_WRITE_TO_BINLOG, so a
+// partition named local must be quoted there.
+%nonassoc EMPTY_NO_WRITE_TO_BINLOG
+%nonassoc <str> LOCAL
 
 %token LEX_ERROR
 %left <str> UNION
@@ -432,7 +441,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> ACTIVE ADMIN AUTOEXTEND_SIZE BUCKETS CLONE COLUMN_FORMAT COMPONENT DEFINITION ENFORCED ENGINE_ATTRIBUTE EXCLUDE FOLLOWING GET_MASTER_PUBLIC_KEY GET_SOURCE_PUBLIC_KEY HISTOGRAM HISTORY
 %token <str> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
 %token <str> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PARTIAL PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
-%token <str> TABLE_CHECKSUM
+%token <str> TABLE_CHECKSUM NODEGROUP QUICK FAST MEDIUM CHANGED USE_FRM
 %token <str> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_ENGINE_ATTRIBUTE SECONDARY_LOAD SECONDARY_UNLOAD SIMPLE SKIP
 %token <str> SOURCE_COMPRESSION_ALGORITHMS SOURCE_PUBLIC_KEY_PATH SOURCE_TLS_CIPHERSUITES SOURCE_ZSTD_COMPRESSION_LEVEL SRID
 %token <str> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE RETURNING
@@ -449,7 +458,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> FORMAT VITESS VTEXPLAIN VEXPLAIN PLAN MYSQLPLAN
 
 // Lock type tokens
-%token <str> LOCAL LOW_PRIORITY
+%token <str> LOW_PRIORITY
 
 // Flush tokens
 %token <str> NO_WRITE_TO_BINLOG LOGS ERROR GENERAL HOSTS OPTIMIZER_COSTS USER_RESOURCES SLOW CHANNEL RELAY EXPORT
@@ -645,9 +654,17 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <optLike> create_like
 %type <str> table_opt_value
 %type <tableOption> table_option ternary_option
+%type <boolean> no_write_to_binlog_opt
+%type <strs> check_type_list_opt repair_type_list_opt
+%type <str> check_type repair_type index_type_keyword
+%type <literal> partition_node_group
+%type <valTuple> partition_value_tuple
+%type <exprs> partition_value_list
+%type <expr> partition_value
+%type <orderBy> alter_order_list
 %type <literal> ulonglong_num ulong_num size_number
 %type <tableOptions> table_option_list table_option_list_opt space_separated_table_option_list
-%type <indexInfo> index_info
+%type <indexInfo> index_info named_index_info
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option using_index_type
@@ -3072,6 +3089,17 @@ index_definition:
   {
     $$ = &IndexDefinition{Info: $1, Columns: $3, Options: $5}
   }
+// The index type can come before the columns, as in `KEY k USING BTREE (a)`.
+// It is written out with the options after the columns, where it means the
+// same. As in MySQL, TYPE takes the place of USING there only after a name.
+| index_info USING sql_id '(' index_column_list ')' index_option_list_opt
+  {
+    $$ = &IndexDefinition{Info: $1, Columns: $5, Options: append([]*IndexOption{{Name: string($2), String: $3.String()}}, $7...)}
+  }
+| named_index_info index_type_keyword sql_id '(' index_column_list ')' index_option_list_opt
+  {
+    $$ = &IndexDefinition{Info: $1, Columns: $5, Options: append([]*IndexOption{{Name: "using", String: $3.String()}}, $7...)}
+  }
 
 index_option_list_opt:
   {
@@ -3097,10 +3125,9 @@ index_option:
   {
     $$ = $1
   }
-| KEY_BLOCK_SIZE equal_opt INTEGRAL
+| KEY_BLOCK_SIZE equal_opt ulong_num
   {
-    // should not be string
-    $$ = &IndexOption{Name: string($1), Value: NewIntLiteral($3)}
+    $$ = &IndexOption{Name: string($1), Value: $3}
   }
 | COMMENT_KEYWORD STRING
   {
@@ -3157,6 +3184,20 @@ index_info:
 | index_or_key name_opt
   {
     $$ = &IndexInfo{Type: IndexTypeDefault, Name: NewIdentifierCI($2)}
+  }
+
+named_index_info:
+  constraint_name_opt PRIMARY KEY sql_id
+  {
+    $$ = &IndexInfo{Type: IndexTypePrimary, ConstraintName: NewIdentifierCI($1), Name: NewIdentifierCI("PRIMARY")}
+  }
+| constraint_name_opt UNIQUE index_or_key_opt sql_id
+  {
+    $$ = &IndexInfo{Type: IndexTypeUnique, ConstraintName: NewIdentifierCI($1), Name: $4}
+  }
+| index_or_key sql_id
+  {
+    $$ = &IndexInfo{Type: IndexTypeDefault, Name: $2}
   }
 
 constraint_name_opt:
@@ -3752,9 +3793,13 @@ alter_commands_list:
   {
     $$ = $1
   }
-| alter_options ',' ORDER BY column_list
+| ORDER BY alter_order_list
   {
-    $$ = append($1,&OrderByOption{Cols:$5})
+    $$ = []AlterOption{&OrderByOption{Order: $3}}
+  }
+| alter_options ',' ORDER BY alter_order_list
+  {
+    $$ = append($1,&OrderByOption{Order: $5})
   }
 | alter_commands_modifier_list
   {
@@ -3764,9 +3809,25 @@ alter_commands_list:
   {
     $$ = append($1,$3...)
   }
-| alter_commands_modifier_list ',' alter_options ',' ORDER BY column_list
+| alter_commands_modifier_list ',' ORDER BY alter_order_list
   {
-    $$ = append(append($1,$3...),&OrderByOption{Cols:$7})
+    $$ = append($1,&OrderByOption{Order: $5})
+  }
+| alter_commands_modifier_list ',' alter_options ',' ORDER BY alter_order_list
+  {
+    $$ = append(append($1,$3...),&OrderByOption{Order: $7})
+  }
+
+// ALTER TABLE ... ORDER BY takes columns, which can be qualified, each with an
+// optional direction.
+alter_order_list:
+  column_name asc_desc_opt
+  {
+    $$ = OrderBy{&Order{Expr: $1, Direction: $2}}
+  }
+| alter_order_list ',' column_name asc_desc_opt
+  {
+    $$ = append($1, &Order{Expr: $3, Direction: $4})
   }
 
 alter_options:
@@ -3832,6 +3893,10 @@ alter_option:
   {
     $$ = &AlterCheck{Name: $3, Enforced: $4}
   }
+| ALTER CONSTRAINT sql_id enforced
+  {
+    $$ = &AlterCheck{Name: $3, Enforced: $4, Constraint: true}
+  }
 | ALTER INDEX sql_id VISIBLE
   {
     $$ = &AlterIndex{Name: $3, Invisible: false}
@@ -3856,6 +3921,10 @@ alter_option:
   {
     $$ = &AlterCharset{CharacterSet:$4, Collate:$5}
   }
+| CONVERT TO charset_or_character_set DEFAULT collate_opt
+  {
+    $$ = &AlterCharset{IsDefault: true, Collate:$5}
+  }
 | DISABLE KEYS
   {
     $$ = &KeyState{Enable:false}
@@ -3872,8 +3941,9 @@ alter_option:
   {
     $$ = &TablespaceOperation{Import:true}
   }
-| DROP column_opt column_name
+| DROP column_opt column_name restrict_or_cascade_opt
   {
+    // MySQL accepts RESTRICT and CASCADE here, and ignores them.
     $$ = &DropColumn{Name:$3}
   }
 | DROP index_or_key sql_id
@@ -3901,6 +3971,10 @@ alter_option:
     $$ = &Force{}
   }
 | RENAME to_opt table_name
+  {
+    $$ = &RenameTableName{Table:$3}
+  }
+| RENAME '=' table_name
   {
     $$ = &RenameTableName{Table:$3}
   }
@@ -4548,17 +4622,29 @@ subpartitions_opt:
   }
 
 partition_operation:
-  ADD PARTITION '(' partition_definition ')'
+  ADD PARTITION no_write_to_binlog_opt
   {
-    $$ = &PartitionSpec{Action: AddAction, Definitions: []*PartitionDefinition{$4}}
+    $$ = &PartitionSpec{Action: AddAction, NoWriteToBinlog: $3}
+  }
+| ADD PARTITION no_write_to_binlog_opt '(' partition_definitions ')'
+  {
+    $$ = &PartitionSpec{Action: AddAction, NoWriteToBinlog: $3, Definitions: $5}
+  }
+| ADD PARTITION no_write_to_binlog_opt PARTITIONS INTEGRAL
+  {
+    $$ = &PartitionSpec{Action: AddAction, NoWriteToBinlog: $3, Number: NewIntLiteral($5)}
   }
 | DROP PARTITION partition_list
   {
     $$ = &PartitionSpec{Action:DropAction, Names:$3}
   }
-| REORGANIZE PARTITION partition_list INTO openb partition_definitions closeb
+| REORGANIZE PARTITION no_write_to_binlog_opt
   {
-    $$ = &PartitionSpec{Action: ReorganizeAction, Names: $3, Definitions: $6}
+    $$ = &PartitionSpec{Action: ReorganizeAction, NoWriteToBinlog: $3}
+  }
+| REORGANIZE PARTITION no_write_to_binlog_opt partition_list INTO openb partition_definitions closeb
+  {
+    $$ = &PartitionSpec{Action: ReorganizeAction, NoWriteToBinlog: $3, Names: $4, Definitions: $7}
   }
 | DISCARD PARTITION partition_list TABLESPACE
   {
@@ -4584,57 +4670,146 @@ partition_operation:
   {
     $$ = &PartitionSpec{Action:TruncateAction, IsAll:true}
   }
-| COALESCE PARTITION INTEGRAL
+| COALESCE PARTITION no_write_to_binlog_opt INTEGRAL
   {
-    $$ = &PartitionSpec{Action:CoalesceAction, Number:NewIntLiteral($3) }
+    $$ = &PartitionSpec{Action:CoalesceAction, NoWriteToBinlog: $3, Number:NewIntLiteral($4) }
   }
 | EXCHANGE PARTITION sql_id WITH TABLE table_name without_valid_opt
   {
     $$ = &PartitionSpec{Action:ExchangeAction, Names: Partitions{$3}, TableName: $6, WithoutValidation: $7}
   }
-| ANALYZE PARTITION partition_list
+| ANALYZE PARTITION no_write_to_binlog_opt partition_list
   {
-    $$ = &PartitionSpec{Action:AnalyzeAction, Names:$3}
+    $$ = &PartitionSpec{Action:AnalyzeAction, NoWriteToBinlog: $3, Names:$4}
   }
-| ANALYZE PARTITION ALL
+| ANALYZE PARTITION no_write_to_binlog_opt ALL
   {
-    $$ = &PartitionSpec{Action:AnalyzeAction, IsAll:true}
+    $$ = &PartitionSpec{Action:AnalyzeAction, NoWriteToBinlog: $3, IsAll:true}
   }
-| CHECK PARTITION partition_list
+| CHECK PARTITION partition_list check_type_list_opt
   {
-    $$ = &PartitionSpec{Action:CheckAction, Names:$3}
+    $$ = &PartitionSpec{Action:CheckAction, Names:$3, CheckTypes: $4}
   }
-| CHECK PARTITION ALL
+| CHECK PARTITION ALL check_type_list_opt
   {
-    $$ = &PartitionSpec{Action:CheckAction, IsAll:true}
+    $$ = &PartitionSpec{Action:CheckAction, IsAll:true, CheckTypes: $4}
   }
-| OPTIMIZE PARTITION partition_list
+| OPTIMIZE PARTITION no_write_to_binlog_opt partition_list
   {
-    $$ = &PartitionSpec{Action:OptimizeAction, Names:$3}
+    $$ = &PartitionSpec{Action:OptimizeAction, NoWriteToBinlog: $3, Names:$4}
   }
-| OPTIMIZE PARTITION ALL
+| OPTIMIZE PARTITION no_write_to_binlog_opt ALL
   {
-    $$ = &PartitionSpec{Action:OptimizeAction, IsAll:true}
+    $$ = &PartitionSpec{Action:OptimizeAction, NoWriteToBinlog: $3, IsAll:true}
   }
-| REBUILD PARTITION partition_list
+| REBUILD PARTITION no_write_to_binlog_opt partition_list
   {
-    $$ = &PartitionSpec{Action:RebuildAction, Names:$3}
+    $$ = &PartitionSpec{Action:RebuildAction, NoWriteToBinlog: $3, Names:$4}
   }
-| REBUILD PARTITION ALL
+| REBUILD PARTITION no_write_to_binlog_opt ALL
   {
-    $$ = &PartitionSpec{Action:RebuildAction, IsAll:true}
+    $$ = &PartitionSpec{Action:RebuildAction, NoWriteToBinlog: $3, IsAll:true}
   }
-| REPAIR PARTITION partition_list
+| REPAIR PARTITION no_write_to_binlog_opt partition_list repair_type_list_opt
   {
-    $$ = &PartitionSpec{Action:RepairAction, Names:$3}
+    $$ = &PartitionSpec{Action:RepairAction, NoWriteToBinlog: $3, Names:$4, CheckTypes: $5}
   }
-| REPAIR PARTITION ALL
+| REPAIR PARTITION no_write_to_binlog_opt ALL repair_type_list_opt
   {
-    $$ = &PartitionSpec{Action:RepairAction, IsAll:true}
+    $$ = &PartitionSpec{Action:RepairAction, NoWriteToBinlog: $3, IsAll:true, CheckTypes: $5}
   }
 | UPGRADE PARTITIONING
   {
     $$ = &PartitionSpec{Action:UpgradeAction}
+  }
+| SECONDARY_LOAD
+  {
+    $$ = &PartitionSpec{Action: SecondaryLoadAction}
+  }
+| SECONDARY_LOAD PARTITION '(' partition_list ')'
+  {
+    $$ = &PartitionSpec{Action: SecondaryLoadAction, Names: $4}
+  }
+| SECONDARY_UNLOAD
+  {
+    $$ = &PartitionSpec{Action: SecondaryUnloadAction}
+  }
+| SECONDARY_UNLOAD PARTITION '(' partition_list ')'
+  {
+    $$ = &PartitionSpec{Action: SecondaryUnloadAction, Names: $4}
+  }
+
+// LOCAL is a synonym of NO_WRITE_TO_BINLOG.
+no_write_to_binlog_opt:
+  %prec EMPTY_NO_WRITE_TO_BINLOG
+  {
+    $$ = false
+  }
+| NO_WRITE_TO_BINLOG
+  {
+    $$ = true
+  }
+| LOCAL
+  {
+    $$ = true
+  }
+
+check_type_list_opt:
+  {
+    $$ = nil
+  }
+| check_type_list_opt check_type
+  {
+    $$ = append($1, $2)
+  }
+
+check_type:
+  QUICK
+  {
+    $$ = "quick"
+  }
+| FAST
+  {
+    $$ = "fast"
+  }
+| MEDIUM
+  {
+    $$ = "medium"
+  }
+| EXTENDED
+  {
+    $$ = "extended"
+  }
+| CHANGED
+  {
+    $$ = "changed"
+  }
+| FOR UPGRADE
+  {
+    $$ = "for upgrade"
+  }
+
+repair_type_list_opt:
+  {
+    $$ = nil
+  }
+| repair_type_list_opt repair_type
+  {
+    $$ = append($1, $2)
+  }
+
+repair_type:
+  QUICK
+  {
+    $$ = "quick"
+  }
+| EXTENDED
+  {
+    $$ = "extended"
+  }
+| USE_FRM
+  {
+    $$ = "use_frm"
   }
 
 without_valid_opt:
@@ -4710,6 +4885,11 @@ partition_definition_attribute_list_opt:
     $1.TableSpace = $2
     $$ = $1
   }
+| partition_definition_attribute_list_opt partition_node_group
+  {
+    $1.NodeGroup = $2
+    $$ = $1
+  }
 | partition_definition_attribute_list_opt subpartition_definition_list_with_brackets
   {
     $1.SubPartitionDefinitions = $2
@@ -4776,13 +4956,24 @@ subpartition_definition_attribute_list_opt:
     $1.TableSpace = $2
     $$ = $1
   }
+| subpartition_definition_attribute_list_opt partition_node_group
+  {
+    $1.NodeGroup = $2
+    $$ = $1
+  }
 
 partition_value_range:
-  VALUES LESS THAN val_tuple
+  VALUES LESS THAN partition_value_tuple
   {
     $$ = &PartitionValueRange{
     	Type: LessThanType,
     	Range: $4,
+    }
+    // VALUES LESS THAN (MAXVALUE) means VALUES LESS THAN MAXVALUE.
+    if len($4) == 1 {
+      if _, ok := $4[0].(*MaxValue); ok {
+        $$ = &PartitionValueRange{Type: LessThanType, Maxvalue: true}
+      }
     }
   }
 | VALUES LESS THAN maxvalue
@@ -4792,12 +4983,44 @@ partition_value_range:
     	Maxvalue: true,
     }
   }
-| VALUES IN val_tuple
+| VALUES IN partition_value_tuple
   {
     $$ = &PartitionValueRange{
     	Type: InType,
     	Range: $3,
     }
+  }
+
+// A value that bounds a partition can be MAXVALUE, as in
+// VALUES LESS THAN (1, MAXVALUE) for RANGE COLUMNS. MAXVALUE alone is the
+// maxvalue rule.
+partition_value_tuple:
+  openb partition_value_list closeb
+  {
+    $$ = ValTuple($2)
+  }
+
+partition_value_list:
+  partition_value
+  {
+    $$ = []Expr{$1}
+  }
+| partition_value_list ',' partition_value
+  {
+    $$ = append($1, $3)
+  }
+
+partition_value:
+  expression
+| MAXVALUE
+  {
+    $$ = &MaxValue{}
+  }
+
+partition_node_group:
+  NODEGROUP equal_opt INTEGRAL
+  {
+    $$ = NewIntLiteral($3)
   }
 
 partition_storage_opt:
@@ -4867,10 +5090,6 @@ partition_name:
 
 maxvalue:
   MAXVALUE
-  {
-    $$ = ""
-  }
-| openb MAXVALUE closeb
   {
     $$ = ""
   }
@@ -9279,6 +9498,23 @@ using_index_type:
   {
     $$ = &IndexOption{Name: string($1), String: string($2.String())}
   }
+| index_type_keyword sql_id
+  {
+    // TYPE is a synonym of USING here.
+    $$ = &IndexOption{Name: "using", String: string($2.String())}
+  }
+
+// index_type_keyword is TYPE, which MySQL takes in place of USING before an
+// index type. TYPE is not a keyword here, because it is a common column name
+// that would then have to be quoted in every formatted query.
+index_type_keyword:
+  ID
+  {
+    if !strings.EqualFold($1, "type") {
+      yylex.Error("syntax error")
+      return 1
+    }
+  }
 
 sql_id:
   ci_identifier
@@ -9574,6 +9810,7 @@ non_reserved_keyword:
 | CASCADE
 | CASCADED
 | CATALOG_NAME
+| CHANGED
 | CHANNEL
 | CHAR %prec FUNCTION_CALL_NON_KEYWORD
 | CHARSET
@@ -9650,6 +9887,7 @@ non_reserved_keyword:
 | EXPORT
 | EXTENDED
 | ExtractValue %prec FUNCTION_CALL_NON_KEYWORD
+| FAST
 | FLOAT_TYPE
 | FIELDS
 | FIRST
@@ -9756,6 +9994,7 @@ non_reserved_keyword:
 | MASTER_ZSTD_COMPRESSION_LEVEL
 | MAX %prec FUNCTION_CALL_NON_KEYWORD
 | MAX_ROWS
+| MEDIUM
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
@@ -9780,6 +10019,7 @@ non_reserved_keyword:
 | NCHAR
 | NESTED
 | NETWORK_NAMESPACE
+| NODEGROUP
 | NOWAIT
 | NVARCHAR
 | NO
@@ -9829,6 +10069,7 @@ non_reserved_keyword:
 | QUALIFY
 | QUERIES
 | QUERY
+| QUICK
 | RANDOM
 | RATIO
 | REAL
@@ -10000,6 +10241,7 @@ non_reserved_keyword:
 | UNSIGNED
 | UNTHROTTLE
 | UNUSED
+| USE_FRM
 | UpdateXML %prec FUNCTION_CALL_NON_KEYWORD
 | UPGRADE
 | USER
