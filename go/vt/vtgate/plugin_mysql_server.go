@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
@@ -1821,38 +1822,27 @@ type mysqlServer struct {
 	tcpListener     *mysql.Listener
 	unixListener    *mysql.Listener
 	sigChan         chan os.Signal
+	tlsReloader     *servenv.TLSReloader
 	vtgateHandle    *vtgateHandler
 	heartbeatCancel context.CancelFunc
 }
 
 // initTLSConfig inits tls config for the given mysql listener
 func initTLSConfig(ctx context.Context, srv *mysqlServer, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA string, mysqlServerRequireSecureTransport bool, mysqlMinTLSVersion uint16) error {
-	serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlMinTLSVersion)
+	files := servenv.TLSServerFiles{Cert: mysqlSslCert, Key: mysqlSslKey, CA: mysqlSslCa, CRL: mysqlSslCrl, ServerCA: mysqlSslServerCA}
+	reloader, err := servenv.NewTLSReloader("mysql", files, mysqlMinTLSVersion, func(config *tls.Config) {
+		srv.tcpListener.TLSConfig.Store(config)
+	})
 	if err != nil {
-		log.Error(fmt.Sprintf("grpcutils.TLSServerConfig failed: %v", err))
+		log.Error(fmt.Sprintf("Failed to load the MySQL server's TLS config: %v", err))
 		os.Exit(1)
 		return err
 	}
-	srv.tcpListener.TLSConfig.Store(serverConfig)
 	srv.tcpListener.RequireSecureTransport = mysqlServerRequireSecureTransport
 	srv.sigChan = make(chan os.Signal, 1)
 	signal.Notify(srv.sigChan, syscall.SIGHUP)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-srv.sigChan:
-				serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlMinTLSVersion)
-				if err != nil {
-					log.Error(fmt.Sprintf("grpcutils.TLSServerConfig failed: %v", err))
-				} else {
-					log.Info("grpcutils.TLSServerConfig updated")
-					srv.tcpListener.TLSConfig.Store(serverConfig)
-				}
-			}
-		}
-	}()
+	reloader.Start(ctx, srv.sigChan, servenv.TLSReloadInterval())
+	srv.tlsReloader = reloader
 	return nil
 }
 
@@ -2026,6 +2016,9 @@ func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
 	}
 	if srv.sigChan != nil {
 		signal.Stop(srv.sigChan)
+	}
+	if srv.tlsReloader != nil {
+		srv.tlsReloader.Stop()
 	}
 	setListenerToNil := func() {
 		srv.tcpListener = nil

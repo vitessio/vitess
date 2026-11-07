@@ -75,6 +75,10 @@ type (
 		// maxBoundIssuers of them, counted by boundIssuers.
 		bound        sync.Map
 		boundIssuers atomic.Int64
+		// onIssuer, when set, is told of each issuer that verification
+		// alone vouches for once the CRLs bind to it, see
+		// clientCRLCheckerFrom.
+		onIssuer func(*x509.Certificate)
 		// revokedSerials indexes the serial numbers each CRL
 		// revokes, so that a handshake looks a certificate up
 		// rather than scanning a CRL that may hold many entries.
@@ -112,6 +116,14 @@ type (
 var expiredCRLWarnings sync.Map
 
 const expiredCRLWarningInterval = time.Minute
+
+// expiredCRLWarningsSweepAfter is how long a throttled warning lives
+// after it was last refreshed: a CRL that is still consulted refreshes
+// its entry at least once per interval, so one whose entry is older
+// than this is no longer consulted, and its key goes with it. The
+// sweep keeps expiredCRLWarnings bounded across the CRL versions that
+// a CA rotation issues.
+const expiredCRLWarningsSweepAfter = time.Hour
 
 // maxBoundIssuers bounds how many issuers found in verified chains
 // have their bindings kept, see crlChecker.bound: a peer that holds
@@ -238,6 +250,14 @@ func warnExpiredCRL(crl *x509.RevocationList, key string) {
 		slog.String("crl_number", crlNumber(crl)),
 		slog.Time("next_update", crl.NextUpdate),
 	)
+	// Warnings are rare, so sweeping the keys of CRLs that are no
+	// longer consulted here costs nothing worth counting.
+	expiredCRLWarnings.Range(func(key, last any) bool {
+		if time.Since(last.(time.Time)) >= expiredCRLWarningsSweepAfter {
+			expiredCRLWarnings.Delete(key)
+		}
+		return true
+	})
 }
 
 // isRevoked reports whether crl, which has to be one of the checker's,
@@ -255,13 +275,19 @@ func (c *crlChecker) isRevoked(cert *x509.Certificate, crl *x509.RevocationList)
 // newCRLChecker loads the CRLs in crl and, when ca is set, the CA
 // certificates that the CRLs may be signed by.
 func newCRLChecker(crl, ca string) (*crlChecker, error) {
+	return newCRLCheckerWith(crl, ca, loadx509Certificates)
+}
+
+// newCRLCheckerWith is newCRLChecker with the CA certificates loaded
+// by loadCertificates. The CRLs are read anew on every call.
+func newCRLCheckerWith(crl, ca string, loadCertificates func(string) ([]*x509.Certificate, error)) (*crlChecker, error) {
 	crls, err := loadCRLSet(crl)
 	if err != nil {
 		return nil, err
 	}
 	var issuers []*x509.Certificate
 	if ca != "" {
-		issuers, err = loadx509Certificates(ca)
+		issuers, err = loadCertificates(ca)
 		if err != nil {
 			return nil, err
 		}
@@ -607,6 +633,9 @@ func (c *crlChecker) crlsOf(issuer *x509.Certificate) ([]*x509.RevocationList, e
 		return binding.crls, binding.err
 	}
 	crls, err := c.bindCRLs(issuer)
+	if err == nil && c.onIssuer != nil {
+		c.onIssuer(issuer)
+	}
 	if c.reserveBinding() {
 		if _, loaded := c.bound.LoadOrStore(string(issuer.Raw), crlBinding{crls: crls, err: err}); loaded {
 			c.boundIssuers.Add(-1)
@@ -637,7 +666,11 @@ func loadCRLSet(crl string) ([]*x509.RevocationList, error) {
 	if err != nil {
 		return nil, err
 	}
+	return parseCRLSet(crl, body)
+}
 
+// parseCRLSet parses the CRLs in body, the contents of the file crl.
+func parseCRLSet(crl string, body []byte) ([]*x509.RevocationList, error) {
 	crlSet := make([]*x509.RevocationList, 0)
 	for len(body) > 0 {
 		var block *pem.Block
