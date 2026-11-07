@@ -44,6 +44,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -234,7 +235,9 @@ type TabletManager struct {
 	// mysqlVersion caches the MySQL server version string. It has its own lock
 	// (not tm.mutex) so reads never contend with unrelated TabletManager
 	// operations. See getMySQLVersionString for why this is cached.
-	mysqlVersion mysqlVersionCache
+	mysqlVersion                        mysqlVersionCache
+	managedReplicationDeprecationWarned atomic.Bool
+	unmanaged                           bool
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
@@ -396,6 +399,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	log.Info("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
+	tm.unmanaged = config != nil && config.Unmanaged
 	tm.tmc = tmclient.NewTabletManagerClient()
 
 	// Check if there's an existing tablet record in topology and use it if flag is enabled
@@ -575,6 +579,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if err != nil {
 		return err
 	}
+	// The check reads through the DBA pool, so it has to wait for the grants: a
+	// connection opened before them keeps the old privileges (#15730).
+	tm.warnManagedReplicationDeprecation(ctx)
 	tm.tmState.Open()
 
 	startSucceeded = true
@@ -1067,6 +1074,7 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 			log.Error(fmt.Sprintf("Failed waiting for DBA grants: %v", err))
 			os.Exit(1)
 		}
+		tm.warnManagedReplicationDeprecation(ctx)
 
 		// Open the state manager after restore is done.
 		tm.tmState.Open()
