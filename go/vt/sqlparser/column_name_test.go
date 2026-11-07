@@ -84,6 +84,10 @@ func TestPreserveColumnNames(t *testing.T) {
 		input:  "create view v as select a, a, a+b from t1",
 		output: "create view v as select a, a, a + b from t1",
 	}, {
+		name:   "a view with a * names each expression as written",
+		input:  "create view v as select *, a+b from t1",
+		output: "create view v as select *, a + b as `a+b` from t1",
+	}, {
 		name:   "a query that is not part of DDL keeps its expressions as they are",
 		input:  "select * from (select a+b from t1) as d",
 		output: "select * from (select a + b from t1) as d",

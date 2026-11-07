@@ -84,11 +84,10 @@ type Statement struct {
 	// ExpectedErrors is the argument of the `--error` command that precedes
 	// the statement, or empty when MySQL is expected to accept it.
 	ExpectedErrors string
-	// SQLModeDependent is set when the file enabled ANSI_QUOTES or
-	// IGNORE_SPACE before the statement. They change how MySQL reads a
-	// double-quoted string and a function name followed by a space, and the
-	// parser does not know the session's sql_mode, so such a statement cannot
-	// be judged.
+	// SQLModeDependent is set when the file enabled an sql_mode that changes
+	// how MySQL reads SQL text, such as ANSI_QUOTES or PIPES_AS_CONCAT, before
+	// the statement. VTGate rejects these modes, because the parser does not
+	// read SQL text under them, so such a statement cannot be judged.
 	SQLModeDependent bool
 }
 
@@ -96,6 +95,10 @@ type Statement struct {
 // without the `--` prefix. A statement that starts with one of them is a
 // command to the test runner, not SQL.
 var testCommand = regexp.MustCompile(`(?i)^\s*(let|eval|connect|connection|disconnect|source|echo|if|while|end|sleep|replace_result|replace_regex|replace_column|exec|perl|send|send_eval|reap|disable_\w+|enable_\w+|query_vertical|sorted_result|error|inc|dec|die|skip|exit|vertical_results|horizontal_results|real_sleep|save_master_pos|sync_slave_with_master|copy_file|remove_file|write_file|append_file|cat_file|file_exists|mkdir|rmdir|list_files\w*|chmod|move_file|shutdown_server|character_set|result_format|lowercase_result|expr|assert|output|change_user|ping|query|send_quit|start_timer|end_timer)\b`)
+
+// unsupportedSQLMode matches the sql_mode values that VTGate rejects, because
+// they change how MySQL reads SQL text. ANSI stands for several of them.
+var unsupportedSQLMode = regexp.MustCompile(`ANSI|NO_BACKSLASH_ESCAPES|PIPES_AS_CONCAT|REAL_AS_FLOAT|IGNORE_SPACE|HIGH_NOT_PRECEDENCE`)
 
 var (
 	errorCommand     = regexp.MustCompile(`(?i)^--\s*error\s+(.*)$`)
@@ -222,7 +225,7 @@ func (reader *reader) endStatement() {
 	}
 	if match := sqlModeCommand.FindStringSubmatch(sql); match != nil {
 		mode := strings.ToUpper(match[1])
-		reader.sqlModeDependent = strings.Contains(mode, "ANSI") || strings.Contains(mode, "IGNORE_SPACE")
+		reader.sqlModeDependent = unsupportedSQLMode.MatchString(mode)
 	}
 	reader.statements = append(reader.statements, Statement{
 		File:             reader.name,

@@ -151,8 +151,10 @@ func preserveViewColumnNames(sel *Select) {
 	for _, expr := range sel.SelectExprs.Exprs {
 		aliased, ok := expr.(*AliasedExpr)
 		if !ok {
-			// A view's * is expanded into the columns it stands for, whose
-			// names this cannot know, so the names are left as they are.
+			// A * is expanded into the columns it stands for, whose names
+			// this cannot know, so the names cannot be made unique the way
+			// MySQL does. Each expression keeps its name, as for a table.
+			preserveQueryColumnNames(sel, true)
 			return
 		}
 		_, isColumn := aliased.Expr.(*ColName)
