@@ -27,6 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
@@ -130,6 +133,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return err
 		}
 		originalType = tablet.Type
+		// No deferral starts while the backup holds the action lock, but the
+		// watcher can end one from a sample taken before the backup: decide the
+		// cleanup now.
+		deferred := tm.tmState.replicationInitPending()
 		// A primary's semi-sync is restored from the policy in effect now, so a
 		// policy that can't be read refuses the backup before the type changes.
 		// VTOrc reconciles a later policy change once the primary serves again.
@@ -185,10 +192,15 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
+			// The steps below run while the backup holds the action lock, so a
+			// MySQL or topology call that does not return must not keep it.
+			replCtx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+			defer cancel()
+
 			// Find the correct primary tablet and set the replication source,
 			// since the primary could have changed while we executed the backup which can
 			// also affect whether we want to send semi sync acks or not.
-			tabletInfo, err := tm.TopoServer.GetTablet(bgCtx, tablet.Alias)
+			tabletInfo, err := tm.TopoServer.GetTablet(replCtx, tablet.Alias)
 			if err != nil {
 				l.Errorf("Failed to fetch updated tablet info, error: %v", err)
 				return
@@ -199,12 +211,12 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 				return
 			}
 
-			shardPrimary, err := topotools.GetShardPrimaryForTablet(bgCtx, tm.TopoServer, tablet.Tablet)
+			shardPrimary, err := topotools.GetShardPrimaryForTablet(replCtx, tm.TopoServer, tablet.Tablet)
 			if err != nil {
 				return
 			}
 
-			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(bgCtx, tablet.Keyspace)
+			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(replCtx, tablet.Keyspace)
 			if err != nil {
 				l.Errorf("Failed to get durability policy, error: %v", err)
 				return
@@ -215,12 +227,35 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 
 			isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
-			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
+			semiSyncAction, err := tm.convertBoolToSemiSyncAction(replCtx, isSemiSync)
 			if err != nil {
 				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
 				return
 			}
-			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
+			// A deferred replication initialization leaves the source to VTOrc,
+			// a reparent or an operator, which choose it under the shard lock.
+			// This does not hold it, so it only restores the semi-sync role that
+			// entering BACKUP turned off, which can restart a running receiver
+			// from its configured source. It leaves semi-sync off on a receiver
+			// that runs from a source other than the shard primary, which may be
+			// the primary a reparent replaces.
+			if deferred {
+				status, err := tm.MysqlDaemon.ReplicationStatus(replCtx)
+				if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
+					l.Errorf("Leaving semi-sync off: cannot read the replication status: %v", err)
+					return
+				}
+				// A receiver that is connecting acknowledges its source once it connects.
+				if err == nil && status.IOState != replication.ReplicationStateStopped && (status.SourceHost != shardPrimary.MysqlHostname || status.SourcePort != shardPrimary.MysqlPort) {
+					l.Infof("Leaving semi-sync off: replication runs from %v, not from the shard primary", netutil.JoinHostPort(status.SourceHost, status.SourcePort))
+					return
+				}
+				if err := tm.fixSemiSyncAndReplication(replCtx, tabletInfo.Type, semiSyncAction); err != nil {
+					l.Errorf("Failed to restore semi-sync, error: %v", err)
+				}
+				return
+			}
+			if err := tm.setReplicationSourceLocked(replCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
 				l.Errorf("Failed to set replication source, error: %v", err)
 			}
 		}()

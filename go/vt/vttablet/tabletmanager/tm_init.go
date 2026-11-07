@@ -51,6 +51,7 @@ import (
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -66,6 +67,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -236,6 +238,14 @@ type TabletManager struct {
 	// operations. See getMySQLVersionString for why this is cached.
 	mysqlVersion mysqlVersionCache
 }
+
+// shardLockUnavailableError reports that replication initialization left
+// replication unchanged because acquiring the shard lock timed out. Other lock
+// failures are not wrapped in it.
+type shardLockUnavailableError struct{ cause error }
+
+func (e *shardLockUnavailableError) Error() string { return e.cause.Error() }
+func (e *shardLockUnavailableError) Cause() error  { return e.cause }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
 func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, db *dbconfigs.DBConfigs, collationEnv *collations.Environment) (*topodatapb.Tablet, error) {
@@ -555,7 +565,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	// We should be re-read the tablet from tabletManager and use the type specified there.
 	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
 	// earlier in tm.checkPrimaryShip code.
-	_, err = tm.initializeReplication(ctx, tm.Tablet().Type)
+	_, err = tm.initializeReplicationUnlessShardLocked(ctx, logutil.NewConsoleLogger(), tm.Tablet().Type, nil)
 	if err != nil {
 		return err
 	}
@@ -1009,42 +1019,9 @@ func (tm *TabletManager) handleRestore(ctx context.Context, config *tabletenv.Ta
 	// Restore in the background
 	go func() {
 		logger := logutil.NewConsoleLogger()
-
-		switch {
-		case restoreFromBackup:
-			// Zero date will cause us to use the latest, which is the default
-			backupTime := time.Time{}
-			// Or if a backup timestamp was specified then we use the last backup taken at or before that time
-			if restoreFromBackupTsStr != "" {
-				var err error
-				backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
-				if err != nil {
-					log.Error(fmt.Sprintf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr))
-					os.Exit(1)
-				}
-			}
-
-			restoreToTimestamp := time.Time{}
-			if restoreToTimestampStr != "" {
-				var err error
-				restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
-				if err != nil {
-					log.Error(fmt.Sprintf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err))
-					os.Exit(1)
-				}
-			}
-
-			// restoreFromBackup will just be a regular action
-			// (same as if it was triggered remotely)
-			if err := tm.RestoreBackup(ctx, logger, waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
-				log.Error(fmt.Sprintf("RestoreFromBackup failed: %v", err))
-				os.Exit(1)
-			}
-		case restoreWithClone:
-			if err := tm.restoreFromClone(ctx, logger, false /*deleteBeforeRestore*/); err != nil {
-				log.Error(fmt.Sprintf("restoreFromClone failed: %v", err))
-				os.Exit(1)
-			}
+		if err := tm.restoreAtStartup(ctx, logger); err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
 		}
 
 		// Make sure we have the correct privileges for the DBA user before we start the state manager.
@@ -1141,9 +1118,374 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 	}
 }
 
+const replicationInitializationPrimaryStatusTimeout = 2 * time.Second
+
+// replicationInitializationLockWait is how long replication initialization
+// retries a held shard lock: long enough for other tablets' replication
+// initializations, which hold it briefly, but not for a reparent. The lock
+// holder may need RPCs to this tablet, which a starting tablet does not serve
+// yet and a restoring tablet blocks with its action lock, so the wait delays
+// the holder.
+const replicationInitializationLockWait = time.Second
+
+// replicationInitializationLockRetryInterval is the pause between attempts to
+// take a held shard lock.
+const replicationInitializationLockRetryInterval = 100 * time.Millisecond
+
+// lockReplicationInitialization takes the shard lock without waiting in the
+// lock's queue, retrying for replicationInitializationLockWait while it is
+// held. Each attempt has its own topo.RemoteOperationTimeout, and the first
+// one always runs to completion, so a slow topology server costs only its
+// round trips and is not mistaken for a held lock.
+func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (context.Context, func(*error), error) {
+	tablet := tm.Tablet()
+	msg := fmt.Sprintf("cannot initialize replication for %s/%s; replication has not been changed", tablet.Keyspace, tablet.Shard)
+	deadline := time.Now().Add(replicationInitializationLockWait)
+	for {
+		lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication",
+			topo.WithType(topo.NonBlocking), topo.WithAcquireTimeout(topo.RemoteOperationTimeout))
+		switch {
+		case err == nil:
+			return lockedCtx, unlock, nil
+		case ctx.Err() != nil:
+			return nil, nil, vterrors.Wrap(ctx.Err(), msg)
+		case topo.IsErrType(err, topo.NodeExists) && time.Now().Before(deadline):
+			select {
+			case <-ctx.Done():
+				return nil, nil, vterrors.Wrap(ctx.Err(), msg)
+			case <-time.After(replicationInitializationLockRetryInterval):
+			}
+		case topo.IsErrType(err, topo.NodeExists), topo.IsErrType(err, topo.Timeout):
+			err = vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "timed out acquiring the shard lock: %v", err)
+			return nil, nil, &shardLockUnavailableError{vterrors.Wrap(err, msg)}
+		default:
+			return nil, nil, vterrors.Wrap(err, msg)
+		}
+	}
+}
+
+// restoreAtStartup restores as --restore-from-backup or --restore-with-clone
+// asks. A vttablet that restarts after a restore finds data and does not
+// restore again: it then initializes replication as an ordinary start does,
+// since a restore that deferred replication initialization left replication
+// reset. A point-in-time restore keeps the replication it set up, which it
+// disabled.
+func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Logger) error {
+	// Parse the flags before checking for data, so a bad value fails every
+	// start, as on main.
+	// Zero date will cause us to use the latest, which is the default
+	backupTime := time.Time{}
+	restoreToTimestamp := time.Time{}
+	if restoreFromBackup {
+		// Or if a backup timestamp was specified then we use the last backup taken at or before that time
+		if restoreFromBackupTsStr != "" {
+			var err error
+			backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
+			if err != nil {
+				return fmt.Errorf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr)
+			}
+		}
+		if restoreToTimestampStr != "" {
+			var err error
+			restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
+			if err != nil {
+				return fmt.Errorf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err)
+			}
+		}
+	}
+	if restoreToPos == "" && restoreToTimestampStr == "" {
+		restore, err := mysqlctl.ShouldRestore(ctx, logger, tm.Cnf, tm.MysqlDaemon, topoproto.TabletDbName(tm.Tablet()), false)
+		if err == nil && !restore {
+			// Start has returned, so the tablet may serve RPCs already: hold
+			// the action lock, as a restore does.
+			if err := tm.lock(ctx); err != nil {
+				return err
+			}
+			// A restore that finds data runs the hook after unlocking, with
+			// no restore error.
+			defer tm.invokeRestoreDoneHook(time.Now(), nil, "")
+			defer tm.unlock()
+			// A point-in-time restore disabled replication, whatever the
+			// flags of this start: keep it disabled. Without the status, it
+			// may be: do not initialize.
+			status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+			if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
+				return vterrors.Wrap(err, "cannot read the replication status")
+			}
+			if err == nil && status.SourceHost == disabledReplicationSourceHost {
+				logger.Infof("Replication was disabled by a point-in-time restore, leaving it disabled")
+				return nil
+			}
+			if _, err := tm.initializeReplicationUnlessShardLocked(ctx, logger, tm.Tablet().Type, nil); err != nil {
+				return vterrors.Wrap(err, "failed to initialize replication")
+			}
+			return nil
+		}
+	}
+	switch {
+	case restoreFromBackup:
+		// restoreFromBackup will just be a regular action
+		// (same as if it was triggered remotely)
+		if err := tm.RestoreBackup(ctx, logger, waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
+			return fmt.Errorf("RestoreFromBackup failed: %v", err)
+		}
+	case restoreWithClone:
+		if err := tm.restoreFromClone(ctx, logger, false /*deleteBeforeRestore*/); err != nil {
+			return fmt.Errorf("restoreFromClone failed: %v", err)
+		}
+	}
+	return nil
+}
+
+// replicationInitWatchInterval is the wait between checks of a deferred
+// replication initialization.
+const replicationInitWatchInterval = time.Second
+
+// initializeReplicationUnlessShardLocked initializes replication unless the
+// shard lock is unavailable. In that case replication is left unchanged, a
+// former primary is fenced, and non-primary types do not serve queries until
+// replication runs from the shard primary: VTOrc, a reparent or an operator
+// starts it. After a restore, restored is the restored position, otherwise nil:
+// the replica then serves only once replication applies past it, as a restore
+// that initializes replication waits for.
+func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Context, logger logutil.Logger, tabletType topodatapb.TabletType, restored *replication.Position) (string, error) {
+	primaryPos, err := tm.initializeReplication(ctx, tabletType)
+	if _, ok := errors.AsType[*shardLockUnavailableError](err); ok {
+		// A commit waiting for semi-sync acknowledgements would keep a former
+		// primary writable, and VTOrc's repair would hold the shard lock behind
+		// it. The fence releases the commit, which recovery's errant GTID check
+		// then rejects, and makes the tablet reject writes. A failed fence fails
+		// initialization, as under the lock: that check misses a commit that a
+		// later repoint releases.
+		fenceCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+		fenced, fenceErr := tm.fenceFormerPrimary(fenceCtx)
+		cancel()
+		if fenceErr != nil {
+			return "", vterrors.Wrapf(fenceErr, "cannot fence a former primary before deferring replication initialization (%v)", err)
+		}
+		if fenced {
+			logger.Infof("fenced a former primary before deferring replication initialization")
+		}
+		logger.Warningf("deferring replication initialization, staying out of rotation until replication runs from the shard primary: %v", err)
+		id := tm.tmState.deferReplicationInit(ctx, err, restored)
+		go tm.watchReplicationInit(tm.tmState.ctx, id)
+		return "", nil
+	}
+	return primaryPos, err
+}
+
+// watchReplicationInit checks the deferred replication initialization id until
+// it ends or ctx is done.
+func (tm *TabletManager) watchReplicationInit(ctx context.Context, id uint64) {
+	var lastErr string
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(replicationInitWatchInterval):
+		}
+		ended, err := tm.admitDeferredReplicationInit(ctx, id)
+		if ended {
+			return
+		}
+		if err == nil {
+			continue
+		}
+		key := err.Error()
+		if errant, ok := errors.AsType[*errantGTIDsError](err); ok {
+			// The positions in the message change with every transaction.
+			key = errant.errant
+		}
+		if key == lastErr {
+			continue
+		}
+		lastErr = key
+		tm.tmState.setReplicationInitError(ctx, id, err)
+		log.Info(fmt.Sprintf("Deferred replication initialization is waiting: %v", err))
+	}
+}
+
+// admitDeferredReplicationInit ends the deferred replication initialization id
+// if the tablet is the primary, or if replication runs from the shard primary,
+// and reports whether id is no longer pending. It changes no replication and
+// takes no lock: whatever started replication, VTOrc, a reparent or an
+// operator, chose and checked its source. The error says why the replica still
+// waits.
+//
+// Admission is a one-time check of a sample: replication can stop or change
+// source right after it. From then on, the replica's health check and
+// reparents govern it, as for a replica that never deferred.
+func (tm *TabletManager) admitDeferredReplicationInit(ctx context.Context, id uint64) (bool, error) {
+	// A primary does not replicate. The type is checked under the same lock
+	// as the deferral, so a primary demoted since is not admitted.
+	if tm.tmState.endReplicationInit(ctx, id, true) || !tm.tmState.isPendingReplicationInit(id) {
+		// Ended here, or by a later deferral or a restore.
+		return true, nil
+	}
+	tablet := tm.Tablet()
+	switch tablet.Type {
+	case topodatapb.TabletType_RESTORE:
+		return false, vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for the restore to finish")
+	case topodatapb.TabletType_BACKUP:
+		return false, vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for the backup to finish")
+	}
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	status, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+	if errors.Is(err, mysql.ErrNotReplica) {
+		return false, vterrors.New(vtrpc.Code_UNAVAILABLE, "replication is not configured")
+	}
+	if err != nil {
+		return false, err
+	}
+	// IOHealthy would also accept a receiver that is still connecting.
+	if !status.Running() {
+		return false, vterrors.New(vtrpc.Code_UNAVAILABLE, "replication is not running")
+	}
+	primary, err := topotools.GetShardPrimaryForTablet(ctx, tm.TopoServer, tablet)
+	if err != nil {
+		return false, err
+	}
+	if status.SourceHost != primary.MysqlHostname || status.SourcePort != primary.MysqlPort {
+		return false, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "replication runs from %s, not from the shard primary %s (%s)",
+			netutil.JoinHostPort(status.SourceHost, status.SourcePort), topoproto.TabletAliasString(primary.Alias), netutil.JoinHostPort(primary.MysqlHostname, primary.MysqlPort))
+	}
+	// Initialization would also have refused errant GTIDs.
+	primaryStatus, err := tm.checkNoErrantGTIDs(ctx, primary.Tablet)
+	if err != nil {
+		return false, err
+	}
+	// A restore that initializes replication waits until replication applies
+	// past the restored position, unless the primary is still there.
+	if restored := tm.tmState.replicationInitRestoredPosition(id); restored != nil && status.Position.Equal(*restored) {
+		primaryPos, err := replication.DecodePosition(primaryStatus.Position)
+		if err != nil {
+			return false, err
+		}
+		if !primaryPos.Equal(*restored) {
+			return false, vterrors.New(vtrpc.Code_UNAVAILABLE, "waiting for replication to apply past the restored position")
+		}
+	}
+	// This ends only this deferral, and not while a restore or a backup that
+	// started after the checks above runs.
+	if tm.tmState.endReplicationInit(ctx, id, false) {
+		log.Info("Replication runs from the shard primary; the replica returns to rotation")
+	}
+	return !tm.tmState.isPendingReplicationInit(id), nil
+}
+
+// replicaSemiSyncAction returns the semi-sync action that the keyspace's
+// durability policy requires for this tablet as a tabletType replica of
+// primary.
+func (tm *TabletManager) replicaSemiSyncAction(ctx context.Context, primary *topodatapb.Tablet, tabletType topodatapb.TabletType) (SemiSyncAction, error) {
+	tablet := tm.Tablet()
+	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
+	if err != nil {
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
+	}
+	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+	}
+	// The policy depends on the type this tablet replicates as.
+	tablet.Type = tabletType
+	return tm.convertBoolToSemiSyncAction(ctx, policy.IsReplicaSemiSync(durability, primary, tablet))
+}
+
+// checkNoErrantGTIDs returns the status of primary after checking that this
+// tablet has executed no transaction that primary lacks. A tablet with such an
+// errant GTID must not enter the replication graph.
+func (tm *TabletManager) checkNoErrantGTIDs(ctx context.Context, primary *topodatapb.Tablet) (*replicationdatapb.PrimaryStatus, error) {
+	replicaPos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Bound the probe so a dead primary does not keep the shard lock held.
+	statusCtx, statusCancel := context.WithTimeout(ctx, replicationInitializationPrimaryStatusTimeout)
+	primaryStatus, err := tm.tmc.PrimaryStatus(statusCtx, primary)
+	statusCancel()
+	if err != nil {
+		return nil, err
+	}
+	primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
+	if err != nil {
+		return nil, err
+	}
+	primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
+	if err != nil {
+		return nil, err
+	}
+	errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPos, primaryPosition, primarySid)
+	if err != nil {
+		return nil, err
+	}
+	if errantGtid != "" {
+		return nil, &errantGTIDsError{
+			errant: errantGtid,
+			error:  vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String())),
+		}
+	}
+	return primaryStatus, nil
+}
+
+// errantGTIDsError reports GTIDs that this tablet has executed and the primary
+// lacks.
+type errantGTIDsError struct {
+	errant string
+	error
+}
+
+func (e *errantGTIDsError) Cause() error { return e.error }
+
+// fenceRevertTimeout bounds fenceFormerPrimary's revert after a failure, which
+// runs after the caller's deadline when that deadline caused the failure.
+const fenceRevertTimeout = 2 * time.Second
+
+// fenceFormerPrimary fences writes on a mysqld with source-side semi-sync
+// enabled, as a former primary has. Its commits waiting for acknowledgements
+// reach gtid_executed only once released, so when it returns true the caller
+// must repeat its errant GTID check. The applier's commits can wait too, so
+// a caller that stops replication must fence first.
+func (tm *TabletManager) fenceFormerPrimary(ctx context.Context) (_ bool, err error) {
+	source, replica, err := tm.MysqlDaemon.ReadSemiSyncEnabled(ctx)
+	if err != nil || !source {
+		return false, err
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		// Re-enable source-side semi-sync, so that the next attempt fences
+		// again instead of validating while released commits may still be
+		// finishing.
+		revertCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), fenceRevertTimeout)
+		defer cancel()
+		if revertErr := tm.MysqlDaemon.SetSemiSyncEnabled(revertCtx, true, replica); revertErr != nil {
+			log.Warn(fmt.Sprintf("Failed to re-enable source-side semi-sync after a failed fence: %v", revertErr))
+		}
+	}()
+	// Release the waiting commits first: enabling super_read_only waits for
+	// commits in progress, and they would never finish.
+	log.Info("Disabling source-side semi-sync and enabling super_read_only before replicating")
+	if err := tm.MysqlDaemon.SetSemiSyncEnabled(ctx, false, replica); err != nil {
+		return false, err
+	}
+	// Enabling super_read_only waits for the released commits to finish and
+	// rejects new ones.
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(ctx, true); err != nil {
+		if sqlErr, ok := errors.AsType[*sqlerror.SQLError](err); !ok || sqlErr.Number() != sqlerror.ERUnknownSystemVariable {
+			return false, err
+		}
+		log.Warn("server does not know about super_read_only, continuing anyway...")
+	}
+	return true, nil
+}
+
 // initializeReplication is used to initialize the replication when the tablet starts.
 // It returns the current primary tablet for use externally
-func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (string, error) {
+func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType topodatapb.TabletType) (_ string, err error) {
 	// If active reparents are disabled, we do not touch replication.
 	// There is nothing to do
 	if mysqlctl.DisableActiveReparents {
@@ -1156,8 +1498,35 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", nil
 	}
 
-	// Read the shard to find the current primary, and its location.
+	// Avoid contending with shard operations when no receiver will be started.
 	tablet := tm.Tablet()
+	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return "", vterrors.Wrap(err, "cannot read shard")
+	}
+	if si.PrimaryAlias == nil {
+		log.Warn(fmt.Sprintf("cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard))
+		return "", nil
+	}
+	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {
+		log.Warn("cannot start replication during initialization: primary in shard record still points to this tablet.")
+		return "", nil
+	}
+	ctx, unlock, err := tm.lockReplicationInitialization(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer unlock(&err)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer cancel()
+	return tm.initializeReplicationLocked(ctx, tabletType)
+}
+
+// initializeReplicationLocked runs with the shard lock held from source selection
+// through receiver startup, so it cannot undo a reparent's receiver revocation.
+func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tabletType topodatapb.TabletType) (string, error) {
+	tablet := tm.Tablet()
+	// Read the shard to find the current primary, and its location.
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
 		return "", vterrors.Wrap(err, "cannot read shard")
@@ -1179,66 +1548,53 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
 	}
 
-	durabilityName, err := tm.TopoServer.GetKeyspaceDurability(ctx, tablet.Keyspace)
-	if err != nil {
-		return "", vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
-	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
-	durability, err := policy.GetDurabilityPolicy(durabilityName)
-	if err != nil {
-		return "", vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
-	}
 	// If using semi-sync, we need to enable it before connecting to primary.
-	// We should set the correct type, since it is used in replica semi-sync
-
-	tablet.Type = tabletType
-
-	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, policy.IsReplicaSemiSync(durability, currentPrimary.Tablet, tablet))
+	semiSyncAction, err := tm.replicaSemiSyncAction(ctx, currentPrimary.Tablet, tabletType)
 	if err != nil {
-		return "", err
-	}
-
-	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
 		return "", err
 	}
 
 	// Set primary and start replication.
 	if currentPrimary.MysqlHostname == "" {
 		log.Warn("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
+		// A former primary still stops accepting writes.
+		if _, err := tm.fenceFormerPrimary(ctx); err != nil {
+			return "", err
+		}
 		return "", nil
 	}
 
-	// Find our own executed GTID set and,
-	// the executed GTID set of the tablet that we are reparenting to.
-	// We will then compare our own position against it to verify that we don't
-	// have an errant GTID. If we find any GTID that we have, but the primary doesn't,
-	// we will not enter the replication graph and instead fail replication.
-	replicaPos, err := tm.MysqlDaemon.PrimaryPosition(ctx)
-	if err != nil {
+	if _, err := tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet); err != nil {
 		return "", err
 	}
 
-	primaryStatus, err := tm.tmc.PrimaryStatus(ctx, currentPrimary.Tablet)
+	// Check again once nothing else can commit: the fence waits for a
+	// former primary's commits, and STOP REPLICA for the applier's
+	// transaction in progress. Fence first, because with source-side
+	// semi-sync on, the applier's commit can itself wait for
+	// acknowledgements until the fence disables it.
+	if _, err := tm.fenceFormerPrimary(ctx); err != nil {
+		return "", err
+	}
+	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
+		return "", vterrors.Wrap(err, "failed to stop replication")
+	}
+	primaryStatus, err := tm.checkNoErrantGTIDs(ctx, currentPrimary.Tablet)
 	if err != nil {
 		return "", err
 	}
-	primaryPosition, err := replication.DecodePosition(primaryStatus.Position)
-	if err != nil {
+	// Check the lock after the waits above, just before acknowledging and
+	// connecting to the source. It is not a fencing token: the lock lease
+	// can still expire after it.
+	if err := topo.CheckShardLocked(ctx, tablet.Keyspace, tablet.Shard); err != nil {
 		return "", err
 	}
-	primarySid, err := replication.ParseSID(primaryStatus.ServerUuid)
-	if err != nil {
+	// Change semi-sync only after validating the source, but before the
+	// receiver connects to it.
+	if err := tm.fixSemiSync(ctx, tabletType, semiSyncAction); err != nil {
 		return "", err
 	}
-	errantGtid, err := replication.ErrantGTIDsOnReplica(replicaPos, primaryPosition, primarySid)
-	if err != nil {
-		return "", err
-	}
-	if errantGtid != "" {
-		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, fmt.Sprintf("Errant GTID detected - %s; Primary GTID - %s, Replica GTID - %s", errantGtid, primaryPosition, replicaPos.String()))
-	}
-
-	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, true, true); err != nil {
+	if err := tm.setReplicationSourceRecoverable(ctx, currentPrimary.MysqlHostname, currentPrimary.MysqlPort, 0, false, true); err != nil {
 		return "", vterrors.Wrap(err, "failed to configure replication source")
 	}
 

@@ -21,6 +21,7 @@ package failover
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -214,18 +216,41 @@ func (l *heldLock) release(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// shardLockLease returns the etcd lease of the shard's lock, failing if the shard is not locked.
-// ctx bounds the lookup: the client's DialTimeout does not bound requests.
-func shardLockLease(ctx context.Context, t *testing.T, ci *cluster.LocalProcessCluster) (*clientv3.Client, clientv3.LeaseID) {
-	require.Equal(t, "etcd2", *ci.TopoFlavorString(), "shard lock leases are etcd specific")
+// shardLocks returns the etcd keys of the shard lock's holder and waiters, oldest first, which
+// is the order in which etcd2topo grants the lock. ctx bounds the lookup: the client's
+// DialTimeout does not bound requests.
+func shardLocks(ctx context.Context, t *testing.T, ci *cluster.LocalProcessCluster) (*clientv3.Client, []*mvccpb.KeyValue) {
+	require.Equal(t, "etcd2", *ci.TopoFlavorString(), "shard lock keys are etcd specific")
 	cli, err := clientv3.New(clientv3.Config{Endpoints: []string{net.JoinHostPort(ci.TopoProcess.Host, strconv.Itoa(ci.TopoProcess.Port))}, DialTimeout: 5 * time.Second})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = cli.Close() })
 	locks := path.Join(cluster.TopoGlobalRoot("etcd2"), "keyspaces", utils.KeyspaceName, "shards", utils.ShardName, "locks")
-	resp, err := cli.Get(ctx, locks, clientv3.WithPrefix())
+	resp, err := cli.Get(ctx, locks, clientv3.WithPrefix(), clientv3.WithSort(clientv3.SortByCreateRevision, clientv3.SortAscend))
 	require.NoError(t, err)
-	require.Len(t, resp.Kvs, 1, "the shard is not locked")
-	return cli, clientv3.LeaseID(resp.Kvs[0].Lease)
+	return cli, resp.Kvs
+}
+
+// shardLockLease returns the etcd lease of the shard lock's holder, failing if the shard is not
+// locked.
+func shardLockLease(ctx context.Context, t *testing.T, ci *cluster.LocalProcessCluster) (*clientv3.Client, clientv3.LeaseID) {
+	cli, kvs := shardLocks(ctx, t, ci)
+	require.NotEmpty(t, kvs, "the shard is not locked")
+	return cli, clientv3.LeaseID(kvs[0].Lease)
+}
+
+// shardLockActions returns the actions of the shard lock's holder and waiters, oldest first.
+func shardLockActions(t *testing.T, ci *cluster.LocalProcessCluster) []string {
+	ctx, cancel := context.WithTimeout(t.Context(), topo.RemoteOperationTimeout)
+	defer cancel()
+	cli, kvs := shardLocks(ctx, t, ci)
+	_ = cli.Close()
+	var actions []string
+	for _, kv := range kvs {
+		var l topo.Lock
+		require.NoError(t, json.Unmarshal(kv.Value, &l))
+		actions = append(actions, l.Action)
+	}
+	return actions
 }
 
 func tryLockShard(t *testing.T, ts *topo.Server) error {

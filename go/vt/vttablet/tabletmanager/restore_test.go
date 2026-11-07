@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
@@ -151,6 +152,8 @@ func TestInvokeRestoreDoneHook_Timestamps(t *testing.T) {
 	}
 }
 
+// TestStartReplicationKeepsRestoredBinlogs checks that finalization leaves the
+// GTIDs to mysqlctl.Restore, which keeps restored binlogs: it never resets them.
 func TestStartReplicationKeepsRestoredBinlogs(t *testing.T) {
 	ts := memorytopo.NewServer(t.Context(), "cell1")
 	t.Cleanup(ts.Close)
@@ -163,13 +166,6 @@ func TestStartReplicationKeepsRestoredBinlogs(t *testing.T) {
 	// The shard has no primary, so initializeReplication returns before reparenting.
 	fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL"}
 	fake.ExpectedExecuteSuperQueryCurrent = 0
-	require.NoError(t, tm.startReplication(t.Context(), pos, topodatapb.TabletType_REPLICA, true))
-	assert.Equal(t, len(fake.ExpectedExecuteSuperQueryList), fake.ExpectedExecuteSuperQueryCurrent)
-
-	// Without restored binlogs, the position is still set (RESET + gtid_purged).
-	fake.SetReplicationPositionPos = pos
-	fake.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA", "FAKE RESET REPLICA ALL", "FAKE RESET BINARY LOGS AND GTIDS", "FAKE SET GLOBAL gtid_purged"}
-	fake.ExpectedExecuteSuperQueryCurrent = 0
-	require.NoError(t, tm.startReplication(t.Context(), pos, topodatapb.TabletType_REPLICA, false))
+	require.NoError(t, tm.startReplication(t.Context(), logutil.NewMemoryLogger(), pos, topodatapb.TabletType_REPLICA))
 	assert.Equal(t, len(fake.ExpectedExecuteSuperQueryList), fake.ExpectedExecuteSuperQueryCurrent)
 }
