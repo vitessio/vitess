@@ -387,7 +387,9 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 }
 
 func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
-	_, txPool, _, closer := setup(t)
+	env := newEnv("TabletServerTest")
+	env.Config().SanitizeLogMessages = true
+	_, txPool, _, closer := setupWithEnv(t, env)
 	defer closer()
 
 	startingStray := txPool.env.Stats().InternalErrors.Counts()["StrayTransactions"]
@@ -395,6 +397,7 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	// Start stray transaction.
 	conn, _, _, err := txPool.Begin(t.Context(), &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
+	conn.TxProperties().RecordQueryDetail("update t1 set name = 'stray-tx-literal' where id = 1", nil)
 	conn.Unlock()
 	connID := conn.ConnID
 	// And a reserved connection with no transaction.
@@ -411,7 +414,8 @@ func TestTxPoolCloseKillsStrayTransactions(t *testing.T) {
 	record := logs.Record(t, "killing transaction for shutdown")
 	assert.Equal(t, "WARN", record["level"])
 	assert.Equal(t, float64(connID), record["transaction_id"])
-	assert.NotEmpty(t, record["transaction"])
+	assert.Contains(t, record["transaction"], "update t1 set")
+	assert.NotContains(t, logs.String(), "stray-tx-literal")
 	record = logs.Record(t, "killing connection for shutdown")
 	assert.Equal(t, "WARN", record["level"])
 	assert.Equal(t, float64(reservedID), record["reserved_id"])
@@ -424,6 +428,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	env := newEnv("TabletServerTest")
 	env.Config().TxPool.Size = 1
 	env.Config().Oltp.TxTimeout = time.Second
+	env.Config().SanitizeLogMessages = true
 	_, txPool, limiter, closer := setupWithEnv(t, env)
 	defer closer()
 	startingKills := txPool.env.Stats().KillCounters.Counts()["Transactions"]
@@ -441,6 +446,7 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelWarn)
 	conn, _, _, err := txPool.Begin(ctxWithCallerID, &querypb.ExecuteOptions{}, false, 0, nil)
 	require.NoError(t, err)
+	conn.TxProperties().RecordQueryDetail("update t1 set name = 'killed-tx-literal' where id = 1", nil)
 	conn.Unlock()
 	connID := conn.ConnID
 
@@ -454,6 +460,8 @@ func TestTxTimeoutKillsTransactions(t *testing.T) {
 	assert.EqualValues(t, time.Second, record["timeout"])
 	assert.Equal(t, float64(connID), record["transaction_id"])
 	assert.Contains(t, record["transaction"], "principle")
+	assert.Contains(t, record["transaction"], "update t1 set")
+	assert.NotContains(t, logs.String(), "killed-tx-literal")
 	assert.NotContains(t, record, "reserved_id")
 
 	// Regression test for #6727: make sure the tx limiter is decremented when the tx killer closes

@@ -1933,21 +1933,9 @@ func TestHandleExecUnknownError(t *testing.T) {
 // TestHandlePanicAndSendLogStatsMessageTruncation tests that when an error truncation
 // length is set and a panic occurs, the code in handlePanicAndSendLogStats will
 // truncate the error text in logs, but will not truncate the error text in the
-// error value.
+// error value. With SanitizeLogMessages, the bind variables are redacted from
+// the logs but not from the error value.
 func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
-	ctx := t.Context()
-	logs := logtest.Capture(t, slog.LevelError)
-	logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation", streamlog.NewQueryLogConfigForTest())
-	env, err := vtenv.New(vtenv.Options{
-		MySQLServerVersion: config.DefaultMySQLVersion,
-		TruncateErrLen:     32,
-	})
-	require.NoError(t, err)
-
-	db, tsv := setupTabletServerTestCustom(t, ctx, tabletenv.NewDefaultConfig(), "", env)
-	defer tsv.StopService()
-	defer db.Close()
-
 	longSql := "select * from test_table_loooooooooooooooooooooooooooooooooooong"
 	longBv := map[string]*querypb.BindVariable{
 		"bv1": sqltypes.Int64BindVariable(1111111111),
@@ -1955,20 +1943,62 @@ func TestHandlePanicAndSendLogStatsMessageTruncation(t *testing.T) {
 		"bv3": sqltypes.Int64BindVariable(3333333333),
 		"bv4": sqltypes.Int64BindVariable(4444444444),
 	}
+	literals := []string{"1111111111", "2222222222", "3333333333", "4444444444"}
 
-	defer func() {
-		err := logStats.Error
-		want := "Uncaught panic for Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), want)
-		record := logs.Record(t, "Uncaught panic")
-		assert.Equal(t, "Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]", record["query"])
-		assert.Equal(t, "panic from TestHandlePanicAndSendLogStatsMessageTruncation", record["panic"])
-		assert.Contains(t, record["stack"], "tabletserver_test.go")
-	}()
+	tests := []struct {
+		name           string
+		truncateErrLen int
+		sanitize       bool
+		wantQuery      string
+	}{
+		{
+			name:           "truncated",
+			truncateErrLen: 32,
+			wantQuery:      "Sql: \"select * from test_t [TRUNCATED]\", BindVars: {bv1: \"typ [TRUNCATED]",
+		},
+		{
+			name:      "sanitized",
+			sanitize:  true,
+			wantQuery: "Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {[REDACTED]}",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			logs := logtest.Capture(t, slog.LevelError)
+			logStats := tabletenv.NewLogStats(ctx, "TestHandlePanicAndSendLogStatsMessageTruncation", streamlog.NewQueryLogConfigForTest())
+			env, err := vtenv.New(vtenv.Options{
+				MySQLServerVersion: config.DefaultMySQLVersion,
+				TruncateErrLen:     tt.truncateErrLen,
+			})
+			require.NoError(t, err)
 
-	defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
-	panic("panic from TestHandlePanicAndSendLogStatsMessageTruncation")
+			cfg := tabletenv.NewDefaultConfig()
+			cfg.SanitizeLogMessages = tt.sanitize
+			db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", env)
+			defer tsv.StopService()
+			defer db.Close()
+
+			defer func() {
+				err := logStats.Error
+				want := "Uncaught panic for Sql: \"select * from test_table_loooooooooooooooooooooooooooooooooooong\", BindVars: {bv1: \"type:INT64 value:\\\"1111111111\\\"\"bv2: \"type:INT64 value:\\\"2222222222\\\"\"bv3: \"type:INT64 value:\\\"3333333333\\\"\"bv4: \"type:INT64 value:\\\"4444444444\\\"\"}"
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), want)
+				record := logs.Record(t, "Uncaught panic")
+				assert.Equal(t, tt.wantQuery, record["query"])
+				assert.Equal(t, "panic from TestHandlePanicAndSendLogStatsMessageTruncation", record["panic"])
+				assert.Contains(t, record["stack"], "tabletserver_test.go")
+				if tt.sanitize {
+					for _, literal := range literals {
+						assert.NotContains(t, logs.String(), literal)
+					}
+				}
+			}()
+
+			defer tsv.handlePanicAndSendLogStats(longSql, longBv, logStats)
+			panic("panic from TestHandlePanicAndSendLogStatsMessageTruncation")
+		})
+	}
 }
 
 func TestQueryAsString(t *testing.T) {
