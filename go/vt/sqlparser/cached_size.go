@@ -1964,6 +1964,23 @@ func (cached *GeomPropertyFuncExpr) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *GetFormatExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field Type string
+	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
+	// field Style vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Style.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+
 func (cached *GroupBy) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

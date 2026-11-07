@@ -221,6 +221,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfGeomFromWKBExpr(in)
 	case *GeomPropertyFuncExpr:
 		return CloneRefOfGeomPropertyFuncExpr(in)
+	case *GetFormatExpr:
+		return CloneRefOfGetFormatExpr(in)
 	case *GroupBy:
 		return CloneRefOfGroupBy(in)
 	case *GroupConcatExpr:
@@ -1696,6 +1698,16 @@ func CloneRefOfGeomPropertyFuncExpr(n *GeomPropertyFuncExpr) *GeomPropertyFuncEx
 	}
 	out := *n
 	out.Geom = CloneExpr(n.Geom)
+	return &out
+}
+
+// CloneRefOfGetFormatExpr creates a deep clone of the input.
+func CloneRefOfGetFormatExpr(n *GetFormatExpr) *GetFormatExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Style = CloneExpr(n.Style)
 	return &out
 }
 
@@ -4341,6 +4353,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfGeomFromWKBExpr(in)
 	case *GeomPropertyFuncExpr:
 		return CloneRefOfGeomPropertyFuncExpr(in)
+	case *GetFormatExpr:
+		return CloneRefOfGetFormatExpr(in)
 	case *GroupConcatExpr:
 		return CloneRefOfGroupConcatExpr(in)
 	case *InsertExpr:

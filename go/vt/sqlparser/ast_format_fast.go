@@ -2244,11 +2244,30 @@ func (node *NullVal) FormatFast(buf *TrackedBuffer) {
 
 // FormatFast formats the node.
 func (node *ODBCEscape) FormatFast(buf *TrackedBuffer) {
+	// MySQL names the column of a temporal literal after its text, so it is
+	// written as it usually is, as in {d'2001-01-01'}. Another type keeps the
+	// space, which keeps x and '41' from being read as the literal x'41'.
+	if node.isTemporal() {
+		buf.WriteByte('{')
+		node.Type.FormatFast(buf)
+		buf.printExpr(node, node.Expr, true)
+		buf.WriteByte('}')
+		return
+	}
 	buf.WriteByte('{')
 	node.Type.FormatFast(buf)
 	buf.WriteByte(' ')
 	buf.printExpr(node, node.Expr, true)
 	buf.WriteByte('}')
+}
+
+// FormatFast formats the node.
+func (node *GetFormatExpr) FormatFast(buf *TrackedBuffer) {
+	buf.WriteString("get_format(")
+	buf.WriteString(node.Type)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.Style, true)
+	buf.WriteByte(')')
 }
 
 // FormatFast formats the node.

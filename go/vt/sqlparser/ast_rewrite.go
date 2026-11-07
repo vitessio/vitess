@@ -221,6 +221,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfGeomFromWKBExpr(parent, node, replacer)
 	case *GeomPropertyFuncExpr:
 		return a.rewriteRefOfGeomPropertyFuncExpr(parent, node, replacer)
+	case *GetFormatExpr:
+		return a.rewriteRefOfGetFormatExpr(parent, node, replacer)
 	case *GroupBy:
 		return a.rewriteRefOfGroupBy(parent, node, replacer)
 	case *GroupConcatExpr:
@@ -5448,6 +5450,46 @@ func (a *application) rewriteRefOfGeomPropertyFuncExpr(parent SQLNode, node *Geo
 	}
 	if !a.rewriteExpr(node, node.Geom, func(newNode, parent SQLNode) {
 		parent.(*GeomPropertyFuncExpr).Geom = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.collectPaths {
+		a.cur.current.Pop()
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+
+// Function Generation Source: PtrToStructMethod
+func (a *application) rewriteRefOfGetFormatExpr(parent SQLNode, node *GetFormatExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		kontinue := !a.pre(&a.cur)
+		if a.cur.revisit {
+			a.cur.revisit = false
+			return a.rewriteSQLNode(parent, a.cur.node, replacer)
+		}
+		if kontinue {
+			return true
+		}
+	}
+	if a.collectPaths {
+		a.cur.current.AddStep(uint16(RefOfGetFormatExprStyle))
+	}
+	if !a.rewriteExpr(node, node.Style, func(newNode, parent SQLNode) {
+		parent.(*GetFormatExpr).Style = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -15658,6 +15700,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfGeomFromWKBExpr(parent, node, replacer)
 	case *GeomPropertyFuncExpr:
 		return a.rewriteRefOfGeomPropertyFuncExpr(parent, node, replacer)
+	case *GetFormatExpr:
+		return a.rewriteRefOfGetFormatExpr(parent, node, replacer)
 	case *GroupConcatExpr:
 		return a.rewriteRefOfGroupConcatExpr(parent, node, replacer)
 	case *InsertExpr:

@@ -46,7 +46,7 @@ const mysqlServersEnv = "VT_MYSQL_COMPARE_SOCKETS"
 // on both servers, so that the DDL of a test file runs on the tables, the data
 // and the session settings that the file sets up. It leaves out anything that
 // can reach beyond the test's own databases or session.
-var replayedStatement = regexp.MustCompile(`(?is)^(insert|replace|drop\s+(temporary\s+)?(table|tables|view|index)|drop\s+(database|schema)|rename\s+table|truncate|use|create\s+(or\s+replace\s+)?(algorithm\s*=\s*\w+\s+)?view|set\s+(names|character\s+set|charset|sql_mode|@@sql_mode|session|@@session|@@local|local|foreign_key_checks|@@foreign_key_checks|default_storage_engine|@@default_storage_engine|explicit_defaults_for_timestamp|@@explicit_defaults_for_timestamp|character_set_\w+|collation_\w+|@@character_set_\w+|@@collation_\w+|big_tables|default_collation_for_utf8mb4|@@default_collation_for_utf8mb4))\b`)
+var replayedStatement = regexp.MustCompile(`(?is)^(insert|replace|drop\s+(temporary\s+)?(table|tables|view|index)|drop\s+(database|schema)|rename\s+table|truncate|use|create\s+(or\s+replace\s+)?(algorithm\s*=\s*\w+\s+)?view|set\s+(names|character\s+set|charset|sql_mode|@@sql_mode|session|@@session|@@local|local|foreign_key_checks|@@foreign_key_checks|default_storage_engine|@@default_storage_engine|explicit_defaults_for_timestamp|@@explicit_defaults_for_timestamp|character_set_\w+|collation_\w+|@@character_set_\w+|@@collation_\w+|big_tables|default_collation_for_utf8mb4|@@default_collation_for_utf8mb4|timestamp|@@timestamp))\b`)
 
 // unsafeStatement matches the statements that the test does not run, even
 // when they are DDL: those that name a system schema, change a global

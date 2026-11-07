@@ -2746,6 +2746,14 @@ type (
 		Unit  IntervalType
 	}
 
+	// GetFormatExpr is GET_FORMAT(DATE, 'USA'). Type is date, time, datetime
+	// or timestamp: a type, not an expression. Style is the style of the
+	// format, such as 'USA'.
+	GetFormatExpr struct {
+		Type  string
+		Style Expr
+	}
+
 	// ExtractFuncExpr represents the function and arguments for EXTRACT(YEAR FROM '2019-07-02') type functions.
 	ExtractFuncExpr struct {
 		IntervalType IntervalType
@@ -3578,6 +3586,7 @@ func (*Argument) IsExpr()                           {}
 func (*NullVal) IsExpr()                            {}
 func (*MaxValue) IsExpr()                           {}
 func (*ODBCEscape) IsExpr()                         {}
+func (*GetFormatExpr) IsExpr()                      {}
 func (BoolVal) IsExpr()                             {}
 func (*ColName) IsExpr()                            {}
 func (ValTuple) IsExpr()                            {}

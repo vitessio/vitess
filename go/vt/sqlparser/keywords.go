@@ -317,6 +317,7 @@ var keywords = []keyword{
 	{"geomcollection", GEOMETRYCOLLECTION},
 	{"geometrycollection", GEOMETRYCOLLECTION},
 	{"get", UNUSED},
+	{"get_format", GET_FORMAT},
 	{"get_lock", GET_LOCK},
 	{"glength", ST_Length},
 	{"global", GLOBAL},
