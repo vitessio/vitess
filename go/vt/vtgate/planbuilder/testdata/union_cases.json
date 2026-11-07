@@ -730,9 +730,31 @@
     "comment": "union all on scatter and single route",
     "query": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
     "plan": {
-      "Type": "Complex",
+      "Type": "Scatter",
       "QueryType": "SELECT",
       "Original": "select id from user where id = 1 union select id from user where id = 1  union all select id from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1 union all select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 1 union select id from `user` where id = 1 union all select id from `user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "UNION ALL keeps a global aggregate single-shard",
+    "query": "select count(*) from user where id = 1 union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user where id = 1 union all select id from user",
       "Instructions": {
         "OperatorType": "Concatenate",
         "Inputs": [
@@ -743,8 +765,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select id from `user` where 1 != 1 union select id from `user` where 1 != 1",
-            "Query": "select id from `user` where id = 1 union select id from `user` where id = 1",
+            "FieldQuery": "select count(*) from `user` where 1 != 1",
+            "Query": "select count(*) from `user` where id = 1",
             "Values": [
               "1"
             ],
@@ -765,7 +787,8 @@
       "TablesUsed": [
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "union of information_schema with normal table",

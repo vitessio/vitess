@@ -111,7 +111,8 @@ func mergeUnionInputs(
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
 	lhsInput, rhsInput := operatorsToRoutes(lhs, rhs)
-	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput)
+	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput) ||
+		routeContainsGlobalAggregate(ctx, lhsInput) || routeContainsGlobalAggregate(ctx, rhsInput)
 
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
@@ -183,6 +184,10 @@ func routeContainsSpecialUnionInput(route *Route) bool {
 		return true
 	}
 	return false
+}
+
+func routeContainsGlobalAggregate(ctx *plancontext.PlanningContext, route *Route) bool {
+	return route != nil && hasGlobalAggregate(ctx, route.Source)
 }
 
 func markSpecialUnionInput(op Operator, contains bool) {
