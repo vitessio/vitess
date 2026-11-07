@@ -123,7 +123,6 @@ Flags:
       --mysql-allow-clear-text-without-tls                               If set, the server will allow the use of a clear text password over non-SSL connections.
       --mysql-auth-server-impl string                                    Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
       --mysql-auth-server-static-file string                             JSON File to read the users/passwords from.
-      --mysql-auth-server-static-string string                           JSON representation of the users/passwords config.
       --mysql-auth-static-reload-interval duration                       Ticker to reload credentials
       --mysql-auth-vault-addr string                                     URL to Vault server
       --mysql-auth-vault-path string                                     Vault path to vtgate credentials JSON blob, e.g.: secret/data/prod/vtgatecreds
@@ -137,7 +136,6 @@ Flags:
       --mysql-clientcert-auth-method string                              client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-default-workload string                                    Default session workload (OLTP, OLAP, DBA) (default "OLTP")
       --mysql-ldap-auth-config-file string                               JSON File from which to read LDAP server config.
-      --mysql-ldap-auth-config-string string                             JSON representation of LDAP server config.
       --mysql-ldap-auth-method string                                    client-side authentication method to use. Supported values: mysql_clear_password, dialog. (default "mysql_clear_password")
       --mysql-server-bind-address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql-server-drain-onterm                                        If set, the server waits for --onterm-timeout for already connected clients to complete their in flight work

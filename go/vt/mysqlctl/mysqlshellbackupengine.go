@@ -104,9 +104,9 @@ func init() {
 
 func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&mysqlShellBackupLocation, "mysql-shell-backup-location", mysqlShellBackupLocation, "location where the backup will be stored")
-	fs.StringVar(&mysqlShellFlags, "mysql-shell-flags", mysqlShellFlags, "execution flags to pass to mysqlsh binary to be used during dump/load")
-	fs.StringVar(&mysqlShellDumpFlags, "mysql-shell-dump-flags", mysqlShellDumpFlags, "flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST")
-	fs.StringVar(&mysqlShellLoadFlags, "mysql-shell-load-flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
+	fs.StringVar(&mysqlShellFlags, "mysql-shell-flags", mysqlShellFlags, `execution flags to pass to mysqlsh binary to be used during dump/load. Do not put passwords here; put them in an option file and pass it with --defaults-file as the first flag, keeping the other default flags, e.g. "--defaults-file=/path/to/mysqlsh.cnf --js -h localhost"`)
+	fs.StringVar(&mysqlShellDumpFlags, "mysql-shell-dump-flags", mysqlShellDumpFlags, "flags to pass to mysql shell dump utility. This should be a JSON string. Do not put cloud storage credentials here; MySQL Shell can read them from the cloud provider's configuration files or environment variables.")
+	fs.StringVar(&mysqlShellLoadFlags, "mysql-shell-load-flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string and will be saved in the MANIFEST. Do not put cloud storage credentials here; MySQL Shell can read them from the cloud provider's configuration files or environment variables.")
 	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql-shell-should-drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
 	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql-shell-speedup-restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
 	fs.BoolVar(&mysqlShellRestoreSkipVersionCheck, "mysql-shell-restore-skip-version-check", mysqlShellRestoreSkipVersionCheck, "skip the MySQL version compatibility check when restoring from a mysql-shell backup")

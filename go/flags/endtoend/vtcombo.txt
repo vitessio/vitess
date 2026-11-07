@@ -53,17 +53,13 @@ Flags:
       --consolidator-stream-query-size int                               Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator. (default 2097152)
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
-      --db-allprivs-password string                                      db allprivs password
       --db-allprivs-use-ssl                                              Set this flag to false to make the allprivs connection to not use ssl (default true)
       --db-allprivs-user string                                          db allprivs user userKey (default "vt_allprivs")
-      --db-app-password string                                           db app password
       --db-app-use-ssl                                                   Set this flag to false to make the app connection to not use ssl (default true)
       --db-app-user string                                               db app user userKey (default "vt_app")
-      --db-appdebug-password string                                      db appdebug password
       --db-appdebug-use-ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
       --db-appdebug-user string                                          db appdebug user userKey (default "vt_appdebug")
       --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
-      --db-clone-password string                                         db clone password
       --db-clone-use-ssl                                                 Set this flag to false to make the clone connection to not use ssl (default true)
       --db-clone-user string                                             db clone user userKey (default "vt_clone")
       --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
@@ -79,20 +75,16 @@ Flags:
       --db-credentials-vault-tls-ca string                               Path to CA PEM for validating Vault server certificate
       --db-credentials-vault-tokenfile string                            Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                                How long to cache DB credentials from the Vault server (default 30m0s)
-      --db-dba-password string                                           db dba password
       --db-dba-use-ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
       --db-dba-user string                                               db dba user userKey (default "vt_dba")
-      --db-erepl-password string                                         db erepl password
       --db-erepl-use-ssl                                                 Set this flag to false to make the erepl connection to not use ssl (default true)
       --db-erepl-user string                                             db erepl user userKey (default "vt_erepl")
-      --db-filtered-password string                                      db filtered password
       --db-filtered-use-ssl                                              Set this flag to false to make the filtered connection to not use ssl (default true)
       --db-filtered-user string                                          db filtered user userKey (default "vt_filtered")
       --db-flags uint                                                    Flag values as defined by MySQL.
       --db-flavor string                                                 Flavor overrid. Valid value is FilePos.
       --db-host string                                                   The host name for the tcp connection.
       --db-port int                                                      tcp port
-      --db-repl-password string                                          db repl password
       --db-repl-use-ssl                                                  Set this flag to false to make the repl connection to not use ssl (default true)
       --db-repl-user string                                              db repl user userKey (default "vt_repl")
       --db-server-name string                                            server name of the DB we are connecting to.
@@ -134,9 +126,9 @@ Flags:
       --enable-tx-throttler                                              If true replication-lag-based throttling on transactions will be enabled.
       --enable-views                                                     Enable views support in vtgate. (default true)
       --enforce-strict-trans-tables                                      If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database. (default true)
-      --external-compressor string                                       command with arguments to use when compressing a backup.
+      --external-compressor string                                       command with arguments to use when compressing a backup. Do not put secrets in the arguments; have the command read them from a file instead.
       --external-compressor-extension string                             extension to use when using an external compressor.
-      --external-decompressor string                                     command with arguments to use when decompressing a backup.
+      --external-decompressor string                                     command with arguments to use when decompressing a backup. Do not put secrets in the arguments; have the command read them from a file instead.
       --external-decompressor-use-manifest                               allows the decompressor command stored in the backup manifest to be used at restore time. Enabling this is a security risk: an attacker with write access to the backup storage could modify the manifest to execute arbitrary commands on the tablet as the Vitess user. NOT RECOMMENDED.
       --external-topo-server                                             Should vtcombo use an external topology server instead of starting its own in-memory topology server. If true, vtcombo will use the flags defined in topo/server.go to open topo server
       --foreign-key-mode string                                          This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow (default "allow")
@@ -201,7 +193,7 @@ Flags:
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log-structured                                                   enable structured JSON logging (default true)
-      --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
+      --manifest-external-decompressor string                            command with arguments to store in the backup manifest when compressing a backup with an external compression engine. Do not put secrets in the arguments; have the command read them from a file instead.
       --max-concurrent-online-ddl int                                    Maximum number of online DDL changes that may run concurrently (default 256)
       --max-memory-rows int                                              Maximum number of rows that will be held in memory for intermediate results as well as the final result. (default 300000)
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
@@ -251,9 +243,9 @@ Flags:
       --mysql-server-version string                                      MySQL server version to advertise. (default "8.4.6-Vitess")
       --mysql-server-write-timeout duration                              connection write timeout
       --mysql-shell-backup-location string                               location where the backup will be stored
-      --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST (default "{\"threads\": 4}")
-      --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load (default "--defaults-file=/dev/null --js -h localhost")
-      --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
+      --mysql-shell-dump-flags string                                    flags to pass to mysql shell dump utility. This should be a JSON string. Do not put cloud storage credentials here; MySQL Shell can read them from the cloud provider's configuration files or environment variables. (default "{\"threads\": 4}")
+      --mysql-shell-flags string                                         execution flags to pass to mysqlsh binary to be used during dump/load. Do not put passwords here; put them in an option file and pass it with --defaults-file as the first flag, keeping the other default flags, e.g. "--defaults-file=/path/to/mysqlsh.cnf --js -h localhost" (default "--defaults-file=/dev/null --js -h localhost")
+      --mysql-shell-load-flags string                                    flags to pass to mysql shell load utility. This should be a JSON string and will be saved in the MANIFEST. Do not put cloud storage credentials here; MySQL Shell can read them from the cloud provider's configuration files or environment variables. (default "{\"threads\": 4, \"loadUsers\": true, \"updateGtidSet\": \"replace\", \"skipBinlog\": true, \"progressFile\": \"\"}")
       --mysql-shell-restore-skip-version-check                           skip the MySQL version compatibility check when restoring from a mysql-shell backup
       --mysql-shell-should-drain                                         decide if we should drain while taking a backup or continue to serving traffic
       --mysql-shell-speedup-restore                                      speed up restore by disabling redo logging and double write buffer during the restore process
@@ -460,9 +452,9 @@ Flags:
       --warn-memory-rows int                                             Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented. (default 30000)
       --warn-payload-size int                                            The warning threshold for query payloads in bytes. A payload greater than this threshold will cause the VtGateWarnings.WarnPayloadSizeExceeded counter to be incremented.
       --warn-sharded-only                                                If any features that are only available in unsharded mode are used, query execution warnings will be added to the session
-      --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
-      --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
-      --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
+      --xbstream-restore-flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt. Do not put secrets here; use --encrypt-key-file instead of --encrypt-key.
+      --xtrabackup-backup-flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command. Do not put secrets here; read them from files instead, e.g. --encrypt-key-file instead of --encrypt-key, and a password in an [xtrabackup] section of a file listed in the EXTRA_MY_CNF environment variable.
+      --xtrabackup-prepare-flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command. Do not put secrets here; read them from files instead.
       --xtrabackup-root-path string                                      Directory location of the xtrabackup and xbstream executables, e.g., /usr/bin
       --xtrabackup-should-drain                                          Decide if we should drain while taking a backup or continue to serving traffic
       --xtrabackup-stream-mode string                                    Which mode to use if streaming, valid values are tar and xbstream. Please note that tar is not supported in XtraBackup 8.0 (default "tar")
