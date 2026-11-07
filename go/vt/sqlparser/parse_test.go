@@ -41,6 +41,34 @@ var validSQL = []struct {
 	partialDDL           bool
 	ignoreNormalizerTest bool
 }{{
+	// MySQL's lexer reads these type names as the token of the type that they
+	// stand for, so they are written out as that type.
+	input:  "create table t (a int1, b int2, c int3, d middleint, e int4, f int8, g dec(6,2), h fixed(5), i double precision(10,2))",
+	output: "create table t (\n\ta tinyint,\n\tb smallint,\n\tc mediumint,\n\td mediumint,\n\te int,\n\tf bigint,\n\tg decimal(6,2),\n\th decimal(5),\n\ti double(10,2)\n)",
+}, {
+	// The field options come in any order, and SIGNED does not undo UNSIGNED.
+	input:  "create table t (a int zerofill unsigned, b int signed, c int unsigned signed, d year(4) unsigned)",
+	output: "create table t (\n\ta int unsigned zerofill,\n\tb int,\n\tc int unsigned,\n\td year(4) unsigned\n)",
+}, {
+	input:  "create table t (a character(10), b char varying(10), c character varying(10), d varcharacter(10))",
+	output: "create table t (\n\ta char(10),\n\tb varchar(10),\n\tc varchar(10),\n\td varchar(10)\n)",
+}, {
+	// NATIONAL and NCHAR stand for the national character set, utf8mb3.
+	input:  "create table t (a nchar(10), b national char(10) binary, c nvarchar(10), d national varchar(10), e nchar varchar(10), f nchar varying(10), g national character varying(10))",
+	output: "create table t (\n\ta char(10) character set utf8mb3,\n\tb char(10) character set utf8mb3 binary,\n\tc varchar(10) character set utf8mb3,\n\td varchar(10) character set utf8mb3,\n\te varchar(10) character set utf8mb3,\n\tf varchar(10) character set utf8mb3,\n\tg varchar(10) character set utf8mb3\n)",
+}, {
+	input:  "create table t (a long, b long varchar, c long varbinary, d long byte, e varchar(10) byte)",
+	output: "create table t (\n\ta mediumtext,\n\tb mediumtext,\n\tc mediumblob,\n\td mediumtext character set binary,\n\te varchar(10) character set binary\n)",
+}, {
+	// BINARY before a character set stands for its binary collation.
+	input:  "create table t (a varchar(10) binary character set latin1, b char(10) binary charset latin1)",
+	output: "create table t (\n\ta varchar(10) character set latin1 binary,\n\tb char(10) character set latin1 binary\n)",
+}, {
+	// Hexadecimal and bit literals are kept as written, because MySQL reads
+	// them as binary strings.
+	input:  "create table t (a enum(0xc3a6, x'c3b8', b'1001001', 0b101, 'x'), b set(0xE4))",
+	output: "create table t (\n\ta enum(0xc3a6, X'c3b8', B'1001001', 0b101, 'x'),\n\tb set(0xE4)\n)",
+}, {
 	// MySQL allows every character from U+0080 on in an unquoted identifier.
 	input:  "create table tæøå (кол int, 🐬 int, index ix_ā (кол))",
 	output: "create table `tæøå` (\n\t`кол` int,\n\t`🐬` int,\n\tkey `ix_ā` (`кол`)\n)",

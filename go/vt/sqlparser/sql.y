@@ -379,6 +379,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %token <str> REAL DOUBLE FLOAT_TYPE FLOAT4_TYPE FLOAT8_TYPE DECIMAL_TYPE NUMERIC
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
+%token <str> INT1 INT2 INT3 INT4 INT8 MIDDLEINT DEC PRECISION VARCHARACTER VARYING LONG NATIONAL NVARCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
 %token <str> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON JSON_SCHEMA_VALID JSON_SCHEMA_VALIDATION_REPORT ENUM
 %token <str> GEOMETRY POINT LINESTRING POLYGON GEOMCOLLECTION GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
@@ -627,16 +628,17 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <convertType> convert_type returning_type_opt convert_type_weight_string
 %type <boolean> array_opt rollup_opt
 %type <columnType> column_type
-%type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
+%type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type numeric_column_type
 %type <literal> partition_comment partition_data_directory partition_index_directory
 %type <intPtr> length_opt
 %type <integer> func_datetime_precision
-%type <columnCharset> charset_opt
+%type <columnCharset> charset_opt column_charset_opt binary_charset
 %type <str> collate_opt
 %type <boolean> binary_opt
 %type <LengthScaleOption> double_length_opt float_length_opt decimal_length_opt
-%type <boolean> unsigned_opt zero_fill_opt without_valid_opt
+%type <boolean> without_valid_opt
 %type <strs> enum_values
+%type <str> enum_value varchar_synonym national_char national_varchar
 %type <columnDefinition> column_definition
 %type <columnDefinitions> column_definition_list
 %type <indexDefinition> index_definition
@@ -2424,12 +2426,7 @@ keys:
   }
 
 column_type:
-  numeric_type unsigned_opt zero_fill_opt
-  {
-    $$ = $1
-    $$.Unsigned = $2
-    $$.Zerofill = $3
-  }
+  numeric_column_type
 | char_type
 | time_type
 | spatial_type
@@ -2438,6 +2435,35 @@ column_type:
     // SERIAL is MySQL's alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE.
     // It takes no length and no UNSIGNED or ZEROFILL.
     $$ = &ColumnType{Type: string($1)}
+  }
+
+// MySQL takes the field options UNSIGNED, SIGNED and ZEROFILL in any order
+// and any number of times, and ORs them together, so SIGNED never undoes an
+// UNSIGNED.
+numeric_column_type:
+  numeric_type
+| YEAR length_opt
+  {
+    // MySQL rejects any display width for YEAR but 4.
+    if $2 != nil && *$2 != 4 {
+      yylex.Error("YEAR only takes a display width of 4")
+      return 1
+    }
+    $$ = &ColumnType{Type: string($1), Length: $2}
+  }
+| numeric_column_type UNSIGNED
+  {
+    $1.Unsigned = true
+    $$ = $1
+  }
+| numeric_column_type SIGNED
+  {
+    $$ = $1
+  }
+| numeric_column_type ZEROFILL
+  {
+    $1.Zerofill = true
+    $$ = $1
   }
 
 numeric_type:
@@ -2488,6 +2514,32 @@ int_type:
   {
     $$ = &ColumnType{Type: string($1)}
   }
+// MySQL's lexer reads the synonyms below as the token of the type they stand
+// for, so they are written out as that type.
+| INT1
+  {
+    $$ = &ColumnType{Type: "tinyint"}
+  }
+| INT2
+  {
+    $$ = &ColumnType{Type: "smallint"}
+  }
+| INT3
+  {
+    $$ = &ColumnType{Type: "mediumint"}
+  }
+| MIDDLEINT
+  {
+    $$ = &ColumnType{Type: "mediumint"}
+  }
+| INT4
+  {
+    $$ = &ColumnType{Type: "int"}
+  }
+| INT8
+  {
+    $$ = &ColumnType{Type: "bigint"}
+  }
 
 decimal_type:
 REAL double_length_opt
@@ -2501,6 +2553,12 @@ REAL double_length_opt
     $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
+  }
+| DOUBLE PRECISION double_length_opt
+  {
+    $$ = &ColumnType{Type: string($1)}
+    $$.Length = $3.Length
+    $$.Scale = $3.Scale
   }
 | FLOAT8_TYPE double_length_opt
   {
@@ -2532,6 +2590,18 @@ REAL double_length_opt
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
+| DEC decimal_length_opt
+  {
+    $$ = &ColumnType{Type: "decimal"}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FIXED decimal_length_opt
+  {
+    $$ = &ColumnType{Type: "decimal"}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
 
 time_type:
   DATE
@@ -2550,13 +2620,13 @@ time_type:
   {
     $$ = &ColumnType{Type: string($1), Length: $2}
   }
-| YEAR length_opt
-  {
-    $$ = &ColumnType{Type: string($1), Length: $2}
-  }
 
 char_type:
   CHAR length_opt charset_opt
+  {
+    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
+  }
+| CHAR length_opt binary_charset
   {
     $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
@@ -2566,9 +2636,45 @@ char_type:
     // https://dev.mysql.com/doc/refman/8.0/en/string-type-syntax.html
     $$ = &ColumnType{Type: "binary", Length: $2}
   }
-| VARCHAR length_opt charset_opt
+| CHARACTER length_opt column_charset_opt
+  {
+    $$ = &ColumnType{Type: "char", Length: $2, Charset: $3}
+  }
+| VARCHAR length_opt column_charset_opt
   {
     $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
+  }
+| varchar_synonym length_opt column_charset_opt
+  {
+    $$ = &ColumnType{Type: "varchar", Length: $2, Charset: $3}
+  }
+// NATIONAL and NCHAR stand for MySQL's national character set, utf8mb3, and
+// take only the BINARY modifier.
+| national_char length_opt binary_opt
+  {
+    $$ = &ColumnType{Type: "char", Length: $2, Charset: ColumnCharset{Name: "utf8mb3", Binary: $3}}
+  }
+| national_varchar length_opt binary_opt
+  {
+    $$ = &ColumnType{Type: "varchar", Length: $2, Charset: ColumnCharset{Name: "utf8mb3", Binary: $3}}
+  }
+// LONG and LONG VARCHAR stand for MEDIUMTEXT, and LONG VARBINARY for
+// MEDIUMBLOB.
+| LONG column_charset_opt
+  {
+    $$ = &ColumnType{Type: "mediumtext", Charset: $2}
+  }
+| LONG VARCHAR column_charset_opt
+  {
+    $$ = &ColumnType{Type: "mediumtext", Charset: $3}
+  }
+| LONG varchar_synonym column_charset_opt
+  {
+    $$ = &ColumnType{Type: "mediumtext", Charset: $3}
+  }
+| LONG VARBINARY
+  {
+    $$ = &ColumnType{Type: "mediumblob"}
   }
 | BINARY length_opt
   {
@@ -2578,19 +2684,19 @@ char_type:
   {
     $$ = &ColumnType{Type: string($1), Length: $2}
   }
-| TEXT length_opt charset_opt
+| TEXT length_opt column_charset_opt
   {
     $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
-| TINYTEXT charset_opt
+| TINYTEXT column_charset_opt
   {
     $$ = &ColumnType{Type: string($1), Charset: $2}
   }
-| MEDIUMTEXT charset_opt
+| MEDIUMTEXT column_charset_opt
   {
     $$ = &ColumnType{Type: string($1), Charset: $2}
   }
-| LONGTEXT charset_opt
+| LONGTEXT column_charset_opt
   {
     $$ = &ColumnType{Type: string($1), Charset: $2}
   }
@@ -2614,7 +2720,7 @@ char_type:
   {
     $$ = &ColumnType{Type: string($1)}
   }
-| ENUM '(' enum_values ')' charset_opt
+| ENUM '(' enum_values ')' column_charset_opt
   {
     $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
@@ -2623,7 +2729,7 @@ char_type:
     $$ = &ColumnType{Type: string($1), Length: $2}
   }
 // need set_values / SetValues ?
-| SET '(' enum_values ')' charset_opt
+| SET '(' enum_values ')' column_charset_opt
   {
     $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
@@ -2663,15 +2769,61 @@ spatial_type:
   }
 
 enum_values:
-  STRING
+  enum_value
   {
     $$ = make([]string, 0, 4)
-    $$ = append($$, encodeSQLString($1))
+    $$ = append($$, $1)
   }
-| enum_values ',' STRING
+| enum_values ',' enum_value
   {
-    $$ = append($1, encodeSQLString($3))
+    $$ = append($1, $3)
   }
+
+// An ENUM or SET value is a string, or a hexadecimal or bit literal that
+// MySQL reads as a binary string. A literal is kept as written: as a quoted
+// string, its bytes would be read in the connection's character set rather
+// than as binary.
+enum_value:
+  STRING
+  {
+    $$ = encodeSQLString($1)
+  }
+| HEX
+  {
+    $$ = "X'" + $1 + "'"
+  }
+| HEXNUM
+  {
+    $$ = $1
+  }
+| BIT_LITERAL
+  {
+    $$ = "B'" + $1 + "'"
+  }
+| BITNUM
+  {
+    $$ = $1
+  }
+
+varchar_synonym:
+  VARCHARACTER
+| CHAR VARYING
+| CHARACTER VARYING
+
+national_char:
+  NCHAR
+| NATIONAL CHAR
+| NATIONAL CHARACTER
+
+national_varchar:
+  NVARCHAR
+| NATIONAL VARCHAR
+| NATIONAL VARCHARACTER
+| NCHAR VARCHAR
+| NCHAR VARCHARACTER
+| NCHAR VARYING
+| NATIONAL CHAR VARYING
+| NATIONAL CHARACTER VARYING
 
 length_opt:
   {
@@ -2724,28 +2876,6 @@ decimal_length_opt:
     }
   }
 
-unsigned_opt:
-  {
-    $$ = false
-  }
-| UNSIGNED
-  {
-    $$ = true
-  }
-| SIGNED
-  {
-    $$ = false
-  }
-
-zero_fill_opt:
-  {
-    $$ = false
-  }
-| ZEROFILL
-  {
-    $$ = true
-  }
-
 charset_opt:
   {
     $$ = ColumnCharset{}
@@ -2790,6 +2920,37 @@ charset_opt:
   {
     // BINARY UNICODE: Shorthand for CHARACTER SET ucs2 with binary collation
     $$ = ColumnCharset{Name: "ucs2", Binary: true}
+  }
+
+// column_charset_opt is the character set of a column of a string type. It
+// takes more than charset_opt, which CAST and INTO OUTFILE share.
+column_charset_opt:
+  charset_opt
+| binary_charset
+| BYTE
+  {
+    // BYTE stands for CHARACTER SET binary.
+    $$ = ColumnCharset{Name: "binary"}
+  }
+
+// BINARY before a character set stands for that character set's binary
+// collation, as BINARY after it does.
+binary_charset:
+  BINARY charset_or_character_set sql_id
+  {
+    $$ = ColumnCharset{Name: string($3.String()), Binary: true}
+  }
+| BINARY charset_or_character_set STRING
+  {
+    if $3 == "" {
+      yylex.Error("charset name cannot be empty")
+      return 1
+    }
+    $$ = ColumnCharset{Name: string($3), Binary: true}
+  }
+| BINARY charset_or_character_set BINARY
+  {
+    $$ = ColumnCharset{Name: string($3), Binary: true}
   }
 
 binary_opt:
@@ -9052,6 +9213,15 @@ reserved_keyword:
 | CURRENT_TIMESTAMP
 | CURTIME
 | CURRENT_USER
+| DEC
+| INT1
+| INT2
+| INT3
+| INT4
+| INT8
+| LONG
+| MIDDLEINT
+| PRECISION
 | SUBSTR
 | SUBSTRING
 | DATABASE
@@ -9184,6 +9354,8 @@ reserved_keyword:
 | UTC_TIME
 | UTC_TIMESTAMP
 | VALUES
+| VARCHARACTER
+| VARYING
 | VIRTUAL
 | WITH
 | WHEN
@@ -9435,10 +9607,12 @@ non_reserved_keyword:
 | MYSQL_ERRNO
 | NAME
 | NAMES
+| NATIONAL
 | NCHAR
 | NESTED
 | NETWORK_NAMESPACE
 | NOWAIT
+| NVARCHAR
 | NO
 | NONE
 | NULLS
