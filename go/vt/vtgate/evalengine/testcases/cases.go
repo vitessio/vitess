@@ -71,7 +71,7 @@ var Cases = []TestCase{
 	{Run: LogicalStatement},
 	{Run: TupleComparisons},
 	{Run: Comparisons},
-	{Run: TemporalComparisons},
+	{Run: TemporalComparisons, SQLMode: SQLModeZeroDates},
 	{Run: InStatement},
 	{Run: FnField},
 	{Run: FnElt},
@@ -1530,7 +1530,8 @@ func Comparisons(yield Query) {
 // TemporalComparisons compares dates, datetimes and times with each other. A
 // zero date orders before 0001-01-01, and a TIME compared with a date or
 // datetime is first placed on the current date. Every pair here gives the same
-// result whatever the current date is.
+// result whatever the current date is. The case runs under SQLModeZeroDates:
+// under the default sql_mode, MySQL rejects every zero date literal.
 func TemporalComparisons(yield Query) {
 	elements := []string{
 		`DATE'0000-00-00'`,
@@ -1555,9 +1556,11 @@ func TemporalComparisons(yield Query) {
 		}
 	}
 
+	// As in MultiComparisons, the collation isn't compared: MySQL reports a
+	// GREATEST or LEAST of temporal arguments with the connection collation.
 	for _, fn := range []string{"GREATEST", "LEAST"} {
-		yield(fn+"(TIMESTAMP'0000-00-00 00:00:00', TIMESTAMP'0001-01-01 00:00:00')", nil, false)
-		yield(fn+"(DATE'0000-00-00', DATE'0001-01-01')", nil, false)
+		yield(fn+"(TIMESTAMP'0000-00-00 00:00:00', TIMESTAMP'0001-01-01 00:00:00')", nil, true)
+		yield(fn+"(DATE'0000-00-00', DATE'0001-01-01')", nil, true)
 	}
 
 	for _, op := range []string{"=", "<", ">"} {
