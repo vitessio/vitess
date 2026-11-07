@@ -282,6 +282,33 @@ func TestWriteHeartbeatError(t *testing.T) {
 	assert.Equal(t, "UNKNOWN", record["error_code"])
 }
 
+// TestKillWriteError checks that a failed kill of an in-progress heartbeat
+// write is logged as a failed kill, not as a failed write.
+func TestKillWriteError(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	tw := newSimpleTestWriter(db, nil)
+	tw.writeConnID.Store(42)
+
+	writeErrors.Reset()
+
+	logs := logtest.Capture(t, slog.LevelError)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	tw.killWritesUntilStopped(ctx)
+
+	// A stalled kill can let the ticker fire for a second attempt, which is
+	// counted but throttled out of the log.
+	assert.Positive(t, writeErrors.Get())
+	record := logs.Record(t, "failed to kill heartbeat write")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "HeartbeatWriter", record["logger"])
+	assert.Contains(t, record["error"], "kill 42")
+	assert.Equal(t, "UNKNOWN", record["error_code"])
+	assert.NotContains(t, logs.String(), "failed to write heartbeat")
+}
+
 // TestCloseWhileStuckWriting tests that Close shouldn't get stuck even if the heartbeat writer is stuck waiting for a semi-sync ACK.
 func TestCloseWhileStuckWriting(t *testing.T) {
 	db := fakesqldb.New(t)

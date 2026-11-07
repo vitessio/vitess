@@ -277,6 +277,14 @@ func (w *heartbeatWriter) recordError(err error) {
 	writeErrors.Add(1)
 }
 
+func (w *heartbeatWriter) recordKillError(err error) {
+	if err == nil {
+		return
+	}
+	w.errorLog.Error("failed to kill heartbeat write", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+	writeErrors.Add(1)
+}
+
 // enableWrites activates heartbeat writes
 func (w *heartbeatWriter) enableWrites() {
 	// We must combat a potential race condition: the writer is Open, and a request comes
@@ -316,7 +324,7 @@ func (w *heartbeatWriter) killWritesUntilStopped(ctx context.Context) {
 	for {
 		// Actually try to kill the query.
 		err := w.killWrite()
-		w.recordError(err)
+		w.recordKillError(err)
 		select {
 		case <-ctx.Done():
 			// If the context has been cancelled, then we know that the ticks have stopped.
