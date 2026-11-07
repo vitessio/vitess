@@ -55,6 +55,9 @@ type Tokenizer struct {
 	// columnDefaults are the DEFAULT attributes of the column definition that
 	// is being parsed.
 	columnDefaults columnDefaults
+	// partitionValues are where the values of the partition that is being
+	// parsed start and end in the text. See checkPartitionValues.
+	partitionValues [][2]int
 	// columnChecks holds the CHECK constraints of each column definition
 	// until the statement that the column belongs to adds them to its table.
 	// See takeColumnChecks.
@@ -960,6 +963,7 @@ func (tkn *Tokenizer) reset() {
 	tkn.pendingColumnChecks = nil
 	tkn.columnChecks = nil
 	tkn.columnDefaults = columnDefaults{}
+	tkn.partitionValues = nil
 }
 
 func isLetter(ch uint16) bool {
