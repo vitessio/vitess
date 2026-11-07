@@ -21026,7 +21026,7 @@ INPUT
 select 1 /bin /boot /cdrom /dev /etc /home /lib /lib32 /lib64 /libx32 /lost+found /media /mnt /opt /proc /root /run /sbin /snap /srv /swapfile /sys /tmp /usr /var long multi line comment */;
 END
 ERROR
-syntax error at position 174 near 'multi'
+syntax error at position 168 near 'long'
 END
 INPUT
 select date_add(date,INTERVAL 1 MONTH) from t1;
