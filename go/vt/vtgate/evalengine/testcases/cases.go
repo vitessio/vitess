@@ -1694,6 +1694,7 @@ func FnLower(yield Query) {
 		yield(fmt.Sprintf("LCASE(%s)", str), nil, false)
 	}
 	yield(`LOWER(JSON_OBJECT('A', 'B')) = '{"a": "b"}'`, nil, false)
+	yield("LOWER(DATE'2020-01-01') = '2020-1-1'", nil, false)
 }
 
 func FnUpper(yield Query) {
@@ -1703,6 +1704,8 @@ func FnUpper(yield Query) {
 	}
 	yield(`UPPER(JSON_OBJECT('a', 'b')) = '{"A": "B"}'`, nil, false)
 	yield(`UPPER(JSON_OBJECT('a', 'b')) = '{"a": "b"}'`, nil, false)
+	yield(`UPPER(JSON_ARRAY('ƀ')) = '["ƀ"]'`, nil, false)
+	yield("UPPER(1e100)", nil, false)
 	yield("UPPER(1) = '1.0'", nil, false)
 }
 
