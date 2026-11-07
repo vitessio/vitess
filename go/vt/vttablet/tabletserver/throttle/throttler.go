@@ -181,8 +181,8 @@ type Throttler struct {
 
 	throttleMetricChan  chan *base.ThrottleMetric
 	clusterProbesChan   chan *base.ClusterProbes
-	throttlerConfigChan chan *topodatapb.ThrottlerConfig
-	serialFuncChan      chan func() // Used by unit tests to inject non-racy behavior
+	throttlerConfigChan chan struct{} // Tells Operate to apply pendingThrottlerConfig
+	serialFuncChan      chan func()   // Used by unit tests to inject non-racy behavior
 
 	inventory *base.Inventory
 
@@ -201,6 +201,12 @@ type Throttler struct {
 	cancelOpenContext   context.CancelFunc
 	cancelEnableContext context.CancelFunc
 	throttledAppsMutex  sync.Mutex
+
+	// pendingThrottlerConfig is the latest config that WatchSrvKeyspaceCallback left for Operate to apply while
+	// the throttler is enabled. Enable gives each Operate a throttlerConfigChan of its own, so that an Operate
+	// whose throttler was disabled can't take the signal meant for the next one. Outside tests, initMutex
+	// protects both fields.
+	pendingThrottlerConfig *topodatapb.ThrottlerConfig
 
 	readSelfThrottleMetrics func(context.Context, tmclient.TabletManagerClient) base.ThrottleMetrics // overwritten by unit test
 }
@@ -246,7 +252,6 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 
 	throttler.throttleMetricChan = make(chan *base.ThrottleMetric)
 	throttler.clusterProbesChan = make(chan *base.ClusterProbes)
-	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.serialFuncChan = make(chan func())
 	throttler.inventory = base.NewInventory()
 
@@ -416,15 +421,20 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
+	// Outside tests, the throttler is only enabled and disabled while initMutex is held, so it stays as it is
+	// until we're done.
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
 	if throttler.IsEnabled() {
 		// Throttler is enabled and we should apply the config change
 		// through Operate() or else we get into race conditions.
-		go func() {
-			throttler.throttlerConfigChan <- throttlerConfig
-		}()
+		throttler.pendingThrottlerConfig = throttlerConfig
+		select {
+		case throttler.throttlerConfigChan <- struct{}{}:
+		default:
+			// Operate has yet to apply the previous config, and will apply this one instead.
+		}
 	} else {
-		throttler.initMutex.Lock()
-		defer throttler.initMutex.Unlock()
 		// Throttler is not enabled, we should apply directly.
 		throttler.applyThrottlerConfig(context.Background(), throttlerConfig)
 	}
@@ -519,10 +529,29 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		}
 		throttler.convergeMetricThresholds()
 	}
+	// The throttler is enabled or disabled before the next config is applied, so that it ends up as the latest
+	// config says. Neither Enable nor Disable waits for Operate, which calls them when it applies a config.
 	if throttlerConfig.Enabled {
-		go throttler.Enable()
+		throttler.Enable()
 	} else {
-		go throttler.Disable()
+		throttler.Disable()
+	}
+}
+
+// applyPendingThrottlerConfig applies the config that WatchSrvKeyspaceCallback left for Operate, if any.
+// ctx is the context of the Operate that calls it.
+func (throttler *Throttler) applyPendingThrottlerConfig(ctx context.Context) {
+	throttler.initMutex.Lock()
+	defer throttler.initMutex.Unlock()
+
+	if ctx.Err() != nil {
+		// The throttler was disabled since this Operate started, by Close or by a newer config. If it's
+		// enabled again, the next Operate gets the configs that arrive from then on.
+		return
+	}
+	if throttlerConfig := throttler.pendingThrottlerConfig; throttlerConfig != nil {
+		throttler.pendingThrottlerConfig = nil
+		throttler.applyThrottlerConfig(ctx, throttlerConfig)
 	}
 }
 
@@ -565,6 +594,7 @@ func (throttler *Throttler) Enable() *sync.WaitGroup {
 	wg := &sync.WaitGroup{}
 	var ctx context.Context
 	ctx, throttler.cancelEnableContext = context.WithCancel(context.Background())
+	throttler.throttlerConfigChan = make(chan struct{}, 1)
 	throttler.check.SelfChecks(ctx)
 	throttler.Operate(ctx, wg)
 
@@ -789,6 +819,9 @@ func (throttler *Throttler) recentlyChecked() bool {
 // Operate is the main entry point for the throttler operation and logic. It will
 // run the probes, collect metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
+	// Enable makes a channel for each Operate. This one keeps to its own, so that once its throttler is disabled,
+	// it can't take a signal meant for the next Operate.
+	throttlerConfigChan := throttler.throttlerConfigChan
 	tickers := [](*timer.SuspendableTicker){}
 	addTicker := func(d time.Duration) *timer.SuspendableTicker {
 		t := timer.NewSuspendableTicker(d, false)
@@ -922,8 +955,8 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				if throttler.IsOpen() {
 					go throttler.expireThrottledApps()
 				}
-			case throttlerConfig := <-throttler.throttlerConfigChan:
-				throttler.applyThrottlerConfig(ctx, throttlerConfig)
+			case <-throttlerConfigChan:
+				throttler.applyPendingThrottlerConfig(ctx)
 			case f := <-throttler.serialFuncChan:
 				// Used in unit testing to serialize operations and avoid race conditions
 				f()
