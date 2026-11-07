@@ -69,6 +69,16 @@ const (
 	RetriesExhaustedIndicator = "retries exhausted"
 )
 
+// notParkedPredicate restricts lower-tier (informational / retryable error)
+// message writes to streams that are not Stopped or Error. For a parked
+// stream, the message is the reason it stopped (fatal tier, written together
+// with the state by vreplicator.setState or by an operator) and must remain
+// the last visible message. Legitimate clearing happens when the stream is
+// moved back to Running/Copying via setState(..., "") or an explicit update.
+var notParkedPredicate = "state not in (" +
+	encodeString(binlogdatapb.VReplicationWorkflowState_Stopped.String()) + ", " +
+	encodeString(binlogdatapb.VReplicationWorkflowState_Error.String()) + ")"
+
 // controller is created by Engine. Members are initialized upfront.
 // There is no mutex within a controller because its members are
 // either read-only or self-synchronized.
@@ -414,7 +424,9 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	// Never overwrite the stop/error reason of a parked stream.
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v and %s",
+		encodeString(binlogplayer.MessageTruncate(message)), ct.id, notParkedPredicate)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
