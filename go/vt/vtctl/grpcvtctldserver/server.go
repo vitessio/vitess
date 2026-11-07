@@ -5038,7 +5038,7 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 
 		if len(results.Results) > 0 {
 			resp.Results = append(resp.Results, results.Results...)
-			for shard, shardResults := range resp.ResultsByShard {
+			for shard, shardResults := range results.ResultsByShard {
 				resp.ResultsByShard[shard].Results = append(resp.ResultsByShard[shard].Results, shardResults.Results...)
 			}
 			return resp, err
