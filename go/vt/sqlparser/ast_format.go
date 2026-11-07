@@ -1652,7 +1652,15 @@ func (node *Literal) Format(buf *TrackedBuffer) {
 	switch node.Type {
 	case StrVal:
 		sqltypes.MakeTrusted(sqltypes.VarChar, node.Bytes()).EncodeSQL(buf)
-	case IntVal, FloatVal, DecimalVal, HexNum, BitNum:
+	case BitNum:
+		// b'' is an empty bit literal, which has no 0b form: MySQL reads 0b
+		// as an identifier.
+		if node.Val == "0b" {
+			buf.literal("b''")
+		} else {
+			buf.astPrintf(node, "%#s", node.Val)
+		}
+	case IntVal, FloatVal, DecimalVal, HexNum:
 		buf.astPrintf(node, "%#s", node.Val)
 	case HexVal:
 		buf.astPrintf(node, "X'%#s'", node.Val)
@@ -1753,6 +1761,11 @@ func (node *Argument) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *NullVal) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "null")
+}
+
+// Format formats the node.
+func (node *ODBCEscape) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "{%v %v}", node.Type, node.Expr)
 }
 
 // Format formats the node.

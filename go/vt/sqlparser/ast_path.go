@@ -336,6 +336,8 @@ const (
 	RefOfNotExprExpr
 	RefOfNtileExprN
 	RefOfNtileExprOverClause
+	RefOfODBCEscapeType
+	RefOfODBCEscapeExpr
 	RefOfOffsetOriginal
 	OnDupOffset
 	RefOfOptLikeLikeTable
@@ -1241,6 +1243,10 @@ func (s ASTStep) DebugString() string {
 		return "(*NtileExpr).N"
 	case RefOfNtileExprOverClause:
 		return "(*NtileExpr).OverClause"
+	case RefOfODBCEscapeType:
+		return "(*ODBCEscape).Type"
+	case RefOfODBCEscapeExpr:
+		return "(*ODBCEscape).Expr"
 	case RefOfOffsetOriginal:
 		return "(*Offset).Original"
 	case OnDupOffset:
@@ -2496,6 +2502,10 @@ func GetNodeFromPath(node SQLNode, path ASTPath) SQLNode {
 			node = node.(*NtileExpr).N
 		case RefOfNtileExprOverClause:
 			node = node.(*NtileExpr).OverClause
+		case RefOfODBCEscapeType:
+			node = node.(*ODBCEscape).Type
+		case RefOfODBCEscapeExpr:
+			node = node.(*ODBCEscape).Expr
 		case RefOfOffsetOriginal:
 			node = node.(*Offset).Original
 		case OnDupOffset:

@@ -2789,6 +2789,14 @@ type (
 	// NullVal represents a NULL value.
 	NullVal struct{}
 
+	// ODBCEscape is an ODBC escape such as {d '2001-01-01'}. MySQL reads it
+	// as a DATE, TIME or DATETIME literal when Type is d, t or ts and Expr is
+	// a string in the right format, and as Expr otherwise.
+	ODBCEscape struct {
+		Type IdentifierCS
+		Expr Expr
+	}
+
 	// MaxValue is MAXVALUE among the values that bound a partition, as in
 	// VALUES LESS THAN (1, MAXVALUE). It is not an expression anywhere else.
 	MaxValue struct{}
@@ -3685,6 +3693,7 @@ func (*Literal) IsExpr()                            {}
 func (*Argument) IsExpr()                           {}
 func (*NullVal) IsExpr()                            {}
 func (*MaxValue) IsExpr()                           {}
+func (*ODBCEscape) IsExpr()                         {}
 func (BoolVal) IsExpr()                             {}
 func (*ColName) IsExpr()                            {}
 func (ValTuple) IsExpr()                            {}
