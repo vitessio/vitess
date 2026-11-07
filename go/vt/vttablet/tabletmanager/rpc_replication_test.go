@@ -2018,7 +2018,8 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 			mysqlctl.PopulateReparentJournal(created.UnixNano(), "EmergencyReparentShard", topoproto.TabletAliasString(tm.tabletAlias), promotionPosition),
 		}
 		request := newRequest()
-		journalTimeout := topo.RemoteOperationTimeout / 2
+		// Longer than the remote operation timeout, as PRS asks for its whole wait_replicas_timeout.
+		journalTimeout := topo.RemoteOperationTimeout * 2
 		request.PopulateReparentJournalTimeout = protoutil.DurationToProto(journalTimeout)
 		started := time.Now()
 
@@ -2278,15 +2279,6 @@ func TestPromoteReplicaAndJournalRejectsInvalidRequest(t *testing.T) {
 				PopulateReparentJournalTimeout: protoutil.DurationToProto(-time.Second),
 			},
 			expectErr: "populate_reparent_journal_timeout",
-		},
-		{
-			name: "journal timeout exceeds remote operation timeout",
-			request: &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
-				TimeCreated:                    protoutil.TimeToProto(created),
-				ActionName:                     "EmergencyReparentShard",
-				PopulateReparentJournalTimeout: protoutil.DurationToProto(topo.RemoteOperationTimeout + time.Second),
-			},
-			expectErr: "must not exceed the remote operation timeout",
 		},
 	}
 

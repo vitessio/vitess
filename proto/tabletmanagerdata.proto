@@ -599,14 +599,15 @@ message PromoteReplicaAndJournalRequest {
   vttime.Time time_created = 2;
   // Required. action_name is the non-empty action stored in the reparent journal row and must not exceed 255 bytes.
   string action_name = 3;
-  // populate_reparent_journal_timeout limits the journal write phase. Zero uses the remote operation timeout; nonzero values cannot exceed it.
+  // populate_reparent_journal_timeout limits the journal write phase, including after the caller cancels. Zero uses the default remote operation timeout.
+  // Under semi-sync the write waits for a replica ACK, so it should leave time for repointed replicas to connect.
   vttime.Duration populate_reparent_journal_timeout = 4;
 }
 
 // PromoteReplicaAndJournalResponse contains the completed phase results and any partial failure.
 // Phase failures are returned in the corresponding error field instead of as transport errors.
 message PromoteReplicaAndJournalResponse {
-  // Output only. position is set after promotion, including when writing the reparent journal fails.
+  // Output only. position is set once MySQL has been promoted, including when a later step fails. A non-empty position alone does not mean the tablet is writable.
   string position = 1;
   // Output only. promote_replica_error describes a promotion failure. The journal write is skipped when this is set.
   vtrpc.RPCError promote_replica_error = 2;

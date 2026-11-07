@@ -1235,7 +1235,7 @@ func (tm *TabletManager) PrepareEmergencyReparent(ctx context.Context, request *
 	}
 	if request.WaitPosition != "" {
 		if _, err := replication.DecodePosition(request.WaitPosition); err != nil {
-			return nil, vterrors.Wrapf(vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%s", err), "invalid wait_position")
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid wait_position: %v", err)
 		}
 	}
 
@@ -1311,6 +1311,10 @@ func (tm *TabletManager) promoteReplicaLocked(ctx context.Context, semiSync bool
 	return position, nil
 }
 
+// PromoteReplicaAndJournal promotes the tablet and then writes its reparent
+// journal row, so a reparent needs one round trip instead of two. Promotion
+// stops when the caller gives up, but once the tablet is writable the journal
+// write runs to completion or to populate_reparent_journal_timeout.
 func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
 	if request == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "request is required")
@@ -1318,9 +1322,6 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	journalTimeout, err := reparentPhaseTimeout(request.PopulateReparentJournalTimeout)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "invalid populate_reparent_journal_timeout")
-	}
-	if journalTimeout > topo.RemoteOperationTimeout {
-		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "populate_reparent_journal_timeout must not exceed the remote operation timeout of %s", topo.RemoteOperationTimeout)
 	}
 	if request.TimeCreated == nil {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "time_created is required")
@@ -1371,7 +1372,8 @@ func (tm *TabletManager) PromoteReplicaAndJournal(ctx context.Context, request *
 	}
 
 	// Once the tablet is writable, a missing journal row is the torn state we want
-	// to avoid, so the journal write outlives the caller's cancellation.
+	// to avoid, so the journal write outlives the caller's cancellation, bounded by
+	// the timeout the caller asked for.
 	journalCtx, journalCancel := context.WithTimeout(context.WithoutCancel(ctx), journalTimeout)
 	err = tm.PopulateReparentJournal(journalCtx, timeCreated.UnixNano(), request.ActionName, tm.tabletAlias, response.Position)
 	journalCancel()

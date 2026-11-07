@@ -5418,7 +5418,8 @@ type PromoteReplicaAndJournalRequest struct {
 	TimeCreated *vttime.Time `protobuf:"bytes,2,opt,name=time_created,json=timeCreated,proto3" json:"time_created,omitempty"`
 	// Required. action_name is the non-empty action stored in the reparent journal row and must not exceed 255 bytes.
 	ActionName string `protobuf:"bytes,3,opt,name=action_name,json=actionName,proto3" json:"action_name,omitempty"`
-	// populate_reparent_journal_timeout limits the journal write phase. Zero uses the remote operation timeout; nonzero values cannot exceed it.
+	// populate_reparent_journal_timeout limits the journal write phase, including after the caller cancels. Zero uses the default remote operation timeout.
+	// Under semi-sync the write waits for a replica ACK, so it should leave time for repointed replicas to connect.
 	PopulateReparentJournalTimeout *vttime.Duration `protobuf:"bytes,4,opt,name=populate_reparent_journal_timeout,json=populateReparentJournalTimeout,proto3" json:"populate_reparent_journal_timeout,omitempty"`
 	unknownFields                  protoimpl.UnknownFields
 	sizeCache                      protoimpl.SizeCache
@@ -5486,7 +5487,7 @@ func (x *PromoteReplicaAndJournalRequest) GetPopulateReparentJournalTimeout() *v
 // Phase failures are returned in the corresponding error field instead of as transport errors.
 type PromoteReplicaAndJournalResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Output only. position is set after promotion, including when writing the reparent journal fails.
+	// Output only. position is set once MySQL has been promoted, including when a later step fails. A non-empty position alone does not mean the tablet is writable.
 	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 	// Output only. promote_replica_error describes a promotion failure. The journal write is skipped when this is set.
 	PromoteReplicaError *vtrpc.RPCError `protobuf:"bytes,2,opt,name=promote_replica_error,json=promoteReplicaError,proto3" json:"promote_replica_error,omitempty"`
