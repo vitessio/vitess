@@ -44,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -1618,9 +1619,13 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name: targetKeyspaceName,
 			Keyspace: &vschemapb.Keyspace{
-				Sharded: true,
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
 				Tables: map[string]*vschemapb.Table{
-					tableName: {AutoIncrement: &vschemapb.AutoIncrement{Column: "id", Sequence: sequence}},
+					tableName: {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{Column: "id", Name: "hash"}},
+						AutoIncrement:  &vschemapb.AutoIncrement{Column: "id", Sequence: sequence},
+					},
 				},
 			},
 		})
@@ -1688,6 +1693,16 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			},
 			setUp: func(t *testing.T, env *testEnv) {
 				setUpSequence(t, env, fmt.Sprintf("`%s`.`%s`", sequenceKeyspaceName, sequenceTableName))
+				// VTGate uses the table names in a vschema as they are, so
+				// this entry, whose name is in backticks, doesn't define the
+				// backing table.
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: sequenceKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{Tables: map[string]*vschemapb.Table{
+						fmt.Sprintf("`%s`", sequenceTableName): {Type: "sequence"},
+					}},
+				})
+				require.NoError(t, err)
 				// The target shards report different maxima, and the highest
 				// one initializes the sequence.
 				for i, maxValue := range []int64{5, 7} {
@@ -1719,14 +1734,25 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				CurrentState: "All Reads Switched. Writes Switched",
 			},
 			check: func(t *testing.T, env *testEnv, _ error) {
-				// The backing table is added to the sequence keyspace's vschema,
-				// and the switch's routing rebuild publishes it.
+				// The backing table is added to the sequence keyspace's vschema
+				// under its raw name, and the switch's routing rebuild
+				// publishes it, so VTGate resolves the target table's sequence
+				// to it.
 				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
 				require.NoError(t, err)
-				assert.Equal(t, map[string]*vschemapb.Table{sequenceTableName: {Type: "sequence"}}, kvs.Tables)
+				assert.Equal(t, map[string]*vschemapb.Table{
+					fmt.Sprintf("`%s`", sequenceTableName): {Type: "sequence"},
+					sequenceTableName:                      {Type: "sequence"},
+				}, kvs.Tables)
 				srvVSchema, err := env.ts.GetSrvVSchema(ctx, defaultCellName)
 				require.NoError(t, err)
-				assert.Equal(t, "sequence", srvVSchema.Keyspaces[sequenceKeyspaceName].GetTables()[sequenceTableName].GetType())
+				vschema := vindexes.BuildVSchema(srvVSchema, env.ws.SQLParser())
+				targetVSchema := vschema.Keyspaces[targetKeyspaceName]
+				require.NoError(t, targetVSchema.Error)
+				usingTable := targetVSchema.Tables[tableName]
+				require.NotNil(t, usingTable)
+				require.NotNil(t, usingTable.AutoIncrement)
+				assert.Equal(t, vindexes.TypeSequence, usingTable.AutoIncrement.Sequence.Type)
 				// Both maxima were read, and the sequence was initialized.
 				env.tmc.mu.Lock()
 				defer env.tmc.mu.Unlock()
