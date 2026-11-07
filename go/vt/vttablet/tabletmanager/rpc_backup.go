@@ -133,8 +133,10 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		// A primary's semi-sync is restored from the policy in effect now, so a
 		// policy that can't be read refuses the backup before the type changes.
 		// VTOrc reconciles a later policy change once the primary serves again.
+		// An unmanaged primary keeps its semi-sync through the drain, so there is
+		// nothing to restore.
 		var primarySemiSync SemiSyncAction
-		if originalType == topodatapb.TabletType_PRIMARY {
+		if originalType == topodatapb.TabletType_PRIMARY && tm.mysqlMode == topodatapb.TabletMySQLMode_MANAGED {
 			if primarySemiSync, err = tm.primarySemiSyncAction(ctx, tablet.Tablet); err != nil {
 				return err
 			}
@@ -195,7 +197,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 
 			// Do not do anything for primary tablets or when active reparenting is disabled
-			if mysqlctl.DisableActiveReparents || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
+			if tm.isReparentingDisabled() || tabletInfo.Type == topodatapb.TabletType_PRIMARY {
 				return
 			}
 
@@ -225,7 +227,15 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			}
 		}()
 
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
+		// Update our type to `BACKUP`. An unmanaged tablet gets a topo-only change:
+		// SemiSyncActionUnset carries into fixSemiSync, which writes
+		// rpl_semi_sync_replica_enabled and can then restart replication on a MySQL we were told
+		// not to manage. The deferred restore above already asks for None.
+		semiSync := SemiSyncActionUnset
+		if tm.mysqlMode != topodatapb.TabletMySQLMode_MANAGED {
+			semiSync = SemiSyncActionNone
+		}
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, semiSync); err != nil {
 			return err
 		}
 	}
