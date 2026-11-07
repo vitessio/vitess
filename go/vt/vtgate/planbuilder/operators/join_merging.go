@@ -107,14 +107,16 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 // outer join preserves on a reference side exactly once. A reference table has the same rows on
 // every shard, so a route that reads more than one returns each unmatched preserved row once per
 // shard. Checking the opcode leaves unsharded routes out, and the routing type leaves out dual,
-// whose own merge rule only lets a single-shard route take it.
+// which keeps its own merge rule from main.
 func owesReferenceRows(joinType sqlparser.JoinType, preserved *Route) bool {
 	return !joinType.IsInner() && canCarryReferenceRows(preserved.Routing)
 }
 
 // isDirectDMLRowSource reports whether a merge of these routes is the row source of a multi-table
 // DML sent to the shards as it is, rather than something that reads it. Nothing returns the
-// preserved rows then: an unmatched one has no row to update or delete on the other side. A target
+// preserved rows then. When only the other side is written, an unmatched preserved row has no row
+// to write; a write to the reference table itself is decided by each shard on its own, as on main.
+// A target
 // among these routes is what says the DML writes through this join rather than reading it from
 // further down, where an outer join in a subquery does have its rows read. A DML that is known to
 // read its rows first, through a SELECT, has no row source. findDMLAboveRoute can still turn a DML

@@ -267,3 +267,20 @@ func TestPreservedRowsSurviveIntoAMergedCTE(t *testing.T) {
 	require.True(t, ok, "expected the outer side to be a route, got %T", sq.Outer)
 	require.Equal(t, engine.Reference, outer.Opcode)
 }
+
+// An inner join with another reference table keeps the rows the outer join preserved on a reference
+// route, whichever side of it they come from, so a sharded recursive term cannot widen that route.
+func TestPreservedRowsSurviveAnInnerJoinWithAReferenceTable(t *testing.T) {
+	for _, seed := range []string{
+		"select r1.col as col from ref r1 left join ref r2 on r1.col = r2.col join ref r3 on r3.col = r1.col",
+		"select r1.col as col from ref r3 join (ref r1 left join ref r2 on r1.col = r2.col) on r3.col = r1.col",
+	} {
+		t.Run(seed, func(t *testing.T) {
+			primitive := planReferenceOuterJoin(t,
+				"with recursive c as ("+seed+" union all select u.col from `user` u join c on u.col = c.col where u.col < 5) select col from c")
+
+			require.IsType(t, &engine.RecurseCTE{}, primitive,
+				"merging the term into the seed would return each unmatched r1 row once per shard")
+		})
+	}
+}
