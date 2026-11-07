@@ -80,6 +80,11 @@ func TestShutdownLogs(t *testing.T) {
 	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGTERM))
 	require.NoError(t, <-errCh)
 
+	record = logs.Record(t, "graceful shutdown triggered")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "received signal: terminated", record["reason"])
+	assert.NotContains(t, record, "error")
+
 	record = logs.Record(t, "entering lame duck period")
 	assert.Equal(t, "INFO", record["level"])
 	assert.InDelta(t, float64(time.Millisecond), record["lameduck_period"], 0)

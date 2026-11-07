@@ -264,7 +264,7 @@ func (s *Server) ListenAndServe() error {
 	log.Info("server listening", slog.String("server", s.name), slog.String("address", s.opts.Addr))
 
 	reason := <-shutdown
-	log.Warn("graceful shutdown triggered", slog.Any("error", reason))
+	log.Warn("graceful shutdown triggered", slog.Any("reason", reason))
 
 	if s.opts.LameDuckDuration > 0 {
 		log.Info("entering lame duck period", slog.Duration("lameduck_period", s.opts.LameDuckDuration))
