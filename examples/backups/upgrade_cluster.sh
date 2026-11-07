@@ -27,7 +27,7 @@ for i in 101 102; do
   CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
   vtctldclient DeleteTablets --allow-primary zone1-$i
-  rm -Rf $VTDATAROOT/vt_0000000$i
+  remove_tablet_dir $i
   echo "Starting tablet zone1-$i again"
   CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
   CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
@@ -40,7 +40,7 @@ for i in 201 202; do
   CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
   vtctldclient DeleteTablets --allow-primary zone1-$i
-  rm -Rf $VTDATAROOT/vt_0000000$i
+  remove_tablet_dir $i
   echo "Starting tablet zone1-$i again"
   CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
   SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh
@@ -53,7 +53,7 @@ for i in 301 302; do
   CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-down.sh
   echo "Removing tablet directory zone1-$i"
   vtctldclient DeleteTablets --allow-primary zone1-$i
-  rm -Rf $VTDATAROOT/vt_0000000$i
+  remove_tablet_dir $i
   echo "Starting tablet zone1-$i again"
   CELL=zone1 TABLET_UID=$i ../common/backup-scripts/mysqlctl-up.sh
   SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/backup-scripts/vttablet-up.sh

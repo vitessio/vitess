@@ -79,7 +79,7 @@
         - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
         - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
     - **[VTAdmin](#minor-changes-vtadmin)**
-        - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
+        - [vtadmin-web updated to node v24.21.0 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
@@ -917,9 +917,9 @@ Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tab
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 
-#### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v22.23.2 (LTS)</a>
+#### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v24.21.0 (LTS)</a>
 
-Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
+Building `vtadmin-web` now requires node v24.15.0 or newer on the 24 line, or v26 and above, with npm v11.12.1 or newer, up from node v22.13.0 and npm v10.9.2; node 22 is no longer supported. `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v24.21.0. The node range is what jsdom 30, a test dependency, supports on those lines. npm 11 is required because `npm ci` on npm 10 fails against the lock file that npm 11 writes. Full details on the node v24.21.0 release can be found at https://nodejs.org/en/blog/release/v24.21.0.
 
 ### <a id="minor-changes-general"/>General</a>
 
