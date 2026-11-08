@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -54,6 +56,53 @@ func (c ctxAwareCloser) Write(p []byte) (int, error) { return len(p), nil }
 func (c ctxAwareCloser) Close() error {
 	<-c.ctx.Done()
 	return c.ctx.Err()
+}
+
+// failingCloseWriter accepts writes and fails Close, like a GCS object whose
+// upload fails when it is committed.
+type failingCloseWriter struct{ err error }
+
+func (w failingCloseWriter) Write(p []byte) (int, error) { return len(p), nil }
+func (w failingCloseWriter) Close() error                { return w.err }
+
+type asyncManifestBackupHandle struct {
+	*FakeBackupHandle
+	uploadDone <-chan struct{}
+}
+
+func newAsyncManifestBackupHandle(t *testing.T, uploadErr error) *asyncManifestBackupHandle {
+	handle := &asyncManifestBackupHandle{FakeBackupHandle: &FakeBackupHandle{}}
+	handle.AddFileReturnF = func(name string) FakeBackupHandleAddFileReturn {
+		if name != backupManifestFileName {
+			return FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()}
+		}
+		reader, writer := io.Pipe()
+		done := make(chan struct{})
+		handle.uploadDone = done
+		go func() {
+			defer close(done)
+			defer reader.Close()
+			if _, err := io.Copy(io.Discard, reader); err != nil {
+				handle.RecordError(name, err)
+			} else if uploadErr != nil {
+				handle.RecordError(name, uploadErr)
+			}
+		}()
+		t.Cleanup(func() {
+			_ = writer.Close()
+			_ = reader.Close()
+			<-done
+		})
+		return FakeBackupHandleAddFileReturn{WriteCloser: writer}
+	}
+	return handle
+}
+
+func (handle *asyncManifestBackupHandle) Wait() {
+	if handle.uploadDone != nil {
+		<-handle.uploadDone
+	}
+	handle.FakeBackupHandle.Wait()
 }
 
 func TestFindReplicationPosition(t *testing.T) {
@@ -267,7 +316,7 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 // TestXtrabackupExecuteBackupVerifiesPosition runs a full backup with a fake
 // xtrabackup binary, and checks that the engine verifies the position its
 // MANIFEST records before it writes the MANIFEST, and writes none when that
-// check fails.
+// check fails. MANIFEST close and asynchronous upload failures make the backup unusable.
 func TestXtrabackupExecuteBackupVerifiesPosition(t *testing.T) {
 	const (
 		serverUUID = "16b1039f-22b6-11ed-b765-0a43f95f28a3"
@@ -311,21 +360,36 @@ echo "backup data"
 	}
 
 	for _, tc := range []struct {
-		name      string
-		verifyErr error
+		name        string
+		verifyErr   error
+		closeErr    error
+		asyncUpload bool
+		uploadErr   error
 	}{
-		{"MANIFEST written after the check passes", nil},
-		{"no MANIFEST when the check fails", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")},
+		{name: "MANIFEST written after the check passes"},
+		{name: "no MANIFEST when the check fails", verifyErr: vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")},
+		{name: "a MANIFEST that fails to close makes the backup unusable", closeErr: errors.New("MANIFEST close failed")},
+		{name: "asynchronous MANIFEST upload succeeds", asyncUpload: true},
+		{name: "asynchronous MANIFEST upload fails", asyncUpload: true, uploadErr: errors.New("MANIFEST upload failed")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			manifest := ioutil.NewBytesBufferWriter()
 			bh := &FakeBackupHandle{
 				AddFileReturnF: func(name string) FakeBackupHandleAddFileReturn {
 					if name == backupManifestFileName {
+						if tc.closeErr != nil {
+							return FakeBackupHandleAddFileReturn{WriteCloser: failingCloseWriter{tc.closeErr}}
+						}
 						return FakeBackupHandleAddFileReturn{WriteCloser: manifest}
 					}
 					return FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()}
 				},
+			}
+			var handle backupstorage.BackupHandle = bh
+			if tc.asyncUpload {
+				asyncHandle := newAsyncManifestBackupHandle(t, tc.uploadErr)
+				bh = asyncHandle.FakeBackupHandle
+				handle = asyncHandle
 			}
 			var verified []replication.Position
 			var reportedManifest string
@@ -341,7 +405,7 @@ echo "backup data"
 				},
 			}
 
-			result, err := (&XtrabackupEngine{}).ExecuteBackup(t.Context(), params, bh)
+			result, err := (&XtrabackupEngine{}).ExecuteBackup(t.Context(), params, handle)
 
 			require.Len(t, verified, 1)
 			assert.Equal(t, gtids, verified[0].String())
@@ -349,12 +413,23 @@ echo "backup data"
 			for _, call := range bh.AddFileCalls {
 				added = append(added, call.Filename)
 			}
-			if tc.verifyErr == nil {
+			switch {
+			case tc.closeErr != nil:
+				require.ErrorIs(t, err, tc.closeErr)
+				assert.Equal(t, BackupUnusable, result)
+			case tc.uploadErr != nil:
+				require.ErrorContains(t, err, tc.uploadErr.Error())
+				assert.Equal(t, BackupUnusable, result)
+			case tc.verifyErr == nil:
 				require.NoError(t, err)
 				assert.Equal(t, BackupUsable, result)
 				assert.Contains(t, added, backupManifestFileName)
-				assert.Equal(t, manifest.String(), reportedManifest, "ManifestOut must be the MANIFEST bytes written to storage")
-			} else {
+				if tc.asyncUpload {
+					assert.NotEmpty(t, reportedManifest)
+				} else {
+					assert.Equal(t, manifest.String(), reportedManifest, "ManifestOut must be the MANIFEST bytes written to storage")
+				}
+			default:
 				require.ErrorContains(t, err, "errant GTIDs")
 				assert.Equal(t, BackupUnusable, result)
 				assert.NotContains(t, added, backupManifestFileName)
