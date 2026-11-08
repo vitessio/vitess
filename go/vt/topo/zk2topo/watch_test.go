@@ -533,6 +533,9 @@ func TestWaitForLeadershipDeletesProposalWhenConnectionDrops(t *testing.T) {
 func TestWaitForLeadershipReturnsWhenServerCloses(t *testing.T) {
 	fake := startFakeZkServer(t, 1, "0000000001", "0000000002")
 	zs := NewServer(fake.addr(), "/")
+	// The test closes the server itself, this only cleans up if it fails
+	// first.
+	t.Cleanup(zs.Close)
 
 	mp, err := zs.NewLeaderParticipation("election", "id")
 	require.NoError(t, err)
@@ -556,6 +559,9 @@ func TestWaitForLeadershipReturnsWhenServerCloses(t *testing.T) {
 func TestLockReturnsWhenServerCloses(t *testing.T) {
 	fake := startFakeZkServer(t, 1, "0000000001", "0000000002")
 	zs := NewServer(fake.addr(), "/")
+	// The test closes the server itself, this only cleans up if it fails
+	// first.
+	t.Cleanup(zs.Close)
 
 	errc := make(chan error, 1)
 	go func() {
