@@ -181,9 +181,14 @@ func (vc *vdbClient) AddQueryToTrxBatch(query string) error {
 	return nil
 }
 
-// ExecuteQueryBatch sends the transaction's current batch of queries
-// down the wire to the database.
+// ExecuteTrxQueryBatch sends the transaction's current batch of queries
+// down the wire to the database. It sends nothing when the batch has no
+// unsent queries, as when a second setStateWithDBClient follows one that
+// already flushed it: MySQL rejects an empty query (error 1065).
 func (vc *vdbClient) ExecuteTrxQueryBatch() ([]*sqltypes.Result, error) {
+	if vc.queriesPos >= int64(len(vc.queries)) {
+		return nil, nil
+	}
 	defer vc.stats.Timings.Record(binlogplayer.BlplMultiQuery, time.Now())
 
 	queries := strings.Join(vc.queries[vc.queriesPos:], ";")

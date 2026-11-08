@@ -7864,7 +7864,8 @@ func TestCommitLoop_WorkerStopPosSetsStateAndStops(t *testing.T) {
 // buffer is marked flushed so the later CommitTrxQueryBatch sends only
 // "commit" — replaying nothing. Deferring the state UPDATE into the batch
 // (the previous design) double-executed insertLog's SELECT/INSERT on
-// replay, duplicating vreplication_log rows.
+// replay, duplicating vreplication_log rows. A second setState in the same
+// transaction has nothing left to flush and must send nothing.
 func TestSetState_BatchedTransactionExecutesImmediatelyWithoutReplay(t *testing.T) {
 	vp, _ := testVPlayer(t)
 	recording := &recordingDBClient{}
@@ -7899,6 +7900,65 @@ func TestSetState_BatchedTransactionExecutesImmediatelyWithoutReplay(t *testing.
 		}
 	}
 	require.Equal(t, 1, sawStateUpdate)
+
+	// With on-ddl=STOP, a stop position at the DDL's GTID sets the state twice
+	// in one transaction: the stop position's setState flushes the batch, and
+	// applyDDLEvent's own setState then finds it empty. Only a real connection
+	// shows MySQL rejecting an empty query (error 1065): recordingDBClient and
+	// realDBClient both accept one.
+	t.Run("stop at a DDL at the stop position on a real connection", func(t *testing.T) {
+		vp, _ := testVPlayer(t)
+		dbClient := binlogplayer.NewDBClient(env.Dbcfgs.AppWithDB(), vtenv.NewTestEnv().Parser())
+		require.NoError(t, dbClient.Connect())
+		t.Cleanup(dbClient.Close)
+		bls := &binlogdatapb.BinlogSource{
+			Keyspace: env.KeyspaceName, Shard: env.ShardName, OnDdl: binlogdatapb.OnDDLAction_STOP,
+		}
+		// Insert the stream's row directly rather than through the engine, so
+		// nothing streams it.
+		qr, err := dbClient.ExecuteFetch(binlogplayer.CreateVReplication("stop_at_ddl", bls,
+			"MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-4", math.MaxInt64, math.MaxInt64, 0,
+			vrepldb, binlogdatapb.VReplicationWorkflowType_MoveTables, 0, false), 1)
+		require.NoError(t, err)
+		id := qr.InsertID
+		t.Cleanup(func() {
+			// A failed subtest can leave the transaction open, and closing the
+			// connection would then roll these deletes back too.
+			assert.NoError(t, dbClient.Rollback())
+			_, err := dbClient.ExecuteFetch(
+				fmt.Sprintf("delete from _vt.vreplication where id = %d", id), 1)
+			assert.NoError(t, err)
+			_, err = dbClient.ExecuteFetch(
+				fmt.Sprintf("delete from _vt.vreplication_log where vrepl_id = %d", id), 10)
+			assert.NoError(t, err)
+		})
+
+		vp.vr.id = int32(id)
+		vp.vr.source = bls
+		vp.vr.dbClient = newVDBClient(dbClient, vp.vr.stats, vp.vr.workflowConfig.RelayLogMaxItems)
+		vp.vr.storeState(binlogdatapb.VReplicationWorkflowState_Running)
+		pos, err := binlogplayer.DecodePosition("MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-5")
+		require.NoError(t, err)
+		settings := binlogplayer.VRSettings{StartPos: pos, StopPos: pos}
+		vp = newVPlayer(vp.vr, settings, nil, replication.Position{}, "")
+		require.True(t, vp.batchMode)
+		require.NoError(t, vp.setConnectionBatchMode())
+
+		_, err = vp.applyDDLEvent(t.Context(), &binlogdatapb.VEvent{
+			Type:      binlogdatapb.VEventType_DDL,
+			Statement: "alter table t1 add column c1 int",
+			Timestamp: 100,
+		})
+		require.ErrorIs(t, err, io.EOF)
+
+		qr, err = dbClient.ExecuteFetch(fmt.Sprintf(
+			"select state, message, pos from _vt.vreplication where id = %d", id), 1)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		assert.Equal(t, "Stopped", qr.Rows[0][0].ToString())
+		assert.Equal(t, "Stopped at DDL alter table t1 add column c1 int", qr.Rows[0][1].ToString())
+		assert.Equal(t, replication.EncodePosition(pos), qr.Rows[0][2].ToString())
+	})
 }
 
 // TestSetStateImmediate_BatchedTransactionDoesNotDuplicateWrites exercises
