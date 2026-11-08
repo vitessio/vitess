@@ -221,7 +221,9 @@ func TestBackupReturnsManifestAndResult(t *testing.T) {
 	t.Run("engine that does not report its manifest returns none", func(t *testing.T) {
 		env := createFakeBackupRestoreEnv(t)
 		env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUsable, nil}
-		env.backupParams.ManifestOut = new(string)
+		// A reused ManifestOut still holds an earlier backup's MANIFEST.
+		stale := manifestJSON
+		env.backupParams.ManifestOut = &stale
 
 		outcome, err := Backup(env.ctx, env.backupParams)
 		require.NoError(t, err, env.logger.Events)

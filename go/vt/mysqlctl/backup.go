@@ -138,6 +138,11 @@ func Backup(ctx context.Context, params BackupParams) (BackupOutcome, error) {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
 	}
+	// A caller can reuse BackupParams, so clear what an earlier backup left in
+	// ManifestOut: an engine that doesn't report its MANIFEST leaves it alone.
+	if params.ManifestOut != nil {
+		*params.ManifestOut = ""
+	}
 	if err := ValidateIncludeBinlogs(params); err != nil {
 		return BackupOutcome{Result: BackupUnusable}, err
 	}
