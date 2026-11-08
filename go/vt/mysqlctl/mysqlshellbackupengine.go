@@ -229,7 +229,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 		closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 		bh.Wait()
 		if finalErr == nil {
-			finalErr = bh.Error()
+			finalErr = vterrors.Wrapf(bh.Error(), "cannot upload %v", backupManifestFileName)
 		}
 		// A MANIFEST that failed to close or finish uploading is not usable.
 		if finalErr != nil {

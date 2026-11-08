@@ -370,7 +370,7 @@ echo "backup data"
 		{name: "no MANIFEST when the check fails", verifyErr: vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")},
 		{name: "a MANIFEST that fails to close makes the backup unusable", closeErr: errors.New("MANIFEST close failed")},
 		{name: "asynchronous MANIFEST upload succeeds", asyncUpload: true},
-		{name: "asynchronous MANIFEST upload fails", asyncUpload: true, uploadErr: errors.New("MANIFEST upload failed")},
+		{name: "asynchronous MANIFEST upload fails", asyncUpload: true, uploadErr: errors.New("remote upload rejected")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bh := &FakeBackupHandle{
@@ -413,6 +413,7 @@ echo "backup data"
 				assert.Equal(t, BackupUnusable, result)
 			case tc.uploadErr != nil:
 				require.ErrorContains(t, err, tc.uploadErr.Error())
+				require.ErrorContains(t, err, "cannot upload MANIFEST")
 				assert.Equal(t, BackupUnusable, result)
 			case tc.verifyErr == nil:
 				require.NoError(t, err)
