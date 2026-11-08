@@ -1164,7 +1164,7 @@ func TestBackupTabletForwardsOutcomeThenError(t *testing.T) {
 			"zone1-0000000100": {
 				Events:     []*logutilpb.Event{{}},
 				Status:     tabletmanagerdatapb.BackupResponse_USABLE,
-				ErrorAfter: 200 * time.Millisecond,
+				ErrorAfter: 500 * time.Millisecond,
 			},
 		},
 	}

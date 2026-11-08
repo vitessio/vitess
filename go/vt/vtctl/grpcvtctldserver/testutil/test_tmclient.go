@@ -431,7 +431,13 @@ func (stream *backupStreamAdapter) Recv() (*tabletmanagerdatapb.BackupResponse, 
 	case msg := <-stream.ch:
 		return msg, nil
 	case <-stream.Closed():
-		return nil, stream.CloseErr()
+		// Messages sent before the stream closed are still received first.
+		select {
+		case msg := <-stream.ch:
+			return msg, nil
+		default:
+			return nil, stream.CloseErr()
+		}
 	}
 }
 
