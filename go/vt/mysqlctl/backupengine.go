@@ -48,11 +48,16 @@ import (
 // backupEngineImplementation is the implementation to use for BackupEngine
 var backupEngineImplementation = builtinBackupEngineName
 
+// BackupResult classifies the backup that BackupEngine.ExecuteBackup took.
 type BackupResult int
 
 const (
+	// BackupUnusable means the backup cannot be used, so it is aborted.
 	BackupUnusable BackupResult = iota
+	// BackupEmpty means an incremental backup found nothing new to back up.
 	BackupEmpty
+	// BackupUsable means the engine wrote, closed and finished uploading the
+	// whole backup, including its MANIFEST, without any upload errors.
 	BackupUsable
 )
 
@@ -101,6 +106,26 @@ type BackupParams struct {
 	// VerifyPosition, if set, is called with the position that the backup's MANIFEST will record,
 	// just before each attempt to write the MANIFEST. An error makes the backup unusable, so it is aborted.
 	VerifyPosition func(ctx context.Context, pos replication.Position) error
+	// ManifestOut, when non-nil, is set by the backup engine to the raw JSON of the
+	// MANIFEST it wrote, so callers can surface it without reading it back from
+	// backup storage. Callers set it only when they need the MANIFEST, since the
+	// engine then keeps a copy of it. It is optional for engines: for one that
+	// leaves it unset, the backup outcome simply has no manifest.
+	ManifestOut *string
+}
+
+// BackupOutcome describes a completed backup.
+type BackupOutcome struct {
+	// Name is the backup's name in backup storage, which is also its directory,
+	// e.g. "2026-09-10.161343.zone1-0000000102". It identifies the backup for a
+	// later restore. Empty when no backup was stored.
+	Name string
+	// Manifest is the raw JSON of the backup's MANIFEST, exactly as written to
+	// storage. Empty when no backup was stored, when the caller did not set
+	// BackupParams.ManifestOut, or if the engine did not report it there.
+	Manifest string
+	// Result classifies the outcome of the backup.
+	Result BackupResult
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -123,6 +148,7 @@ func (b *BackupParams) Copy() BackupParams {
 		InitSQL:              b.InitSQL,
 		IncludeBinlogs:       b.IncludeBinlogs,
 		VerifyPosition:       b.VerifyPosition,
+		ManifestOut:          b.ManifestOut,
 	}
 }
 

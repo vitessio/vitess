@@ -1306,6 +1306,9 @@ func (be *BuiltinBackupEngine) backupManifest(
 		if _, err := wc.Write(data); err != nil {
 			return vterrors.Wrapf(err, "cannot write %v %s", backupManifestFileName, retryStr)
 		}
+		if params.ManifestOut != nil {
+			*params.ManifestOut = string(data)
+		}
 		return nil
 	}
 

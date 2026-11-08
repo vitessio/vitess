@@ -127,12 +127,24 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, params BackupParams) error {
+//
+// On success it returns a BackupOutcome describing the backup: its name, the raw
+// JSON contents of its MANIFEST if params.ManifestOut is set, and its
+// classification (BackupUsable or BackupEmpty). This lets callers identify and
+// log the backup without scraping log lines. For an empty backup the name and
+// manifest are "". A backup that was stored is reported as BackupUsable even if
+// a later step fails, such as restarting mysqld, alongside that error.
+func Backup(ctx context.Context, params BackupParams) (BackupOutcome, error) {
 	if params.Stats == nil {
 		params.Stats = backupstats.NoStats()
 	}
+	// A caller can reuse BackupParams, so clear what an earlier backup left in
+	// ManifestOut: an engine that doesn't report its MANIFEST leaves it alone.
+	if params.ManifestOut != nil {
+		*params.ManifestOut = ""
+	}
 	if err := ValidateIncludeBinlogs(params); err != nil {
-		return err
+		return BackupOutcome{Result: BackupUnusable}, err
 	}
 
 	startTs := time.Now()
@@ -141,7 +153,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
-		return vterrors.Wrap(err, "unable to get backup storage")
+		return BackupOutcome{Result: BackupUnusable}, vterrors.Wrap(err, "unable to get backup storage")
 	}
 	defer bs.Close()
 
@@ -159,7 +171,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 	bh, err := bs.StartBackup(ctx, backupDir, name)
 	if err != nil {
-		return vterrors.Wrap(err, "StartBackup failed")
+		return BackupOutcome{Result: BackupUnusable}, vterrors.Wrap(err, "StartBackup failed")
 	}
 	params.Logger.Infof("Starting backup %v", bh.Name())
 
@@ -177,7 +189,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	} else {
 		be, err = GetBackupEngine(params.BackupEngine)
 		if err != nil {
-			return vterrors.Wrap(err, "failed to find backup engine")
+			return BackupOutcome{Result: BackupUnusable}, vterrors.Wrap(err, "failed to find backup engine")
 		}
 	}
 
@@ -205,14 +217,42 @@ func Backup(ctx context.Context, params BackupParams) error {
 			// to finish the backup: just log the backup
 			// finish error, return the backup error.
 			logger.Errorf2(finishErr, "failed to finish backup: %v")
+			return BackupOutcome{Result: BackupUnusable}, err
 		}
-		return err
+		if backupResult == BackupUsable {
+			// The engine stored the backup and then failed, for example to restart
+			// mysqld, so report the stored backup along with the error.
+			return usableOutcome(name, params), err
+		}
+		return BackupOutcome{Result: backupResult}, err
 	}
-
-	// The backup worked, so just return the finish error, if any.
+	// The backup engine ran; record its duration whether or not finalizing the
+	// backup succeeded, matching the stats emitted before the manifest/result
+	// return values were introduced.
 	backupstats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
 	params.Stats.Scope(backupstats.Operation("Backup")).TimedIncrement(time.Since(startTs))
-	return finishErr
+
+	if finishErr != nil {
+		// The backup engine succeeded but finalizing the backup (EndBackup/
+		// AbortBackup) failed, so the backup is not usable.
+		return BackupOutcome{Result: BackupUnusable}, finishErr
+	}
+
+	if backupResult != BackupUsable {
+		// An empty backup stores nothing, so it has neither a name nor a manifest.
+		return BackupOutcome{Result: backupResult}, nil
+	}
+	return usableOutcome(name, params), nil
+}
+
+// usableOutcome describes a stored backup. Its manifest is the one the engine
+// reported through params.ManifestOut, if the caller asked for it.
+func usableOutcome(name string, params BackupParams) BackupOutcome {
+	outcome := BackupOutcome{Name: name, Result: BackupUsable}
+	if params.ManifestOut != nil {
+		outcome.Manifest = *params.ManifestOut
+	}
+	return outcome
 }
 
 // ParseBackupName parses the backup name for a given dir/name, according to

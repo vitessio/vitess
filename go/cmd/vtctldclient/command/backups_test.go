@@ -17,9 +17,14 @@ limitations under the License.
 package command
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,6 +32,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -261,6 +267,166 @@ func TestBackupCommand_BuildsCorrectRequest(t *testing.T) {
 					assert.Equal(t, int64(0), tc.wantTimeoutSeconds)
 				}
 				assert.Equal(t, tc.wantFailOnError, initSQLFailOnError)
+			}
+		})
+	}
+}
+
+// fakeBackupServer records the Backup and BackupShard request flags and, like a
+// tablet, ends the stream with the outcome if the request asked for it. If err is
+// set, it returns err instead.
+type fakeBackupServer struct {
+	vtctlservicepb.UnimplementedVtctldServer
+	includeOutcome bool
+	includeBinlogs bool
+	err            error
+}
+
+func (s *fakeBackupServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservicepb.Vtctld_BackupServer) error {
+	s.includeOutcome = req.IncludeOutcome
+	s.includeBinlogs = req.IncludeBinlogs
+	return s.finish(stream)
+}
+
+func (s *fakeBackupServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream vtctlservicepb.Vtctld_BackupShardServer) error {
+	s.includeOutcome = req.IncludeOutcome
+	s.includeBinlogs = req.IncludeBinlogs
+	return s.finish(stream)
+}
+
+func (s *fakeBackupServer) finish(stream vtctlservicepb.Vtctld_BackupServer) error {
+	if err := stream.Send(eventResp()); err != nil {
+		return err
+	}
+	if s.err != nil || !s.includeOutcome {
+		return s.err
+	}
+	return stream.Send(&vtctldatapb.BackupResponse{
+		Status:     tabletmanagerdatapb.BackupResponse_USABLE,
+		BackupName: "2026-01-01.000000.zone1-0000000100",
+	})
+}
+
+// TestBackupCommands_JSONOutputWiring runs Backup and BackupShard against a local
+// server to check that --json and --include-binlogs set independent request flags,
+// that each command prints the outcome only with its own --json, and that log
+// events go to stderr with --json and to stdout without it.
+func TestBackupCommands_JSONOutputWiring(t *testing.T) {
+	originalProtocol := VtctldClientProtocol
+	VtctldClientProtocol = "local"
+	t.Cleanup(func() {
+		Root.SetArgs(nil)
+		Root.SetOut(nil)
+		Root.SetErr(nil)
+		VtctldClientProtocol = originalProtocol
+		backupOptions.OutputJSON = false
+		backupShardOptions.OutputJSON = false
+		backupOptions.IncludeBinlogs = false
+		backupShardOptions.IncludeBinlogs = false
+	})
+
+	testCases := []struct {
+		name               string
+		args               []string
+		streamErr          error
+		wantIncludeOutcome bool
+		wantIncludeBinlogs bool
+		wantErr            string
+	}{
+		{
+			name:               "Backup --json",
+			args:               []string{"Backup", "--json", "zone1-100"},
+			wantIncludeOutcome: true,
+		},
+		{
+			name: "Backup without --json",
+			args: []string{"Backup", "zone1-100"},
+		},
+		{
+			name:               "Backup --include-binlogs",
+			args:               []string{"Backup", "--include-binlogs", "zone1-100"},
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:               "Backup -j --include-binlogs",
+			args:               []string{"Backup", "-j", "--include-binlogs", "zone1-100"},
+			wantIncludeOutcome: true,
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:               "BackupShard --json",
+			args:               []string{"BackupShard", "--json", "ks/0"},
+			wantIncludeOutcome: true,
+		},
+		{
+			name: "BackupShard without --json",
+			args: []string{"BackupShard", "ks/0"},
+		},
+		{
+			name:               "BackupShard --include-binlogs",
+			args:               []string{"BackupShard", "--include-binlogs", "ks/0"},
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:               "BackupShard -j --include-binlogs",
+			args:               []string{"BackupShard", "-j", "--include-binlogs", "ks/0"},
+			wantIncludeOutcome: true,
+			wantIncludeBinlogs: true,
+		},
+		{
+			name:      "Backup stream error",
+			args:      []string{"Backup", "--json", "zone1-100"},
+			streamErr: errors.New("tablet went away"),
+			wantErr:   "tablet went away",
+		},
+		{
+			name:      "BackupShard stream error",
+			args:      []string{"BackupShard", "--json", "ks/0"},
+			streamErr: errors.New("tablet went away"),
+			wantErr:   "tablet went away",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Flag-bound globals persist across Root.Execute calls.
+			backupOptions.OutputJSON = false
+			backupShardOptions.OutputJSON = false
+			backupOptions.IncludeBinlogs = false
+			backupShardOptions.IncludeBinlogs = false
+			backupOptions.InitSQLQueries = nil
+			backupOptions.InitSQLTabletTypes = nil
+			backupOptions.InitSQLTimeout = 0
+			backupOptions.InitSQLFailOnError = false
+			for _, cmd := range []*cobra.Command{Backup, BackupShard} {
+				cmd.Flags().Lookup("json").Changed = false
+				cmd.Flags().Lookup("include-binlogs").Changed = false
+			}
+
+			server := &fakeBackupServer{err: tc.streamErr}
+			localvtctldclient.SetServer(server)
+			Root.SetArgs(tc.args)
+			var out, errOut bytes.Buffer
+			Root.SetOut(&out)
+			Root.SetErr(&errOut)
+
+			err := Root.Execute()
+			if tc.wantErr != "" {
+				require.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantIncludeOutcome, server.includeOutcome)
+			assert.Equal(t, tc.wantIncludeBinlogs, server.includeBinlogs)
+			event := fmt.Sprintf("ks/- (zone1-0000000100): %v\n", eventResp().Event)
+			if tc.wantIncludeOutcome {
+				assert.Equal(t, event, errOut.String())
+				assert.Contains(t, out.String(), `"status": "USABLE"`)
+				var got backupJSONOutput
+				require.NoError(t, json.Unmarshal(out.Bytes(), &got), "stdout must be one JSON object: %q", out.String())
+			} else {
+				assert.Equal(t, event, out.String())
+				assert.Empty(t, errOut.String())
 			}
 		})
 	}

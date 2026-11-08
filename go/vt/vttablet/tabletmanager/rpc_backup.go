@@ -44,9 +44,17 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage.
-func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) (retErr error) {
+//
+// It returns a mysqlctl.BackupOutcome carrying the backup's Result
+// (mysqlctl.BackupUsable or mysqlctl.BackupEmpty) and, for a usable backup, its
+// Name and, if req.IncludeOutcome is set, the raw JSON contents of its MANIFEST
+// file, so callers can identify and log the backup without scraping log lines.
+// Name and Manifest are empty for an empty (no-op incremental) backup. A backup
+// that was stored is reported even if a later step fails, such as restoring the
+// tablet, alongside that error.
+func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) (outcome mysqlctl.BackupOutcome, retErr error) {
 	if tm.Cnf == nil {
-		return errors.New("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, errors.New("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
 
 	// Check tablet type current process has.
@@ -55,7 +63,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	// It is not safe to take backups from tablet in this state
 	currentTablet := tm.Tablet()
 	if !req.AllowPrimary && currentTablet.Type == topodatapb.TabletType_PRIMARY {
-		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
 	}
 
 	backupEngine := ""
@@ -65,15 +73,15 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 
 	engine, err := mysqlctl.GetBackupEngine(backupEngine)
 	if err != nil {
-		return vterrors.Wrap(err, "failed to find backup engine")
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, vterrors.Wrap(err, "failed to find backup engine")
 	}
 	// Get Tablet info from topo so that it is up to date
 	tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 	if err != nil {
-		return err
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 	}
 	if !req.AllowPrimary && tablet.Type == topodatapb.TabletType_PRIMARY {
-		return errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, errors.New("type PRIMARY cannot take backup. if you really need to do this, rerun the backup command with --allow-primary")
 	}
 
 	// Create the logger: tee to console and source.
@@ -98,14 +106,19 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		InitSQL:              req.InitSql.CloneVT(),
 		IncludeBinlogs:       req.IncludeBinlogs,
 	}
+	// Only a caller that asked for the outcome is sent the MANIFEST, so only then
+	// does the engine need to keep a copy of it.
+	if req.IncludeOutcome {
+		backupParams.ManifestOut = new(string)
+	}
 	// Refuse an invalid IncludeBinlogs request before the init SQL queries run.
 	if err := mysqlctl.ValidateIncludeBinlogs(backupParams); err != nil {
-		return err
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 	}
 
 	// Perform any requested pre backup initialization queries.
 	if err := mysqlctl.ExecuteBackupInitSQL(ctx, &backupParams); err != nil {
-		return vterrors.Wrap(err, "failed to execute backup init SQL queries")
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, vterrors.Wrap(err, "failed to execute backup init SQL queries")
 	}
 
 	// Prevent concurrent backups, and record stats
@@ -114,20 +127,20 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		backupMode = backupModeOffline
 	}
 	if err := tm.beginBackup(backupMode); err != nil {
-		return err
+		return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 	}
 	defer tm.endBackup(backupMode)
 
 	var originalType topodatapb.TabletType
 	if engine.ShouldDrainForBackup(req) {
 		if err := tm.lock(ctx); err != nil {
-			return err
+			return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 		}
 		defer tm.unlock()
 
 		tablet, err := tm.TopoServer.GetTablet(ctx, tm.tabletAlias)
 		if err != nil {
-			return err
+			return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 		}
 		originalType = tablet.Type
 		// A primary's semi-sync is restored from the policy in effect now, so a
@@ -136,7 +149,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		var primarySemiSync SemiSyncAction
 		if originalType == topodatapb.TabletType_PRIMARY {
 			if primarySemiSync, err = tm.primarySemiSyncAction(ctx, tablet.Tablet); err != nil {
-				return err
+				return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 			}
 		}
 		// Restore the original type even if the change to BACKUP fails after
@@ -226,15 +239,13 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		}()
 
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
-			return err
+			return mysqlctl.BackupOutcome{Result: mysqlctl.BackupUnusable}, err
 		}
 	}
 
 	// Now we can run the backup.
 	backupParams.BackupTime = time.Now()
-	returnErr := mysqlctl.Backup(ctx, backupParams)
-
-	return returnErr
+	return mysqlctl.Backup(ctx, backupParams)
 }
 
 // primarySemiSyncAction returns the semi-sync action that the keyspace's

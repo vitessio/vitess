@@ -21,6 +21,7 @@
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
+        - [`TabletManagerClient.Backup` now returns a manifest/status stream](#tmclient-backup-stream)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -79,6 +80,7 @@
         - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
         - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
         - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
+        - [Backup commands surface the MANIFEST and empty-incremental status](#backup-manifest-output)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v24.21.0 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -292,6 +294,18 @@ VTGate used to report a planned `REPLACE` statement with the `INSERT` statement 
 **Impact**: dashboards, alerts and query-log parsing that count `INSERT` no longer include `REPLACE` statements. Planning, routing, transactions and results are unchanged.
 
 **Migration**: match `REPLACE` as well as `INSERT` wherever `REPLACE` statements should be included.
+
+#### <a id="tmclient-backup-stream"/>`TabletManagerClient.Backup` now returns a manifest/status stream</a>
+
+The `tmclient.TabletManagerClient.Backup` method now returns a `tmclient.BackupStream` instead of a `logutil.EventStream`. The stream carries log events as before; a request that sets the new `include_outcome` field also ends with a terminal message carrying the backup's raw MANIFEST JSON, its `backup_name`, and an outcome `Status` (`USABLE` or `EMPTY`). A failed backup ends with its error and no terminal message. If the backup was stored but a later step failed, such as restarting mysqld or restoring the tablet, the `USABLE` terminal message is still sent and the stream then ends with that error. Correspondingly, the internal `RPCTM.Backup` method and `mysqlctl.Backup` now return `(mysqlctl.BackupOutcome, error)` instead of just `error`; `BackupOutcome` carries the backup's `Name`, `Manifest` and `Result`, and `Manifest` is set only when the caller sets `BackupParams.ManifestOut` (for `RPCTM.Backup`, when the request sets `include_outcome`).
+
+The wire protocol is backward and forward compatible: the new request and response fields are additive, and a request that does not set `include_outcome` gets no terminal message.
+
+The `BackupEngine` interface is **not** changed. When the caller sets the new `BackupParams.ManifestOut` pointer, engines can report the MANIFEST they write through it, and all in-tree engines do. For an engine that does not, the outcome has no manifest; it is not read back from storage. Because a `BackupUsable` result is now reported as a stored backup once `EndBackup` succeeds, even if the engine returned it with an error from a later step, an engine should return `BackupUsable` only after it has written, closed and finished uploading the whole backup, including its MANIFEST, without any upload errors.
+
+**Impact**: This is a source-level Go API change; the wire format stays compatible. Any out-of-tree implementation or caller of `tmclient.TabletManagerClient` or `tabletmanager.RPCTM`, or any caller of `mysqlctl.Backup`, must update the signature. Callers that only consumed log events can call `Recv()` on the new stream and read `resp.Event` exactly as before.
+
+See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
@@ -966,6 +980,20 @@ Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tab
 | unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
 
 `--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
+
+#### <a id="backup-manifest-output"/>Backup commands surface the MANIFEST and empty-incremental status</a>
+
+The `vtctldclient Backup` and `BackupShard` commands can now report a backup's outcome and MANIFEST directly, instead of requiring callers to scrape it from the log stream. With the new `--json`/`-j` flag:
+
+- Log events go to stderr and, once the backup completes, a JSON object with its outcome status (`USABLE`, `EMPTY`, or `UNKNOWN`), its name, and its MANIFEST is written to stdout. `backup_name` is a typed field, so callers that only need to identify the backup do not have to parse the manifest -- which also covers engines that do not record a name inside their MANIFEST.
+- An incremental backup that finds no new data to back up reports status `EMPTY`. It is still a successful backup and exits `0`. If a later step, such as restoring the tablet, then fails, nothing is printed and the command exits non-zero, since no backup was stored.
+- If the backup is stored but a later step fails, for example restarting mysqld or restoring the tablet, the JSON object is still printed with status `USABLE` and the backup's name, and the command exits non-zero with the error. A caller can tell the backup exists instead of retrying it.
+
+Without `--json`, nothing changes: the request, the output and the exit codes are as before.
+
+`--json` sets the new `include_outcome` field on the request, which vtctld passes on to the tablet. Only then does the tablet ask the engine for the MANIFEST and end the stream with a terminal message carrying three additive `BackupResponse` fields (`manifest`, `status`, and `backup_name`). If that message would exceed the sender's `--grpc-max-message-size`, it is sent without the MANIFEST, and a warning on the stream says so. Set the flag at least as high on vtctld and the client as on vttablet; a lower limit there fails the command even though the backup is stored. See the [related breaking change](#tmclient-backup-stream) for the Go API impact. Mixed-version clusters are unaffected: an older vtctld or tablet ignores `include_outcome`, so `--json` reports status `UNKNOWN`, and an older vtctld never receives the terminal message because it cannot ask for it.
+
+See [#21243](https://github.com/vitessio/vitess/pull/21243) for details.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 
