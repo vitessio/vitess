@@ -17,6 +17,9 @@ limitations under the License.
 package sqlparser
 
 import (
+	"fmt"
+	"strings"
+
 	"vitess.io/vitess/go/vt/vterrors"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -33,20 +36,21 @@ import (
 type ClientCharset int8
 
 const (
-	// ClientCharsetUTF8 reads a query as utf8mb4 or utf8mb3. A byte from 0x80
-	// to 0xFE can be part of a name, but a name cannot start with a multibyte
-	// lead byte that does not start a valid UTF-8 character.
-	//
-	// MySQL reads utf8mb3 with the same lexer rule, and then it also rejects
-	// a name that is not well-formed utf8mb3, such as one that holds a stray
-	// byte or a character of four bytes (IDENT_sys in sql_yacc.yy). The parser
-	// does not make that check: under utf8mb4, MySQL replaces such a byte with
-	// '?' instead, and Vitess sends the query on a utf8mb4 connection.
+	// ClientCharsetUTF8 reads a query as utf8mb4. A byte from 0x80 to 0xFE can
+	// be part of a name, but a name cannot start with a multibyte lead byte
+	// (0xC2 to 0xF7) that does not start a valid UTF-8 character.
 	ClientCharsetUTF8 ClientCharset = iota
 	// ClientCharsetLatin1 reads a query as latin1. A byte from 0x80 up can be
 	// part of a name only if MySQL's latin1 table makes it a letter, and 0xA0,
 	// the no-break space, is a space.
 	ClientCharsetLatin1
+	// ClientCharsetUTF8MB3 reads a query as utf8mb3. The lexer reads it as
+	// utf8mb4, except that 0xF0 to 0xF7 do not start a character of four
+	// bytes, which utf8mb3 does not have. Then every name, quoted with back
+	// quotes or not, must be well-formed utf8mb3, as MySQL checks in IDENT_sys
+	// of sql_yacc.yy: a name with a stray byte, a cut short character or a
+	// character of four bytes is an error, ER_INVALID_CHARACTER_STRING.
+	ClientCharsetUTF8MB3
 
 	// charsetCount is the number of character sets. It must stay last.
 	charsetCount
@@ -59,6 +63,8 @@ func (cs ClientCharset) String() string {
 		return "utf8mb4"
 	case ClientCharsetLatin1:
 		return "latin1"
+	case ClientCharsetUTF8MB3:
+		return "utf8mb3"
 	default:
 		return "unknown"
 	}
@@ -69,7 +75,7 @@ func (cs ClientCharset) String() string {
 // exist.
 func (cs ClientCharset) validate() error {
 	switch cs {
-	case ClientCharsetUTF8, ClientCharsetLatin1:
+	case ClientCharsetUTF8, ClientCharsetLatin1, ClientCharsetUTF8MB3:
 		return nil
 	default:
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown parser character set %d", cs)
@@ -81,8 +87,10 @@ func (cs ClientCharset) validate() error {
 // ok is false for a character set that the parser has no rule for.
 func ClientCharsetFor(name string) (cs ClientCharset, ok bool) {
 	switch name {
-	case "utf8mb4", "utf8mb3", "utf8":
+	case "utf8mb4":
 		return ClientCharsetUTF8, true
+	case "utf8mb3", "utf8":
+		return ClientCharsetUTF8MB3, true
 	case "latin1":
 		return ClientCharsetLatin1, true
 	default:
@@ -124,8 +132,9 @@ func (table *charTable) class(ch uint16) charClass {
 
 // charTables holds the table of each character set.
 var charTables = [charsetCount]*charTable{
-	ClientCharsetUTF8:   newCharTable(ClientCharsetUTF8),
-	ClientCharsetLatin1: newCharTable(ClientCharsetLatin1),
+	ClientCharsetUTF8:    newCharTable(ClientCharsetUTF8),
+	ClientCharsetLatin1:  newCharTable(ClientCharsetLatin1),
+	ClientCharsetUTF8MB3: newCharTable(ClientCharsetUTF8MB3),
 }
 
 // latin1Letters are the bytes from 0x80 up that MySQL's latin1 character set
@@ -167,18 +176,21 @@ func newCharTable(cs ClientCharset) *charTable {
 		table[sqlSpaceChars[i]] = classSpace
 	}
 	switch cs {
-	case ClientCharsetUTF8:
+	case ClientCharsetUTF8, ClientCharsetUTF8MB3:
 		// MySQL's utf8mb4 and utf8mb3 tables mark every byte from 0x80 to 0xFE
 		// as a letter, so that the bytes of every character from U+0080 up can
 		// be part of a name. Their entry for 0xFF is 0, so MySQL reads that
 		// byte as a token of its own, which is a syntax error. No UTF-8
 		// character holds it.
+		lastLead := 0xF7 // my_mbcharlen_utf8mb4 gives 0xC2 to 0xF7 a length of 2 to 4
+		if cs == ClientCharsetUTF8MB3 {
+			lastLead = 0xEF // my_mbcharlen_utf8mb3 gives 0xC2 to 0xEF a length of 2 or 3
+		}
 		for ch := 0x80; ch <= 0xFE; ch++ {
 			table[ch] = classLetter
-			if 0xC2 <= ch && ch <= 0xF7 {
-				// my_mbcharlen_utf8mb4 gives these bytes a length of 2 to 4.
-				// It gives the others a length of 0, and MySQL reads such a
-				// byte as a character of one byte without checking it.
+			if 0xC2 <= ch && ch <= lastLead {
+				// MySQL gives every other byte a length of 0, and reads it
+				// as a character of one byte without checking it.
 				table[ch] |= classLead
 			}
 		}
@@ -193,4 +205,19 @@ func newCharTable(cs ClientCharset) *charTable {
 		panic(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no character table for %s", cs))
 	}
 	return &table
+}
+
+// invalidCharacterStringMessage returns the message of MySQL's
+// ER_INVALID_CHARACTER_STRING for name, which is not well-formed in cs. MySQL
+// writes the bytes of name from 0x80 up in hexadecimal.
+func invalidCharacterStringMessage(cs ClientCharset, name string) string {
+	var printable strings.Builder
+	for i := range len(name) {
+		if c := name[i]; c < 0x80 {
+			printable.WriteByte(c)
+		} else {
+			fmt.Fprintf(&printable, "\\x%02X", c)
+		}
+	}
+	return fmt.Sprintf("Invalid %s character string: '%s'", cs, printable.String())
 }

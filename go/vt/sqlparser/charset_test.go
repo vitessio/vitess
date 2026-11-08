@@ -22,6 +22,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/sqlerror"
 )
 
 // parserFor returns the test parser for a character set.
@@ -137,8 +139,8 @@ func TestUnquotedNameLatin1(t *testing.T) {
 // a name, in "CREATE TABLE <byte>a (a int)", in both character sets. The bytes
 // that each character set accepts are written out here from MySQL's tables, as
 // a second statement of the rule that the tokenizer's tables hold, and agree
-// with what MySQL 8.4.13 rejects as a syntax error for each byte under
-// SET NAMES utf8mb4 and SET NAMES latin1.
+// with what MySQL 8.4.13 rejects for each byte under SET NAMES utf8mb4, SET
+// NAMES latin1 and SET NAMES utf8mb3.
 func TestUnquotedNameEveryByte(t *testing.T) {
 	// latin1: the letters of ctype_latin1, and 0xA0, which is a space.
 	latin1Accepted := map[byte]bool{0x83: true, 0x8A: true, 0x8C: true, 0x8E: true, 0x9A: true, 0x9C: true, 0x9E: true, 0x9F: true, 0xA0: true}
@@ -154,12 +156,76 @@ func TestUnquotedNameEveryByte(t *testing.T) {
 
 	utf8Parser := parserFor(t, ClientCharsetUTF8)
 	latin1Parser := parserFor(t, ClientCharsetLatin1)
+	utf8mb3Parser := parserFor(t, ClientCharsetUTF8MB3)
 	for b := 0x80; b <= 0xFF; b++ {
 		name := string([]byte{byte(b), 'a'})
 		_, err := createTableName(utf8Parser, name)
 		assert.Equal(t, utf8Accepted(byte(b)), err == nil, "utf8mb4: byte 0x%02X: %v", b, err)
 		_, err = createTableName(latin1Parser, name)
 		assert.Equal(t, latin1Accepted[byte(b)], err == nil, "latin1: byte 0x%02X: %v", b, err)
+		// utf8mb3: no byte followed by 'a' is well-formed.
+		_, err = createTableName(utf8mb3Parser, name)
+		assert.Error(t, err, "utf8mb3: byte 0x%02X", b)
+	}
+}
+
+// TestNamesUTF8MB3 tests the names that the parser accepts when it reads
+// utf8mb3. The lexer reads utf8mb3 as utf8mb4, and then every name, quoted with
+// back quotes or not, must be well-formed utf8mb3, as MySQL requires. The
+// cases were measured on MySQL 8.4.13 after SET NAMES utf8mb3: MySQL rejects
+// a name that is not well-formed with ER_INVALID_CHARACTER_STRING, and accepts
+// such bytes in a string literal, a comment and a name without quotes after
+// '@'.
+func TestNamesUTF8MB3(t *testing.T) {
+	parser := parserFor(t, ClientCharsetUTF8MB3)
+	testcases := []struct {
+		sql     string
+		invalid string // the name that MySQL reports, or empty when it accepts the statement
+	}{
+		{"CREATE TABLE \x84a (a int)", "\\x84a"},
+		{"CREATE TABLE `\x84a` (a int)", "\\x84a"},
+		{"CREATE TABLE `😀a` (a int)", "\\xF0\\x9F\\x98\\x80a"},
+		{"CREATE TABLE t (`\x84` int)", "\\x84"},
+		{"CREATE TABLE t2 (a int, KEY `\x84` (a))", "\\x84"},
+		{"SELECT 1 AS `\x84`", "\\x84"},
+		{"SELECT 1 AS \x84", "\\x84"},
+		{"SET @`\x84a` = 1", "\\x84a"},
+		// 0xF0 does not start a character in utf8mb3, so the lexer reads it
+		// as part of the name, which is then not well-formed.
+		{"SELECT 1 AS \xF0a", "\\xF0a"},
+		{"SELECT 1 AS a\xF0", "a\\xF0"},
+		{"CREATE TABLE t (é int)", ""},
+		{"SELECT 1 AS \uffff", ""},
+		{"SELECT 1 AS '\x84'", ""},
+		{"SELECT 1 AS '😀'", ""},
+		{"SELECT 'x\x84'", ""},
+		{"SELECT @\x84a", ""},
+		{"SELECT 1 /* \x84 */", ""},
+		{"SELECT 1 FROM dual WHERE 1 = 1 -- \x84", ""},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.sql, func(t *testing.T) {
+			_, err := parser.Parse(tc.sql)
+			if tc.invalid == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, "Invalid utf8mb3 character string: '"+tc.invalid+"'")
+			// MySQL reports it as ER_INVALID_CHARACTER_STRING, not as a syntax
+			// error, and so does VTGate.
+			var sqlErr *sqlerror.SQLError
+			require.ErrorAs(t, sqlerror.NewSQLErrorFromError(err), &sqlErr)
+			assert.Equal(t, sqlerror.ERInvalidCharacterString, sqlErr.Num)
+		})
+	}
+
+	// The same names in utf8mb4, where MySQL accepts them all.
+	utf8mb4 := parserFor(t, ClientCharsetUTF8)
+	for _, tc := range testcases {
+		if tc.invalid != "" && tc.sql != "SELECT 1 AS \xF0a" {
+			_, err := utf8mb4.Parse(tc.sql)
+			assert.NoError(t, err, "utf8mb4: %s", tc.sql)
+		}
 	}
 }
 
@@ -239,8 +305,8 @@ func TestClientCharsetFor(t *testing.T) {
 		ok       bool
 	}{
 		{"utf8mb4", ClientCharsetUTF8, true},
-		{"utf8mb3", ClientCharsetUTF8, true},
-		{"utf8", ClientCharsetUTF8, true},
+		{"utf8mb3", ClientCharsetUTF8MB3, true},
+		{"utf8", ClientCharsetUTF8MB3, true},
 		{"latin1", ClientCharsetLatin1, true},
 		{"koi8r", ClientCharsetUTF8, false},
 		{"", ClientCharsetUTF8, false},
@@ -252,6 +318,7 @@ func TestClientCharsetFor(t *testing.T) {
 	}
 	assert.Equal(t, "utf8mb4", ClientCharsetUTF8.String())
 	assert.Equal(t, "latin1", ClientCharsetLatin1.String())
+	assert.Equal(t, "utf8mb3", ClientCharsetUTF8MB3.String())
 	assert.Equal(t, "unknown", charsetCount.String())
 }
 

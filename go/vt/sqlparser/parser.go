@@ -79,6 +79,9 @@ func yyParsePooled(yylex yyLexer) int {
 func (p *Parser) Parse2(sql string) (Statement, BindVars, error) {
 	tokenizer := p.NewStringTokenizer(sql)
 	if yyParsePooled(tokenizer) != 0 || tokenizer.LastError != nil {
+		if tokenizer.lastErrorState != vterrors.Undefined {
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.lastErrorState, "%s", tokenizer.LastError.Error())
+		}
 		return nil, nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
 	err := checkParseTreesError(tokenizer)

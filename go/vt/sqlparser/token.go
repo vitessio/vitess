@@ -23,6 +23,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -72,8 +73,16 @@ type Tokenizer struct {
 	parser *Parser
 	// chars is the table of the character set that the parser reads, which
 	// decides which bytes can be part of a name and which are spaces.
-	chars     *charTable
-	currStart int // start position of current token (set in Scan after skipBlank)
+	chars *charTable
+	// checkNames is set when every name must be well-formed in the
+	// character set, as in utf8mb3, and invalidName is the first name that
+	// is not, for Error to report.
+	checkNames  bool
+	invalidName string
+	// lastErrorState is the MySQL error that LastError stands for, when it is
+	// not a syntax error, such as InvalidCharacterString.
+	lastErrorState vterrors.State
+	currStart      int // start position of current token (set in Scan after skipBlank)
 }
 
 // location tracks the byte-offset span [start, end) of a grammar symbol
@@ -103,22 +112,23 @@ func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
 	// Some callers tokenize with a nil parser, which worked before the parser
 	// had a character set, as long as the text has no versioned comment. Such
 	// a tokenizer reads UTF-8, as every tokenizer did then.
-	chars := charTables[ClientCharsetUTF8]
+	chars, checkNames := charTables[ClientCharsetUTF8], false
 	if p != nil {
-		chars = charTables[p.charset]
+		chars, checkNames = charTables[p.charset], p.charset == ClientCharsetUTF8MB3
 	}
 	return &Tokenizer{
-		buf:      sql,
-		BindVars: make(map[string]struct{}),
-		parser:   p,
-		chars:    chars,
+		buf:        sql,
+		BindVars:   make(map[string]struct{}),
+		parser:     p,
+		chars:      chars,
+		checkNames: checkNames,
 	}
 }
 
 // newTextTokenizer creates a Tokenizer that reads text, a piece of a query
 // that a Tokenizer already read, in the same character set.
 func (tkn *Tokenizer) newTextTokenizer(text string) *Tokenizer {
-	return &Tokenizer{buf: text, parser: tkn.parser, chars: tkn.chars}
+	return &Tokenizer{buf: text, parser: tkn.parser, chars: tkn.chars, checkNames: tkn.checkNames}
 }
 
 // Lex returns the next token form the Tokenizer.
@@ -142,6 +152,9 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 			break
 		}
 		typ, val = tkn.Scan()
+	}
+	if tkn.checkNames && typ == ID && !tkn.wellFormedName(val) {
+		typ = LEX_ERROR
 	}
 	lval.yyloc.start = tkn.currStart
 	lval.yyloc.end = tkn.Pos
@@ -181,10 +194,42 @@ func (tkn *Tokenizer) GetInputExpression(start, end int) string {
 
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
+	tkn.lastErrorState = vterrors.Undefined
+	if tkn.invalidName != "" {
+		// The tokenizer refused a name that is not well-formed in the
+		// client's character set. MySQL reports it so rather than as a
+		// syntax error.
+		err = invalidCharacterStringMessage(tkn.parser.charset, tkn.invalidName)
+		tkn.lastErrorState = vterrors.InvalidCharacterString
+		tkn.invalidName = ""
+	}
 	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Pos + 1, Near: tkn.lastToken}
 
 	// Try and re-sync to the next statement
 	tkn.skipStatement()
+}
+
+// wellFormedName reports whether name, a name that the tokenizer read, is
+// well-formed utf8mb3, as MySQL requires of every name it reads from a
+// utf8mb3 client. It records a name that is not, for Error to report. Lex
+// checks every name it returns to the parser, and Scan checks a name in back
+// quotes after '@', which Lex does not see as a name.
+func (tkn *Tokenizer) wellFormedName(name string) bool {
+	for i := 0; i < len(name); {
+		if name[i] < utf8.RuneSelf {
+			i++
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(name[i:])
+		if size == 1 || r > 0xFFFF {
+			// A byte that starts no valid character, or a character of
+			// four bytes, which utf8mb3 does not have.
+			tkn.invalidName = name
+			return false
+		}
+		i += size
+	}
+	return true
 }
 
 // Scan scans the tokenizer for the next token and returns
@@ -219,6 +264,12 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			if tkn.cur() == '`' {
 				tkn.skip(1)
 				tID, tBytes = tkn.scanLiteralIdentifier()
+				// MySQL reads a name in back quotes after '@' as any other
+				// name, and checks it as one. It does not check a name
+				// without quotes after '@'.
+				if tkn.checkNames && tID == ID && !tkn.wellFormedName(tBytes) {
+					return LEX_ERROR, tBytes
+				}
 			} else if tokenID == AT_ID && (tkn.cur() == '\'' || tkn.cur() == '"') && !tkn.quotedNameIsIdentifier() {
 				// MySQL reads a quoted name after a single '@' to its closing
 				// quote, so nothing inside the quotes is a comment. Vitess

@@ -42,6 +42,9 @@ const (
 	// utf8Only parses only in UTF-8, where it names the column é. In latin1
 	// the second byte, ©, is not a letter.
 	utf8Only = "select 1 as \xC3\xA9 from dual"
+	// strayByteName names a column with a byte that starts no UTF-8
+	// character, which utf8mb3 refuses and utf8mb4 accepts.
+	strayByteName = "select 1 as a\x84 from dual"
 )
 
 // sessionWithCharset returns a session whose client uses the character set
@@ -73,7 +76,19 @@ func assertReadsAs(t *testing.T, executor *Executor, session *econtext.SafeSessi
 	_, err = executorExecSession(t.Context(), executor, session, accepted, nil)
 	require.NoError(t, err, "%q must parse in %s", accepted, name)
 	_, err = executorExecSession(t.Context(), executor, session, rejected, nil)
-	assert.ErrorContains(t, err, "syntax error", "%q must not parse in %s", rejected, name)
+	// utf8mb3 refuses the name before the grammar does, so the error is
+	// ER_INVALID_CHARACTER_STRING rather than a syntax error there.
+	require.Error(t, err, "%q must not parse in %s", rejected, name)
+
+	// utf8mb3 also requires every name to be well-formed, while utf8mb4
+	// takes the stray byte as part of the name.
+	_, err = executorExecSession(t.Context(), executor, session, strayByteName, nil)
+	switch name {
+	case "utf8mb3":
+		require.ErrorContains(t, err, "Invalid utf8mb3 character string", "%q must not parse in %s", strayByteName, name)
+	case "utf8mb4":
+		assert.NoError(t, err, "%q must parse in %s", strayByteName, name)
+	}
 }
 
 // TestHandshakeClientCharset tests that VTGate accepts a handshake only in a
