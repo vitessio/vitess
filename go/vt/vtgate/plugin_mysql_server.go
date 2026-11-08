@@ -1825,17 +1825,40 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	return session
 }
 
-// handshakeClientCharset returns the value of character_set_client for a
-// client's session: the character set of the client's handshake, which VTGate
-// reads the client's unquoted names in, as MySQL does. A character set that
-// VTGate does not accept for a connection, and a collation ID that MySQL does
-// not define, get utf8mb4, which is how VTGate has always read the queries of
-// every client.
-func handshakeClientCharset(c *mysql.Conn) string {
+var _ mysql.HandshakeCharsetChecker = (*vtgateHandler)(nil)
+
+// CheckHandshakeCharset refuses a client whose handshake asks for a character
+// set that VTGate has no rule for reading unquoted names in: one other than
+// utf8mb4, utf8mb3 and latin1. VTGate would read such a client's names by
+// another rule than MySQL does, and some such character sets, such as sjis,
+// cannot be tokenized safely at all. A handshake without a collation gets
+// utf8mb4.
+func (vh *vtgateHandler) CheckHandshakeCharset(c *mysql.Conn) error {
+	if c.CharacterSet == collations.Unknown {
+		return nil
+	}
 	// A collation ID names the same character set in every MySQL version, so
 	// any environment's tables answer this.
-	name, ok := collations.MySQL8().ConnectionCharset(c.CharacterSet)
-	if !ok || name == "" {
+	name, _ := collations.MySQL8().ConnectionCharset(c.CharacterSet) // the name is empty for an ID that MySQL does not define
+	if _, ok := sqlparser.ClientCharsetFor(name); !ok {
+		described := name
+		if described == "" {
+			described = fmt.Sprintf("of collation %d", c.CharacterSet)
+		}
+		return sqlerror.NewSQLErrorf(sqlerror.ERUnknownCharacterSet, sqlerror.SSClientError,
+			"VTGate does not support the character set %s for a connection: use utf8mb4, utf8mb3 or latin1", described)
+	}
+	return nil
+}
+
+// handshakeClientCharset returns the value of character_set_client for a
+// client's session: the character set of the client's handshake, which VTGate
+// reads the client's unquoted names in, as MySQL does. CheckHandshakeCharset
+// has refused every other character set, so only a handshake without a
+// collation gets utf8mb4, the server's default.
+func handshakeClientCharset(c *mysql.Conn) string {
+	name, _ := collations.MySQL8().ConnectionCharset(c.CharacterSet) // the name is empty for no collation
+	if name == "" {
 		name = "utf8mb4"
 	}
 	return engine.ClientCharsetValue(name)

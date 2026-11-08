@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 
@@ -26,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -74,35 +76,81 @@ func assertReadsAs(t *testing.T, executor *Executor, session *econtext.SafeSessi
 	assert.ErrorContains(t, err, "syntax error", "%q must not parse in %s", rejected, name)
 }
 
-// TestHandshakeClientCharset tests that the character set of a client's
-// handshake sets character_set_client, which selects the rule by which VTGate
-// reads the client's names, and that a character set that VTGate does not
-// accept for a connection gets utf8mb4.
+// TestHandshakeClientCharset tests that VTGate accepts a handshake only in a
+// character set that it has a rule for, that the character set of the
+// handshake sets character_set_client, and that it selects the rule by which
+// VTGate reads the client's names.
 func TestHandshakeClientCharset(t *testing.T) {
 	executor, _, _, _, _ := createExecutorEnv(t)
 	testcases := []struct {
 		name     string
 		id       collations.ID
-		expected string
+		expected string // empty when VTGate refuses the handshake
 	}{
 		{"latin1_swedish_ci", 8, "latin1"},
 		{"latin1_bin", 47, "latin1"},
 		{"utf8mb4_0900_ai_ci", collations.CollationUtf8mb4ID, "utf8mb4"},
+		{"utf8mb4_general_ci", 45, "utf8mb4"},
 		{"utf8mb3_general_ci", 33, "utf8mb3"},
-		// koi8r has no rule, so its names are read as UTF-8, but MySQL would
-		// report it as the client's character set too.
-		{"koi8r_general_ci", 7, "koi8r"},
-		{"sjis_japanese_ci, which VTGate cannot parse safely", 13, "utf8mb4"},
 		{"no collation", collations.Unknown, "utf8mb4"},
-		{"an ID that MySQL does not define", 1000, "utf8mb4"},
+		// koi8r is safe to tokenize, but VTGate would read its names by
+		// another rule than MySQL does.
+		{"koi8r_general_ci", 7, ""},
+		{"cp1251_general_ci", 51, ""},
+		{"binary", collations.CollationBinaryID, ""},
+		// sjis cannot be tokenized safely at all.
+		{"sjis_japanese_ci", 13, ""},
+		{"an ID that MySQL does not define", 1000, ""},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			vh := &vtgateHandler{}
-			session := vh.session(&mysql.Conn{CharacterSet: tc.id})
-			assertReadsAs(t, executor, econtext.NewAutocommitSession(session), tc.expected)
+			conn := &mysql.Conn{CharacterSet: tc.id}
+			err := vh.CheckHandshakeCharset(conn)
+			if tc.expected == "" {
+				var sqlErr *sqlerror.SQLError
+				require.ErrorAs(t, err, &sqlErr)
+				assert.Equal(t, sqlerror.ERUnknownCharacterSet, sqlErr.Number())
+				return
+			}
+			require.NoError(t, err)
+			assertReadsAs(t, executor, econtext.NewAutocommitSession(vh.session(conn)), tc.expected)
 		})
 	}
+}
+
+// TestHandshakeClientCharsetOverTheWire tests that a client that connects in a
+// character set that VTGate has no rule for is refused before it is
+// authenticated, and that one that connects in latin1 has its names read in
+// latin1.
+func TestHandshakeClientCharsetOverTheWire(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	vh := newVtgateHandler(newVTGate(executor, nil, nil, nil, nil))
+	listener, err := mysql.NewListener("tcp", "127.0.0.1:", mysql.NewAuthServerNone(), vh, 0, 0, false, false, 0, 0, false)
+	require.NoError(t, err)
+	defer listener.Close()
+	defer waitForConnectionsClosed(t, vh)
+	go listener.Accept()
+
+	addr := listener.Addr().(*net.TCPAddr)
+	connect := func(id collations.ID) (*mysql.Conn, error) {
+		return mysql.Connect(t.Context(), &mysql.ConnParams{Host: addr.IP.String(), Port: addr.Port, Uname: "user1", Charset: id})
+	}
+
+	_, err = connect(7) // koi8r_general_ci
+	var sqlErr *sqlerror.SQLError
+	require.ErrorAs(t, err, &sqlErr)
+	assert.Equal(t, sqlerror.ERUnknownCharacterSet, sqlErr.Number())
+	assert.Contains(t, sqlErr.Error(), "VTGate does not support the character set koi8r for a connection")
+
+	conn, err := connect(8) // latin1_swedish_ci
+	require.NoError(t, err)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("select @@character_set_client from dual", 1, false)
+	require.NoError(t, err)
+	assert.Equal(t, "latin1", qr.Rows[0][0].ToString())
+	_, err = conn.ExecuteFetch(latin1Only, 1, false)
+	require.NoError(t, err)
 }
 
 // TestNoClientCharset tests that a session without character_set_client, such

@@ -157,6 +157,19 @@ type ConnActivityObserver interface {
 	ConnActivity(c *Conn)
 }
 
+// HandshakeCharsetChecker is an optional interface that a Handler can
+// implement to refuse a client because of the character set of its handshake.
+// It is a separate interface, as ConnActivityObserver is, so that adding it is
+// not a breaking change for existing Handler implementations.
+//
+// CheckHandshakeCharset is called once the client's handshake response has
+// been read, and over TLS when the client asked for it, before the client is
+// authenticated. When it returns an error, the listener sends the client that
+// error and closes the connection.
+type HandshakeCharsetChecker interface {
+	CheckHandshakeCharset(c *Conn) error
+}
+
 // UnimplementedHandler implemnts all of the optional callbacks so as to satisy
 // the Handler interface. Intended to be embedded into your custom Handler
 // implementation without needing to define every callback and to help be forwards
@@ -488,6 +501,14 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		}
 		connCountByTLSVer.Add(versionNoTLS, 1)
 		defer connCountByTLSVer.Add(versionNoTLS, -1)
+	}
+
+	if checker, ok := l.handler.(HandshakeCharsetChecker); ok {
+		if err := checker.CheckHandshakeCharset(c); err != nil {
+			log.Warn(fmt.Sprintf("Refusing the character set of the handshake of %s: %v", c, err))
+			c.writeErrorPacketFromError(err)
+			return
+		}
 	}
 
 	// See what auth method the AuthServer wants to use for that user.
