@@ -6178,6 +6178,32 @@ func TestScheduleItems_HeartbeatUpdatesLag(t *testing.T) {
 
 	assert.Equal(t, int64(100*1e9), vp.loadLagSnapshot().timestampNs)
 	assert.Equal(t, 2, vp.numAccumulatedHeartbeats)
+
+	// While an older transaction is uncommitted, a heartbeat leaves the lag
+	// alone: its own timestamp would report about zero lag until that
+	// transaction's commit reported an older one. First, events accumulated
+	// for a transaction that is not scheduled yet.
+	rowEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_ROW}
+	state.curEvents = append(state.curEvents, rowEvent)
+	hbEvent = &binlogdatapb.VEvent{
+		Type:        binlogdatapb.VEventType_HEARTBEAT,
+		Timestamp:   200,
+		CurrentTime: time.Now().UnixNano(),
+	}
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{hbEvent}}))
+	assert.Equal(t, int64(100*1e9), vp.loadLagSnapshot().timestampNs)
+
+	// Then a scheduled transaction that is not committed yet.
+	state.curEvents = nil
+	commitEvent := &binlogdatapb.VEvent{Type: binlogdatapb.VEventType_COMMIT, Timestamp: 150}
+	require.NoError(t, vp.enqueueCommitOnly(ctx, scheduler, commitEvent, true, true, 0, 0, false))
+	hbEvent = &binlogdatapb.VEvent{
+		Type:        binlogdatapb.VEventType_HEARTBEAT,
+		Timestamp:   300,
+		CurrentTime: time.Now().UnixNano(),
+	}
+	require.NoError(t, vp.scheduleItems(ctx, scheduler, state, [][]*binlogdatapb.VEvent{{hbEvent}}))
+	assert.Equal(t, int64(100*1e9), vp.loadLagSnapshot().timestampNs)
 }
 
 func TestScheduleItems_ThrottledHeartbeatEstimatesLag(t *testing.T) {

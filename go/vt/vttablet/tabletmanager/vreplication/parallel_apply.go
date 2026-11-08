@@ -2013,8 +2013,15 @@ func (vp *vplayer) scheduleItems(ctx context.Context, scheduler *applyScheduler,
 				if err != nil {
 					return err
 				}
-				// Update lag from heartbeat timestamp.
-				if event.Timestamp != 0 && !event.Throttled {
+				// Update lag from the heartbeat's timestamp only when nothing
+				// is uncommitted, as for the heartbeat write above. With an
+				// older transaction still accumulating or scheduled, the
+				// heartbeat would report about zero lag until that
+				// transaction's commit reported its own, older timestamp.
+				// Only unthrottled heartbeats, about one a second, probe
+				// scheduler.idle().
+				if event.Timestamp != 0 && !event.Throttled &&
+					len(state.curEvents) == 0 && scheduler.idle() {
 					tsNs := event.Timestamp * 1e9
 					now := time.Now().UnixNano()
 					offset := now - event.CurrentTime
