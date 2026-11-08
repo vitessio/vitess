@@ -20,6 +20,7 @@ package schemacache
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -60,11 +61,18 @@ type schemaCache = cache.Cache[Key, []*vtadminpb.Schema] // define a type alias 
 func AddOrBackfill(c *schemaCache, schemas []*vtadminpb.Schema, key Key, d time.Duration, opts LoadOptions) {
 	if opts.isFullPayload() {
 		if err := c.Add(key, schemas, d); err != nil {
-			log.Warn(fmt.Sprintf("failed to add schema to cache for %+v: %s", key, err))
+			log.Warn("failed to add schema to cache",
+				slog.String("cluster_id", key.ClusterID),
+				slog.String("keyspace", key.Keyspace),
+				slog.Bool("include_non_serving_shards", key.IncludeNonServingShards),
+				slog.Any("error", err))
 		}
 	} else {
 		if !c.EnqueueBackfill(key) {
-			log.Warn(fmt.Sprintf("failed to enqueue backfill for schema cache %+v", key))
+			log.Warn("failed to enqueue backfill for schema cache",
+				slog.String("cluster_id", key.ClusterID),
+				slog.String("keyspace", key.Keyspace),
+				slog.Bool("include_non_serving_shards", key.IncludeNonServingShards))
 		}
 	}
 }
@@ -168,7 +176,11 @@ func LoadOne(c *schemaCache, key Key, opts LoadOptions) (schema *vtadminpb.Schem
 
 	if len(schemas) != 1 {
 		err = vterrors.Errorf(vtrpc.Code_INTERNAL, "impossible: cache should have exactly 1 schema for request %+v (have %d)", key, len(schemas))
-		log.Error(err.Error())
+		log.Error("impossible: cache should have exactly 1 schema for request",
+			slog.String("cluster_id", key.ClusterID),
+			slog.String("keyspace", key.Keyspace),
+			slog.Bool("include_non_serving_shards", key.IncludeNonServingShards),
+			slog.Int("schema_count", len(schemas)))
 		return nil, found, err
 	}
 
