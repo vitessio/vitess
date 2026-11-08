@@ -17,10 +17,10 @@ limitations under the License.
 package grpctmserver
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,7 +45,7 @@ func (r *sendRecorder) Send(resp *tabletmanagerdatapb.BackupResponse) error {
 		r.t.Error("concurrent Send on the Backup stream")
 	}
 	defer r.inFlight.Add(-1)
-	time.Sleep(time.Millisecond) // widen the window for an overlapping Send
+	runtime.Gosched()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.sent = append(r.sent, resp)
@@ -61,27 +61,35 @@ func TestBackupSender(t *testing.T) {
 
 	// Events from several goroutines, as from an engine's progress goroutines.
 	var wg sync.WaitGroup
+	start := make(chan struct{})
 	for range 4 {
 		wg.Go(func() {
+			<-start
 			for range 5 {
 				sender.event(&logutilpb.Event{Value: "progress"})
 			}
 		})
 	}
+	close(start)
 	wg.Wait()
 
 	// The terminal message, while a goroutine keeps logging.
 	var stop atomic.Bool
+	started := make(chan struct{})
 	wg.Go(func() {
+		sender.event(&logutilpb.Event{Value: "late progress"})
+		close(started)
 		for !stop.Load() {
 			sender.event(&logutilpb.Event{Value: "late progress"})
 		}
 	})
-	time.Sleep(5 * time.Millisecond)
+	<-started
 	terminal := &tabletmanagerdatapb.BackupResponse{Status: tabletmanagerdatapb.BackupResponse_USABLE, BackupName: "b1"}
 	require.NoError(t, sender.last(terminal))
 	stop.Store(true)
 	wg.Wait()
 
+	sender.event(&logutilpb.Event{Value: "after terminal"})
+	require.NotEmpty(t, rec.sent)
 	assert.Same(t, terminal, rec.sent[len(rec.sent)-1], "the terminal message must be the last one sent")
 }
