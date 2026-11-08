@@ -750,6 +750,16 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 			continue
 		}
 		vc.logOpTraffic(primitive, res)
+<<<<<<< HEAD
+||||||| parent of 542b13ab94 (vtgate: stop racing SafeSession.LastInsertId from parallel streams (#21639))
+		if res != nil && res.InsertIDUpdated() {
+			vc.SafeSession.LastInsertId = res.InsertID
+		}
+=======
+		if res != nil && res.InsertIDUpdated() {
+			vc.SetLastInsertID(res.InsertID)
+		}
+>>>>>>> 542b13ab94 (vtgate: stop racing SafeSession.LastInsertId from parallel streams (#21639))
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
@@ -799,7 +809,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 	if vc.interOpStats == nil {
 		return func(r *sqltypes.Result) error {
 			if r.InsertIDUpdated() {
-				vc.SafeSession.LastInsertId = r.InsertID
+				vc.SetLastInsertID(r.InsertID)
 			}
 			return callback(r)
 		}
@@ -807,7 +817,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 
 	return func(r *sqltypes.Result) error {
 		if r.InsertIDUpdated() {
-			vc.SafeSession.LastInsertId = r.InsertID
+			vc.SetLastInsertID(r.InsertID)
 		}
 		vc.logOpTraffic(primitive, r)
 		return callback(r)
@@ -899,7 +909,7 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr != nil && qr.InsertIDUpdated() {
-		vc.SafeSession.LastInsertId = qr.InsertID
+		vc.SetLastInsertID(qr.InsertID)
 	}
 	return qr, errs
 }
@@ -941,7 +951,7 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr.InsertIDUpdated() {
-		vc.SafeSession.LastInsertId = qr.InsertID
+		vc.SetLastInsertID(qr.InsertID)
 	}
 	return qr, vterrors.Aggregate(errs)
 }
