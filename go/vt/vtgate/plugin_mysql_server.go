@@ -36,6 +36,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
@@ -51,11 +52,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -1235,7 +1238,11 @@ func (vh *vtgateHandler) ComQueryMulti(c *mysql.Conn, sql string, callback func(
 }
 
 func (vh *vtgateHandler) streamExecuteMultiQuery(ctx context.Context, c *mysql.Conn, mysqlCtx *vtgateMySQLConnection, session *vtgatepb.Session, sql string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
-	queries, err := vh.vtg.executor.Environment().Parser().SplitStatementToPieces(sql)
+	parser, err := engine.ParserForSession(vh.vtg.executor.Environment().Parser(), session)
+	if err != nil {
+		return session, err
+	}
+	queries, err := parser.SplitStatementToPieces(sql)
 	if err != nil {
 		return session, err
 	}
@@ -1812,9 +1819,26 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
 		}
+		session.SystemVariables = map[string]string{sysvars.CharacterSetClient.Name: handshakeClientCharset(c)}
 		c.ClientData = session
 	}
 	return session
+}
+
+// handshakeClientCharset returns the value of character_set_client for a
+// client's session: the character set of the client's handshake, which VTGate
+// reads the client's unquoted names in, as MySQL does. A character set that
+// VTGate does not accept for a connection, and a collation ID that MySQL does
+// not define, get utf8mb4, which is how VTGate has always read the queries of
+// every client.
+func handshakeClientCharset(c *mysql.Conn) string {
+	// A collation ID names the same character set in every MySQL version, so
+	// any environment's tables answer this.
+	name, ok := collations.MySQL8().ConnectionCharset(c.CharacterSet)
+	if !ok || name == "" {
+		name = "utf8mb4"
+	}
+	return engine.ClientCharsetValue(name)
 }
 
 type mysqlServer struct {

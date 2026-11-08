@@ -124,7 +124,13 @@ func buildSQLCalcFoundRowsPlan(
 		return nil, nil, err
 	}
 
-	statement2, reserved2, err := vschema.Environment().Parser().Parse2(originalQuery)
+	// originalQuery is the client's text, so it parses in the client's
+	// character set, as it did the first time.
+	parser, err := vschema.ClientParser()
+	if err != nil {
+		return nil, nil, err
+	}
+	statement2, reserved2, err := parser.Parse2(originalQuery)
 	if err != nil {
 		return nil, nil, err
 	}

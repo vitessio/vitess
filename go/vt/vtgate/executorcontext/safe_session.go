@@ -1252,3 +1252,22 @@ func (session *SafeSession) GetTargetTabletAlias() *topodatapb.TabletAlias {
 	defer session.mu.Unlock()
 	return session.targetTabletAlias
 }
+
+// ClientCharsetName returns the client's character set, which VTGate reads the
+// client's unquoted names in. See engine.ClientCharsetName.
+func (session *SafeSession) ClientCharsetName() (string, error) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return engine.ClientCharsetName(session.SystemVariables)
+}
+
+// Parser returns parser for the character set of the session's client, so
+// that VTGate reads the unquoted names in the client's queries as MySQL reads
+// them in the client's character_set_client.
+func (session *SafeSession) Parser(parser *sqlparser.Parser) (*sqlparser.Parser, error) {
+	name, err := session.ClientCharsetName()
+	if err != nil {
+		return nil, err
+	}
+	return engine.ParserForClientCharset(parser, name)
+}

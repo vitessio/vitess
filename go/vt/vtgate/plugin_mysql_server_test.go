@@ -48,6 +48,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -3563,7 +3564,9 @@ func TestComQueryTempTableHeartbeatRegistration(t *testing.T) {
 	vh.ComResetConnection(c)
 	require.False(t, vh.session(c).GetOptions().GetHasCreatedTempTables())
 	require.False(t, vh.session(c).GetInReservedConn())
-	require.Empty(t, vh.session(c).GetSystemVariables())
+	// A fresh session holds only the character set of the client's handshake,
+	// which VTGate keeps to itself.
+	require.Equal(t, map[string]string{sysvars.CharacterSetClient.Name: "'utf8mb4'"}, vh.session(c).GetSystemVariables())
 	require.Empty(t, vh.session(c).GetShardSessions())
 	_, ok = vh.tempTableConns.Load(c)
 	require.False(t, ok)

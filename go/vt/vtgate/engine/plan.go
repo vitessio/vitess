@@ -60,7 +60,8 @@ type (
 	}
 
 	// PlanKey identifies a plan uniquely based on keyspace, destination, query,
-	// SET_VAR comment, and collation. It is primarily used as a cache key.
+	// SET_VAR comment, collation and the client's character set. It is
+	// primarily used as a cache key.
 	PlanKey struct {
 		CurrentKeyspace string                // CurrentKeyspace is the name of the keyspace associated with the plan.
 		TabletType      topodatapb.TabletType // TabletType is the type of tablet (primary, replica, etc.) for the plan.
@@ -68,6 +69,10 @@ type (
 		Query           string                // Query is the original or normalized SQL statement used to build the plan.
 		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
 		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
+		// ClientCharset is the rule by which the query's unquoted names were
+		// read. The same text can parse differently, or not at all, by
+		// another rule, so a plan is only reused for the same rule.
+		ClientCharset sqlparser.ClientCharset
 	}
 )
 
@@ -257,13 +262,14 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d, ClientCharset: %s", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation, pk.ClientCharset.String())
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
+	_, _ = hasher.Write([]byte{byte(pk.ClientCharset)}) // the hash's Write never fails, as for the fields around it
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)

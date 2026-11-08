@@ -60,6 +60,7 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	econtext "vitess.io/vitess/go/vt/vtgate/executorcontext"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	vtschema "vitess.io/vitess/go/vt/vtgate/schema"
@@ -691,7 +692,11 @@ func (vtg *VTGate) ExecuteMulti(
 	session *vtgatepb.Session,
 	sqlString string,
 ) (newSession *vtgatepb.Session, qrs []*sqltypes.Result, err error) {
-	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
+	parser, err := engine.ParserForSession(vtg.executor.Environment().Parser(), session)
+	if err != nil {
+		return session, nil, err
+	}
+	queries, err := parser.SplitStatementToPieces(sqlString)
 	if err != nil {
 		return session, nil, err
 	}
@@ -797,7 +802,11 @@ func (vtg *VTGate) StreamExecute(ctx context.Context, mysqlCtx vtgateservice.MyS
 // StreamExecuteMulti executes a streaming query.
 // Note we guarantee the callback will not be called concurrently by multiple go routines.
 func (vtg *VTGate) StreamExecuteMulti(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, session *vtgatepb.Session, sqlString string, callback func(qr sqltypes.QueryResponse, more bool, firstPacket bool) error) (*vtgatepb.Session, error) {
-	queries, err := vtg.executor.Environment().Parser().SplitStatementToPieces(sqlString)
+	parser, err := engine.ParserForSession(vtg.executor.Environment().Parser(), session)
+	if err != nil {
+		return session, err
+	}
+	queries, err := parser.SplitStatementToPieces(sqlString)
 	if err != nil {
 		return session, err
 	}
