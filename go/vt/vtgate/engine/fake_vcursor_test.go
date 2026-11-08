@@ -716,13 +716,17 @@ func (f *loggingVCursor) ExecuteStandalone(ctx context.Context, _ Primitive, que
 }
 
 func (f *loggingVCursor) StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError, autocommit, fetchLastInsertID bool, callback func(reply *sqltypes.Result) error) []error {
-	f.mu.Lock()
-	f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
-	if f.onStreamExecuteMultiFn != nil {
-		f.onStreamExecuteMultiFn(ctx, primitive, query, rss, bindVars, rollbackOnError, autocommit, callback)
-	}
-	r, err := f.nextResult()
-	f.mu.Unlock()
+	// The lock is released before callback runs: a streaming callback can
+	// call back into the vcursor, as INSERT ... SELECT does.
+	r, err := func() (*sqltypes.Result, error) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.log = append(f.log, fmt.Sprintf("StreamExecuteMulti %s %s", query, printResolvedShardsBindVars(rss, bindVars)))
+		if f.onStreamExecuteMultiFn != nil {
+			f.onStreamExecuteMultiFn(ctx, primitive, query, rss, bindVars, rollbackOnError, autocommit, callback)
+		}
+		return f.nextResult()
+	}()
 	if err != nil {
 		return []error{err}
 	}

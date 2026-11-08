@@ -18,8 +18,8 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"time"
 
@@ -77,17 +77,16 @@ var (
 		},
 		Run: run,
 		PostRun: func(cmd *cobra.Command, args []string) {
-			trace.LogErrorsWhenClosing(traceCloser)
+			trace.LogErrorsWhenClosing(traceCloser)()
 		},
 		Version: servenv.AppVersion.String(),
 	}
 )
 
-// fatal ensures the tracer is closed and final spans are sent before issuing
-// a log.Error call followed by os.Exit(1) with the given args.
-func fatal(args ...any) {
-	trace.LogErrorsWhenClosing(traceCloser)
-	log.Error(fmt.Sprint(args...))
+// exit ensures the tracer is closed and final spans are sent before calling
+// os.Exit(1). Callers log the reason with log.Error first.
+func exit() {
+	trace.LogErrorsWhenClosing(traceCloser)()
 	os.Exit(1)
 }
 
@@ -96,7 +95,7 @@ func fatal(args ...any) {
 func startTracing(cmd *cobra.Command) {
 	tracer, err := cmd.Flags().GetString("tracer")
 	if err != nil {
-		log.Warn(fmt.Sprintf("not starting tracer; err: %s", err))
+		log.Warn("not starting tracer", slog.Any("error", err))
 		return
 	}
 
@@ -116,7 +115,8 @@ func run(cmd *cobra.Command, args []string) {
 
 	if len(configs) == 0 && !enableDynamicClusters {
 		bootSpan.Finish()
-		fatal("must specify at least one cluster")
+		log.Error("must specify at least one cluster")
+		exit()
 	}
 
 	var rbacConfig *rbac.Config
@@ -125,21 +125,25 @@ func run(cmd *cobra.Command, args []string) {
 	} else if enableRBAC && rbacConfigPath != "" {
 		cfg, err := rbac.LoadConfig(rbacConfigPath)
 		if err != nil {
-			fatal(err)
+			log.Error("failed to load RBAC config", slog.String("path", rbacConfigPath), slog.Any("error", err))
+			exit()
 		}
 
 		rbacConfig = cfg
 	} else if enableRBAC && rbacConfigPath == "" {
-		fatal("must pass --rbac-config path when enabling rbac")
+		log.Error("must pass --rbac-config path when enabling rbac")
+		exit()
 	} else {
-		fatal("must explicitly enable or disable RBAC by passing --no-rbac or --rbac")
+		log.Error("must explicitly enable or disable RBAC by passing --no-rbac or --rbac")
+		exit()
 	}
 
 	for i, cfg := range configs {
 		cluster, err := cfg.Cluster(ctx)
 		if err != nil {
 			bootSpan.Finish()
-			fatal(err)
+			log.Error("failed to create cluster", slog.String("cluster_id", cfg.ID), slog.Any("error", err))
+			exit()
 		}
 
 		clusters[i] = cluster
@@ -156,7 +160,8 @@ func run(cmd *cobra.Command, args []string) {
 		TruncateErrLen:     servenv.TruncateErrLen,
 	})
 	if err != nil {
-		fatal(err)
+		log.Error("failed to create vtenv", slog.Any("error", err))
+		exit()
 	}
 	s := vtadmin.NewAPI(env, clusters, vtadmin.Options{
 		GRPCOpts:              opts,
@@ -167,7 +172,8 @@ func run(cmd *cobra.Command, args []string) {
 	bootSpan.Finish()
 
 	if err := s.ListenAndServe(); err != nil {
-		fatal(err)
+		log.Error("server failed", slog.Any("error", err))
+		exit()
 	}
 }
 
@@ -248,7 +254,7 @@ func main() {
 
 	rootCmd.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := rootCmd.Execute(); err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("command failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 }

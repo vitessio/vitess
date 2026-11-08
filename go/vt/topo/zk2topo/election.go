@@ -19,6 +19,7 @@ package zk2topo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"path"
 	"sort"
 
@@ -143,7 +144,7 @@ func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkCo
 	// get to work watching our own proposal
 	_, stats, events, err := conn.GetW(ctx, proposal)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Cannot watch proposal while being Leader, stopping: %v", err))
+		log.Warn("Cannot watch proposal while being Leader, stopping", slog.Any("error", err))
 		cancel()
 		deleteProposal(conn, proposal, -1)
 		return
@@ -152,16 +153,16 @@ func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkCo
 	select {
 	case <-mp.stopCtx.Done():
 		// we were asked to stop, we're done. Remove our node.
-		log.Info(fmt.Sprintf("Canceling leadership '%v' upon Stop.", mp.name))
+		log.Info("Canceling leadership upon Stop.", slog.String("election_name", mp.name))
 
 		if err := conn.Delete(ctx, proposal, stats.Version); err != nil {
-			log.Warn(fmt.Sprintf("Error deleting our proposal %v: %v", proposal, err))
+			log.Warn("Error deleting our proposal", slog.String("path", proposal), slog.Any("error", err))
 		}
 		close(mp.done)
 
 	case e := <-events:
 		// something happened to our proposal, that can only be bad.
-		log.Warn(fmt.Sprintf("Watch on proposal triggered, canceling leadership '%v': %v", mp.name, e))
+		log.Warn("Watch on proposal triggered, canceling leadership", slog.String("election_name", mp.name), slog.String("zk_event", fmt.Sprint(e)))
 		if e.Err != nil {
 			// Stop leading before cleaning up, as the cleanup may
 			// take a while.
@@ -180,7 +181,7 @@ func deleteProposal(conn *ZkConn, proposal string, version int32) {
 	ctx, cancel := context.WithTimeout(context.Background(), baseTimeout)
 	defer cancel()
 	if err := conn.Delete(ctx, proposal, version); err != nil && err != zk.ErrNoNode {
-		log.Warn(fmt.Sprintf("Error deleting our proposal %v: %v", proposal, err))
+		log.Warn("Error deleting our proposal", slog.String("path", proposal), slog.Any("error", err))
 	}
 }
 

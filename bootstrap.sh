@@ -26,6 +26,10 @@ source ./dev.env
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
 BUILD_PROTOC=${BUILD_PROTOC:-1}
+# Maven is off by default: the bootstrap image runs bootstrap.sh and must not
+# contain it (CVE-2024-47554). docker/test/run.sh turns it on in the test
+# containers.
+BUILD_MAVEN=${BUILD_MAVEN:-0}
 
 VITESS_RESOURCES_DOWNLOAD_BASE_URL="https://github.com/vitessio/vitess-resources/releases/download"
 VITESS_RESOURCES_RELEASE="v5.0"
@@ -91,38 +95,72 @@ get_arch() {
 	uname -m
 }
 
-# verify_sha256 verifies the SHA256 checksum of a file.
-#
-# Usage: verify_sha256 <file> <expected_sha256>
-verify_sha256() {
-	local file="$1"
-	local expected="$2"
+# Downloads are kept here, outside the directories that install_dep wipes,
+# so that they survive a re-install and can be cached (CI does).
+DOWNLOAD_CACHE="$VTROOT/dist/download-cache"
 
-	if command -v sha256sum &>/dev/null; then
-		echo "$expected  $file" | sha256sum -c - &>/dev/null || fail "SHA256 checksum verification failed for $file"
+# checksum_matches reports whether a file exists and has the expected checksum.
+#
+# Usage: checksum_matches <256|512> <file> <expected_checksum>
+checksum_matches() {
+	local bits="$1"
+	local file="$2"
+	local expected="$3"
+
+	[[ -f "$file" ]] || return 1
+	if command -v "sha${bits}sum" &>/dev/null; then
+		echo "$expected  $file" | "sha${bits}sum" -c - &>/dev/null
 	elif command -v shasum &>/dev/null; then
-		echo "$expected  $file" | shasum -a 256 -c - &>/dev/null || fail "SHA256 checksum verification failed for $file"
+		echo "$expected  $file" | shasum -a "$bits" -c - &>/dev/null
 	else
-		fail "Neither sha256sum nor shasum found. Cannot verify checksum."
+		fail "Neither sha${bits}sum nor shasum found. Cannot verify checksum."
 	fi
-	echo "OK: SHA256 checksum verified for $file"
 }
 
-# verify_sha512 verifies the SHA512 checksum of a file.
+# download_verified makes sure that $DOWNLOAD_CACHE/<file> exists and has the
+# expected checksum. A cached file is used only if its checksum matches;
+# otherwise it is downloaded again from the first URL that works. Only a
+# download that passes the checksum is moved into the cache, with a rename that
+# replaces the cached file atomically. The cached file is never deleted first:
+# the docker test containers share the cache, and another one may have just
+# published it and be about to extract it.
 #
-# Usage: verify_sha512 <file> <expected_sha512>
-verify_sha512() {
+# Usage: download_verified <file> <256|512> <expected_checksum> <url>...
+download_verified() {
 	local file="$1"
-	local expected="$2"
+	local bits="$2"
+	local expected="$3"
+	shift 3
 
-	if command -v sha512sum &>/dev/null; then
-		echo "$expected  $file" | sha512sum -c - &>/dev/null || fail "SHA512 checksum verification failed for $file"
-	elif command -v shasum &>/dev/null; then
-		echo "$expected  $file" | shasum -a 512 -c - &>/dev/null || fail "SHA512 checksum verification failed for $file"
-	else
-		fail "Neither sha512sum nor shasum found. Cannot verify checksum."
+	local cached="$DOWNLOAD_CACHE/$file"
+	if checksum_matches "$bits" "$cached" "$expected"; then
+		echo "OK: using cached $cached"
+		return
 	fi
-	echo "OK: SHA512 checksum verified for $file"
+
+	mkdir -p "$DOWNLOAD_CACHE"
+	# A unique name, as the docker test containers share the cache.
+	local partial
+	partial="$(mktemp "$cached.XXXXXX")"
+	local url
+	for url in "$@"; do
+		# Tries must be bounded: wget-retry retries a 404 forever by default and
+		# the next URL would never be tried.
+		if "${VTROOT}/tools/wget-retry" -q -t 3 -O "$partial" "$url"; then
+			if checksum_matches "$bits" "$partial" "$expected"; then
+				# mktemp makes the file private, but the docker builds and test
+				# containers read it as another user.
+				chmod 644 "$partial"
+				mv "$partial" "$cached"
+				echo "OK: SHA${bits} checksum verified for $cached"
+				return
+			fi
+			rm -f "$partial"
+			fail "SHA${bits} checksum verification failed for $file downloaded from $url"
+		fi
+	done
+	rm -f "$partial"
+	fail "Could not download $file"
 }
 
 # Install protoc.
@@ -170,11 +208,10 @@ install_protoc() {
 
 	local file="protoc-${version}-${platform}-${target}.zip"
 
-	# This is how we'd download directly from source:
-	"${VTROOT}/tools/wget-retry" -q -t 3 "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
-	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	verify_sha256 "$file" "$sha256"
-	unzip "$file"
+	# This is how we'd download from the Vitess resources mirror:
+	# "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	download_verified "$file" 256 "$sha256" "https://github.com/protocolbuffers/protobuf/releases/download/v${version}/${file}"
+	unzip "$DOWNLOAD_CACHE/$file"
 
 	ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
@@ -186,18 +223,32 @@ install_zookeeper() {
 	local zk="zookeeper-$version"
 	local file="apache-${zk}-bin.tar.gz"
 
-	# SHA512 checksum for Zookeeper 3.9.6 from Apache archives.
-	local sha512="e999626df06de30dc8bb53bb51da9bb786b1658406adafc6b92f104d72ca25e869f70a57c83a726f8b9558cc0fb519fc20f201aa5d6da09884bc4be5fe6dd3b0"
+	# SHA512 checksum for Zookeeper 3.9.7 from Apache archives.
+	local sha512="69ce6bf0b6df9a9ecdf080bdc15758eef97ef176a88f1408214f2327fe6e5349fedf738031977e6fc2f52cb636b45779653389a6bfda75be9c82dd3e72f24f25"
 
 	# dlcdn.apache.org only serves current releases; fall back to archive.apache.org for older versions.
-	# Tries must be bounded: wget-retry retries a 404 forever by default and the fallback would never run.
-	"${VTROOT}/tools/wget-retry" -q -t 3 "https://dlcdn.apache.org/zookeeper/${zk}/${file}" || \
-		"${VTROOT}/tools/wget-retry" -q -t 3 "https://archive.apache.org/dist/zookeeper/${zk}/${file}"
-	verify_sha512 "$dist/$file" "$sha512"
-	tar -xzf "$dist/$file"
+	download_verified "$file" 512 "$sha512" \
+		"https://dlcdn.apache.org/zookeeper/${zk}/${file}" \
+		"https://archive.apache.org/dist/zookeeper/${zk}/${file}"
+	tar -xzf "$DOWNLOAD_CACHE/$file"
 	mkdir -p "$dist"/lib
 	cp "$dist/apache-$zk-bin/lib/"*.jar "$dist/lib/"
 	rm -rf "$dist/apache-$zk-bin"
+}
+
+# Install Maven.
+install_maven() {
+	local version="$1"
+	local file="apache-maven-${version}-bin.tar.gz"
+
+	# SHA512 checksum for Maven 3.9.16 from Apache downloads.
+	local sha512="831a8591fe20c8243b1dbe7d71e3244f31d1665b0804b2e825e38cbbe5ce0cafb8338851f90780735568773e0a6cd07bbec107cda0b896b008b861075358b6f6"
+
+	# Maven Central keeps every Maven release, unlike dlcdn.apache.org, and
+	# archive.apache.org keeps timing out from the CI runners.
+	download_verified "$file" 512 "$sha512" \
+		"https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${version}/${file}"
+	tar -xzf "$DOWNLOAD_CACHE/$file" --strip-components=1
 }
 
 # Download and install etcd, link etcd binary into our root.
@@ -245,16 +296,14 @@ install_etcd() {
 
 	local file="etcd-${version}-${platform}-${target}.${ext}"
 
-	# This is how we'd download directly from source:
-	"${VTROOT}/tools/wget-retry" -q -t 3 "https://github.com/etcd-io/etcd/releases/download/$version/$file"
-	#"${VTROOT}/tools/wget-retry" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	verify_sha256 "$file" "$sha256"
+	# This is how we'd download from the Vitess resources mirror:
+	# "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	download_verified "$file" 256 "$sha256" "https://github.com/etcd-io/etcd/releases/download/$version/$file"
 	if [ "$ext" = "tar.gz" ]; then
-		tar xzf "$file"
+		tar xzf "$DOWNLOAD_CACHE/$file"
 	else
-		unzip "$file"
+		unzip "$DOWNLOAD_CACHE/$file"
 	fi
-	rm "$file"
 	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
 	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
@@ -302,9 +351,8 @@ install_consul() {
 	# This is how we'd download directly from source:
 	# download_url=https://releases.hashicorp.com/consul
 	# wget "${download_url}/${version}/${file}"
-	"${VTROOT}/tools/wget-retry" -q -t 3 "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
-	verify_sha256 "$file" "$sha256"
-	unzip "$file"
+	download_verified "$file" 256 "$sha256" "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+	unzip "$DOWNLOAD_CACHE/$file"
 	ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
@@ -327,6 +375,11 @@ install_all() {
 	# consul
 	if [ "$BUILD_CONSUL" == 1 ]; then
 		install_dep "Consul" "$CONSUL_VER" "$VTROOT/dist/consul" install_consul
+	fi
+
+	# Maven, on the PATH of the bootstrap image as dist/maven/bin.
+	if [ "$BUILD_MAVEN" == 1 ]; then
+		install_dep "Maven" "$MAVEN_VER" "$VTROOT/dist/maven" install_maven
 	fi
 
 	echo
