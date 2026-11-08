@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -55,6 +56,13 @@ func (c ctxAwareCloser) Close() error {
 	<-c.ctx.Done()
 	return c.ctx.Err()
 }
+
+// failingCloseWriter accepts writes and fails Close, like a GCS object whose
+// upload fails when it is committed.
+type failingCloseWriter struct{ err error }
+
+func (w failingCloseWriter) Write(p []byte) (int, error) { return len(p), nil }
+func (w failingCloseWriter) Close() error                { return w.err }
 
 func TestFindReplicationPosition(t *testing.T) {
 	input := `MySQL binlog position: filename 'vt-0476396352-bin.000005', position '310088991', GTID of the last change '145e508e-ae54-11e9-8ce6-46824dd1815e:1-3,
@@ -313,13 +321,18 @@ echo "backup data"
 	for _, tc := range []struct {
 		name      string
 		verifyErr error
+		closeErr  error
 	}{
-		{"MANIFEST written after the check passes", nil},
-		{"no MANIFEST when the check fails", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")},
+		{"MANIFEST written after the check passes", nil, nil},
+		{"no MANIFEST when the check fails", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs"), nil},
+		{"a MANIFEST that fails to close makes the backup unusable", nil, errors.New("MANIFEST upload failed")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			bh := &FakeBackupHandle{
-				AddFileReturnF: func(string) FakeBackupHandleAddFileReturn {
+				AddFileReturnF: func(name string) FakeBackupHandleAddFileReturn {
+					if name == backupManifestFileName && tc.closeErr != nil {
+						return FakeBackupHandleAddFileReturn{WriteCloser: failingCloseWriter{tc.closeErr}}
+					}
 					return FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()}
 				},
 			}
@@ -343,11 +356,15 @@ echo "backup data"
 			for _, call := range bh.AddFileCalls {
 				added = append(added, call.Filename)
 			}
-			if tc.verifyErr == nil {
+			switch {
+			case tc.closeErr != nil:
+				require.ErrorIs(t, err, tc.closeErr)
+				assert.Equal(t, BackupUnusable, result)
+			case tc.verifyErr == nil:
 				require.NoError(t, err)
 				assert.Equal(t, BackupUsable, result)
 				assert.Contains(t, added, backupManifestFileName)
-			} else {
+			default:
 				require.ErrorContains(t, err, "errant GTIDs")
 				assert.Equal(t, BackupUnusable, result)
 				assert.NotContains(t, added, backupManifestFileName)

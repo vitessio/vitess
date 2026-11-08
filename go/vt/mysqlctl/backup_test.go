@@ -154,6 +154,19 @@ func TestBackupEmitsStats(t *testing.T) {
 // TestBackupTriesToParameterizeBackupStorage tests that Backup tries to pass
 // backupstorage.Params to backupstorage, but only if it responds to
 // backupstorage.WithParams.
+// TestBackupAbortsUnusableBackup tests that an unusable backup is aborted, not
+// finished, so storage does not keep a backup whose MANIFEST failed to close.
+func TestBackupAbortsUnusableBackup(t *testing.T) {
+	env := createFakeBackupRestoreEnv(t)
+	env.backupEngine.ExecuteBackupReturn = FakeBackupEngineExecuteBackupReturn{BackupUnusable, errors.New("MANIFEST upload failed")}
+
+	err := Backup(env.ctx, env.backupParams)
+	require.ErrorContains(t, err, "MANIFEST upload failed")
+	handle := env.backupStorage.StartBackupReturn.BackupHandle.(*FakeBackupHandle)
+	assert.Len(t, handle.AbortBackupCalls, 1)
+	assert.Empty(t, handle.EndBackupCalls)
+}
+
 func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	env := createFakeBackupRestoreEnv(t)
 

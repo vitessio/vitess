@@ -48,11 +48,16 @@ import (
 // backupEngineImplementation is the implementation to use for BackupEngine
 var backupEngineImplementation = builtinBackupEngineName
 
+// BackupResult classifies the backup that BackupEngine.ExecuteBackup took.
 type BackupResult int
 
 const (
+	// BackupUnusable means the backup cannot be used, so it is aborted.
 	BackupUnusable BackupResult = iota
+	// BackupEmpty means an incremental backup found nothing new to back up.
 	BackupEmpty
+	// BackupUsable means the engine wrote and closed the whole backup,
+	// including its MANIFEST.
 	BackupUsable
 )
 
