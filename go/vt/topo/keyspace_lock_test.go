@@ -17,15 +17,20 @@ limitations under the License.
 package topo_test
 
 import (
+	"log/slog"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // TestTopoKeyspaceLock tests keyspace lock operations.
@@ -111,4 +116,34 @@ func TestTopoKeyspaceLockWithTTL(t *testing.T) {
 	stats := tsf.GetCallStats()
 	require.NotNil(t, stats)
 	require.Equal(t, int64(1), stats.Counts()["LockWithTTL"])
+}
+
+// TestTopoKeyspaceLockLogs checks that locking and unlocking log the locked
+// resource, the action, the lock options and the action error as attributes.
+func TestTopoKeyspaceLockLogs(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{}))
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	_, unlock, err := ts.LockKeyspace(ctx, "ks1", "Reshard", topo.WithTTL(time.Minute))
+	require.NoError(t, err)
+	actionErr := vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "zq7 action failed")
+	unlock(&actionErr)
+
+	record := logs.Record(t, "Locking for action with options")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "keyspace", record["resource_type"])
+	assert.Equal(t, "ks1", record["resource"])
+	assert.Equal(t, "Reshard", record["action"])
+	assert.Equal(t, "blocking", record["topo_lock_type"])
+	assert.Equal(t, float64(time.Minute), record["lock_ttl"])
+
+	record = logs.Record(t, "Unlocking for action with error")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "ks1", record["resource"])
+	assert.Equal(t, "Reshard", record["action"])
+	assert.Equal(t, "zq7 action failed", record["error"])
+	assert.Equal(t, "FAILED_PRECONDITION", record["error_code"])
 }
