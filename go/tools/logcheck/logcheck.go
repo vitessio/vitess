@@ -271,7 +271,7 @@ func messageParam(obj types.Object) int {
 }
 
 func isString(t types.Type) bool {
-	b, ok := t.(*types.Basic)
+	b, ok := types.Unalias(t).(*types.Basic)
 	return ok && b.Kind() == types.String
 }
 

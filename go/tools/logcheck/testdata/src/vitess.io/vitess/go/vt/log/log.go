@@ -77,6 +77,11 @@ type Field = slog.Attr
 
 func InfoFields(msg string, fields ...Field) {}
 
+// MessageAlias is an alias of string.
+type MessageAlias = string
+
+func InfoAlias(msg MessageAlias, attrs ...slog.Attr) {}
+
 // Logger's methods are promoted from an unexported type.
 type Logger struct {
 	*logger

@@ -100,6 +100,13 @@ func aliasedAttr(name string) {
 	log.InfoFields(name) // want "log message must be a constant; pass values as slog attributes"
 }
 
+func aliasedMessage(name string) {
+	log.InfoAlias("ok")
+	log.InfoAlias(name)   // want "log message must be a constant; pass values as slog attributes"
+	info := log.InfoAlias // want "logging function must be called directly, not used as a value"
+	info(name)
+}
+
 func promotedFromUnexported(name string) {
 	l := log.NewLogger()
 	l.Info("ok")
