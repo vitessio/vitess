@@ -1,3 +1,19 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package grpctmserver
 
 import (
@@ -26,6 +42,7 @@ type backupStreamRecorder struct {
 	overlapped atomic.Bool
 	mu         sync.Mutex
 	sent       []*tabletmanagerdatapb.BackupResponse
+	sendErr    error
 }
 
 func (recorder *backupStreamRecorder) Context() context.Context {
@@ -41,15 +58,34 @@ func (recorder *backupStreamRecorder) Send(response *tabletmanagerdatapb.BackupR
 	recorder.mu.Lock()
 	defer recorder.mu.Unlock()
 	recorder.sent = append(recorder.sent, response)
-	return nil
+	return recorder.sendErr
+}
+
+type restoreStreamRecorder struct {
+	*backupStreamRecorder
+}
+
+func (recorder *restoreStreamRecorder) Send(response *tabletmanagerdatapb.RestoreFromBackupResponse) error {
+	return recorder.backupStreamRecorder.Send(&tabletmanagerdatapb.BackupResponse{Event: response.Event})
 }
 
 type concurrentBackupTM struct {
 	tabletmanager.RPCTM
-	backupErr error
+	backupErr  error
+	restoreErr error
 }
 
 func (tm *concurrentBackupTM) Backup(_ context.Context, logger logutil.Logger, _ *tabletmanagerdatapb.BackupRequest) error {
+	logConcurrentProgress(logger)
+	return tm.backupErr
+}
+
+func (tm *concurrentBackupTM) RestoreFromBackup(_ context.Context, logger logutil.Logger, _ *tabletmanagerdatapb.RestoreFromBackupRequest) error {
+	logConcurrentProgress(logger)
+	return tm.restoreErr
+}
+
+func logConcurrentProgress(logger logutil.Logger) {
 	var workers sync.WaitGroup
 	start := make(chan struct{})
 	for workerIndex := range 4 {
@@ -62,7 +98,6 @@ func (tm *concurrentBackupTM) Backup(_ context.Context, logger logutil.Logger, _
 	}
 	close(start)
 	workers.Wait()
-	return tm.backupErr
 }
 
 // TestBackupSerializesLogEvents exercises concurrent engine logging through the RPC handler.
@@ -70,12 +105,14 @@ func TestBackupSerializesLogEvents(t *testing.T) {
 	for _, testCase := range []struct {
 		name      string
 		backupErr error
+		sendErr   error
 	}{
 		{name: "successful backup"},
 		{name: "failed backup", backupErr: errors.New("backup failed")},
+		{name: "send error does not interrupt backup", sendErr: errors.New("client disconnected")},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			recorder := &backupStreamRecorder{ctx: t.Context()}
+			recorder := &backupStreamRecorder{ctx: t.Context(), sendErr: testCase.sendErr}
 			handler := &server{tm: &concurrentBackupTM{
 				RPCTM:     tmrpctest.NewFakeRPCTM(t),
 				backupErr: testCase.backupErr,
@@ -87,6 +124,38 @@ func TestBackupSerializesLogEvents(t *testing.T) {
 				require.NoError(t, err)
 			}
 			assert.False(t, recorder.overlapped.Load(), "concurrent Send on the Backup stream")
+			require.Len(t, recorder.sent, 40)
+			for _, response := range recorder.sent {
+				require.NotNil(t, response.Event)
+			}
+		})
+	}
+}
+
+// TestRestoreSerializesLogEvents exercises concurrent restore logging through the RPC handler.
+func TestRestoreSerializesLogEvents(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		restoreErr error
+		sendErr    error
+	}{
+		{name: "successful restore"},
+		{name: "failed restore", restoreErr: errors.New("restore failed")},
+		{name: "send error does not interrupt restore", sendErr: errors.New("client disconnected")},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			recorder := &restoreStreamRecorder{backupStreamRecorder: &backupStreamRecorder{ctx: t.Context(), sendErr: testCase.sendErr}}
+			handler := &server{tm: &concurrentBackupTM{
+				RPCTM:      tmrpctest.NewFakeRPCTM(t),
+				restoreErr: testCase.restoreErr,
+			}}
+			err := handler.RestoreFromBackup(&tabletmanagerdatapb.RestoreFromBackupRequest{}, recorder)
+			if testCase.restoreErr != nil {
+				require.ErrorIs(t, err, testCase.restoreErr)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.False(t, recorder.overlapped.Load(), "concurrent Send on the RestoreFromBackup stream")
 			require.Len(t, recorder.sent, 40)
 			for _, response := range recorder.sent {
 				require.NotNil(t, response.Event)

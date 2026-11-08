@@ -691,11 +691,14 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	return s.tm.Backup(ctx, logger, request)
 }
 
+// backupSender serializes engine progress callbacks because gRPC does not
+// support concurrent sends on one stream.
 type backupSender struct {
 	stream tabletmanagerservicepb.TabletManager_BackupServer
 	mu     sync.Mutex
 }
 
+// event ignores Send errors so a disconnected client does not interrupt the backup.
 func (sender *backupSender) event(event *logutilpb.Event) {
 	sender.mu.Lock()
 	defer sender.mu.Unlock()
@@ -707,11 +710,15 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 	defer s.tm.HandleRPCPanic(ctx, "RestoreFromBackup", request, nil, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 
+	// Restore workers can log concurrently; gRPC permits only one Send at a time.
+	var sendMu sync.Mutex
 	// create a logger, send the result back to the caller
 	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		sendMu.Lock()
+		defer sendMu.Unlock()
 		// If the client disconnects, we will just fail
 		// to send the log events, but won't interrupt
-		// the backup.
+		// the restore.
 		stream.Send(&tabletmanagerdatapb.RestoreFromBackupResponse{
 			Event: e,
 		})
