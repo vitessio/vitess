@@ -227,8 +227,11 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	}
 	defer func() {
 		closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
-		// A MANIFEST that failed to close may not be in storage, so the backup
-		// is not usable.
+		bh.Wait()
+		if finalErr == nil {
+			finalErr = bh.Error()
+		}
+		// A MANIFEST that failed to close or finish uploading is not usable.
 		if finalErr != nil {
 			result = BackupUnusable
 		}

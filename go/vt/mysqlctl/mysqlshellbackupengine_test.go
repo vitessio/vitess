@@ -475,7 +475,34 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		result, err := be.ExecuteBackup(t.Context(), params, bh)
 		require.ErrorIs(t, err, closeErr)
 		assert.Equal(t, BackupUnusable, result)
+		require.False(t, mysql.GlobalReadLock)
 	})
+
+	for _, tc := range []struct {
+		name      string
+		uploadErr error
+	}{
+		{name: "asynchronous MANIFEST upload succeeds"},
+		{name: "asynchronous MANIFEST upload fails", uploadErr: errors.New("MANIFEST upload failed")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
+			mysql.GlobalReadLock = false
+			handle := newAsyncManifestBackupHandle(t, tc.uploadErr)
+			generateTestFile(t, be.binaryName, fmt.Sprintf(
+				"#!/bin/bash\n>&2 echo %s; echo \"backup completed\"; sleep 0.01", mysqlShellLockMessage))
+
+			result, err := be.ExecuteBackup(t.Context(), params, handle)
+			if tc.uploadErr != nil {
+				require.ErrorContains(t, err, tc.uploadErr.Error())
+				assert.Equal(t, BackupUnusable, result)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, BackupUsable, result)
+			}
+			require.False(t, mysql.GlobalReadLock)
+		})
+	}
 
 	t.Run("lock released when backup fails", func(t *testing.T) {
 		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
