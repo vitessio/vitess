@@ -865,6 +865,8 @@ message CheckThrottlerRequest {
   bool ok_if_not_exists = 4;
   reserved 5; // used to be multi_metrics_enabled, introduced in v21 for backwards compatibility, and removed in v22
   reserved "multi_metrics_enabled";
+  // ThrottlerType specifies which throttler to check (defaults to DEFAULT_LAG_THROTTLER)
+  ThrottlerType throttler_type = 6;
 }
 
 enum CheckThrottlerResponseCode {
@@ -874,6 +876,12 @@ enum CheckThrottlerResponseCode {
   APP_DENIED = 3;
   UNKNOWN_METRIC = 4;
   INTERNAL_ERROR = 5;
+}
+
+// ThrottlerType specifies which throttler to use
+enum ThrottlerType {
+  DEFAULT_LAG_THROTTLER = 0;       // Default - replication lag throttler
+  DEDICATED_QUERY_THROTTLER = 1;   // Dedicated query throttler
 }
 
 message CheckThrottlerResponse {
@@ -920,9 +928,15 @@ message CheckThrottlerResponse {
 
   // ResponseCode is the enum representation of the response
   CheckThrottlerResponseCode response_code = 10;
+
+  // ThrottlerType is the throttler that answered the check. Tablets that predate the field
+  // always answer for the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
+  ThrottlerType throttler_type = 11;
 }
 
 message GetThrottlerStatusRequest {
+  // ThrottlerType specifies which throttler to query (defaults to DEFAULT_LAG_THROTTLER)
+  ThrottlerType throttler_type = 1;
 }
 
 message GetThrottlerStatusResponse {
@@ -983,6 +997,10 @@ message GetThrottlerStatusResponse {
   }
   // RecentApps is a map of app names to their recent check status
   map<string, RecentApp> recent_apps = 18;
+
+  // ThrottlerType is the throttler that this status describes. Tablets that predate the field
+  // always describe the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
+  ThrottlerType throttler_type = 19;
 }
 
 message ChangeTagsRequest {

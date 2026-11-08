@@ -22,7 +22,7 @@ package memorytopo
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"os"
 	"regexp"
@@ -295,13 +295,13 @@ func NewServerAndFactory(ctx context.Context, cells ...string) (*topo.Server, *F
 
 	ts, err := topo.NewWithFactory(f, "" /*serverAddress*/, "" /*root*/)
 	if err != nil {
-		log.Error(fmt.Sprintf("topo.NewWithFactory() failed: %v", err))
+		log.Error("topo.NewWithFactory() failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 	for _, cell := range cells {
 		f.cells[cell] = f.newDirectory(cell, nil)
 		if err := ts.CreateCellInfo(ctx, cell, &topodatapb.CellInfo{}); err != nil {
-			log.Error(fmt.Sprintf("ts.CreateCellInfo(%v) failed: %v", cell, err))
+			log.Error("ts.CreateCellInfo() failed", slog.String("cell", cell), slog.Any("error", err))
 			os.Exit(1)
 		}
 	}

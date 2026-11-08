@@ -142,8 +142,8 @@ func (metric *ThrottleMetric) WithError(err error) *ThrottleMetric {
 }
 
 // ReadThrottleMetrics returns a metric for the given probe. Either by explicit query
-// or via SHOW REPLICA STATUS
-func ReadThrottleMetrics(ctx context.Context, probe *Probe, tmClient tmclient.TabletManagerClient, metricsFunc func(context.Context, tmclient.TabletManagerClient) ThrottleMetrics) ThrottleMetrics {
+// or via SHOW REPLICA STATUS. metricsPrefix prefixes the probe metrics it records.
+func ReadThrottleMetrics(ctx context.Context, metricsPrefix string, probe *Probe, tmClient tmclient.TabletManagerClient, metricsFunc func(context.Context, tmclient.TabletManagerClient) ThrottleMetrics) ThrottleMetrics {
 	if metrics := getCachedThrottleMetrics(probe); metrics != nil {
 		return metrics
 	}
@@ -152,11 +152,11 @@ func ReadThrottleMetrics(ctx context.Context, probe *Probe, tmClient tmclient.Ta
 	throttleMetrics := metricsFunc(ctx, tmClient)
 
 	go func(metrics ThrottleMetrics, started time.Time) {
-		stats.GetOrNewGauge("ThrottlerProbesLatency", "probes latency").Set(time.Since(started).Nanoseconds())
-		stats.GetOrNewCounter("ThrottlerProbesTotal", "total probes").Add(1)
+		stats.GetOrNewGauge(metricsPrefix+"ProbesLatency", "probes latency").Set(time.Since(started).Nanoseconds())
+		stats.GetOrNewCounter(metricsPrefix+"ProbesTotal", "total probes").Add(1)
 		for _, metric := range metrics {
 			if metric.Err != nil {
-				stats.GetOrNewCounter("ThrottlerProbesError", "total probes errors").Add(1)
+				stats.GetOrNewCounter(metricsPrefix+"ProbesError", "total probes errors").Add(1)
 				break
 			}
 		}

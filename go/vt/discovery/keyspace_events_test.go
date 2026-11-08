@@ -19,6 +19,7 @@ package discovery
 import (
 	"context"
 	"encoding/hex"
+	"log/slog"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -29,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/faketopo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -730,6 +732,10 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 		// wantNoScan marks a case that must exit the gate before reading any
 		// shard record.
 		wantNoScan bool
+		// wantLog, if set, is the msg of an INFO record that must be logged
+		// with wantLogAttrs.
+		wantLog      string
+		wantLogAttrs map[string]any
 	}{
 		{
 			// Also the shape of a --no-routing-rules workflow between Create
@@ -810,6 +816,8 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			deniedShards: shards,
 			wantType:     MoveTablesRegular,
 			wantState:    MoveTablesSwitched,
+			wantLog:      "getMoveTablesStatus: writes have been switched for table",
+			wantLogAttrs: map[string]any{"keyspace": "source", "table": "t1", "routed_to": "target.t1"},
 		},
 		{
 			// The switched rule set again, with a primary keyspace routing rule
@@ -911,6 +919,8 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 			deniedShards: shards,
 			wantType:     MoveTablesRegular,
 			wantState:    MoveTablesSwitched,
+			wantLog:      "getMoveTablesStatus: MoveTables writes switched by a keyspace routing rule",
+			wantLogAttrs: map[string]any{"keyspace": "source", "routed_to": "target"},
 		},
 		{
 			// What setupInitialRoutingRules actually writes at Create: a self
@@ -1067,11 +1077,19 @@ func TestGetMoveTablesStatusScopedToKeyspace(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setDeniedTables(t, tc.deniedShards...)
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			state, err := kss.getMoveTablesStatus(tc.vs)
 			require.NoError(t, err)
 			require.NotNil(t, state)
 			require.Equal(t, tc.wantType, state.Typ, "unexpected MoveTables type %s", state)
 			require.Equal(t, tc.wantState, state.State, "unexpected MoveTables state %s", state)
+			if tc.wantLog != "" {
+				record := logs.Record(t, tc.wantLog)
+				assert.Equal(t, "INFO", record["level"])
+				for key, want := range tc.wantLogAttrs {
+					assert.Equal(t, want, record[key], key)
+				}
+			}
 
 			if tc.wantNoScan {
 				// Reading a shard record here fails, so this only succeeds if
