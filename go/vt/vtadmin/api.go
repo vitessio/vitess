@@ -328,7 +328,9 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) 
 		env:     api.env,
 	}
 
-	if c != nil {
+	// c may already be the cluster registered under id, which must not be
+	// closed or replaced.
+	if c != nil && c != api.clusterMap[id] {
 		existingCluster, exists := api.clusterMap[id]
 		shouldAddCluster := !exists
 		if exists {

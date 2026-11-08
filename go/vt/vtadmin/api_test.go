@@ -6081,6 +6081,24 @@ func TestWithClusterReplacesChangedCluster(t *testing.T) {
 	assert.Equal(t, []string{"c1", "c2"}, clusterIDs(t, api))
 }
 
+func TestWithClusterSameClusterTwice(t *testing.T) {
+	t.Parallel()
+
+	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
+	t.Cleanup(func() { _ = api.Close() })
+
+	c := newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999")
+	for range 2 {
+		_, err := api.WithCluster(c, "c1")
+		require.NoError(t, err)
+	}
+
+	type debuggable interface{ Debug() map[string]any }
+	assert.Equal(t, []string{"c1"}, clusterIDs(t, api))
+	assert.Equal(t, true, c.DB.(debuggable).Debug()["is_connected"], "the registered cluster's vtgate proxy must stay open")
+	assert.Equal(t, true, c.Vtctld.(debuggable).Debug()["is_connected"], "the registered cluster's vtctld proxy must stay open")
+}
+
 func TestEjectDynamicCluster(t *testing.T) {
 	t.Parallel()
 
