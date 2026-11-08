@@ -547,19 +547,13 @@ func TestSQLSelectLimit(t *testing.T) {
 		assert.Equal(t, 2, len(qr.Rows))
 
 		qr = utils.Exec(t, conn, "select /*vt+ PLANNER=gen4 */ uid, msg from t7_xxhash union all select uid, msg from t7_xxhash limit 3")
-<<<<<<< HEAD
 		assert.Equal(t, 3, len(qr.Rows))
-||||||| parent of 7251a5fd45 (Apply sql_select_limit to the UNION statement, not to each UNION branch #21234 (#21235))
-		assert.Len(t, qr.Rows, 3)
-=======
-		assert.Len(t, qr.Rows, 3)
 
 		// Don't LIMIT the branches of a UNION: the limit applies to the deduplicated result.
 		// Each branch yields (a, a, b) in uid order; limiting each branch to 2 rows first
 		// would collapse the UNION DISTINCT result to a single row.
 		qr = utils.Exec(t, conn, "(select msg from t7_xxhash where uid in ('1', '4', '6') order by uid) union (select msg from t7_xxhash where uid in ('1', '4', '6') order by uid)")
 		assert.Len(t, qr.Rows, 2)
->>>>>>> 7251a5fd45 (Apply sql_select_limit to the UNION statement, not to each UNION branch #21234 (#21235))
 	}
 }
 
