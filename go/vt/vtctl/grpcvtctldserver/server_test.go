@@ -1170,6 +1170,98 @@ func TestBackupTabletForwardsOutcomeThenError(t *testing.T) {
 	assert.Equal(t, "b1", stream.resps[1].BackupName)
 }
 
+func TestFakeBackupStreamDelayedReceiver(t *testing.T) {
+	for _, testCase := range []struct {
+		name           string
+		errorAfter     time.Duration
+		eventInterval  time.Duration
+		wantEvents     int
+		wantOutcome    bool
+		cancelProducer bool
+	}{
+		{name: "EOF after buffered outcome", eventInterval: time.Microsecond, wantEvents: 16, wantOutcome: true},
+		{name: "error after buffered outcome", errorAfter: time.Second, eventInterval: time.Microsecond, wantEvents: 16, wantOutcome: true},
+		{name: "error before outcome", errorAfter: time.Millisecond, eventInterval: time.Hour, wantEvents: 1},
+		{name: "cancellation stops producer", errorAfter: time.Hour, eventInterval: time.Hour, cancelProducer: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(cancel)
+			streamCtx, cancelStream := context.WithCancel(ctx)
+			t.Cleanup(cancelStream)
+			tablet := &topodatapb.Tablet{
+				Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+				Type:  topodatapb.TabletType_REPLICA,
+			}
+			events := make([]*logutilpb.Event, 16)
+			for index := range events {
+				events[index] = &logutilpb.Event{Value: fmt.Sprintf("progress %d", index)}
+			}
+			client := &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+					Manifest      string
+					Status        tabletmanagerdatapb.BackupResponse_Status
+				}{
+					"zone1-0000000100": {
+						Events:        events,
+						EventInterval: testCase.eventInterval,
+						EventJitter:   time.Nanosecond,
+						ErrorAfter:    testCase.errorAfter,
+						Manifest:      `{"BackupName":"b1"}`,
+						Status:        tabletmanagerdatapb.BackupResponse_USABLE,
+					},
+				},
+			}
+			stream, err := client.Backup(streamCtx, tablet, &tabletmanagerdatapb.BackupRequest{IncludeOutcome: true})
+			require.NoError(t, err)
+			completion, ok := stream.(interface {
+				Closed() <-chan struct{}
+				CloseErr() error
+			})
+			require.True(t, ok)
+			if testCase.cancelProducer {
+				cancelStream()
+			}
+			select {
+			case <-completion.Closed():
+			case <-ctx.Done():
+				t.Fatal("fake backup producer did not finish")
+			}
+			if testCase.cancelProducer {
+				require.ErrorIs(t, completion.CloseErr(), context.Canceled)
+				return
+			}
+
+			for _, event := range events[:testCase.wantEvents] {
+				response, err := stream.Recv()
+				require.NoError(t, err, "buffered log events must precede completion")
+				require.NotNil(t, response.Event)
+				assert.Equal(t, event.Value, response.Event.Value)
+			}
+			if testCase.wantOutcome {
+				outcome, err := stream.Recv()
+				require.NoError(t, err, "the buffered outcome must precede completion")
+				assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, outcome.Status)
+				assert.Equal(t, "zone1-0000000100", outcome.BackupName)
+				assert.Equal(t, `{"BackupName":"b1"}`, outcome.Manifest)
+			}
+			for range 2 {
+				response, err := stream.Recv()
+				assert.Nil(t, response)
+				if testCase.errorAfter != 0 {
+					require.ErrorContains(t, err, "error triggered after")
+				} else {
+					require.ErrorIs(t, err, io.EOF)
+				}
+			}
+		})
+	}
+}
+
 // outcomeThenErrorTMC is a tablet manager client whose Backup stream sends a log
 // event and a stored backup's terminal message, and then fails, in that order.
 type outcomeThenErrorTMC struct {

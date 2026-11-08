@@ -426,8 +426,6 @@ func (stream *backupStreamAdapter) Recv() (*tabletmanagerdatapb.BackupResponse, 
 	select {
 	case <-stream.Context().Done():
 		return nil, stream.Context().Err()
-	case err := <-stream.ErrCh:
-		return nil, err
 	case msg := <-stream.ch:
 		return msg, nil
 	case <-stream.Closed():
@@ -490,51 +488,53 @@ func (fake *TabletManagerClient) Backup(ctx context.Context, tablet *topodatapb.
 			log.Warn(fmt.Sprintf("testutil.TabletManagerClient.Backup faked with no event jitter for %s, defaulting to %s", key, testdata.EventJitter))
 		}
 
-		errCtx, errCancel := context.WithCancel(context.Background())
-		switch testdata.ErrorAfter {
-		case 0:
-			// no error to send, cancel the error context immediately
-			errCancel()
-		default:
-			go func() {
-				timer := time.NewTimer(testdata.ErrorAfter)
-				defer func() { // Stop the timer and drain the channel.
-					if !timer.Stop() {
-						<-timer.C
-					}
-				}()
-				defer errCancel()
-
-				<-timer.C
-				stream.ErrCh <- fmt.Errorf("error triggered after %s", testdata.ErrorAfter)
-			}()
+		var errorDeadline <-chan time.Time
+		if testdata.ErrorAfter != 0 {
+			errorTimer := time.NewTimer(testdata.ErrorAfter)
+			defer errorTimer.Stop()
+			errorDeadline = errorTimer.C
 		}
 
 		ticker := timer.NewRandTicker(testdata.EventInterval, testdata.EventJitter)
 
 		defer ticker.Stop()
-		defer stream.CloseWithError(nil)
+		var streamErr error
+		defer func() { stream.CloseWithError(streamErr) }()
 
 		for _, event := range testdata.Events {
-			stream.ch <- &tabletmanagerdatapb.BackupResponse{Event: event}
-			<-ticker.C
-		}
-
-		if req.IncludeOutcome {
-			stream.ch <- &tabletmanagerdatapb.BackupResponse{
-				Manifest:   testdata.Manifest,
-				Status:     testdata.Status,
-				BackupName: key,
+			if streamErr = stream.Send(&tabletmanagerdatapb.BackupResponse{Event: event}); streamErr != nil {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				streamErr = ctx.Err()
+				return
+			case <-errorDeadline:
+				streamErr = fmt.Errorf("error triggered after %s", testdata.ErrorAfter)
+				return
+			case <-ticker.C:
 			}
 		}
 
-		// Wait for the error goroutine to finish. Note that if ErrorAfter
-		// is zero, we never start the goroutine and cancel this context
-		// immediately.
-		//
-		// The reason for this select is so that the error goroutine does
-		// not attempt to send to stream.errCh after the call to CloseSend().
-		<-errCtx.Done()
+		if req.IncludeOutcome {
+			streamErr = stream.Send(&tabletmanagerdatapb.BackupResponse{
+				Manifest:   testdata.Manifest,
+				Status:     testdata.Status,
+				BackupName: key,
+			})
+			if streamErr != nil {
+				return
+			}
+		}
+
+		if errorDeadline != nil {
+			select {
+			case <-ctx.Done():
+				streamErr = ctx.Err()
+			case <-errorDeadline:
+				streamErr = fmt.Errorf("error triggered after %s", testdata.ErrorAfter)
+			}
+		}
 	}()
 
 	return stream, nil
