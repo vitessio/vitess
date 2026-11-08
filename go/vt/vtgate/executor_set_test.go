@@ -419,12 +419,12 @@ func TestExecutorSetOp(t *testing.T) {
 		// a character set Vitess cannot parse safely is refused, not ignored
 		in:     "set character_set_client = 'sjis'",
 		result: returnNoResult("character_set_client", "varchar"),
-		err:    "unsupported connection character set 'sjis' for character_set_client: use utf8mb4",
+		err:    "unsupported connection character set 'sjis' for character_set_client: use utf8mb4, utf8mb3 or latin1",
 	}, {
 		// MySQL also accepts a collation ID: 28 is gbk_chinese_ci
 		in:     "set character_set_client = 28",
 		result: returnNoResult("character_set_client", "varchar"),
-		err:    "unsupported connection character set 28 for character_set_client: use utf8mb4",
+		err:    "unsupported connection character set 28 for character_set_client: use utf8mb4, utf8mb3 or latin1",
 	}, {
 		in:     "set collation_connection = 255",
 		result: returnNoResult("collation_connection", "varchar"),

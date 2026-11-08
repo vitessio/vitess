@@ -189,7 +189,9 @@ func TestSetClientCharset(t *testing.T) {
 		{"set character set default", "utf8mb4"},
 		{"set character_set_client = default", "utf8mb4"},
 		{"set character_set_client = utf8mb3", "utf8mb3"},
-		{"set character_set_client = 'koi8r'", "koi8r"},
+		{"set names utf8mb3", "utf8mb3"},
+		// A value that is only known when the SET runs.
+		{"set character_set_client = concat('lat', 'in1')", "latin1"},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.set, func(t *testing.T) {
@@ -207,11 +209,28 @@ func TestSetClientCharset(t *testing.T) {
 	}
 }
 
-// TestSetClientCharsetRejected tests that a character set that VTGate rejects
-// leaves the client's character set as it was.
+// TestSetClientCharsetRejected tests that SET NAMES, SET CHARACTER SET and SET
+// character_set_client refuse a character set that VTGate has no rule for
+// reading names in, as VTGate refuses a handshake in one, and that the client's
+// character set stays as it was.
 func TestSetClientCharsetRejected(t *testing.T) {
 	executor, _, _, _, ctx := createExecutorEnv(t)
-	for _, set := range []string{"set names koi8r", "set character_set_client = 'sjis'", "set character_set_client = 28", "set character_set_client = 'nope'"} {
+	for _, set := range []string{
+		"set names koi8r",
+		"set character set cp1251",
+		"set names binary",
+		// koi8r is safe to tokenize, but VTGate has no rule for its names,
+		// as for a handshake in it.
+		"set character_set_client = 'koi8r'",
+		"set character_set_client = koi8r",
+		"set character_set_client = 7", // koi8r_general_ci
+		"set character_set_client = binary",
+		// A value that is only known when the SET runs.
+		"set character_set_client = concat('koi', '8r')",
+		"set character_set_client = 'sjis'",
+		"set character_set_client = 28",
+		"set character_set_client = 'nope'",
+	} {
 		session := sessionWithCharset("latin1")
 		_, err := executorExecSession(ctx, executor, session, set, nil)
 		require.Error(t, err, set)

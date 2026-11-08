@@ -92,6 +92,9 @@ func (pc *sysvarPlanCache) init(env *vtenv.Environment) {
 		for _, name := range []string{sysvars.CharacterSetClient.Name, "character_set_connection", "character_set_results", "collation_connection"} {
 			pc.funcs[name] = validateConnectionCharsetPlan(pc.funcs[name])
 		}
+		// VTGate reads the client's names in character_set_client, so it must
+		// also have a rule for that character set, as for the handshake's.
+		pc.funcs[sysvars.CharacterSetClient.Name] = validateClientCharsetPlan(pc.funcs[sysvars.CharacterSetClient.Name])
 	})
 }
 
