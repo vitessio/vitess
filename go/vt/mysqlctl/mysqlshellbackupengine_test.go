@@ -486,7 +486,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		uploadErr error
 	}{
 		{name: "asynchronous MANIFEST upload succeeds"},
-		{name: "asynchronous MANIFEST upload fails", uploadErr: errors.New("MANIFEST upload failed")},
+		{name: "asynchronous MANIFEST upload fails", uploadErr: errors.New("remote upload rejected")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
@@ -498,6 +498,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 			result, err := be.ExecuteBackup(t.Context(), params, handle)
 			if tc.uploadErr != nil {
 				require.ErrorContains(t, err, tc.uploadErr.Error())
+				require.ErrorContains(t, err, "cannot upload MANIFEST")
 				assert.Equal(t, BackupUnusable, result)
 			} else {
 				require.NoError(t, err)

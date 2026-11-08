@@ -780,11 +780,15 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 	defer s.tm.HandleRPCPanic(ctx, "RestoreFromBackup", request, nil, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 
+	// Restore workers can log concurrently; gRPC permits only one Send at a time.
+	var sendMu sync.Mutex
 	// create a logger, send the result back to the caller
 	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		sendMu.Lock()
+		defer sendMu.Unlock()
 		// If the client disconnects, we will just fail
 		// to send the log events, but won't interrupt
-		// the backup.
+		// the restore.
 		stream.Send(&tabletmanagerdatapb.RestoreFromBackupResponse{
 			Event: e,
 		})

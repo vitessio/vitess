@@ -56,8 +56,8 @@ const (
 	BackupUnusable BackupResult = iota
 	// BackupEmpty means an incremental backup found nothing new to back up.
 	BackupEmpty
-	// BackupUsable means the engine wrote and closed the whole backup,
-	// including its MANIFEST.
+	// BackupUsable means the engine wrote, closed and finished uploading the
+	// whole backup, including its MANIFEST, without any upload errors.
 	BackupUsable
 )
 
