@@ -22,6 +22,7 @@
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [DDL that Vitess cannot parse in full is rejected](#partial-ddl-removed)
         - [Words that MySQL reserves are rejected as unquoted names](#mysql-reserved-words)
+        - [Unquoted names are read in the client's character set](#client-charset-names)
         - [`COUNT (a)` with a space calls a stored function, as in MySQL](#mysql-function-names)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
@@ -266,7 +267,29 @@ The parser used to accept many words that MySQL 8.4 reserves as unquoted names, 
 
 **Migration**: quote such names with back quotes, as in `` CREATE TABLE t (`keys` INT) ``.
 
-One difference remains: the parser takes every byte from 0x80 on as part of an unquoted name, while MySQL decides by the connection's character set. In latin1, for example, MySQL rejects a name that starts with byte 0x84, which is not a letter there. Vitess accepts such a name and quotes it byte for byte in the statement it sends MySQL, so MySQL creates or uses the name rather than rejecting the statement.
+Which bytes can be part of an unquoted name depends on the client's character set, in VTGate as in MySQL. See [Unquoted names are read in the client's character set](#client-charset-names).
+
+#### <a id="client-charset-names"/>Unquoted names are read in the client's character set</a>
+
+MySQL reads a query in the client's character set (`character_set_client`), and that character set decides which bytes can be part of an unquoted name and which bytes are spaces. The parser used to take every byte from 0x80 on as part of a name, whatever the character set. VTGate now reads the unquoted names in a client's queries in the client's character set, by one of two rules:
+
+- **UTF-8**, for `utf8mb4` and `utf8mb3`: a byte from 0x80 to 0xFE is part of a name, but a name cannot start with a multibyte lead byte (0xC2 to 0xF7) that does not start a valid UTF-8 character. `CREATE TABLE <0xE9>a (a int)` is a syntax error, because 0xE9 starts a character of three bytes and `a` does not continue it, while `CREATE TABLE <0x84>a (a int)`, `éa` and a name that starts with a no-break space are accepted, as in MySQL. Only the first byte of a name is checked, as in MySQL. The byte 0xFF, which no UTF-8 character holds, is a syntax error.
+- **latin1**: a byte from 0x80 on is part of a name only if MySQL's latin1 table makes it a letter: `À` to `Ö`, `Ø` to `ö`, `ø` to `ÿ`, and `Š`, `Œ`, `Ž`, `š`, `œ`, `ž`, `Ÿ` and `ƒ`. The no-break space, 0xA0, is a space. Every other byte, such as `€` (0x80), `„` (0x84) and `×` (0xD7), is a syntax error, as in MySQL.
+
+Both rules were checked byte by byte against MySQL 8.4.13 with `CREATE TABLE <byte>a (a int)` for every byte from 0x80 to 0xFF, under `SET NAMES utf8mb4` and `SET NAMES latin1`: VTGate rejects as a syntax error exactly the bytes that MySQL rejects as one.
+
+`character_set_client` is now a Vitess-aware system variable. VTGate keeps the client's character set in the session's system variables under that name, and never sends it to MySQL: setting it reserves no connection and adds no `SET_VAR` hint, and `SET character_set_client` is no longer checked against a tablet. The character set of the client's handshake sets it; a character set that VTGate does not accept for a connection, and a gRPC client, which has no handshake, get `utf8mb4`. `SET character_set_client`, `SET NAMES` and `SET CHARACTER SET` change it, for the values that VTGate already accepts, and `SET character_set_client = DEFAULT` sets `utf8mb4`. `SELECT @@character_set_client` and `SHOW VARIABLES` report the session's value, as MySQL does, rather than the value of VTGate's connection to MySQL. `character_set_connection`, `character_set_results` and `collation_connection` are still checked and ignored.
+
+A client whose character set has no rule, such as `cp1251` or `koi8r`, gets the UTF-8 rule. The query plan cache keeps a plan for each rule. vttablet, vtctld, schemadiff, vtexplain, Online DDL and VReplication read names by the UTF-8 rule, as Vitess writes the statements they read.
+
+**Impact**: a statement whose unquoted name breaks the client's rule now fails with a syntax error in VTGate, as it does in MySQL. This includes a name that starts with an invalid UTF-8 lead byte in a session that uses the UTF-8 rule, which can happen to a client that uses a character set without a rule, such as `koi8r`, and a name with a byte that is not a latin1 letter in a latin1 session.
+
+**Migration**: quote such names with back quotes.
+
+Two limitations remain:
+
+- VTGate does not pass the client's character set to the tablets: a latin1 client's bytes reach MySQL over the tablets' `utf8mb4` connections, so MySQL reads a latin1 name as UTF-8. This was so before, and this change does not change it.
+- For a `utf8mb3` client, MySQL also rejects a name that is not well-formed `utf8mb3`, such as one with a stray byte from 0x80 on or a character of four bytes, with error 1300 (`Invalid utf8mb3 character string`). VTGate accepts such a name, as MySQL does for a `utf8mb4` client.
 
 #### <a id="mysql-function-names"/>`COUNT (a)` with a space calls a stored function, as in MySQL</a>
 
