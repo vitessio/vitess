@@ -553,5 +553,15 @@
     "comment": "a DELETE with EXISTS beside another subquery that can't be merged in one predicate is refused",
     "query": "delete from user where id = 5 or exists (select 1 from user_extra ue where ue.col = 1) or exists (select 1 from music m where m.col = 2)",
     "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "EXISTS beside an IN subquery that can't be merged in one predicate is refused",
+    "query": "select id from user where exists (select 1 from user_extra ue where ue.col = 1) or col in (select col from music)",
+    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "an UPDATE with EXISTS beside an IN subquery that can't be merged in one predicate is refused",
+    "query": "update user set name = 'x' where exists (select 1 from user_extra ue where ue.col = 1) or col in (select col from music)",
+    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
   }
 ]
