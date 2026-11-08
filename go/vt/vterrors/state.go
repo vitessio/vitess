@@ -129,6 +129,10 @@ const (
 
 	UnsupportedSQLMode
 
+	// InvalidCharacterString is MySQL's ER_INVALID_CHARACTER_STRING, for a
+	// name that is not well-formed in the client's character set.
+	InvalidCharacterString
+
 	// No state should be added below NumOfStates
 	NumOfStates
 )

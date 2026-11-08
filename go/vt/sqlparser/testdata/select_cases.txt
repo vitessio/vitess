@@ -13549,8 +13549,8 @@ END
 INPUT
 select * from имя_таблицы_в_кодировке_утф8_длиной_больше_чем_48;
 END
-ERROR
-syntax error at position 16 near 'Ð'
+OUTPUT
+select * from `имя_таблицы_в_кодировке_утф8_длиной_больше_чем_48`
 END
 INPUT
 select i, count(*) from bug22555 group by i;

@@ -383,33 +383,54 @@ func TestSplitComments(t *testing.T) {
 // against the tokenizer for every byte value.
 //
 // SplitMarginComments trims spaces off the query, and then the parser reads only
-// the part that stays in the query. The two must agree about which bytes are
-// spaces. If they do not agree, the split can put SQL where nothing parses it.
+// the part that stays in the query. The split must never take a byte for a space
+// that the parser reads as part of the statement, or the split can put SQL where
+// nothing parses it. In UTF-8 the two agree on every byte. In latin1 the parser
+// also reads the no-break space as a space, and the split does not: it leaves
+// the byte in the query, where the parser skips it, so the split stays safe.
 //
-// The tokenizer cannot call IsSQLSpace. It reads each byte as a uint16 value, so
-// that eofChar, which is 0x100, stays different from all 256 byte values. A byte
-// with the value 0 is legal in a query, so the tokenizer needs a value outside
-// the range of a byte to mark the end of the text. This test fails if somebody
-// changes one of the two definitions and not the other.
+// The tokenizer reads its spaces from a table that is built from the same set
+// as IsSQLSpace, and this test fails if somebody changes one of the two and not
+// the other.
 func TestMarginCommentRulesMatchTokenizer(t *testing.T) {
-	parser := NewTestParser()
+	for _, cs := range []ClientCharset{ClientCharsetUTF8, ClientCharsetLatin1} {
+		parser, err := NewTestParser().WithCharset(cs)
+		require.NoError(t, err)
+		for b := range 256 {
+			c := byte(b)
+			tokenizerSpace := IsSQLSpace(c) || cs == ClientCharsetLatin1 && c == latin1Space
 
-	for b := range 256 {
-		c := byte(b)
+			// skipBlank must step over the byte only if it is a space in the
+			// character set.
+			// string([]byte{c}) rather than string(c), which would encode the
+			// byte from 0x80 up as a UTF-8 character of two bytes.
+			blankTkn := parser.NewStringTokenizer(string([]byte{c}) + "x")
+			blankTkn.skipBlank()
+			assert.Equal(t, tokenizerSpace, blankTkn.Pos == 1,
+				"%s: skipBlank disagrees about byte 0x%02x", cs, b)
 
-		// skipBlank must step over the byte only if IsSQLSpace accepts it.
-		blankTkn := parser.NewStringTokenizer(string(c) + "x")
-		blankTkn.skipBlank()
-		assert.Equal(t, IsSQLSpace(c), blankTkn.Pos == 1,
-			"skipBlank and IsSQLSpace disagree about byte 0x%02x", b)
-
-		// A '--' opens a comment only if a space character comes after it.
-		lineTkn := parser.NewStringTokenizer("--" + string(c))
-		lineTkn.AllowComments = true
-		typ, _ := lineTkn.Scan()
-		assert.Equal(t, IsSQLSpace(c), typ == COMMENT,
-			"the '--' rule and IsSQLSpace disagree about byte 0x%02x", b)
+			// A '--' opens a comment only if a space character comes after it.
+			lineTkn := parser.NewStringTokenizer("--" + string([]byte{c}))
+			lineTkn.AllowComments = true
+			typ, _ := lineTkn.Scan()
+			assert.Equal(t, tokenizerSpace, typ == COMMENT,
+				"%s: the '--' rule disagrees about byte 0x%02x", cs, b)
+		}
 	}
+}
+
+// TestSplitMarginCommentsLatin1Space tests that a no-break space around a
+// latin1 query stays in the query, where the latin1 parser reads it as a
+// space, and that the comments around it are still split off.
+func TestSplitMarginCommentsLatin1Space(t *testing.T) {
+	parser, err := NewTestParser().WithCharset(ClientCharsetLatin1)
+	require.NoError(t, err)
+	query, comments := parser.SplitMarginComments("/* a */ \xA0select 1\xA0 /* b */")
+	assert.Equal(t, "\xA0select 1\xA0", query)
+	assert.Equal(t, MarginComments{Leading: "/* a */ ", Trailing: " /* b */"}, comments)
+	stmt, err := parser.Parse(query)
+	require.NoError(t, err)
+	assert.Equal(t, "select 1 from dual", String(stmt))
 }
 
 // TestSQLSpaceCharsMatchMySQL checks that the parser accepts the characters MySQL

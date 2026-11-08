@@ -1172,11 +1172,15 @@ func formatID(buf *TrackedBuffer, original string, at AtCount) {
 	}
 }
 
+// writeEscapedString writes original as a quoted identifier. It copies the
+// bytes of original as they are, because the tokenizer reads bytes, and a name
+// in the client's character set, such as latin1, is not always valid UTF-8.
+// Ranging over the string would write such a byte as U+FFFD instead.
 func writeEscapedString(buf *TrackedBuffer, original string) {
 	buf.WriteByte('`')
-	for _, c := range original {
-		buf.WriteRune(c)
-		if c == '`' {
+	for i := range len(original) {
+		buf.WriteByte(original[i])
+		if original[i] == '`' {
 			buf.WriteByte('`')
 		}
 	}
