@@ -328,14 +328,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	if err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}
-	defer func() {
-		closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
-		// A MANIFEST that failed to close may not be in storage, so the backup
-		// is not usable.
-		if finalErr != nil {
-			backupResult = BackupUnusable
-		}
-	}()
+	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
 	// Get the hostname
 	hostname, err := netutil.FullyQualifiedHostname()

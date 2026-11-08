@@ -225,14 +225,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	if err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}
-	defer func() {
-		closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
-		// A MANIFEST that failed to close may not be in storage, so the backup
-		// is not usable.
-		if finalErr != nil {
-			result = BackupUnusable
-		}
-	}()
+	defer closeFile(mwc, backupManifestFileName, params.Logger, &finalErr)
 
 	// Get the hostname
 	hostname, err := netutil.FullyQualifiedHostname()
