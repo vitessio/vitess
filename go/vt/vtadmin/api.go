@@ -581,7 +581,9 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	// Maintain order of clusters when removing dynamic cluster
 	clusterIndex := slices.IndexFunc(api.clusters, func(c *cluster.Cluster) bool { return c.ID == key })
 	if clusterIndex < 0 {
-		log.Error("Cannot remove cluster from api.clusters. Cluster not found.", slog.String("cluster_id", key))
+		log.Error("Cannot remove cluster from api.clusters. Cluster not found.",
+			slog.String("cluster_id", key),
+			slog.Int("cluster_count", len(api.clusters)))
 		return
 	}
 

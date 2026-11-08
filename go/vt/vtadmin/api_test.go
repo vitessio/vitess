@@ -6137,6 +6137,7 @@ func TestDynamicClusterLookupLogs(t *testing.T) {
 	record = logs.Record(t, "Cannot remove cluster from api.clusters. Cluster not found.")
 	assert.Equal(t, "ERROR", record["level"])
 	assert.Equal(t, "unknown", record["cluster_id"])
+	assert.Equal(t, float64(1), record["cluster_count"])
 }
 
 func init() {
