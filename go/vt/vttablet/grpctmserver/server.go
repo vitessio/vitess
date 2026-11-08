@@ -20,6 +20,7 @@ import (
 	"context"
 	"log/slog"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -688,14 +689,8 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	ctx = callinfo.GRPCCallInfo(ctx)
 
 	// create a logger, send the result back to the caller
-	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
-		// If the client disconnects, we will just fail
-		// to send the log events, but won't interrupt
-		// the backup.
-		stream.Send(&tabletmanagerdatapb.BackupResponse{
-			Event: e,
-		})
-	})
+	sender := &backupSender{stream: stream}
+	logger := logutil.NewCallbackLogger(sender.event)
 
 	outcome, err := s.tm.Backup(ctx, logger, request)
 	// A backup that was stored is reported even if a later step failed, such as
@@ -727,7 +722,7 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 			resp.BackupName, len(resp.Manifest), maxSize)
 		resp.Manifest = ""
 	}
-	if sendErr := stream.Send(resp); sendErr != nil {
+	if sendErr := sender.last(resp); sendErr != nil {
 		// gRPC has already sent this error to the caller as the RPC's status, so
 		// returning it would change nothing. The likely cause is a client that
 		// disconnected during a long backup.
@@ -737,6 +732,34 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 		)
 	}
 	return err
+}
+
+// backupSender sends the messages of one Backup stream. The engine's progress
+// goroutines can still log after tm.Backup returns, and gRPC does not allow
+// concurrent Sends on a stream, so log events and the terminal message share a
+// lock, and events that come after the terminal message are dropped.
+type backupSender struct {
+	stream tabletmanagerservicepb.TabletManager_BackupServer
+	mu     sync.Mutex
+	done   bool
+}
+
+// event sends a log event. If the client disconnects, we will just fail to send
+// the log events, but won't interrupt the backup.
+func (b *backupSender) event(e *logutilpb.Event) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !b.done {
+		b.stream.Send(&tabletmanagerdatapb.BackupResponse{Event: e})
+	}
+}
+
+// last sends the terminal message. No event is sent after it.
+func (b *backupSender) last(resp *tabletmanagerdatapb.BackupResponse) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.done = true
+	return b.stream.Send(resp)
 }
 
 // backupResultToStatus maps the mysqlctl backup classification to the proto
