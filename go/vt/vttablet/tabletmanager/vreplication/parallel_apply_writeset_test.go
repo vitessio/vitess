@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/capabilities"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1470,6 +1471,34 @@ func TestBuildTxnWritesetPadSpaceTextPrimaryKeyUsesTrailingSpaceEquality(t *test
 			}
 		})
 	}
+
+	// collationUsesPadSpace decides whether trailing spaces are significant,
+	// both here and in fkColumnsHashAlike, so a wrong entry lets conflicting
+	// transactions apply at the same time. Check it against MySQL's own pad
+	// attribute for every collation that both know.
+	t.Run("pad attribute matches MySQL", func(t *testing.T) {
+		if env.DBMajorVersion < 8 {
+			t.Skip("MySQL 5.7's information_schema.COLLATIONS has no PAD_ATTRIBUTE column")
+		}
+		qr, err := env.Mysqld.FetchSuperQuery(t.Context(),
+			"select id, collation_name, pad_attribute from information_schema.collations")
+		require.NoError(t, err)
+		checked := 0
+		for _, row := range qr.Rows {
+			id, err := row[0].ToCastInt64()
+			require.NoError(t, err)
+			// writesetDigestAddFieldValue fails closed on a collation that
+			// Vitess does not know, so collationUsesPadSpace never sees it.
+			collation := colldata.Lookup(collations.ID(id))
+			if collation == nil {
+				continue
+			}
+			checked++
+			assert.Equal(t, row[2].ToString() == "PAD SPACE", collationUsesPadSpace(collation),
+				"collation %s is %s in MySQL", row[1].ToString(), row[2].ToString())
+		}
+		assert.Positive(t, checked)
+	})
 }
 
 func TestBuildTxnWritesetWithStringFKRefsUsesCollationEqualityAcrossCompatibleTypes(t *testing.T) {

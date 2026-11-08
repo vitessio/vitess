@@ -199,10 +199,12 @@ func canonicalFloatZero(v sqltypes.Value) sqltypes.Value {
 }
 
 // collationUsesPadSpace reports whether the given collation compares strings
-// as if right-padded with spaces.
+// as if right-padded with spaces, as information_schema.COLLATIONS's
+// PAD_ATTRIBUTE does.
 func collationUsesPadSpace(collation colldata.Collation) bool {
 	switch collation.(type) {
-	case *colldata.Collation_utf8mb4_uca_0900, *colldata.Collation_utf8mb4_0900_bin:
+	case *colldata.Collation_utf8mb4_uca_0900, *colldata.Collation_utf8mb4_0900_bin,
+		*colldata.Collation_binary:
 		return false
 	default:
 		return true
