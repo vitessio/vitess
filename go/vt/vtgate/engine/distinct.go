@@ -68,6 +68,24 @@ func (pt *probeTable) exists(inputRow sqltypes.Row) (sqltypes.Row, error) {
 	return inputRow, nil
 }
 
+// filter returns the rows not seen before. A nil probeTable keeps every row.
+func (pt *probeTable) filter(rows []sqltypes.Row) ([]sqltypes.Row, error) {
+	if pt == nil {
+		return rows, nil
+	}
+	out := make([]sqltypes.Row, 0, len(rows))
+	for _, row := range rows {
+		newRow, err := pt.exists(row)
+		if err != nil {
+			return nil, err
+		}
+		if newRow != nil {
+			out = append(out, newRow)
+		}
+	}
+	return out, nil
+}
+
 func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (vthash.Hash, error) {
 	hasher := vthash.New()
 	for i, checkCol := range pt.checkCols {
@@ -176,11 +194,7 @@ func (d *Distinct) description() PrimitiveDescription {
 	other := map[string]any{}
 
 	if len(d.CheckCols) > 0 {
-		colls := make([]string, 0, len(d.CheckCols))
-		for _, checkCol := range d.CheckCols {
-			colls = append(colls, checkCol.String())
-		}
-		other["Collations"] = colls
+		other["Collations"] = checkColStrings(d.CheckCols)
 	}
 
 	if d.Truncate > 0 {
@@ -190,6 +204,14 @@ func (d *Distinct) description() PrimitiveDescription {
 		Other:        other,
 		OperatorType: "Distinct",
 	}
+}
+
+func checkColStrings(checkCols []CheckCol) []string {
+	colls := make([]string, 0, len(checkCols))
+	for _, checkCol := range checkCols {
+		colls = append(colls, checkCol.String())
+	}
+	return colls
 }
 
 // SwitchToWeightString returns a new CheckCol that works on the weight string column instead

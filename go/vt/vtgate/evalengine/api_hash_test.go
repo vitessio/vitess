@@ -347,6 +347,99 @@ func TestHashCodes128(t *testing.T) {
 	}
 }
 
+// TestHashCodes128UnknownType checks that text and binary values of an unknown type
+// aren't hashed as numbers, which would make them all equal.
+func TestHashCodes128UnknownType(t *testing.T) {
+	hash := func(value sqltypes.Value, collation collations.ID) (vthash.Hash, error) {
+		hasher := vthash.New()
+		err := NullsafeHashcode128(&hasher, value, collation, sqltypes.Unknown, 0, nil)
+		return hasher.Sum128(), err
+	}
+
+	// with a collation, the bytes are compared in it
+	alice, err := hash(sqltypes.NewVarChar("alice"), collations.CollationUtf8mb4ID)
+	require.NoError(t, err)
+	bob, err := hash(sqltypes.NewVarChar("bob"), collations.CollationUtf8mb4ID)
+	require.NoError(t, err)
+	assert.NotEqual(t, alice, bob)
+	upper, err := hash(sqltypes.NewVarChar("ALICE"), collations.CollationUtf8mb4ID)
+	require.NoError(t, err)
+	assert.Equal(t, alice, upper)
+
+	// without one, the caller has to use a weight string, for every type that isn't a number
+	for _, typ := range []sqltypes.Type{
+		sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Enum, sqltypes.Set, sqltypes.TypeJSON,
+		sqltypes.Bit, sqltypes.Geometry, sqltypes.Vector, sqltypes.Date, sqltypes.Datetime,
+	} {
+		_, err := hash(sqltypes.MakeTrusted(typ, []byte("X")), collations.Unknown)
+		require.ErrorIs(t, err, UnsupportedCollationHashError, typ.String())
+
+		// and with a collation, distinct values stay distinct
+		x, err := hash(sqltypes.MakeTrusted(typ, []byte("X")), collations.CollationBinaryID)
+		require.NoError(t, err)
+		y, err := hash(sqltypes.MakeTrusted(typ, []byte("Y")), collations.CollationBinaryID)
+		require.NoError(t, err)
+		assert.NotEqual(t, x, y, typ.String())
+	}
+
+	// decimals above 2^53 aren't rounded together either
+	dec, err := hash(sqltypes.NewDecimal("9007199254740992.00"), collations.CollationBinaryID)
+	require.NoError(t, err)
+	decNext, err := hash(sqltypes.NewDecimal("9007199254740993.00"), collations.CollationBinaryID)
+	require.NoError(t, err)
+	assert.NotEqual(t, dec, decNext)
+
+	// and numbers of different types with the same value are equal
+	intTwo, err := hash(sqltypes.NewInt64(2), collations.CollationBinaryID)
+	require.NoError(t, err)
+	for _, value := range []sqltypes.Value{sqltypes.NewDecimal("2.0"), sqltypes.NewFloat64(2)} {
+		two, err := hash(value, collations.CollationBinaryID)
+		require.NoError(t, err)
+		assert.Equal(t, intTwo, two, value.Type().String())
+	}
+
+	// numbers are still hashed
+	_, err = hash(sqltypes.NewInt64(1), collations.CollationBinaryID)
+	require.NoError(t, err)
+
+	// integers above 2^53 aren't rounded together, as they would be as floats
+	big, err := hash(sqltypes.NewInt64(9007199254740992), collations.CollationBinaryID)
+	require.NoError(t, err)
+	bigger, err := hash(sqltypes.NewInt64(9007199254740993), collations.CollationBinaryID)
+	require.NoError(t, err)
+	assert.NotEqual(t, big, bigger)
+	ubig, err := hash(sqltypes.NewUint64(18446744073709551614), collations.CollationBinaryID)
+	require.NoError(t, err)
+	ubigger, err := hash(sqltypes.NewUint64(18446744073709551615), collations.CollationBinaryID)
+	require.NoError(t, err)
+	assert.NotEqual(t, ubig, ubigger)
+
+	// but a signed and an unsigned integer with the same value are equal
+	signed, err := hash(sqltypes.NewInt64(5), collations.CollationBinaryID)
+	require.NoError(t, err)
+	unsigned, err := hash(sqltypes.NewUint64(5), collations.CollationBinaryID)
+	require.NoError(t, err)
+	assert.Equal(t, signed, unsigned)
+}
+
+// TestHashCodes128BytesTypes checks that BIT, GEOMETRY and VECTOR values are compared by their bytes,
+// instead of failing because they can't be coerced.
+func TestHashCodes128BytesTypes(t *testing.T) {
+	for _, typ := range []sqltypes.Type{sqltypes.Bit, sqltypes.Geometry, sqltypes.Vector} {
+		t.Run(typ.String(), func(t *testing.T) {
+			hash := func(raw string) vthash.Hash {
+				hasher := vthash.New()
+				value := sqltypes.MakeTrusted(typ, []byte(raw))
+				require.NoError(t, NullsafeHashcode128(&hasher, value, collations.CollationBinaryID, typ, 0, nil))
+				return hasher.Sum128()
+			}
+			one := hash("\x01")
+			assert.Equal(t, one, hash("\x01"))
+			assert.NotEqual(t, one, hash("\x02"))
+		})
+	}
+}
+
 // The following test tries to produce lots of different values and compares them both using hash code and compare,
 // to make sure that these two methods agree on what values are equal
 func TestHashCodesRandom128(t *testing.T) {

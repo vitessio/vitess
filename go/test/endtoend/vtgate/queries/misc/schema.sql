@@ -89,3 +89,16 @@ create table all_types
     bigint_neg         BIGINT,
     primary key (id)
 ) Engine = InnoDB;
+
+create table cte_text
+(
+    id  bigint,
+    nxt bigint,
+    ci  varchar(10) collate utf8mb4_0900_ai_ci,
+    bin varchar(10) collate utf8mb4_bin,
+    lat varchar(10) character set latin1 collate latin1_swedish_ci,
+    bt  bit(8),
+    bt2 bit(8),
+    pt  point,
+    primary key (id)
+) Engine = InnoDB;

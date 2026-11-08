@@ -221,3 +221,94 @@ func TestWeightStringFallBack(t *testing.T) {
 		Type:  evalengine.NewType(sqltypes.VarBinary, collations.CollationBinaryID),
 	}}, distinct.CheckCols, "checkCols should not be updated")
 }
+
+// TestWeightStringFallBackUnknownType checks that text of an unknown type uses its weight string,
+// instead of being hashed as a number, which made all non-numeric strings equal.
+func TestWeightStringFallBackUnknownType(t *testing.T) {
+	input := r("name|weightstring(name)",
+		"varchar|varbinary",
+		"alice|alice",
+		"bob|bob",
+		"alice|alice")
+
+	distinct := &Distinct{
+		Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+		CheckCols: []CheckCol{{Col: 0, WsCol: new(1), Type: evalengine.NewUnknownType()}},
+		Truncate:  1,
+	}
+
+	qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	utils.MustMatch(t, fmt.Sprintf("%v", r("name", "varchar", "alice", "bob").Rows), fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestDistinctUnknownTypeValues checks that values of an unknown type that aren't text are compared
+// by their weight string, or as decimals for numbers, instead of all being hashed as the same float.
+// This is what a plain UNION or SELECT DISTINCT over a column that vtgate can't type relies on.
+func TestDistinctUnknownTypeValues(t *testing.T) {
+	testcases := []struct {
+		typ    string
+		values []string
+		expect []string
+	}{
+		{"enum", []string{"X|WX", "Y|WY", "X|WX"}, []string{"X", "Y"}},
+		{"set", []string{"X|WX", "Y|WY", "X|WX"}, []string{"X", "Y"}},
+		{"json", []string{`{"a":1}|J1`, `{"a":2}|J2`, `{"a":1}|J1`}, []string{`{"a":1}`, `{"a":2}`}},
+		{"bit", []string{"X|WX", "Y|WY", "X|WX"}, []string{"X", "Y"}},
+		{"geometry", []string{"X|WX", "Y|WY", "X|WX"}, []string{"X", "Y"}},
+		{"vector", []string{"X|WX", "Y|WY", "X|WX"}, []string{"X", "Y"}},
+		// decimals above 2^53 would be rounded together as floats
+		{
+			"decimal",
+			[]string{"9007199254740992.00|", "9007199254740993.00|", "9007199254740992.00|"},
+			[]string{"9007199254740992.00", "9007199254740993.00"},
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.typ, func(t *testing.T) {
+			distinct := &Distinct{
+				Source:    &fakePrimitive{results: []*sqltypes.Result{r("n|ws", tc.typ+"|varbinary", tc.values...)}},
+				CheckCols: []CheckCol{{Col: 0, WsCol: new(1), Type: evalengine.NewUnknownType()}},
+				Truncate:  1,
+			}
+
+			qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+			require.NoError(t, err)
+			var got []string
+			for _, row := range qr.Rows {
+				got = append(got, row[0].ToString())
+			}
+			require.Equal(t, tc.expect, got)
+		})
+	}
+}
+
+// TestDistinctOnlyFallsBackOnUnsupportedCollation checks that a hash error that the weight
+// string can't explain is returned, instead of switching columns to the weight string midway.
+func TestDistinctOnlyFallsBackOnUnsupportedCollation(t *testing.T) {
+	input := r("n|ws", "varchar|varbinary", "1|1", "1.5|1.5")
+
+	distinct := &Distinct{
+		Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+		CheckCols: []CheckCol{{Col: 0, WsCol: new(1), Type: evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID)}},
+		Truncate:  1,
+	}
+
+	_, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.ErrorIs(t, err, evalengine.ErrHashCoercionIsNotExact)
+}
+
+// TestDistinctUnknownTypeWithCollation checks that text of an unknown type, with a collation but
+// without a weight string, is compared in that collation instead of being hashed as a number.
+func TestDistinctUnknownTypeWithCollation(t *testing.T) {
+	input := r("name", "varchar", "alice", "bob", "ALICE")
+
+	distinct := &Distinct{
+		Source:    &fakePrimitive{results: []*sqltypes.Result{input}},
+		CheckCols: []CheckCol{{Col: 0, Type: evalengine.NewType(sqltypes.Unknown, collations.CollationUtf8mb4ID)}},
+	}
+
+	qr, err := distinct.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	utils.MustMatch(t, fmt.Sprintf("%v", r("name", "varchar", "alice", "bob").Rows), fmt.Sprintf("%v", qr.Rows))
+}

@@ -79,6 +79,18 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
 		hash.Write16(hashPrefixNil)
+	case coerceTo == sqltypes.Unknown && sqltypes.IsNumber(v.Type()):
+		// sqltypes.Unknown has all the flag bits set, so it would take the float path below,
+		// which loses the precision of integers and decimals above 2^53
+		return NullsafeHashcode128(hash, v, collation, sqltypes.Decimal, sqlmode, values)
+	case coerceTo == sqltypes.Unknown:
+		// without a type we can only compare the bytes in the collation, if we have one
+		coll := colldata.Lookup(collation)
+		if coll == nil {
+			return UnsupportedCollationHashError
+		}
+		hash.Write16(hashPrefixBytes)
+		coll.Hash(hash, v.Raw(), 0)
 	case sqltypes.IsFloat(coerceTo):
 		var f float64
 		var err error
@@ -192,7 +204,8 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		}
 		hash.Write64(u)
 
-	case sqltypes.IsBinary(coerceTo):
+	case sqltypes.IsBinary(coerceTo), coerceTo == sqltypes.Bit, coerceTo == sqltypes.Geometry, coerceTo == sqltypes.Vector:
+		// these are compared by their bytes
 		hash.Write16(hashPrefixBytes)
 		colldata.Lookup(collations.CollationBinaryID).Hash(hash, v.Raw(), 0)
 
