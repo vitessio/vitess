@@ -38,7 +38,7 @@ func TestIsParenthesizedTwice(t *testing.T) {
 	}
 	for _, tc := range testcases {
 		t.Run(tc.text, func(t *testing.T) {
-			assert.Equal(t, tc.twice, isParenthesizedTwice(tc.text))
+			assert.Equal(t, tc.twice, isParenthesizedTwice(NewTestParser().NewStringTokenizer(tc.text)))
 		})
 	}
 }
@@ -46,6 +46,6 @@ func TestIsParenthesizedTwice(t *testing.T) {
 // TestTakePartitionValuesMissing tests that values that did not record where
 // they are fail closed.
 func TestTakePartitionValuesMissing(t *testing.T) {
-	tkn := &Tokenizer{buf: "(1)"}
+	tkn := NewTestParser().NewStringTokenizer("(1)")
 	assert.Equal(t, partitionColumnListError, tkn.checkPartitionValues(ValTuple{NewIntLiteral("1")}, true))
 }

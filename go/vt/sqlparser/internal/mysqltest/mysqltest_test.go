@@ -26,8 +26,8 @@ import (
 )
 
 // TestReadFile tests that a mysqltest file is split into its statements the
-// way mysqltest splits it, with the expected errors and the session state of
-// each statement.
+// way mysqltest splits it, with the expected errors, the session state and the
+// connection character set of each statement.
 func TestReadFile(t *testing.T) {
 	content := `# A comment.
 create table t1 (a int); create table t2 (b int);
@@ -49,6 +49,8 @@ set names utf8mb4;
 create table t6 (a int);
 character_set latin1;
 create table t7 (a int);
+set names 'UTF8MB4';
+create table t8 (a int);
 `
 	path := filepath.Join(t.TempDir(), "example.test")
 	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
@@ -62,11 +64,13 @@ create table t7 (a int);
 		{Line: 11, SQL: "set sql_mode = 'ANSI_QUOTES'", UnsupportedSession: true},
 		{Line: 12, SQL: "create table t4 (a int)", UnsupportedSession: true},
 		{Line: 13, SQL: "set sql_mode = default"},
-		{Line: 14, SQL: "set names gb18030", UnsupportedSession: true},
-		{Line: 15, SQL: "create table t5 (a int)", UnsupportedSession: true},
-		{Line: 16, SQL: "set names utf8mb4"},
-		{Line: 18, SQL: "create table t6 (a int)", UnsupportedSession: true},
-		{Line: 20, SQL: "create table t7 (a int)"},
+		{Line: 14, SQL: "set names gb18030", UnsupportedSession: true, Charset: "gb18030"},
+		{Line: 15, SQL: "create table t5 (a int)", UnsupportedSession: true, Charset: "gb18030"},
+		{Line: 16, SQL: "set names utf8mb4", Charset: "utf8mb4"},
+		{Line: 18, SQL: "create table t6 (a int)", UnsupportedSession: true, Charset: "utf16"},
+		{Line: 20, SQL: "create table t7 (a int)", Charset: "latin1"},
+		{Line: 21, SQL: "set names 'UTF8MB4'", Charset: "utf8mb4"},
+		{Line: 22, SQL: "create table t8 (a int)", Charset: "utf8mb4"},
 	}
 	for i := range expected {
 		expected[i].File = "t/example.test"

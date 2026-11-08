@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -66,9 +67,12 @@ type Tokenizer struct {
 	multi              bool
 	inVersionedComment bool // true when scanning inside a MySQL versioned comment (/*!...*/)
 
-	Pos       int
-	buf       string
-	parser    *Parser
+	Pos    int
+	buf    string
+	parser *Parser
+	// chars is the table of the character set that the parser reads, which
+	// decides which bytes can be part of a name and which are spaces.
+	chars     *charTable
 	currStart int // start position of current token (set in Scan after skipBlank)
 }
 
@@ -96,11 +100,25 @@ func yyLocDefault(cur *location, rhs []yySymType, n int) {
 // NewStringTokenizer creates a new Tokenizer for the
 // sql string.
 func (p *Parser) NewStringTokenizer(sql string) *Tokenizer {
+	// Some callers tokenize with a nil parser, which worked before the parser
+	// had a character set, as long as the text has no versioned comment. Such
+	// a tokenizer reads UTF-8, as every tokenizer did then.
+	chars := charTables[ClientCharsetUTF8]
+	if p != nil {
+		chars = charTables[p.charset]
+	}
 	return &Tokenizer{
 		buf:      sql,
 		BindVars: make(map[string]struct{}),
 		parser:   p,
+		chars:    chars,
 	}
+}
+
+// newTextTokenizer creates a Tokenizer that reads text, a piece of a query
+// that a Tokenizer already read, in the same character set.
+func (tkn *Tokenizer) newTextTokenizer(text string) *Tokenizer {
+	return &Tokenizer{buf: text, parser: tkn.parser, chars: tkn.chars}
 }
 
 // Lex returns the next token form the Tokenizer.
@@ -184,7 +202,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 		tkn.currStart = tkn.Pos
 		if tkn.qualifiedNameFollows {
 			tkn.qualifiedNameFollows = false
-			if isIdentifierCharacter(tkn.cur()) || isDigit(tkn.cur()) {
+			if tkn.isNameCharacter(tkn.cur()) {
 				return tkn.scanQualifiedName()
 			}
 		}
@@ -217,7 +235,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				return tID, ""
 			}
 			return tokenID, tBytes
-		case isIdentifierCharacter(ch):
+		case tkn.startsName(ch) || tkn.isLeadByte(ch) && tkn.startsValidUTF8():
 			if ch == 'X' || ch == 'x' {
 				if tkn.peek(1) == '\'' {
 					tkn.skip(2)
@@ -265,7 +283,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 			if ch == '.' && isDigit(tkn.peek(1)) && (tkn.lastTokenType != ID || tkn.lastTokenEnd != tkn.Pos) {
 				return tkn.scanNumber()
 			}
-			if ch == '.' && tkn.lastTokenType == ID && tkn.lastTokenEnd == tkn.Pos && (isIdentifierCharacter(tkn.peek(1)) || isDigit(tkn.peek(1))) {
+			if ch == '.' && tkn.lastTokenType == ID && tkn.lastTokenEnd == tkn.Pos && tkn.isNameCharacter(tkn.peek(1)) {
 				tkn.qualifiedNameFollows = true
 			}
 
@@ -330,7 +348,7 @@ func (tkn *Tokenizer) Scan() (int, string) {
 				switch tkn.cur() {
 				case '-':
 					nextChar := tkn.peek(1)
-					if nextChar == ' ' || nextChar == '\t' || nextChar == '\n' || nextChar == '\v' || nextChar == '\f' || nextChar == '\r' || nextChar == eofChar {
+					if tkn.isSpace(nextChar) || nextChar == eofChar {
 						tkn.skip(1)
 						return tkn.scanCommentType1(2)
 					}
@@ -404,10 +422,8 @@ func (tkn *Tokenizer) skipStatement() int {
 
 // skipBlank skips the cursor while it finds whitespace
 func (tkn *Tokenizer) skipBlank() {
-	ch := tkn.cur()
-	for ch == ' ' || ch == '\t' || ch == '\n' || ch == '\v' || ch == '\f' || ch == '\r' {
+	for tkn.isSpace(tkn.cur()) {
 		tkn.skip(1)
-		ch = tkn.cur()
 	}
 }
 
@@ -436,17 +452,19 @@ func (tkn *Tokenizer) quotedNameIsIdentifier() bool {
 // scanIdentifier scans a language keyword or @-encased variable
 func (tkn *Tokenizer) scanIdentifier(isVariable bool) (int, string) {
 	start := tkn.Pos
-	tkn.skip(1)
-
-	for {
-		ch := tkn.cur()
-		if !isIdentifierCharacter(ch) && !isDigit(ch) && (!isVariable || !isCarat(ch)) {
+	// Most of the bytes of a query are in names and keywords, so this loop
+	// reads the text and the table from locals rather than through tkn.
+	buf, chars := tkn.buf, tkn.chars
+	pos := start + 1
+	for ; pos < len(buf); pos++ {
+		ch := uint16(buf[pos])
+		if chars.class(ch)&(classLetter|classDigit) == 0 && (!isVariable || !isCarat(ch)) {
 			break
 		}
-		tkn.skip(1)
 	}
+	tkn.Pos = pos
 	keywordName := tkn.buf[start:tkn.Pos]
-	if !isVariable && tkn.cur() == '.' && (isIdentifierCharacter(tkn.peek(1)) || isDigit(tkn.peek(1))) {
+	if !isVariable && tkn.cur() == '.' && tkn.isNameCharacter(tkn.peek(1)) {
 		// MySQL reads a word right before a '.' and a name as the name of a
 		// table or a database, even when it is a keyword, as in int.a.
 		return ID, keywordName
@@ -724,7 +742,7 @@ exponent:
 	}
 
 exit:
-	if isIdentifierCharacter(tkn.cur()) {
+	if tkn.isNameLetter(tkn.cur()) {
 		// A letter cannot immediately follow a float number.
 		if token == FLOAT || token == DECIMAL {
 			return LEX_ERROR, tkn.buf[start:tkn.Pos]
@@ -743,7 +761,7 @@ exit:
 // even when it is a keyword.
 func (tkn *Tokenizer) scanQualifiedName() (int, string) {
 	start := tkn.Pos
-	for isIdentifierCharacter(tkn.cur()) || isDigit(tkn.cur()) {
+	for tkn.isNameCharacter(tkn.cur()) {
 		tkn.skip(1)
 	}
 	return ID, tkn.buf[start:tkn.Pos]
@@ -752,7 +770,7 @@ func (tkn *Tokenizer) scanQualifiedName() (int, string) {
 // scanIdentifierRest scans the rest of an identifier that starts at start
 // with what looked like a number.
 func (tkn *Tokenizer) scanIdentifierRest(start int) (int, string) {
-	for isIdentifierCharacter(tkn.cur()) || isDigit(tkn.cur()) {
+	for tkn.isNameCharacter(tkn.cur()) {
 		tkn.skip(1)
 	}
 	return ID, tkn.buf[start:tkn.Pos]
@@ -970,13 +988,55 @@ func isLetter(ch uint16) bool {
 	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '$'
 }
 
-// isIdentifierCharacter reports whether ch can be part of an unquoted
-// identifier. MySQL allows every character from U+0080 on in an unquoted
-// identifier. The tokenizer reads bytes, and every byte of the UTF-8 encoding
-// of such a character is 0x80 or more, as is every byte of the other character
-// sets that MySQL allows for identifiers, so it accepts any such byte.
-func isIdentifierCharacter(ch uint16) bool {
-	return isLetter(ch) || 0x80 <= ch && ch < eofChar
+// isNameLetter reports whether ch can be part of an unquoted name and is not a
+// digit, in the character set that the tokenizer reads. This is MySQL's
+// ident_map for that character set, without the digits.
+func (tkn *Tokenizer) isNameLetter(ch uint16) bool {
+	return tkn.chars.class(ch)&classLetter != 0
+}
+
+// isNameCharacter reports whether ch can be part of an unquoted name, digits
+// included, in the character set that the tokenizer reads.
+func (tkn *Tokenizer) isNameCharacter(ch uint16) bool {
+	return tkn.chars.class(ch)&(classLetter|classDigit) != 0
+}
+
+// isSpace reports whether MySQL skips ch between two tokens in the character
+// set that the tokenizer reads.
+func (tkn *Tokenizer) isSpace(ch uint16) bool {
+	return tkn.chars.class(ch)&classSpace != 0
+}
+
+// startsName reports whether ch, the byte at the cursor, starts an unquoted
+// name, as a byte that MySQL's lexer reads in its MY_LEX_START state does,
+// unless ch is a UTF-8 multibyte lead byte. Such a byte starts a name only if
+// startsValidUTF8 reports that it starts a valid character there; otherwise
+// MySQL reads it as a token of its own, which is a syntax error. Only the first
+// byte of a name has this check: MySQL reads every other byte from 0x80 up as
+// part of the name, even one that is not valid UTF-8, and so does a name that
+// starts after a digit or right after the '.' that follows a name.
+//
+// Scan calls this for every token, so the check of a lead byte is left to its
+// caller, to keep this small enough to inline.
+func (tkn *Tokenizer) startsName(ch uint16) bool {
+	return tkn.chars.class(ch)&(classLetter|classLead) == classLetter
+}
+
+// isLeadByte reports whether ch is a UTF-8 multibyte lead byte, in the UTF-8
+// character set. See startsName.
+func (tkn *Tokenizer) isLeadByte(ch uint16) bool {
+	return tkn.chars.class(ch)&classLead != 0
+}
+
+// startsValidUTF8 reports whether the text at the cursor starts with a valid
+// UTF-8 character of more than one byte, as my_ismbchar_utf8mb4 does. Both
+// reject an overlong form, a surrogate, a code point above U+10FFFF and a
+// character that the end of the text cuts short.
+//
+//go:noinline
+func (tkn *Tokenizer) startsValidUTF8() bool {
+	_, size := utf8.DecodeRuneInString(tkn.buf[tkn.Pos:])
+	return size > 1
 }
 
 func isCarat(ch uint16) bool {

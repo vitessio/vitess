@@ -336,20 +336,38 @@ func (p *Parser) IsMySQL80AndAbove() bool {
 	return p.version >= "80000"
 }
 
+// SetTruncateErrLen sets the length that the parser truncates queries to in
+// errors. It sets it for the copies that WithCharset returns too, because they
+// stand for the same parser.
 func (p *Parser) SetTruncateErrLen(l int) {
-	p.truncateErrLen = l
+	for cs := range charsetCount {
+		p.withCharset(cs).truncateErrLen = l
+	}
 }
 
 type Options struct {
 	MySQLServerVersion string
 	TruncateUILen      int
 	TruncateErrLen     int
+	// Charset is the character set that the parser reads queries in. It
+	// decides which bytes can be part of an unquoted name and which are
+	// spaces. The zero value, ClientCharsetUTF8, suits every query that Vitess
+	// writes itself. VTGate reads a client's query with WithCharset.
+	Charset ClientCharset
 }
 
 type Parser struct {
 	version        string
 	truncateUILen  int
 	truncateErrLen int
+	charset        ClientCharset
+	// withCharset returns this parser or one of its copies for the other
+	// character sets, which are built with it, so that WithCharset returns a
+	// parser without building one for each query. Every copy shares the same
+	// function. It is a function rather than a pointer to the copies because
+	// the copies point to each other, and the generated CachedSize would
+	// follow that cycle forever; it does not follow a function.
+	withCharset func(ClientCharset) *Parser
 }
 
 func New(opts Options) (*Parser, error) {
@@ -360,11 +378,46 @@ func New(opts Options) (*Parser, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Parser{
-		version:        convVersion,
-		truncateUILen:  opts.TruncateUILen,
-		truncateErrLen: opts.TruncateErrLen,
-	}, nil
+	if err := opts.Charset.validate(); err != nil {
+		return nil, err
+	}
+	return newParser(convVersion, opts.TruncateUILen, opts.TruncateErrLen, opts.Charset), nil
+}
+
+// newParser builds a parser and its copies for every character set, and
+// returns the one for charset.
+func newParser(version string, truncateUILen, truncateErrLen int, charset ClientCharset) *Parser {
+	var charsets [charsetCount]*Parser
+	withCharset := func(cs ClientCharset) *Parser { return charsets[cs] }
+	for cs := range charsetCount {
+		charsets[cs] = &Parser{
+			version:        version,
+			truncateUILen:  truncateUILen,
+			truncateErrLen: truncateErrLen,
+			charset:        cs,
+			withCharset:    withCharset,
+		}
+	}
+	return charsets[charset]
+}
+
+// WithCharset returns a parser that is the same as p but reads queries in the
+// character set cs. VTGate uses it to read a client's query in the character
+// set of the client's connection, as MySQL does. The parser is built with p,
+// so this does not allocate.
+//
+// It fails for a value that is not one of the ClientCharset constants rather
+// than guess which bytes the query's names hold.
+func (p *Parser) WithCharset(cs ClientCharset) (*Parser, error) {
+	if err := cs.validate(); err != nil {
+		return nil, err
+	}
+	return p.withCharset(cs), nil
+}
+
+// Charset returns the character set that the parser reads queries in.
+func (p *Parser) Charset() ClientCharset {
+	return p.charset
 }
 
 func NewTestParser() *Parser {
@@ -372,9 +425,5 @@ func NewTestParser() *Parser {
 	if err != nil {
 		panic(err)
 	}
-	return &Parser{
-		version:        convVersion,
-		truncateUILen:  512,
-		truncateErrLen: 0,
-	}
+	return newParser(convVersion, 512, 0, ClientCharsetUTF8)
 }

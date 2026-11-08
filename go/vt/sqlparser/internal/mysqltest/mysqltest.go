@@ -90,6 +90,11 @@ type Statement struct {
 	// reads SQL text, and the parser does not read SQL text in such a
 	// character set, as gb18030 or utf16, so the statement cannot be judged.
 	UnsupportedSession bool
+	// Charset is the connection character set that the file set before the
+	// statement, as the file spells it in lower case, or empty when it set
+	// none. MySQL reads the statement in that character set, which decides
+	// which bytes can be part of an unquoted name.
+	Charset string
 }
 
 // testCommand matches the mysqltest commands that can be written
@@ -133,6 +138,8 @@ type reader struct {
 	// enabled an sql_mode or a connection character set that VTGate rejects.
 	unsupportedSQLMode bool
 	unsupportedCharset bool
+	// charset is the connection character set that the file set last.
+	charset string
 }
 
 // ReadFile returns the SQL statements of a mysqltest file. It drops
@@ -247,6 +254,7 @@ func (reader *reader) endStatement() {
 		SQL:                sql,
 		ExpectedErrors:     expectedErrors,
 		UnsupportedSession: reader.unsupportedSQLMode || reader.unsupportedCharset,
+		Charset:            reader.charset,
 	})
 }
 
@@ -255,6 +263,7 @@ func (reader *reader) endStatement() {
 func (reader *reader) trackCharset(sql string) {
 	if match := charsetCommand.FindStringSubmatch(sql); match != nil {
 		reader.unsupportedCharset = unsupportedCharset.MatchString(match[1])
+		reader.charset = strings.ToLower(match[1])
 	}
 }
 

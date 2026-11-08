@@ -63,10 +63,14 @@ func TestMySQLTestSuiteDDL(t *testing.T) {
 	checked := 0
 	var accepted []string
 	for _, statement := range statements {
+		fileParser, ok := MySQLTestParser(t, parser, statement)
+		if !ok {
+			continue
+		}
 		// mysqltest sends the text up to its delimiter as one query, which can
 		// hold several statements when the delimiter is not ';'. An expected
 		// error then belongs to one of them, but not to a known one.
-		pieces, err := parser.SplitStatementToPieces(statement.SQL)
+		pieces, err := fileParser.SplitStatementToPieces(statement.SQL)
 		if err != nil || len(pieces) > 1 && statement.ExpectedErrors != "" {
 			continue
 		}
@@ -77,16 +81,38 @@ func TestMySQLTestSuiteDDL(t *testing.T) {
 			}
 			checked++
 			if mysqltest.IsParseError(statement.ExpectedErrors) {
-				if _, err := parser.Parse(statement.SQL); err == nil {
+				if _, err := fileParser.Parse(statement.SQL); err == nil {
 					accepted = append(accepted, fmt.Sprintf("%s:%d: %s", statement.File, statement.Line, statement.SQL))
 				}
 				continue
 			}
-			checkMySQLTestStatement(t, parser, statement)
+			checkMySQLTestStatement(t, fileParser, statement)
 		}
 	}
 	t.Logf("checked %d DDL statements of %d statements", checked, len(statements))
 	t.Logf("%d statements that MySQL rejects as syntax errors parse:\n%s", len(accepted), strings.Join(accepted, "\n"))
+}
+
+// MySQLTestParser returns parser for the character set in which MySQL reads
+// statement: the connection character set that the test file set before it,
+// or utf8mb4, the server's default, when the file set none. ok is false for a
+// character set that the parser has no rule for, such as koi8r or cp1251:
+// MySQL reads a name in such a character set with a rule of its own, so the
+// statement cannot be judged.
+//
+// It is exported so that the tests of package sqlparser_test can use it too.
+func MySQLTestParser(t *testing.T, parser *Parser, statement mysqltest.Statement) (fileParser *Parser, ok bool) {
+	charset := ClientCharsetUTF8
+	switch statement.Charset {
+	case "", "default":
+	default:
+		if charset, ok = ClientCharsetFor(statement.Charset); !ok {
+			return nil, false
+		}
+	}
+	fileParser, err := parser.WithCharset(charset)
+	require.NoError(t, err)
+	return fileParser, true
 }
 
 func checkMySQLTestStatement(t *testing.T, parser *Parser, statement mysqltest.Statement) {

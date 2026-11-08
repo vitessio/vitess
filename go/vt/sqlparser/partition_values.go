@@ -86,7 +86,7 @@ func (tkn *Tokenizer) checkPartitionValues(values ValTuple, in bool) string {
 		if !ok || len(tuple) < 2 {
 			return rowSinglePartitionError
 		}
-		if isParenthesizedTwice(tkn.buf[spans[i][0]:spans[i][1]]) {
+		if isParenthesizedTwice(tkn.newTextTokenizer(tkn.buf[spans[i][0]:spans[i][1]])) {
 			// MySQL reads ((1, 2)) as a tuple of one value, which is a
 			// row, but the formatter writes it as (1, 2).
 			return partitionRowValueError
@@ -99,10 +99,9 @@ func (tkn *Tokenizer) checkPartitionValues(values ValTuple, in bool) string {
 	return ""
 }
 
-// isParenthesizedTwice reports whether text, a value as written, is in two
-// pairs of parentheses, as in ((1, 2)).
-func isParenthesizedTwice(text string) bool {
-	tkn := &Tokenizer{buf: text}
+// isParenthesizedTwice reports whether the text that tkn reads, a value as
+// written, is in two pairs of parentheses, as in ((1, 2)).
+func isParenthesizedTwice(tkn *Tokenizer) bool {
 	var tokens []int
 	for {
 		typ, _ := tkn.Scan()

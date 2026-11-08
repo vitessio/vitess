@@ -239,11 +239,14 @@ func (p *Parser) tokenizedMarginBounds(sql string) (start, end int, newlineFirst
 // tokens: space, tab, newline, vertical tab, form feed and carriage return.
 //
 // This string is the only place that spells out the set. IsSQLSpace reads it
-// through sqlSpaceTable, and the trims in SplitMarginComments take it as a
-// cutset, so no second copy can drift from this one. Tokenizer.skipBlank and the
-// '--' rule in Tokenizer.Scan repeat the set because they read a uint16 rather
-// than a byte, and TestMarginCommentRulesMatchTokenizer checks that all of them
-// stay equal.
+// through sqlSpaceTable, the trims in SplitMarginComments take it as a cutset,
+// and the tokenizer's character tables are built from it, so no second copy can
+// drift from this one. TestMarginCommentRulesMatchTokenizer checks that all of
+// them stay equal.
+//
+// A latin1 query has one more space, the no-break space 0xA0, which only the
+// tokenizer knows. The margin rules leave it in the query, which is safe: the
+// parser reads the query and skips it.
 //
 // Do not use unicode.IsSpace instead. That function also accepts a no-break space
 // and other characters that MySQL does not accept, and then Vitess would remove a

@@ -314,8 +314,9 @@ func compareStatement(t *testing.T, parser *sqlparser.Parser, asWritten, formatt
 	where := fmt.Sprintf("%s:%d: %s", statement.File, statement.Line, sql)
 	formattedSQL := sql
 	var tree sqlparser.Statement
-	if isDDL && !statement.UnsupportedSession {
-		parsed, err := parser.Parse(sql)
+	fileParser, ok := sqlparser.MySQLTestParser(t, parser, statement)
+	if isDDL && !statement.UnsupportedSession && ok {
+		parsed, err := fileParser.Parse(sql)
 		if err == nil {
 			tree = parsed
 			formattedSQL = sqlparser.String(tree)

@@ -336,7 +336,11 @@ func stringColumnName(literal *Literal, text string) string {
 	if text == "" {
 		return literal.Val
 	}
-	tkn := &Tokenizer{buf: text}
+	// The literal's text is in the character set of the query that held it,
+	// which is not known here. Read it as UTF-8: the text starts with a quote
+	// or with an introducer, which are ASCII in every character set the
+	// parser reads, and a column name is only shown to the client.
+	tkn := defaultMarginParser.NewStringTokenizer(text)
 	typ, val := tkn.Scan()
 	if strings.HasPrefix(val, "_") || typ == ID {
 		// A character set introducer, as in _utf8mb4'a' 'b'.
@@ -348,11 +352,11 @@ func stringColumnName(literal *Literal, text string) string {
 	return val
 }
 
-// isConcatenatedString reports whether text, a string literal as written,
-// is several strings in a row rather than one string whose value is value.
-func isConcatenatedString(text, value string) bool {
-	tkn := &Tokenizer{buf: text}
-	typ, val := tkn.Scan()
+// isConcatenatedString reports whether text, a string literal as written in
+// the text that tkn reads, is several strings in a row rather than one string
+// whose value is value.
+func (tkn *Tokenizer) isConcatenatedString(text, value string) bool {
+	typ, val := tkn.newTextTokenizer(text).Scan()
 	if typ != STRING {
 		return false
 	}

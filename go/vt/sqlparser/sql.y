@@ -6435,7 +6435,8 @@ select_expression:
           // MySQL names a string written as several strings, as in 'a' 'b',
           // after the first one, so its text is kept. A single string is
           // named after its value, which needs no text.
-          if text := yylex.(*Tokenizer).GetInputExpression(@1.start, @1.end); isConcatenatedString(text, expr.Val) {
+          tkn := yylex.(*Tokenizer)
+          if text := tkn.GetInputExpression(@1.start, @1.end); tkn.isConcatenatedString(text, expr.Val) {
             ae.InputExpression = text
           }
         }
