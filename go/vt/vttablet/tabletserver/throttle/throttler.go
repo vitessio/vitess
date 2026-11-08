@@ -78,6 +78,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -93,6 +94,14 @@ const (
 	// once. A demoted primary still answers it, so after a reparent this bounds how long the tablet keeps
 	// stimulating the old primary.
 	cachedPrimaryTTL = 15 * time.Second
+	// queryThrottlerHeartbeatLeaseInterval is how often the dedicated query throttler renews the heartbeat lease:
+	// half of the shortest lease, as for the tablets that the primary does not probe.
+	queryThrottlerHeartbeatLeaseInterval = heartbeat.MinimalOnDemandDuration / 2
+	// queryThrottlerLeaderCheckInterval is how often the dedicated query throttler checks whether its tablet is the
+	// primary. A promoted tablet's throttler is already open, so it learns of the promotion from this check alone, and
+	// only then renews the heartbeat lease. With the default heartbeat flags, the primary writes heartbeats only while a
+	// throttler renews the lease, so until then the lag that every tablet in the shard reads can keep growing.
+	queryThrottlerLeaderCheckInterval = time.Second
 
 	aggregatedMetricsExpiration = 5 * time.Second
 	recentAppsExpiration        = time.Hour
@@ -109,9 +118,17 @@ const (
 
 var throttleTabletTypes = "replica"
 
+const (
+	// lagThrottlerMetricsPrefix prefixes the lag throttler's metrics.
+	lagThrottlerMetricsPrefix = "Throttler"
+	// queryThrottlerMetricsPrefix prefixes the dedicated query throttler's metrics, so its
+	// probes and checks don't mix into the lag throttler's.
+	queryThrottlerMetricsPrefix = "QueryThrottlerDedicated"
+)
+
 var (
-	statsThrottlerHeartbeatRequests    = stats.NewCounter("ThrottlerHeartbeatRequests", "heartbeat requests")
-	statsThrottlerProbeRecentlyChecked = stats.NewCounter("ThrottlerProbeRecentlyChecked", "probe recently checked")
+	statsThrottlerHeartbeatRequests    = stats.NewCounter(lagThrottlerMetricsPrefix+"HeartbeatRequests", "heartbeat requests")
+	statsThrottlerProbeRecentlyChecked = stats.NewCounter(lagThrottlerMetricsPrefix+"ProbeRecentlyChecked", "probe recently checked")
 
 	// stimulationErrorLogger logs failed stimulations of the primary at most once a minute: a tablet that the primary
 	// does not probe stimulates it every few seconds, including while the primary is unreachable.
@@ -141,10 +158,12 @@ type throttlerTopoService interface {
 // Throttler is the main entity in the throttling mechanism. This service runs, probes, collects data,
 // aggregates, reads inventory, provides information, etc.
 type Throttler struct {
-	keyspace    string
-	shard       string
-	tabletAlias *topodatapb.TabletAlias
-	tabletInfo  atomic.Pointer[topo.TabletInfo]
+	keyspace      string
+	shard         string
+	tabletAlias   *topodatapb.TabletAlias
+	throttlerType ThrottlerType
+	configLoader  configLoader
+	tabletInfo    atomic.Pointer[topo.TabletInfo]
 
 	check     *ThrottlerCheck
 	isEnabled atomic.Bool
@@ -168,7 +187,14 @@ type Throttler struct {
 	heartbeatWriter  heartbeat.HeartbeatWriter
 	overrideTmClient tmclient.TabletManagerClient
 
-	recentCheckRateLimiter *timer.RateLimiter
+	// recentCheckRateLimiter is nil until the first Operate. Enable marks the throttler enabled before Operate
+	// creates it, so a check can run while it is nil.
+	recentCheckRateLimiter atomic.Pointer[timer.RateLimiter]
+	// operateDone is closed once the last Operate started has exited. Disable doesn't wait for Operate to exit, so a
+	// Disable and an Enable in quick succession start an Operate while the previous one still runs. The new one waits
+	// for this before it starts its loop: the loops share the throttler's channels and inventory, and the previous
+	// one's cleanup clears inventory.TabletMetrics, a plain map, which the new one writes to.
+	operateDone            atomic.Pointer[chan struct{}]
 	recentCheckDormantDiff int64
 	recentCheckDiff        int64
 
@@ -230,15 +256,28 @@ type ThrottlerStatus struct {
 }
 
 // NewThrottler creates a Throttler
-func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, connectionPoolName string) *Throttler {
+func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, heartbeatWriter heartbeat.HeartbeatWriter, tabletTypeFunc func() topodatapb.TabletType, throttlerType ThrottlerType) *Throttler {
+	var poolName string
+	var cfgLoader configLoader
+	switch throttlerType {
+	case QueryTabletThrottler:
+		poolName = "QueryThrottlerPool"
+		cfgLoader = &queryConfigLoader{}
+	default:
+		poolName = "ThrottlerPool"
+		cfgLoader = &defaultConfigLoader{}
+	}
+
 	throttler := &Throttler{
 		tabletAlias:     tabletAlias,
+		throttlerType:   throttlerType,
+		configLoader:    cfgLoader,
 		env:             env,
 		tabletTypeFunc:  tabletTypeFunc,
 		srvTopoServer:   srvTopoServer,
 		ts:              ts,
 		heartbeatWriter: heartbeatWriter,
-		pool: connpool.NewPool(env, connectionPoolName, tabletenv.ConnPoolConfig{
+		pool: connpool.NewPool(env, poolName, tabletenv.ConnPoolConfig{
 			Size:        2,
 			IdleTimeout: env.Config().OltpReadPool.IdleTimeout,
 		}),
@@ -261,6 +300,9 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.check = NewThrottlerCheck(throttler)
 
 	throttler.leaderCheckInterval = leaderCheckInterval
+	if throttlerType == QueryTabletThrottler {
+		throttler.leaderCheckInterval = queryThrottlerLeaderCheckInterval
+	}
 	throttler.activeCollectInterval = activeCollectInterval
 	throttler.dormantCollectInterval = dormantCollectInterval
 	throttler.inventoryRefreshInterval = inventoryRefreshInterval
@@ -332,6 +374,14 @@ func (throttler *Throttler) InitDBConfig(keyspace, shard string) {
 	throttler.shard = shard
 }
 
+// getConfigLoader returns the configLoader, defaulting to defaultConfigLoader if not set.
+func (throttler *Throttler) getConfigLoader() configLoader {
+	if throttler.configLoader != nil {
+		return throttler.configLoader
+	}
+	return &defaultConfigLoader{}
+}
+
 func (throttler *Throttler) GetMetricsQuery() string {
 	if customQuery := throttler.GetCustomMetricsQuery(); customQuery != "" {
 		return customQuery
@@ -381,7 +431,7 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 	if err != nil {
 		return nil, err
 	}
-	return throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig), nil
+	return throttler.normalizeThrottlerConfig(throttler.getConfigLoader().loadConfig(srvks)), nil
 }
 
 // normalizeThrottlerConfig normalizes missing throttler config information, as needed.
@@ -414,7 +464,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 		}
 		return true
 	}
-	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
+	throttlerConfig := throttler.normalizeThrottlerConfig(throttler.getConfigLoader().loadConfig(srvks))
 
 	if throttler.IsEnabled() {
 		// Throttler is enabled and we should apply the config change
@@ -697,7 +747,26 @@ func (throttler *Throttler) requestHeartbeats() {
 		return
 	}
 	go throttler.heartbeatWriter.RequestHeartbeats()
-	statsThrottlerHeartbeatRequests.Add(1)
+	throttler.counter(statsThrottlerHeartbeatRequests, "HeartbeatRequests", "heartbeat requests").Add(1)
+}
+
+// metricsPrefix returns the prefix of this throttler's metrics.
+func (throttler *Throttler) metricsPrefix() string {
+	if throttler.throttlerType == QueryTabletThrottler {
+		return queryThrottlerMetricsPrefix
+	}
+	return lagThrottlerMetricsPrefix
+}
+
+// counter returns this throttler's counter for name, which excludes the prefix. The lag
+// throttler uses lagCounter, registered at init, so its metrics are unchanged. The
+// dedicated query throttler registers its own on first use, so a tablet that never
+// enables the query throttler exports none of them.
+func (throttler *Throttler) counter(lagCounter *stats.Counter, name, help string) *stats.Counter {
+	if throttler.throttlerType != QueryTabletThrottler {
+		return lagCounter
+	}
+	return stats.GetOrNewCounter(queryThrottlerMetricsPrefix+name, help)
 }
 
 // stimulatePrimaryThrottler sends a check request to the primary tablet in the shard, to stimulate
@@ -715,7 +784,10 @@ func (throttler *Throttler) stimulatePrimaryThrottler(ctx context.Context, tmCli
 	if primary == nil {
 		return nil
 	}
-	req := &tabletmanagerdatapb.CheckThrottlerRequest{AppName: throttlerapp.ThrottlerStimulatorName.String()}
+	req := &tabletmanagerdatapb.CheckThrottlerRequest{
+		AppName:       throttlerapp.ThrottlerStimulatorName.String(),
+		ThrottlerType: throttler.throttlerType.ToProto(),
+	}
 	_, err = tmClient.CheckThrottler(ctx, primary, req)
 	if err != nil {
 		// The primary may have moved: read it from the topo on the next stimulation.
@@ -772,18 +844,20 @@ func (throttler *Throttler) ThrottledApps() (result []base.AppThrottle) {
 // Instead of measuring actual time, we use the fact recentCheckRateLimiter ticks every second, and take
 // a logical diff, counting the number of ticks since the last check. This is a good enough approximation.
 func (throttler *Throttler) isDormant() bool {
-	if throttler.recentCheckRateLimiter == nil {
+	rateLimiter := throttler.recentCheckRateLimiter.Load()
+	if rateLimiter == nil {
 		return false
 	}
-	return throttler.recentCheckRateLimiter.Diff() > throttler.recentCheckDormantDiff
+	return rateLimiter.Diff() > throttler.recentCheckDormantDiff
 }
 
 // recentlyChecked returns true when this throttler was checked "just now" (whereabouts of once second or two)
 func (throttler *Throttler) recentlyChecked() bool {
-	if throttler.recentCheckRateLimiter == nil {
+	rateLimiter := throttler.recentCheckRateLimiter.Load()
+	if rateLimiter == nil {
 		return false
 	}
-	return throttler.recentCheckRateLimiter.Diff() <= throttler.recentCheckDiff
+	return rateLimiter.Diff() <= throttler.recentCheckDiff
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
@@ -801,12 +875,32 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 	inventoryRefreshTicker := addTicker(throttler.inventoryRefreshInterval)
 	metricsAggregateTicker := addTicker(throttler.metricsAggregateInterval)
 	throttledAppsTicker := addTicker(throttler.throttledAppsSnapshotInterval)
+	// The query throttler's strategy checks the dedicated query throttler only once per
+	// --query-throttler-cache-update-interval, which can outlast an on-demand heartbeat lease. The lag it read would
+	// then include the time that heartbeats were paused, so the dedicated query throttler keeps the lease for as long
+	// as it runs, whatever metrics the rules use: a lag rule added later would otherwise read the age of the last
+	// heartbeat as lag. requestHeartbeats does nothing unless this tablet is the primary. Other throttlers leave the
+	// channel nil, so this case never fires for them.
+	var heartbeatLeaseC <-chan time.Time
+	if throttler.throttlerType == QueryTabletThrottler {
+		heartbeatLeaseC = addTicker(queryThrottlerHeartbeatLeaseInterval).C
+	}
 	var lastPrimaryStimulation time.Time
-	throttler.recentCheckRateLimiter = timer.NewRateLimiter(recentCheckRateLimiterInterval)
+	recentCheckRateLimiter := timer.NewRateLimiter(recentCheckRateLimiterInterval)
+	throttler.recentCheckRateLimiter.Store(recentCheckRateLimiter)
+	done := make(chan struct{})
+	previousDone := throttler.operateDone.Swap(&done)
 
 	wg.Go(func() {
+		defer close(done)
+		if previousDone != nil {
+			// Whoever starts an Operate cancels the previous one first, so it exits promptly. This goroutine holds no
+			// lock, so the previous Operate can still take initMutex on its way out.
+			<-*previousDone
+		}
 		defer func() {
-			throttler.recentCheckRateLimiter.Stop()
+			// Stop this Operate's rate limiter, not the field's, which a later Enable may have replaced.
+			recentCheckRateLimiter.Stop()
 			throttler.aggregatedMetrics.Flush()
 			throttler.recentApps.Flush()
 			clear(throttler.inventory.TabletMetrics)
@@ -922,6 +1016,10 @@ func (throttler *Throttler) Operate(ctx context.Context, wg *sync.WaitGroup) {
 				if throttler.IsOpen() {
 					go throttler.expireThrottledApps()
 				}
+			case <-heartbeatLeaseC:
+				if throttler.IsOpen() {
+					throttler.requestHeartbeats()
+				}
 			case throttlerConfig := <-throttler.throttlerConfigChan:
 				throttler.applyThrottlerConfig(ctx, throttlerConfig)
 			case f := <-throttler.serialFuncChan:
@@ -961,7 +1059,9 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 		}
 		metrics := make(base.ThrottleMetrics)
 
-		req := &tabletmanagerdatapb.CheckThrottlerRequest{} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
+		req := &tabletmanagerdatapb.CheckThrottlerRequest{
+			ThrottlerType: throttler.throttlerType.ToProto(),
+		} // We leave AppName empty; it will default to VitessName anyway, and we can save some proto space
 		resp, err := tmClient.CheckThrottler(ctx, probe.Tablet, req)
 		if err != nil {
 			err = vterrors.Wrapf(err, "gRPC error accessing tablet %v", probe.Alias)
@@ -975,7 +1075,7 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 			// We have just probed a tablet, and it reported back that someone just recently "check"ed it.
 			// We therefore renew the heartbeats lease.
 			throttler.requestHeartbeats()
-			statsThrottlerProbeRecentlyChecked.Add(1)
+			throttler.counter(statsThrottlerProbeRecentlyChecked, "ProbeRecentlyChecked", "probe recently checked").Add(1)
 		}
 		for name, metric := range resp.Metrics {
 			metricName := base.MetricName(name)
@@ -993,6 +1093,22 @@ func (throttler *Throttler) generateTabletProbeFunction(scope base.Scope, probe 
 			// Backwards compatibility to v20. v20 does not report multi metrics.
 			throttleMetric.Name = throttler.metricNameUsedAsDefault()
 			metrics[throttleMetric.Name] = throttleMetric
+		}
+		if throttler.throttlerType == QueryTabletThrottler {
+			// The "vitess" app checks every known metric, so a tablet leaves metrics out when its throttler isn't
+			// running, for example while the tablet isn't serving: it then answers OK with only the "default" metric.
+			// Unset, they would make every shard metric read as not collected yet, which the query throttler can't
+			// throttle on. As errors, they leave the tablet out, like a tablet that can't be probed.
+			for _, metricName := range base.KnownMetricNames {
+				if _, ok := metrics[metricName]; !ok {
+					metrics[metricName] = &base.ThrottleMetric{
+						Name:  metricName,
+						Scope: scope,
+						Alias: probe.Alias,
+						Err:   vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tablet %v did not report %v", probe.Alias, metricName),
+					}
+				}
+			}
 		}
 
 		return metrics
@@ -1056,7 +1172,7 @@ func (throttler *Throttler) collectSelfMetrics(ctx context.Context, tmClient tmc
 		defer atomic.StoreInt64(&probe.QueryInProgress, 0)
 
 		// Throttler is probing its own tablet's metrics:
-		_ = base.ReadThrottleMetrics(ctx, probe, tmClient, throttler.readSelfThrottleMetrics)
+		_ = base.ReadThrottleMetrics(ctx, throttler.metricsPrefix(), probe, tmClient, throttler.readSelfThrottleMetrics)
 	}()
 }
 
@@ -1079,7 +1195,7 @@ func (throttler *Throttler) collectShardMetrics(ctx context.Context, tmClient tm
 			// Throttler probing other tablets:
 			throttleMetricFunc := throttler.generateTabletProbeFunction(base.ShardScope, probe)
 
-			throttleMetrics := base.ReadThrottleMetrics(ctx, probe, tmClient, throttleMetricFunc)
+			throttleMetrics := base.ReadThrottleMetrics(ctx, throttler.metricsPrefix(), probe, tmClient, throttleMetricFunc)
 			for _, metric := range throttleMetrics {
 				select {
 				case <-ctx.Done():
@@ -1573,7 +1689,9 @@ func (throttler *Throttler) checkScope(ctx context.Context, appName string, scop
 
 	if shouldRequestHeartbeats {
 		throttler.requestHeartbeats()
-		throttler.recentCheckRateLimiter.DoEmpty()
+		if rateLimiter := throttler.recentCheckRateLimiter.Load(); rateLimiter != nil {
+			rateLimiter.DoEmpty()
+		}
 		// This check was made by someone other than the throttler itself, i.e. this came from online-ddl or vreplication or other.
 		// We mark the fact that someone just made a check. If this is a REPLICA or RDONLY tables, this will be reported back
 		// to the PRIMARY so that it knows it must renew the heartbeat lease.
