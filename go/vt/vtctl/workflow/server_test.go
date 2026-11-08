@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sort"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -1651,6 +1653,9 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		// wantCanceled means that the failed switch must have been canceled,
 		// leaving writes on the source.
 		wantCanceled bool
+		// wantRefreshWarnings means that the forced partial refreshes of the
+		// failing source and target tablets must be logged.
+		wantRefreshWarnings bool
 	}{
 		{
 			name: "basic forward",
@@ -2043,6 +2048,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				StartState:   "Reads Not Switched. Writes Not Switched",
 				CurrentState: "All Reads Switched. Writes Switched",
 			},
+			wantRefreshWarnings: true,
 		},
 		{
 			name: "forward with an error reading the source positions",
@@ -2175,6 +2181,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				}
 			}
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			if tc.check != nil {
 				defer tc.check(t, env, err)
@@ -2201,6 +2208,26 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
+
+			if tc.wantRefreshWarnings {
+				refreshed := make(map[string]bool)
+				for _, record := range logs.Records(t) {
+					msg := record["msg"]
+					if msg != "failed to successfully refresh all tablets in the source shard" &&
+						msg != "failed to successfully refresh all tablets in the target shard" {
+						continue
+					}
+					assert.Equal(t, "WARN", record["level"])
+					assert.Equal(t, workflowName, record["workflow"])
+					assert.Contains(t, record["partial_refresh_details"], "tablet refresh error")
+					// The refresh RPC failed but the topo read didn't, so there
+					// is no error to log.
+					assert.NotContains(t, record, "error")
+					refreshed[fmt.Sprintf("%s %s/%s", msg, record["keyspace"], record["shard"])] = true
+				}
+				assert.True(t, refreshed["failed to successfully refresh all tablets in the source shard "+sourceKeyspaceName+"/0"], refreshed)
+				assert.True(t, refreshed["failed to successfully refresh all tablets in the target shard "+targetKeyspaceName+"/-80"], refreshed)
+			}
 
 			if tc.multiTenant { // Confirm the keyspace routing rules
 				gotKrrs, err := env.ts.GetKeyspaceRoutingRules(ctx)

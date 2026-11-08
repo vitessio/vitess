@@ -36,6 +36,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"strings"
 
@@ -263,7 +264,10 @@ func DeleteTablet(ctx context.Context, ts *topo.Server, tablet *topodatapb.Table
 			err = nil
 		}
 		if err != nil {
-			log.Warn(fmt.Sprintf("remove replication data for %v failed: %v", topoproto.TabletAliasString(tablet.Alias), err))
+			log.Warn("remove replication data failed",
+				slog.String("tablet", topoproto.TabletAliasString(tablet.Alias)),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 
