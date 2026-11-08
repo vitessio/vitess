@@ -750,16 +750,6 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 			continue
 		}
 		vc.logOpTraffic(primitive, res)
-<<<<<<< HEAD
-||||||| parent of 542b13ab94 (vtgate: stop racing SafeSession.LastInsertId from parallel streams (#21639))
-		if res != nil && res.InsertIDUpdated() {
-			vc.SafeSession.LastInsertId = res.InsertID
-		}
-=======
-		if res != nil && res.InsertIDUpdated() {
-			vc.SetLastInsertID(res.InsertID)
-		}
->>>>>>> 542b13ab94 (vtgate: stop racing SafeSession.LastInsertId from parallel streams (#21639))
 		return res, err
 	}
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
