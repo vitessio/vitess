@@ -318,6 +318,11 @@ func (v *vschema) WarnUnshardedOnly(format string, params ...any) {
 	panic("implement me")
 }
 
+func (v *vschema) ClientParser() (*sqlparser.Parser, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (v *vschema) PlannerWarning(message string) {
 	// TODO implement me
 	panic("implement me")

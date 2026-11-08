@@ -188,16 +188,16 @@ func TestExecutorSet(t *testing.T) {
 		err: "VT05006: unknown system variable '@@foo = 1'",
 	}, {
 		in:  "set names utf8",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"character_set_client": "'utf8mb3'"}},
 	}, {
 		in:  "set names ascii",
 		err: "charset/name ascii is not supported",
 	}, {
 		in:  "set charset utf8",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"character_set_client": "'utf8mb3'"}},
 	}, {
 		in:  "set character set default",
-		out: &vtgatepb.Session{Autocommit: true},
+		out: &vtgatepb.Session{Autocommit: true, SystemVariables: map[string]string{"character_set_client": "'utf8mb4'"}},
 	}, {
 		in:  "set character set ascii",
 		err: "charset/name ascii is not supported",
@@ -391,8 +391,10 @@ func TestExecutorSetOp(t *testing.T) {
 		in:     "set net_read_timeout = 600",
 		result: returnResult("net_read_timeout", "int64", "300"),
 	}, {
-		in:     "set character_set_client = utf8",
-		result: returnResult("character_set_client", "varchar", "utf8"),
+		// VTGate keeps character_set_client in the session, so that it reads
+		// the client's names in it, and sends nothing to MySQL.
+		in:      "set character_set_client = utf8",
+		sysVars: map[string]string{"character_set_client": "'utf8mb3'"},
 	}, {
 		in:     "set character_set_results=null",
 		result: returnNoResult("character_set_results", "varchar"),
@@ -417,12 +419,12 @@ func TestExecutorSetOp(t *testing.T) {
 		// a character set Vitess cannot parse safely is refused, not ignored
 		in:     "set character_set_client = 'sjis'",
 		result: returnNoResult("character_set_client", "varchar"),
-		err:    "unsupported connection character set 'sjis' for character_set_client: use utf8mb4",
+		err:    "unsupported connection character set 'sjis' for character_set_client: use utf8mb4, utf8mb3 or latin1",
 	}, {
 		// MySQL also accepts a collation ID: 28 is gbk_chinese_ci
 		in:     "set character_set_client = 28",
 		result: returnNoResult("character_set_client", "varchar"),
-		err:    "unsupported connection character set 28 for character_set_client: use utf8mb4",
+		err:    "unsupported connection character set 28 for character_set_client: use utf8mb4, utf8mb3 or latin1",
 	}, {
 		in:     "set collation_connection = 255",
 		result: returnNoResult("collation_connection", "varchar"),

@@ -63,9 +63,13 @@ var (
 	ForeignKeyChecks = "foreign_key_checks"
 	UniqueChecks     = "unique_checks"
 
-	Autocommit                  = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
-	SQLMode                     = SystemVariable{Name: "sql_mode", SupportSetVar: true}
-	Charset                     = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
+	Autocommit = SystemVariable{Name: "autocommit", IsBoolean: true, Default: on}
+	SQLMode    = SystemVariable{Name: "sql_mode", SupportSetVar: true}
+	Charset    = SystemVariable{Name: "charset", Default: utf8mb4, IdentifierAsString: true}
+	// CharacterSetClient is the client's character set. VTGate keeps it rather
+	// than send it to MySQL, and reads the client's unquoted names in it, as
+	// MySQL does.
+	CharacterSetClient          = SystemVariable{Name: "character_set_client", Default: utf8mb4, IdentifierAsString: true}
 	ClientFoundRows             = SystemVariable{Name: "client_found_rows", IsBoolean: true, Default: off}
 	SessionEnableSystemSettings = SystemVariable{Name: "enable_system_settings", IsBoolean: true, Default: on}
 	Names                       = SystemVariable{Name: "names", Default: utf8mb4, IdentifierAsString: true}
@@ -108,6 +112,7 @@ var (
 		Workload,
 		Charset,
 		Names,
+		CharacterSetClient,
 		SessionUUID,
 		MigrationContext,
 		SessionEnableSystemSettings,
@@ -246,7 +251,6 @@ var (
 		// as long as they have the same value as the underlying database
 		{Name: "binlog_format"},
 		{Name: "block_encryption_mode"},
-		{Name: "character_set_client"},
 		{Name: "character_set_connection"},
 		{Name: "character_set_database"},
 		{Name: "character_set_filesystem"},

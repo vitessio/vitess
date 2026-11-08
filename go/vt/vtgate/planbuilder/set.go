@@ -267,6 +267,44 @@ func validateConnectionCharsetPlan(inner planFunc) planFunc {
 	}
 }
 
+// validateClientCharsetPlan refuses a constant value of character_set_client
+// that names a character set VTGate has no rule for reading the client's
+// names in, before any assignment of the SET runs. The engine makes the same
+// check of a value that is only known when the SET runs.
+func validateClientCharsetPlan(inner planFunc) planFunc {
+	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {
+		collEnv := vschema.Environment().CollationEnv()
+		var id collations.ID
+		switch value := expr.Expr.(type) {
+		case *sqlparser.Literal:
+			switch value.Type {
+			case sqlparser.StrVal:
+				id, _ = collEnv.ParseConnectionCharset(value.Val) // Unknown for a name it does not know
+			case sqlparser.IntVal:
+				n, err := strconv.ParseUint(value.Val, 10, 16)
+				if err != nil {
+					return inner(expr, vschema, ec)
+				}
+				id = collations.ID(n)
+			default:
+				return inner(expr, vschema, ec)
+			}
+		case *sqlparser.ColName:
+			if !value.Qualifier.IsEmpty() {
+				return inner(expr, vschema, ec)
+			}
+			id, _ = collEnv.ParseConnectionCharset(value.Name.String()) // Unknown for a name it does not know
+		default:
+			return inner(expr, vschema, ec)
+		}
+		name, _ := collEnv.ConnectionCharset(id) // empty for Unknown
+		if _, ok := sqlparser.ClientCharsetFor(name); !ok {
+			return nil, engine.UnsupportedClientCharsetError(sqlparser.String(expr.Expr), expr.Var.Name.Lowered())
+		}
+		return inner(expr, vschema, ec)
+	}
+}
+
 func buildSetOpReservedConn(s setting) planFunc {
 	return func(expr *sqlparser.SetExpr, vschema plancontext.VSchema, _ *expressionConverter) (engine.SetOp, error) {
 		if !vschema.SysVarSetEnabled() {

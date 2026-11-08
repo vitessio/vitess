@@ -729,6 +729,7 @@ func (nz *normalizer) sysVarRewrite(cursor *Cursor, node *Variable) {
 
 	switch lowered {
 	case sysvars.Autocommit.Name,
+		sysvars.CharacterSetClient.Name,
 		sysvars.Charset.Name,
 		sysvars.ClientFoundRows.Name,
 		sysvars.DDLStrategy.Name,

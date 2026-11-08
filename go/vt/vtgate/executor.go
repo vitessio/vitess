@@ -287,7 +287,7 @@ func (e *Executor) Execute(
 	}
 	if result != nil && len(result.Rows) > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
+		piiSafeSQL, err := redactClientSQL(e.env.Parser(), safeSession, sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -495,7 +495,7 @@ func (e *Executor) StreamExecute(
 	saveSessionStats(safeSession, srr.stmtType, srr.rowsAffected, srr.rowsReturned, err)
 	if srr.rowsReturned > warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
-		piiSafeSQL, err := e.env.Parser().RedactSQLQuery(sql)
+		piiSafeSQL, err := redactClientSQL(e.env.Parser(), safeSession, sql)
 		if err != nil {
 			piiSafeSQL = logStats.StmtType
 		}
@@ -660,6 +660,12 @@ func (e *Executor) addNeededBindVars(vcursor *econtext.VCursorImpl, bindVarNeeds
 				}
 			})
 			bindVars[key] = sqltypes.StringBindVariable(v)
+		case sysvars.CharacterSetClient.Name:
+			name, err := session.ClientCharsetName()
+			if err != nil {
+				return err
+			}
+			bindVars[key] = sqltypes.StringBindVariable(name)
 		case sysvars.Version.Name:
 			bindVars[key] = sqltypes.StringBindVariable(servenv.AppVersion.MySQLVersion())
 		case sysvars.VersionComment.Name:
@@ -1281,9 +1287,15 @@ func (e *Executor) fetchOrCreatePlan(
 		return nil, nil, nil, vterrors.VT13001("vschema not initialized")
 	}
 
+	// The client's text is read in the client's character set, as MySQL reads
+	// it, which decides which bytes can be part of an unquoted name.
+	parser, err := safeSession.Parser(e.env.Parser())
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	// Plans can forward the statement text to MySQL as written, so MySQL must
 	// skip every comment that Vitess skips.
-	queryString, rewritten := e.env.Parser().RewriteDoubleSlashComments(queryString)
+	queryString, rewritten := parser.RewriteDoubleSlashComments(queryString)
 	// Count each executed statement once: a binary protocol prepare is
 	// counted when the statement is executed, and a retry after buffering
 	// shares the statement's logStats. A SQL PREPARE is counted by
@@ -1292,7 +1304,7 @@ func (e *Executor) fetchOrCreatePlan(
 		logStats.DoubleSlashComment = true
 		e.countDoubleSlashComment()
 	}
-	query, comments := e.env.Parser().SplitMarginComments(queryString)
+	query, comments := parser.SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
 
 	var setVarComment string
@@ -1302,7 +1314,7 @@ func (e *Executor) fetchOrCreatePlan(
 
 	var planKey engine.PlanKey
 	if preparedPlan {
-		planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
+		planKey = buildPlanKey(ctx, vcursor, query, setVarComment, parser.Charset())
 		plan, logStats.CachedPlan = e.plans.Get(planKey.Hash(), e.epoch.Load())
 	}
 
@@ -1400,7 +1412,11 @@ func (e *Executor) getCachedOrBuildPlan(
 	planKey engine.PlanKey,
 	ignoreCache bool,
 ) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
-	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
+	parser, err := vcursor.ClientParser()
+	if err != nil {
+		return nil, false, nil, err
+	}
+	stmt, reservedVars, err := parseAndValidateQuery(query, parser)
 	if err != nil {
 		return nil, false, nil, err
 	}
@@ -1473,7 +1489,7 @@ func (e *Executor) getCachedOrBuildPlan(
 	if planCachable && !ignoreCache {
 		if !preparedPlan {
 			// build Plan key
-			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
+			planKey = buildPlanKey(ctx, vcursor, query, setVarComment, parser.Charset())
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
@@ -1484,7 +1500,9 @@ func (e *Executor) getCachedOrBuildPlan(
 	return plan, false, stmt, err
 }
 
-func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
+// buildPlanKey builds the key of the plan for query. charset is the rule that
+// the query's text parses by, in the client's character set.
+func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string, charset sqlparser.ClientCharset) engine.PlanKey {
 	allDest := getDestinations(ctx, vcursor)
 
 	return engine.PlanKey{
@@ -1494,6 +1512,9 @@ func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query stri
 		Query:           query,
 		SetVarComment:   setVarComment,
 		Collation:       vcursor.ConnCollation(),
+		// The prepared path looks the plan up by the text before it parses
+		// it, and the client's character set decides how the text parses.
+		ClientCharset: charset,
 	}
 }
 
@@ -1691,7 +1712,13 @@ func (e *Executor) prepare(ctx context.Context, safeSession *econtext.SafeSessio
 		// (WITH ... SELECT/INSERT/REPLACE/UPDATE/DELETE). Anything else stays
 		// unknown and is rejected below, rather than being reported to the
 		// client as a zero-parameter success.
-		stmt, err := e.env.Parser().Parse(sql)
+		parser, err := safeSession.Parser(e.env.Parser())
+		if err != nil {
+			logStats.StmtType = stmtType.String()
+			safeSession.ClearWarnings()
+			return nil, 0, err
+		}
+		stmt, err := parser.Parse(sql)
 		if err != nil {
 			// The statement stays unknown, and an unparseable statement is
 			// never SHOW, so record the type and clear warnings the way the
@@ -1878,6 +1905,16 @@ func buildNullFieldTypes(stmt sqlparser.Statement) ([]*querypb.Field, uint16, bo
 	return fields, countArguments(stmt), true
 }
 
+// redactClientSQL redacts sql, the text of a client's query, reading it in
+// the character set of the client's session.
+func redactClientSQL(parser *sqlparser.Parser, safeSession *econtext.SafeSession, sql string) (string, error) {
+	parser, err := safeSession.Parser(parser)
+	if err != nil {
+		return "", err
+	}
+	return parser.RedactSQLQuery(sql)
+}
+
 func parseAndValidateQuery(query string, parser *sqlparser.Parser) (sqlparser.Statement, *sqlparser.ReservedVars, error) {
 	stmt, reserved, err := parser.Parse2(query)
 	if err != nil {
@@ -2039,7 +2076,11 @@ func (e *Executor) PlanPrepareStmt(ctx context.Context, safeSession *econtext.Sa
 	// The session keeps the rewritten text of the statement, so this is the
 	// only time that a SQL PREPARE can be counted. Its statement clears the
 	// session warnings before it runs, so the warning stays.
-	if _, rewritten := e.env.Parser().RewriteDoubleSlashComments(query); rewritten {
+	parser, err := safeSession.Parser(e.env.Parser())
+	if err != nil {
+		return nil, err
+	}
+	if _, rewritten := parser.RewriteDoubleSlashComments(query); rewritten {
 		e.countDoubleSlashComment()
 		safeSession.RecordWarning(doubleSlashCommentWarning())
 	}

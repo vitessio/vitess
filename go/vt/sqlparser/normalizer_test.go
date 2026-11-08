@@ -577,12 +577,12 @@ type testCaseSysVar struct {
 }
 
 type myTestCase struct {
-	in, expected                                                                            string
-	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID                       bool
-	ddlStrategy, migrationContext, sessionUUID, sessionEnableSystemSettings                 bool
-	udv                                                                                     int
-	autocommit, foreignKeyChecks, clientFoundRows, skipQueryPlanCache, socket, queryTimeout bool
-	sqlSelectLimit, transactionMode, workload, version, versionComment, transactionTimeout  bool
+	in, expected                                                                                                string
+	liid, db, foundRows, rowCount, rawGTID, rawTimeout, sessTrackGTID                                           bool
+	ddlStrategy, migrationContext, sessionUUID, sessionEnableSystemSettings                                     bool
+	udv                                                                                                         int
+	autocommit, foreignKeyChecks, clientFoundRows, skipQueryPlanCache, socket, queryTimeout, characterSetClient bool
+	sqlSelectLimit, transactionMode, workload, version, versionComment, transactionTimeout                      bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -712,6 +712,11 @@ func TestRewrites(in *testing.T) {
 		in:       "SELECT @@socket",
 		expected: "SELECT :__vtsocket as `@@socket`",
 		socket:   true,
+	}, {
+		// VTGate keeps the client's character set, so it answers this itself.
+		in:                 "SELECT @@character_set_client",
+		expected:           "SELECT :__vtcharacter_set_client as `@@character_set_client`",
+		characterSetClient: true,
 	}, {
 		in:       "select (select 42) from dual",
 		expected: "select 42 as `(select 42)` from dual",
@@ -862,6 +867,7 @@ func TestRewrites(in *testing.T) {
 		socket:                      true,
 		queryTimeout:                true,
 		transactionTimeout:          true,
+		characterSetClient:          true,
 	}, {
 		// the global scope reports global values: only the server identity is substituted
 		in:             "SHOW GLOBAL VARIABLES",
@@ -921,6 +927,7 @@ func TestRewrites(in *testing.T) {
 			assert.Equal(tc.version, result.NeedsSysVar(sysvars.Version.Name), "should need Vitess version")
 			assert.Equal(tc.versionComment, result.NeedsSysVar(sysvars.VersionComment.Name), "should need Vitess version")
 			assert.Equal(tc.socket, result.NeedsSysVar(sysvars.Socket.Name), "should need :__vtsocket")
+			assert.Equal(tc.characterSetClient, result.NeedsSysVar(sysvars.CharacterSetClient.Name), "should need :__vtcharacter_set_client")
 		})
 	}
 }

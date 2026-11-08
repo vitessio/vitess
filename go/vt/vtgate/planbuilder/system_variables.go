@@ -86,11 +86,15 @@ func (pc *sysvarPlanCache) init(env *vtenv.Environment) {
 		// planning time, so an invalid or unsupported value fails the SET before any
 		// assignment executes, regardless of whether system settings are enabled.
 		pc.funcs[sysvars.SQLMode.Name] = validateSQLModePlan(pc.funcs[sysvars.SQLMode.Name])
-		// A character set assignment is ignored, but VTGate must not tell a client
-		// that a character set Vitess cannot parse safely was accepted.
-		for _, name := range []string{"character_set_client", "character_set_connection", "character_set_results", "collation_connection"} {
+		// VTGate keeps character_set_client and ignores the other character set
+		// variables, but it must not tell a client that a character set Vitess
+		// cannot parse safely was accepted.
+		for _, name := range []string{sysvars.CharacterSetClient.Name, "character_set_connection", "character_set_results", "collation_connection"} {
 			pc.funcs[name] = validateConnectionCharsetPlan(pc.funcs[name])
 		}
+		// VTGate reads the client's names in character_set_client, so it must
+		// also have a rule for that character set, as for the handshake's.
+		pc.funcs[sysvars.CharacterSetClient.Name] = validateClientCharsetPlan(pc.funcs[sysvars.CharacterSetClient.Name])
 	})
 }
 

@@ -147,6 +147,12 @@ func (vw *VSchemaWrapper) Environment() *vtenv.Environment {
 	return vw.Env
 }
 
+// ClientParser returns the environment's parser: the tests that use the
+// wrapper read their queries as UTF-8.
+func (vw *VSchemaWrapper) ClientParser() (*sqlparser.Parser, error) {
+	return vw.Env.Parser(), nil
+}
+
 func (vw *VSchemaWrapper) PlannerWarning(_ string) {
 }
 

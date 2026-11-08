@@ -100,27 +100,31 @@ func TestPlanKey(t *testing.T) {
 		expectedPlanPrefixKey string
 		resolvedShard         []*srvtopo.ResolvedShard
 		setVarComment         string
+		clientCharset         sqlparser.ClientCharset
 	}
 
 	tests := []testCase{{
 		targetString:          "",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, ClientCharset: utf8mb4",
 	}, {
 		setVarComment:         "sEtVaRcOmMeNt",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255, ClientCharset: utf8mb4",
 	}, {
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, ClientCharset: utf8mb4",
 	}, {
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255, ClientCharset: utf8mb4",
 	}, {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
 		},
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, ClientCharset: utf8mb4",
+	}, {
+		clientCharset:         sqlparser.ClientCharsetLatin1,
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, ClientCharset: latin1",
 	}}
 	cfg := econtext.VCursorConfig{
 		Collation:         collations.CollationUtf8mb4ID,
@@ -134,7 +138,7 @@ func TestPlanKey(t *testing.T) {
 			ss := econtext.NewSafeSession(&vtgatepb.Session{TargetString: tc.targetString})
 			resolver := &fakeResolver{resolveShards: tc.resolvedShard}
 			vc, _ := econtext.NewVCursorImpl(ss, makeComments(""), e, nil, e.vm, e.VSchema(), resolver, nil, nullResultsObserver{}, cfg, nil)
-			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment)
+			key := buildPlanKey(ctx, vc, "SELECT 1", tc.setVarComment, tc.clientCharset)
 			require.Equal(t, tc.expectedPlanPrefixKey, key.DebugString(), "test case %d", i)
 		})
 	}
@@ -1684,7 +1688,7 @@ func assertCacheContains(t *testing.T, e *Executor, vc *econtext.VCursorImpl, sq
 			return true
 		})
 	} else {
-		h := buildPlanKey(t.Context(), vc, sql, "")
+		h := buildPlanKey(t.Context(), vc, sql, "", sqlparser.ClientCharsetUTF8)
 		plan, _ = e.plans.Get(h.Hash(), e.epoch.Load())
 	}
 	assert.NotNilf(t, plan, "plan not found for query: %s", sql)

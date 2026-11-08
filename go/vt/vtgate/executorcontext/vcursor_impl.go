@@ -1390,6 +1390,11 @@ func (vc *VCursorImpl) SetMigrationContext(migrationContext string) {
 	vc.SafeSession.SetMigrationContext(migrationContext)
 }
 
+// ClientParser implements the VSchema interface
+func (vc *VCursorImpl) ClientParser() (*sqlparser.Parser, error) {
+	return vc.SafeSession.Parser(vc.Environment().Parser())
+}
+
 // GetMigrationContext implements the SessionActions interface
 func (vc *VCursorImpl) GetMigrationContext() string {
 	return vc.SafeSession.GetMigrationContext()

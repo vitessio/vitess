@@ -20,8 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -547,12 +549,27 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 			return err
 		}
 		switch strings.ToLower(str) {
-		case "", "utf8", "utf8mb4", "latin1", "default":
-			// do nothing
-			break
+		case "", "utf8mb4", "default":
+			// SET NAMES DEFAULT and SET CHARACTER SET DEFAULT set the server's
+			// default character set, which is utf8mb4.
+			vcursor.Session().SetSysVar(sysvars.CharacterSetClient.Name, ClientCharsetValue("utf8mb4"))
+		case "utf8", "utf8mb3", "latin1":
+			vcursor.Session().SetSysVar(sysvars.CharacterSetClient.Name, ClientCharsetValue(str))
 		default:
+			// VTGate has no rule for reading a client's names in any other
+			// character set, as it refuses a handshake in one.
 			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "charset/name %v is not supported", str)
 		}
+	case sysvars.CharacterSetClient.Name:
+		// VTGate keeps the client's character set rather than send it to MySQL,
+		// and reads the client's unquoted names in it, as MySQL would. The
+		// planner already refused a character set that VTGate has no rule for,
+		// if the value is a constant.
+		name, err := svss.evalCharsetName(env, vcursor)
+		if err != nil {
+			return err
+		}
+		vcursor.Session().SetSysVar(sysvars.CharacterSetClient.Name, ClientCharsetValue(name))
 	case sysvars.ReadAfterWriteGTID.Name:
 		str, err := svss.evalAsString(env, vcursor)
 		if err != nil {
@@ -629,6 +646,40 @@ func (svss *SysVarSetAware) evalAsString(env *evalengine.ExpressionEnv, vcursor 
 	return v.ToString(), nil
 }
 
+// evalCharsetName returns the name of the character set that the value of a
+// character set variable gives: a character set or a collation name, or the
+// ID of a collation, which MySQL also accepts. It fails for a value that is
+// not a character set that VTGate has a rule for reading names in, as VTGate
+// refuses a handshake in one.
+func (svss *SysVarSetAware) evalCharsetName(env *evalengine.ExpressionEnv, vcursor VCursor) (string, error) {
+	value, err := env.Evaluate(svss.Expr)
+	if err != nil {
+		return "", err
+	}
+	v := value.Value(vcursor.ConnCollation())
+	collEnv := vcursor.Environment().CollationEnv()
+	var id collations.ID
+	switch {
+	case v.IsIntegral():
+		n, err := v.ToUint64()
+		if err != nil || n == 0 || n > math.MaxUint16 {
+			return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Unknown collation: '%s'", v.ToString())
+		}
+		id = collations.ID(n)
+	case v.IsText() || v.IsBinary():
+		if id, err = collEnv.ParseConnectionCharset(v.ToString()); err != nil {
+			return "", err
+		}
+	default:
+		return "", vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "incorrect argument type to variable '%s': %s", svss.Name, v.Type().String())
+	}
+	name, _ := collEnv.ConnectionCharset(id) // a character set with a rule is safe for a connection
+	if _, ok := sqlparser.ClientCharsetFor(name); !ok {
+		return "", UnsupportedClientCharsetError(v.ToString(), svss.Name)
+	}
+	return name, nil
+}
+
 func (svss *SysVarSetAware) setBoolSysVar(ctx context.Context, env *evalengine.ExpressionEnv, setter func(context.Context, bool) error) error {
 	value, err := env.Evaluate(svss.Expr)
 	if err != nil {
@@ -654,4 +705,61 @@ func (v *VitessMetadata) Execute(ctx context.Context, vcursor VCursor, env *eval
 
 func (v *VitessMetadata) VariableName() string {
 	return v.Name
+}
+
+// ClientCharsetValue returns the value that VTGate keeps for character_set_client
+// in the session's system variables when the client's character set is name.
+// It is a string literal, as the values of the other system variables are SQL
+// expressions.
+func ClientCharsetValue(name string) string {
+	name = strings.ToLower(name)
+	if name == "utf8" {
+		// utf8 is utf8mb3 in MySQL 8.0 and later, which reports it so.
+		name = "utf8mb3"
+	}
+	return sqlparser.String(sqlparser.NewStrLiteral(name))
+}
+
+// ClientCharsetName returns the client's character set from the session's
+// system variables, which VTGate reads the client's unquoted names in, as MySQL
+// reads them in character_set_client. A session without the variable, such as
+// one of a gRPC client, has utf8mb4, the server's default. It fails for a value
+// that ClientCharsetValue did not write, which a gRPC client can send, rather
+// than guess what the client meant.
+func ClientCharsetName(systemVariables map[string]string) (string, error) {
+	value, ok := systemVariables[sysvars.CharacterSetClient.Name]
+	if !ok {
+		return "utf8mb4", nil
+	}
+	name, quoted := strings.CutPrefix(value, "'")
+	name, closed := strings.CutSuffix(name, "'")
+	if !quoted || !closed || name == "" || strings.Trim(name, "abcdefghijklmnopqrstuvwxyz0123456789_") != "" {
+		return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid value for %s in the session: %s", sysvars.CharacterSetClient.Name, value)
+	}
+	return name, nil
+}
+
+// ParserForClientCharset returns parser for the client's character set name.
+// A character set that the parser has no rule for, such as koi8r, gets the
+// UTF-8 rule, which is how VTGate has always read the queries of every client.
+func ParserForClientCharset(parser *sqlparser.Parser, name string) (*sqlparser.Parser, error) {
+	charset, _ := sqlparser.ClientCharsetFor(name) // ClientCharsetUTF8 when the parser has no rule
+	return parser.WithCharset(charset)
+}
+
+// ParserForSession returns parser for the character set of the client of a
+// session.
+func ParserForSession(parser *sqlparser.Parser, session *vtgatepb.Session) (*sqlparser.Parser, error) {
+	name, err := ClientCharsetName(session.GetSystemVariables())
+	if err != nil {
+		return nil, err
+	}
+	return ParserForClientCharset(parser, name)
+}
+
+// UnsupportedClientCharsetError is the error for a value of a character set
+// variable that names a character set VTGate has no rule for reading a
+// client's names in.
+func UnsupportedClientCharsetError(value, variable string) error {
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported connection character set %s for %s: use utf8mb4, utf8mb3 or latin1", value, variable)
 }

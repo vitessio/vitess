@@ -69,6 +69,10 @@ type VSchema interface {
 	SetPlannerVersion(pv PlannerVersion)
 	ConnCollation() collations.ID
 	Environment() *vtenv.Environment
+	// ClientParser returns the parser for the character set of the client,
+	// for the planner to parse the client's query text again. Text that
+	// Vitess writes itself parses with Environment().Parser().
+	ClientParser() (*sqlparser.Parser, error)
 
 	// ErrorIfShardedF will return an error if the keyspace is sharded,
 	// and produce a warning if the vtgate if configured to do so
