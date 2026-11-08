@@ -348,8 +348,8 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 			wantIncludeBinlogs: true,
 		},
 		{
-			name:               "Backup --json --include-binlogs",
-			args:               []string{"Backup", "--json", "--include-binlogs", "zone1-100"},
+			name:               "Backup -j --include-binlogs",
+			args:               []string{"Backup", "-j", "--include-binlogs", "zone1-100"},
 			wantIncludeOutcome: true,
 			wantIncludeBinlogs: true,
 		},
@@ -368,8 +368,8 @@ func TestBackupCommands_JSONOutputWiring(t *testing.T) {
 			wantIncludeBinlogs: true,
 		},
 		{
-			name:               "BackupShard --json --include-binlogs",
-			args:               []string{"BackupShard", "--json", "--include-binlogs", "ks/0"},
+			name:               "BackupShard -j --include-binlogs",
+			args:               []string{"BackupShard", "-j", "--include-binlogs", "ks/0"},
 			wantIncludeOutcome: true,
 			wantIncludeBinlogs: true,
 		},

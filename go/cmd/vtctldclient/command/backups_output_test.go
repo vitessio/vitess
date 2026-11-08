@@ -144,15 +144,13 @@ func TestConsumeBackupStream_JSONManifestNotJSON(t *testing.T) {
 	err := consumeBackupStream(stream, true /* outputJSON */, &out, &errOut)
 	require.NoError(t, err, "an unparseable manifest must not fail the command")
 
-	var got struct {
-		Status     string          `json:"status"`
-		BackupName string          `json:"backup_name"`
-		Manifest   json.RawMessage `json:"manifest"`
-	}
-	require.NoError(t, json.Unmarshal(out.Bytes(), &got), "stdout must still be valid JSON")
-	assert.Equal(t, "USABLE", got.Status)
-	assert.Equal(t, "2026-01-01.000000.zone1-0000000100", got.BackupName)
-	assert.Equal(t, "null", string(got.Manifest))
+	// The keys, their order and the indentation are the format callers parse.
+	assert.Equal(t, `{
+  "status": "USABLE",
+  "backup_name": "2026-01-01.000000.zone1-0000000100",
+  "manifest": null
+}
+`, out.String())
 	assert.Contains(t, errOut.String(), "not valid JSON")
 }
 
