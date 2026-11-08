@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -93,6 +94,9 @@ type requiredPositionFixture struct {
 	// reparent journal count of a tablet only advances once it applied.
 	applied map[string]bool
 
+	// journalExpected records that expectJournal allowed ReadReparentJournalInfo.
+	journalExpected bool
+
 	behind   string
 	advanced replicaPositions
 	lagging  string
@@ -138,7 +142,7 @@ func newRequiredPositionFixture(t *testing.T, opts newRequiredPositionFixtureOpt
 
 	tmc := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
 
-	return &requiredPositionFixture{
+	f := &requiredPositionFixture{
 		t:        t,
 		erp:      NewEmergencyReparenter(ts, tmc, logutil.NewMemoryLogger()),
 		tmc:      tmc,
@@ -149,6 +153,40 @@ func newRequiredPositionFixture(t *testing.T, opts newRequiredPositionFixtureOpt
 		advanced: replicaPositions{executed: opts.applied, relay: opts.received},
 		lagging:  opts.lagging,
 	}
+	// The fused calls go through the test's legacy expectations, so waits are still
+	// counted. Without expectJournal the journal read fails and ERS reads it again.
+	f.tmc.EXPECT().PrepareEmergencyReparent(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
+			if err := f.tmc.WaitForPosition(ctx, tablet, request.WaitPosition); err != nil {
+				return &tabletmanagerdatapb.PrepareEmergencyReparentResponse{WaitForPositionError: vterrors.ToVTRPC(err)}, nil
+			}
+			f.mu.Lock()
+			journalExpected := f.journalExpected
+			f.mu.Unlock()
+			if !journalExpected {
+				return &tabletmanagerdatapb.PrepareEmergencyReparentResponse{ReadReparentJournalError: vterrors.ToVTRPC(assert.AnError)}, nil
+			}
+			length, err := f.tmc.ReadReparentJournalInfo(ctx, tablet)
+			if err != nil {
+				return &tabletmanagerdatapb.PrepareEmergencyReparentResponse{ReadReparentJournalError: vterrors.ToVTRPC(err)}, nil
+			}
+			return &tabletmanagerdatapb.PrepareEmergencyReparentResponse{ReparentJournalLength: length}, nil
+		}).
+		AnyTimes()
+	f.tmc.EXPECT().PromoteReplicaAndJournal(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+			position, err := f.tmc.PromoteReplica(ctx, tablet, request.SemiSync)
+			if err != nil {
+				return nil, err
+			}
+			response := &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{Position: position}
+			if err := f.tmc.PopulateReparentJournal(ctx, tablet, request.TimeCreated.Seconds*int64(time.Second)+int64(request.TimeCreated.Nanoseconds), request.ActionName, tablet.Alias, position); err != nil {
+				response.PopulateReparentJournalError = vterrors.ToVTRPC(err)
+			}
+			return response, nil
+		}).
+		AnyTimes()
+	return f
 }
 
 // replicaPositions holds the executed and relay log positions of one replica.
@@ -230,6 +268,9 @@ func (f *requiredPositionFixture) expectWaits(n int) {
 // has not applied its relay logs and after once it has. A tablet absent from
 // after keeps its before count.
 func (f *requiredPositionFixture) expectJournal(before, after map[string]int32) {
+	f.mu.Lock()
+	f.journalExpected = true
+	f.mu.Unlock()
 	f.tmc.EXPECT().ReadReparentJournalInfo(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, tablet *topodatapb.Tablet) (int32, error) {
 			alias := topoproto.TabletAliasString(tablet.Alias)

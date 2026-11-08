@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/timer"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
@@ -39,6 +40,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtctl/internal/grpcshim"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -1042,9 +1044,30 @@ func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, ta
 	return 0, assert.AnError
 }
 
+// PrepareEmergencyReparent is part of the tmclient.TabletManagerClient interface.
+// Without PrepareEmergencyReparentResults it falls back to the WaitForPosition
+// and ReadReparentJournalInfo fakes, so legacy-RPC tests still apply.
 func (fake *TabletManagerClient) PrepareEmergencyReparent(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
 	if fake.PrepareEmergencyReparentResults == nil {
-		return nil, assert.AnError
+		if request.WaitPosition != "" {
+			waitCtx := ctx
+			if timeout, ok, err := protoutil.DurationFromProto(request.WaitForPositionTimeout); err == nil && ok && timeout > 0 {
+				var cancel context.CancelFunc
+				waitCtx, cancel = context.WithTimeout(ctx, timeout)
+				defer cancel()
+			}
+			if err := fake.WaitForPosition(waitCtx, tablet, request.WaitPosition); err != nil {
+				return nil, err
+			}
+		}
+		response := &tabletmanagerdatapb.PrepareEmergencyReparentResponse{}
+		length, err := fake.ReadReparentJournalInfo(ctx, tablet)
+		if err != nil {
+			response.ReadReparentJournalError = vterrors.ToVTRPC(err)
+		} else {
+			response.ReparentJournalLength = length
+		}
+		return response, nil
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)
@@ -1091,9 +1114,21 @@ func (fake *TabletManagerClient) PromoteReplica(ctx context.Context, tablet *top
 	return "", assert.AnError
 }
 
+// PromoteReplicaAndJournal is part of the tmclient.TabletManagerClient interface.
+// Without PromoteReplicaAndJournalResults it falls back to the PromoteReplica
+// and PopulateReparentJournal fakes, so legacy-RPC tests still apply.
 func (fake *TabletManagerClient) PromoteReplicaAndJournal(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
 	if fake.PromoteReplicaAndJournalResults == nil {
-		return nil, assert.AnError
+		position, err := fake.PromoteReplica(ctx, tablet, request.SemiSync)
+		if err != nil {
+			return nil, err
+		}
+		response := &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{Position: position}
+		timeCreated := protoutil.TimeFromProto(request.TimeCreated)
+		if err := fake.PopulateReparentJournal(ctx, tablet, timeCreated.UnixNano(), request.ActionName, tablet.Alias, position); err != nil {
+			response.PopulateReparentJournalError = vterrors.ToVTRPC(err)
+		}
+		return response, nil
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)

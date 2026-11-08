@@ -25,8 +25,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 
@@ -38,9 +40,12 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
@@ -3116,6 +3121,68 @@ func TestUnsupportedBackupTabletTypes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			require.Equal(t, tt.expected, UnsupportedBackupTabletTypes(tt.tabletTypes))
+		})
+	}
+}
+
+// TestPromoteReplicaAndJournal checks that the helper tells a failed promotion
+// apart from a failed journal write.
+func TestPromoteReplicaAndJournal(t *testing.T) {
+	tablet := &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}
+	created := time.Unix(1700000000, 123)
+
+	tests := []struct {
+		name           string
+		response       *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
+		err            error
+		wantPromoteErr string
+		wantJournalErr string
+	}{
+		{name: "success", response: &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{Position: "pos"}},
+		{name: "call fails", err: errors.New("connection refused"), wantPromoteErr: "connection refused"},
+		{
+			name: "promotion fails",
+			response: &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{
+				PromoteReplicaError: &vtrpcpb.RPCError{Code: vtrpcpb.Code_FAILED_PRECONDITION, Message: "not a replica"},
+			},
+			wantPromoteErr: "not a replica",
+		},
+		{
+			name: "journal write fails",
+			response: &tabletmanagerdatapb.PromoteReplicaAndJournalResponse{
+				Position:                     "pos",
+				PopulateReparentJournalError: &vtrpcpb.RPCError{Code: vtrpcpb.Code_DEADLINE_EXCEEDED, Message: "insert timed out"},
+			},
+			wantJournalErr: "insert timed out",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmc := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
+			tmc.EXPECT().PromoteReplicaAndJournal(gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, r *tabletmanagerdatapb.PromoteReplicaAndJournalRequest) (*tabletmanagerdatapb.PromoteReplicaAndJournalResponse, error) {
+					assert.True(t, r.SemiSync)
+					assert.Equal(t, "PlannedReparentShard", r.ActionName)
+					assert.Equal(t, created.UnixNano(), protoutil.TimeFromProto(r.TimeCreated).UnixNano())
+					timeout, _, err := protoutil.DurationFromProto(r.PopulateReparentJournalTimeout)
+					require.NoError(t, err)
+					assert.Equal(t, 45*time.Second, timeout)
+					return tt.response, tt.err
+				})
+
+			promoteErr, journalErr := promoteReplicaAndJournal(t.Context(), tmc, tablet, true, created.UnixNano(), "PlannedReparentShard", 45*time.Second)
+
+			if tt.wantPromoteErr != "" {
+				require.ErrorContains(t, promoteErr, tt.wantPromoteErr)
+			} else {
+				require.NoError(t, promoteErr)
+			}
+			if tt.wantJournalErr != "" {
+				require.ErrorContains(t, journalErr, tt.wantJournalErr)
+				assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(journalErr))
+			} else {
+				require.NoError(t, journalErr)
+			}
 		})
 	}
 }

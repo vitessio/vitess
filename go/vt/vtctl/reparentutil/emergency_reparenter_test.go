@@ -33,6 +33,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/protoutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -51,6 +52,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -5612,22 +5614,27 @@ func TestEmergencyReparenterRestartsStoppedIOThreadsOnFailure(t *testing.T) {
 		// Now simulate every candidate taking too long while applying relay logs. A single
 		// candidate applying in time would let the reparent proceed, so all of them have
 		// to time out for ERS to abort during relay log application.
-		tmc.EXPECT().
-			WaitForPosition(gomock.Any(), tabletAliasMatcher(stoppedIOAlias), relayLogPosition).
-			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
-				// Block until the context expires so ERS aborts before it starts repointing replicas.
-				<-ctx.Done()
-				return ctx.Err()
-			}).
-			Times(1)
-
-		tmc.EXPECT().
-			WaitForPosition(gomock.Any(), tabletAliasMatcher(alreadyStoppedIO), relayLogPosition).
-			DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, position string) error {
-				<-ctx.Done()
-				return ctx.Err()
-			}).
-			Times(1)
+		for _, alias := range []string{stoppedIOAlias, alreadyStoppedIO} {
+			// The tablet times out the wait itself and reports a phase error.
+			tmc.EXPECT().
+				PrepareEmergencyReparent(gomock.Any(), tabletAliasMatcher(alias), gomock.Any()).
+				DoAndReturn(func(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
+					assert.Equal(t, relayLogPosition, request.WaitPosition)
+					timeout, _, err := protoutil.DurationFromProto(request.WaitForPositionTimeout)
+					if err != nil {
+						return nil, err
+					}
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					case <-time.After(timeout):
+					}
+					return &tabletmanagerdatapb.PrepareEmergencyReparentResponse{
+						WaitForPositionError: &vtrpc.RPCError{Code: vtrpc.Code_DEADLINE_EXCEEDED, Message: "timed out waiting for position"},
+					}, nil
+				}).
+				Times(1)
+		}
 
 		// We expect the replica whose IO thread was stopped as part of the ERS (and only that replica,
 		// not the one that already had its IO thread stopped) to have replication restarted.
@@ -10417,7 +10424,7 @@ func TestEmergencyReparenterFindErrantGTIDs(t *testing.T) {
 			validCandidates, isGtid, err := FindPositionsOfAllCandidates(tt.statusMap, tt.primaryStatusMap)
 			require.NoError(t, err)
 			require.True(t, isGtid)
-			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil, false)
+			candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, tt.statusMap, tt.tabletMap, 10*time.Second, nil, false, nil)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
 				return
@@ -10519,7 +10526,7 @@ func TestEmergencyReparenterFindErrantGTIDs_NilPosition(t *testing.T) {
 		"zone1-0000000104": nil,
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false, nil)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000102")
 	// the nil peer at maxLen contributed no evidence, so the surviving candidate was
@@ -10651,7 +10658,7 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryPosition(t *testing.T) {
 		},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false, nil)
 	require.NoError(t, err)
 	// the empty primary contributed no evidence, so the lagged replica must be accepted
 	// as-is rather than have its entire GTID set flagged errant
@@ -10742,7 +10749,7 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 		},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false, nil)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000101")
 	// no other tablet corroborates u3:1, so zone1-0000000102 has an errant GTID and
@@ -10817,7 +10824,7 @@ func TestEmergencyReparenterFindErrantGTIDs_WipedMaxJournalFailsClosed(t *testin
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false, nil)
 	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
 	require.ErrorContains(t, err, "zone1-0000000100")
 }
@@ -10840,7 +10847,7 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsWithJournalHistory(t
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false, nil)
 	require.ErrorContains(t, err, "cannot be proven to have seen the latest promotion")
 	require.ErrorContains(t, err, "zone1-0000000100")
 }
@@ -10863,7 +10870,7 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsNewShard(t *testing.
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true, nil)
 	require.NoError(t, err)
 	assert.Contains(t, candidates, "zone1-0000000100")
 	assert.Contains(t, candidates, "zone1-0000000101")
@@ -10895,7 +10902,7 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableRealPosition(t *t
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false, nil)
 	require.ErrorContains(t, err, "could not read reparent journal information")
 }
 
@@ -10919,7 +10926,7 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableNewShard(t *testi
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true, nil)
 	require.NoError(t, err)
 	assert.Contains(t, candidates, "zone1-0000000100")
 	assert.Contains(t, candidates, "zone1-0000000101")
@@ -10946,7 +10953,7 @@ func TestEmergencyReparenterFindErrantGTIDs_AllZeroPositionsInitializedShard(t *
 		"zone1-0000000101": {Combined: emptyPos},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false, nil)
 	require.ErrorContains(t, err, "topology records a previous primary")
 }
 
@@ -10974,7 +10981,7 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableInitializedShard(
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, false, nil)
 	require.ErrorContains(t, err, "could not read reparent journal information")
 }
 
@@ -11003,6 +11010,123 @@ func TestEmergencyReparenterFindErrantGTIDs_MissingJournalTableMixedStateShard(t
 		},
 	}
 
-	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true)
+	_, _, err := erp.findErrantGTIDs(t.Context(), validCandidates, map[string]*replicationdatapb.StopReplicationStatus{}, tabletMap, 10*time.Second, nil, true, nil)
 	require.ErrorContains(t, err, "could not read reparent journal information")
+}
+
+// TestPrepareEmergencyReparentResult checks that only a successful wait and
+// journal read keep the journal length.
+func TestPrepareEmergencyReparentResult(t *testing.T) {
+	const (
+		alias    = "zone1-0000000100"
+		position = "MySQL56/3e11fa47-71ca-11e1-9e33-c80aa9429562:1-20"
+	)
+	tabletInfo := &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}}
+	status := &replicationdatapb.StopReplicationStatus{After: &replicationdatapb.Status{RelayLogPosition: position}}
+
+	tests := []struct {
+		name          string
+		response      *tabletmanagerdatapb.PrepareEmergencyReparentResponse
+		err           error
+		wantErr       string
+		wantJournal   bool
+		wantJournalTo int32
+	}{
+		{
+			name:          "wait and journal read succeed",
+			response:      &tabletmanagerdatapb.PrepareEmergencyReparentResponse{ReparentJournalLength: 7},
+			wantJournal:   true,
+			wantJournalTo: 7,
+		},
+		{
+			name: "journal read fails after the wait",
+			response: &tabletmanagerdatapb.PrepareEmergencyReparentResponse{
+				ReadReparentJournalError: &vtrpc.RPCError{Code: vtrpc.Code_NOT_FOUND, Message: "no journal"},
+			},
+		},
+		{
+			name: "wait fails",
+			response: &tabletmanagerdatapb.PrepareEmergencyReparentResponse{
+				ReparentJournalLength: 7,
+				WaitForPositionError:  &vtrpc.RPCError{Code: vtrpc.Code_DEADLINE_EXCEEDED, Message: "timed out waiting for position"},
+			},
+			wantErr: "timed out waiting for position",
+		},
+		{
+			name:    "call fails",
+			err:     errors.New("connection refused"),
+			wantErr: "connection refused",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmc := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
+			var request *tabletmanagerdatapb.PrepareEmergencyReparentRequest
+			var deadline time.Time
+			tmc.EXPECT().PrepareEmergencyReparent(gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(ctx context.Context, _ *topodatapb.Tablet, r *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
+					request = r
+					deadline, _ = ctx.Deadline()
+					return tt.response, tt.err
+				})
+			erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+			started := time.Now()
+
+			result := erp.prepareEmergencyReparent(t.Context(), alias, tabletInfo, status, 30*time.Second)
+
+			assert.Equal(t, alias, result.alias)
+			assert.Equal(t, position, request.WaitPosition)
+			timeout, _, err := protoutil.DurationFromProto(request.WaitForPositionTimeout)
+			require.NoError(t, err)
+			assert.Equal(t, 30*time.Second, timeout)
+			// The call outlives the wait budget so the journal read can follow it.
+			assert.WithinDuration(t, started.Add(30*time.Second+topo.RemoteOperationTimeout), deadline, 2*time.Second)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, result.err, tt.wantErr)
+			} else {
+				require.NoError(t, result.err)
+			}
+			if tt.wantJournal {
+				require.NotNil(t, result.journalLength)
+				assert.Equal(t, tt.wantJournalTo, *result.journalLength)
+			} else {
+				assert.Nil(t, result.journalLength)
+			}
+		})
+	}
+
+	t.Run("exhausted budget is still sent as positive", func(t *testing.T) {
+		tmc := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
+		tmc.EXPECT().PrepareEmergencyReparent(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ *topodatapb.Tablet, r *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
+				timeout, _, err := protoutil.DurationFromProto(r.WaitForPositionTimeout)
+				require.NoError(t, err)
+				// A zero timeout would make the tablet fall back to its default.
+				assert.Positive(t, timeout)
+				return &tabletmanagerdatapb.PrepareEmergencyReparentResponse{}, nil
+			})
+		erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+		require.NoError(t, erp.prepareEmergencyReparent(t.Context(), alias, tabletInfo, status, 0).err)
+	})
+}
+
+// TestGatherReparentJournalInfoSkipsKnownLengths checks that known journal
+// lengths are not read again.
+func TestGatherReparentJournalInfoSkipsKnownLengths(t *testing.T) {
+	tabletMap := map[string]*topo.TabletInfo{
+		"zone1-0000000100": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}},
+		"zone1-0000000101": {Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}}},
+	}
+	tmc := &testutil.TabletManagerClient{
+		ReadReparentJournalInfoResults: map[string]int32{"zone1-0000000101": 4},
+		// Reading the known tablet's journal again would fail the gather.
+		ReadReparentJournalInfoErrors: map[string]error{"zone1-0000000100": assert.AnError},
+	}
+	erp := NewEmergencyReparenter(nil, tmc, logutil.NewMemoryLogger())
+	candidates := map[string]*RelayLogPositions{"zone1-0000000100": {}, "zone1-0000000101": {}}
+
+	lengths, err := erp.gatherReparentJournalInfo(t.Context(), candidates, tabletMap, 10*time.Second, false, map[string]int32{"zone1-0000000100": 5})
+
+	require.NoError(t, err)
+	assert.Equal(t, map[string]int32{"zone1-0000000100": 5, "zone1-0000000101": 4}, lengths)
 }
