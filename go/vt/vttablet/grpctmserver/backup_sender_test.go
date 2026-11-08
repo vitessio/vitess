@@ -17,79 +17,87 @@ limitations under the License.
 package grpctmserver
 
 import (
-	"runtime"
-	"sync"
-	"sync/atomic"
+	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
+	"vitess.io/vitess/go/vt/vttablet/tmrpctest"
+
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-// sendRecorder is a Backup stream that records what is sent and fails the test
-// if two Sends overlap.
-type sendRecorder struct {
-	grpc.ServerStream
-	t        *testing.T
-	inFlight atomic.Int32
-	mu       sync.Mutex
-	sent     []*tabletmanagerdatapb.BackupResponse
+type lateLoggingBackupTM struct {
+	tabletmanager.RPCTM
+	background context.Context
+	done       chan struct{}
+	logger     logutil.Logger
+	backupErr  error
 }
 
-func (r *sendRecorder) Send(resp *tabletmanagerdatapb.BackupResponse) error {
-	if r.inFlight.Add(1) > 1 {
-		r.t.Error("concurrent Send on the Backup stream")
-	}
-	defer r.inFlight.Add(-1)
-	runtime.Gosched()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.sent = append(r.sent, resp)
-	return nil
-}
-
-// TestBackupSender verifies that log events from several goroutines and the
-// terminal message never overlap, and that no event follows the terminal
-// message, as when an engine's progress goroutine logs after Backup returns.
-func TestBackupSender(t *testing.T) {
-	rec := &sendRecorder{t: t}
-	sender := &backupSender{stream: rec}
-
-	// Events from several goroutines, as from an engine's progress goroutines.
-	var wg sync.WaitGroup
-	start := make(chan struct{})
-	for range 4 {
-		wg.Go(func() {
-			<-start
-			for range 5 {
-				sender.event(&logutilpb.Event{Value: "progress"})
+func (tm *lateLoggingBackupTM) Backup(_ context.Context, logger logutil.Logger, _ *tabletmanagerdatapb.BackupRequest) (mysqlctl.BackupOutcome, error) {
+	tm.logger = logger
+	started := make(chan struct{})
+	go func() {
+		defer close(tm.done)
+		logger.Infof("progress")
+		close(started)
+		for {
+			select {
+			case <-tm.background.Done():
+				return
+			default:
+				logger.Infof("late progress")
 			}
+		}
+	}()
+	<-started
+	return mysqlctl.BackupOutcome{Name: "b1", Result: mysqlctl.BackupUsable}, tm.backupErr
+}
+
+// TestBackupSerializesTerminalMessage checks handler wiring while the tablet keeps logging after returning.
+func TestBackupSerializesTerminalMessage(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		backupErr error
+	}{
+		{name: "successful backup"},
+		{name: "stored backup followed by an error", backupErr: errors.New("tablet restoration failed")},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			background, cancel := context.WithCancel(t.Context())
+			tm := &lateLoggingBackupTM{
+				RPCTM:      tmrpctest.NewFakeRPCTM(t),
+				background: background,
+				done:       make(chan struct{}),
+				backupErr:  testCase.backupErr,
+			}
+			t.Cleanup(func() {
+				cancel()
+				<-tm.done
+			})
+			recorder := &backupStreamRecorder{ctx: t.Context()}
+			handler := &server{tm: tm}
+			err := handler.Backup(&tabletmanagerdatapb.BackupRequest{IncludeOutcome: true}, recorder)
+			tm.logger.Infof("after terminal")
+			cancel()
+			<-tm.done
+			if testCase.backupErr != nil {
+				require.ErrorIs(t, err, testCase.backupErr)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.False(t, recorder.overlapped.Load(), "concurrent Send on the Backup stream")
+			require.NotEmpty(t, recorder.sent)
+			terminal := recorder.sent[len(recorder.sent)-1]
+			assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, terminal.Status)
+			assert.Equal(t, "b1", terminal.BackupName)
+			assert.Nil(t, terminal.Event)
 		})
 	}
-	close(start)
-	wg.Wait()
-
-	// The terminal message, while a goroutine keeps logging.
-	var stop atomic.Bool
-	started := make(chan struct{})
-	wg.Go(func() {
-		sender.event(&logutilpb.Event{Value: "late progress"})
-		close(started)
-		for !stop.Load() {
-			sender.event(&logutilpb.Event{Value: "late progress"})
-		}
-	})
-	<-started
-	terminal := &tabletmanagerdatapb.BackupResponse{Status: tabletmanagerdatapb.BackupResponse_USABLE, BackupName: "b1"}
-	require.NoError(t, sender.last(terminal))
-	stop.Store(true)
-	wg.Wait()
-
-	sender.event(&logutilpb.Event{Value: "after terminal"})
-	require.NotEmpty(t, rec.sent)
-	assert.Same(t, terminal, rec.sent[len(rec.sent)-1], "the terminal message must be the last one sent")
 }
