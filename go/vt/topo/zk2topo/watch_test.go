@@ -380,6 +380,9 @@ func TestSocketDialerRefusesSocketsOnceClosed(t *testing.T) {
 		errc <- err
 	}()
 	receive(t, dialing, "dial did not start")
+	// Bound the read below, so that a socket that is not closed fails the
+	// test instead of blocking it.
+	require.NoError(t, server.SetReadDeadline(time.Now().Add(30*time.Second)))
 	d.Close()
 	close(release)
 
