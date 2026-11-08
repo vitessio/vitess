@@ -19,6 +19,7 @@ package grpctmserver
 import (
 	"context"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -684,16 +685,21 @@ func (s *server) Backup(request *tabletmanagerdatapb.BackupRequest, stream table
 	ctx = callinfo.GRPCCallInfo(ctx)
 
 	// create a logger, send the result back to the caller
-	logger := logutil.NewCallbackLogger(func(e *logutilpb.Event) {
-		// If the client disconnects, we will just fail
-		// to send the log events, but won't interrupt
-		// the backup.
-		stream.Send(&tabletmanagerdatapb.BackupResponse{
-			Event: e,
-		})
-	})
+	sender := &backupSender{stream: stream}
+	logger := logutil.NewCallbackLogger(sender.event)
 
 	return s.tm.Backup(ctx, logger, request)
+}
+
+type backupSender struct {
+	stream tabletmanagerservicepb.TabletManager_BackupServer
+	mu     sync.Mutex
+}
+
+func (sender *backupSender) event(event *logutilpb.Event) {
+	sender.mu.Lock()
+	defer sender.mu.Unlock()
+	sender.stream.Send(&tabletmanagerdatapb.BackupResponse{Event: event})
 }
 
 func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBackupRequest, stream tabletmanagerservicepb.TabletManager_RestoreFromBackupServer) (err error) {
