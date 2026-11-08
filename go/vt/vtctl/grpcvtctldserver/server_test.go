@@ -1154,35 +1154,51 @@ func TestBackupTabletManifestTooLarge(t *testing.T) {
 // terminal message is forwarded and the tablet's later error still fails the RPC.
 func TestBackupTabletForwardsOutcomeThenError(t *testing.T) {
 	ctx := t.Context()
-	tmc := &testutil.TabletManagerClient{
-		Backups: map[string]struct {
-			Events        []*logutilpb.Event
-			EventInterval time.Duration
-			EventJitter   time.Duration
-			ErrorAfter    time.Duration
-			Manifest      string
-			Status        tabletmanagerdatapb.BackupResponse_Status
-		}{
-			"zone1-0000000100": {
-				Events:     []*logutilpb.Event{{}},
-				Status:     tabletmanagerdatapb.BackupResponse_USABLE,
-				ErrorAfter: 500 * time.Millisecond,
-			},
-		},
-	}
 	tablet := &topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
 		Type:     topodatapb.TabletType_REPLICA,
 		Keyspace: "ks",
 		Shard:    "-",
 	}
-	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), tmc)
+	s := NewTestVtctldServer(memorytopo.NewServer(ctx, "zone1"), outcomeThenErrorTMC{})
 	stream := &recordingBackupSendStream{}
 
 	err := s.backupTablet(ctx, tablet, &vtctldatapb.BackupRequest{IncludeOutcome: true}, stream)
-	require.ErrorContains(t, err, "error triggered after")
+	require.ErrorContains(t, err, "tablet restoration failed")
 	require.Len(t, stream.resps, 2, "expected 1 log event + 1 terminal message")
 	assert.Equal(t, tabletmanagerdatapb.BackupResponse_USABLE, stream.resps[1].Status)
+	assert.Equal(t, "b1", stream.resps[1].BackupName)
+}
+
+// outcomeThenErrorTMC is a tablet manager client whose Backup stream sends a log
+// event and a stored backup's terminal message, and then fails, in that order.
+type outcomeThenErrorTMC struct {
+	tmclient.TabletManagerClient
+}
+
+func (outcomeThenErrorTMC) Backup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.BackupRequest) (tmclient.BackupStream, error) {
+	return &sliceBackupStream{
+		resps: []*tabletmanagerdatapb.BackupResponse{
+			{Event: &logutilpb.Event{Value: "progress"}},
+			{BackupName: "b1", Status: tabletmanagerdatapb.BackupResponse_USABLE},
+		},
+		err: errors.New("backup completed, but tablet restoration failed"),
+	}, nil
+}
+
+// sliceBackupStream returns resps in order, and then err.
+type sliceBackupStream struct {
+	resps []*tabletmanagerdatapb.BackupResponse
+	err   error
+}
+
+func (s *sliceBackupStream) Recv() (*tabletmanagerdatapb.BackupResponse, error) {
+	if len(s.resps) == 0 {
+		return nil, s.err
+	}
+	resp := s.resps[0]
+	s.resps = s.resps[1:]
+	return resp, nil
 }
 
 // TestBackupTabletForwardsOversizedEvent verifies that only a MANIFEST is
