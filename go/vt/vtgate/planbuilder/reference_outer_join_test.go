@@ -284,3 +284,37 @@ func TestPreservedRowsSurviveAnInnerJoinWithAReferenceTable(t *testing.T) {
 		})
 	}
 }
+
+// An UPDATE that sets a column from another table reads its rows through a SELECT and writes them
+// back by primary key. A scatter would test `user.id is null` against one shard's users at a time
+// and update a reference row that another shard has a match for.
+func TestReferenceRowsReadByAnUpdateFromAnotherTableAreNotMergedIntoTheScatter(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	id := sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
+	vschema.Keyspaces["user"].Tables["ref_with_source"].PrimaryKey = id
+	vschema.Keyspaces["main"].Tables["source_of_ref"].PrimaryKey = id
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	require.NoError(t, err)
+
+	plan, err := TestBuilder("update ref_with_source left join `user` on ref_with_source.col = `user`.col set ref_with_source.foo = ref_with_source.foo + coalesce(`user`.foo, 1) where `user`.id is null", vw, vw.CurrentDb())
+	require.NoError(t, err)
+
+	dml, ok := plan.Instructions.(*engine.DMLWithInput)
+	require.True(t, ok, "the rows are expected to be read before they are written, got %T", plan.Instructions)
+	proj, ok := dml.Input.(*engine.SimpleProjection)
+	require.True(t, ok, "expected the input to project the columns the update needs, got %T", dml.Input)
+	filter, ok := proj.Input.(*engine.Filter)
+	require.True(t, ok, "`user.id is null` is expected to be tested against every shard's users, got %T", proj.Input)
+	require.IsType(t, &engine.Join{}, filter.Input,
+		"merging the reference route into the scatter would read each unmatched ref_with_source row once per shard")
+}
+
+// A recursive term that keeps its own preserved rows next to a reference seed is still a reference
+// route, so a later join with a sharded table cannot route the CTE to a single shard.
+func TestPreservedRowsOfARecursiveTermSurviveIntoAMergedCTE(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select col from ref union all select r1.col from ref r1 left join ref r2 on r1.col = r2.col join c on c.col = r1.col where r1.col < 5) select col from c where exists (select 1 from `user` u where u.id = c.col)")
+
+	require.IsType(t, &engine.SemiJoin{}, primitive,
+		"merging the CTE into the single shard of `user` would drop the rows the term preserved")
+}

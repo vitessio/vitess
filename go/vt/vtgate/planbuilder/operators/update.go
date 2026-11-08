@@ -157,6 +157,7 @@ type updColumn struct {
 type updList []updColumn
 
 func createUpdateWithInputOp(ctx *plancontext.PlanningContext, upd *sqlparser.Update) (op Operator) {
+	ctx.DMLReadsItsRows = true
 	updClone := ctx.SemTable.Clone(upd).(*sqlparser.Update)
 	upd.Limit = nil
 

@@ -46,10 +46,10 @@ type PlanningContext struct {
 	VerifyAllFKs bool
 
 	// DMLReadsItsRows is set when the DML is planned as a SELECT that reads the rows to write,
-	// followed by a write of each of them by primary key: a multi-target DELETE, and an UPDATE
-	// with a LIMIT, which a multi-table UPDATE needs to apply above a multi-shard row source. Every
-	// join of the statement is then part of that SELECT, and its rows are read like those of any
-	// other query.
+	// followed by a write of each of them by primary key: a multi-target DELETE, an UPDATE that
+	// writes more than one table or sets a column from another one, and an UPDATE with a LIMIT,
+	// which a multi-table UPDATE needs to apply above a multi-shard row source. Every join of the
+	// statement is then part of that SELECT, and its rows are read like those of any other query.
 	DMLReadsItsRows bool
 
 	// MergedSubqueries tracks subqueries that have been merged into routes,
