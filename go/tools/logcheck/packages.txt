@@ -20,6 +20,7 @@ vitess.io/vitess/go/vt/discovery
 vitess.io/vitess/go/vt/external/golib/sqlutils
 vitess.io/vitess/go/vt/grpcclient
 vitess.io/vitess/go/vt/schemadiff
+vitess.io/vitess/go/vt/schemamanager
 vitess.io/vitess/go/vt/sqlparser
 vitess.io/vitess/go/vt/srvtopo
 vitess.io/vitess/go/vt/tableacl
@@ -45,8 +46,12 @@ vitess.io/vitess/go/vt/vtadmin/internal/backoff
 vitess.io/vitess/go/vt/vtadmin/rbac
 vitess.io/vitess/go/vt/vtadmin/vtctldclient
 vitess.io/vitess/go/vt/vtadmin/vtsql
+vitess.io/vitess/go/vt/vtctl
+vitess.io/vitess/go/vt/vtctl/grpcvtctldserver
+vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil
 vitess.io/vitess/go/vt/vtctl/reparentutil
 vitess.io/vitess/go/vt/vtctl/reparentutil/policy
+vitess.io/vitess/go/vt/vtctl/vtctlclient
 vitess.io/vitess/go/vt/vtctl/workflow
 vitess.io/vitess/go/vt/vtctl/workflow/vexec
 vitess.io/vitess/go/vt/vterrors
@@ -56,3 +61,4 @@ vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication
 vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer
 vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv
 vitess.io/vitess/go/vt/vttls
+vitess.io/vitess/go/vt/wrangler
