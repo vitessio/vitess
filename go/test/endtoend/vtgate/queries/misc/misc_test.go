@@ -1043,3 +1043,48 @@ func TestOlapErrorAfterFields(t *testing.T) {
 	// The error ended the result set cleanly, so the connection stays usable.
 	utils.AssertMatches(t, mcmp.VtConn, "select 1", "[[INT64(1)]]")
 }
+
+// TestTemporalLiteralsUnderSQLMode verifies that Vitess judges DATE and TIMESTAMP
+// literals under the session's sql_mode like MySQL does. MySQL rejects a literal its
+// sql_mode does not allow with ER_WRONG_VALUE (1525) before running the statement;
+// Vitess replaces the literal with a cast of a bind variable, which MySQL evaluates to
+// NULL, so Vitess has to reject the literal itself.
+func TestTemporalLiteralsUnderSQLMode(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+
+	mcmp.Exec("insert into all_types(id, t_date) values (1, '2020-01-01')")
+
+	mcmp.Run("default sql_mode", func(mcmp *utils.MySQLCompare) {
+		for _, query := range []string{
+			"select date'0000-00-00'",
+			"select date'2020-00-15'",
+			"select date'0000-00-00' from all_types where id = 1",
+			"select timestamp'0000-00-00 00:00:00' from all_types where id = 1",
+			"select date'2020-02-31' from all_types where id = 1",
+			"select if(1, 'x', date'0000-00-00') from all_types where id = 1",
+			"select id from all_types where t_date = date'0000-00-00'",
+			"insert into all_types(id, t_date) values (2, date'0000-00-00')",
+		} {
+			mcmp.AssertContainsError(query, "(errno 1525)")
+		}
+	})
+
+	mcmp.Run("empty sql_mode", func(mcmp *utils.MySQLCompare) {
+		mcmp.Exec("set sql_mode = ''")
+		mcmp.AssertMatches("select date'0000-00-00', date'2020-01-00' from all_types where id = 1", `[[DATE("0000-00-00") DATE("2020-01-00")]]`)
+		mcmp.AssertContainsError("select date'2020-02-31' from all_types where id = 1", "(errno 1525)")
+	})
+
+	mcmp.Run("NO_ZERO_DATE", func(mcmp *utils.MySQLCompare) {
+		mcmp.Exec("set sql_mode = 'NO_ZERO_DATE'")
+		mcmp.AssertMatches("select date'2020-01-00' from all_types where id = 1", `[[DATE("2020-01-00")]]`)
+		mcmp.AssertContainsError("select date'0000-00-00' from all_types where id = 1", "(errno 1525)")
+	})
+
+	mcmp.Run("ALLOW_INVALID_DATES", func(mcmp *utils.MySQLCompare) {
+		mcmp.Exec("set sql_mode = 'ALLOW_INVALID_DATES'")
+		mcmp.AssertMatches("select date'2020-02-31' from all_types where id = 1", `[[DATE("2020-02-31")]]`)
+		mcmp.AssertContainsError("select date'2020-02-32' from all_types where id = 1", "(errno 1525)")
+	})
+}

@@ -494,6 +494,65 @@ func TestNormalizeInvalidDates(t *testing.T) {
 	}
 }
 
+// TestNormalizeTemporalLiteralsUnderSQLMode checks that the normalizer judges DATE and
+// TIMESTAMP literals under the session's sql_mode like MySQL does, failing with
+// ER_WRONG_VALUE where MySQL fails, since the cast of a bind variable it replaces a
+// literal with would evaluate to NULL instead.
+func TestNormalizeTemporalLiteralsUnderSQLMode(t *testing.T) {
+	testcases := []struct {
+		// sqlMode is the session's stored sql_mode; nil when the session has not set it.
+		sqlMode *string
+		in      string
+		err     string
+	}{
+		{in: "select date'2020-01-15'"},
+		{in: "select date'0000-00-00'", err: "Incorrect DATE value: '0000-00-00'"},
+		{in: "select date'2020-00-15'", err: "Incorrect DATE value: '2020-00-15'"},
+		{in: "select date'2020-02-31'", err: "Incorrect DATE value: '2020-02-31'"},
+		{in: "select timestamp'0000-00-00 00:00:00'", err: "Incorrect DATETIME value: '0000-00-00 00:00:00'"},
+		{in: "select timestamp'2020-01-00 10:00:00'", err: "Incorrect DATETIME value: '2020-01-00 10:00:00'"},
+		{in: "select time'00:00:00'"},
+		{in: "select * from t where col = date'0000-00-00'", err: "Incorrect DATE value: '0000-00-00'"},
+		{in: "insert into t(col) values (date'0000-00-00')", err: "Incorrect DATE value: '0000-00-00'"},
+
+		{sqlMode: new("''"), in: "select date'0000-00-00', date'2020-00-15', timestamp'2020-01-00 10:00:00'"},
+		{sqlMode: new("''"), in: "select date'2020-02-31'", err: "Incorrect DATE value: '2020-02-31'"},
+		{sqlMode: new("'NO_ZERO_DATE'"), in: "select date'0000-00-00'", err: "Incorrect DATE value: '0000-00-00'"},
+		{sqlMode: new("'NO_ZERO_DATE'"), in: "select date'2020-00-15'"},
+		{sqlMode: new("'NO_ZERO_IN_DATE'"), in: "select date'0000-00-00'"},
+		{sqlMode: new("'NO_ZERO_IN_DATE'"), in: "select date'2020-00-15'", err: "Incorrect DATE value: '2020-00-15'"},
+		{sqlMode: new("'ALLOW_INVALID_DATES'"), in: "select date'2020-02-31'"},
+		{sqlMode: new("'TRADITIONAL'"), in: "select date'0000-00-00'", err: "Incorrect DATE value: '0000-00-00'"},
+		// STRICT_TRANS_TABLES, as a numeric bitmask
+		{sqlMode: new("2097152"), in: "select date'0000-00-00'"},
+		// a stored value that cannot be parsed leaves the mode-dependent checks to MySQL
+		{sqlMode: new("'NOT_A_MODE'"), in: "select date'0000-00-00'"},
+		{sqlMode: new("'NOT_A_MODE'"), in: "select date'2020-02-31'", err: "Incorrect DATE value: '2020-02-31'"},
+	}
+	parser := NewTestParser()
+	for _, tc := range testcases {
+		name := tc.in
+		sysVars := map[string]string{}
+		if tc.sqlMode != nil {
+			name = "sql_mode=" + *tc.sqlMode + " " + tc.in
+			sysVars["sql_mode"] = *tc.sqlMode
+		}
+		t.Run(name, func(t *testing.T) {
+			stmt, err := parser.Parse(tc.in)
+			require.NoError(t, err)
+			known := getBindvars(stmt)
+			bv := make(map[string]*querypb.BindVariable)
+			_, err = Normalize(stmt, NewReservedVars("bv", known), bv, true, "ks", 0, "", sysVars, nil, nil)
+			if tc.err == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.EqualError(t, err, tc.err)
+			assert.Equal(t, vterrors.WrongValue, vterrors.ErrState(err))
+		})
+	}
+}
+
 func TestNormalizeValidSQL(t *testing.T) {
 	parser := NewTestParser()
 	for _, tcase := range validSQL {

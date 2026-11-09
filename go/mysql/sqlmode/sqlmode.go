@@ -22,6 +22,7 @@ package sqlmode
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -264,6 +265,28 @@ func FromValue(value sqltypes.Value) (Mode, error) {
 	default:
 		return Parse(value.ToString())
 	}
+}
+
+// FromEncodedSQL parses an sql_mode value encoded as a SQL literal, the form in which
+// vtgate stores the value of a session's sql_mode: a quoted list of mode names or a
+// numeric bitmask (see sqltypes.Value.EncodeSQL). The returned mode has its combination
+// modes expanded, like the value MySQL reports for @@sql_mode.
+func FromEncodedSQL(encoded string) (Mode, error) {
+	var value sqltypes.Value
+	if bits, err := strconv.ParseUint(encoded, 10, 64); err == nil {
+		value = sqltypes.NewUint64(bits)
+	} else {
+		names, err := sqltypes.DecodeStringSQL(encoded)
+		if err != nil {
+			return 0, vterrors.Wrapf(err, "decoding the sql_mode value %s", encoded)
+		}
+		value = sqltypes.NewVarChar(names)
+	}
+	mode, err := FromValue(value)
+	if err != nil {
+		return 0, err
+	}
+	return mode.Expand(), nil
 }
 
 // Expand returns the mode with all combination modes (ANSI, TRADITIONAL) expanded into

@@ -129,6 +129,32 @@ func TestFromValue(t *testing.T) {
 	}
 }
 
+func TestFromEncodedSQL(t *testing.T) {
+	tests := []struct {
+		encoded     string
+		expected    Mode
+		expectedErr string
+	}{
+		{encoded: "''", expected: 0},
+		{encoded: "'STRICT_TRANS_TABLES,NO_ZERO_DATE'", expected: StrictTransTables | NoZeroDate},
+		{encoded: "'TRADITIONAL'", expected: Traditional.Expand()},
+		{encoded: "'it''s'", expectedErr: "Variable 'sql_mode' can't be set to the value of 'it's'"},
+		{encoded: "2097152", expected: StrictTransTables},
+		{encoded: "STRICT_TRANS_TABLES", expectedErr: "decoding the sql_mode value STRICT_TRANS_TABLES: STRICT_TRANS_TABLES: invalid SQL encoded string"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.encoded, func(t *testing.T) {
+			mode, err := FromEncodedSQL(tt.encoded)
+			if tt.expectedErr != "" {
+				require.EqualError(t, err, tt.expectedErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, mode)
+		})
+	}
+}
+
 func TestExpand(t *testing.T) {
 	assert.Equal(t, RealAsFloat|PipesAsConcat|AnsiQuotes|IgnoreSpace|OnlyFullGroupBy|Ansi, Ansi.Expand())
 	assert.Equal(t,

@@ -122,7 +122,9 @@ func (f *Strftime) FormatNumeric(t DateTime) (n int64) {
 	return n
 }
 
-func (f *Strftime) parse(s string, prec int) (DateTime, string, int, bool) {
+// parseParts parses s into its fields, without validating them as a whole, and returns
+// the input left after the last field.
+func (f *Strftime) parseParts(s string) (timeparts, string, bool) {
 	var tp timeparts
 	tp.month = -1
 	tp.day = -1
@@ -132,8 +134,16 @@ func (f *Strftime) parse(s string, prec int) (DateTime, string, int, bool) {
 	for _, w := range f.compiled {
 		s, ok = w.parse(&tp, s)
 		if !ok {
-			return DateTime{}, "", 0, false
+			return timeparts{}, "", false
 		}
+	}
+	return tp, s, true
+}
+
+func (f *Strftime) parse(s string, prec int) (DateTime, string, int, bool) {
+	tp, s, ok := f.parseParts(s)
+	if !ok {
+		return DateTime{}, "", 0, false
 	}
 	t, l, ok := tp.toDateTime(prec)
 	return t, s, l, ok

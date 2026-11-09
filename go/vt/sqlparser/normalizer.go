@@ -21,7 +21,9 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/datetime"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -60,6 +62,7 @@ type (
 		fkChecksState *bool
 		sysVars       map[string]string
 		views         VSchemaViews
+		dateChecks    datetime.CheckFlags
 
 		onLeave      map[*AliasedExpr]func(*AliasedExpr)
 		parameterize bool
@@ -154,9 +157,50 @@ func newNormalizer(
 		fkChecksState: fkChecksState,
 		sysVars:       sysVars,
 		views:         views,
+		dateChecks:    dateChecksForSession(sysVars),
 		onLeave:       make(map[*AliasedExpr]func(*AliasedExpr)),
 		parameterize:  parameterize,
 	}
+}
+
+// defaultDateChecks are the date checks of MySQL's default sql_mode.
+var defaultDateChecks = func() datetime.CheckFlags {
+	mode, err := sqlmode.Parse(config.DefaultSQLMode)
+	if err != nil {
+		panic(err)
+	}
+	return dateChecksForMode(mode)
+}()
+
+// dateChecksForSession returns the checks MySQL applies to temporal literals under the
+// session's sql_mode, given the session's system variables. A session that has not set
+// sql_mode is taken to use MySQL's default sql_mode, like the rest of vtgate does. When
+// the stored value cannot be parsed, the mode-dependent checks are left to MySQL.
+func dateChecksForSession(sysVars map[string]string) datetime.CheckFlags {
+	encoded, ok := sysVars[sysvars.SQLMode.Name]
+	if !ok {
+		return defaultDateChecks
+	}
+	mode, err := sqlmode.FromEncodedSQL(encoded)
+	if err != nil {
+		return 0
+	}
+	return dateChecksForMode(mode)
+}
+
+// dateChecksForMode returns the checks MySQL applies to temporal literals under mode.
+func dateChecksForMode(mode sqlmode.Mode) datetime.CheckFlags {
+	var checks datetime.CheckFlags
+	if mode&sqlmode.NoZeroInDate != 0 {
+		checks |= datetime.CheckNoZeroInDate
+	}
+	if mode&sqlmode.NoZeroDate != 0 {
+		checks |= datetime.CheckNoZeroDate
+	}
+	if mode&sqlmode.AllowInvalidDates != 0 {
+		checks |= datetime.CheckAllowInvalidDates
+	}
+	return checks
 }
 
 func (nz *normalizer) determineQueryRewriteStrategy(in Statement) {
@@ -310,20 +354,24 @@ func (nz *normalizer) visitLiteral(cursor *Cursor, node *Literal) {
 	}
 }
 
-// validateLiteral ensures that a Literal node has a valid value based on its type.
-func validateLiteral(node *Literal) error {
+// validateLiteral ensures that a Literal node has a valid value based on its type. Like
+// MySQL, it judges the date of a DATE or TIMESTAMP literal under the session's sql_mode.
+// It must reject the literals MySQL rejects: the normalizer replaces a literal with a
+// cast of a bind variable, and MySQL evaluates a cast of an invalid value to NULL, with
+// a warning, where it fails the statement for the literal.
+func (nz *normalizer) validateLiteral(node *Literal) error {
 	switch node.Type {
 	case DateVal:
-		if _, ok := datetime.ParseDate(node.Val); !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect DATE value: '%s'", node.Val)
+		if !datetime.CheckDate(node.Val, nz.dateChecks) {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATE value: '%s'", node.Val)
 		}
 	case TimeVal:
 		if _, _, state := datetime.ParseTime(node.Val, -1); state != datetime.TimeOK {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect TIME value: '%s'", node.Val)
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect TIME value: '%s'", node.Val)
 		}
 	case TimestampVal:
-		if _, _, ok := datetime.ParseDateTime(node.Val, -1); !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect DATETIME value: '%s'", node.Val)
+		if !datetime.CheckDateTime(node.Val, nz.dateChecks) {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValue, "Incorrect DATETIME value: '%s'", node.Val)
 		}
 	}
 	return nil
@@ -331,7 +379,7 @@ func validateLiteral(node *Literal) error {
 
 // convertLiteralDedup converts a Literal node to a bind variable with deduplication.
 func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
-	if err := validateLiteral(node); err != nil {
+	if err := nz.validateLiteral(node); err != nil {
 		nz.err = err
 		return
 	}
@@ -364,7 +412,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 
 // convertLiteral converts a Literal node to a bind variable without deduplication.
 func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
-	if err := validateLiteral(node); err != nil {
+	if err := nz.validateLiteral(node); err != nil {
 		nz.err = err
 		return
 	}
@@ -415,7 +463,7 @@ func (nz *normalizer) normalizeComparisonWithBindVar(left, right Expr) Expr {
 	if !ok {
 		return nil
 	}
-	if err := validateLiteral(lit); err != nil {
+	if err := nz.validateLiteral(lit); err != nil {
 		nz.err = err
 		return nil
 	}
