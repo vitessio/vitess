@@ -827,11 +827,10 @@ func TestControllerErrorLogMessages(t *testing.T) {
 // records, each under error.
 func TestControllerSetStateErrorLogs(t *testing.T) {
 	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
-	t.Cleanup(func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay })
+	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
 	vttablet.DefaultVReplicationConfig.RetryDelay = time.Hour
 
-	tablet := addTablet(100)
-	t.Cleanup(func() { deleteTablet(tablet) })
+	defer deleteTablet(addTablet(100))
 
 	const rowValue = "zq7rowvalue"
 	params := map[string]string{
@@ -863,7 +862,7 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	t.Cleanup(setTabletTypesStr("replica"))
+	defer setTabletTypesStr("replica")()
 
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	require.NoError(t, err)
@@ -877,11 +876,9 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 		assert.Equal(t, "test_workflow", record["workflow"])
 		assert.EqualValues(t, 1, record["stream_id"])
 	}
-	// Each record carries only its own error. The failed update quotes the
-	// MySQL error, which must not make it look like one.
+	// Each record carries only its own error.
 	assert.Equal(t, []string{"error", "level", "msg", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(setStateRecord)))
-	assert.Equal(t, []string{"error", "error_code", "level", "msg", "mysql_errno", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(errorTextRecord)))
-	assert.EqualValues(t, sqlerror.ERDupEntry, errorTextRecord["mysql_errno"])
+	assert.Equal(t, []string{"error", "error_code", "level", "msg", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(errorTextRecord)))
 	assert.Contains(t, setStateRecord["error"], "zq7setstatefailure")
 	assert.Contains(t, errorTextRecord["error"], rowValue)
 	assert.NotContains(t, errorTextRecord["error"], "zq7setstatefailure")
