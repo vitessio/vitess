@@ -1,11 +1,6 @@
 name: Unit Test
 
 on:
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
-    tags: "**"
   pull_request:
     branches: "**"
 
