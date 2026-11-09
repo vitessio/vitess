@@ -210,6 +210,53 @@ func TestExecuteFetchDirectContextTimeoutRedactsQuery(t *testing.T) {
 	assert.NotContains(t, logs.String(), "secret")
 }
 
+// TestSuperQueryListRedactsPassword verifies that the password in a query is
+// redacted in the query and the error of the query failed line, on a pooled
+// and on a direct connection, and in the query of the direct-connection exec
+// line.
+func TestSuperQueryListRedactsPassword(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+
+	params := db.ConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "fakesqldb")
+	testMysqld := NewMysqld(dbc)
+	t.Cleanup(testMysqld.Close)
+
+	const password = "redaction-sentinel-5e1f"
+	query := `START xxx USER = 'vt_repl', PASSWORD = '` + password + `'`
+	redacted := `START xxx USER = 'vt_repl', PASSWORD = '****'`
+	db.AddQuery("SELECT 1", &sqltypes.Result{})
+
+	db.AddRejectedQuery(query, errors.New("rejected"))
+
+	t.Run("pooled connection", func(t *testing.T) {
+		logs := logtest.Capture(t, slog.LevelInfo)
+		require.Error(t, testMysqld.ExecuteSuperQueryList(t.Context(), []string{query}))
+
+		failed := logs.Record(t, "query failed")
+		assert.Equal(t, redacted, failed["query"])
+		assert.Contains(t, failed["error"], redacted)
+		assert.NotContains(t, logs.String(), password)
+	})
+
+	t.Run("direct connection", func(t *testing.T) {
+		conn, err := testMysqld.GetDbaConnection(t.Context())
+		require.NoError(t, err)
+		t.Cleanup(conn.Close)
+
+		logs := logtest.Capture(t, slog.LevelInfo)
+		require.Error(t, testMysqld.executeSuperQueryListDirectContext(t.Context(), conn, []string{query}))
+
+		assert.Equal(t, redacted, logs.Record(t, "exec")["query"])
+		failed := logs.Record(t, "query failed")
+		assert.Equal(t, redacted, failed["query"])
+		assert.Contains(t, failed["error"], redacted)
+		assert.NotContains(t, logs.String(), password)
+	})
+}
+
 // TestExecuteSuperQueryListTaintedDiscardsConnection verifies that operator-supplied SQL
 // executed through the tainted variant cannot leak session state (e.g. sql_mode) into the
 // dba pool: the connection is discarded, and the next pool use dials a fresh connection —
