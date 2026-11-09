@@ -89,6 +89,7 @@
         - [ORCA metrics now report QPS and EPS](#grpc-orca-qps)
         - [Statements are trimmed of MySQL's space characters only](#sqlparser-mysql-space-set)
         - [Charset and collation names are quoted when regenerated](#sqlparser-charset-name-quoting)
+        - [New `--mysqlctl-mysqld-output-to-stderr` flag](#mysqlctl-mysqld-output-to-stderr)
 
 ## <a id="major-changes"/>Major Changes</a>
 
@@ -1072,3 +1073,9 @@ User-visible consequences:
 - **`COLLATE binary` in an expression is quoted.** `expr COLLATE binary` regenerates as ``expr COLLATE `binary` ``, because MySQL's expression `COLLATE` only accepts `binary` quoted. Column, table and database `COLLATE binary` and `CHARACTER SET binary` stay bare.
 - **An empty charset, collation, engine or partition tablespace name is rejected.** `CHARACTER SET ''` and `COLLATE ''` on a column, a table, `ALTER TABLE ... CONVERT TO`, `CAST`/`CONVERT`, `CONVERT ... USING`, `CHAR ... USING`, `SELECT ... INTO OUTFILE` and an expression, `ENGINE ''` on a table or a partition, and a partition's `TABLESPACE ''` no longer parse. An empty name in these positions is indistinguishable from the clause being absent, so it would previously have been dropped or mangled and a statement MySQL rejects could have become a valid, different one. Non-DDL statements get the error directly; DDL falls back to a partial parse, so the client's own text is forwarded and MySQL rejects it. `SET NAMES ... COLLATE ''` and `SET CHARACTER SET ... COLLATE ''`, which used to parse and discard the collation, are now parse errors too; MySQL rejects both. `CREATE`/`ALTER DATABASE ... CHARACTER SET ''` and `COLLATE ''` are unchanged: they still parse and are written back as `''`.
 - **`ENCRYPTION` requires a quoted value.** `CREATE`/`ALTER DATABASE ... ENCRYPTION N` no longer fully parses, matching MySQL, which only accepts `'Y'` or `'N'` as a quoted string. Such a statement now falls back to a partial parse rather than being regenerated into a spelling MySQL would refuse.
+
+#### <a id="mysqlctl-mysqld-output-to-stderr"/>New `--mysqlctl-mysqld-output-to-stderr` flag</a>
+
+When Vitess starts `mysqld` or `mysqld_safe` itself (`mysqlctl`, `mysqlctld`, `vtbackup`, `vtcombo`, and `vttablet` without `--mysqlctl-socket`), it logs each line the process writes as an INFO record, with the line in the message. The new `--mysqlctl-mysqld-output-to-stderr` flag, off by default, connects the process's stdout and stderr to Vitess's own stderr instead, so the lines are written unchanged and not logged. Those five binaries take the flag. It has no effect when a `mysqld_start` hook starts `mysqld`. With `mysqlctl start`, the started process keeps `mysqlctl`'s stderr open after `mysqlctl` exits, so a caller that reads that stderr until it closes waits until `mysqld` stops.
+
+MySQL's error log reaches that stderr when `mysqld` logs to the console, or when its error log path resolves to its stderr, for example a file symlinked to `/dev/stderr`. With a regular file it doesn't. The default `my.cnf` template sets `log-error` to a file; `skip-log-error` in an `EXTRA_MY_CNF` file switches `mysqld` to the console. `mysqld_safe` always passes `--log-error`, and unless it runs as root or can write to `/`, it starts `mysqld` with its output appended to that path, so with a symlinked error log MySQL's lines reach `mysqld_safe`'s stderr too. With console logging and MySQL 8.4, adding `log_error_services = 'log_filter_internal; log_sink_json'` makes MySQL write its error log as JSON.
