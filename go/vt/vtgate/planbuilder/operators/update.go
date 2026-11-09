@@ -398,7 +398,7 @@ func createUpdateOperator(ctx *plancontext.PlanningContext, updStmt *sqlparser.U
 	if updStmt.Limit != nil {
 		// Unless the rows end up on one shard, the limit is applied above the route.
 		ctx.DMLReadsItsRows = true
-		updOp.Source = newLimit(updOp.Source, updStmt.Limit, false)
+		updOp.Source = newLimit(updOp.Source, updStmt.Limit, true)
 	}
 
 	return sqc.getRootOperator(updOp, nil), targetTbl, updClone

@@ -186,6 +186,25 @@ func TestReferenceRowsReadByADMLWithInputAreNotMergedIntoTheScatter(t *testing.T
 		"merging the reference route into the scatter would read each unmatched r row once per shard")
 }
 
+// With nothing above the join to hold it, a LIMIT pushed into both sides of the join would allow
+// up to LIMIT matches for each of LIMIT preserved rows.
+func TestTheLimitOfAnUpdateThatReadsReferenceRowsStaysAboveTheJoin(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	require.NoError(t, vschema.AddPrimaryKey("user", "user", []string{"id"}))
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	require.NoError(t, err)
+
+	plan, err := TestBuilder("update ref r left join `user` u on r.col = u.col set u.foo = 1 limit 5", vw, vw.CurrentDb())
+	require.NoError(t, err)
+
+	dml, ok := plan.Instructions.(*engine.DMLWithInput)
+	require.True(t, ok, "the rows are expected to be read before they are written, got %T", plan.Instructions)
+	limit, ok := dml.Input.(*engine.Limit)
+	require.True(t, ok, "the LIMIT is expected to stay above the join, got %T", dml.Input)
+	require.IsType(t, &engine.Join{}, limit.Input,
+		"merging the reference route into the scatter would read each unmatched r row once per shard")
+}
+
 // Every row of the recursive term is paired with a row of the CTE, which the seed placed on one
 // shard, so what the term preserved comes back once from a sharded seed's route.
 func TestReferenceRowsInARecursiveTermAreMergedIntoAShardedSeed(t *testing.T) {
