@@ -305,10 +305,18 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // WithCluster returns a dynamic API with the given cluster. If `c` is non-nil,
-// it is used as the selected cluster. If the cluster is nil, then a cluster
-// with the given id is retrieved from the API and used in the dynamic API. If
-// the cluster is nil and the API has no cluster with the given id, WithCluster
-// returns a NOT_FOUND error.
+// WithCluster takes ownership of it and selects the cluster registered under
+// the given id afterwards:
+//   - If no cluster is registered under the id, `c` is registered.
+//   - If a different cluster is registered under the id, that cluster is
+//     closed and replaced by `c`.
+//   - If an equal cluster is registered under the id, `c` is closed, so
+//     callers must not use `c` afterwards.
+//   - If `c` is the registered cluster itself, nothing changes.
+//
+// If the cluster is nil, then a cluster with the given id is retrieved from
+// the API and used in the dynamic API. If the cluster is nil and the API has
+// no cluster with the given id, WithCluster returns a NOT_FOUND error.
 //
 // Callers must ensure that:
 // 1. If c is non-nil, c.ID == id.

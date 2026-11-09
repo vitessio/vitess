@@ -106,8 +106,42 @@ func TestClusterFromString(t *testing.T) {
 			shouldErr:  true,
 		},
 		{
+			name:       "vtgate without host",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtgates\": [{}]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name:       "null vtctld",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [null]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
 			name:       "vtctld without host",
 			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{}]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name: "unknown vtctld backoff strategy",
+			s: `{
+				"id": "dynamic_cluster",
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }",
+				"vtctld-backoff-strategy": "bogus"
+			}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name: "unknown vtsql backoff strategy",
+			s: `{
+				"id": "dynamic_cluster",
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }",
+				"vtsql-backoff-strategy": "bogus"
+			}`,
 			expectedID: "dynamic_cluster",
 			shouldErr:  true,
 		},

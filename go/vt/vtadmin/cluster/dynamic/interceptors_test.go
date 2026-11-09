@@ -23,6 +23,7 @@ import (
 	"log/slog"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -146,7 +147,11 @@ func TestUnaryServerInterceptorRepeatedSpecDoesNotLeakCluster(t *testing.T) {
 	}
 
 	// The registered cluster keeps redialing its vtctld, which doesn't resolve.
-	goleak.VerifyNone(t, existingGoroutines, goleak.IgnoreTopFunction("google.golang.org/grpc.(*addrConn).resetTransportAndUnlock"))
+	// The closed duplicates' DNS lookups end only when DNS answers, which can
+	// take longer than goleak.VerifyNone retries.
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		assert.NoError(c, goleak.Find(existingGoroutines, goleak.IgnoreTopFunction("google.golang.org/grpc.(*addrConn).resetTransportAndUnlock")))
+	}, 30*time.Second, 100*time.Millisecond)
 }
 
 // panickingAPI is a dynamic API whose GetClusters panics.

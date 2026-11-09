@@ -6086,7 +6086,10 @@ func TestWithClusterReplacesChangedCluster(t *testing.T) {
 
 	_, err := api.WithCluster(newUnresolvableCluster(t, "c1", "vtctld3.invalid:15999"), "c1")
 	require.NoError(t, err)
+	assert.Equal(t, []string{"c1", "c2"}, clusterIDs(t, api))
 
+	_, err = api.WithCluster(newUnresolvableCluster(t, "c2", "vtctld4.invalid:15999"), "c2")
+	require.NoError(t, err)
 	assert.Equal(t, []string{"c1", "c2"}, clusterIDs(t, api))
 }
 

@@ -102,7 +102,11 @@ func TestNewClosesVTGateProxyWhenVtctldFails(t *testing.T) {
 				}()
 			}
 
-			goleak.VerifyNone(t, existingGoroutines)
+			// The closed vtgate proxies' DNS lookups end only when DNS
+			// answers, which can take longer than goleak.VerifyNone retries.
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				assert.NoError(c, goleak.Find(existingGoroutines))
+			}, 30*time.Second, 100*time.Millisecond)
 		})
 	}
 }
