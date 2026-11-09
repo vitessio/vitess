@@ -876,9 +876,11 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 		assert.Equal(t, "test_workflow", record["workflow"])
 		assert.EqualValues(t, 1, record["stream_id"])
 	}
-	// Each record carries only its own error.
+	// Each record carries only its own error. The failed update quotes the
+	// MySQL error, which must not make it look like one.
 	assert.Equal(t, []string{"error", "level", "msg", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(setStateRecord)))
-	assert.Equal(t, []string{"error", "error_code", "level", "msg", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(errorTextRecord)))
+	assert.Equal(t, []string{"error", "error_code", "level", "msg", "mysql_errno", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(errorTextRecord)))
+	assert.EqualValues(t, sqlerror.ERDupEntry, errorTextRecord["mysql_errno"])
 	assert.Contains(t, setStateRecord["error"], "zq7setstatefailure")
 	assert.Contains(t, errorTextRecord["error"], rowValue)
 	assert.NotContains(t, errorTextRecord["error"], "zq7setstatefailure")
