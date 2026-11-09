@@ -40,10 +40,10 @@ import (
 // settings from. The "live" config only updates after blocking all values from
 // reading in order to swap in the most recently-loaded config from the "disk".
 type Viper struct {
-	m    sync.Mutex // prevents races between loadFromDisk and AllSettings
+	m    sync.RWMutex // guards live
 	disk *viper.Viper
 	live *viper.Viper
-	keys map[string]*sync.RWMutex
+	keys map[string]struct{}
 
 	subscribers    []chan<- struct{}
 	watchingConfig bool
@@ -66,7 +66,7 @@ func New() *Viper {
 	return &Viper{
 		disk:  viper.New(),
 		live:  viper.New(),
-		keys:  map[string]*sync.RWMutex{},
+		keys:  map[string]struct{}{},
 		fs:    afero.NewOsFs(), // default Fs used by viper, but we need this set so loadFromDisk doesn't accidentally nil-out the live fs
 		setCh: make(chan struct{}, 1),
 	}
@@ -74,13 +74,9 @@ func New() *Viper {
 
 // Set sets the given key to the given value, in both the disk and live vipers.
 func (v *Viper) Set(key string, value any) {
-	m, ok := v.keys[key]
-	if !ok {
+	if _, ok := v.keys[key]; !ok {
 		return
 	}
-
-	m.Lock()
-	defer m.Unlock()
 
 	v.m.Lock()
 	defer v.m.Unlock()
@@ -153,12 +149,6 @@ func (v *Viper) Watch(ctx context.Context, static *viper.Viper, minWaitInterval 
 	v.watchingConfig = true
 	v.loadFromDisk()
 	v.disk.OnConfigChange(func(in fsnotify.Event) {
-		for _, m := range v.keys {
-			m.Lock()
-			// This won't fire until after the config has been updated on v.live.
-			defer m.Unlock()
-		}
-
 		v.loadFromDisk()
 
 		for _, ch := range v.subscribers {
@@ -233,12 +223,6 @@ func (v *Viper) WriteConfig() error {
 		defer v.onConfigWrite()
 	}
 
-	for _, m := range v.keys {
-		m.Lock()
-		// This won't fire until after the config has been written.
-		defer m.Unlock()
-	}
-
 	v.m.Lock()
 	defer v.m.Unlock()
 
@@ -266,8 +250,8 @@ func (v *Viper) Notify(ch chan<- struct{}) {
 
 // AllSettings returns the current live settings.
 func (v *Viper) AllSettings() map[string]any {
-	v.m.Lock()
-	defer v.m.Unlock()
+	v.m.RLock()
+	defer v.m.RUnlock()
 
 	return v.live.AllSettings()
 }
@@ -332,12 +316,11 @@ func AdaptGetter[T any](key string, getter func(v *viper.Viper) func(key string)
 		panic("already adapted a getter for key " + key)
 	}
 
-	var m sync.RWMutex
-	v.keys[key] = &m
+	v.keys[key] = struct{}{}
 
 	return func(key string) T {
-		m.RLock()
-		defer m.RUnlock()
+		v.m.RLock()
+		defer v.m.RUnlock()
 
 		return getter(v.live)(key)
 	}
