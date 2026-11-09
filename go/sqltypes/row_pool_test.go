@@ -35,12 +35,17 @@ func TestRowPoolBudget(t *testing.T) {
 }
 
 func TestRowPoolPacketBudget(t *testing.T) {
+	// Values well above the floor, so the result depends on the payload, the row count and the widest row's
+	// Lengths rather than collapsing to RowPoolMinBytes.
 	rows := []*querypb.Row{
-		{Lengths: []int64{1, 2}, Values: make([]byte, 3, 1024)},
+		{Lengths: []int64{1, 3<<20 - 1}, Values: make([]byte, 3<<20, 4<<20)},
 		nil,
-		{Lengths: []int64{1, 2, 3}, Values: make([]byte, 6, 2048)},
+		{Lengths: []int64{1, 2, 1<<20 - 3}, Values: make([]byte, 1<<20, 2<<20)},
 	}
-	require.Equal(t, RowPoolBudget(9, 3, 3), RowPoolPacketBudget(rows))
+	want := RowPoolHeadroom * (4<<20 + 3*(3*8+rowFixedBytes))
+	require.Greater(t, want, RowPoolMinBytes)
+	require.Equal(t, want, RowPoolPacketBudget(rows))
+	require.Equal(t, RowPoolBudget(4<<20, 3, 3), RowPoolPacketBudget(rows))
 }
 
 func TestRowPoolRetained(t *testing.T) {

@@ -36,6 +36,28 @@ func TestDynamicPacketSizerMaxSize(t *testing.T) {
 	require.LessOrEqual(t, ps.candidateSize, ps.maxSize)
 }
 
+// TestDynamicPacketSizerCapsGrowthThroughRecord drives the sizer the way a stream does: every packet is
+// Limit() bytes and takes about the same time, so throughput keeps improving with the packet size and
+// nothing but the cap can stop the growth. Limit() must never pass the cap and must reach it.
+func TestDynamicPacketSizerCapsGrowthThroughRecord(t *testing.T) {
+	base := 25000
+	maxSize := base * dynamicPacketSizerMaxGrowthFactor
+	ps := newDynamicPacketSizer(base)
+
+	reached := false
+	for i := range 20000 {
+		// A near-constant duration with a little jitter, so the throughput samples of two packet sizes
+		// differ as the t-test needs them to.
+		d := time.Millisecond + time.Duration(i%7)*time.Microsecond
+		ps.Record(ps.Limit(), d)
+		require.LessOrEqual(t, ps.Limit(), maxSize, "call %d: the packet size grew past the cap", i)
+		if ps.Limit() == maxSize {
+			reached = true
+		}
+	}
+	require.True(t, reached, "the packet size never reached the cap: %d", ps.Limit())
+}
+
 type polynomial []float64
 
 func (p polynomial) fit(x float64) float64 {

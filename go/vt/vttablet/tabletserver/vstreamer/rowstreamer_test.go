@@ -790,9 +790,14 @@ func TestTrimRowPool(t *testing.T) {
 	require.Nil(t, kept)
 }
 
-// smallColumns repeats what (a column definition or a value) for the 15 small columns of the reuse test.
+// smallColumnCount is how many one-byte columns the row-pool tests put next to the id: with 64 columns a
+// row's Lengths (512 bytes) outweigh its values and the fixed per-row cost, so a budget or an accounting
+// that leaves Lengths out is off by more than the headroom.
+const smallColumnCount = 63
+
+// smallColumns repeats what (a column definition or a value) for the small columns of the row-pool tests.
 func smallColumns(what string) string {
-	parts := make([]string, 15)
+	parts := make([]string, smallColumnCount)
 	for i := range parts {
 		parts[i] = what
 		if strings.HasPrefix(what, "varbinary") {
@@ -821,13 +826,14 @@ func TestStreamRowsReusesRowPool(t *testing.T) {
 		minPackets int
 	}{
 		{
-			// About 12k rows of 16 one-byte columns per 256 KiB packet: each row's Lengths outweigh its
-			// values, so the pool holds about 1.9 MB per packet, over the 1 MiB floor and over four times
-			// the values it carries. A budget or an accounting that ignores Lengths drops it.
+			// About 3.8k rows of 64 one-byte columns per 256 KiB packet: each row's Lengths (512 bytes) outweigh
+			// its values (69 bytes) and the fixed per-row cost (64 bytes), so the pool holds about 2.2 MB per
+			// packet, over the 1 MiB floor and over four times the values it carries. A budget or an
+			// accounting that ignores Lengths drops it.
 			name:       "many small rows",
 			create:     "create table t1(id int, " + smallColumns("varbinary(1)") + ", primary key(id))",
 			rowValues:  func(id int) string { return fmt.Sprintf("(%d, %s)", id, smallColumns("'a'")) },
-			rows:       160000,
+			rows:       60000,
 			packetSize: 256 << 10,
 			minPackets: 12,
 		},
@@ -894,6 +900,87 @@ func TestStreamRowsReusesRowPool(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestStreamRowsDropsDensePoolForLargeRows streams dense packets of many-column rows and then packets of a
+// few large rows through the engine. The dense packets leave a pool whose retained bytes are mostly
+// Lengths; the large-row packets have a budget near the floor, so the pool must be dropped on the first of
+// them. An accounting that leaves Lengths out of poolBytes would see a pool well under budget and keep it
+// (vitessio/vitess#20954).
+func TestStreamRowsDropsDensePoolForLargeRows(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	const (
+		denseRows  = 20000
+		largeRows  = 12
+		largeBytes = 64 << 10
+		packetSize = 256 << 10
+		firstID    = 100000
+	)
+
+	execStatements(t, []string{
+		"create table t1(id int, " + smallColumns("varbinary(1)") + ", val longblob, primary key(id))",
+	})
+	defer execStatements(t, []string{"drop table t1"})
+
+	var stmts []string
+	for first := firstID; first < firstID+denseRows; first += 5000 {
+		var values []string
+		for id := first; id < first+5000 && id < firstID+denseRows; id++ {
+			values = append(values, fmt.Sprintf("(%d, %s, 'x')", id, smallColumns("'a'")))
+		}
+		stmts = append(stmts, "insert into t1 values "+strings.Join(values, ","))
+	}
+	var large []string
+	for id := firstID + denseRows; id < firstID+denseRows+largeRows; id++ {
+		large = append(large, fmt.Sprintf("(%d, %s, repeat('b', %d))", id, smallColumns("'a'"), largeBytes))
+	}
+	stmts = append(stmts, "insert into t1 values "+strings.Join(large, ","))
+	execStatements(t, stmts)
+
+	var options binlogdatapb.VStreamOptions
+	options.ConfigOverrides = map[string]string{
+		"vstream-dynamic-packet-size": "false",
+		"vstream-packet-size":         strconv.Itoa(packetSize),
+	}
+
+	type seen struct {
+		rows     int
+		retained int
+		first    *querypb.Row
+	}
+	var got []seen
+	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if len(rows.Rows) == 0 {
+			return nil
+		}
+		got = append(got, seen{rows: len(rows.Rows), retained: sqltypes.RowPoolRetained(rows.Rows), first: rows.Rows[0]})
+		return nil
+	}, &options)
+	require.NoError(t, err)
+
+	// Find the first packet of large rows: far fewer rows than a dense packet.
+	dense := got[0]
+	firstLarge := -1
+	for i, g := range got {
+		if g.rows < dense.rows/10 {
+			firstLarge = i
+			break
+		}
+	}
+	require.Positive(t, firstLarge, "no packet of large rows was sent")
+	require.Greater(t, dense.retained, sqltypes.RowPoolMinBytes, "the dense pool must exceed the floor for the drop to be required")
+
+	// The dense packets reuse the pool; the first large-row packet still sees it (the callback runs before
+	// the trim), and the one after it must be served by a fresh pool.
+	for i := 1; i < firstLarge; i++ {
+		assert.Same(t, dense.first, got[i].first, "packet %d: the pool was dropped under uniform dense rows", i)
+	}
+	require.Greater(t, len(got), firstLarge+1, "need a packet after the first large-row packet")
+	assert.NotSame(t, dense.first, got[firstLarge+1].first, "the pool holding the dense packets' Lengths was kept for the large rows")
+	assert.Less(t, got[firstLarge+1].retained, dense.retained/2, "the pool after the drop still retains the dense packets' Lengths")
 }
 
 // TestStreamRowsBoundsRowPoolRetention streams a table whose one large value lands in a new slot of the
