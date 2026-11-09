@@ -21,6 +21,7 @@
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
+        - [Log messages are becoming constant, with values in attributes](#log-constant-messages)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -292,6 +293,23 @@ VTGate used to report a planned `REPLACE` statement with the `INSERT` statement 
 **Impact**: dashboards, alerts and query-log parsing that count `INSERT` no longer include `REPLACE` statements. Planning, routing, transactions and results are unchanged.
 
 **Migration**: match `REPLACE` as well as `INSERT` wherever `REPLACE` statements should be included.
+
+#### <a id="log-constant-messages"/>Log messages are becoming constant, with values in attributes</a>
+
+Log messages across Vitess are being converted to constant messages, with the values they used to contain, such as tablet aliases, keyspaces, tables, positions, queries and errors, in structured attributes ([#21323](https://github.com/vitessio/vitess/issues/21323)). This keeps row data and query text out of the message itself. Some components are converted in this release, and others will follow.
+
+With the default JSON log format, each attribute is a field next to `msg`. With `--log-format=text`, attributes follow the message as `key=value` pairs.
+
+Converted lines follow these conventions:
+
+- The message is a fixed sentence, and every value is in an attribute.
+- Errors are under `error`. Many lines that log a Vitess error also log its code, such as `INVALID_ARGUMENT`, under `error_code`.
+- Lines from a throttled logger carry the logger's name under `logger`, where it used to prefix the message. Their report of skipped lines is `skipped log messages`, with `logger` and `skipped`.
+- With the JSON format, durations are integer nanoseconds, and `--log-err-stacks` no longer adds stack traces to errors logged as attributes. The text format prints durations such as `1.5s` and still prints stack traces.
+
+**Impact**: alerts, dashboards, log searches, log-based rules and redaction rules that match on a line's old message text, or on a value inside it, stop matching once that line is converted. For example, `Error applying event for table <table> while processing position <position>: <error>` is now `Error applying event`, with `table`, `processing_position` and `error` attributes.
+
+**Migration**: if you search or alert on a log line's text, match on its new constant message and filter on its attributes instead. For example, search for the message `Error applying event` with `table` set to `users`, rather than for the text `Error applying event for table users`. The pull requests linked from [#21323](https://github.com/vitessio/vitess/issues/21323) list, in their Deployment Notes, the changed lines you're most likely to be matching on.
 
 ### <a id="deprecations"/>Deprecations</a>
 
