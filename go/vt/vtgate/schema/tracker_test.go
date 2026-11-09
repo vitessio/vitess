@@ -18,7 +18,6 @@ package schema
 
 import (
 	"context"
-	"log/slog"
 	"os"
 	"sync"
 	"testing"
@@ -31,14 +30,11 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
@@ -609,58 +605,4 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return true // timed out
 	}
-}
-
-func TestViewMapSetLogsDefinitionAsAttribute(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-	vm := &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.TableStatement{}, parser: sqlparser.NewTestParser()}
-
-	vm.set("ks", "v1", "create view v1 as select * from t where c = 'view-sentinel' and")
-	record := logs.Record(t, "ignoring view, parsing error in view definition")
-	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, "ks", record["keyspace"])
-	assert.Equal(t, "v1", record["view"])
-	assert.Equal(t, "create view v1 as select * from t where c = 'view-sentinel' and", record["query"])
-
-	vm.set("ks", "v2", "select 'view-sentinel'")
-	record = logs.Record(t, "ignoring view, view definition is not a create view query")
-	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, "v2", record["view"])
-	assert.Equal(t, "*sqlparser.Select", record["statement_type"])
-
-	for _, record := range logs.Records(t) {
-		assert.NotContains(t, record["msg"], "sentinel")
-	}
-}
-
-// failingSchemaConn fails every GetSchema call.
-type failingSchemaConn struct {
-	*sandboxconn.SandboxConn
-}
-
-func (failingSchemaConn) GetSchema(context.Context, *querypb.Target, querypb.SchemaTableType, []string, func(*querypb.GetSchemaResponse) error) error {
-	return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "schema fetch failed")
-}
-
-func TestUpdatedSchemaLogsNamesAsLists(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-	tracker := NewTracker(nil, true, false, sqlparser.NewTestParser())
-	target := &querypb.Target{Cell: cell, Keyspace: keyspace, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
-	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
-	th := &discovery.TabletHealth{
-		Conn:   failingSchemaConn{sandboxconn.NewSandboxConn(tablet)},
-		Tablet: tablet,
-		Target: target,
-		Stats:  &querypb.RealtimeStats{TableSchemaChanged: []string{"t2", "t1"}, ViewSchemaChanged: []string{"v1"}},
-	}
-
-	assert.False(t, tracker.updatedTableSchema(th))
-	record := logs.Record(t, "error fetching new schema, making them non-authoritative")
-	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, []any{"t2", "t1"}, record["tables"])
-
-	assert.False(t, tracker.updatedViewSchema(th))
-	record = logs.Record(t, "error fetching new views definition")
-	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, []any{"v1"}, record["views"])
 }

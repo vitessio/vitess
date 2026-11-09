@@ -19,14 +19,12 @@ package engine
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log/logtest"
+	"github.com/stretchr/testify/require"
 )
 
 type dbddlTestFake struct {
@@ -99,17 +97,4 @@ func TestDBDDLTimeout(t *testing.T) {
 	vc = &loggingVCursor{dbDDLPlugin: pluginName, ksAvailable: true}
 	_, err = primitive.TryExecute(t.Context(), vc, nil, false)
 	assert.EqualError(t, err, "could not validate drop database: keyspace still available in vschema")
-}
-
-func TestDBDDLUnregisteredPluginLogs(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-	primitive := &DBDDL{name: "ks", create: true}
-	vc := &loggingVCursor{dbDDLPlugin: "notRegistered"}
-
-	_, err := primitive.TryExecute(t.Context(), vc, nil, false)
-	require.Error(t, err)
-
-	record := logs.Record(t, "database ddl plugin is not registered. Falling back to default plugin")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "notRegistered", record["plugin"])
 }

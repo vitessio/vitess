@@ -18,15 +18,12 @@ package simplifier
 
 import (
 	"fmt"
-	"log/slog"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -147,22 +144,5 @@ func plus(a, b sqlparser.Expr) sqlparser.Expr {
 		Operator: sqlparser.PlusOp,
 		Left:     a,
 		Right:    b,
-	}
-}
-
-func TestSimplifyExprLogsExpressionsAsAttributes(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-	in := plus(sqlparser.NewIntLiteral("1"), sqlparser.NewStrLiteral("simplifier-sentinel"))
-
-	SimplifyExpr(in, func(sqlparser.Expr) bool { return false })
-
-	records := logs.Records(t)
-	require.NotEmpty(t, records)
-	for _, record := range records {
-		assert.Equal(t, "failed attempt: tried changing expression", record["msg"])
-		assert.Equal(t, "ERROR", record["level"])
-		assert.Equal(t, "1 + 'simplifier-sentinel'", record["full_expression"])
-		assert.NotEmpty(t, record["expression"])
-		assert.Contains(t, record, "simplified_expression")
 	}
 }

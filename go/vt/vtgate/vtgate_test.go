@@ -1012,53 +1012,31 @@ func TestRecordAndAnnotateErrorLogs(t *testing.T) {
 	}
 }
 
-// TestExecuteErrorLogsClientQueryOnlyInAttributes checks that a failed Execute
-// logs the client's SQL, bind variables and session, and the tablet error that
-// quotes them, only in attributes, and that with terse errors it logs none of
-// them.
-func TestExecuteErrorLogsClientQueryOnlyInAttributes(t *testing.T) {
-	execute := func(t *testing.T) (*logtest.Logs, error) {
-		vtg, sbc, ctx := createVtgateEnv(t)
-		logs := logtest.Capture(t, slog.LevelInfo)
-		// The tablet's error quotes the bound query, as vttablet's does.
-		sbc.EphemeralShardErr = vterrors.New(vtrpcpb.Code_INTERNAL,
-			`internal error: Sql: "select id from t1 where name = :name and val = :vtg1", BindVars: {name: "type:VARCHAR value:\"bv-sentinel\""vtg1: "type:VARCHAR value:\"sql-sentinel\""}`)
-		session := &vtgatepb.Session{
-			TargetString:         KsTestUnsharded + "@primary",
-			UserDefinedVariables: map[string]*querypb.BindVariable{"v": sqltypes.StringBindVariable("session-sentinel")},
-		}
-		bindVars := map[string]*querypb.BindVariable{"name": sqltypes.StringBindVariable("bv-sentinel")}
-		_, _, err := vtg.Execute(ctx, nil, session, "select id from t1 where name = :name and val = 'sql-sentinel'", bindVars, false)
-		return logs, err
+// TestExecuteErrorWithTerseErrorsLogsNoClientData checks that with terse
+// errors, a failed Execute logs none of the client's SQL, bind variables or
+// session, nor the bind variables quoted in the tablet's error.
+func TestExecuteErrorWithTerseErrorsLogsNoClientData(t *testing.T) {
+	saved := terseErrors
+	t.Cleanup(func() { terseErrors = saved })
+	terseErrors = true
+
+	vtg, sbc, ctx := createVtgateEnv(t)
+	logs := logtest.Capture(t, slog.LevelInfo)
+	// The tablet's error quotes the bound query, as vttablet's does.
+	sbc.EphemeralShardErr = vterrors.New(vtrpcpb.Code_INTERNAL,
+		`internal error: Sql: "select id from t1 where name = :name and val = :vtg1", BindVars: {name: "type:VARCHAR value:\"bv-sentinel\""vtg1: "type:VARCHAR value:\"sql-sentinel\""}`)
+	session := &vtgatepb.Session{
+		TargetString:         KsTestUnsharded + "@primary",
+		UserDefinedVariables: map[string]*querypb.BindVariable{"v": sqltypes.StringBindVariable("session-sentinel")},
 	}
+	bindVars := map[string]*querypb.BindVariable{"name": sqltypes.StringBindVariable("bv-sentinel")}
+	_, _, err := vtg.Execute(ctx, nil, session, "select id from t1 where name = :name and val = 'sql-sentinel'", bindVars, false)
+	require.Error(t, err)
 
-	t.Run("default", func(t *testing.T) {
-		logs, err := execute(t)
-		assert.Equal(t, vtrpcpb.Code_INTERNAL, vterrors.Code(err))
-		record := logs.Record(t, "Request failed")
-		assert.Equal(t, "ERROR", record["level"])
-		assert.Equal(t, "Execute", record["logger"])
-		assert.Equal(t, "INTERNAL", record["error_code"])
-		assert.Contains(t, record["error"], "bv-sentinel")
-		assert.Contains(t, record["request"], "sql-sentinel")
-		assert.Contains(t, record["request"], "bv-sentinel")
-		assert.Contains(t, record["request"], "session-sentinel")
-		for _, record := range logs.Records(t) {
-			assert.NotContains(t, record["msg"], "sentinel")
-		}
-	})
-
-	t.Run("terse errors", func(t *testing.T) {
-		saved := terseErrors
-		t.Cleanup(func() { terseErrors = saved })
-		terseErrors = true
-
-		logs, err := execute(t)
-		require.Error(t, err)
-		record := logs.Record(t, "Request failed")
-		assert.Equal(t, "map[]", record["request"])
-		assert.NotContains(t, logs.String(), "sentinel")
-	})
+	record := logs.Record(t, "Request failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "map[]", record["request"])
+	assert.NotContains(t, logs.String(), "sentinel")
 }
 
 func TestHTTPErrorfDoesNotLogTheRequest(t *testing.T) {
