@@ -34,8 +34,7 @@
         "from": "lookup_non_planable",
         "to": "keyspace_id",
         "autocommit": "true"
-      },
-      "owner": "user"
+      }
     }
   },
   "tables": {
