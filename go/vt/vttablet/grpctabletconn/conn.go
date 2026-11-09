@@ -852,6 +852,7 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 			Target:            request.Target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Options:           request.Options,
 		}
 		stream, err := conn.c.VStreamTables(ctx, req)
 		if err != nil {

@@ -67,6 +67,11 @@ type FakeQueryService struct {
 
 	// VStreamTablesResponses are sent, in order, by VStreamTables, each cloned before it is sent.
 	VStreamTablesResponses []*binlogdatapb.VStreamTablesResponse
+
+	// LastVStreamRowsRequest and LastVStreamTablesRequest are the requests the last VStreamRows and
+	// VStreamTables calls received, for checking what the client forwards.
+	LastVStreamRowsRequest   *binlogdatapb.VStreamRowsRequest
+	LastVStreamTablesRequest *binlogdatapb.VStreamTablesRequest
 }
 
 var _ queryservice.QueryService = (*FakeQueryService)(nil)
@@ -725,6 +730,7 @@ func (f *FakeQueryService) VStream(ctx context.Context, request *binlogdatapb.VS
 
 // VStreamRows is part of the QueryService interface. It sends VStreamRowsResponses in order.
 func (f *FakeQueryService) VStreamRows(ctx context.Context, request *binlogdatapb.VStreamRowsRequest, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	f.LastVStreamRowsRequest = request
 	if f.HasError {
 		return f.TabletError
 	}
@@ -741,6 +747,7 @@ func (f *FakeQueryService) VStreamRows(ctx context.Context, request *binlogdatap
 
 // VStreamTables is part of the QueryService interface. It sends VStreamTablesResponses in order.
 func (f *FakeQueryService) VStreamTables(ctx context.Context, request *binlogdatapb.VStreamTablesRequest, send func(*binlogdatapb.VStreamTablesResponse) error) error {
+	f.LastVStreamTablesRequest = request
 	if f.HasError {
 		return f.TabletError
 	}

@@ -1135,6 +1135,12 @@ const (
 
 var rowPoolFields = []*querypb.Field{{Name: "id"}, {Name: "val"}}
 
+// rowPoolOptions are the VStreamOptions the row-pool tests send; the source side's settings travel in them,
+// so the client must forward them unchanged on both RPCs.
+var rowPoolOptions = &binlogdatapb.VStreamOptions{
+	ConfigOverrides: map[string]string{"vstream-memory-bounds": "false", "vstream-packet-size": "65536"},
+}
+
 // rowPoolPackets returns the scenario's packets as row slices: the fields-only packet is nil, the rowless
 // packets after each uniform packet are empty.
 func rowPoolPackets() [][]*querypb.Row {
@@ -1226,7 +1232,7 @@ func testVStreamRows(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 		var got []rowPoolSeen
 		withMemoryBounds(memoryBounds, func() {
 			ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
-			err := conn.VStreamRows(ctx, &binlogdatapb.VStreamRowsRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamRowsResponse) error {
+			err := conn.VStreamRows(ctx, &binlogdatapb.VStreamRowsRequest{Target: TestTarget, Options: rowPoolOptions}, func(resp *binlogdatapb.VStreamRowsResponse) error {
 				recordRowPool(&got, resp.Rows)
 				return nil
 			})
@@ -1234,6 +1240,8 @@ func testVStreamRows(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 		})
 		checkRowPoolReuse(t, got, memoryBounds)
 	}
+	require.NotNil(t, f.LastVStreamRowsRequest)
+	assert.True(t, proto.Equal(rowPoolOptions, f.LastVStreamRowsRequest.Options), "VStreamRows must forward the request's Options to the tablet")
 }
 
 // withMemoryBounds runs f with the vttablet memory bounds flag set as given.
@@ -1265,7 +1273,7 @@ func testVStreamTables(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 		var got []rowPoolSeen
 		withMemoryBounds(memoryBounds, func() {
 			ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
-			err := conn.VStreamTables(ctx, &binlogdatapb.VStreamTablesRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamTablesResponse) error {
+			err := conn.VStreamTables(ctx, &binlogdatapb.VStreamTablesRequest{Target: TestTarget, Options: rowPoolOptions}, func(resp *binlogdatapb.VStreamTablesResponse) error {
 				recordRowPool(&got, resp.Rows)
 				return nil
 			})
@@ -1273,4 +1281,6 @@ func testVStreamTables(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 		})
 		checkRowPoolReuse(t, got, memoryBounds)
 	}
+	require.NotNil(t, f.LastVStreamTablesRequest)
+	assert.True(t, proto.Equal(rowPoolOptions, f.LastVStreamTablesRequest.Options), "VStreamTables must forward the request's Options to the tablet (the atomic copy sends the workflow's overrides in them)")
 }
