@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -495,6 +496,54 @@ func TestStartNoWaitLogs(t *testing.T) {
 	starting := logs.Record(t, "Starting mysqld")
 	assert.Equal(t, path.Join(root, "bin", "mysqld_safe")+" --defaults-file="+path.Join(root, "my.cnf")+" --basedir="+root, starting["exec_cmd"])
 	assert.NotContains(t, logs.String(), "env-secret-sentinel")
+}
+
+// TestApplyBinlogFileLogs checks that the mysqlbinlog and mysql commands are
+// logged without their environment.
+func TestApplyBinlogFileLogs(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	params := *db.ConnParams()
+	// NewMysqld detects the version with the real mysqld, so VT_MYSQL_ROOT is set after it.
+	mysqld := NewMysqld(dbconfigs.NewTestDBConfigs(params, params, "fakesqldb"))
+	t.Cleanup(mysqld.Close)
+
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
+	for _, binary := range []string{"mysqlbinlog", "mysql"} {
+		require.NoError(t, os.WriteFile(path.Join(root, "bin", binary), []byte("#!/bin/sh\n"), 0o755))
+	}
+	t.Setenv("VT_MYSQL_ROOT", root)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "env-secret-sentinel")
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, mysqld.ApplyBinlogFile(t.Context(), &mysqlctlpb.ApplyBinlogFileRequest{BinlogFileName: "binlog.000001"}))
+
+	assert.NotContains(t, logs.String(), "env-secret-sentinel")
+	mysqlbinlog := logs.Record(t, "ApplyBinlogFile: running mysqlbinlog command")
+	assert.Equal(t, path.Join(root, "bin", "mysqlbinlog")+" binlog.000001", mysqlbinlog["exec_cmd"])
+	mysql := logs.Record(t, "ApplyBinlogFile: running mysql command")
+	assert.Regexp(t, "^"+regexp.QuoteMeta(path.Join(root, "bin", "mysql")+" --defaults-extra-file=")+`\S+$`, mysql["exec_cmd"])
+}
+
+// TestReadBinlogFilesTimestampsLogs checks that the mysqlbinlog command is
+// logged without its environment.
+func TestReadBinlogFilesTimestampsLogs(t *testing.T) {
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
+	// A timestamp lets the scan for the last timestamp reuse the first scan, so mysqlbinlog runs once.
+	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqlbinlog"), []byte("#!/bin/sh\necho '# original_committed_timestamp=1'\n"), 0o755))
+	t.Setenv("VT_MYSQL_ROOT", root)
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "env-secret-sentinel")
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, err := (&Mysqld{}).ReadBinlogFilesTimestamps(t.Context(), &mysqlctlpb.ReadBinlogFilesTimestampsRequest{BinlogFileNames: []string{"binlog.000001"}})
+	require.NoError(t, err)
+
+	assert.NotContains(t, logs.String(), "env-secret-sentinel")
+	running := logs.Record(t, "ApplyBinlogFile: running mysqlbinlog command")
+	assert.Equal(t, path.Join(root, "bin", "mysqlbinlog")+" binlog.000001", running["exec_cmd"])
 }
 
 func TestBuildLdPathsTZ(t *testing.T) {
