@@ -281,7 +281,7 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
 	fs.Uint64Var(&backupFileChunkThreshold, "builtinbackup-file-chunk-threshold", backupFileChunkThreshold, "Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.")
 	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore.")
-	fs.Var(builtinBackupRestoreWriteMode, "builtinbackup-restore-write-mode", "How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 4096; otherwise the restore fails before any data is downloaded.")
+	fs.Var(builtinBackupRestoreWriteMode, "builtinbackup-restore-write-mode", "How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 4096; otherwise the restore fails before any data is downloaded. Incremental backups are always restored buffered.")
 }
 
 // errInvalidBinlogEntry is returned for a stripped binlog whose name is not binlog.<seq>.
@@ -1435,7 +1435,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 
 	// For chunked files, we pre-create the files at the right size, each chunk then only writes to the right offset.
 	// This is done to prevent them from being truncated when retries happen.
-	if err := createChunkedDestinations(ctx, fes, params.Cnf, createdDir, params.Logger); err != nil {
+	if err := createChunkedDestinations(ctx, fes, params.Cnf, createdDir, restoreWithDirectIO(bm), params.Logger); err != nil {
 		return "", err
 	}
 
@@ -1512,12 +1512,19 @@ func validateChunkMetadata(fe *FileEntry, fileIndex int) (int64, error) {
 	return expectedOffset, nil
 }
 
+// restoreWithDirectIO reports whether the chunks of bm are restored with O_DIRECT. Incremental
+// backups are always restored buffered: their binlogs are written to a temporary directory and
+// read back once, so O_DIRECT gains nothing there, and that directory may not support it.
+func restoreWithDirectIO(bm builtinBackupManifest) bool {
+	return builtinBackupRestoreWriteMode.String() == restoreWriteModeDirect && !bm.Incremental
+}
+
 // createChunkedDestinations pre-creates and pre-sizes destination files for chunked
 // entries. This is called once before any restore pass so that restoreFileEntries can
 // always open them with O_WRONLY (no truncation), making retries safe.
-func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf, createdDir string, logger logutil.Logger) error {
-	// In direct write mode, the requirements are checked here, before any chunk is downloaded.
-	direct := builtinBackupRestoreWriteMode.String() == restoreWriteModeDirect
+func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf, createdDir string, direct bool, logger logutil.Logger) error {
+	// When the chunks are restored with O_DIRECT, the requirements are checked here, before any
+	// chunk is downloaded.
 	for i := range fes {
 		fe := &fes[i]
 		if len(fe.Chunks) == 0 {
@@ -1867,7 +1874,7 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 	defer cancel()
 
 	// createChunkedDestinations already checked that direct write mode can be used.
-	direct := builtinBackupRestoreWriteMode.String() == restoreWriteModeDirect
+	direct := restoreWithDirectIO(bm)
 	openDestAt := time.Now()
 	dest, err := openChunkDestination(destPath, direct)
 	if err != nil {

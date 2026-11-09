@@ -440,7 +440,7 @@ func TestRestoreChunkedRetryPreservesData(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 
 	// Pre-create and pre-size destination files, as restoreFiles() would.
-	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger()))
 
 	// First pass: chunk 0-1 will fail.
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
@@ -583,7 +583,7 @@ func TestRestoreCloseErrorIsFatal(t *testing.T) {
 	}
 
 	be := &BuiltinBackupEngine{}
-	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger()))
 
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
 	require.Error(t, err)
@@ -1038,7 +1038,7 @@ func TestCreateChunkedDestinationsRejectsBadStorageName(t *testing.T) {
 		},
 	}
 
-	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger())
 	require.ErrorContains(t, err, "unexpected storage name")
 	require.ErrorContains(t, err, `got "wrong-name"`)
 	require.ErrorContains(t, err, `expected "0-1"`)
@@ -1075,7 +1075,7 @@ func TestRestoreFileChunkRejectsDecompressedSizeMismatch(t *testing.T) {
 	}
 
 	be := &BuiltinBackupEngine{}
-	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger()))
 
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
 	require.ErrorContains(t, err, "decompressed size mismatch")
@@ -1097,7 +1097,7 @@ func TestCreateChunkedDestinationsRejectsGap(t *testing.T) {
 		},
 	}
 
-	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger())
 	require.ErrorContains(t, err, "gap/overlap")
 	require.ErrorContains(t, err, "expected offset 10, got 20")
 }
@@ -1117,7 +1117,7 @@ func TestCreateChunkedDestinationsRejectsOverlap(t *testing.T) {
 		},
 	}
 
-	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger())
 	require.ErrorContains(t, err, "gap/overlap")
 	require.ErrorContains(t, err, "expected offset 15, got 10")
 }
@@ -1140,7 +1140,7 @@ func TestCreateChunkedDestinationsAcceptsOutOfOrderChunks(t *testing.T) {
 		},
 	}
 
-	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger())
 	require.NoError(t, err)
 }
 
