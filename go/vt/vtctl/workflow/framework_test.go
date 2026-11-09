@@ -88,6 +88,7 @@ func TestMain(m *testing.M) {
 type testEnv struct {
 	ws                             *Server
 	ts                             *topo.Server
+	topoFactory                    *memorytopo.Factory
 	tmc                            *testTMClient
 	sourceKeyspace, targetKeyspace *testKeyspace
 	// Keyed first by keyspace name, then tablet UID.
@@ -97,8 +98,10 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T, ctx context.Context, cell string, sourceKeyspace, targetKeyspace *testKeyspace) *testEnv {
 	t.Helper()
+	ts, topoFactory := memorytopo.NewServerAndFactory(ctx, cell)
 	env := &testEnv{
-		ts:             memorytopo.NewServer(ctx, cell),
+		ts:             ts,
+		topoFactory:    topoFactory,
 		sourceKeyspace: sourceKeyspace,
 		targetKeyspace: targetKeyspace,
 		tablets:        make(map[string]map[int]*topodatapb.Tablet),
