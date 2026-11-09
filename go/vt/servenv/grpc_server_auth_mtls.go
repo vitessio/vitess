@@ -73,7 +73,7 @@ func mtlsAuthPluginInitializer() (Authenticator, error) {
 	mtlsAuthPlugin := &MtlsAuthPlugin{
 		clientCertSubstrings: strings.Split(clientCertSubstrings, ":"),
 	}
-	log.Info("mtls auth plugin have initialized successfully with allowed client cert name substrings", slog.Any("client_cert_substrings", mtlsAuthPlugin.clientCertSubstrings))
+	log.Info("mtls auth plugin has initialized successfully with allowed client cert name substrings", slog.Any("client_cert_substrings", mtlsAuthPlugin.clientCertSubstrings))
 	return mtlsAuthPlugin, nil
 }
 
