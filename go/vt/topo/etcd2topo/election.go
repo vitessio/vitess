@@ -18,7 +18,7 @@ package etcd2topo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"path"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -83,7 +83,7 @@ func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) 
 		}
 		if ld != nil {
 			if err := ld.Unlock(context.Background()); err != nil {
-				log.Error(fmt.Sprintf("failed to unlock electionPath %v: %v", electionPath, err))
+				log.Error("failed to unlock electionPath", slog.String("path", electionPath), slog.Any("error", err))
 			}
 		}
 		lockCancel()
@@ -92,7 +92,7 @@ func (mp *etcdLeaderParticipation) WaitForLeadership() (context.Context, error) 
 
 	// Try to get the primaryship, by getting a lock.
 	var err error
-	ld, err = mp.s.lock(lockCtx, electionPath, mp.id, leaseTTL)
+	ld, err = mp.s.lock(lockCtx, electionPath, mp.id, leaseTTL, true /*wait*/)
 	if err != nil {
 		// It can be that we were interrupted.
 		return nil, err

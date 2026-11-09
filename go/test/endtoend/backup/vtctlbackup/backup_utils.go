@@ -1002,7 +1002,8 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	require.NoError(t, err)
 
 	verifyInitialReplication(t)
-	restoreWaitForBackup(t, tabletType, nil, true)
+	// The rdonly run takes a BackupShard on replica2 below, so replica2 needs a real backup engine there.
+	restoreWaitForBackup(t, tabletType, nil, tabletType != "rdonly")
 
 	err = localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.NoError(t, err)
@@ -1023,6 +1024,10 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	// BuiltinBackup setup: the xtrabackup engine does not record them.
 	if currentSetupType == BuiltinBackup {
 		verifyRestoreRanThroughDecompressor(t, replica2.VttabletProcess.GetVars())
+	}
+
+	if tabletType == "rdonly" {
+		backups = backupShardPrefersRdonly(t, backups)
 	}
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
@@ -1091,6 +1096,27 @@ func backupShardWithBinlogs(t *testing.T) {
 	require.NoError(t, err)
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
 	require.NoError(t, err)
+}
+
+// backupShardPrefersRdonly runs BackupShard with --tablet-types=rdonly,replica while the shard has replica1 as a REPLICA and replica2 as a RDONLY.
+// Then it checks that the backup was taken on replica2.
+// It returns all backups, including the new one.
+func backupShardPrefersRdonly(t *testing.T, backups []string) []string {
+	err := localCluster.VtctldClientProcess.ExecuteCommand("BackupShard", "--tablet-types", "rdonly,replica", shardKsName)
+	require.NoError(t, err)
+
+	allBackups := localCluster.VerifyBackupCount(t, shardKsName, len(backups)+1)
+
+	var newBackup string
+	for _, backup := range allBackups {
+		if !slices.Contains(backups, backup) {
+			newBackup = backup
+		}
+	}
+	// Backup names are <timestamp>.<tablet alias>.
+	assert.Truef(t, strings.HasSuffix(newBackup, "."+replica2.Alias), "expected the backup to be taken on the rdonly %s, got %q", replica2.Alias, newBackup)
+
+	return allBackups
 }
 
 func chunkedBackup(t *testing.T) {

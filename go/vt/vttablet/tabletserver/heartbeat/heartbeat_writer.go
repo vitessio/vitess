@@ -16,6 +16,11 @@ limitations under the License.
 
 package heartbeat
 
+import "time"
+
+// MinimalOnDemandDuration is the shortest lease that an on-demand heartbeat request gets.
+const MinimalOnDemandDuration = 4 * time.Second
+
 type HeartbeatWriter interface {
 	RequestHeartbeats()
 }

@@ -2701,11 +2701,12 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 	return s.ts.DeleteShard(ctx, keyspace, shard)
 }
 
-// updateShardRecords updates the shard records based on 'from' or 'to' direction.
+// updateShardRecords updates QueryServiceDisabled for the shards based on 'from'
+// or 'to' direction. See topotools.UpdateShardRecords.
 func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string,
-	servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool, logger logutil.Logger,
+	servedType topodatapb.TabletType, isFrom bool, logger logutil.Logger,
 ) (err error) {
-	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, logger)
+	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, shardTabletRefreshTimeout, logger)
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
@@ -3240,21 +3241,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	// Find out if the target is using any sequence tables for auto_increment
-	// value generation. If so, then we'll need to ensure that they are
-	// initialized properly before allowing new writes on the target.
-	sequenceMetadata := make(map[string]*sequenceMetadata)
-	// For sharded to sharded migrations the sequence must already be setup.
-	// For reshards the sequence usage is not changed.
-	if req.InitializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
-		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
-		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
-		sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
-		if err != nil {
-			return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
-		}
-	}
-
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
 	if err != nil {
@@ -3262,6 +3248,28 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
+
+		// Find out if the target is using any sequence tables for auto_increment
+		// value generation. If so, then we'll need to ensure that they are
+		// initialized properly before allowing new writes on the target. This
+		// only runs before the journals are created: the sequences are
+		// initialized before then, so a switch that finds the journals has
+		// nothing left to set up for them and only has to finish.
+		sequenceMetadata := make(map[string]*sequenceMetadata)
+		// For sharded to sharded migrations the sequence must already be setup.
+		// For reshards the sequence usage is not changed.
+		if req.InitializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+			ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
+			!ts.SourceKeyspaceSchema().Keyspace.Sharded {
+			sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
+			if err != nil {
+				return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
+			}
+			if err := sw.prepareTargetSequences(ctx, sequenceMetadata); err != nil {
+				return handleError(fmt.Sprintf("failed to prepare the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
+			}
+		}
+
 		sm, err := BuildStreamMigrator(ctx, ts, cancel, s.env.Parser())
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
@@ -3496,11 +3504,15 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	defer cancel()
 	refreshTablets := func(si *topo.ShardInfo, stype string) {
 		if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
-			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
-				si.Keyspace(), si.ShardName(), stype, err, partialDetails)
 			if partial && ts.force {
-				log.Warn(msg)
+				if stype == "source" {
+					log.Warn("failed to successfully refresh all tablets in the source shard", ts.partialRefreshAttrs(si, partialDetails, err)...)
+				} else {
+					log.Warn("failed to successfully refresh all tablets in the target shard", ts.partialRefreshAttrs(si, partialDetails, err)...)
+				}
 			} else {
+				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
+					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
 				m.Lock()
 				refreshErrors.WriteString(msg)
 				m.Unlock()
