@@ -1131,6 +1131,8 @@ const (
 	rowPoolBigPackets   = 20
 	rowPoolBigRows      = 200
 	rowPoolBigBytes     = 1 << 20
+	// rowPoolSeenPackets is how many packets with rows the scenario has.
+	rowPoolSeenPackets = rowPoolUniformPackets + 2*rowPoolBigPackets
 )
 
 var rowPoolFields = []*querypb.Field{{Name: "id"}, {Name: "val"}}
@@ -1164,17 +1166,22 @@ type rowPoolSeen struct {
 	first    *querypb.Row // the first slot's *Row, the same object while the pool is reused
 }
 
-func recordRowPool(got *[]rowPoolSeen, rows []*querypb.Row) {
+// recordRowPool records a packet with rows and reports whether it was the scenario's last one. The caller
+// then clears the response's rows, so the receive loop does not hand this run's pool, grown to about
+// rowPoolBigPackets MiB with the memory bounds off, to the next stream that takes a response from the
+// shared pool: a later run of the suite would start from it and see it dropped under uniform rows.
+func recordRowPool(got *[]rowPoolSeen, rows []*querypb.Row) (last bool) {
 	if len(rows) == 0 {
-		return
+		return false
 	}
 	*got = append(*got, rowPoolSeen{rows: len(rows), retained: sqltypes.RowPoolRetained(rows), first: rows[0]})
+	return len(*got) == rowPoolSeenPackets
 }
 
 // checkRowPoolReuse checks what the receive loop handed its callback over the rowPoolPackets scenario,
 // with the memory bounds on (the pool is trimmed) or off (today's behavior: it is never dropped).
 func checkRowPoolReuse(t *testing.T, got []rowPoolSeen, memoryBounds bool) {
-	require.Len(t, got, rowPoolUniformPackets+2*rowPoolBigPackets)
+	require.Len(t, got, rowPoolSeenPackets)
 
 	if !memoryBounds {
 		for i := 1; i < len(got); i++ {
@@ -1233,7 +1240,9 @@ func testVStreamRows(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 		withMemoryBounds(memoryBounds, func() {
 			ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
 			err := conn.VStreamRows(ctx, &binlogdatapb.VStreamRowsRequest{Target: TestTarget, Options: rowPoolOptions}, func(resp *binlogdatapb.VStreamRowsResponse) error {
-				recordRowPool(&got, resp.Rows)
+				if recordRowPool(&got, resp.Rows) {
+					resp.Rows = nil
+				}
 				return nil
 			})
 			require.NoError(t, err)
@@ -1274,7 +1283,9 @@ func testVStreamTables(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 		withMemoryBounds(memoryBounds, func() {
 			ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
 			err := conn.VStreamTables(ctx, &binlogdatapb.VStreamTablesRequest{Target: TestTarget, Options: rowPoolOptions}, func(resp *binlogdatapb.VStreamTablesResponse) error {
-				recordRowPool(&got, resp.Rows)
+				if recordRowPool(&got, resp.Rows) {
+					resp.Rows = nil
+				}
 				return nil
 			})
 			require.NoError(t, err)
