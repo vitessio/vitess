@@ -115,7 +115,7 @@ func skipFile(pass *analysis.Pass, f *ast.File) bool {
 }
 
 // checkIdent is called for every identifier, so the common path is one
-// Uses lookup and package path comparisons.
+// Uses lookup and a few package path comparisons.
 func checkIdent(pass *analysis.Pass, c inspector.Cursor, id *ast.Ident) {
 	obj := pass.TypesInfo.Uses[id]
 	if obj == nil || obj.Pkg() == nil {
