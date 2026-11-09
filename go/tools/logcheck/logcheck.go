@@ -33,8 +33,9 @@ limitations under the License.
 // Keys that can hold data include:
 //
 //   - error
-//   - query, filter and expression
-//   - last_pk, row, values, event, transaction, message and panic
+//   - query, filter, expression, schema, request and throttler_config
+//   - last_pk, row, row_range, values, next_value, last_value, result, event,
+//     transaction, message, stage, stderr and panic
 package logcheck
 
 import (
