@@ -42,12 +42,8 @@ type consulLockDescriptor struct {
 func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	// We list the directory first to make sure it exists.
 	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
-		// We need to return the right error codes, like
-		// topo.ErrNoNode and topo.ErrInterrupted, and the
-		// easiest way to do this is to return convertError(err).
-		// It may lose some of the context, if this is an issue,
-		// maybe logging the error would work here.
-		return nil, convertError(ctx, err, dirPath)
+		// ListDir already returns topo.NoNode, or a topo error when ctx is done.
+		return nil, err
 	}
 
 	return s.lock(ctx, dirPath, contents, s.lockTTL)
@@ -57,12 +53,8 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl time.Duration) (topo.LockDescriptor, error) {
 	// We list the directory first to make sure it exists.
 	if _, err := s.ListDir(ctx, dirPath, false /*full*/); err != nil {
-		// We need to return the right error codes, like
-		// topo.ErrNoNode and topo.ErrInterrupted, and the
-		// easiest way to do this is to return convertError(err).
-		// It may lose some of the context, if this is an issue,
-		// maybe logging the error would work here.
-		return nil, convertError(ctx, err, dirPath)
+		// ListDir already returns topo.NoNode, or a topo error when ctx is done.
+		return nil, err
 	}
 
 	return s.lock(ctx, dirPath, contents, ttl.String())
@@ -78,12 +70,8 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 	// We list all the entries under dirPath
 	entries, err := s.ListDir(ctx, dirPath, true)
 	if err != nil {
-		// We need to return the right error codes, like
-		// topo.ErrNoNode and topo.ErrInterrupted, and the
-		// easiest way to do this is to return convertError(err).
-		// It may lose some of the context, if this is an issue,
-		// maybe logging the error would work here.
-		return nil, convertError(ctx, err, dirPath)
+		// ListDir already returns topo.NoNode, or a topo error when ctx is done.
+		return nil, err
 	}
 
 	// If there is a file 'lock' in it then we can assume that someone else already has a lock.

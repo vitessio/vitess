@@ -317,9 +317,10 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 			statsConn.readOnly = globalCellConn.readOnly
 		}
 		if cached && cc.conn != nil {
-			// Close the cached connection only now that its replacement is up. If connecting fails, it stays
+			// Close the cached connection only now that Create has succeeded. If Create fails, the connection stays
 			// cached: the watches on it keep running, and once the cell is pointed back at the topo server it is
-			// connected to, ConnForCell returns it again rather than a closed connection.
+			// connected to, ConnForCell returns it again rather than a closed connection. Only etcd2topo's Create
+			// reaches the server; consultopo's and zk2topo's don't, so on those a bad address still gets this far.
 			cc.conn.Close()
 		}
 		ts.cellConns[cell] = cellConn{ci, statsConn}
