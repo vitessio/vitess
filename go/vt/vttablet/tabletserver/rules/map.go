@@ -19,6 +19,7 @@ package rules
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -46,7 +47,7 @@ func (qri *Map) RegisterSource(ruleSource string) {
 	qri.mu.Lock()
 	defer qri.mu.Unlock()
 	if _, existed := qri.queryRulesMap[ruleSource]; existed {
-		log.Error("Query rule source " + ruleSource + " has been registered")
+		log.Error("Query rule source has been registered", slog.String("rule_source", ruleSource))
 		panic("Query rule source " + ruleSource + " has been registered")
 	}
 	qri.queryRulesMap[ruleSource] = New()
