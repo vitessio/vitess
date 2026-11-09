@@ -17,12 +17,87 @@ limitations under the License.
 package schemacache
 
 import (
+	"context"
+	"log/slog"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/vtadmin/cache"
+
+	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+func TestLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	fill := func(ctx context.Context, key Key) ([]*vtadminpb.Schema, error) { return nil, nil }
+	assertKey := func(t *testing.T, record map[string]any, keyspace string) {
+		assert.Equal(t, "c1", record["cluster_id"])
+		assert.Equal(t, keyspace, record["keyspace"])
+		assert.Equal(t, true, record["include_non_serving_shards"])
+	}
+
+	c := cache.New(fill, cache.Config{})
+	t.Cleanup(func() { _ = c.Close() })
+	allKey := Key{ClusterID: "c1", IncludeNonServingShards: true}
+	require.NoError(t, c.Add(allKey, []*vtadminpb.Schema{{Keyspace: "ks1"}, {Keyspace: "ks2"}}, cache.DefaultExpiration))
+	_, found, err := LoadOne(c, allKey, LoadOptions{BaseRequest: &vtctldatapb.GetSchemaRequest{}})
+	require.Error(t, err)
+	assert.True(t, found)
+	record := logs.Record(t, "impossible: cache should have exactly 1 schema for request")
+	assert.Equal(t, "ERROR", record["level"])
+	assertKey(t, record, "")
+	assert.InDelta(t, 2, record["schema_count"], 0)
+
+	key := Key{ClusterID: "c1", Keyspace: "ks1", IncludeNonServingShards: true}
+
+	// A closed cache with no queue can't take a backfill request.
+	closed := cache.New(fill, cache.Config{BackfillQueueSize: 0, BackfillEnqueueWaitTime: time.Millisecond})
+	require.NoError(t, closed.Close())
+	AddOrBackfill(closed, nil, key, cache.DefaultExpiration, LoadOptions{BaseRequest: &vtctldatapb.GetSchemaRequest{}})
+	record = logs.Record(t, "failed to enqueue backfill for schema cache")
+	assert.Equal(t, "WARN", record["level"])
+	assertKey(t, record, "ks1")
+
+	// Adding fails only when the key is added, replaced or expires between the
+	// cache's existence check and its write.
+	var stop atomic.Bool
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for !stop.Load() {
+			_ = c.Add(key, nil, time.Hour)
+			_ = c.Add(key, nil, time.Nanosecond)
+		}
+	})
+	t.Cleanup(func() {
+		stop.Store(true)
+		wg.Wait()
+	})
+	full := LoadOptions{BaseRequest: &vtctldatapb.GetSchemaRequest{IncludeViews: true}, AggregateSizes: true}
+	require.Eventually(t, func() bool {
+		for range 100 {
+			AddOrBackfill(c, nil, key, time.Hour, full)
+		}
+		return strings.Contains(logs.String(), "failed to add schema to cache")
+	}, 30*time.Second, time.Millisecond)
+	for _, record := range logs.Records(t) {
+		if record["msg"] == "failed to add schema to cache" {
+			assert.Equal(t, "WARN", record["level"])
+			assertKey(t, record, "ks1")
+			assert.NotEmpty(t, record["error"])
+			return
+		}
+	}
+	assert.Fail(t, "no record of the failed add")
+}
 
 func TestLoadOptions(t *testing.T) {
 	t.Parallel()

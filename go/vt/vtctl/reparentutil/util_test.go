@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -32,8 +33,10 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/promotionrule"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -2651,6 +2654,28 @@ func Test_getTabletsWithPromotionRules(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestShardReplicationStatusesLogsSortedTablets(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	defer ts.Close()
+	// Drained tablets are skipped, so no tablet manager calls are made.
+	for _, uid := range []uint32{102, 100, 101} {
+		testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+			Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: uid},
+			Keyspace: "ks",
+			Shard:    "0",
+			Type:     topodatapb.TabletType_DRAINED,
+		}, nil)
+	}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, _, err := ShardReplicationStatuses(ctx, ts, nil, "ks", "0")
+	require.NoError(t, err)
+	record := logs.Record(t, "Gathering tablet replication status")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, []any{"zone1-0000000100", "zone1-0000000101", "zone1-0000000102"}, record["tablets"])
 }
 
 func TestGetBackupCandidates(t *testing.T) {
