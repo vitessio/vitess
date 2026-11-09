@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -89,7 +90,7 @@ func repointCell(t *testing.T, ts *topo.Server, cell, root string) {
 func assertClosed(t *testing.T, conn topo.Conn, want bool, msg string) {
 	closed, _, err := conn.Get(t.Context(), closedProbePath)
 	require.NoError(t, err)
-	assert.Equal(t, fmt.Sprint(want), string(closed), msg)
+	assert.Equal(t, strconv.FormatBool(want), string(closed), msg)
 }
 
 // TestConnForCellPointedBackAfterFailedReplacement verifies that when a cell is re-pointed at a topo server
