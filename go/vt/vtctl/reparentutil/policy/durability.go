@@ -18,6 +18,7 @@ package policy
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"vitess.io/vitess/go/vt/log"
@@ -96,7 +97,7 @@ type Durabler interface {
 
 func RegisterDurability(name string, newDurablerFunc NewDurabler) {
 	if durabilityPolicies[name] != nil {
-		log.Error(fmt.Sprintf("durability policy %v already registered", name))
+		log.Error("durability policy already registered", slog.String("durability_policy", name))
 		os.Exit(1)
 	}
 	durabilityPolicies[name] = newDurablerFunc

@@ -21,7 +21,7 @@ package consultopo
 
 import (
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -143,7 +143,7 @@ func NewServer(cell, serverAddr, root string) (*Server, error) {
 		if creds[cell] != nil {
 			cfg.Token = creds[cell].ACLToken
 		} else {
-			log.Warn(fmt.Sprintf("Client auth not configured for cell: %v", cell))
+			log.Warn("Client auth not configured for cell", slog.String("cell", cell))
 		}
 	}
 

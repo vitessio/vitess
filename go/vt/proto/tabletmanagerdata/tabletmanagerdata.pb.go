@@ -156,6 +156,53 @@ func (CheckThrottlerResponseCode) EnumDescriptor() ([]byte, []int) {
 	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{1}
 }
 
+// ThrottlerType specifies which throttler to use
+type ThrottlerType int32
+
+const (
+	ThrottlerType_DEFAULT_LAG_THROTTLER     ThrottlerType = 0 // Default - replication lag throttler
+	ThrottlerType_DEDICATED_QUERY_THROTTLER ThrottlerType = 1 // Dedicated query throttler
+)
+
+// Enum value maps for ThrottlerType.
+var (
+	ThrottlerType_name = map[int32]string{
+		0: "DEFAULT_LAG_THROTTLER",
+		1: "DEDICATED_QUERY_THROTTLER",
+	}
+	ThrottlerType_value = map[string]int32{
+		"DEFAULT_LAG_THROTTLER":     0,
+		"DEDICATED_QUERY_THROTTLER": 1,
+	}
+)
+
+func (x ThrottlerType) Enum() *ThrottlerType {
+	p := new(ThrottlerType)
+	*p = x
+	return p
+}
+
+func (x ThrottlerType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ThrottlerType) Descriptor() protoreflect.EnumDescriptor {
+	return file_tabletmanagerdata_proto_enumTypes[2].Descriptor()
+}
+
+func (ThrottlerType) Type() protoreflect.EnumType {
+	return &file_tabletmanagerdata_proto_enumTypes[2]
+}
+
+func (x ThrottlerType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ThrottlerType.Descriptor instead.
+func (ThrottlerType) EnumDescriptor() ([]byte, []int) {
+	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{2}
+}
+
 type TableDefinition struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// the table name
@@ -7578,6 +7625,8 @@ type CheckThrottlerRequest struct {
 	SkipRequestHeartbeats bool `protobuf:"varint,3,opt,name=skip_request_heartbeats,json=skipRequestHeartbeats,proto3" json:"skip_request_heartbeats,omitempty"`
 	// OKIfNotExists asks the throttler to return OK even if the metric does not exist
 	OkIfNotExists bool `protobuf:"varint,4,opt,name=ok_if_not_exists,json=okIfNotExists,proto3" json:"ok_if_not_exists,omitempty"`
+	// ThrottlerType specifies which throttler to check (defaults to DEFAULT_LAG_THROTTLER)
+	ThrottlerType ThrottlerType `protobuf:"varint,6,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7640,6 +7689,13 @@ func (x *CheckThrottlerRequest) GetOkIfNotExists() bool {
 	return false
 }
 
+func (x *CheckThrottlerRequest) GetThrottlerType() ThrottlerType {
+	if x != nil {
+		return x.ThrottlerType
+	}
+	return ThrottlerType_DEFAULT_LAG_THROTTLER
+}
+
 type CheckThrottlerResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Value is the metric value collected by the tablet
@@ -7661,7 +7717,10 @@ type CheckThrottlerResponse struct {
 	// Summary is a human readable analysis of the result
 	Summary string `protobuf:"bytes,9,opt,name=summary,proto3" json:"summary,omitempty"`
 	// ResponseCode is the enum representation of the response
-	ResponseCode  CheckThrottlerResponseCode `protobuf:"varint,10,opt,name=response_code,json=responseCode,proto3,enum=tabletmanagerdata.CheckThrottlerResponseCode" json:"response_code,omitempty"`
+	ResponseCode CheckThrottlerResponseCode `protobuf:"varint,10,opt,name=response_code,json=responseCode,proto3,enum=tabletmanagerdata.CheckThrottlerResponseCode" json:"response_code,omitempty"`
+	// ThrottlerType is the throttler that answered the check. Tablets that predate the field
+	// always answer for the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
+	ThrottlerType ThrottlerType `protobuf:"varint,11,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7759,8 +7818,17 @@ func (x *CheckThrottlerResponse) GetResponseCode() CheckThrottlerResponseCode {
 	return CheckThrottlerResponseCode_UNDEFINED
 }
 
+func (x *CheckThrottlerResponse) GetThrottlerType() ThrottlerType {
+	if x != nil {
+		return x.ThrottlerType
+	}
+	return ThrottlerType_DEFAULT_LAG_THROTTLER
+}
+
 type GetThrottlerStatusRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ThrottlerType specifies which throttler to query (defaults to DEFAULT_LAG_THROTTLER)
+	ThrottlerType ThrottlerType `protobuf:"varint,1,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7793,6 +7861,13 @@ func (x *GetThrottlerStatusRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use GetThrottlerStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetThrottlerStatusRequest) Descriptor() ([]byte, []int) {
 	return file_tabletmanagerdata_proto_rawDescGZIP(), []int{148}
+}
+
+func (x *GetThrottlerStatusRequest) GetThrottlerType() ThrottlerType {
+	if x != nil {
+		return x.ThrottlerType
+	}
+	return ThrottlerType_DEFAULT_LAG_THROTTLER
 }
 
 type GetThrottlerStatusResponse struct {
@@ -7832,7 +7907,10 @@ type GetThrottlerStatusResponse struct {
 	AppCheckedMetrics map[string]string `protobuf:"bytes,16,rep,name=app_checked_metrics,json=appCheckedMetrics,proto3" json:"app_checked_metrics,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	RecentlyChecked   bool              `protobuf:"varint,17,opt,name=recently_checked,json=recentlyChecked,proto3" json:"recently_checked,omitempty"`
 	// RecentApps is a map of app names to their recent check status
-	RecentApps    map[string]*GetThrottlerStatusResponse_RecentApp `protobuf:"bytes,18,rep,name=recent_apps,json=recentApps,proto3" json:"recent_apps,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	RecentApps map[string]*GetThrottlerStatusResponse_RecentApp `protobuf:"bytes,18,rep,name=recent_apps,json=recentApps,proto3" json:"recent_apps,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// ThrottlerType is the throttler that this status describes. Tablets that predate the field
+	// always describe the lag throttler and leave it unset, which reads as DEFAULT_LAG_THROTTLER.
+	ThrottlerType ThrottlerType `protobuf:"varint,19,opt,name=throttler_type,json=throttlerType,proto3,enum=tabletmanagerdata.ThrottlerType" json:"throttler_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7991,6 +8069,13 @@ func (x *GetThrottlerStatusResponse) GetRecentApps() map[string]*GetThrottlerSta
 		return x.RecentApps
 	}
 	return nil
+}
+
+func (x *GetThrottlerStatusResponse) GetThrottlerType() ThrottlerType {
+	if x != nil {
+		return x.ThrottlerType
+	}
+	return ThrottlerType_DEFAULT_LAG_THROTTLER
 }
 
 type ChangeTagsRequest struct {
@@ -9366,12 +9451,13 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"/\n" +
 	"\x15ResetSequencesRequest\x12\x16\n" +
 	"\x06tables\x18\x01 \x03(\tR\x06tables\"\x18\n" +
-	"\x16ResetSequencesResponse\"\xc6\x01\n" +
+	"\x16ResetSequencesResponse\"\x8f\x02\n" +
 	"\x15CheckThrottlerRequest\x12\x19\n" +
 	"\bapp_name\x18\x01 \x01(\tR\aappName\x12\x14\n" +
 	"\x05scope\x18\x02 \x01(\tR\x05scope\x126\n" +
 	"\x17skip_request_heartbeats\x18\x03 \x01(\bR\x15skipRequestHeartbeats\x12'\n" +
-	"\x10ok_if_not_exists\x18\x04 \x01(\bR\rokIfNotExistsJ\x04\b\x05\x10\x06R\x15multi_metrics_enabled\"\xf6\x05\n" +
+	"\x10ok_if_not_exists\x18\x04 \x01(\bR\rokIfNotExists\x12G\n" +
+	"\x0ethrottler_type\x18\x06 \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerTypeJ\x04\b\x05\x10\x06R\x15multi_metrics_enabled\"\xbf\x06\n" +
 	"\x16CheckThrottlerResponse\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x01R\x05value\x12\x1c\n" +
 	"\tthreshold\x18\x03 \x01(\x01R\tthreshold\x12\x14\n" +
@@ -9382,7 +9468,8 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\bapp_name\x18\b \x01(\tR\aappName\x12\x18\n" +
 	"\asummary\x18\t \x01(\tR\asummary\x12R\n" +
 	"\rresponse_code\x18\n" +
-	" \x01(\x0e2-.tabletmanagerdata.CheckThrottlerResponseCodeR\fresponseCode\x1a\xf0\x01\n" +
+	" \x01(\x0e2-.tabletmanagerdata.CheckThrottlerResponseCodeR\fresponseCode\x12G\n" +
+	"\x0ethrottler_type\x18\v \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerType\x1a\xf0\x01\n" +
 	"\x06Metric\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05value\x18\x03 \x01(\x01R\x05value\x12\x1c\n" +
@@ -9393,8 +9480,9 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\rresponse_code\x18\b \x01(\x0e2-.tabletmanagerdata.CheckThrottlerResponseCodeR\fresponseCodeJ\x04\b\x02\x10\x03\x1al\n" +
 	"\fMetricsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12F\n" +
-	"\x05value\x18\x02 \x01(\v20.tabletmanagerdata.CheckThrottlerResponse.MetricR\x05value:\x028\x01J\x04\b\x01\x10\x02R\vstatus_code\"\x1b\n" +
-	"\x19GetThrottlerStatusRequest\"\x9b\x10\n" +
+	"\x05value\x18\x02 \x01(\v20.tabletmanagerdata.CheckThrottlerResponse.MetricR\x05value:\x028\x01J\x04\b\x01\x10\x02R\vstatus_code\"d\n" +
+	"\x19GetThrottlerStatusRequest\x12G\n" +
+	"\x0ethrottler_type\x18\x01 \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerType\"\xe4\x10\n" +
 	"\x1aGetThrottlerStatusResponse\x12!\n" +
 	"\ftablet_alias\x18\x01 \x01(\tR\vtabletAlias\x12\x1a\n" +
 	"\bkeyspace\x18\x02 \x01(\tR\bkeyspace\x12\x14\n" +
@@ -9417,7 +9505,8 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\x13app_checked_metrics\x18\x10 \x03(\v2D.tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntryR\x11appCheckedMetrics\x12)\n" +
 	"\x10recently_checked\x18\x11 \x01(\bR\x0frecentlyChecked\x12^\n" +
 	"\vrecent_apps\x18\x12 \x03(\v2=.tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntryR\n" +
-	"recentApps\x1a:\n" +
+	"recentApps\x12G\n" +
+	"\x0ethrottler_type\x18\x13 \x01(\x0e2 .tabletmanagerdata.ThrottlerTypeR\rthrottlerType\x1a:\n" +
 	"\fMetricResult\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\x01R\x05value\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x1a\x80\x01\n" +
@@ -9487,7 +9576,10 @@ const file_tabletmanagerdata_proto_rawDesc = "" +
 	"\n" +
 	"APP_DENIED\x10\x03\x12\x12\n" +
 	"\x0eUNKNOWN_METRIC\x10\x04\x12\x12\n" +
-	"\x0eINTERNAL_ERROR\x10\x05B0Z.vitess.io/vitess/go/vt/proto/tabletmanagerdatab\x06proto3"
+	"\x0eINTERNAL_ERROR\x10\x05*I\n" +
+	"\rThrottlerType\x12\x19\n" +
+	"\x15DEFAULT_LAG_THROTTLER\x10\x00\x12\x1d\n" +
+	"\x19DEDICATED_QUERY_THROTTLER\x10\x01B0Z.vitess.io/vitess/go/vt/proto/tabletmanagerdatab\x06proto3"
 
 var (
 	file_tabletmanagerdata_proto_rawDescOnce sync.Once
@@ -9501,337 +9593,342 @@ func file_tabletmanagerdata_proto_rawDescGZIP() []byte {
 	return file_tabletmanagerdata_proto_rawDescData
 }
 
-var file_tabletmanagerdata_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_tabletmanagerdata_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
 var file_tabletmanagerdata_proto_msgTypes = make([]protoimpl.MessageInfo, 181)
 var file_tabletmanagerdata_proto_goTypes = []any{
 	(TabletSelectionPreference)(0),                  // 0: tabletmanagerdata.TabletSelectionPreference
 	(CheckThrottlerResponseCode)(0),                 // 1: tabletmanagerdata.CheckThrottlerResponseCode
-	(*TableDefinition)(nil),                         // 2: tabletmanagerdata.TableDefinition
-	(*SchemaDefinition)(nil),                        // 3: tabletmanagerdata.SchemaDefinition
-	(*SchemaChangeResult)(nil),                      // 4: tabletmanagerdata.SchemaChangeResult
-	(*UserPermission)(nil),                          // 5: tabletmanagerdata.UserPermission
-	(*DbPermission)(nil),                            // 6: tabletmanagerdata.DbPermission
-	(*Permissions)(nil),                             // 7: tabletmanagerdata.Permissions
-	(*PingRequest)(nil),                             // 8: tabletmanagerdata.PingRequest
-	(*PingResponse)(nil),                            // 9: tabletmanagerdata.PingResponse
-	(*SleepRequest)(nil),                            // 10: tabletmanagerdata.SleepRequest
-	(*SleepResponse)(nil),                           // 11: tabletmanagerdata.SleepResponse
-	(*ExecuteHookRequest)(nil),                      // 12: tabletmanagerdata.ExecuteHookRequest
-	(*ExecuteHookResponse)(nil),                     // 13: tabletmanagerdata.ExecuteHookResponse
-	(*GetSchemaRequest)(nil),                        // 14: tabletmanagerdata.GetSchemaRequest
-	(*GetSchemaResponse)(nil),                       // 15: tabletmanagerdata.GetSchemaResponse
-	(*GetPermissionsRequest)(nil),                   // 16: tabletmanagerdata.GetPermissionsRequest
-	(*GetPermissionsResponse)(nil),                  // 17: tabletmanagerdata.GetPermissionsResponse
-	(*GetGlobalStatusVarsRequest)(nil),              // 18: tabletmanagerdata.GetGlobalStatusVarsRequest
-	(*GetGlobalStatusVarsResponse)(nil),             // 19: tabletmanagerdata.GetGlobalStatusVarsResponse
-	(*SetReadOnlyRequest)(nil),                      // 20: tabletmanagerdata.SetReadOnlyRequest
-	(*SetReadOnlyResponse)(nil),                     // 21: tabletmanagerdata.SetReadOnlyResponse
-	(*SetReadWriteRequest)(nil),                     // 22: tabletmanagerdata.SetReadWriteRequest
-	(*SetReadWriteResponse)(nil),                    // 23: tabletmanagerdata.SetReadWriteResponse
-	(*ChangeTypeRequest)(nil),                       // 24: tabletmanagerdata.ChangeTypeRequest
-	(*ChangeTypeResponse)(nil),                      // 25: tabletmanagerdata.ChangeTypeResponse
-	(*RefreshStateRequest)(nil),                     // 26: tabletmanagerdata.RefreshStateRequest
-	(*RefreshStateResponse)(nil),                    // 27: tabletmanagerdata.RefreshStateResponse
-	(*RunHealthCheckRequest)(nil),                   // 28: tabletmanagerdata.RunHealthCheckRequest
-	(*RunHealthCheckResponse)(nil),                  // 29: tabletmanagerdata.RunHealthCheckResponse
-	(*ReloadSchemaRequest)(nil),                     // 30: tabletmanagerdata.ReloadSchemaRequest
-	(*ReloadSchemaResponse)(nil),                    // 31: tabletmanagerdata.ReloadSchemaResponse
-	(*PreflightSchemaRequest)(nil),                  // 32: tabletmanagerdata.PreflightSchemaRequest
-	(*PreflightSchemaResponse)(nil),                 // 33: tabletmanagerdata.PreflightSchemaResponse
-	(*ApplySchemaRequest)(nil),                      // 34: tabletmanagerdata.ApplySchemaRequest
-	(*ApplySchemaResponse)(nil),                     // 35: tabletmanagerdata.ApplySchemaResponse
-	(*LockTablesRequest)(nil),                       // 36: tabletmanagerdata.LockTablesRequest
-	(*LockTablesResponse)(nil),                      // 37: tabletmanagerdata.LockTablesResponse
-	(*UnlockTablesRequest)(nil),                     // 38: tabletmanagerdata.UnlockTablesRequest
-	(*UnlockTablesResponse)(nil),                    // 39: tabletmanagerdata.UnlockTablesResponse
-	(*ExecuteQueryRequest)(nil),                     // 40: tabletmanagerdata.ExecuteQueryRequest
-	(*ExecuteQueryResponse)(nil),                    // 41: tabletmanagerdata.ExecuteQueryResponse
-	(*ExecuteFetchAsDbaRequest)(nil),                // 42: tabletmanagerdata.ExecuteFetchAsDbaRequest
-	(*ExecuteFetchAsDbaResponse)(nil),               // 43: tabletmanagerdata.ExecuteFetchAsDbaResponse
-	(*SessionVariable)(nil),                         // 44: tabletmanagerdata.SessionVariable
-	(*ExecuteMultiFetchAsDbaRequest)(nil),           // 45: tabletmanagerdata.ExecuteMultiFetchAsDbaRequest
-	(*ExecuteMultiFetchAsDbaResponse)(nil),          // 46: tabletmanagerdata.ExecuteMultiFetchAsDbaResponse
-	(*ExecuteFetchAsAllPrivsRequest)(nil),           // 47: tabletmanagerdata.ExecuteFetchAsAllPrivsRequest
-	(*ExecuteFetchAsAllPrivsResponse)(nil),          // 48: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse
-	(*ExecuteFetchAsAppRequest)(nil),                // 49: tabletmanagerdata.ExecuteFetchAsAppRequest
-	(*ExecuteFetchAsAppResponse)(nil),               // 50: tabletmanagerdata.ExecuteFetchAsAppResponse
-	(*GetUnresolvedTransactionsRequest)(nil),        // 51: tabletmanagerdata.GetUnresolvedTransactionsRequest
-	(*GetUnresolvedTransactionsResponse)(nil),       // 52: tabletmanagerdata.GetUnresolvedTransactionsResponse
-	(*ReadTransactionRequest)(nil),                  // 53: tabletmanagerdata.ReadTransactionRequest
-	(*ReadTransactionResponse)(nil),                 // 54: tabletmanagerdata.ReadTransactionResponse
-	(*GetTransactionInfoRequest)(nil),               // 55: tabletmanagerdata.GetTransactionInfoRequest
-	(*GetTransactionInfoResponse)(nil),              // 56: tabletmanagerdata.GetTransactionInfoResponse
-	(*ConcludeTransactionRequest)(nil),              // 57: tabletmanagerdata.ConcludeTransactionRequest
-	(*ConcludeTransactionResponse)(nil),             // 58: tabletmanagerdata.ConcludeTransactionResponse
-	(*MysqlHostMetricsRequest)(nil),                 // 59: tabletmanagerdata.MysqlHostMetricsRequest
-	(*MysqlHostMetricsResponse)(nil),                // 60: tabletmanagerdata.MysqlHostMetricsResponse
-	(*ReplicationStatusRequest)(nil),                // 61: tabletmanagerdata.ReplicationStatusRequest
-	(*ReplicationStatusResponse)(nil),               // 62: tabletmanagerdata.ReplicationStatusResponse
-	(*PrimaryStatusRequest)(nil),                    // 63: tabletmanagerdata.PrimaryStatusRequest
-	(*PrimaryStatusResponse)(nil),                   // 64: tabletmanagerdata.PrimaryStatusResponse
-	(*PrimaryPositionRequest)(nil),                  // 65: tabletmanagerdata.PrimaryPositionRequest
-	(*PrimaryPositionResponse)(nil),                 // 66: tabletmanagerdata.PrimaryPositionResponse
-	(*WaitForPositionRequest)(nil),                  // 67: tabletmanagerdata.WaitForPositionRequest
-	(*WaitForPositionResponse)(nil),                 // 68: tabletmanagerdata.WaitForPositionResponse
-	(*StopReplicationRequest)(nil),                  // 69: tabletmanagerdata.StopReplicationRequest
-	(*StopReplicationResponse)(nil),                 // 70: tabletmanagerdata.StopReplicationResponse
-	(*StopReplicationMinimumRequest)(nil),           // 71: tabletmanagerdata.StopReplicationMinimumRequest
-	(*StopReplicationMinimumResponse)(nil),          // 72: tabletmanagerdata.StopReplicationMinimumResponse
-	(*StartReplicationRequest)(nil),                 // 73: tabletmanagerdata.StartReplicationRequest
-	(*StartReplicationResponse)(nil),                // 74: tabletmanagerdata.StartReplicationResponse
-	(*RestartReplicationRequest)(nil),               // 75: tabletmanagerdata.RestartReplicationRequest
-	(*RestartReplicationResponse)(nil),              // 76: tabletmanagerdata.RestartReplicationResponse
-	(*StartReplicationUntilAfterRequest)(nil),       // 77: tabletmanagerdata.StartReplicationUntilAfterRequest
-	(*StartReplicationUntilAfterResponse)(nil),      // 78: tabletmanagerdata.StartReplicationUntilAfterResponse
-	(*GetReplicasRequest)(nil),                      // 79: tabletmanagerdata.GetReplicasRequest
-	(*GetReplicasResponse)(nil),                     // 80: tabletmanagerdata.GetReplicasResponse
-	(*ResetReplicationRequest)(nil),                 // 81: tabletmanagerdata.ResetReplicationRequest
-	(*ResetReplicationResponse)(nil),                // 82: tabletmanagerdata.ResetReplicationResponse
-	(*VReplicationExecRequest)(nil),                 // 83: tabletmanagerdata.VReplicationExecRequest
-	(*VReplicationExecResponse)(nil),                // 84: tabletmanagerdata.VReplicationExecResponse
-	(*VReplicationWaitForPosRequest)(nil),           // 85: tabletmanagerdata.VReplicationWaitForPosRequest
-	(*VReplicationWaitForPosResponse)(nil),          // 86: tabletmanagerdata.VReplicationWaitForPosResponse
-	(*InitPrimaryRequest)(nil),                      // 87: tabletmanagerdata.InitPrimaryRequest
-	(*InitPrimaryResponse)(nil),                     // 88: tabletmanagerdata.InitPrimaryResponse
-	(*PopulateReparentJournalRequest)(nil),          // 89: tabletmanagerdata.PopulateReparentJournalRequest
-	(*PopulateReparentJournalResponse)(nil),         // 90: tabletmanagerdata.PopulateReparentJournalResponse
-	(*ReadReparentJournalInfoRequest)(nil),          // 91: tabletmanagerdata.ReadReparentJournalInfoRequest
-	(*ReadReparentJournalInfoResponse)(nil),         // 92: tabletmanagerdata.ReadReparentJournalInfoResponse
-	(*InitReplicaRequest)(nil),                      // 93: tabletmanagerdata.InitReplicaRequest
-	(*InitReplicaResponse)(nil),                     // 94: tabletmanagerdata.InitReplicaResponse
-	(*DemotePrimaryRequest)(nil),                    // 95: tabletmanagerdata.DemotePrimaryRequest
-	(*DemotePrimaryResponse)(nil),                   // 96: tabletmanagerdata.DemotePrimaryResponse
-	(*UndoDemotePrimaryRequest)(nil),                // 97: tabletmanagerdata.UndoDemotePrimaryRequest
-	(*UndoDemotePrimaryResponse)(nil),               // 98: tabletmanagerdata.UndoDemotePrimaryResponse
-	(*ReplicaWasPromotedRequest)(nil),               // 99: tabletmanagerdata.ReplicaWasPromotedRequest
-	(*ReplicaWasPromotedResponse)(nil),              // 100: tabletmanagerdata.ReplicaWasPromotedResponse
-	(*ResetReplicationParametersRequest)(nil),       // 101: tabletmanagerdata.ResetReplicationParametersRequest
-	(*ResetReplicationParametersResponse)(nil),      // 102: tabletmanagerdata.ResetReplicationParametersResponse
-	(*FullStatusRequest)(nil),                       // 103: tabletmanagerdata.FullStatusRequest
-	(*FullStatusResponse)(nil),                      // 104: tabletmanagerdata.FullStatusResponse
-	(*SetReplicationSourceRequest)(nil),             // 105: tabletmanagerdata.SetReplicationSourceRequest
-	(*SetReplicationSourceResponse)(nil),            // 106: tabletmanagerdata.SetReplicationSourceResponse
-	(*ReplicaWasRestartedRequest)(nil),              // 107: tabletmanagerdata.ReplicaWasRestartedRequest
-	(*ReplicaWasRestartedResponse)(nil),             // 108: tabletmanagerdata.ReplicaWasRestartedResponse
-	(*StopReplicationAndGetStatusRequest)(nil),      // 109: tabletmanagerdata.StopReplicationAndGetStatusRequest
-	(*StopReplicationAndGetStatusResponse)(nil),     // 110: tabletmanagerdata.StopReplicationAndGetStatusResponse
-	(*PrepareEmergencyReparentRequest)(nil),         // 111: tabletmanagerdata.PrepareEmergencyReparentRequest
-	(*PrepareEmergencyReparentResponse)(nil),        // 112: tabletmanagerdata.PrepareEmergencyReparentResponse
-	(*PromoteReplicaRequest)(nil),                   // 113: tabletmanagerdata.PromoteReplicaRequest
-	(*PromoteReplicaResponse)(nil),                  // 114: tabletmanagerdata.PromoteReplicaResponse
-	(*PromoteReplicaAndJournalRequest)(nil),         // 115: tabletmanagerdata.PromoteReplicaAndJournalRequest
-	(*PromoteReplicaAndJournalResponse)(nil),        // 116: tabletmanagerdata.PromoteReplicaAndJournalResponse
-	(*BackupRequest)(nil),                           // 117: tabletmanagerdata.BackupRequest
-	(*BackupResponse)(nil),                          // 118: tabletmanagerdata.BackupResponse
-	(*RestoreFromBackupRequest)(nil),                // 119: tabletmanagerdata.RestoreFromBackupRequest
-	(*RestoreFromBackupResponse)(nil),               // 120: tabletmanagerdata.RestoreFromBackupResponse
-	(*CreateVReplicationWorkflowRequest)(nil),       // 121: tabletmanagerdata.CreateVReplicationWorkflowRequest
-	(*CreateVReplicationWorkflowResponse)(nil),      // 122: tabletmanagerdata.CreateVReplicationWorkflowResponse
-	(*DeleteTableDataRequest)(nil),                  // 123: tabletmanagerdata.DeleteTableDataRequest
-	(*DeleteTableDataResponse)(nil),                 // 124: tabletmanagerdata.DeleteTableDataResponse
-	(*DeleteVReplicationWorkflowRequest)(nil),       // 125: tabletmanagerdata.DeleteVReplicationWorkflowRequest
-	(*DeleteVReplicationWorkflowResponse)(nil),      // 126: tabletmanagerdata.DeleteVReplicationWorkflowResponse
-	(*HasVReplicationWorkflowsRequest)(nil),         // 127: tabletmanagerdata.HasVReplicationWorkflowsRequest
-	(*HasVReplicationWorkflowsResponse)(nil),        // 128: tabletmanagerdata.HasVReplicationWorkflowsResponse
-	(*ReadVReplicationWorkflowsRequest)(nil),        // 129: tabletmanagerdata.ReadVReplicationWorkflowsRequest
-	(*ReadVReplicationWorkflowsResponse)(nil),       // 130: tabletmanagerdata.ReadVReplicationWorkflowsResponse
-	(*ReadVReplicationWorkflowRequest)(nil),         // 131: tabletmanagerdata.ReadVReplicationWorkflowRequest
-	(*ReadVReplicationWorkflowResponse)(nil),        // 132: tabletmanagerdata.ReadVReplicationWorkflowResponse
-	(*ValidateVReplicationPermissionsRequest)(nil),  // 133: tabletmanagerdata.ValidateVReplicationPermissionsRequest
-	(*ValidateVReplicationPermissionsResponse)(nil), // 134: tabletmanagerdata.ValidateVReplicationPermissionsResponse
-	(*VDiffRequest)(nil),                            // 135: tabletmanagerdata.VDiffRequest
-	(*VDiffResponse)(nil),                           // 136: tabletmanagerdata.VDiffResponse
-	(*VDiffPickerOptions)(nil),                      // 137: tabletmanagerdata.VDiffPickerOptions
-	(*VDiffReportOptions)(nil),                      // 138: tabletmanagerdata.VDiffReportOptions
-	(*VDiffCoreOptions)(nil),                        // 139: tabletmanagerdata.VDiffCoreOptions
-	(*VDiffOptions)(nil),                            // 140: tabletmanagerdata.VDiffOptions
-	(*VDiffTableLastPK)(nil),                        // 141: tabletmanagerdata.VDiffTableLastPK
-	(*UpdateVReplicationWorkflowRequest)(nil),       // 142: tabletmanagerdata.UpdateVReplicationWorkflowRequest
-	(*UpdateVReplicationWorkflowResponse)(nil),      // 143: tabletmanagerdata.UpdateVReplicationWorkflowResponse
-	(*UpdateVReplicationWorkflowsRequest)(nil),      // 144: tabletmanagerdata.UpdateVReplicationWorkflowsRequest
-	(*UpdateVReplicationWorkflowsResponse)(nil),     // 145: tabletmanagerdata.UpdateVReplicationWorkflowsResponse
-	(*ResetSequencesRequest)(nil),                   // 146: tabletmanagerdata.ResetSequencesRequest
-	(*ResetSequencesResponse)(nil),                  // 147: tabletmanagerdata.ResetSequencesResponse
-	(*CheckThrottlerRequest)(nil),                   // 148: tabletmanagerdata.CheckThrottlerRequest
-	(*CheckThrottlerResponse)(nil),                  // 149: tabletmanagerdata.CheckThrottlerResponse
-	(*GetThrottlerStatusRequest)(nil),               // 150: tabletmanagerdata.GetThrottlerStatusRequest
-	(*GetThrottlerStatusResponse)(nil),              // 151: tabletmanagerdata.GetThrottlerStatusResponse
-	(*ChangeTagsRequest)(nil),                       // 152: tabletmanagerdata.ChangeTagsRequest
-	(*ChangeTagsResponse)(nil),                      // 153: tabletmanagerdata.ChangeTagsResponse
-	(*UpdateSequenceTablesRequest)(nil),             // 154: tabletmanagerdata.UpdateSequenceTablesRequest
-	(*UpdateSequenceTablesResponse)(nil),            // 155: tabletmanagerdata.UpdateSequenceTablesResponse
-	(*GetMaxValueForSequencesRequest)(nil),          // 156: tabletmanagerdata.GetMaxValueForSequencesRequest
-	(*GetMaxValueForSequencesResponse)(nil),         // 157: tabletmanagerdata.GetMaxValueForSequencesResponse
-	nil,                                             // 158: tabletmanagerdata.UserPermission.PrivilegesEntry
-	nil,                                             // 159: tabletmanagerdata.DbPermission.PrivilegesEntry
-	nil,                                             // 160: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
-	nil,                                             // 161: tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
-	(*BackupRequest_InitSQL)(nil),                   // 162: tabletmanagerdata.BackupRequest.InitSQL
-	nil,                                             // 163: tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
-	(*ReadVReplicationWorkflowResponse_Stream)(nil), // 164: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
-	nil,                                   // 165: tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
-	nil,                                   // 166: tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
-	(*CheckThrottlerResponse_Metric)(nil), // 167: tabletmanagerdata.CheckThrottlerResponse.Metric
-	nil,                                   // 168: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
-	(*GetThrottlerStatusResponse_MetricResult)(nil), // 169: tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
-	nil, // 170: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
-	nil, // 171: tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
-	(*GetThrottlerStatusResponse_MetricHealth)(nil), // 172: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
-	nil, // 173: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
-	nil, // 174: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
-	nil, // 175: tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
-	(*GetThrottlerStatusResponse_RecentApp)(nil), // 176: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
-	nil, // 177: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
-	nil, // 178: tabletmanagerdata.ChangeTagsRequest.TagsEntry
-	nil, // 179: tabletmanagerdata.ChangeTagsResponse.TagsEntry
-	(*UpdateSequenceTablesRequest_SequenceMetadata)(nil),    // 180: tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
-	(*GetMaxValueForSequencesRequest_SequenceMetadata)(nil), // 181: tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
-	nil,                                           // 182: tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
-	(*query.Field)(nil),                           // 183: query.Field
-	(topodata.TabletType)(0),                      // 184: topodata.TabletType
-	(*vtrpc.CallerID)(nil),                        // 185: vtrpc.CallerID
-	(*query.QueryResult)(nil),                     // 186: query.QueryResult
-	(*query.TransactionMetadata)(nil),             // 187: query.TransactionMetadata
-	(*mysqlctl.HostMetricsResponse)(nil),          // 188: mysqlctl.HostMetricsResponse
-	(*replicationdata.Status)(nil),                // 189: replicationdata.Status
-	(*replicationdata.PrimaryStatus)(nil),         // 190: replicationdata.PrimaryStatus
-	(*topodata.TabletAlias)(nil),                  // 191: topodata.TabletAlias
-	(*replicationdata.FullStatus)(nil),            // 192: replicationdata.FullStatus
-	(replicationdata.StopReplicationMode)(0),      // 193: replicationdata.StopReplicationMode
-	(*replicationdata.StopReplicationStatus)(nil), // 194: replicationdata.StopReplicationStatus
-	(*vttime.Duration)(nil),                       // 195: vttime.Duration
-	(*vtrpc.RPCError)(nil),                        // 196: vtrpc.RPCError
-	(*vttime.Time)(nil),                           // 197: vttime.Time
-	(*logutil.Event)(nil),                         // 198: logutil.Event
-	(*binlogdata.BinlogSource)(nil),               // 199: binlogdata.BinlogSource
-	(binlogdata.VReplicationWorkflowType)(0),      // 200: binlogdata.VReplicationWorkflowType
-	(binlogdata.VReplicationWorkflowSubType)(0),   // 201: binlogdata.VReplicationWorkflowSubType
-	(binlogdata.VReplicationWorkflowState)(0),     // 202: binlogdata.VReplicationWorkflowState
-	(binlogdata.OnDDLAction)(0),                   // 203: binlogdata.OnDDLAction
-	(*binlogdata.Rule)(nil),                       // 204: binlogdata.Rule
-	(*topodata.ThrottledAppRule)(nil),             // 205: topodata.ThrottledAppRule
+	(ThrottlerType)(0),                              // 2: tabletmanagerdata.ThrottlerType
+	(*TableDefinition)(nil),                         // 3: tabletmanagerdata.TableDefinition
+	(*SchemaDefinition)(nil),                        // 4: tabletmanagerdata.SchemaDefinition
+	(*SchemaChangeResult)(nil),                      // 5: tabletmanagerdata.SchemaChangeResult
+	(*UserPermission)(nil),                          // 6: tabletmanagerdata.UserPermission
+	(*DbPermission)(nil),                            // 7: tabletmanagerdata.DbPermission
+	(*Permissions)(nil),                             // 8: tabletmanagerdata.Permissions
+	(*PingRequest)(nil),                             // 9: tabletmanagerdata.PingRequest
+	(*PingResponse)(nil),                            // 10: tabletmanagerdata.PingResponse
+	(*SleepRequest)(nil),                            // 11: tabletmanagerdata.SleepRequest
+	(*SleepResponse)(nil),                           // 12: tabletmanagerdata.SleepResponse
+	(*ExecuteHookRequest)(nil),                      // 13: tabletmanagerdata.ExecuteHookRequest
+	(*ExecuteHookResponse)(nil),                     // 14: tabletmanagerdata.ExecuteHookResponse
+	(*GetSchemaRequest)(nil),                        // 15: tabletmanagerdata.GetSchemaRequest
+	(*GetSchemaResponse)(nil),                       // 16: tabletmanagerdata.GetSchemaResponse
+	(*GetPermissionsRequest)(nil),                   // 17: tabletmanagerdata.GetPermissionsRequest
+	(*GetPermissionsResponse)(nil),                  // 18: tabletmanagerdata.GetPermissionsResponse
+	(*GetGlobalStatusVarsRequest)(nil),              // 19: tabletmanagerdata.GetGlobalStatusVarsRequest
+	(*GetGlobalStatusVarsResponse)(nil),             // 20: tabletmanagerdata.GetGlobalStatusVarsResponse
+	(*SetReadOnlyRequest)(nil),                      // 21: tabletmanagerdata.SetReadOnlyRequest
+	(*SetReadOnlyResponse)(nil),                     // 22: tabletmanagerdata.SetReadOnlyResponse
+	(*SetReadWriteRequest)(nil),                     // 23: tabletmanagerdata.SetReadWriteRequest
+	(*SetReadWriteResponse)(nil),                    // 24: tabletmanagerdata.SetReadWriteResponse
+	(*ChangeTypeRequest)(nil),                       // 25: tabletmanagerdata.ChangeTypeRequest
+	(*ChangeTypeResponse)(nil),                      // 26: tabletmanagerdata.ChangeTypeResponse
+	(*RefreshStateRequest)(nil),                     // 27: tabletmanagerdata.RefreshStateRequest
+	(*RefreshStateResponse)(nil),                    // 28: tabletmanagerdata.RefreshStateResponse
+	(*RunHealthCheckRequest)(nil),                   // 29: tabletmanagerdata.RunHealthCheckRequest
+	(*RunHealthCheckResponse)(nil),                  // 30: tabletmanagerdata.RunHealthCheckResponse
+	(*ReloadSchemaRequest)(nil),                     // 31: tabletmanagerdata.ReloadSchemaRequest
+	(*ReloadSchemaResponse)(nil),                    // 32: tabletmanagerdata.ReloadSchemaResponse
+	(*PreflightSchemaRequest)(nil),                  // 33: tabletmanagerdata.PreflightSchemaRequest
+	(*PreflightSchemaResponse)(nil),                 // 34: tabletmanagerdata.PreflightSchemaResponse
+	(*ApplySchemaRequest)(nil),                      // 35: tabletmanagerdata.ApplySchemaRequest
+	(*ApplySchemaResponse)(nil),                     // 36: tabletmanagerdata.ApplySchemaResponse
+	(*LockTablesRequest)(nil),                       // 37: tabletmanagerdata.LockTablesRequest
+	(*LockTablesResponse)(nil),                      // 38: tabletmanagerdata.LockTablesResponse
+	(*UnlockTablesRequest)(nil),                     // 39: tabletmanagerdata.UnlockTablesRequest
+	(*UnlockTablesResponse)(nil),                    // 40: tabletmanagerdata.UnlockTablesResponse
+	(*ExecuteQueryRequest)(nil),                     // 41: tabletmanagerdata.ExecuteQueryRequest
+	(*ExecuteQueryResponse)(nil),                    // 42: tabletmanagerdata.ExecuteQueryResponse
+	(*ExecuteFetchAsDbaRequest)(nil),                // 43: tabletmanagerdata.ExecuteFetchAsDbaRequest
+	(*ExecuteFetchAsDbaResponse)(nil),               // 44: tabletmanagerdata.ExecuteFetchAsDbaResponse
+	(*SessionVariable)(nil),                         // 45: tabletmanagerdata.SessionVariable
+	(*ExecuteMultiFetchAsDbaRequest)(nil),           // 46: tabletmanagerdata.ExecuteMultiFetchAsDbaRequest
+	(*ExecuteMultiFetchAsDbaResponse)(nil),          // 47: tabletmanagerdata.ExecuteMultiFetchAsDbaResponse
+	(*ExecuteFetchAsAllPrivsRequest)(nil),           // 48: tabletmanagerdata.ExecuteFetchAsAllPrivsRequest
+	(*ExecuteFetchAsAllPrivsResponse)(nil),          // 49: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse
+	(*ExecuteFetchAsAppRequest)(nil),                // 50: tabletmanagerdata.ExecuteFetchAsAppRequest
+	(*ExecuteFetchAsAppResponse)(nil),               // 51: tabletmanagerdata.ExecuteFetchAsAppResponse
+	(*GetUnresolvedTransactionsRequest)(nil),        // 52: tabletmanagerdata.GetUnresolvedTransactionsRequest
+	(*GetUnresolvedTransactionsResponse)(nil),       // 53: tabletmanagerdata.GetUnresolvedTransactionsResponse
+	(*ReadTransactionRequest)(nil),                  // 54: tabletmanagerdata.ReadTransactionRequest
+	(*ReadTransactionResponse)(nil),                 // 55: tabletmanagerdata.ReadTransactionResponse
+	(*GetTransactionInfoRequest)(nil),               // 56: tabletmanagerdata.GetTransactionInfoRequest
+	(*GetTransactionInfoResponse)(nil),              // 57: tabletmanagerdata.GetTransactionInfoResponse
+	(*ConcludeTransactionRequest)(nil),              // 58: tabletmanagerdata.ConcludeTransactionRequest
+	(*ConcludeTransactionResponse)(nil),             // 59: tabletmanagerdata.ConcludeTransactionResponse
+	(*MysqlHostMetricsRequest)(nil),                 // 60: tabletmanagerdata.MysqlHostMetricsRequest
+	(*MysqlHostMetricsResponse)(nil),                // 61: tabletmanagerdata.MysqlHostMetricsResponse
+	(*ReplicationStatusRequest)(nil),                // 62: tabletmanagerdata.ReplicationStatusRequest
+	(*ReplicationStatusResponse)(nil),               // 63: tabletmanagerdata.ReplicationStatusResponse
+	(*PrimaryStatusRequest)(nil),                    // 64: tabletmanagerdata.PrimaryStatusRequest
+	(*PrimaryStatusResponse)(nil),                   // 65: tabletmanagerdata.PrimaryStatusResponse
+	(*PrimaryPositionRequest)(nil),                  // 66: tabletmanagerdata.PrimaryPositionRequest
+	(*PrimaryPositionResponse)(nil),                 // 67: tabletmanagerdata.PrimaryPositionResponse
+	(*WaitForPositionRequest)(nil),                  // 68: tabletmanagerdata.WaitForPositionRequest
+	(*WaitForPositionResponse)(nil),                 // 69: tabletmanagerdata.WaitForPositionResponse
+	(*StopReplicationRequest)(nil),                  // 70: tabletmanagerdata.StopReplicationRequest
+	(*StopReplicationResponse)(nil),                 // 71: tabletmanagerdata.StopReplicationResponse
+	(*StopReplicationMinimumRequest)(nil),           // 72: tabletmanagerdata.StopReplicationMinimumRequest
+	(*StopReplicationMinimumResponse)(nil),          // 73: tabletmanagerdata.StopReplicationMinimumResponse
+	(*StartReplicationRequest)(nil),                 // 74: tabletmanagerdata.StartReplicationRequest
+	(*StartReplicationResponse)(nil),                // 75: tabletmanagerdata.StartReplicationResponse
+	(*RestartReplicationRequest)(nil),               // 76: tabletmanagerdata.RestartReplicationRequest
+	(*RestartReplicationResponse)(nil),              // 77: tabletmanagerdata.RestartReplicationResponse
+	(*StartReplicationUntilAfterRequest)(nil),       // 78: tabletmanagerdata.StartReplicationUntilAfterRequest
+	(*StartReplicationUntilAfterResponse)(nil),      // 79: tabletmanagerdata.StartReplicationUntilAfterResponse
+	(*GetReplicasRequest)(nil),                      // 80: tabletmanagerdata.GetReplicasRequest
+	(*GetReplicasResponse)(nil),                     // 81: tabletmanagerdata.GetReplicasResponse
+	(*ResetReplicationRequest)(nil),                 // 82: tabletmanagerdata.ResetReplicationRequest
+	(*ResetReplicationResponse)(nil),                // 83: tabletmanagerdata.ResetReplicationResponse
+	(*VReplicationExecRequest)(nil),                 // 84: tabletmanagerdata.VReplicationExecRequest
+	(*VReplicationExecResponse)(nil),                // 85: tabletmanagerdata.VReplicationExecResponse
+	(*VReplicationWaitForPosRequest)(nil),           // 86: tabletmanagerdata.VReplicationWaitForPosRequest
+	(*VReplicationWaitForPosResponse)(nil),          // 87: tabletmanagerdata.VReplicationWaitForPosResponse
+	(*InitPrimaryRequest)(nil),                      // 88: tabletmanagerdata.InitPrimaryRequest
+	(*InitPrimaryResponse)(nil),                     // 89: tabletmanagerdata.InitPrimaryResponse
+	(*PopulateReparentJournalRequest)(nil),          // 90: tabletmanagerdata.PopulateReparentJournalRequest
+	(*PopulateReparentJournalResponse)(nil),         // 91: tabletmanagerdata.PopulateReparentJournalResponse
+	(*ReadReparentJournalInfoRequest)(nil),          // 92: tabletmanagerdata.ReadReparentJournalInfoRequest
+	(*ReadReparentJournalInfoResponse)(nil),         // 93: tabletmanagerdata.ReadReparentJournalInfoResponse
+	(*InitReplicaRequest)(nil),                      // 94: tabletmanagerdata.InitReplicaRequest
+	(*InitReplicaResponse)(nil),                     // 95: tabletmanagerdata.InitReplicaResponse
+	(*DemotePrimaryRequest)(nil),                    // 96: tabletmanagerdata.DemotePrimaryRequest
+	(*DemotePrimaryResponse)(nil),                   // 97: tabletmanagerdata.DemotePrimaryResponse
+	(*UndoDemotePrimaryRequest)(nil),                // 98: tabletmanagerdata.UndoDemotePrimaryRequest
+	(*UndoDemotePrimaryResponse)(nil),               // 99: tabletmanagerdata.UndoDemotePrimaryResponse
+	(*ReplicaWasPromotedRequest)(nil),               // 100: tabletmanagerdata.ReplicaWasPromotedRequest
+	(*ReplicaWasPromotedResponse)(nil),              // 101: tabletmanagerdata.ReplicaWasPromotedResponse
+	(*ResetReplicationParametersRequest)(nil),       // 102: tabletmanagerdata.ResetReplicationParametersRequest
+	(*ResetReplicationParametersResponse)(nil),      // 103: tabletmanagerdata.ResetReplicationParametersResponse
+	(*FullStatusRequest)(nil),                       // 104: tabletmanagerdata.FullStatusRequest
+	(*FullStatusResponse)(nil),                      // 105: tabletmanagerdata.FullStatusResponse
+	(*SetReplicationSourceRequest)(nil),             // 106: tabletmanagerdata.SetReplicationSourceRequest
+	(*SetReplicationSourceResponse)(nil),            // 107: tabletmanagerdata.SetReplicationSourceResponse
+	(*ReplicaWasRestartedRequest)(nil),              // 108: tabletmanagerdata.ReplicaWasRestartedRequest
+	(*ReplicaWasRestartedResponse)(nil),             // 109: tabletmanagerdata.ReplicaWasRestartedResponse
+	(*StopReplicationAndGetStatusRequest)(nil),      // 110: tabletmanagerdata.StopReplicationAndGetStatusRequest
+	(*StopReplicationAndGetStatusResponse)(nil),     // 111: tabletmanagerdata.StopReplicationAndGetStatusResponse
+	(*PrepareEmergencyReparentRequest)(nil),         // 112: tabletmanagerdata.PrepareEmergencyReparentRequest
+	(*PrepareEmergencyReparentResponse)(nil),        // 113: tabletmanagerdata.PrepareEmergencyReparentResponse
+	(*PromoteReplicaRequest)(nil),                   // 114: tabletmanagerdata.PromoteReplicaRequest
+	(*PromoteReplicaResponse)(nil),                  // 115: tabletmanagerdata.PromoteReplicaResponse
+	(*PromoteReplicaAndJournalRequest)(nil),         // 116: tabletmanagerdata.PromoteReplicaAndJournalRequest
+	(*PromoteReplicaAndJournalResponse)(nil),        // 117: tabletmanagerdata.PromoteReplicaAndJournalResponse
+	(*BackupRequest)(nil),                           // 118: tabletmanagerdata.BackupRequest
+	(*BackupResponse)(nil),                          // 119: tabletmanagerdata.BackupResponse
+	(*RestoreFromBackupRequest)(nil),                // 120: tabletmanagerdata.RestoreFromBackupRequest
+	(*RestoreFromBackupResponse)(nil),               // 121: tabletmanagerdata.RestoreFromBackupResponse
+	(*CreateVReplicationWorkflowRequest)(nil),       // 122: tabletmanagerdata.CreateVReplicationWorkflowRequest
+	(*CreateVReplicationWorkflowResponse)(nil),      // 123: tabletmanagerdata.CreateVReplicationWorkflowResponse
+	(*DeleteTableDataRequest)(nil),                  // 124: tabletmanagerdata.DeleteTableDataRequest
+	(*DeleteTableDataResponse)(nil),                 // 125: tabletmanagerdata.DeleteTableDataResponse
+	(*DeleteVReplicationWorkflowRequest)(nil),       // 126: tabletmanagerdata.DeleteVReplicationWorkflowRequest
+	(*DeleteVReplicationWorkflowResponse)(nil),      // 127: tabletmanagerdata.DeleteVReplicationWorkflowResponse
+	(*HasVReplicationWorkflowsRequest)(nil),         // 128: tabletmanagerdata.HasVReplicationWorkflowsRequest
+	(*HasVReplicationWorkflowsResponse)(nil),        // 129: tabletmanagerdata.HasVReplicationWorkflowsResponse
+	(*ReadVReplicationWorkflowsRequest)(nil),        // 130: tabletmanagerdata.ReadVReplicationWorkflowsRequest
+	(*ReadVReplicationWorkflowsResponse)(nil),       // 131: tabletmanagerdata.ReadVReplicationWorkflowsResponse
+	(*ReadVReplicationWorkflowRequest)(nil),         // 132: tabletmanagerdata.ReadVReplicationWorkflowRequest
+	(*ReadVReplicationWorkflowResponse)(nil),        // 133: tabletmanagerdata.ReadVReplicationWorkflowResponse
+	(*ValidateVReplicationPermissionsRequest)(nil),  // 134: tabletmanagerdata.ValidateVReplicationPermissionsRequest
+	(*ValidateVReplicationPermissionsResponse)(nil), // 135: tabletmanagerdata.ValidateVReplicationPermissionsResponse
+	(*VDiffRequest)(nil),                            // 136: tabletmanagerdata.VDiffRequest
+	(*VDiffResponse)(nil),                           // 137: tabletmanagerdata.VDiffResponse
+	(*VDiffPickerOptions)(nil),                      // 138: tabletmanagerdata.VDiffPickerOptions
+	(*VDiffReportOptions)(nil),                      // 139: tabletmanagerdata.VDiffReportOptions
+	(*VDiffCoreOptions)(nil),                        // 140: tabletmanagerdata.VDiffCoreOptions
+	(*VDiffOptions)(nil),                            // 141: tabletmanagerdata.VDiffOptions
+	(*VDiffTableLastPK)(nil),                        // 142: tabletmanagerdata.VDiffTableLastPK
+	(*UpdateVReplicationWorkflowRequest)(nil),       // 143: tabletmanagerdata.UpdateVReplicationWorkflowRequest
+	(*UpdateVReplicationWorkflowResponse)(nil),      // 144: tabletmanagerdata.UpdateVReplicationWorkflowResponse
+	(*UpdateVReplicationWorkflowsRequest)(nil),      // 145: tabletmanagerdata.UpdateVReplicationWorkflowsRequest
+	(*UpdateVReplicationWorkflowsResponse)(nil),     // 146: tabletmanagerdata.UpdateVReplicationWorkflowsResponse
+	(*ResetSequencesRequest)(nil),                   // 147: tabletmanagerdata.ResetSequencesRequest
+	(*ResetSequencesResponse)(nil),                  // 148: tabletmanagerdata.ResetSequencesResponse
+	(*CheckThrottlerRequest)(nil),                   // 149: tabletmanagerdata.CheckThrottlerRequest
+	(*CheckThrottlerResponse)(nil),                  // 150: tabletmanagerdata.CheckThrottlerResponse
+	(*GetThrottlerStatusRequest)(nil),               // 151: tabletmanagerdata.GetThrottlerStatusRequest
+	(*GetThrottlerStatusResponse)(nil),              // 152: tabletmanagerdata.GetThrottlerStatusResponse
+	(*ChangeTagsRequest)(nil),                       // 153: tabletmanagerdata.ChangeTagsRequest
+	(*ChangeTagsResponse)(nil),                      // 154: tabletmanagerdata.ChangeTagsResponse
+	(*UpdateSequenceTablesRequest)(nil),             // 155: tabletmanagerdata.UpdateSequenceTablesRequest
+	(*UpdateSequenceTablesResponse)(nil),            // 156: tabletmanagerdata.UpdateSequenceTablesResponse
+	(*GetMaxValueForSequencesRequest)(nil),          // 157: tabletmanagerdata.GetMaxValueForSequencesRequest
+	(*GetMaxValueForSequencesResponse)(nil),         // 158: tabletmanagerdata.GetMaxValueForSequencesResponse
+	nil,                                             // 159: tabletmanagerdata.UserPermission.PrivilegesEntry
+	nil,                                             // 160: tabletmanagerdata.DbPermission.PrivilegesEntry
+	nil,                                             // 161: tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
+	nil,                                             // 162: tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
+	(*BackupRequest_InitSQL)(nil),                   // 163: tabletmanagerdata.BackupRequest.InitSQL
+	nil,                                             // 164: tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
+	(*ReadVReplicationWorkflowResponse_Stream)(nil), // 165: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
+	nil,                                   // 166: tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
+	nil,                                   // 167: tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
+	(*CheckThrottlerResponse_Metric)(nil), // 168: tabletmanagerdata.CheckThrottlerResponse.Metric
+	nil,                                   // 169: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
+	(*GetThrottlerStatusResponse_MetricResult)(nil), // 170: tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
+	nil, // 171: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
+	nil, // 172: tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
+	(*GetThrottlerStatusResponse_MetricHealth)(nil), // 173: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
+	nil, // 174: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
+	nil, // 175: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
+	nil, // 176: tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
+	(*GetThrottlerStatusResponse_RecentApp)(nil), // 177: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
+	nil, // 178: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
+	nil, // 179: tabletmanagerdata.ChangeTagsRequest.TagsEntry
+	nil, // 180: tabletmanagerdata.ChangeTagsResponse.TagsEntry
+	(*UpdateSequenceTablesRequest_SequenceMetadata)(nil),    // 181: tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
+	(*GetMaxValueForSequencesRequest_SequenceMetadata)(nil), // 182: tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
+	nil,                                           // 183: tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
+	(*query.Field)(nil),                           // 184: query.Field
+	(topodata.TabletType)(0),                      // 185: topodata.TabletType
+	(*vtrpc.CallerID)(nil),                        // 186: vtrpc.CallerID
+	(*query.QueryResult)(nil),                     // 187: query.QueryResult
+	(*query.TransactionMetadata)(nil),             // 188: query.TransactionMetadata
+	(*mysqlctl.HostMetricsResponse)(nil),          // 189: mysqlctl.HostMetricsResponse
+	(*replicationdata.Status)(nil),                // 190: replicationdata.Status
+	(*replicationdata.PrimaryStatus)(nil),         // 191: replicationdata.PrimaryStatus
+	(*topodata.TabletAlias)(nil),                  // 192: topodata.TabletAlias
+	(*replicationdata.FullStatus)(nil),            // 193: replicationdata.FullStatus
+	(replicationdata.StopReplicationMode)(0),      // 194: replicationdata.StopReplicationMode
+	(*replicationdata.StopReplicationStatus)(nil), // 195: replicationdata.StopReplicationStatus
+	(*vttime.Duration)(nil),                       // 196: vttime.Duration
+	(*vtrpc.RPCError)(nil),                        // 197: vtrpc.RPCError
+	(*vttime.Time)(nil),                           // 198: vttime.Time
+	(*logutil.Event)(nil),                         // 199: logutil.Event
+	(*binlogdata.BinlogSource)(nil),               // 200: binlogdata.BinlogSource
+	(binlogdata.VReplicationWorkflowType)(0),      // 201: binlogdata.VReplicationWorkflowType
+	(binlogdata.VReplicationWorkflowSubType)(0),   // 202: binlogdata.VReplicationWorkflowSubType
+	(binlogdata.VReplicationWorkflowState)(0),     // 203: binlogdata.VReplicationWorkflowState
+	(binlogdata.OnDDLAction)(0),                   // 204: binlogdata.OnDDLAction
+	(*binlogdata.Rule)(nil),                       // 205: binlogdata.Rule
+	(*topodata.ThrottledAppRule)(nil),             // 206: topodata.ThrottledAppRule
 }
 var file_tabletmanagerdata_proto_depIdxs = []int32{
-	183, // 0: tabletmanagerdata.TableDefinition.fields:type_name -> query.Field
-	2,   // 1: tabletmanagerdata.SchemaDefinition.table_definitions:type_name -> tabletmanagerdata.TableDefinition
-	3,   // 2: tabletmanagerdata.SchemaChangeResult.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	3,   // 3: tabletmanagerdata.SchemaChangeResult.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	158, // 4: tabletmanagerdata.UserPermission.privileges:type_name -> tabletmanagerdata.UserPermission.PrivilegesEntry
-	159, // 5: tabletmanagerdata.DbPermission.privileges:type_name -> tabletmanagerdata.DbPermission.PrivilegesEntry
-	5,   // 6: tabletmanagerdata.Permissions.user_permissions:type_name -> tabletmanagerdata.UserPermission
-	6,   // 7: tabletmanagerdata.Permissions.db_permissions:type_name -> tabletmanagerdata.DbPermission
-	160, // 8: tabletmanagerdata.ExecuteHookRequest.extra_env:type_name -> tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
-	3,   // 9: tabletmanagerdata.GetSchemaResponse.schema_definition:type_name -> tabletmanagerdata.SchemaDefinition
-	7,   // 10: tabletmanagerdata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
-	161, // 11: tabletmanagerdata.GetGlobalStatusVarsResponse.status_values:type_name -> tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
-	184, // 12: tabletmanagerdata.ChangeTypeRequest.tablet_type:type_name -> topodata.TabletType
-	4,   // 13: tabletmanagerdata.PreflightSchemaResponse.change_results:type_name -> tabletmanagerdata.SchemaChangeResult
-	3,   // 14: tabletmanagerdata.ApplySchemaRequest.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	3,   // 15: tabletmanagerdata.ApplySchemaRequest.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	3,   // 16: tabletmanagerdata.ApplySchemaResponse.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	3,   // 17: tabletmanagerdata.ApplySchemaResponse.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
-	185, // 18: tabletmanagerdata.ExecuteQueryRequest.caller_id:type_name -> vtrpc.CallerID
-	186, // 19: tabletmanagerdata.ExecuteQueryResponse.result:type_name -> query.QueryResult
-	186, // 20: tabletmanagerdata.ExecuteFetchAsDbaResponse.result:type_name -> query.QueryResult
-	44,  // 21: tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.session_variables:type_name -> tabletmanagerdata.SessionVariable
-	186, // 22: tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.results:type_name -> query.QueryResult
-	186, // 23: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.result:type_name -> query.QueryResult
-	186, // 24: tabletmanagerdata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
-	187, // 25: tabletmanagerdata.GetUnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
-	187, // 26: tabletmanagerdata.ReadTransactionResponse.transaction:type_name -> query.TransactionMetadata
-	188, // 27: tabletmanagerdata.MysqlHostMetricsResponse.HostMetrics:type_name -> mysqlctl.HostMetricsResponse
-	189, // 28: tabletmanagerdata.ReplicationStatusResponse.status:type_name -> replicationdata.Status
-	190, // 29: tabletmanagerdata.PrimaryStatusResponse.status:type_name -> replicationdata.PrimaryStatus
-	186, // 30: tabletmanagerdata.VReplicationExecResponse.result:type_name -> query.QueryResult
-	191, // 31: tabletmanagerdata.PopulateReparentJournalRequest.primary_alias:type_name -> topodata.TabletAlias
-	191, // 32: tabletmanagerdata.InitReplicaRequest.parent:type_name -> topodata.TabletAlias
-	190, // 33: tabletmanagerdata.DemotePrimaryResponse.primary_status:type_name -> replicationdata.PrimaryStatus
-	192, // 34: tabletmanagerdata.FullStatusResponse.status:type_name -> replicationdata.FullStatus
-	191, // 35: tabletmanagerdata.SetReplicationSourceRequest.parent:type_name -> topodata.TabletAlias
-	191, // 36: tabletmanagerdata.ReplicaWasRestartedRequest.parent:type_name -> topodata.TabletAlias
-	193, // 37: tabletmanagerdata.StopReplicationAndGetStatusRequest.stop_replication_mode:type_name -> replicationdata.StopReplicationMode
-	194, // 38: tabletmanagerdata.StopReplicationAndGetStatusResponse.status:type_name -> replicationdata.StopReplicationStatus
-	195, // 39: tabletmanagerdata.PrepareEmergencyReparentRequest.wait_for_position_timeout:type_name -> vttime.Duration
-	196, // 40: tabletmanagerdata.PrepareEmergencyReparentResponse.wait_for_position_error:type_name -> vtrpc.RPCError
-	196, // 41: tabletmanagerdata.PrepareEmergencyReparentResponse.read_reparent_journal_error:type_name -> vtrpc.RPCError
-	197, // 42: tabletmanagerdata.PromoteReplicaAndJournalRequest.time_created:type_name -> vttime.Time
-	195, // 43: tabletmanagerdata.PromoteReplicaAndJournalRequest.populate_reparent_journal_timeout:type_name -> vttime.Duration
-	196, // 44: tabletmanagerdata.PromoteReplicaAndJournalResponse.promote_replica_error:type_name -> vtrpc.RPCError
-	196, // 45: tabletmanagerdata.PromoteReplicaAndJournalResponse.populate_reparent_journal_error:type_name -> vtrpc.RPCError
-	195, // 46: tabletmanagerdata.BackupRequest.mysql_shutdown_timeout:type_name -> vttime.Duration
-	162, // 47: tabletmanagerdata.BackupRequest.init_sql:type_name -> tabletmanagerdata.BackupRequest.InitSQL
-	198, // 48: tabletmanagerdata.BackupResponse.event:type_name -> logutil.Event
-	197, // 49: tabletmanagerdata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
-	197, // 50: tabletmanagerdata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
-	198, // 51: tabletmanagerdata.RestoreFromBackupResponse.event:type_name -> logutil.Event
-	199, // 52: tabletmanagerdata.CreateVReplicationWorkflowRequest.binlog_source:type_name -> binlogdata.BinlogSource
-	184, // 53: tabletmanagerdata.CreateVReplicationWorkflowRequest.tablet_types:type_name -> topodata.TabletType
+	184, // 0: tabletmanagerdata.TableDefinition.fields:type_name -> query.Field
+	3,   // 1: tabletmanagerdata.SchemaDefinition.table_definitions:type_name -> tabletmanagerdata.TableDefinition
+	4,   // 2: tabletmanagerdata.SchemaChangeResult.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
+	4,   // 3: tabletmanagerdata.SchemaChangeResult.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
+	159, // 4: tabletmanagerdata.UserPermission.privileges:type_name -> tabletmanagerdata.UserPermission.PrivilegesEntry
+	160, // 5: tabletmanagerdata.DbPermission.privileges:type_name -> tabletmanagerdata.DbPermission.PrivilegesEntry
+	6,   // 6: tabletmanagerdata.Permissions.user_permissions:type_name -> tabletmanagerdata.UserPermission
+	7,   // 7: tabletmanagerdata.Permissions.db_permissions:type_name -> tabletmanagerdata.DbPermission
+	161, // 8: tabletmanagerdata.ExecuteHookRequest.extra_env:type_name -> tabletmanagerdata.ExecuteHookRequest.ExtraEnvEntry
+	4,   // 9: tabletmanagerdata.GetSchemaResponse.schema_definition:type_name -> tabletmanagerdata.SchemaDefinition
+	8,   // 10: tabletmanagerdata.GetPermissionsResponse.permissions:type_name -> tabletmanagerdata.Permissions
+	162, // 11: tabletmanagerdata.GetGlobalStatusVarsResponse.status_values:type_name -> tabletmanagerdata.GetGlobalStatusVarsResponse.StatusValuesEntry
+	185, // 12: tabletmanagerdata.ChangeTypeRequest.tablet_type:type_name -> topodata.TabletType
+	5,   // 13: tabletmanagerdata.PreflightSchemaResponse.change_results:type_name -> tabletmanagerdata.SchemaChangeResult
+	4,   // 14: tabletmanagerdata.ApplySchemaRequest.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
+	4,   // 15: tabletmanagerdata.ApplySchemaRequest.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
+	4,   // 16: tabletmanagerdata.ApplySchemaResponse.before_schema:type_name -> tabletmanagerdata.SchemaDefinition
+	4,   // 17: tabletmanagerdata.ApplySchemaResponse.after_schema:type_name -> tabletmanagerdata.SchemaDefinition
+	186, // 18: tabletmanagerdata.ExecuteQueryRequest.caller_id:type_name -> vtrpc.CallerID
+	187, // 19: tabletmanagerdata.ExecuteQueryResponse.result:type_name -> query.QueryResult
+	187, // 20: tabletmanagerdata.ExecuteFetchAsDbaResponse.result:type_name -> query.QueryResult
+	45,  // 21: tabletmanagerdata.ExecuteMultiFetchAsDbaRequest.session_variables:type_name -> tabletmanagerdata.SessionVariable
+	187, // 22: tabletmanagerdata.ExecuteMultiFetchAsDbaResponse.results:type_name -> query.QueryResult
+	187, // 23: tabletmanagerdata.ExecuteFetchAsAllPrivsResponse.result:type_name -> query.QueryResult
+	187, // 24: tabletmanagerdata.ExecuteFetchAsAppResponse.result:type_name -> query.QueryResult
+	188, // 25: tabletmanagerdata.GetUnresolvedTransactionsResponse.transactions:type_name -> query.TransactionMetadata
+	188, // 26: tabletmanagerdata.ReadTransactionResponse.transaction:type_name -> query.TransactionMetadata
+	189, // 27: tabletmanagerdata.MysqlHostMetricsResponse.HostMetrics:type_name -> mysqlctl.HostMetricsResponse
+	190, // 28: tabletmanagerdata.ReplicationStatusResponse.status:type_name -> replicationdata.Status
+	191, // 29: tabletmanagerdata.PrimaryStatusResponse.status:type_name -> replicationdata.PrimaryStatus
+	187, // 30: tabletmanagerdata.VReplicationExecResponse.result:type_name -> query.QueryResult
+	192, // 31: tabletmanagerdata.PopulateReparentJournalRequest.primary_alias:type_name -> topodata.TabletAlias
+	192, // 32: tabletmanagerdata.InitReplicaRequest.parent:type_name -> topodata.TabletAlias
+	191, // 33: tabletmanagerdata.DemotePrimaryResponse.primary_status:type_name -> replicationdata.PrimaryStatus
+	193, // 34: tabletmanagerdata.FullStatusResponse.status:type_name -> replicationdata.FullStatus
+	192, // 35: tabletmanagerdata.SetReplicationSourceRequest.parent:type_name -> topodata.TabletAlias
+	192, // 36: tabletmanagerdata.ReplicaWasRestartedRequest.parent:type_name -> topodata.TabletAlias
+	194, // 37: tabletmanagerdata.StopReplicationAndGetStatusRequest.stop_replication_mode:type_name -> replicationdata.StopReplicationMode
+	195, // 38: tabletmanagerdata.StopReplicationAndGetStatusResponse.status:type_name -> replicationdata.StopReplicationStatus
+	196, // 39: tabletmanagerdata.PrepareEmergencyReparentRequest.wait_for_position_timeout:type_name -> vttime.Duration
+	197, // 40: tabletmanagerdata.PrepareEmergencyReparentResponse.wait_for_position_error:type_name -> vtrpc.RPCError
+	197, // 41: tabletmanagerdata.PrepareEmergencyReparentResponse.read_reparent_journal_error:type_name -> vtrpc.RPCError
+	198, // 42: tabletmanagerdata.PromoteReplicaAndJournalRequest.time_created:type_name -> vttime.Time
+	196, // 43: tabletmanagerdata.PromoteReplicaAndJournalRequest.populate_reparent_journal_timeout:type_name -> vttime.Duration
+	197, // 44: tabletmanagerdata.PromoteReplicaAndJournalResponse.promote_replica_error:type_name -> vtrpc.RPCError
+	197, // 45: tabletmanagerdata.PromoteReplicaAndJournalResponse.populate_reparent_journal_error:type_name -> vtrpc.RPCError
+	196, // 46: tabletmanagerdata.BackupRequest.mysql_shutdown_timeout:type_name -> vttime.Duration
+	163, // 47: tabletmanagerdata.BackupRequest.init_sql:type_name -> tabletmanagerdata.BackupRequest.InitSQL
+	199, // 48: tabletmanagerdata.BackupResponse.event:type_name -> logutil.Event
+	198, // 49: tabletmanagerdata.RestoreFromBackupRequest.backup_time:type_name -> vttime.Time
+	198, // 50: tabletmanagerdata.RestoreFromBackupRequest.restore_to_timestamp:type_name -> vttime.Time
+	199, // 51: tabletmanagerdata.RestoreFromBackupResponse.event:type_name -> logutil.Event
+	200, // 52: tabletmanagerdata.CreateVReplicationWorkflowRequest.binlog_source:type_name -> binlogdata.BinlogSource
+	185, // 53: tabletmanagerdata.CreateVReplicationWorkflowRequest.tablet_types:type_name -> topodata.TabletType
 	0,   // 54: tabletmanagerdata.CreateVReplicationWorkflowRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	200, // 55: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
-	201, // 56: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
-	186, // 57: tabletmanagerdata.CreateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
-	163, // 58: tabletmanagerdata.DeleteTableDataRequest.table_filters:type_name -> tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
-	186, // 59: tabletmanagerdata.DeleteVReplicationWorkflowResponse.result:type_name -> query.QueryResult
-	202, // 60: tabletmanagerdata.ReadVReplicationWorkflowsRequest.include_states:type_name -> binlogdata.VReplicationWorkflowState
-	202, // 61: tabletmanagerdata.ReadVReplicationWorkflowsRequest.exclude_states:type_name -> binlogdata.VReplicationWorkflowState
-	132, // 62: tabletmanagerdata.ReadVReplicationWorkflowsResponse.workflows:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse
-	184, // 63: tabletmanagerdata.ReadVReplicationWorkflowResponse.tablet_types:type_name -> topodata.TabletType
+	201, // 55: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
+	202, // 56: tabletmanagerdata.CreateVReplicationWorkflowRequest.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
+	187, // 57: tabletmanagerdata.CreateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
+	164, // 58: tabletmanagerdata.DeleteTableDataRequest.table_filters:type_name -> tabletmanagerdata.DeleteTableDataRequest.TableFiltersEntry
+	187, // 59: tabletmanagerdata.DeleteVReplicationWorkflowResponse.result:type_name -> query.QueryResult
+	203, // 60: tabletmanagerdata.ReadVReplicationWorkflowsRequest.include_states:type_name -> binlogdata.VReplicationWorkflowState
+	203, // 61: tabletmanagerdata.ReadVReplicationWorkflowsRequest.exclude_states:type_name -> binlogdata.VReplicationWorkflowState
+	133, // 62: tabletmanagerdata.ReadVReplicationWorkflowsResponse.workflows:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse
+	185, // 63: tabletmanagerdata.ReadVReplicationWorkflowResponse.tablet_types:type_name -> topodata.TabletType
 	0,   // 64: tabletmanagerdata.ReadVReplicationWorkflowResponse.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	200, // 65: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
-	201, // 66: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
-	164, // 67: tabletmanagerdata.ReadVReplicationWorkflowResponse.streams:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
-	165, // 68: tabletmanagerdata.ReadVReplicationWorkflowResponse.config_overrides:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
-	140, // 69: tabletmanagerdata.VDiffRequest.options:type_name -> tabletmanagerdata.VDiffOptions
-	186, // 70: tabletmanagerdata.VDiffResponse.output:type_name -> query.QueryResult
-	137, // 71: tabletmanagerdata.VDiffOptions.picker_options:type_name -> tabletmanagerdata.VDiffPickerOptions
-	139, // 72: tabletmanagerdata.VDiffOptions.core_options:type_name -> tabletmanagerdata.VDiffCoreOptions
-	138, // 73: tabletmanagerdata.VDiffOptions.report_options:type_name -> tabletmanagerdata.VDiffReportOptions
-	186, // 74: tabletmanagerdata.VDiffTableLastPK.target:type_name -> query.QueryResult
-	186, // 75: tabletmanagerdata.VDiffTableLastPK.source:type_name -> query.QueryResult
-	184, // 76: tabletmanagerdata.UpdateVReplicationWorkflowRequest.tablet_types:type_name -> topodata.TabletType
+	201, // 65: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_type:type_name -> binlogdata.VReplicationWorkflowType
+	202, // 66: tabletmanagerdata.ReadVReplicationWorkflowResponse.workflow_sub_type:type_name -> binlogdata.VReplicationWorkflowSubType
+	165, // 67: tabletmanagerdata.ReadVReplicationWorkflowResponse.streams:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream
+	166, // 68: tabletmanagerdata.ReadVReplicationWorkflowResponse.config_overrides:type_name -> tabletmanagerdata.ReadVReplicationWorkflowResponse.ConfigOverridesEntry
+	141, // 69: tabletmanagerdata.VDiffRequest.options:type_name -> tabletmanagerdata.VDiffOptions
+	187, // 70: tabletmanagerdata.VDiffResponse.output:type_name -> query.QueryResult
+	138, // 71: tabletmanagerdata.VDiffOptions.picker_options:type_name -> tabletmanagerdata.VDiffPickerOptions
+	140, // 72: tabletmanagerdata.VDiffOptions.core_options:type_name -> tabletmanagerdata.VDiffCoreOptions
+	139, // 73: tabletmanagerdata.VDiffOptions.report_options:type_name -> tabletmanagerdata.VDiffReportOptions
+	187, // 74: tabletmanagerdata.VDiffTableLastPK.target:type_name -> query.QueryResult
+	187, // 75: tabletmanagerdata.VDiffTableLastPK.source:type_name -> query.QueryResult
+	185, // 76: tabletmanagerdata.UpdateVReplicationWorkflowRequest.tablet_types:type_name -> topodata.TabletType
 	0,   // 77: tabletmanagerdata.UpdateVReplicationWorkflowRequest.tablet_selection_preference:type_name -> tabletmanagerdata.TabletSelectionPreference
-	203, // 78: tabletmanagerdata.UpdateVReplicationWorkflowRequest.on_ddl:type_name -> binlogdata.OnDDLAction
-	202, // 79: tabletmanagerdata.UpdateVReplicationWorkflowRequest.state:type_name -> binlogdata.VReplicationWorkflowState
-	166, // 80: tabletmanagerdata.UpdateVReplicationWorkflowRequest.config_overrides:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
-	204, // 81: tabletmanagerdata.UpdateVReplicationWorkflowRequest.filter_rules:type_name -> binlogdata.Rule
-	186, // 82: tabletmanagerdata.UpdateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
-	202, // 83: tabletmanagerdata.UpdateVReplicationWorkflowsRequest.state:type_name -> binlogdata.VReplicationWorkflowState
-	186, // 84: tabletmanagerdata.UpdateVReplicationWorkflowsResponse.result:type_name -> query.QueryResult
-	168, // 85: tabletmanagerdata.CheckThrottlerResponse.metrics:type_name -> tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
-	1,   // 86: tabletmanagerdata.CheckThrottlerResponse.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	170, // 87: tabletmanagerdata.GetThrottlerStatusResponse.aggregated_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
-	171, // 88: tabletmanagerdata.GetThrottlerStatusResponse.metric_thresholds:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
-	173, // 89: tabletmanagerdata.GetThrottlerStatusResponse.metrics_health:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
-	174, // 90: tabletmanagerdata.GetThrottlerStatusResponse.throttled_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
-	175, // 91: tabletmanagerdata.GetThrottlerStatusResponse.app_checked_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
-	177, // 92: tabletmanagerdata.GetThrottlerStatusResponse.recent_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
-	178, // 93: tabletmanagerdata.ChangeTagsRequest.tags:type_name -> tabletmanagerdata.ChangeTagsRequest.TagsEntry
-	179, // 94: tabletmanagerdata.ChangeTagsResponse.tags:type_name -> tabletmanagerdata.ChangeTagsResponse.TagsEntry
-	180, // 95: tabletmanagerdata.UpdateSequenceTablesRequest.sequences:type_name -> tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
-	181, // 96: tabletmanagerdata.GetMaxValueForSequencesRequest.sequences:type_name -> tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
-	182, // 97: tabletmanagerdata.GetMaxValueForSequencesResponse.max_values_by_sequence_table:type_name -> tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
-	184, // 98: tabletmanagerdata.BackupRequest.InitSQL.tablet_types:type_name -> topodata.TabletType
-	195, // 99: tabletmanagerdata.BackupRequest.InitSQL.timeout:type_name -> vttime.Duration
-	199, // 100: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
-	197, // 101: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
-	197, // 102: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time
-	202, // 103: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.state:type_name -> binlogdata.VReplicationWorkflowState
-	197, // 104: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_heartbeat:type_name -> vttime.Time
-	197, // 105: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_throttled:type_name -> vttime.Time
-	1,   // 106: tabletmanagerdata.CheckThrottlerResponse.Metric.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	167, // 107: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry.value:type_name -> tabletmanagerdata.CheckThrottlerResponse.Metric
-	169, // 108: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
-	197, // 109: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.last_healthy_at:type_name -> vttime.Time
-	172, // 110: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
-	205, // 111: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
-	197, // 112: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.checked_at:type_name -> vttime.Time
-	1,   // 113: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
-	176, // 114: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
-	115, // [115:115] is the sub-list for method output_type
-	115, // [115:115] is the sub-list for method input_type
-	115, // [115:115] is the sub-list for extension type_name
-	115, // [115:115] is the sub-list for extension extendee
-	0,   // [0:115] is the sub-list for field type_name
+	204, // 78: tabletmanagerdata.UpdateVReplicationWorkflowRequest.on_ddl:type_name -> binlogdata.OnDDLAction
+	203, // 79: tabletmanagerdata.UpdateVReplicationWorkflowRequest.state:type_name -> binlogdata.VReplicationWorkflowState
+	167, // 80: tabletmanagerdata.UpdateVReplicationWorkflowRequest.config_overrides:type_name -> tabletmanagerdata.UpdateVReplicationWorkflowRequest.ConfigOverridesEntry
+	205, // 81: tabletmanagerdata.UpdateVReplicationWorkflowRequest.filter_rules:type_name -> binlogdata.Rule
+	187, // 82: tabletmanagerdata.UpdateVReplicationWorkflowResponse.result:type_name -> query.QueryResult
+	203, // 83: tabletmanagerdata.UpdateVReplicationWorkflowsRequest.state:type_name -> binlogdata.VReplicationWorkflowState
+	187, // 84: tabletmanagerdata.UpdateVReplicationWorkflowsResponse.result:type_name -> query.QueryResult
+	2,   // 85: tabletmanagerdata.CheckThrottlerRequest.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
+	169, // 86: tabletmanagerdata.CheckThrottlerResponse.metrics:type_name -> tabletmanagerdata.CheckThrottlerResponse.MetricsEntry
+	1,   // 87: tabletmanagerdata.CheckThrottlerResponse.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
+	2,   // 88: tabletmanagerdata.CheckThrottlerResponse.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
+	2,   // 89: tabletmanagerdata.GetThrottlerStatusRequest.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
+	171, // 90: tabletmanagerdata.GetThrottlerStatusResponse.aggregated_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry
+	172, // 91: tabletmanagerdata.GetThrottlerStatusResponse.metric_thresholds:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricThresholdsEntry
+	174, // 92: tabletmanagerdata.GetThrottlerStatusResponse.metrics_health:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry
+	175, // 93: tabletmanagerdata.GetThrottlerStatusResponse.throttled_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry
+	176, // 94: tabletmanagerdata.GetThrottlerStatusResponse.app_checked_metrics:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.AppCheckedMetricsEntry
+	178, // 95: tabletmanagerdata.GetThrottlerStatusResponse.recent_apps:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry
+	2,   // 96: tabletmanagerdata.GetThrottlerStatusResponse.throttler_type:type_name -> tabletmanagerdata.ThrottlerType
+	179, // 97: tabletmanagerdata.ChangeTagsRequest.tags:type_name -> tabletmanagerdata.ChangeTagsRequest.TagsEntry
+	180, // 98: tabletmanagerdata.ChangeTagsResponse.tags:type_name -> tabletmanagerdata.ChangeTagsResponse.TagsEntry
+	181, // 99: tabletmanagerdata.UpdateSequenceTablesRequest.sequences:type_name -> tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata
+	182, // 100: tabletmanagerdata.GetMaxValueForSequencesRequest.sequences:type_name -> tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata
+	183, // 101: tabletmanagerdata.GetMaxValueForSequencesResponse.max_values_by_sequence_table:type_name -> tabletmanagerdata.GetMaxValueForSequencesResponse.MaxValuesBySequenceTableEntry
+	185, // 102: tabletmanagerdata.BackupRequest.InitSQL.tablet_types:type_name -> topodata.TabletType
+	196, // 103: tabletmanagerdata.BackupRequest.InitSQL.timeout:type_name -> vttime.Duration
+	200, // 104: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.bls:type_name -> binlogdata.BinlogSource
+	198, // 105: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_updated:type_name -> vttime.Time
+	198, // 106: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.transaction_timestamp:type_name -> vttime.Time
+	203, // 107: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.state:type_name -> binlogdata.VReplicationWorkflowState
+	198, // 108: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_heartbeat:type_name -> vttime.Time
+	198, // 109: tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.time_throttled:type_name -> vttime.Time
+	1,   // 110: tabletmanagerdata.CheckThrottlerResponse.Metric.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
+	168, // 111: tabletmanagerdata.CheckThrottlerResponse.MetricsEntry.value:type_name -> tabletmanagerdata.CheckThrottlerResponse.Metric
+	170, // 112: tabletmanagerdata.GetThrottlerStatusResponse.AggregatedMetricsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricResult
+	198, // 113: tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.last_healthy_at:type_name -> vttime.Time
+	173, // 114: tabletmanagerdata.GetThrottlerStatusResponse.MetricsHealthEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth
+	206, // 115: tabletmanagerdata.GetThrottlerStatusResponse.ThrottledAppsEntry.value:type_name -> topodata.ThrottledAppRule
+	198, // 116: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.checked_at:type_name -> vttime.Time
+	1,   // 117: tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.response_code:type_name -> tabletmanagerdata.CheckThrottlerResponseCode
+	177, // 118: tabletmanagerdata.GetThrottlerStatusResponse.RecentAppsEntry.value:type_name -> tabletmanagerdata.GetThrottlerStatusResponse.RecentApp
+	119, // [119:119] is the sub-list for method output_type
+	119, // [119:119] is the sub-list for method input_type
+	119, // [119:119] is the sub-list for extension type_name
+	119, // [119:119] is the sub-list for extension extendee
+	0,   // [0:119] is the sub-list for field type_name
 }
 
 func init() { file_tabletmanagerdata_proto_init() }
@@ -9849,7 +9946,7 @@ func file_tabletmanagerdata_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_tabletmanagerdata_proto_rawDesc), len(file_tabletmanagerdata_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      3,
 			NumMessages:   181,
 			NumExtensions: 0,
 			NumServices:   0,
