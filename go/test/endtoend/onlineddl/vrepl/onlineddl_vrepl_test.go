@@ -468,7 +468,10 @@ func TestVreplSchemaChanges(t *testing.T) {
 		require.NotNil(t, rs)
 		for _, row := range rs.Named().Rows {
 			message := row["message"].ToString()
-			assert.Contains(t, message, "vreplication: terminal error:", "migration row: %v", row)
+			// The live _vt.vreplication row is authoritative for the error, so
+			// the migration message carries the stream's message verbatim,
+			// including its class marker (here: an unrecoverable error).
+			assert.Contains(t, message, "terminal error: unrecoverable", "migration row: %v", row)
 		}
 	})
 	t.Run("cancel all migrations: nothing to cancel", func(t *testing.T) {

@@ -149,6 +149,11 @@ func (dc *fakeDBClient) Rollback() error {
 	return nil
 }
 
+// SetMultiStatements is part of the DBClient interface
+func (dc *fakeDBClient) SetMultiStatements(on bool) error {
+	return nil
+}
+
 // Close is part of the DBClient interface
 func (dc *fakeDBClient) Close() {
 }

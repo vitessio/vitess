@@ -19,6 +19,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"vitess.io/vitess/go/vt/log"
@@ -45,7 +46,7 @@ type errorBody struct {
 // 500 unknown.
 func NewJSONResponse(value any, err error) *JSONResponse {
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("request failed", slog.Any("error", err))
 
 		switch e := err.(type) {
 		case errors.TypedError:

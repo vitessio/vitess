@@ -20,7 +20,9 @@ import (
 	"encoding/json"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -184,6 +186,13 @@ type Plan struct {
 
 	// Permissions stores the permissions for the tables accessed in the query.
 	Permissions []Permission
+	// TablesUndetermined is set for a statement whose tables the parser
+	// discards or leaves opaque (DO, CALL, REPAIR, OPTIMIZE, LOAD DATA, a
+	// partially parsed CREATE TABLE): Permissions does not cover everything
+	// the statement touches, whether it is empty or names the tables the
+	// parser did keep. Under strict table ACL the executor denies such a
+	// statement rather than skip the check.
+	TablesUndetermined bool
 
 	// FullQuery will be set for all plans.
 	FullQuery *sqlparser.ParsedQuery
@@ -200,6 +209,33 @@ type Plan struct {
 
 	// NeedsReservedConn indicates at a reserved connection is needed to execute this plan
 	NeedsReservedConn bool
+
+	// KillsConnOnTimeout forces a query timeout to kill the stateful
+	// connection instead of keeping it, overriding the plan type's normal
+	// keep-on-timeout safety. Set for DML containing a mutating lock
+	// function: the statement's row changes roll back atomically under KILL
+	// QUERY, but the lock grant or release does not, and can race the kill —
+	// leaving lock state the session never recorded. SELECT carries the same
+	// fact as the SelectLockFunc plan type instead.
+	KillsConnOnTimeout bool
+
+	// VerifySQLMode is set on a PlanSet that assigns sql_mode a value that could not be
+	// judged at plan time (a non-constant expression): the executor must read back the
+	// applied value and validate it with sqlmode.Validate. Such a plan has sql_mode as
+	// its only assignment (see validateSetStatementSQLMode).
+	VerifySQLMode bool
+
+	// stmtType is a sqlparser.StatementType; see StatementType. It is unexported so that
+	// /debug/query_plans doesn't show it, and a uint8 so that it fits in the padding after
+	// the bools above and doesn't grow every cached plan.
+	stmtType uint8
+}
+
+// StatementType returns the statement type derived from the parsed AST. Unlike a textual
+// scan (sqlparser.Preview), it classifies CTE queries (WITH ... SELECT/DML) by their real
+// plan type. It reports REPLACE separately from INSERT.
+func (plan *Plan) StatementType() sqlparser.StatementType {
+	return sqlparser.StatementType(plan.stmtType)
 }
 
 // TableName returns the table name for the plan.
@@ -283,7 +319,7 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	case *sqlparser.Delete:
 		plan, err = analyzeDelete(stmt, tables)
 	case *sqlparser.Set:
-		plan = analyzeSet(stmt)
+		plan, err = analyzeSet(stmt)
 	case sqlparser.DDLStatement:
 		plan, err = analyzeDDL(stmt)
 	case *sqlparser.AlterMigration:
@@ -316,8 +352,21 @@ func BuildStreaming(env *vtenv.Environment, statement sqlparser.Statement, table
 	if err != nil {
 		return nil, err
 	}
+	plan.stmtType = uint8(sqlparser.ASTToStatementType(statement))
+	// A lock function reached through DML mutates or acquires connection-
+	// scoped lock state exactly as it does in a SELECT predicate; the plan
+	// type stays DML (dispatch is unchanged) but the timeout and reservation
+	// consequences carry over. See lockFuncs.
+	switch statement.(type) {
+	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
+		mutating, acquiring := lockFuncs(statement)
+		plan.KillsConnOnTimeout = mutating
+		if acquiring {
+			plan.NeedsReservedConn = true
+		}
+	}
 	plan.AllTables = lookupAllTables(statement, tables)
-	plan.Permissions = BuildPermissions(statement)
+	plan.Permissions, plan.TablesUndetermined = BuildPermissions(statement)
 	return plan, nil
 }
 
@@ -340,40 +389,73 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 	return plan, nil
 }
 
-// hasLockFunc looks for get_lock function in the select query.
-// If it is present then it returns true otherwise false
-func hasLockFunc(sel *sqlparser.Select) bool {
-	var found bool
+// lockFuncs reports whether the statement contains a mutating lock function
+// — get_lock, release_lock, release_all_locks — anywhere in it (select list,
+// predicates, subqueries, DML expressions: a get_lock in a WHERE clause
+// acquires the lock just the same), and whether one of them acquires a lock.
+// A mutating lock function means a query timeout on a reserved connection
+// must kill the connection rather than keep it: the kill can race the
+// server-side grant or release, leaving lock state vtgate never recorded on
+// a connection it goes on reusing. SELECT encodes that as the SelectLockFunc
+// plan type; DML keeps its plan type and carries the KillsConnOnTimeout
+// flag. Only acquisition requires a reserved connection — a lock is scoped
+// to one MySQL connection, so acquiring it on a pooled connection is
+// meaningless. The release functions stay allowed without one: vtgate sends
+// them as plain executes when the session holds no locks, and a pooled
+// connection can hold no user-level lock, so MySQL correctly answers NULL
+// (no such lock) or 0 (held by another connection). The pure reads
+// (is_free_lock, is_used_lock) stay ordinary wherever they appear.
+func lockFuncs(stmt sqlparser.Statement) (mutating, acquiring bool) {
 	_ = sqlparser.Walk(func(in sqlparser.SQLNode) (bool, error) {
 		lFunc, isLFunc := in.(*sqlparser.LockingFunc)
 		if !isLFunc {
 			return true, nil
 		}
-		if lFunc.Type == sqlparser.GetLock {
-			found = true
+		switch lFunc.Type {
+		case sqlparser.GetLock:
+			mutating = true
+			acquiring = true
 			return false, nil
+		case sqlparser.ReleaseLock, sqlparser.ReleaseAllLocks:
+			mutating = true
 		}
 		return true, nil
-	}, sel.SelectExprs)
-	return found
+	}, stmt)
+	return mutating, acquiring
 }
 
-// BuildSettingQuery builds a query for system settings.
-func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query string, resetQuery string, err error) {
+// BuildSettingQuery builds a query for system settings. When rejectSubqueries
+// is set, a setting with a subquery is refused, see rejectSettingSubqueries.
+func BuildSettingQuery(settings []string, parser *sqlparser.Parser, rejectSubqueries bool) (query string, resetQuery string, err error) {
 	if len(settings) == 0 {
 		return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: plan called for empty system settings")
 	}
 	var setExprs sqlparser.SetExprs
 	var resetSetExprs sqlparser.SetExprs
-	lDefault := sqlparser.NewStrLiteral("default")
-	for _, setting := range settings {
+	defaultValue := &sqlparser.Default{}
+	for i, setting := range settings {
 		stmt, err := parser.Parse(setting)
 		if err != nil {
-			return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse system setting: %s", setting)
+			// Parser errors can include the token near the failure, so do not wrap them.
+			return "", "", vterrors.NewErrorf(vterrors.Code(err), vterrors.ErrState(err), "[BUG]: failed to parse system setting at position %d", i+1)
 		}
 		set, ok := stmt.(*sqlparser.Set)
 		if !ok {
-			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement: %s", setting)
+			return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: invalid set statement at position %d", i+1)
+		}
+		// settings are applied with no verification and no table ACL check, so a
+		// subquery is refused where the ACL is enforced, and sql_mode values must
+		// be constants that can be judged here
+		if rejectSubqueries {
+			if err := rejectSettingSubqueries(set); err != nil {
+				return "", "", err
+			}
+		}
+		if err := validateConstantSetExprsSQLMode(set.Exprs); err != nil {
+			return "", "", err
+		}
+		if err := rejectSettingCharsetExprs(set.Exprs); err != nil {
+			return "", "", err
 		}
 		setExprs = append(setExprs, set.Exprs...)
 		for _, sExpr := range set.Exprs {
@@ -381,7 +463,26 @@ func BuildSettingQuery(settings []string, parser *sqlparser.Parser) (query strin
 			if sysVar.Scope != sqlparser.SessionScope && sysVar.Scope != sqlparser.NoScope {
 				return "", "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: session scope expected, got: %s", sysVar.Scope.ToString())
 			}
-			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: lDefault})
+			resetExpr := sqlparser.Expr(defaultValue)
+			switch sysVar.Name.Lowered() {
+			case sysvars.ForeignKeyChecks, sysvars.UniqueChecks:
+				// MySQL Bug#121262: `SET SESSION foreign_key_checks = DEFAULT` (and
+				// unique_checks) sets the session value to the opposite of the global
+				// value, so `default` would hand the next caller a connection with the
+				// checks off. Restore the global value explicitly, which is what DEFAULT
+				// means for a session variable.
+				resetExpr = &sqlparser.Variable{Scope: sqlparser.GlobalScope, Name: sysVar.Name}
+			case sysvars.SQLMode.Name:
+				// `default` would re-inherit the server's global sql_mode including its
+				// lexer modes, undoing the neutralization every Vitess-created
+				// connection starts with (see sqlmode.NeutralizeSessionQuery); restore
+				// the neutralized global instead
+				resetExpr, err = parser.ParseExpr(sqlmode.NeutralizedGlobalExpr)
+				if err != nil {
+					return "", "", vterrors.Wrapf(err, "[BUG]: failed to parse the sql_mode reset expression")
+				}
+			}
+			resetSetExprs = append(resetSetExprs, &sqlparser.SetExpr{Var: sysVar, Expr: resetExpr})
 		}
 	}
 	return sqlparser.String(&sqlparser.Set{Exprs: setExprs}), sqlparser.String(&sqlparser.Set{Exprs: resetSetExprs}), nil

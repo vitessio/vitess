@@ -438,9 +438,9 @@ func (sm *stateManager) verifyTargetLocked(ctx context.Context, target *querypb.
 	if target != nil {
 		switch {
 		case target.Keyspace != sm.target.Keyspace:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid keyspace %v does not match expected %v", target.Keyspace, sm.target.Keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongKeyspaceShard, "keyspace", target.Keyspace, sm.target.Keyspace)
 		case target.Shard != sm.target.Shard:
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid shard %v does not match expected %v", target.Shard, sm.target.Shard)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongKeyspaceShard, "shard", target.Shard, sm.target.Shard)
 		case target.TabletType != sm.target.TabletType:
 			if slices.Contains(sm.alsoAllow, target.TabletType) {
 				return nil
@@ -567,9 +567,9 @@ func (sm *stateManager) unserveCommon() {
 	sm.tableGC.Close()
 	log.Info("Finished table garbage collector close. Started lag throttler close")
 	sm.throttler.Close()
-	log.Info("Finished lag throttler close. Started messager close")
+	log.Info("Finished lag throttler close. Started query throttler close")
 	sm.qThrottler.Close()
-	log.Info("Finished query throttler close. Started query throttler close")
+	log.Info("Finished query throttler close. Started messager close")
 	sm.messager.Close()
 	log.Info("Finished messager close. Started txEngine close")
 	sm.te.Close()

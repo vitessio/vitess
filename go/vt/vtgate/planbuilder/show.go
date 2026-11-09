@@ -45,7 +45,16 @@ const (
 
 func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.ShardDestination() != nil {
-		return buildByPassPlan(sql, vschema, false)
+		plan, err := buildByPassPlan(sql, vschema, false)
+		if err != nil {
+			return nil, err
+		}
+		if isShowVariables(stmt) {
+			// the shard reports its own values; substitute the ones VTGate owns, as for
+			// an untargeted session
+			plan.primitive = engine.NewReplaceVariables(plan.primitive)
+		}
+		return plan, nil
 	}
 
 	var prim engine.Primitive
@@ -178,6 +187,12 @@ func buildSendAnywherePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchem
 		IsDML:             false,
 		SingleShardOnly:   true,
 	}, nil
+}
+
+// isShowVariables reports whether the statement is a SHOW [GLOBAL | SESSION] VARIABLES.
+func isShowVariables(stmt *sqlparser.Show) bool {
+	show, ok := stmt.Internal.(*sqlparser.ShowBasic)
+	return ok && (show.Command == sqlparser.VariableGlobal || show.Command == sqlparser.VariableSession)
 }
 
 func buildVariablePlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {

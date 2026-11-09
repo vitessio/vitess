@@ -107,6 +107,7 @@ type (
 	iExecute interface {
 		Execute(ctx context.Context, mysqlCtx vtgateservice.MySQLConnection, method string, session *SafeSession, s string, vars map[string]*querypb.BindVariable, prepared bool) (*sqltypes.Result, error)
 		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error)
+		ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error)
 		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error
 		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
 		Commit(ctx context.Context, safeSession *SafeSession) error
@@ -265,18 +266,46 @@ func (vc *VCursorImpl) GetSafeSession() *SafeSession {
 	return vc.SafeSession
 }
 
+// PrepareSetVarComment builds the body of the /*+ ... */ optimizer hint that
+// carries the session's system variables to MySQL. The variables are listed
+// sorted by name, so that the same session renders the same hint on every
+// request: the hint is part of the plan cache key and of the query text sent
+// to the tablets. A value that cannot be carried in the hint (it would
+// terminate the comment, letting the rest of the value run as statement text)
+// is left out and applied through a reserved connection instead, so the
+// session is marked as needing one.
 func (vc *VCursorImpl) PrepareSetVarComment() string {
-	var res []string
+	var keys []string
+	values := make(map[string]string)
+	needsReservedConn := false
 	vc.Session().GetSystemVariables(func(k, v string) {
-		if sysvars.SupportsSetVar(k) {
-			if k == "sql_mode" && v == "''" {
-				// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
-				// | Warning | 1064 | Optimizer hint syntax error near ''') */
-				v = "' '"
-			}
-			res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
+		if !sysvars.SupportsSetVar(k) {
+			return
 		}
+		if !sysvars.IsSafeSetVarValue(v) {
+			needsReservedConn = true
+			return
+		}
+		keys = append(keys, k)
+		values[k] = v
 	})
+	// GetSystemVariables holds the session lock while it iterates, so the
+	// session can only be marked once the visitor has returned.
+	if needsReservedConn {
+		vc.NeedsReservedConn()
+	}
+	sort.Strings(keys)
+
+	res := make([]string, 0, len(keys))
+	for _, k := range keys {
+		v := values[k]
+		if k == "sql_mode" && v == "''" {
+			// SET_VAR(sql_mode, '') is not accepted by MySQL, giving a warning:
+			// | Warning | 1064 | Optimizer hint syntax error near ''') */
+			v = "' '"
+		}
+		res = append(res, fmt.Sprintf("SET_VAR(%s = %s)", k, v))
+	}
 
 	return strings.Join(res, " ")
 }
@@ -747,7 +776,7 @@ func (vc *VCursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 		}
 		vc.logOpTraffic(primitive, res)
 		if res != nil && res.InsertIDUpdated() {
-			vc.SafeSession.LastInsertId = res.InsertID
+			vc.SetLastInsertID(res.InsertID)
 		}
 		return res, err
 	}
@@ -798,7 +827,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 	if vc.interOpStats == nil {
 		return func(r *sqltypes.Result) error {
 			if r.InsertIDUpdated() {
-				vc.SafeSession.LastInsertId = r.InsertID
+				vc.SetLastInsertID(r.InsertID)
 			}
 			return callback(r)
 		}
@@ -806,7 +835,7 @@ func (vc *VCursorImpl) wrapCallback(callback func(*sqltypes.Result) error, primi
 
 	return func(r *sqltypes.Result) error {
 		if r.InsertIDUpdated() {
-			vc.SafeSession.LastInsertId = r.InsertID
+			vc.SetLastInsertID(r.InsertID)
 		}
 		vc.logOpTraffic(primitive, r)
 		return callback(r)
@@ -898,9 +927,28 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr != nil && qr.InsertIDUpdated() {
-		vc.SafeSession.LastInsertId = qr.InsertID
+		vc.SetLastInsertID(qr.InsertID)
 	}
 	return qr, errs
+}
+
+// ExecuteMultiShardPerShard runs one read query per shard and returns each
+// shard's result separately, aligned by index to rss. It is used by VEXPLAIN
+// MYSQLPLAN to run EXPLAIN FORMAT=JSON against every resolved shard and attribute
+// each plan to its shard. The queries run in a fresh autocommit session so the
+// EXPLAINs never join the caller's transaction, and FetchLastInsertId is never
+// requested, so - unlike ExecuteMultiShard - it does not write SafeSession.LastInsertId.
+func (vc *VCursorImpl) ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery) ([]*sqltypes.Result, []error) {
+	atomic.AddUint64(&vc.logStats.ShardQueries, uint64(len(rss)))
+	// A tablet-specific target (USE ks:shard@type|alias) is stored on SafeSession, not
+	// in the vtgatepb.Session proto, so NewAutocommitSession would drop it and the
+	// EXPLAINs would route through the gateway to another tablet of that type. Carry the
+	// alias over so each EXPLAIN reaches the same tablet the wrapped query would.
+	standaloneSession := NewAutocommitSession(vc.SafeSession.Session)
+	standaloneSession.SetTargetTabletAlias(vc.SafeSession.GetTargetTabletAlias())
+	results, errs := vc.executor.ExecuteMultiShardPerShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), standaloneSession, false /* autocommit */, vc.observer, false /* fetchLastInsertID */)
+	vc.logShardsQueried(primitive, len(rss))
+	return results, errs
 }
 
 // StreamExecuteMulti is the streaming version of ExecuteMultiShard.
@@ -940,7 +988,7 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, bqs, NewAutocommitSession(vc.SafeSession.Session), false /* autocommit */, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr.InsertIDUpdated() {
-		vc.SafeSession.LastInsertId = qr.InsertID
+		vc.SetLastInsertID(qr.InsertID)
 	}
 	return qr, vterrors.Aggregate(errs)
 }
@@ -1104,12 +1152,22 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 	if setVarComment == "" {
 		return
 	}
+	// An EXPLAIN or VEXPLAIN wraps an inner statement that carries the SET_VAR hint;
+	// decide against that inner statement so, for example, EXPLAIN of a SELECT is
+	// treated like the SELECT and does not spuriously pin the session to a reserved
+	// connection, while EXPLAIN of a statement that cannot take the hint still does.
+	switch explain := stmt.(type) {
+	case *sqlparser.ExplainStmt:
+		stmt = explain.Statement
+	case *sqlparser.VExplainStmt:
+		stmt = explain.Statement
+	}
 	switch stmt.(type) {
 	// If the statement supports optimizer hints or a transaction statement or a SET statement
-	// no reserved connection is needed
+	// or a USE statement (which VTGate handles itself), no reserved connection is needed
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint,
 		*sqlparser.SRollback, *sqlparser.Release, *sqlparser.Set, *sqlparser.Show,
-		sqlparser.SupportOptimizerHint:
+		*sqlparser.Use, sqlparser.SupportOptimizerHint:
 	default:
 		vc.NeedsReservedConn()
 	}
@@ -1118,6 +1176,11 @@ func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sql
 // NeedsReservedConn implements the SessionActions interface
 func (vc *VCursorImpl) NeedsReservedConn() {
 	vc.SafeSession.SetReservedConn(true)
+}
+
+// ResetReservedConn implements the SessionActions interface
+func (vc *VCursorImpl) ResetReservedConn() {
+	vc.SafeSession.SetReservedConn(false)
 }
 
 func (vc *VCursorImpl) InReservedConn() bool {
@@ -1365,7 +1428,7 @@ func (vc *VCursorImpl) SetSessionTrackGTIDs(enable bool) {
 
 // HasCreatedTempTable implements the SessionActions interface
 func (vc *VCursorImpl) HasCreatedTempTable() {
-	vc.SafeSession.GetOrCreateOptions().HasCreatedTempTables = true
+	vc.SafeSession.SetHasCreatedTempTables()
 }
 
 // GetWarnings implements the SessionActions interface

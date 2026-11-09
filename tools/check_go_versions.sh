@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Validate that the go versions in go.mod, CI test workflows
-# and docker/bootstrap/Dockerfile.common are compatible.
+# and docker/bootstrap/Dockerfile are compatible.
 #
 # This is called from the Static Code Checks CI workflow.
 
@@ -14,9 +14,9 @@ if [ -z "${GO_MOD_VERSION}" ]; then
 	exit 1
 fi
 
-# docker/bootstrap/Dockerfile.common
-BOOTSTRAP_GO_VERSION="$(sed -n 's/.*golang:\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' docker/bootstrap/Dockerfile.common)"
+# docker/bootstrap/Dockerfile
+BOOTSTRAP_GO_VERSION="$(sed -n 's/.*golang:\([0-9]*\.[0-9]*\.[0-9]*\).*/\1/p' docker/bootstrap/Dockerfile)"
 if [[ "${BOOTSTRAP_GO_VERSION}" != "${GO_MOD_VERSION}" ]]; then
-	echo "expected golang docker version in docker/bootstrap/Dockerfile.common to be equal to go.mod: '${BOOTSTRAP_GO_VERSION}' != '${GO_MOD_VERSION}'"
+	echo "expected golang docker version in docker/bootstrap/Dockerfile to be equal to go.mod: '${BOOTSTRAP_GO_VERSION}' != '${GO_MOD_VERSION}'"
 	exit 1
 fi

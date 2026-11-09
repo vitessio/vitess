@@ -21,10 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -491,17 +493,30 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 		defer cancel()
 		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 		if isPartial {
-			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
-				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warn(msg)
+				log.Warn("failed to successfully refresh all tablets in the source shard", ts.partialRefreshAttrs(source.GetShard(), partialDetails, err)...)
 				return nil
-			} else {
-				return errors.New(msg)
 			}
+			return fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
+				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 		}
 		return err
 	})
+}
+
+// partialRefreshAttrs returns the attributes of a forced partial refresh of
+// the tablets in si.
+func (ts *trafficSwitcher) partialRefreshAttrs(si *topo.ShardInfo, partialDetails string, err error) []slog.Attr {
+	attrs := []slog.Attr{
+		slog.String("workflow", ts.WorkflowName()),
+		slog.String("keyspace", si.Keyspace()),
+		slog.String("shard", si.ShardName()),
+		slog.String("partial_refresh_details", partialDetails),
+	}
+	if err != nil {
+		attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+	}
+	return attrs
 }
 
 func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
@@ -519,14 +534,12 @@ func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 		defer cancel()
 		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		if isPartial {
-			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
-				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warn(msg)
+				log.Warn("failed to successfully refresh all tablets in the target shard", ts.partialRefreshAttrs(target.GetShard(), partialDetails, err)...)
 				return nil
-			} else {
-				return errors.New(msg)
 			}
+			return fmt.Errorf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
+				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 		}
 		return err
 	})
@@ -638,10 +651,10 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 		return err2
 	}
 	for _, servedType := range servedTypes {
-		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */, ts.Logger()); err != nil {
+		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), fromShards, cells, servedType, true /* isFrom */, ts.Logger()); err != nil {
 			return err
 		}
-		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), toShards, cells, servedType, false, false, ts.Logger()); err != nil {
+		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), toShards, cells, servedType, false, ts.Logger()); err != nil {
 			return err
 		}
 		err := ts.TopoServer().MigrateServedType(ctx, ts.SourceKeyspaceName(), toShards, fromShards, servedType, cells)
@@ -910,73 +923,34 @@ func (ts *trafficSwitcher) ForAllUIDs(f func(target *MigrationTarget, uid int32)
 }
 
 func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error {
+	// Build all of the reverse streams before deleting the existing ones, so
+	// that failing to build them leaves those in place.
+	var mu sync.Mutex
+	reverseBlses := make(map[*MigrationTarget]map[int32]*binlogdatapb.BinlogSource)
+	if err := ts.ForAllUIDs(func(target *MigrationTarget, uid int32) error {
+		reverseBls, err := ts.buildReverseBinlogSource(ctx, target, uid)
+		if err != nil {
+			return err
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if reverseBlses[target] == nil {
+			reverseBlses[target] = make(map[int32]*binlogdatapb.BinlogSource)
+		}
+		reverseBlses[target][uid] = reverseBls
+		return nil
+	}); err != nil {
+		return err
+	}
 	if err := ts.deleteReverseVReplication(ctx); err != nil {
 		return err
 	}
 	err := ts.ForAllUIDs(func(target *MigrationTarget, uid int32) error {
-		bls := target.Sources[uid]
-		source := ts.Sources()[bls.Shard]
-		reverseBls := &binlogdatapb.BinlogSource{
-			Keyspace:       ts.TargetKeyspaceName(),
-			Shard:          target.GetShard().ShardName(),
-			TabletType:     bls.TabletType,
-			Filter:         &binlogdatapb.Filter{},
-			OnDdl:          bls.OnDdl,
-			SourceTimeZone: bls.TargetTimeZone,
-			TargetTimeZone: bls.SourceTimeZone,
-		}
-		var err error
-		for _, rule := range bls.Filter.Rules {
-			if rule.Filter == "exclude" {
-				reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
-				continue
-			}
-			var filter string
-			if strings.HasPrefix(rule.Match, "/") {
-				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
-					filter = key.KeyRangeString(source.GetShard().KeyRange)
-				}
-			} else {
-				var inKeyrange string
-				if ts.SourceKeyspaceSchema().Keyspace.Sharded {
-					vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
-					if !ok {
-						return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
-					}
-					// We currently assume the primary vindex is the best way to filter rows
-					// for the table, which may not always be true.
-					// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
-					switch vtable.Type {
-					case vindexes.TypeReference:
-						// For reference tables there are no vindexes and thus no filter to apply.
-					default:
-						// For non-reference tables we return an error if there's no primary
-						// vindex as it's not clear what to do.
-						if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
-							inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', %s)", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
-								ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, encodeString(key.KeyRangeString(source.GetShard().KeyRange)))
-						} else {
-							return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
-								vtable.Name.String(), ts.SourceKeyspaceName())
-						}
-					}
-				}
-				filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
-				if ts.IsMultiTenantMigration() {
-					filter, err = ts.addTenantFilter(ctx, filter)
-					if err != nil {
-						return err
-					}
-				}
-			}
-			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
-				Match:  rule.Match,
-				Filter: filter,
-			})
-		}
+		source := ts.Sources()[target.Sources[uid].Shard]
+		reverseBls := reverseBlses[target][uid]
 		ts.Logger().Infof("Creating reverse workflow vreplication stream on tablet %s: workflow %s, startPos %s",
 			source.GetPrimary().GetAlias(), ts.ReverseWorkflowName(), target.Position)
-		_, err = ts.VReplicationExec(ctx, source.GetPrimary().GetAlias(),
+		_, err := ts.VReplicationExec(ctx, source.GetPrimary().GetAlias(),
 			binlogplayer.CreateVReplicationState(ts.ReverseWorkflowName(), reverseBls, target.Position,
 				binlogdatapb.VReplicationWorkflowState_Stopped, source.GetPrimary().DbName(), ts.workflowType, ts.workflowSubType))
 		if err != nil {
@@ -998,6 +972,72 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 		return nil
 	})
 	return err
+}
+
+// buildReverseBinlogSource builds the binlog source of the reverse stream for
+// the target stream uid.
+func (ts *trafficSwitcher) buildReverseBinlogSource(ctx context.Context, target *MigrationTarget, uid int32) (*binlogdatapb.BinlogSource, error) {
+	bls := target.Sources[uid]
+	source := ts.Sources()[bls.Shard]
+	reverseBls := &binlogdatapb.BinlogSource{
+		Keyspace:       ts.TargetKeyspaceName(),
+		Shard:          target.GetShard().ShardName(),
+		TabletType:     bls.TabletType,
+		Filter:         &binlogdatapb.Filter{},
+		OnDdl:          bls.OnDdl,
+		SourceTimeZone: bls.TargetTimeZone,
+		TargetTimeZone: bls.SourceTimeZone,
+	}
+	var err error
+	for _, rule := range bls.Filter.Rules {
+		if rule.Filter == "exclude" {
+			reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, rule)
+			continue
+		}
+		var filter string
+		if strings.HasPrefix(rule.Match, "/") {
+			if ts.SourceKeyspaceSchema().Keyspace.Sharded {
+				filter = key.KeyRangeString(source.GetShard().KeyRange)
+			}
+		} else {
+			var inKeyrange string
+			if ts.SourceKeyspaceSchema().Keyspace.Sharded {
+				vtable, ok := ts.SourceKeyspaceSchema().Tables[rule.Match]
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table %s not found in vschema", rule.Match)
+				}
+				// We currently assume the primary vindex is the best way to filter rows
+				// for the table, which may not always be true.
+				// TODO: handle more of these edge cases explicitly, e.g. sequence tables.
+				switch vtable.Type {
+				case vindexes.TypeReference:
+					// For reference tables there are no vindexes and thus no filter to apply.
+				default:
+					// For non-reference tables we return an error if there's no primary
+					// vindex as it's not clear what to do.
+					if len(vtable.ColumnVindexes) > 0 && len(vtable.ColumnVindexes[0].Columns) > 0 {
+						inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s.%s', %s)", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]),
+							ts.SourceKeyspaceName(), vtable.ColumnVindexes[0].Name, encodeString(key.KeyRangeString(source.GetShard().KeyRange)))
+					} else {
+						return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "no primary vindex found for the %s table in the %s keyspace",
+							vtable.Name.String(), ts.SourceKeyspaceName())
+					}
+				}
+			}
+			filter = fmt.Sprintf("select * from %s%s", sqlescape.EscapeID(rule.Match), inKeyrange)
+			if ts.IsMultiTenantMigration() {
+				filter, err = ts.addTenantFilter(ctx, filter)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+		reverseBls.Filter.Rules = append(reverseBls.Filter.Rules, &binlogdatapb.Rule{
+			Match:  rule.Match,
+			Filter: filter,
+		})
+	}
+	return reverseBls, nil
 }
 
 func (ts *trafficSwitcher) addTenantFilter(ctx context.Context, filter string) (string, error) {
@@ -1119,14 +1159,12 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 			defer cancel()
 			isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 			if isPartial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
-					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warn(msg)
+					log.Warn("failed to successfully refresh all tablets in the source shard", ts.partialRefreshAttrs(source.GetShard(), partialDetails, err)...)
 					return nil
-				} else {
-					return errors.New(msg)
 				}
+				return fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
+					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 			}
 			return err
 		})
@@ -1200,10 +1238,21 @@ func (ts *trafficSwitcher) cancelMigration(ctx context.Context, sm *StreamMigrat
 		ts.Logger().Errorf("Cancel migration failed (%v): could not restart vreplication: %v", ts.WorkflowName(), err)
 	}
 
-	ts.Logger().Infof("cancelMigration (%v): deleting reverse vreplication workflows", ts.WorkflowName())
-	if err := ts.deleteReverseVReplication(cmCtx); err != nil {
-		cancelErrs.RecordError(fmt.Errorf("could not delete reverse vreplication streams: %v", err))
-		ts.Logger().Errorf("Cancel migration failed (%v): could not delete reverse vreplication streams: %v", ts.WorkflowName(), err)
+	if strings.HasSuffix(ts.WorkflowName(), reverseSuffix) {
+		// We are canceling a ReverseTraffic, so the reverse workflow is the
+		// original one: put it back as it was before the switch, frozen,
+		// rather than deleting it.
+		ts.Logger().Infof("cancelMigration (%v): restoring the original workflow %s", ts.WorkflowName(), ts.reverseWorkflow)
+		if err := ts.restoreReverseVReplication(cmCtx); err != nil {
+			cancelErrs.RecordError(fmt.Errorf("could not restore the original workflow's streams: %v", err))
+			ts.Logger().Errorf("Cancel migration failed (%v): could not restore the original workflow's streams: %v", ts.WorkflowName(), err)
+		}
+	} else {
+		ts.Logger().Infof("cancelMigration (%v): deleting reverse vreplication workflows", ts.WorkflowName())
+		if err := ts.deleteReverseVReplication(cmCtx); err != nil {
+			cancelErrs.RecordError(fmt.Errorf("could not delete reverse vreplication streams: %v", err))
+			ts.Logger().Errorf("Cancel migration failed (%v): could not delete reverse vreplication streams: %v", ts.WorkflowName(), err)
+		}
 	}
 
 	if cancelErrs.HasErrors() {
@@ -1229,6 +1278,51 @@ func (ts *trafficSwitcher) freezeTargetVReplication(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// restoreReverseVReplication puts the reverse workflow back as it was before a
+// canceled ReverseTraffic: frozen. If the switch had already deleted any of its
+// streams, to recreate them, they are all recreated first; as frozen streams
+// are never run, their positions do not matter.
+func (ts *trafficSwitcher) restoreReverseVReplication(ctx context.Context) error {
+	// createReverseVReplication creates one stream on a source shard for each
+	// target stream that copies from it.
+	wantStreams := make(map[string]int)
+	for _, target := range ts.Targets() {
+		for _, bls := range target.Sources {
+			wantStreams[bls.Shard]++
+		}
+	}
+	var missing atomic.Bool
+	if err := ts.ForAllSources(func(source *MigrationSource) error {
+		res, err := ts.TabletManagerClient().ReadVReplicationWorkflow(ctx, source.GetPrimary().Tablet,
+			&tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: ts.reverseWorkflow})
+		if err != nil {
+			return err
+		}
+		if len(res.GetStreams()) != wantStreams[source.GetShard().ShardName()] {
+			missing.Store(true)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if missing.Load() {
+		if err := ts.createReverseVReplication(ctx); err != nil {
+			return err
+		}
+	}
+	return ts.freezeReverseVReplication(ctx)
+}
+
+// freezeReverseVReplication marks the reverse workflow's streams frozen.
+func (ts *trafficSwitcher) freezeReverseVReplication(ctx context.Context) error {
+	return ts.ForAllSources(func(source *MigrationSource) error {
+		query := fmt.Sprintf("update _vt.vreplication set message = %s where db_name=%s and workflow=%s", encodeString(Frozen),
+			encodeString(source.GetPrimary().DbName()), encodeString(ts.reverseWorkflow))
+		_, err := ts.TabletManagerClient().VReplicationExec(ctx, source.GetPrimary().Tablet, query)
+		return err
+	})
 }
 
 func (ts *trafficSwitcher) dropTargetVReplicationStreams(ctx context.Context) error {
@@ -1650,14 +1744,12 @@ func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, opts setTa
 		defer cancel()
 		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		if isPartial {
-			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
-				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warn(msg)
+				log.Warn("failed to successfully refresh all tablets in the target shard", ts.partialRefreshAttrs(target.GetShard(), partialDetails, err)...)
 				return nil
-			} else {
-				return errors.New(msg)
 			}
+			return fmt.Errorf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
+				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 		}
 		return err
 	})

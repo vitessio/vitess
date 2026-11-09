@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -40,6 +41,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -4971,6 +4973,158 @@ func TestERSSplitBrainPromotionEligibility(t *testing.T) {
 				assert.True(t, topoproto.TabletAliasEqual(tt.wantPrimary, ev.NewPrimary.Alias))
 			}
 			assert.Equal(t, tt.wantOverrideCount, ersSplitBrainOverrides.Counts()["testkeyspace.-"])
+		})
+	}
+}
+
+// startReplicationRecorderTMC records the tablets that the deferred cleanup restarts
+// replication on.
+type startReplicationRecorderTMC struct {
+	*testutil.TabletManagerClient
+
+	mu        sync.Mutex
+	restarted []string
+}
+
+func (fake *startReplicationRecorderTMC) StartReplication(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) error {
+	fake.mu.Lock()
+	fake.restarted = append(fake.restarted, topoproto.TabletAliasString(tablet.Alias))
+	fake.mu.Unlock()
+	return nil
+}
+
+// TestERSDivergentTabletsDoNotCountAsSemiSyncAckers verifies that a promotion relying on a
+// tablet holding GTIDs the new primary lacks fails before ERS repoints anyone.
+func TestERSDivergentTabletsDoNotCountAsSemiSyncAckers(t *testing.T) {
+	var (
+		chosenLeader    = getRelayLogPosition("1-100", "1-31", "1-50")
+		discardedLeader = getRelayLogPosition("1-100", "1-30", "1-51")
+		chosenBranch    = getRelayLogPosition("1-90", "1-30", "1-50")
+
+		healthyLeader     = getRelayLogPosition("1-100", "1-30")
+		errantDominator   = getRelayLogPosition("1-100", "1-30", "1")
+		healthyLaggard    = getRelayLogPosition("1-90", "1-30")
+		chosenPrimary     = &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
+		errantGTIDRefusal = vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "Errant GTID detected")
+	)
+
+	tests := []struct {
+		name          string
+		positions     []string
+		opts          EmergencyReparentOptions
+		wantErr       string
+		wantRestarted []string
+	}{
+		{
+			name:          "split-brain override fails when the only acker is on a discarded branch",
+			positions:     []string{chosenLeader, discardedLeader},
+			opts:          EmergencyReparentOptions{NewPrimaryAlias: chosenPrimary, AllowSplitBrainPromotion: true},
+			wantErr:       "proposed primary zone1-0000000100 will not be able to make forward progress on being promoted",
+			wantRestarted: []string{"zone1-0000000100", "zone1-0000000101"},
+		},
+		{
+			name:      "split-brain override counts a replica on the chosen branch as an acker",
+			positions: []string{chosenLeader, discardedLeader, chosenBranch},
+			opts:      EmergencyReparentOptions{NewPrimaryAlias: chosenPrimary, AllowSplitBrainPromotion: true},
+		},
+		{
+			name:          "fails when the only acker is an errant replica ahead of the new primary",
+			positions:     []string{healthyLeader, errantDominator},
+			wantErr:       "no valid candidates for emergency reparent",
+			wantRestarted: []string{"zone1-0000000100", "zone1-0000000101"},
+		},
+		{
+			name:      "promotes when a healthy acker remains beside an errant replica ahead of the new primary",
+			positions: []string{healthyLeader, errantDominator, healthyLaggard},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmc := &startReplicationRecorderTMC{TabletManagerClient: &testutil.TabletManagerClient{
+				StopReplicationAndGetStatusResults: map[string]struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{},
+				WaitForPositionResults:         map[string]map[string]error{},
+				ReadReparentJournalInfoResults: map[string]int32{},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000100": {Result: "ok"},
+				},
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				// A live tablet runs this errant GTID check on itself before repointing
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": errantGTIDRefusal,
+					"zone1-0000000102": nil,
+					"zone1-0000000200": assert.AnError,
+				},
+			}}
+			tmc.StopReplicationAndGetStatusResults["zone1-0000000200"] = struct {
+				StopStatus *replicationdatapb.StopReplicationStatus
+				Error      error
+			}{Error: assert.AnError}
+
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "zone1")
+			t.Cleanup(ts.Close)
+			testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+				Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+				Type:     topodatapb.TabletType_PRIMARY,
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				Hostname: "dead primary",
+			}, &testutil.AddTabletOptions{AlsoSetShardPrimary: true})
+			for i, pos := range tt.positions {
+				alias := &topodatapb.TabletAlias{Cell: "zone1", Uid: uint32(100 + i)}
+				testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+					Alias:    alias,
+					Type:     topodatapb.TabletType_REPLICA,
+					Keyspace: "testkeyspace",
+					Shard:    "-",
+				}, nil)
+				aliasStr := topoproto.TabletAliasString(alias)
+				tmc.StopReplicationAndGetStatusResults[aliasStr] = struct {
+					StopStatus *replicationdatapb.StopReplicationStatus
+					Error      error
+				}{
+					StopStatus: &replicationdatapb.StopReplicationStatus{
+						Before: &replicationdatapb.Status{IoState: int32(replication.ReplicationStateRunning), SqlState: int32(replication.ReplicationStateRunning)},
+						After: &replicationdatapb.Status{
+							SourceUuid:       "00000000-0000-0000-0000-000000000001",
+							RelayLogPosition: pos,
+						},
+					},
+				}
+				tmc.WaitForPositionResults[aliasStr] = map[string]error{pos: nil}
+				tmc.ReadReparentJournalInfoResults[aliasStr] = 1
+			}
+			reparenttestutil.SetKeyspaceDurability(ctx, t, ts, "testkeyspace", policy.DurabilitySemiSync)
+
+			lockCtx, unlock, err := ts.LockShard(ctx, "testkeyspace", "-", "test lock")
+			require.NoError(t, err)
+			defer unlock(&err)
+
+			ev := &events.Reparent{}
+			opts := tt.opts
+			opts.WaitReplicasTimeout = 30 * time.Second
+			logger := logutil.NewMemoryLogger()
+			erp := NewEmergencyReparenter(ts, tmc, logger)
+			err = erp.reparentShardLocked(lockCtx, ev, "testkeyspace", "-", opts)
+			assert.Contains(t, logger.String(), "zone1-0000000101 has GTIDs that the intermediate source zone1-0000000100 lacks")
+			assert.NotContains(t, logger.String(), "zone1-0000000102 has GTIDs")
+			if tt.wantErr != "" {
+				require.EqualError(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, ev.NewPrimary)
+				assert.True(t, topoproto.TabletAliasEqual(chosenPrimary, ev.NewPrimary.Alias))
+			}
+			assert.ElementsMatch(t, tt.wantRestarted, tmc.restarted)
 		})
 	}
 }
@@ -10590,6 +10744,7 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 		},
 	}
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000101")
@@ -10599,6 +10754,12 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 	assert.NotContains(t, candidates, "zone1-0000000100")
 	// both replicas had a peer to compare against, so nobody was accepted blindly
 	assert.Empty(t, starved)
+
+	record := logs.Record(t, "skipping tablet because we detected errant GTIDs")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "zone1-0000000102", record["tablet"])
+	assert.Equal(t, "MySQL56/"+u1+":1-100,"+u3+":1", record["relay_log_position"])
+	assert.Equal(t, u3+":1", record["errant_gtids"])
 }
 
 // findErrantGTIDsWipedShardFixture returns a two-tablet fixture (a demoted primary and

@@ -14,7 +14,7 @@ import { Tooltip } from '../tooltip/Tooltip';
 import { env } from '../../util/env';
 import style from './Settings.module.scss';
 
-/* eslint-disable jsx-a11y/anchor-is-valid */
+/* eslint-disable jsx-a11y-x/anchor-is-valid */
 export const Settings = () => {
     useDocumentTitle('Debug');
     const [theme, setTheme] = useTheme();

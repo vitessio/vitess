@@ -21,6 +21,8 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -338,6 +340,11 @@ func (f fakeExecutor) ExecuteMultiShard(ctx context.Context, primitive engine.Pr
 	panic("implement me")
 }
 
+func (f fakeExecutor) ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (f fakeExecutor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error {
 	// TODO implement me
 	panic("implement me")
@@ -623,4 +630,142 @@ func TestGetQueryPriority(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPrepareSetVarCommentSortsVariables checks that the SET_VAR hint lists the
+// session's variables sorted by name, on every rendering, skipping the variables
+// that SET_VAR cannot carry.
+func TestPrepareSetVarCommentSortsVariables(t *testing.T) {
+	safeSession := NewSafeSession(&vtgatepb.Session{SystemVariables: map[string]string{
+		"sql_safe_updates":        "1",
+		"unique_checks":           "0",
+		"sql_mode":                "'ANSI'",
+		"max_execution_time":      "100",
+		"big_tables":              "1",
+		"join_buffer_size":        "262144",
+		"sort_buffer_size":        "262144",
+		"group_concat_max_len":    "4096",
+		"div_precision_increment": "6",
+		"max_tmp_tables":          "1", // not settable through SET_VAR
+		"autocommit":              "1", // handled by vtgate itself
+	}})
+	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
+	require.NoError(t, err)
+
+	want := "SET_VAR(big_tables = 1) SET_VAR(div_precision_increment = 6) SET_VAR(group_concat_max_len = 4096) " +
+		"SET_VAR(join_buffer_size = 262144) SET_VAR(max_execution_time = 100) SET_VAR(sort_buffer_size = 262144) " +
+		"SET_VAR(sql_mode = 'ANSI') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0)"
+	for range 100 {
+		require.Equal(t, want, vc.PrepareSetVarComment())
+	}
+}
+
+func TestPrepareSetVarComment(t *testing.T) {
+	tcases := []struct {
+		name             string
+		sysVars          map[string]string
+		want             string
+		wantReservedConn bool
+	}{{
+		name:    "clean values are emitted as hints",
+		sysVars: map[string]string{"sql_mode": "'only_full_group_by'"},
+		want:    "SET_VAR(sql_mode = 'only_full_group_by')",
+	}, {
+		name:             "value containing the comment terminator falls back to a reserved connection",
+		sysVars:          map[string]string{"optimizer_switch": "'x */ select 1 -- '", "sql_mode": "'only_full_group_by'"},
+		want:             "SET_VAR(sql_mode = 'only_full_group_by')",
+		wantReservedConn: true,
+	}, {
+		name:    "variables without SET_VAR support are not inspected",
+		sysVars: map[string]string{"sql_notes": "'x */ select 1 -- '"},
+		want:    "",
+	}}
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			session := NewSafeSession(&vtgatepb.Session{SystemVariables: tc.sysVars})
+			vc, err := NewVCursorImpl(session, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{}, nil)
+			require.NoError(t, err)
+
+			got := vc.PrepareSetVarComment()
+			require.Equal(t, tc.want, got)
+			require.Equal(t, tc.wantReservedConn, session.InReservedConn())
+		})
+	}
+}
+
+// TestWrapCallbackLastInsertIDConcurrent hammers the wrapped stream callback
+// from many goroutines against one session. A single streamed scatter route
+// already produces that shape: StreamExecuteMulti runs one goroutine per shard
+// and does not serialize the callback. A parallel streamed union does the same
+// by driving each source through its own stream. With a direct field write
+// this fails under -race; through the locked setter it passes.
+func TestWrapCallbackLastInsertIDConcurrent(t *testing.T) {
+	for _, withStats := range []bool{false, true} {
+		t.Run(fmt.Sprintf("interOpStats=%t", withStats), func(t *testing.T) {
+			vc := &VCursorImpl{SafeSession: NewSafeSession(&vtgatepb.Session{})}
+			if withStats {
+				vc.interOpStats = make(map[engine.Primitive]engine.RowsReceived)
+			}
+			cb := vc.wrapCallback(func(*sqltypes.Result) error { return nil }, nil)
+
+			const goroutines = 32
+			var wg sync.WaitGroup
+			wg.Add(goroutines)
+			for i := range goroutines {
+				go func(id uint64) {
+					defer wg.Done()
+					_ = cb(&sqltypes.Result{InsertID: id, InsertIDChanged: true})
+				}(uint64(i + 1))
+			}
+			wg.Wait()
+
+			// any writer may win; the guarantee under test is no data race,
+			// not which id lands last
+			require.NotZero(t, vc.SafeSession.GetLastInsertId())
+		})
+	}
+}
+
+// insertIDExecutor answers every ExecuteMultiShard with a fresh result
+// carrying an InsertID, the way an autocommit insert reports it.
+type insertIDExecutor struct {
+	fakeExecutor
+	nextID atomic.Uint64
+}
+
+func (e *insertIDExecutor) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (*sqltypes.Result, []error) {
+	return &sqltypes.Result{InsertID: e.nextID.Add(1), InsertIDChanged: true}, make([]error, len(rss))
+}
+
+// TestExecuteMultiShardLastInsertIDConcurrent drives ExecuteMultiShard from
+// many goroutines against one session, the way a buffered UNION ALL outside a
+// transaction runs each source concurrently through Concatenate.parallelExec.
+// With a direct field write this fails under -race; through the locked setter
+// it passes.
+func TestExecuteMultiShardLastInsertIDConcurrent(t *testing.T) {
+	vc := &VCursorImpl{
+		SafeSession: NewSafeSession(&vtgatepb.Session{}),
+		executor:    &insertIDExecutor{},
+		logStats:    logstats.NewLogStats(t.Context(), t.Name(), "", "", nil, streamlog.NewQueryLogConfigForTest()),
+	}
+	rss := []*srvtopo.ResolvedShard{{}}
+	queries := []*querypb.BoundQuery{{}}
+
+	const goroutines = 32
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			qr, errs := vc.ExecuteMultiShard(t.Context(), nil, rss, queries, false, true, true)
+			if qr == nil || len(errs) != len(rss) {
+				t.Errorf("ExecuteMultiShard returned qr=%v errs=%v", qr, errs)
+			}
+		}()
+	}
+	wg.Wait()
+
+	// any writer may win; the guarantee under test is no data race,
+	// not which id lands last
+	require.NotZero(t, vc.SafeSession.GetLastInsertId())
 }

@@ -47,7 +47,7 @@ export const VTExplain = () => {
         { cluster: clusterID, keyspace: keyspaceName, sql },
         {
             // Never cache, never refetch.
-            cacheTime: 0,
+            gcTime: 0,
             enabled: false,
             refetchOnWindowFocus: false,
             retry: false,

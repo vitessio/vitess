@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -337,7 +338,7 @@ func SetReplicationSource(ctx context.Context, ts *topo.Server, tmc tmclient.Tab
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -544,7 +545,10 @@ func stopReplicationAndBuildStatusMaps(
 	for alias, tabletInfo := range tabletMap {
 		allTablets = append(allTablets, tabletInfo.Tablet)
 		if !ignoredTablets.Has(alias) {
-			mustWaitFor := tabletAliasToWaitFor == alias
+			// Only the primary may be left behind: any other tablet may be the most
+			// advanced one, and if it's cancelled, its position is lost.
+			isPrimary := primaryAlias != nil && topoproto.TabletAliasEqual(primaryAlias, tabletInfo.Alias)
+			mustWaitFor := tabletAliasToWaitFor == alias || !isPrimary
 			// If this is a tablet that we must wait for
 			// we increment numErrorsToWaitFor and pass in this to the
 			// fillStatus function to indicate we must send this with the boolean

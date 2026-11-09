@@ -17,7 +17,7 @@ import cx from 'classnames';
 
 import style from './NavCrumbs.module.scss';
 
-interface Props {
+interface Props extends React.PropsWithChildren {
     className?: string;
 }
 

@@ -19,6 +19,7 @@ package binlogplayer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -43,6 +44,7 @@ type DBClient interface {
 	IsClosed() bool
 	ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error)
 	ExecuteFetchMulti(query string, maxrows int) (qrs []*sqltypes.Result, err error)
+	SetMultiStatements(on bool) error
 	SupportsCapability(capability capabilities.FlavorCapability) (bool, error)
 }
 
@@ -98,7 +100,7 @@ func (dc *dbClientImpl) Connect() error {
 func (dc *dbClientImpl) Begin() error {
 	_, err := dc.dbConn.ExecuteFetch("begin", 1, false)
 	if err != nil {
-		LogError("BEGIN failed w/ error", err)
+		log.Error("BEGIN failed w/ error", slog.String("error", MessageTruncate(err.Error())))
 		dc.handleError(err)
 	}
 	return err
@@ -107,7 +109,7 @@ func (dc *dbClientImpl) Begin() error {
 func (dc *dbClientImpl) Commit() error {
 	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
 	if err != nil {
-		LogError("COMMIT failed w/ error", err)
+		log.Error("COMMIT failed w/ error", slog.String("error", MessageTruncate(err.Error())))
 		dc.dbConn.Close()
 	}
 	return err
@@ -116,7 +118,7 @@ func (dc *dbClientImpl) Commit() error {
 func (dc *dbClientImpl) Rollback() error {
 	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
 	if err != nil {
-		LogError("ROLLBACK failed w/ error", err)
+		log.Error("ROLLBACK failed w/ error", slog.String("error", MessageTruncate(err.Error())))
 		dc.dbConn.Close()
 	}
 	return err
@@ -134,9 +136,23 @@ func (dc *dbClientImpl) SupportsCapability(capability capabilities.FlavorCapabil
 	return dc.dbConn.SupportsCapability(capability)
 }
 
-// LogError logs a message after truncating it to avoid spamming logs
-func LogError(msg string, err error) {
-	log.Error(fmt.Sprintf("%s: %s", msg, MessageTruncate(err.Error())))
+// SetMultiStatements is part of the DBClient interface. It turns the ability to
+// send several statements in a single query on or off for the underlying
+// connection.
+func (dc *dbClientImpl) SetMultiStatements(on bool) error {
+	// Asking for the state the connection is already in costs a round trip and
+	// gains nothing. A closed connection is a different matter: closing it
+	// leaves on record the capability it negotiated while it was alive, so what
+	// it remembers says nothing about what it can do, and answering from that
+	// would report a capability the caller does not have.
+	if !dc.dbConn.IsClosed() && on == (dc.dbConn.Capabilities&mysql.CapabilityClientMultiStatements != 0) {
+		return nil
+	}
+	if err := dc.dbConn.SetMultiStatements(on); err != nil {
+		dc.handleError(err)
+		return err
+	}
+	return nil
 }
 
 // LimitString truncates string to specified size

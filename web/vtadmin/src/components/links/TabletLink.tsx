@@ -16,7 +16,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-interface Props {
+interface Props extends React.PropsWithChildren {
     alias: string | null | undefined;
     className?: string;
     clusterID: string | null | undefined;

@@ -26,6 +26,7 @@ import "binlogdata.proto";
 import "logutil.proto";
 import "mysqlctl.proto";
 import "query.proto";
+import "querythrottler.proto";
 import "replicationdata.proto";
 import "tabletmanagerdata.proto";
 import "topodata.proto";
@@ -476,6 +477,9 @@ message BackupRequest {
   // Optional queries to run on the mysqld instance prior to the backup and fields
   // to control the related behavior.
   tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
+  // IncludeBinlogs includes the source's binary logs in a full builtin backup.
+  // Restores use them automatically.
+  bool include_binlogs = 9;
 }
 
 message BackupResponse {
@@ -509,6 +513,14 @@ message BackupShardRequest {
   // Optional queries to run on the mysqld instance prior to the backup and fields
   // to control the related behavior.
   tabletmanagerdata.BackupRequest.InitSQL init_sql = 8;
+  // IncludeBinlogs includes the source's binary logs in a full builtin backup.
+  // Restores use them automatically.
+  bool include_binlogs = 9;
+  // TabletTypes is an ordered preference of the tablet types to take the backup from.
+  // When empty, the tablet with the lowest replication lag among REPLICA, RDONLY and
+  // SPARE is used. PRIMARY cannot be listed: AllowPrimary falls back to the primary
+  // when no listed type can take the backup.
+  repeated topodata.TabletType tablet_types = 10;
 }
 
 message CancelSchemaMigrationRequest {
@@ -556,6 +568,8 @@ message CheckThrottlerRequest {
   bool skip_request_heartbeats = 4;
   // OKIfNotExists asks the throttler to return OK even if the metric does not exist
   bool ok_if_not_exists = 5;
+  // ThrottlerType specifies which throttler to check (defaults to DEFAULT_LAG_THROTTLER)
+  tabletmanagerdata.ThrottlerType throttler_type = 6;
 }
 
 message CheckThrottlerResponse {
@@ -760,6 +774,13 @@ message EmergencyReparentShardRequest {
   // are detected. NewPrimary is required and must be an upfront undominated candidate.
   // Transactions only present on losing histories will not be preserved.
   bool allow_split_brain_promotion = 9;
+
+  // RequiredPosition is the minimum MySQL GTID set, for example <uuid>:1-100,
+  // that the new primary must have. The reparent fails if no candidate has
+  // received it, either applied or still in its relay log. The check supports
+  // MySQL GTID shards only. On any other shard, the reparent fails only after it
+  // stops replication and demotes a reachable primary. Empty means no requirement.
+  string required_position = 10;
 }
 
 message EmergencyReparentShardResponse {
@@ -1158,6 +1179,8 @@ message GetTabletsResponse {
 message GetThrottlerStatusRequest {
   // TabletAlias is the alias of the tablet to probe
   topodata.TabletAlias tablet_alias = 1;
+  // ThrottlerType specifies which throttler to query (defaults to DEFAULT_LAG_THROTTLER)
+  tabletmanagerdata.ThrottlerType throttler_type = 2;
 }
 
 message GetThrottlerStatusResponse {
@@ -2142,6 +2165,10 @@ message VDiffShowRequest {
   string target_keyspace = 2;
   // This will be 'all', 'last', or a UUID.
   string arg = 3;
+  // no_samples strips the per-table report's row-sample arrays from the
+  // response (keeping the scalar counters), avoiding gRPC message-size limits
+  // on diffs with large blob/JSON rows.
+  bool no_samples = 4;
 }
 
 message VDiffShowResponse {
@@ -2293,4 +2320,14 @@ message SetVtorcEmergencyReparentRequest {
 }
 
 message SetVtorcEmergencyReparentResponse {
+}
+
+message UpdateQueryThrottlerConfigRequest {
+  // Keyspace is the keyspace whose query throttler config to replace.
+  string keyspace = 1;
+  // QueryThrottlerConfig is the new config. It replaces the existing config as a whole.
+  querythrottler.Config query_throttler_config = 2;
+}
+
+message UpdateQueryThrottlerConfigResponse {
 }

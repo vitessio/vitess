@@ -143,6 +143,11 @@ func (e *Executor) newExecute(
 		for _, warning := range plan.Warnings {
 			safeSession.RecordWarning(warning)
 		}
+		// Planning set the flag. This runs for every attempt, as each one
+		// clears the warnings above.
+		if logStats.DoubleSlashComment && plan.QueryType != sqlparser.StmtShow {
+			safeSession.RecordWarning(doubleSlashCommentWarning())
+		}
 
 		// set the overall query timeout if it is not already set
 		ctx, cancel = vcursor.GetContextWithTimeOut(ctx)

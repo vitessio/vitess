@@ -863,27 +863,12 @@ func TestRewrites(in *testing.T) {
 		queryTimeout:                true,
 		transactionTimeout:          true,
 	}, {
-		in:                          "SHOW GLOBAL VARIABLES",
-		expected:                    "SHOW GLOBAL VARIABLES",
-		autocommit:                  true,
-		foreignKeyChecks:            true,
-		clientFoundRows:             true,
-		skipQueryPlanCache:          true,
-		sqlSelectLimit:              true,
-		transactionMode:             true,
-		workload:                    true,
-		version:                     true,
-		versionComment:              true,
-		ddlStrategy:                 true,
-		migrationContext:            true,
-		sessionUUID:                 true,
-		sessionEnableSystemSettings: true,
-		rawGTID:                     true,
-		rawTimeout:                  true,
-		sessTrackGTID:               true,
-		socket:                      true,
-		queryTimeout:                true,
-		transactionTimeout:          true,
+		// the global scope reports global values: only the server identity is substituted
+		in:             "SHOW GLOBAL VARIABLES",
+		expected:       "SHOW GLOBAL VARIABLES",
+		version:        true,
+		versionComment: true,
+		socket:         true,
 	}}
 	parser := NewTestParser()
 	for _, tc := range tests {
@@ -1014,6 +999,70 @@ func TestRewritesWithSetVarComment(in *testing.T) {
 			expected, err := parser.Parse(tc.expected)
 			require.NoError(err, "test expectation does not parse [%s]", tc.expected)
 
+			assert.Equal(t, String(expected), String(result.AST))
+		})
+	}
+}
+
+// TestNormalizeSelectLimit checks that sql_select_limit is applied exactly once, to the
+// statement-level SELECT or UNION, and never to UNION branches, derived tables or subqueries.
+func TestNormalizeSelectLimit(in *testing.T) {
+	tests := []struct{ in, expected string }{{
+		in:       "select a from t1",
+		expected: "select a from t1 limit 10",
+	}, {
+		in:       "select a from t1 limit 3",
+		expected: "select a from t1 limit 3",
+	}, {
+		in:       "select a from t1 union select a from t2",
+		expected: "select a from t1 union select a from t2 limit 10",
+	}, {
+		in:       "select a from t1 union all select a from t2",
+		expected: "select a from t1 union all select a from t2 limit 10",
+	}, {
+		in:       "select a from t1 union select a from t2 order by a",
+		expected: "select a from t1 union select a from t2 order by a limit 10",
+	}, {
+		in:       "select a from t1 union select a from t2 limit 3",
+		expected: "select a from t1 union select a from t2 limit 3",
+	}, {
+		in:       "select a from t1 union (select a from t2 union select a from t3)",
+		expected: "select a from t1 union (select a from t2 union select a from t3) limit 10",
+	}, {
+		in:       "(select a from t1 limit 2) union select a from t2",
+		expected: "(select a from t1 limit 2) union select a from t2 limit 10",
+	}, {
+		in:       "select a from (select a from t1 union select a from t2) dt",
+		expected: "select a from (select a from t1 union select a from t2) dt limit 10",
+	}, {
+		in:       "select a from t1 where a in (select a from t2 union select a from t3)",
+		expected: "select a from t1 where a in (select a from t2 union select a from t3) limit 10",
+	}, {
+		in:       "select a from (select a from t1) dt",
+		expected: "select a from (select a from t1) dt limit 10",
+	}}
+
+	parser := NewTestParser()
+	for _, tc := range tests {
+		in.Run(tc.in, func(t *testing.T) {
+			stmt, err := parser.Parse(tc.in)
+			require.NoError(t, err)
+			result, err := Normalize(
+				stmt,
+				NewReservedVars("v", nil),
+				map[string]*querypb.BindVariable{},
+				false,
+				"ks",
+				10,
+				"",
+				map[string]string{},
+				nil,
+				&fakeViews{},
+			)
+			require.NoError(t, err)
+
+			expected, err := parser.Parse(tc.expected)
+			require.NoError(t, err, "test expectation does not parse [%s]", tc.expected)
 			assert.Equal(t, String(expected), String(result.AST))
 		})
 	}

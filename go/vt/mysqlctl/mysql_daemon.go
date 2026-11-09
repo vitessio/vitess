@@ -61,6 +61,7 @@ type MysqlDaemon interface {
 	StartReplicationUntilAfter(ctx context.Context, pos replication.Position) error
 	StopReplication(ctx context.Context, hookExtraEnv map[string]string) error
 	StopIOThread(ctx context.Context) error
+	RestartReplicationReceiver(ctx context.Context, hookExtraEnv map[string]string) error
 	ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error)
 	PrimaryStatus(ctx context.Context) (replication.PrimaryStatus, error)
 	CollectFullStatusData(ctx context.Context) (*replicationdatapb.FullStatus, error)
@@ -122,6 +123,14 @@ type MysqlDaemon interface {
 
 	// ExecuteSuperQueryList executes a list of queries, no result
 	ExecuteSuperQueryList(ctx context.Context, queryList []string) error
+	// ExecuteSuperQueryListMulti executes a list of queries, each of which may
+	// hold several statements separated by a semicolon, no result
+	ExecuteSuperQueryListMulti(ctx context.Context, queryList []string) error
+
+	// ExecuteSuperQueryListTainted executes a list of queries whose session state
+	// changes must not leak into pooled connections; the connection used is
+	// discarded afterwards. Use for operator-supplied SQL.
+	ExecuteSuperQueryListTainted(ctx context.Context, queryList []string) error
 
 	// FetchSuperQuery executes one query, returns the result
 	FetchSuperQuery(ctx context.Context, query string) (*sqltypes.Result, error)

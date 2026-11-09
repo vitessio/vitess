@@ -17186,7 +17186,7 @@ INPUT
 select "foo" = "foo " collate latin1_test;
 END
 OUTPUT
-select 'foo' = 'foo ' collate latin1_test from dual
+select 'foo' = 'foo ' collate `latin1_test` from dual
 END
 INPUT
 select 'a' union select concat('a', -4.5);

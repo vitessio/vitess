@@ -20,8 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math"
+	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
@@ -284,12 +286,12 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			c, id, err := dynamic.ClusterFromString(r.Context(), urlDecoded)
 			if id != "" {
 				if err != nil {
-					log.Warn(fmt.Sprintf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err))
+					log.Warn("failed to extract valid cluster from cookie; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 				}
 
 				dynamicAPI = api.WithCluster(c, id)
 			} else {
-				log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err))
+				log.Warn("failed to unmarshal dynamic cluster spec from cookie; falling back to static API", slog.Any("error", err))
 			}
 		}
 	}
@@ -325,14 +327,20 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 		if exists {
 			isEqual, err := existingCluster.Equal(c)
 			if err != nil {
-				log.Error(fmt.Sprintf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err))
+				log.Error("Error checking for existing cluster equality with new cluster",
+					slog.String("existing_cluster_id", existingCluster.ID),
+					slog.String("cluster_id", id),
+					slog.Any("error", err))
 			}
 			shouldAddCluster = shouldAddCluster || !isEqual
 		}
 		if shouldAddCluster {
 			if existingCluster != nil {
 				if err := existingCluster.Close(); err != nil {
-					log.Error(err.Error() + "; some connections and goroutines may linger")
+					log.Error("failed to close cluster; some connections and goroutines may linger",
+						slog.String("existing_cluster_id", existingCluster.ID),
+						slog.String("cluster_id", id),
+						slog.Any("error", err))
 				}
 
 				idx := stdsort.Search(len(api.clusters), func(i int) bool {
@@ -351,7 +359,7 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
-			log.Info(fmt.Sprintf("API already has cluster with id %s, using that instead", id))
+			log.Info("API already has an equal cluster, using that instead", slog.String("cluster_id", id))
 		}
 	}
 
@@ -362,12 +370,100 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 	return dynamicAPI
 }
 
+// rejectCrossSiteRequests refuses a state-changing request that a browser sent on
+// behalf of a page from another site, so that a page cannot use a VTAdmin
+// operator's session cookie to change cluster state. Restricting those routes to
+// POST is not enough on its own: a browser sends a cookie with SameSite=None on a
+// cross-site form POST, and one without a SameSite attribute on a cross-site
+// top-level POST made shortly after it was set. CORS does not help either, since it
+// only keeps the page from reading the response.
+//
+// A request is accepted when it is not state-changing, when its Origin is one of
+// the configured CORS origins, when the browser reports it as same-origin or
+// user-initiated (Sec-Fetch-Site), or, from a browser that sends no fetch metadata,
+// when its Origin is the origin it was sent to. A request without an Origin or
+// fetch metadata does not come from a browser and is accepted.
+//
+// Only an explicitly configured origin is trusted: a "*" CORS origin lets any page
+// read responses, and must not also let any page change cluster state. The origin a
+// request was sent to is taken from the connection, so behind a proxy that
+// terminates TLS, browsers without fetch metadata are only accepted from the
+// public origin when it is configured as a CORS origin.
+func rejectCrossSiteRequests(allowedOrigins []string) mux.MiddlewareFunc {
+	allowed := make(map[string]bool, len(allowedOrigins))
+	for _, origin := range allowedOrigins {
+		if normalized, ok := normalizeOrigin(origin); ok {
+			allowed[normalized] = true
+		}
+	}
+
+	isAllowed := func(r *http.Request) bool {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+			return true
+		}
+		origin := r.Header.Get("Origin")
+		normalizedOrigin, validOrigin := normalizeOrigin(origin)
+		if validOrigin && allowed[normalizedOrigin] {
+			return true
+		}
+		switch r.Header.Get("Sec-Fetch-Site") {
+		case "same-origin", "none":
+			return true
+		case "":
+			if origin == "" {
+				return true
+			}
+			scheme := "http"
+			if r.TLS != nil {
+				scheme = "https"
+			}
+			requestOrigin, ok := normalizeOrigin(scheme + "://" + r.Host)
+			return validOrigin && ok && normalizedOrigin == requestOrigin
+		}
+		return false
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !isAllowed(r) {
+				http.Error(w, "cross-site request refused", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// normalizeOrigin returns origin as a lowercase scheme://host:port, with the
+// scheme's default port made explicit, so that two spellings of one origin compare
+// equal. It reports false for anything that is not an http or https origin,
+// including "*" and "null".
+func normalizeOrigin(origin string) (string, bool) {
+	u, err := url.Parse(origin)
+	if err != nil || u.Host == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+		return "", false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	port := u.Port()
+	switch {
+	case scheme == "http" && port == "":
+		port = "80"
+	case scheme == "https" && port == "":
+		port = "443"
+	case scheme != "http" && scheme != "https":
+		return "", false
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port), true
+}
+
 // Handler handles all routes under "/api" (see above)
 func (api *API) Handler() http.Handler {
 	router := mux.NewRouter().PathPrefix("/api").Subrouter()
 
 	router.Use(handlers.CORS(
 		handlers.AllowCredentials(), handlers.AllowedOrigins(api.options.HTTPOpts.CORSOrigins), handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})))
+	router.Use(rejectCrossSiteRequests(api.options.HTTPOpts.CORSOrigins))
 
 	httpAPI := vtadminhttp.NewAPI(api, api.options.HTTPOpts)
 
@@ -394,7 +490,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/launch", httpAPI.Adapt(vtadminhttp.LaunchSchemaMigration)).Name("API.LaunchSchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migration/{cluster_id}/{keyspace}/retry", httpAPI.Adapt(vtadminhttp.RetrySchemaMigration)).Name("API.RetrySchemaMigration").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/migrations/", httpAPI.Adapt(vtadminhttp.GetSchemaMigrations)).Name("API.GetSchemaMigrations")
-	router.HandleFunc("/movetables/{cluster_id}/complete", httpAPI.Adapt(vtadminhttp.MoveTablesComplete)).Name("API.MoveTablesComplete")
+	router.HandleFunc("/movetables/{cluster_id}/complete", httpAPI.Adapt(vtadminhttp.MoveTablesComplete)).Name("API.MoveTablesComplete").Methods("POST", "OPTIONS")
 	router.HandleFunc("/schema/{table}", httpAPI.Adapt(vtadminhttp.FindSchema)).Name("API.FindSchema")
 	router.HandleFunc("/schema/{cluster_id}/{keyspace}/{table}", httpAPI.Adapt(vtadminhttp.GetSchema)).Name("API.GetSchema")
 	router.HandleFunc("/schemas", httpAPI.Adapt(vtadminhttp.GetSchemas)).Name("API.GetSchemas")
@@ -415,8 +511,8 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.GetTablet)).Name("API.GetTablet").Methods("GET")
 	router.HandleFunc("/tablet/{tablet}", httpAPI.Adapt(vtadminhttp.DeleteTablet)).Name("API.DeleteTablet").Methods("DELETE", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/full_status", httpAPI.Adapt(vtadminhttp.GetFullStatus)).Name("API.GetFullStatus").Methods("GET")
-	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck")
-	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet")
+	router.HandleFunc("/tablet/{tablet}/healthcheck", httpAPI.Adapt(vtadminhttp.RunHealthCheck)).Name("API.RunHealthCheck").Methods("POST", "OPTIONS")
+	router.HandleFunc("/tablet/{tablet}/ping", httpAPI.Adapt(vtadminhttp.PingTablet)).Name("API.PingTablet").Methods("POST", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/refresh", httpAPI.Adapt(vtadminhttp.RefreshState)).Name("API.RefreshState").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/refresh_replication_source", httpAPI.Adapt(vtadminhttp.RefreshTabletReplicationSource)).Name("API.RefreshTabletReplicationSource").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/reload_schema", httpAPI.Adapt(vtadminhttp.ReloadTabletSchema)).Name("API.ReloadTabletSchema").Methods("PUT", "OPTIONS")
@@ -426,7 +522,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/tablet/{tablet}/stop_replication", httpAPI.Adapt(vtadminhttp.StopReplication)).Name("API.StopReplication").Methods("PUT", "OPTIONS")
 	router.HandleFunc("/tablet/{tablet}/externally_promoted", httpAPI.Adapt(vtadminhttp.TabletExternallyPromoted)).Name("API.TabletExternallyPromoted").Methods("POST")
 	router.HandleFunc("/transactions/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetUnresolvedTransactions)).Name("API.GetUnresolvedTransactions").Methods("GET")
-	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction")
+	router.HandleFunc("/transaction/{cluster_id}/{dtid}/conclude", httpAPI.Adapt(vtadminhttp.ConcludeTransaction)).Name("API.ConcludeTransaction").Methods("POST", "OPTIONS")
 	router.HandleFunc("/transaction/{cluster_id}/{dtid}/info", httpAPI.Adapt(vtadminhttp.GetTransactionInfo)).Name("API.GetTransactionInfo")
 	router.HandleFunc("/vschema/{cluster_id}/{keyspace}", httpAPI.Adapt(vtadminhttp.GetVSchema)).Name("API.GetVSchema")
 	router.HandleFunc("/vschemas", httpAPI.Adapt(vtadminhttp.GetVSchemas)).Name("API.GetVSchemas")
@@ -438,10 +534,10 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}", httpAPI.Adapt(vtadminhttp.GetWorkflow)).Name("API.GetWorkflow")
 	router.HandleFunc("/workflows", httpAPI.Adapt(vtadminhttp.GetWorkflows)).Name("API.GetWorkflows")
 	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/status", httpAPI.Adapt(vtadminhttp.GetWorkflowStatus)).Name("API.GetWorkflowStatus")
-	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow")
-	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow")
-	router.HandleFunc("/workflow/{cluster_id}/switchtraffic", httpAPI.Adapt(vtadminhttp.WorkflowSwitchTraffic)).Name("API.WorkflowSwitchTraffic")
-	router.HandleFunc("/workflow/{cluster_id}/delete", httpAPI.Adapt(vtadminhttp.WorkflowDelete)).Name("API.WorkflowDelete")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/start", httpAPI.Adapt(vtadminhttp.StartWorkflow)).Name("API.StartWorkflow").Methods("POST", "OPTIONS")
+	router.HandleFunc("/workflow/{cluster_id}/{keyspace}/{name}/stop", httpAPI.Adapt(vtadminhttp.StopWorkflow)).Name("API.StopWorkflow").Methods("POST", "OPTIONS")
+	router.HandleFunc("/workflow/{cluster_id}/switchtraffic", httpAPI.Adapt(vtadminhttp.WorkflowSwitchTraffic)).Name("API.WorkflowSwitchTraffic").Methods("POST", "OPTIONS")
+	router.HandleFunc("/workflow/{cluster_id}/delete", httpAPI.Adapt(vtadminhttp.WorkflowDelete)).Name("API.WorkflowDelete").Methods("POST", "OPTIONS")
 	router.HandleFunc("/workflow/{cluster_id}/materialize", httpAPI.Adapt(vtadminhttp.MaterializeCreate)).Name("API.MaterializeCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/movetables", httpAPI.Adapt(vtadminhttp.MoveTablesCreate)).Name("API.MoveTablesCreate").Methods("POST")
 	router.HandleFunc("/workflow/{cluster_id}/reshard", httpAPI.Adapt(vtadminhttp.ReshardCreate)).Name("API.ReshardCreate").Methods("POST")
@@ -462,14 +558,17 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	if ok {
 		delete(api.clusterMap, key)
 		if err := c.Close(); err != nil {
-			log.Error(err.Error() + "; some connections and goroutines may linger")
+			log.Error("failed to close cluster; some connections and goroutines may linger", slog.String("cluster_id", key), slog.Any("error", err))
 		}
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
 	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
 	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
-		log.Error(fmt.Sprintf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters)))
+		log.Error("Cannot remove cluster from api.clusters. Cluster index is out of range for clusters slice.",
+			slog.String("cluster_id", key),
+			slog.Int("cluster_index", clusterIndex),
+			slog.Int("cluster_count", len(api.clusters)))
 	}
 
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
@@ -766,7 +865,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 				}
 			}
 
-			log.Info(fmt.Sprintf("cluster %s has no tables named %s", c.ID, req.Table))
+			log.Info("cluster has no table with the requested name", slog.String("cluster_id", c.ID), slog.String("table", req.Table))
 		}(c)
 	}
 
@@ -2291,15 +2390,25 @@ func (api *API) RemoveKeyspaceCell(ctx context.Context, req *vtadminpb.RemoveKey
 
 // ReloadSchemaShard is part of the vtadminpb.VTAdminServer interface.
 func (api *API) ReloadSchemaShard(ctx context.Context, req *vtadminpb.ReloadSchemaShardRequest) (*vtadminpb.ReloadSchemaShardResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemas")
+	span, ctx := trace.NewSpan(ctx, "API.ReloadSchemaShard")
 	defer span.Finish()
+
+	span.Annotate("cluster_id", req.ClusterId)
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("shard", req.Shard)
 
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
 	}
 
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SchemaResource, rbac.ReloadAction) {
+		return nil, fmt.Errorf("%w: cannot reload schema for %s/%s in %s", errors.ErrUnauthorized, req.Keyspace, req.Shard, req.ClusterId)
+	}
+
 	res, err := c.Vtctld.ReloadSchemaShard(ctx, &vtctldatapb.ReloadSchemaShardRequest{
+		Keyspace:       req.Keyspace,
+		Shard:          req.Shard,
 		WaitPosition:   req.WaitPosition,
 		IncludePrimary: req.IncludePrimary,
 		Concurrency:    req.Concurrency,
@@ -2602,6 +2711,23 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 	return res, nil
 }
 
+// hasSideEffectsBeyondTables reports whether stmt does something that a read-only
+// transaction does not prevent: write its result to a file on the database host
+// with SELECT ... INTO OUTFILE or DUMPFILE, consume sequence values with SELECT NEXT
+// ... VALUES (which vttablet runs in a transaction of its own), or acquire or
+// release advisory locks.
+func hasSideEffectsBeyondTables(stmt sqlparser.Statement) bool {
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node.(type) {
+		case *sqlparser.SelectInto, *sqlparser.Nextval, *sqlparser.LockingFunc:
+			found = true
+		}
+		return !found, nil
+	}, stmt)
+	return found
+}
+
 // VExplain is part of the vtadminpb.VTAdminServer interface.
 func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*vtadminpb.VExplainResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "API.VExplain")
@@ -2645,6 +2771,34 @@ func (api *API) VExplain(ctx context.Context, req *vtadminpb.VExplainRequest) (*
 	vexplainStmt, ok := stmt.(*sqlparser.VExplainStmt)
 	if !ok {
 		return nil, vterrors.VT09017("Invalid VExplain statement")
+	}
+
+	// VEXPLAIN QUERIES, ALL and TRACE run the statement they explain, and
+	// MYSQLPLAN has MySQL EXPLAIN it, which calls the statement's functions in
+	// some query shapes, such as an IN list on an indexed column or a range that
+	// MIN or MAX resolves over an index. A function can have effects that
+	// nothing short of not calling it prevents, such as taking advisory locks.
+	// So these types are authorized separately from reading a plan. As a
+	// defense in depth for actors authorized to run them, the VTGate proxy runs
+	// QUERIES, ALL and TRACE in a read-only transaction, which keeps them from
+	// changing any table; MYSQLPLAN is not covered, because VTGate runs its
+	// EXPLAINs in a session of their own. Refuse what a read-only transaction
+	// does not prevent: a statement other than a SELECT, whose execution can
+	// take sequence values before it fails (an INSERT into a table with an
+	// auto_increment sequence), and the side effects of
+	// hasSideEffectsBeyondTables. PLAN and KEYS only have VTGate plan the
+	// statement, so they explain any statement.
+	switch vexplainStmt.Type {
+	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType, sqlparser.TraceVExplainType, sqlparser.MySQLVExplainType:
+		if !api.authz.IsAuthorized(ctx, c.ID, rbac.VExplainResource, rbac.ExecuteAction) {
+			return nil, fmt.Errorf("%w: VEXPLAIN %s can run the statement or its functions, which requires the %s action on %s", errors.ErrUnauthorized, vexplainStmt.Type.ToString(), rbac.ExecuteAction, rbac.VExplainResource)
+		}
+		if _, ok := vexplainStmt.Statement.(sqlparser.SelectStatement); !ok {
+			return nil, fmt.Errorf("%w: VEXPLAIN %s only accepts SELECT statements; use VEXPLAIN PLAN for other statements", errors.ErrInvalidRequest, vexplainStmt.Type.ToString())
+		}
+		if hasSideEffectsBeyondTables(vexplainStmt.Statement) {
+			return nil, fmt.Errorf("%w: VEXPLAIN %s does not run statements with INTO, sequence next-values or advisory lock functions; use VEXPLAIN PLAN for them", errors.ErrInvalidRequest, vexplainStmt.Type.ToString())
+		}
 	}
 
 	// Canonicalize the SQL using the AST, to prevent use of raw user input.
@@ -2695,7 +2849,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	defer api.vtexplainLock.Unlock()
 
 	lockWaitTime := time.Since(lockWaitStart)
-	log.Info(fmt.Sprintf("vtexplain lock wait time: %s", lockWaitTime))
+	log.Info("vtexplain lock wait time", slog.Duration("wait_time", lockWaitTime))
 
 	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
 

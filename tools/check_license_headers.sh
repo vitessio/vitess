@@ -34,11 +34,11 @@ while IFS= read -r -d '' file; do
   files+=("$file")
 done < <(git ls-files -z -- '*.go')
 
-if ! go tool -modfile=tools/addlicense/go.mod addlicense -check "${files[@]}"; then
+if ! go run -trimpath -modfile=tools/addlicense/go.mod github.com/google/addlicense -check "${files[@]}"; then
   echo
   echo "The Go files listed above are missing a license header."
   echo "Please add the standard Vitess license header, e.g. by running:"
-  echo "  go tool -modfile=tools/addlicense/go.mod addlicense -c 'The Vitess Authors.' <file>"
+  echo "  go run -trimpath -modfile=tools/addlicense/go.mod github.com/google/addlicense -c 'The Vitess Authors.' <file>"
   exit 1
 fi
 

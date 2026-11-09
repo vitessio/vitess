@@ -45,6 +45,7 @@ func TestDemuxResourceExhaustedErrors(t *testing.T) {
 		// and therefore shouldn't need to be teased out of another error.
 		{"in-memory row count exceeded allowed limit of 13", ERTooManyUserConnections},
 		{"rpc error: code = ResourceExhausted desc = Transaction throttled", EROutOfResources},
+		{"[QueryThrottler] query throttled: metric=lag value=20.00 breached threshold=10.00 throttle=100%", EROutOfResources},
 	}
 
 	for _, c := range cases {
@@ -186,6 +187,11 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSUnknownSQLState,
 		},
 		{
+			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "vttablet: rpc error: code = ResourceExhausted desc = [QueryThrottler] query throttled: metric=lag value=20.00 breached threshold=10.00 throttle=100%%"),
+			num: EROutOfResources,
+			ss:  SSUnknownSQLState,
+		},
+		{
 			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "vttablet: rpc error: code = AlreadyExists desc = Duplicate entry '1' for key 'PRIMARY' (errno 1062) (sqlstate 23000) (CallerID: userData1): Sql: \"insert into test(id, `name`) values (:vtg1 /* INT64 */, :vtg2 /* VARCHAR */)\", BindVars: {vtg1: \"type:INT64 value:\\\"1\\\"\"vtg2: \"type:VARCHAR value:\\\"(errno 1366) (sqlstate 10000)\\\"\"}"),
 			num: ERDupEntry,
 			ss:  SSConstraintViolation,
@@ -218,6 +224,36 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			assert.Equal(t, tc.ss, err.SQLState())
 			ha := err.HaErrorCode()
 			assert.Equal(t, tc.ha, ha)
+		})
+	}
+}
+
+func TestVtRpcErrorCodeLockErrors(t *testing.T) {
+	tCases := []struct {
+		name string
+		err  *SQLError
+		want vtrpc.Code
+	}{
+		{
+			name: "lock wait timeout",
+			err:  NewSQLError(ERLockWaitTimeout, SSUnknownSQLState, "Lock wait timeout exceeded; try restarting transaction"),
+			want: vtrpc.Code_DEADLINE_EXCEEDED,
+		},
+		{
+			name: "lock nowait",
+			err:  NewSQLError(ERLockNowait, SSUnknownSQLState, "Statement aborted because lock(s) could not be acquired immediately and NOWAIT is set."),
+			want: vtrpc.Code_DEADLINE_EXCEEDED,
+		},
+		{
+			name: "deadlock",
+			err:  NewSQLError(ERLockDeadlock, SSLockDeadlock, "Deadlock found when trying to get lock; try restarting transaction"),
+			want: vtrpc.Code_ABORTED,
+		},
+	}
+
+	for _, tc := range tCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.err.VtRpcErrorCode())
 		})
 	}
 }

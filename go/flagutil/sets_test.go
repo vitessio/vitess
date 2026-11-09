@@ -19,7 +19,10 @@ package flagutil
 import (
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sets"
 )
 
 func TestStringSetFlag(t *testing.T) {
@@ -46,9 +49,46 @@ func TestStringSetFlagWithEmptySet(t *testing.T) {
 
 	err := strSetFlag.Set("tmp")
 	require.NoError(t, err)
-	require.Empty(t, strSetFlag.ToSet())
+	require.Equal(t, "tmp", strSetFlag.String())
 
 	err = strSetFlag.Set("guvava")
 	require.NoError(t, err)
-	require.Equal(t, "guvava", strSetFlag.String())
+	require.Equal(t, "guvava, tmp", strSetFlag.String())
+}
+
+// A repeated flag must collect every occurrence, including the first one.
+func TestStringSetFlagRepeatedOnCommandLine(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		expected []string
+	}{
+		{
+			name:     "single occurrence",
+			args:     []string{"--foo", "x"},
+			expected: []string{"x"},
+		},
+		{
+			name:     "two occurrences",
+			args:     []string{"--foo", "x", "--foo", "y"},
+			expected: []string{"x", "y"},
+		},
+		{
+			name:     "repeated value",
+			args:     []string{"--foo", "x", "--foo", "y", "--foo", "x"},
+			expected: []string{"x", "y"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var strSetFlag StringSetFlag
+
+			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+			fs.Var(&strSetFlag, "foo", "")
+			require.NoError(t, fs.Parse(tt.args))
+
+			require.Equal(t, tt.expected, sets.List(strSetFlag.ToSet()))
+		})
+	}
 }

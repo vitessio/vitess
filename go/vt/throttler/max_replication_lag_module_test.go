@@ -19,6 +19,7 @@ package throttler
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -478,6 +480,39 @@ func TestMaxReplicationLagModule_Decrease(t *testing.T) {
 	// the guessed rate gets further reduced by 30 QPS (600 queries / 20s).
 	// Hence, the rate is set to 140 QPS (170 - 30).
 	tf.checkState(stateDecreaseAndGuessRate, 140, sinceZero(90*time.Second))
+}
+
+func TestMaxReplicationLagModule_Decrease_LagIncreaseAboveElapsedLogs(t *testing.T) {
+	tf := newTestFixtureWithMaxReplicationLag(t, 100)
+
+	tf.ratesHistory.add(sinceZero(69*time.Second), 100)
+	tf.process(lagRecord(sinceZero(70*time.Second), r2, 0))
+	tf.checkState(stateIncreaseRate, 200, sinceZero(70*time.Second))
+
+	// r2 @  90s, 30s lag: the lag grew by more than the 20s that elapsed.
+	tf.ratesHistory.add(sinceZero(70*time.Second), 100)
+	tf.ratesHistory.add(sinceZero(89*time.Second), 200)
+	record := lagRecord(sinceZero(90*time.Second), r2, 30)
+	record.Stats.HealthError = "health error text"
+	logs := logtest.Capture(t, slog.LevelInfo)
+	tf.process(record)
+
+	logged := logs.Record(t, "Replication lag increase is higher than the elapsed time. This should not happen.")
+	assert.Equal(t, "ERROR", logged["level"])
+	assert.Equal(t, "cell1-0000000002", logged["tablet"])
+	assert.EqualValues(t, 0, logged["previous_replication_lag_seconds"])
+	assert.EqualValues(t, 30, logged["replication_lag_seconds"])
+	assert.EqualValues(t, 30*time.Second, logged["lag_difference"])
+	assert.EqualValues(t, 20*time.Second, logged["elapsed"])
+	assert.NotContains(t, logs.String(), "health error text")
+
+	// The elapsed time is corrected to the lag difference, so the guessed rate is 0.
+	logged = logs.Record(t, "guessed Replication rate was <= 0")
+	assert.Equal(t, "WARN", logged["level"])
+	assert.EqualValues(t, 0, logged["guessed_replication_rate"])
+	assert.EqualValues(t, 200, logged["primary_rate"])
+	assert.EqualValues(t, 30*time.Second, logged["elapsed"])
+	assert.EqualValues(t, 30*time.Second, logged["lag_difference"])
 }
 
 // TestMaxReplicationLagModule_Decrease_NoReplicaHistory skips decreasing the

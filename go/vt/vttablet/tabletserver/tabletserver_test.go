@@ -22,15 +22,20 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
+
+	"google.golang.org/protobuf/encoding/protowire"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
@@ -39,6 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -55,9 +61,16 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/querythrottler/registry"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -158,7 +171,7 @@ func TestTabletServerPrimaryToReplica(t *testing.T) {
 	require.NoError(t, err)
 
 	// This makes txid2 busy
-	conn2, err := tsv.te.txPool.GetAndLock(state2.TransactionID, "for query")
+	conn2, err := tsv.te.txPool.GetAndLock(ctx, state2.TransactionID, "for query")
 	require.NoError(t, err)
 	ch := make(chan bool)
 	go func() {
@@ -936,6 +949,97 @@ func TestTabletServerStreamExecute(t *testing.T) {
 	err := tsv.StreamExecute(ctx, nil, &target, executeSQL, nil, 0, 0, nil, callback)
 	require.NoErrorf(t, err, "TabletServer.StreamExecute should success: %s, but get error: %v",
 		executeSQL, err)
+}
+
+// TestTabletServerRewritesDoubleSlashComments checks that a statement that
+// VTTablet sends to MySQL as written has each "//" comment rewritten to "#/",
+// so that MySQL skips the text that Vitess skipped.
+func TestTabletServerRewritesDoubleSlashComments(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("repair table test_table #/*x*/ , t2", &sqltypes.Result{})
+	db.AddRejectedQuery("repair table test_table //*x*/ , t2", errRejected)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	_, err := tsv.Execute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil)
+	require.NoError(t, err)
+	err = tsv.StreamExecute(ctx, nil, &target, "repair table test_table //*x*/ , t2", nil, 0, 0, nil, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+}
+
+// TestTabletServerRewritesDoubleSlashCommentsInSetupQueries checks that the
+// settings of a reserved connection and the queries run right after BEGIN,
+// which VTTablet sends to MySQL as written, have each "//" comment rewritten
+// to "#/".
+func TestTabletServerRewritesDoubleSlashCommentsInSetupQueries(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	db.AddQuery("set sql_mode = '' #/ x", &sqltypes.Result{})
+	db.AddRejectedQuery("set sql_mode = '' // x", errRejected)
+	// The settings pool runs the setting rendered from the parsed statement.
+	db.AddQuery("set sql_mode = ''", &sqltypes.Result{})
+	db.AddQuery("savepoint a #/ x", &sqltypes.Result{})
+	db.AddRejectedQuery("savepoint a // x", errRejected)
+	db.AddQuery("select 1 from dual limit 10001", &sqltypes.Result{})
+	// A temporary table needs a reserved connection, which is set up with
+	// the settings as written rather than through the settings pool.
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"28800",
+	))
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	settings := []string{"set sql_mode = '' // x"}
+	postBeginQueries := []string{"savepoint a // x"}
+
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target, settings, "create temporary table temp_t(id int)", nil, 0, nil)
+	require.NoError(t, err)
+	require.NoError(t, tsv.Release(ctx, &target, 0, state.ReservedID))
+
+	txState, _, err := tsv.BeginExecute(ctx, nil, &target, postBeginQueries, "select 1", nil, 0, nil)
+	require.NoError(t, err)
+	_, err = tsv.Rollback(ctx, &target, txState.TransactionID)
+	require.NoError(t, err)
+
+	reservedTxState, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, postBeginQueries, "create temporary table temp_t(id int)", nil, nil)
+	require.NoError(t, err)
+	require.NoError(t, tsv.Release(ctx, &target, reservedTxState.TransactionID, reservedTxState.ReservedID))
+
+	assert.Equal(t, 2, db.GetQueryCalledNum("set sql_mode = '' #/ x"), "query log: %s", db.QueryLog())
+	assert.Positive(t, db.GetQueryCalledNum("savepoint a #/ x"), "query log: %s", db.QueryLog())
+}
+
+// TestTabletServerTxSerializerKeyRewritesDoubleSlashComments checks that hot
+// row protection plans a statement with a "//" comment under the same plan
+// cache entry as its execution, which plans the rewritten text.
+func TestTabletServerTxSerializerKeyRewritesDoubleSlashComments(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	logStats := tabletenv.NewLogStats(ctx, "TestTxSerializerKey", streamlog.NewQueryLogConfigForTest())
+	key, table := tsv.computeTxSerializerKey(ctx, logStats, "update test_table set name_string = 'x' where pk = 1 // x", nil)
+	assert.Equal(t, "test_table where pk = 1", key)
+	assert.Equal(t, "test_table", table)
+
+	// execute plans the rewritten text without its margin comments. The plan
+	// cache admits a key only once it has been seen before, so plan again
+	// until it does.
+	query, _ := sqlparser.SplitMarginComments("update test_table set name_string = 'x' where pk = 1 #/ x")
+	planKey := PlanCacheKey(tsv.qe.getPlanCacheKey(query, false))
+	assert.Eventually(t, func() bool {
+		tsv.computeTxSerializerKey(ctx, logStats, "update test_table set name_string = 'x' where pk = 1 // x", nil)
+		_, ok := tsv.qe.plans.Get(planKey, tsv.qe.schema.Load().epoch)
+		return ok
+	}, 30*time.Second, 10*time.Millisecond, "the hot row key should plan the rewritten statement")
 }
 
 func TestTabletServerStreamExecuteComments(t *testing.T) {
@@ -2189,7 +2293,8 @@ func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
 	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
 	tl := newTestLogger()
 	defer tl.Close()
-	err := tsv.convertAndLogError(ctx, "select * from test_table where id = :a",
+	err := tsv.convertAndLogError(
+		ctx, "select * from test_table where id = :a",
 		map[string]*querypb.BindVariable{"a": sqltypes.Int64BindVariable(1)},
 		sqlerror.NewSQLError(1227, sqlerror.SSClientError, "failover in progress"),
 		nil,
@@ -2373,6 +2478,26 @@ func TestReserveBeginExecute(t *testing.T) {
 	for _, exp := range expected {
 		assert.Contains(t, splitOutput, exp, "expected queries to run")
 	}
+
+	// A temp-table DDL inside a transaction probes and captures too: the
+	// probe precedes the DDL, so even here — where a probe timeout always
+	// costs the whole connection — a lost connection surfaces as the DDL's
+	// error, and a first-temp-DDL-in-transaction connection is not left tied
+	// to the mutable global mirror after commit.
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"54321",
+	))
+	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, state.TransactionID, state.ReservedID, nil)
+	require.NoError(t, err)
+	conn, err := tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.True(t, conn.holdsTempTables, "a temp-table DDL must mark the connection")
+	assert.Equal(t, 54321*time.Second, conn.sessionWaitTimeout,
+		"the first temp-table DDL must capture the session wait_timeout inside a transaction too")
+	conn.Unlock()
+
 	err = tsv.Release(ctx, &target, state.TransactionID, state.ReservedID)
 	require.NoError(t, err)
 }
@@ -2396,8 +2521,276 @@ func TestReserveExecute_WithoutTx(t *testing.T) {
 	for _, exp := range expected {
 		assert.Contains(t, splitOutput, exp, "expected queries to run")
 	}
+
+	// A temporary-table DDL executed on the reserved connection marks it as
+	// holding temp tables — and counts it on the unmanaged temp-table gauge.
+	// The mark is sticky: a DROP TEMPORARY TABLE does not unmark it (net-zero
+	// tracking would require statement bookkeeping the tablet doesn't have; a
+	// stale mark only costs a longer idle grace).
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	db.AddQueryPattern("drop temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"12345",
+	))
+	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	conn, err := tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.True(t, conn.holdsTempTables, "a temp-table DDL must mark the connection")
+	assert.False(t, conn.keepAliveManaged)
+	// Auto mode captures the connection's own @@session.wait_timeout — the
+	// deadline mysqld actually enforces on it — when the first temp DDL runs.
+	assert.Equal(t, 12345*time.Second, conn.sessionWaitTimeout,
+		"the first temp-table DDL must capture the connection's session wait_timeout")
+	conn.Unlock()
+
+	// Ordering is load-bearing: the probe must precede the DDL, so that a
+	// probe that costs the connection fails the DDL visibly instead of
+	// destroying the temp table after the DDL already reported success.
+	probeIdx := strings.Index(db.QueryLog(), "select @@session.wait_timeout")
+	ddlIdx := strings.Index(db.QueryLog(), "create temporary table")
+	require.NotEqual(t, -1, probeIdx, "the probe must run")
+	require.NotEqual(t, -1, ddlIdx, "the DDL must run")
+	assert.Less(t, probeIdx, ddlIdx, "the wait_timeout probe must run before the temp-table DDL")
+	assert.EqualValues(t, 1, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "the marked, unmanaged connection must be on the gauge")
+
+	_, err = tsv.Execute(ctx, nil, &target, "drop temporary table temp_t", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	conn, err = tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.True(t, conn.holdsTempTables, "DROP TEMPORARY TABLE must not unmark the connection")
+	conn.Unlock()
+
+	// The probe runs once per connection: the second temp-table DDL (the
+	// drop) must not incur another mysqld round trip.
+	assert.Equal(t, 1, strings.Count(db.QueryLog(), "select @@session.wait_timeout"),
+		"the session wait_timeout probe must run at most once per connection")
+
+	// A keepalive touch marks the connection keepalive-managed, taking it off
+	// the unmanaged temp-table gauge.
+	require.NoError(t, tsv.te.txPool.KeepAliveReserved(state.ReservedID))
+	assert.Zero(t, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "a keepalive-managed connection must leave the gauge")
+
 	err = tsv.Release(ctx, &target, 0, state.ReservedID)
 	require.NoError(t, err)
+
+	// The probe respects request cancellation: it precedes the DDL, so no
+	// user-visible state exists yet and there is nothing to shield from the
+	// client's own cancellation — an already-canceled request must not send
+	// the hidden probe to MySQL at all, must capture nothing, and must leave
+	// the connection intact; the DDL itself returns the cancellation.
+	state, _, err = tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	conn, err = tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
+	require.NoError(t, err)
+	require.Zero(t, conn.sessionWaitTimeout, "fresh connection must have no captured wait_timeout yet")
+	probesBefore := strings.Count(db.QueryLog(), "select @@session.wait_timeout")
+	canceledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	qre := &QueryExecutor{ctx: canceledCtx, tsv: tsv}
+	qre.captureSessionWaitTimeout(conn)
+	assert.Equal(t, probesBefore, strings.Count(db.QueryLog(), "select @@session.wait_timeout"),
+		"a canceled request must not send the wait_timeout probe to MySQL")
+	assert.Zero(t, conn.sessionWaitTimeout, "no capture under a canceled request")
+	assert.False(t, conn.IsClosed(), "a canceled request's skipped probe must leave the connection intact")
+	conn.Unlock()
+	ddlsBefore := strings.Count(db.QueryLog(), "create temporary table")
+	_, err = tsv.Execute(canceledCtx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
+	require.Error(t, err, "a canceled request's temp-table DDL must return the cancellation")
+	assert.Equal(t, ddlsBefore, strings.Count(db.QueryLog(), "create temporary table"),
+		"a canceled request's DDL must not reach MySQL")
+	assert.Equal(t, probesBefore, strings.Count(db.QueryLog(), "select @@session.wait_timeout"),
+		"a canceled request's DDL must not probe either")
+	err = tsv.Release(ctx, &target, 0, state.ReservedID)
+	require.NoError(t, err)
+
+	// A benign probe failure must not fail the DDL: with the probe query
+	// erroring, the temp table is still created and capture falls back to
+	// the pool's global mirror (no value recorded, retried on the next
+	// temp-table DDL).
+	db.DeleteQuery("select @@session.wait_timeout")
+	state, _, err = tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err, "a failed wait_timeout probe must not fail the temp-table DDL")
+	conn, err = tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.True(t, conn.holdsTempTables, "the DDL must still mark the connection")
+	assert.Zero(t, conn.sessionWaitTimeout, "no capture on a failed probe")
+	conn.Unlock()
+	err = tsv.Release(ctx, &target, 0, state.ReservedID)
+	require.NoError(t, err)
+}
+
+// TestTempTableDropOnlyDoesNotMark pins that DROP TEMPORARY TABLE neither
+// marks the connection as holding temp tables nor probes wait_timeout: only a
+// CREATE does, matching vtgate, which marks the session on CREATE only. A
+// drop-only reserved session (DROP TEMPORARY TABLE IF EXISTS, then abandoned)
+// must be reclaimed on the normal timer, not held for the wait_timeout one.
+func TestTempTableDropOnlyDoesNotMark(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("drop temporary table .*", &sqltypes.Result{})
+	db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@session.wait_timeout", "int64"),
+		"12345",
+	))
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	defer func() { _ = tsv.Release(ctx, &target, 0, state.ReservedID) }()
+
+	_, err = tsv.Execute(ctx, nil, &target, "drop temporary table if exists temp_t", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	conn, err := tsv.te.txPool.GetAndLock(ctx, state.ReservedID, "for test")
+	require.NoError(t, err)
+	assert.False(t, conn.holdsTempTables, "a DROP must not mark the connection")
+	assert.Zero(t, conn.sessionWaitTimeout, "a DROP must not capture wait_timeout")
+	conn.Unlock()
+	assert.NotContains(t, db.QueryLog(), "select @@session.wait_timeout", "a DROP must not probe")
+	assert.Zero(t, tsv.te.txPool.scp.tempTableUnmanaged.Load(), "a drop-only connection must stay off the gauge")
+}
+
+// TestTempTableDropWithoutReservation pins that DROP TEMPORARY TABLE runs on
+// a session without a reserved connection: vtgate does not reserve for a
+// drop, so the tablet must accept it and let MySQL answer as it would for a
+// session holding no temporary tables (a no-op for IF EXISTS).
+func TestTempTableDropWithoutReservation(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+	db.AddQueryPattern("drop temporary table .*", &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	_, err := tsv.Execute(ctx, nil, &target, "drop temporary table if exists temp_t", nil, 0, 0, nil)
+	require.NoError(t, err, "a drop-only session must not be required to reserve a connection")
+	assert.Contains(t, db.QueryLog(), "drop temporary table if exists temp_t")
+}
+
+// TestTempTableSessionWaitTimeoutFollowsSet pins that the captured
+// @@session.wait_timeout follows a later SET wait_timeout run as a query on
+// the reserved connection (how vtgate pushes a session variable to existing
+// reservations). A stale capture would let the tablet reclaim the connection
+// at the old deadline, or outlive mysqld's new one. Connection settings need
+// no such refresh: they are applied on a fresh reservation before any DDL
+// can capture, and a connection holding a capture is already reserved.
+func TestTempTableSessionWaitTimeoutFollowsSet(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set @@sql_mode = ''", &sqltypes.Result{})
+	db.AddQueryPattern("set wait_timeout = .*", &sqltypes.Result{})
+	db.AddQueryPattern("create temporary table .*", &sqltypes.Result{})
+	probeAnswers := func(seconds string) {
+		db.AddQuery("select @@session.wait_timeout", sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("@@session.wait_timeout", "int64"), seconds))
+	}
+	captured := func(reservedID int64) time.Duration {
+		conn, err := tsv.te.txPool.GetAndLock(ctx, reservedID, "for test")
+		require.NoError(t, err)
+		defer conn.Unlock()
+		return conn.sessionWaitTimeout
+	}
+
+	probeAnswers("28800")
+	state, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	defer func() { _ = tsv.Release(ctx, &target, 0, state.ReservedID) }()
+	_, err = tsv.Execute(ctx, nil, &target, "create temporary table temp_t(id int)", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	require.Equal(t, 28800*time.Second, captured(state.ReservedID))
+
+	probeAnswers("60")
+	_, err = tsv.Execute(ctx, nil, &target, "set wait_timeout = 60", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 60*time.Second, captured(state.ReservedID), "a SET wait_timeout on the connection must refresh the capture")
+
+	// A SET of an unrelated variable must not re-probe.
+	probes := strings.Count(db.QueryLog(), "select @@session.wait_timeout")
+	_, err = tsv.Execute(ctx, nil, &target, "set @@sql_mode = ''", nil, 0, state.ReservedID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, probes, strings.Count(db.QueryLog(), "select @@session.wait_timeout"), "an unrelated SET must not re-probe")
+}
+
+// TestTempTableIdleTimeoutAutoWaitTimeout verifies the temp-table idle
+// timeout's auto mode (-1, the default): the tablet mirrors its own mysqld's
+// @@global.wait_timeout, read via the dba pool when the query service opens
+// and re-read on the schema-reload cadence so a runtime SET GLOBAL converges.
+// The notifier only triggers the read — it runs in the background, off the
+// schema engine's locks, with triggers dropped while one is in flight. A
+// failed read logs a warning and retains the last successfully read value,
+// so a transient error cannot snap existing temp-table connections back to
+// the much shorter pre-feature timer.
+func TestTempTableIdleTimeoutAutoWaitTimeout(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	waitTimeout := func() time.Duration { return tsv.te.txPool.scp.MysqlWaitTimeout() }
+	refreshDone := func() bool { return !tsv.qe.mysqlWaitTimeoutRefreshInFlight.Load() }
+
+	// Read triggered at query-service open (the fake serves 28800, mysqld's
+	// default); it lands asynchronously.
+	require.Eventually(t, func() bool { return waitTimeout() == 28800*time.Second },
+		30*time.Second, 10*time.Millisecond, "the open-triggered read must publish")
+
+	// A runtime SET GLOBAL wait_timeout converges on the schema-reload path:
+	// every reload broadcast triggers a background re-read.
+	db.AddQuery("select @@global.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.wait_timeout", "int64"),
+		"600",
+	))
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.Eventually(t, func() bool { return waitTimeout() == 600*time.Second },
+		30*time.Second, 10*time.Millisecond, "a reload-triggered read must converge")
+
+	// A trigger arriving while a read is in flight is dropped, not queued:
+	// with the read blocked, a second broadcast must not produce a second
+	// query — releasing the read would otherwise run the queued one.
+	var reads atomic.Int32
+	releaseRead := make(chan struct{})
+	db.SetBeforeFunc("select @@global.wait_timeout", func() {
+		reads.Add(1)
+		<-releaseRead
+	})
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.Eventually(t, func() bool { return reads.Load() == 1 },
+		30*time.Second, 10*time.Millisecond, "the first trigger must start a read")
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.False(t, refreshDone(), "the blocked read must still hold the in-flight guard")
+	close(releaseRead)
+	db.SetBeforeFunc("select @@global.wait_timeout", nil)
+	require.Eventually(t, refreshDone, 30*time.Second, 10*time.Millisecond)
+	assert.EqualValues(t, 1, reads.Load(), "a trigger during an in-flight read must be dropped")
+
+	// A failed read retains the last successfully read value: a transient
+	// error must not move existing temp-table connections back to the much
+	// shorter normal timer. The guard clearing after the broadcast proves
+	// the failed attempt ran before the retention assertion.
+	db.DeleteQuery("select @@global.wait_timeout")
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.Eventually(t, refreshDone, 30*time.Second, 10*time.Millisecond)
+	require.Equal(t, 600*time.Second, waitTimeout())
+
+	// The next successful read converges again.
+	db.AddQuery("select @@global.wait_timeout", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.wait_timeout", "int64"),
+		"28800",
+	))
+	tsv.se.BroadcastForTesting(nil, nil, nil, false)
+	require.Eventually(t, func() bool { return waitTimeout() == 28800*time.Second },
+		30*time.Second, 10*time.Millisecond)
 }
 
 func TestReserveExecute_WithTx(t *testing.T) {
@@ -2741,6 +3134,227 @@ func TestDatabaseNameReplaceByKeyspaceNameReserveBeginExecuteMethod(t *testing.T
 	require.NoError(t, err)
 }
 
+// The production shutdown path (servenv OnClose -> StopService) must shut the query
+// throttler down too, or its strategy updater and SrvKeyspace watch leak until exit.
+func TestTabletServerStopServiceShutsDownQueryThrottler(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
+	t.Cleanup(db.Close)
+
+	tsv.StopService()
+	requireQueryThrottlerShutDown(t, tsv)
+}
+
+// Same, for the Close path used by vtcombo and vtexplain.
+func TestTabletServerCloseShutsDownQueryThrottler(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
+	t.Cleanup(db.Close)
+	// Close does not stop the health-check ticker that StartService started.
+	t.Cleanup(tsv.StopService)
+
+	require.NoError(t, tsv.Close(ctx))
+	requireQueryThrottlerShutDown(t, tsv)
+}
+
+// requireQueryThrottlerShutDown checks that tsv's query throttler was shut down. A shut-down
+// throttler discards config updates, so enabling throttling must have no effect.
+func requireQueryThrottlerShutDown(t *testing.T, tsv *TabletServer) {
+	t.Helper()
+	enableAlwaysThrottle(t, tsv)
+	err := tsv.queryThrottler.Throttle(t.Context(), topodatapb.TabletType_PRIMARY, nil, sqlparser.StmtSelect, 0, nil)
+	require.NoError(t, err, "the query throttler applied a config update, so it was not shut down")
+}
+
+// CheckThrottler and GetThrottlerStatus must reach the dedicated query throttler for
+// DEDICATED_QUERY_THROTTLER, and the lag throttler otherwise.
+func TestTabletServerThrottlerByType(t *testing.T) {
+	useNoopTabletManagerClient(t)
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	require.NotSame(t, tsv.lagThrottler, tsv.qThrottler)
+	require.Same(t, tsv.qThrottler, tsv.throttlerByType(tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER))
+	require.Same(t, tsv.lagThrottler, tsv.throttlerByType(tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER))
+
+	// InitDBConfig must reach the dedicated throttler, which needs the keyspace to watch its config.
+	require.Equal(t, "keyspaceName", tsv.GetThrottlerStatus(ctx, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER).Keyspace)
+
+	// Tell the two apart by threshold, which each throttler keeps on its own.
+	tsv.qThrottler.MetricsThreshold.Store(math.Float64bits(42))
+	require.Equal(t, float64(42), tsv.GetThrottlerStatus(ctx, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER).Threshold)
+	require.NotEqual(t, float64(42), tsv.GetThrottlerStatus(ctx, tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER).Threshold)
+
+	// A throttler that isn't running answers every check with OK, so enable only the dedicated
+	// one: a check that reaches it reports the metric it hasn't collected yet. A primary's
+	// dedicated throttler probes each replica through this same call.
+	dedicatedChecks := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckAnyTotal", "")
+	before := dedicatedChecks.Get()
+	wg := tsv.qThrottler.Enable()
+	t.Cleanup(func() {
+		tsv.qThrottler.Disable()
+		if wg != nil {
+			wg.Wait()
+		}
+	})
+	result := tsv.CheckThrottler(ctx, "test", &throttle.CheckFlags{}, tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER)
+	require.Equal(t, tabletmanagerdatapb.CheckThrottlerResponseCode_UNKNOWN_METRIC, result.ResponseCode)
+	result = tsv.CheckThrottler(ctx, "test", &throttle.CheckFlags{}, tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER)
+	require.True(t, result.IsOK(), "the lag throttler is not running, so it must answer OK")
+
+	// Only a throttler built as the dedicated type records its checks under its own prefix.
+	assert.Eventually(t, func() bool {
+		return dedicatedChecks.Get() > before
+	}, 30*time.Second, 10*time.Millisecond)
+}
+
+// noopTabletManagerClient lets a throttler run in a test. Every call it would make goes to a
+// tablet in the topo, and these tests have none.
+type noopTabletManagerClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (*noopTabletManagerClient) Close() {}
+
+const noopTabletManagerProtocol = "tabletserver-test-noop"
+
+// The factory registry is process-wide and exits on a duplicate, e.g. with -count=2.
+var registerNoopTabletManagerClientOnce sync.Once
+
+// useNoopTabletManagerClient makes new tablet manager clients noopTabletManagerClients for the
+// rest of the test.
+func useNoopTabletManagerClient(t *testing.T) {
+	registerNoopTabletManagerClientOnce.Do(func() {
+		tmclient.RegisterTabletManagerClientFactory(noopTabletManagerProtocol, func() tmclient.TabletManagerClient {
+			return &noopTabletManagerClient{}
+		})
+	})
+	t.Cleanup(tmclienttest.SetProtocol("TabletServerTest", noopTabletManagerProtocol))
+}
+
+// alwaysThrottleStrategy throttles every statement the query throttler evaluates. Its message
+// names the statement type, tablet type, priority and query it was given, so tests can check
+// what each call site passes. Some plans, such as a savepoint's, have no query.
+type alwaysThrottleStrategy struct{}
+
+func (alwaysThrottleStrategy) Evaluate(_ context.Context, _ *querythrottlerpb.Config, tabletType topodatapb.TabletType, parsedQuery *sqlparser.ParsedQuery, statementType sqlparser.StatementType, _ int64, attrs registry.QueryAttributes) registry.ThrottleDecision {
+	query := "<no query>"
+	if parsedQuery != nil {
+		query = parsedQuery.Query
+	}
+	return registry.ThrottleDecision{
+		Throttle: true,
+		Message:  fmt.Sprintf("always throttle %s on %s with priority %d: %s", statementType, tabletType, attrs.Priority, query),
+	}
+}
+func (alwaysThrottleStrategy) Start()                  {}
+func (alwaysThrottleStrategy) Stop()                   {}
+func (alwaysThrottleStrategy) GetStrategyName() string { return "AlwaysThrottle" }
+
+type alwaysThrottleFactory struct{}
+
+func (alwaysThrottleFactory) New(registry.Deps) (registry.ThrottlingStrategyHandler, error) {
+	return alwaysThrottleStrategy{}, nil
+}
+
+// alwaysThrottleStrategyType is not a real strategy; it only selects alwaysThrottleFactory.
+const alwaysThrottleStrategyType = querythrottlerpb.ThrottlingStrategy(1000)
+
+// enableAlwaysThrottle makes tsv's query throttler throttle every statement it evaluates. The
+// tablet server recovers a panic in a query, and some calls still return no error after one, so
+// the test also fails if a query panics while this strategy is enabled.
+func enableAlwaysThrottle(t *testing.T, tsv *TabletServer) {
+	t.Helper()
+	panics := tsv.stats.InternalErrors.Counts()["Panic"]
+	t.Cleanup(func() {
+		assert.Equal(t, panics, tsv.stats.InternalErrors.Counts()["Panic"], "a query panicked while the always-throttle strategy was enabled")
+	})
+	// The registry is process-wide and Register panics on a duplicate, e.g. with -count=2.
+	if _, ok := registry.Get(alwaysThrottleStrategyType); !ok {
+		registry.Register(alwaysThrottleStrategyType, alwaysThrottleFactory{})
+	}
+	tsv.queryThrottler.HandleConfigUpdate(&topodatapb.SrvKeyspace{
+		QueryThrottlerConfig: &querythrottlerpb.Config{Enabled: true, Strategy: alwaysThrottleStrategyType},
+	}, nil)
+}
+
+// The query throttler skips statements whose rejection costs more than running them. A
+// rejection makes vtgate roll back the session's whole transaction, so statements inside one
+// are skipped: on the execute, stream and streamed DML paths, and the statements that
+// BeginExecute and ReserveBeginExecute replay when a shard joins a transaction late. Outside
+// a transaction, statements that take or release an advisory lock and SELECTs that read no
+// table are skipped too. Everything else is still throttled, including on a reserved
+// connection. Sequence fetches are covered by TestQueryExecutorThrottlerSkipsNextval.
+func TestTabletServerQueryThrottlerSkippedStatements(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "keyspaceName")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+	db.AddQueryPattern(".*", &sqltypes.Result{})
+	target := &querypb.Target{Keyspace: "keyspaceName", TabletType: topodatapb.TabletType_PRIMARY}
+	options := &querypb.ExecuteOptions{Priority: "20"}
+	noop := func(*sqltypes.Result) error { return nil }
+	// The statements read a table, so the no-table skip doesn't hide the case under test.
+	const selectTable = "select * from test_table"
+	const insert = "insert into test_table(pk) values(1)"
+	// VTGate replays savepoints, which the query throttler skips by type whatever the
+	// transaction, so the replayed statements also include one that only the in-transaction
+	// skip lets through.
+	const replayed = "flush logs"
+
+	// Reserve the connection before throttling, since its SET runs outside a transaction.
+	reservedState, _, err := tsv.ReserveExecute(ctx, nil, target, nil, "set sql_mode = ''", nil, 0, options)
+	require.NoError(t, err)
+
+	enableAlwaysThrottle(t, tsv)
+
+	txState, _, err := tsv.BeginExecute(ctx, nil, target, []string{"savepoint a", replayed}, selectTable, nil, 0, options)
+	require.NoError(t, err, "BeginExecute and the statements it replays must not be throttled")
+	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, txState.TransactionID, 0, options)
+	require.NoError(t, err, "a statement inside a transaction must not be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, txState.TransactionID, 0, options, noop)
+	require.NoError(t, err, "a streamed statement inside a transaction must not be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, insert, nil, txState.TransactionID, 0, options, noop)
+	require.NoError(t, err, "a streamed DML inside a transaction must not be throttled")
+
+	// get_lock needs a reserved connection, so ReserveBeginExecute takes its reserve-then-begin
+	// path rather than BeginExecute's.
+	reservedTxState, _, err := tsv.ReserveBeginExecute(ctx, nil, target, nil, []string{"savepoint a", replayed}, "select get_lock('a', 1) from dual", nil, options)
+	require.NoError(t, err, "ReserveBeginExecute and the statements it replays must not be throttled")
+	require.NotZero(t, reservedTxState.ReservedID)
+
+	// A lock function that reads a table, and DML that calls one, so that only the lock
+	// function skip applies.
+	_, err = tsv.Execute(ctx, nil, target, "select release_lock('a') from test_table", nil, 0, reservedState.ReservedID, options)
+	require.NoError(t, err, "releasing an advisory lock must not be throttled")
+	_, err = tsv.Execute(ctx, nil, target, "update test_table set name_string = release_lock('a') where pk = 1", nil, 0, 0, options)
+	require.NoError(t, err, "DML that releases an advisory lock must not be throttled")
+	_, err = tsv.Execute(ctx, nil, target, "select @@sql_mode orig, 'STRICT_TRANS_TABLES' new from dual", nil, 0, 0, options)
+	require.NoError(t, err, "a SELECT that names no table, such as the one vtgate runs to check a SET, must not be throttled")
+
+	// Each call site must also pass the statement's type, which alwaysThrottleStrategy names in
+	// its message: Execute, Stream, and Stream's DML path.
+	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, 0, 0, options)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit statement must be throttled")
+	require.ErrorContains(t, err, "always throttle SELECT on PRIMARY with priority 20: "+selectTable)
+	_, err = tsv.Execute(ctx, nil, target, "flush logs", nil, 0, 0, options)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement other than SELECT must be throttled even if it names no table")
+	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, 0, 0, options, noop)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit streamed statement must be throttled")
+	require.ErrorContains(t, err, "always throttle SELECT")
+	err = tsv.StreamExecute(ctx, nil, target, insert, nil, 0, 0, options, noop)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "an autocommit streamed DML must be throttled")
+	require.ErrorContains(t, err, "always throttle INSERT")
+	_, err = tsv.Execute(ctx, nil, target, selectTable, nil, 0, reservedState.ReservedID, options)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a statement on a reserved connection without a transaction must be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, selectTable, nil, 0, reservedState.ReservedID, options, noop)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a streamed statement on a reserved connection without a transaction must be throttled")
+	err = tsv.StreamExecute(ctx, nil, target, insert, nil, 0, reservedState.ReservedID, options, noop)
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "a streamed DML on a reserved connection without a transaction must be throttled")
+}
+
 func setupTabletServerTest(t testing.TB, ctx context.Context, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	cfg := tabletenv.NewDefaultConfig()
 	return setupTabletServerTestCustom(t, ctx, cfg, keyspaceName, vtenv.NewTestEnv())
@@ -2780,9 +3394,11 @@ func setupFakeDB(t testing.TB) *fakesqldb.DB {
 				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		})
-	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Variable_name|Value",
-		"varchar|int64"),
+	db.AddQuery("show status like 'Innodb_rows_read'", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"Variable_name|Value",
+			"varchar|int64",
+		),
 		"Innodb_rows_read|0",
 	))
 
@@ -2836,6 +3452,14 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 			}},
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
+			},
+		},
+		"select @@global.wait_timeout": {
+			Fields: []*querypb.Field{{
+				Type: sqltypes.Uint64,
+			}},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewVarBinary("28800")},
 			},
 		},
 		mysql.BaseShowPrimary: {
@@ -2946,4 +3570,353 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
+}
+
+// TestReservedConnKeepAliveBatch verifies the batched keepalive touch:
+// reservedID plus the additional reserved_conn_keep_alive_ids are refreshed in
+// one Execute, nothing is sent to MySQL, and ids that no longer exist are
+// reported back as rows so the caller can stop refreshing them.
+func TestReservedConnKeepAliveBatch(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	// Reserve two connections.
+	s1, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+	s2, _, err := tsv.ReserveExecute(ctx, nil, &target, nil, "set sql_mode = ''", nil, 0, nil)
+	require.NoError(t, err)
+
+	// A batched keepalive touch over both live ids (all ids in the list,
+	// reserved id 0 as vtgate sends it) reports none gone and runs nothing on
+	// MySQL.
+	queryLogBefore := db.QueryLog()
+	beatCtx := queryservice.ContextWithReservedConnKeepAlive(ctx, []int64{s1.ReservedID, s2.ReservedID})
+	res, err := tsv.Execute(beatCtx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, nil)
+	require.NoError(t, err)
+	require.Empty(t, res.Rows, "no reserved connection is gone")
+	require.Equal(t, queryLogBefore, db.QueryLog(), "keepalive must not run anything on MySQL")
+
+	// Release one; the next batch reports it gone while the other stays alive.
+	require.NoError(t, tsv.Release(ctx, &target, 0, s2.ReservedID))
+	res, err = tsv.Execute(beatCtx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, nil)
+	require.NoError(t, err)
+	require.Len(t, res.Rows, 1, "the released connection must be reported gone")
+	gone, err := res.Rows[0][0].ToInt64()
+	require.NoError(t, err)
+	require.Equal(t, s2.ReservedID, gone)
+
+	// An oversized batch is rejected before any allocation, bounding what a
+	// malformed or hostile request can cost.
+	huge := make([]int64, queryservice.ReservedConnKeepAliveMaxBatch+1)
+	_, err = tsv.Execute(queryservice.ContextWithReservedConnKeepAlive(ctx, huge), nil, &target,
+		"/* keepalive */ select 1", nil, 0, 0, nil)
+	require.ErrorContains(t, err, "exceeds the limit")
+
+	// A keepalive whose target type no longer matches this tablet (as after a
+	// REPLICA->RDONLY transition) is rejected as a wrong tablet, exactly like a
+	// normal query, so vtgate can drop the now-unreachable registration instead
+	// of pinning the orphaned reservation open. The live reserved id is untouched.
+	wrongTarget := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
+	s1Ctx := queryservice.ContextWithReservedConnKeepAlive(ctx, []int64{s1.ReservedID})
+	_, err = tsv.Execute(s1Ctx, nil, &wrongTarget, "/* keepalive */ select 1", nil, 0, 0, nil)
+	require.ErrorContains(t, err, vterrors.WrongTablet)
+	res, err = tsv.Execute(s1Ctx, nil, &target, "/* keepalive */ select 1", nil, 0, 0, nil)
+	require.NoError(t, err)
+	require.Empty(t, res.Rows, "the reserved connection must survive a rejected wrong-target keepalive")
+
+	// A temp-table activity refresh is an ordinary query on the reserved
+	// connection (it must reach mysqld to reset wait_timeout), locked under a
+	// purpose that colliding client commands wait out.
+	refreshCtx := queryservice.ContextWithReservedConnActivityRefresh(ctx)
+	db.AddQuery("select 1 from dual limit 10001", sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"))
+	res, err = tsv.Execute(refreshCtx, nil, &target, "select 1 from dual", nil, 0, s1.ReservedID, nil)
+	require.NoError(t, err, "an activity refresh must execute on the reserved connection")
+	require.Len(t, res.Rows, 1)
+
+	// The keepalive is not injectable through ExecuteOptions. A vtgate that
+	// predates the feature preserves unknown proto fields when it relays a
+	// client session's options, so a client could smuggle the retired
+	// ExecuteOptions fields 22/23 through it; the tablet must execute the
+	// query normally, not treat it as a keepalive touch.
+	relayed := protowire.AppendTag(nil, 22, protowire.VarintType)
+	relayed = protowire.AppendVarint(relayed, 1)
+	relayed = protowire.AppendTag(relayed, 23, protowire.BytesType)
+	relayed = protowire.AppendBytes(relayed, protowire.AppendVarint(nil, uint64(s1.ReservedID)))
+	injected := &querypb.ExecuteOptions{}
+	injected.ProtoReflect().SetUnknown(protoreflect.RawFields(relayed))
+	wantResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "int64"), "42")
+	db.AddQuery("select 42 from dual limit 10001", wantResult)
+	res, err = tsv.Execute(ctx, nil, &target, "select 42 from dual", nil, 0, 0, injected)
+	require.NoError(t, err)
+	require.Equal(t, wantResult.Rows, res.Rows,
+		"options relayed by an old vtgate must not turn a query into a keepalive touch: the query must execute")
+
+	require.NoError(t, tsv.Release(ctx, &target, 0, s1.ReservedID))
+
+	// A tablet that is not serving must reject keepalives just as it rejects
+	// queries: the keepalive goes through the same StartRequest gate, so
+	// reserved connections on a sick tablet are not pinned past the tablet
+	// timeout by a background refresh the tablet would never serve a query for.
+	require.NoError(t, tsv.SetServingType(topodatapb.TabletType_PRIMARY, time.Time{}, false, "test not serving"))
+	_, err = tsv.Execute(queryservice.ContextWithReservedConnKeepAlive(ctx, []int64{1}), nil, &target,
+		"/* keepalive */ select 1", nil, 0, 0, nil)
+	require.Error(t, err, "a not-serving tablet must reject keepalives")
+}
+
+// TestTabletServerValidatesBindVariables pins the tablet's own gate on wire
+// bind variables: a payload that is not a single literal token is rejected
+// with INVALID_ARGUMENT before any query reaches the database, on both the
+// Execute and StreamExecute paths, while a well-formed payload passes through.
+// vttablet builds statements from bind variables with no other validation.
+func TestTabletServerValidatesBindVariables(t *testing.T) {
+	ctx := t.Context()
+	db, tsv := setupTabletServerTest(t, ctx, "")
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	const sql = "select :v from test_table limit 1"
+	malformed := map[string]*querypb.BindVariable{
+		"v": {Type: querypb.Type_HEXVAL, Value: []byte("1; drop table test_table #")},
+	}
+	wellFormed := map[string]*querypb.BindVariable{
+		"v": {Type: querypb.Type_HEXVAL, Value: []byte("x'41'")},
+	}
+	db.AddQuery("select x'41' from test_table limit 1", &sqltypes.Result{})
+
+	t.Run("Execute rejects a malformed payload", func(t *testing.T) {
+		_, err := tsv.Execute(ctx, nil, &target, sql, malformed, 0, 0, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, db.GetQueryCalledNum("select 1; drop table test_table # from test_table limit 1"))
+	})
+	t.Run("StreamExecute rejects a malformed payload", func(t *testing.T) {
+		err := tsv.StreamExecute(ctx, nil, &target, sql, malformed, 0, 0, nil, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, db.GetQueryCalledNum("select 1; drop table test_table # from test_table limit 1"))
+	})
+
+	// The Reserve* entry points reach the same gate. With settings, a
+	// rejected request must not reserve a connection or apply them.
+	settings := []string{"set sql_mode = ''"}
+	db.AddQueryPattern("set sql_mode = ''", &sqltypes.Result{})
+	t.Run("ReserveExecute rejects a malformed payload", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, _, err := tsv.ReserveExecute(ctx, nil, &target, settings, sql, malformed, 0, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.ReservedID, "no connection should be reserved")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	t.Run("ReserveStreamExecute rejects a malformed payload", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, err := tsv.ReserveStreamExecute(ctx, nil, &target, settings, sql, malformed, 0, nil, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.ReservedID, "no connection should be reserved")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	// The four Begin* entry points validate before anything else, with or
+	// without hot row protection (off here, the default): a rejected request
+	// must not begin a transaction, reserve a connection or apply settings.
+	t.Run("BeginExecute rejects a malformed payload before begin", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, _, err := tsv.BeginExecute(ctx, nil, &target, nil, sql, malformed, 0, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	t.Run("BeginStreamExecute rejects a malformed payload before begin", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, sql, malformed, 0, nil, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	t.Run("ReserveBeginExecute rejects a malformed payload before begin", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, _, err := tsv.ReserveBeginExecute(ctx, nil, &target, settings, nil, sql, malformed, nil)
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Zero(t, state.ReservedID, "no connection should be reserved")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+	t.Run("ReserveBeginStreamExecute rejects a malformed payload before begin", func(t *testing.T) {
+		queryLog := db.QueryLog()
+		state, err := tsv.ReserveBeginStreamExecute(ctx, nil, &target, settings, nil, sql, malformed, nil, func(*sqltypes.Result) error { return nil })
+		require.Error(t, err)
+		assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		require.ErrorContains(t, err, "v: invalid HEXVAL literal")
+		assert.Zero(t, state.TransactionID, "no transaction should be begun")
+		assert.Zero(t, state.ReservedID, "no connection should be reserved")
+		assert.Equal(t, queryLog, db.QueryLog(), "nothing should reach MySQL")
+	})
+
+	t.Run("Execute passes a well-formed payload through", func(t *testing.T) {
+		_, err := tsv.Execute(ctx, nil, &target, sql, wellFormed, 0, 0, nil)
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum("select x'41' from test_table limit 1"))
+	})
+	t.Run("Execute passes a nested tuple through", func(t *testing.T) {
+		// The shape vtgate's engine sends for composite-key DML and foreign
+		// key cascades: a TUPLE bind variable whose members are tuples.
+		nested := map[string]*querypb.BindVariable{
+			"dml_vals": {
+				Type: querypb.Type_TUPLE,
+				Values: []*querypb.Value{
+					sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")}),
+					sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarChar("b")}),
+				},
+			},
+		}
+		const nestedSQL = "select 1 from test_table where (pk, name) in ::dml_vals limit 1"
+		const generated = "select 1 from test_table where (pk, `name`) in ((1, 'a'), (2, 'b')) limit 1"
+		db.AddQuery(generated, &sqltypes.Result{})
+
+		_, err := tsv.Execute(ctx, nil, &target, nestedSQL, nested, 0, 0, nil)
+		require.NoError(t, err)
+		assert.Equal(t, 1, db.GetQueryCalledNum(generated))
+	})
+}
+
+// TestTabletServerValidatesBindVariablesBeforeHotRowProtection pins that with
+// hot row protection enabled, BeginExecute and BeginStreamExecute reject a
+// malformed bind variable before hot row protection builds the serializer key
+// from it and before a transaction is begun. Without the early gate the
+// request still failed in Execute, but only after begin, and after
+// GenerateQuery had recursed into whatever tuple nesting the caller sent.
+func TestTabletServerValidatesBindVariablesBeforeHotRowProtection(t *testing.T) {
+	ctx := t.Context()
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.HotRowProtection.Mode = tabletenv.Enable
+	db, tsv := setupTabletServerTestCustom(t, ctx, cfg, "", vtenv.NewTestEnv())
+	t.Cleanup(tsv.StopService)
+	t.Cleanup(db.Close)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+
+	// Three levels of tuple nesting: one more than the tablet accepts. It goes
+	// with a list placeholder so that, without the gate, GenerateQuery would
+	// reach the tuple encoder and recurse into it; on a scalar placeholder
+	// FetchBindVar refuses a TUPLE before any encoding happens.
+	inner := sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(1)})
+	middle := sqltypes.TupleToProto([]sqltypes.Value{sqltypes.ProtoToValue(inner)})
+	payloads := map[string]struct {
+		sql string
+		bv  *querypb.BindVariable
+	}{
+		"malformed HEXNUM": {
+			sql: "update test_table set name_string = 'x' where pk = :pk",
+			bv:  &querypb.BindVariable{Type: querypb.Type_HEXNUM, Value: []byte("1; drop table test_table #")},
+		},
+		"tuple nested too deep": {
+			sql: "update test_table set name_string = 'x' where pk in ::pk",
+			bv:  &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{middle}},
+		},
+	}
+
+	for name, payload := range payloads {
+		sql := payload.sql
+		bindVars := map[string]*querypb.BindVariable{"pk": payload.bv}
+		t.Run("BeginExecute rejects "+name, func(t *testing.T) {
+			begins := db.GetQueryCalledNum("begin")
+			state, _, err := tsv.BeginExecute(ctx, nil, &target, nil, sql, bindVars, 0, nil)
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+			require.ErrorContains(t, err, "pk: ")
+			assert.Zero(t, state.TransactionID, "no transaction should be begun")
+			assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
+		})
+		t.Run("BeginStreamExecute rejects "+name, func(t *testing.T) {
+			begins := db.GetQueryCalledNum("begin")
+			state, err := tsv.BeginStreamExecute(ctx, nil, &target, nil, sql, bindVars, 0, nil, func(*sqltypes.Result) error { return nil })
+			require.Error(t, err)
+			assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+			require.ErrorContains(t, err, "pk: ")
+			assert.Zero(t, state.TransactionID, "no transaction should be begun")
+			assert.Equal(t, begins, db.GetQueryCalledNum("begin"), "begin should not reach MySQL")
+		})
+	}
+}
+
+// Exercise both settings entry points through the logger: sanitizing the request
+// query alone must not leave a setting's literals in the error message.
+func TestSanitizeLogMessagesConnectionSettingErrors(t *testing.T) {
+	const secret = "connection_setting_secret_21253"
+	tests := []struct {
+		name        string
+		setting     string
+		buildCode   vtrpcpb.Code
+		reserveCode vtrpcpb.Code
+	}{
+		{"subquery", "set @@sql_select_limit = (select count(*) from t where secret = '" + secret + "')", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"parse error", "set @@sql_select_limit = 1 '" + secret + "'", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"partial DDL", "create table a ignore me " + secret, vtrpcpb.Code_INTERNAL, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"not SET", "select '" + secret + "'", vtrpcpb.Code_INTERNAL, vtrpcpb.Code_INVALID_ARGUMENT},
+		{"non-constant sql_mode", "set sql_mode = concat('" + secret + "', '')", vtrpcpb.Code_UNIMPLEMENTED, vtrpcpb.Code_UNIMPLEMENTED},
+		{"invalid sql_mode", "set sql_mode = '" + secret + "'", vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_INVALID_ARGUMENT},
+	}
+	for _, tc := range tests {
+		for _, build := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/build=%t", tc.name, build), func(t *testing.T) {
+				ctx := t.Context()
+				cfg := tabletenv.NewDefaultConfig()
+				cfg.TerseErrors = false
+				cfg.SanitizeLogMessages = true
+				env := vtenv.NewTestEnv()
+				srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
+				tsv := NewTabletServer(ctx, env, "TabletServerTest", cfg, memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
+				tl := newTestLogger()
+				t.Cleanup(tl.Close)
+				// The rejected pre-query is separate from the request SQL that is logged.
+				settings := []string{"set sql_safe_updates = 1", tc.setting}
+				var err error
+				wantCode := tc.reserveCode
+				if build {
+					_, _, err = planbuilder.BuildSettingQuery(settings, env.Parser(), true)
+					wantCode = tc.buildCode
+				} else {
+					err = planbuilder.ValidateSettingsSQLMode(settings, env.Parser(), true)
+				}
+				require.Error(t, err)
+				assert.Equal(t, wantCode, vterrors.Code(err))
+				assert.NotContains(t, err.Error(), secret)
+				if tc.name == "parse error" || tc.name == "not SET" || tc.name == "partial DDL" {
+					assert.Contains(t, err.Error(), "position 2")
+				}
+				if tc.name == "invalid sql_mode" {
+					assert.Equal(t, vterrors.WrongValueForVar, vterrors.ErrState(err))
+				}
+				converted := tsv.convertAndLogError(ctx, "select 1 from dual", nil, err, nil)
+				require.Error(t, converted)
+				assert.Equal(t, wantCode, vterrors.Code(converted))
+				logs := tl.getLogs()
+				for _, logged := range logs {
+					assert.NotContains(t, logged, secret)
+					assert.NotContains(t, logged, tc.setting)
+				}
+				require.Len(t, logs, 1)
+				logged := logs[0]
+				assert.Contains(t, logged, err.Error())
+				assert.NotContains(t, logged, secret)
+				assert.NotContains(t, logged, tc.setting)
+			})
+		}
+	}
 }

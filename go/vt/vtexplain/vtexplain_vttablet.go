@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -118,6 +119,10 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 	}
 	config.EnableOnlineDDL = false
 	config.EnableTableGC = false
+	// Auto mode (the default) reads @@global.wait_timeout on a background
+	// goroutine, and that read would land in the recorded queries at a
+	// nondeterministic point; the fake tablets serve no real connections.
+	config.TempTableIdleTimeout = 0
 
 	// XXX much of this is cloned from the tabletserver tests
 	tsv := tabletserver.NewTabletServer(ctx, env, topoproto.TabletAliasString(t.Alias), config, ts, t.Alias, srvTopoCounts)
@@ -544,6 +549,14 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options, collatio
 func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	// The connection-setup statement every Vitess-created connection runs (see
+	// sqlmode.NeutralizeSessionQuery) is connection state, not query execution: it is
+	// answered without being recorded, so the explain output only shows the queries the
+	// statement under explanation caused.
+	if sqlmode.IsSessionSetupQuery(query) {
+		return callback(&sqltypes.Result{})
+	}
 
 	// If query is part of rejected list then return error right away.
 	if err := t.db.GetRejectedQueryResult(query); err != nil {

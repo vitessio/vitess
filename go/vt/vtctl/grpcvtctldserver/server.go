@@ -22,9 +22,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,7 +37,10 @@ import (
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 
+	"vitess.io/vitess/go/vt/proto/querythrottler"
+
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
@@ -65,6 +70,7 @@ import (
 	vtorcdatapb "vitess.io/vitess/go/vt/proto/vtorcdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/schemamanager"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -96,6 +102,7 @@ const (
 // VtctldServer implements the Vtctld RPC service protocol.
 type VtctldServer struct {
 	vtctlservicepb.UnimplementedVtctldServer
+	env *vtenv.Environment
 	ts  *topo.Server
 	tmc tmclient.TabletManagerClient
 	ws  *workflow.Server
@@ -106,6 +113,7 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 	tmc := tmclient.NewTabletManagerClient()
 
 	return &VtctldServer{
+		env: env,
 		ts:  ts,
 		tmc: tmc,
 		ws:  workflow.NewServer(env, ts, tmc),
@@ -115,10 +123,12 @@ func NewVtctldServer(env *vtenv.Environment, ts *topo.Server) *VtctldServer {
 // NewTestVtctldServer returns a new VtctldServer for the given topo server
 // AND tmclient for use in tests. This should NOT be used in production.
 func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *VtctldServer {
+	env := vtenv.NewTestEnv()
 	return &VtctldServer{
+		env: env,
 		ts:  ts,
 		tmc: tmc,
-		ws:  workflow.NewServer(vtenv.NewTestEnv(), ts, tmc),
+		ws:  workflow.NewServer(env, ts, tmc),
 	}
 }
 
@@ -443,6 +453,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("concurrency", req.Concurrency)
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 	span.Annotate("backup_engine", req.BackupEngine)
+	span.Annotate("include_binlogs", req.IncludeBinlogs)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -470,38 +481,31 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 	span.Annotate("upgrade_safe", req.UpgradeSafe)
 	span.Annotate("mysql_shutdown_timeout", req.MysqlShutdownTimeout)
+	span.Annotate("include_binlogs", req.IncludeBinlogs)
+	span.Annotate("tablet_types", topoproto.MakeStringTypeCSV(req.TabletTypes))
+
+	if slices.Contains(req.TabletTypes, topodatapb.TabletType_PRIMARY) {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+			"type PRIMARY cannot be listed in tablet types. to fall back to the primary when no listed type can take the backup, rerun the backup command with --allow-primary")
+		return err
+	}
+
+	if unsupported := reparentutil.UnsupportedBackupTabletTypes(req.TabletTypes); len(unsupported) > 0 {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet type %s cannot take a backup of a shard",
+			topoproto.MakeStringTypeCSV(unsupported))
+		return err
+	}
 
 	tablets, stats, err := reparentutil.ShardReplicationStatuses(ctx, s.ts, s.tmc, req.Keyspace, req.Shard)
 	// Instead of return on err directly, only return err when no tablets for backup at all
-	if err != nil {
-		tablets = reparentutil.GetBackupCandidates(tablets, stats)
-		// Only return err when no usable tablet
-		if len(tablets) == 0 {
-			return err
-		}
+	if err != nil && len(reparentutil.GetBackupCandidates(tablets, stats)) == 0 {
+		return err
 	}
 
-	var (
-		backupTablet    *topodatapb.Tablet
-		backupTabletLag uint32
-	)
+	var backupTablet *topodatapb.Tablet
 
-	for i, tablet := range tablets {
-		switch tablet.Type {
-		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY, topodatapb.TabletType_SPARE:
-		default:
-			continue
-		}
-
-		// ignore tablet with an unknown replication lag status
-		if stats[i].ReplicationLagUnknown {
-			continue
-		}
-
-		if lag := stats[i].ReplicationLagSeconds; backupTablet == nil || lag < backupTabletLag {
-			backupTablet = tablet.Tablet
-			backupTabletLag = lag
-		}
+	if tablet := reparentutil.ChooseBackupTablet(tablets, stats, req.TabletTypes); tablet != nil {
+		backupTablet = tablet.Tablet
 	}
 
 	if backupTablet == nil && req.AllowPrimary {
@@ -516,6 +520,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 	}
 
 	if backupTablet == nil {
+		// A tablet that could not report may be one of the listed types, so give the status errors as the reason.
+		if err != nil && len(req.TabletTypes) > 0 {
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup: %v", err)
+			return err
+		}
 		err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no tablet available for backup")
 		return err
 	}
@@ -529,6 +538,7 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 		InitSql:              req.InitSql,
+		IncludeBinlogs:       req.IncludeBinlogs,
 	}
 	err = s.backupTablet(ctx, backupTablet, r, stream)
 	return err
@@ -546,6 +556,7 @@ func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tabl
 		UpgradeSafe:          req.UpgradeSafe,
 		MysqlShutdownTimeout: req.MysqlShutdownTimeout,
 		InitSql:              req.InitSql,
+		IncludeBinlogs:       req.IncludeBinlogs,
 	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
@@ -758,6 +769,7 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 		Scope:                 req.Scope,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,
+		ThrottlerType:         req.ThrottlerType,
 	}
 	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
 	if err != nil {
@@ -785,7 +797,9 @@ func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.
 		return nil, err
 	}
 
-	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{})
+	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{
+		ThrottlerType: req.ThrottlerType,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -1226,7 +1240,15 @@ func (s *VtctldServer) DeleteShards(ctx context.Context, req *vtctldatapb.Delete
 	span.Annotate("recursive", req.Recursive)
 	span.Annotate("force", req.Force)
 
+	// Skip repeated shards: without Force, the second delete would fail to
+	// lock the shard that the first one deleted.
+	deleted := make(map[string]bool, len(req.Shards))
 	for _, shard := range req.Shards {
+		key := topoproto.KeyspaceShardString(shard.Keyspace, shard.Name)
+		if deleted[key] {
+			continue
+		}
+		deleted[key] = true
 		if err2 := deleteShard(ctx, s.ts, shard.Keyspace, shard.Name, req.Recursive, req.EvenIfServing, req.Force); err2 != nil {
 			err = err2
 			return nil, err
@@ -1312,6 +1334,12 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 	span.Annotate("shard", req.Shard)
 	span.Annotate("new_primary_alias", topoproto.TabletAliasString(req.NewPrimary))
 	span.Annotate("allow_split_brain_promotion", req.AllowSplitBrainPromotion)
+	span.Annotate("required_position", req.RequiredPosition)
+
+	requiredPosition, err := replication.DecodePositionDefaultFlavor(req.RequiredPosition, replication.Mysql56FlavorID)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid required position: %s", err.Error())
+	}
 
 	ignoreReplicaAliases := topoproto.TabletAliasList(req.IgnoreReplicas).ToStringSlice()
 	span.Annotate("ignore_replicas", strings.Join(ignoreReplicaAliases, ","))
@@ -1347,6 +1375,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 			AllowSplitBrainPromotion:  req.AllowSplitBrainPromotion,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 			ExpectedPrimaryAlias:      req.ExpectedPrimary,
+			RequiredPosition:          requiredPosition,
 		},
 	)
 
@@ -4887,8 +4916,9 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 
 	var shards []string
 	if len(req.Shards) != 0 {
-		// If the user has specified a list of specific shards, we'll use that.
-		shards = req.Shards
+		// If the user has specified a list of specific shards, we'll use that,
+		// without repeats.
+		shards = slices.Compact(slices.Sorted(slices.Values(req.Shards)))
 	} else {
 		// Validate all of the shards.
 		shards, err = s.ts.GetShardNames(ctx, req.Keyspace)
@@ -4978,8 +5008,9 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 
 	var shards []string
 	if len(req.Shards) != 0 {
-		// If the user has specified a list of specific shards, we'll use that.
-		shards = req.Shards
+		// If the user has specified a list of specific shards, we'll use that,
+		// without repeats.
+		shards = slices.Compact(slices.Sorted(slices.Values(req.Shards)))
 	} else {
 		// Otherwise we look at all the shards in the keyspace.
 		shards, err = s.ts.GetShardNames(ctx, keyspace)
@@ -5088,7 +5119,15 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 						return
 					}
 
-					tmutils.DiffSchema(topoproto.TabletAliasString(referenceAlias), referenceSchema, topoproto.TabletAliasString(alias), replicaSchema, &aliasErrs)
+					diffEnv := schemadiff.NewEnv(s.env, s.env.CollationEnv().DefaultConnectionCharset())
+					tmutils.DiffSchemaWithEnvironment(
+						diffEnv,
+						topoproto.TabletAliasString(referenceAlias),
+						referenceSchema,
+						topoproto.TabletAliasString(alias),
+						replicaSchema,
+						&aliasErrs,
+					)
 				}(alias)
 			}
 			aliasWg.Wait()
@@ -5459,7 +5498,8 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 
 	defer panicHandler(&err)
 	keyspace := req.Keyspace
-	shards := req.Shards
+	// Validate each shard once, even if the request repeats it.
+	shards := slices.Compact(slices.Sorted(slices.Values(req.Shards)))
 	excludeTables := req.ExcludeTables
 	includeViews := req.IncludeViews
 
@@ -5906,4 +5946,229 @@ func (s *VtctldServer) GetKeyspaceRoutingRules(ctx context.Context, req *vtctlda
 	return &vtctldatapb.GetKeyspaceRoutingRulesResponse{
 		KeyspaceRoutingRules: rules,
 	}, nil
+}
+
+func validateQueryThrottlerConfigRequest(req *vtctldatapb.UpdateQueryThrottlerConfigRequest) error {
+	if req.GetKeyspace() == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace is required")
+	}
+
+	if req.GetQueryThrottlerConfig() == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query_throttler_config is required")
+	}
+
+	return validateQueryThrottlerConfig(req.GetQueryThrottlerConfig())
+}
+
+func validateQueryThrottlerConfig(cfg *querythrottler.Config) error {
+	if !cfg.GetEnabled() {
+		return nil
+	}
+
+	switch cfg.GetStrategy() {
+	case querythrottler.ThrottlingStrategy_TABLET_THROTTLER:
+		return validateTabletThrottlerStrategyConfig(cfg)
+
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "strategy must be TABLET_THROTTLER when enabled is true")
+	}
+}
+
+func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_strategy_config is required when strategy is TABLET_THROTTLER")
+	}
+
+	if len(tsc.GetTabletRules()) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
+	}
+
+	// seenBareMetrics maps a bare metric name ("lag") to the first rule key that produced
+	// it, across the whole config, so scope collisions are caught globally.
+	seenBareMetrics := make(map[string]string)
+	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
+		// Only accept serving tablet types, spelled the way the runtime reports them.
+		if !base.IsQueryThrottlerTabletType(tabletType) {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported tablet type %q; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL", tabletType)
+		}
+		if len(stmtRuleSet.GetStatementRules()) == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "statement_rules cannot be empty (tablet_type=%s)", tabletType)
+		}
+		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			// Reject statement types that the query throttler never evaluates, such as BEGIN and
+			// SAVEPOINT, and those it must not reject: MIGRATION, SET and UNLOCK_TABLES. See
+			// base.IsQueryThrottlerStatementType.
+			if !base.IsQueryThrottlerStatementType(stmtType) {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type %q (tablet_type=%s)", stmtType, tabletType)
+			}
+			if len(metricRuleSet.GetMetricRules()) == 0 {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)
+			}
+			for metricName, rule := range metricRuleSet.GetMetricRules() {
+				_, mName, err := base.DisaggregateMetricName(metricName)
+				if err != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"unknown metric name %q (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
+				// The custom metric reads from a custom_query this config cannot supply, so
+				// it always reads zero and never breaches. Reject until that is wired up.
+				if mName == base.CustomMetricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"custom metric is not supported by the query throttler (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
+				}
+				// "default", "self" and "shard" name the throttler's default metric, a v20-compatible alias that
+				// reads lag here. A rule spelled this way would report its rejections as metric=default, so a lag
+				// rule must name lag.
+				if mName == base.DefaultMetricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"metric %q names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
+				// Two different keys for the same bare metric ("self/lag" and "shard/lag")
+				// collapse into one CheckResult entry, so one of them silently stops
+				// matching. Repeating the same exact key across statements is fine.
+				bare := mName.String()
+				if prevKey, ok := seenBareMetrics[bare]; ok && prevKey != metricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"metric %q is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config", bare)
+				}
+				seenBareMetrics[bare] = metricName
+				if len(rule.GetThresholds()) == 0 {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"thresholds cannot be empty (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
+				}
+				// Thresholds are matched by the highest breached 'above', so two thresholds
+				// with the same 'above' leave one of them unreachable.
+				seenAbove := make(map[float64]int)
+				for i, t := range rule.GetThresholds() {
+					// NaN compares false against everything and infinities leave no reachable
+					// boundary, so either would make the threshold silently unusable.
+					if math.IsNaN(t.GetAbove()) || math.IsInf(t.GetAbove(), 0) {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'above' must be a finite number, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					if t.GetAbove() < 0 {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					if j, ok := seenAbove[t.GetAbove()]; ok {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] and threshold[%d] have the same 'above' %v (tablet_type=%s, statement=%s, metric=%s)",
+							j, i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					seenAbove[t.GetAbove()] = i
+
+					if t.GetThrottle() < 0 || t.GetThrottle() > 100 {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'throttle' must be between 0 and 100, got %d (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetThrottle(), tabletType, stmtType, metricName)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// sanitizeQueryThrottlerConfig normalizes a Config in-place. For the
+// TABLET_THROTTLER strategy it sorts every threshold slice ascending by Above
+// so that the binary search in GetThrottleDecision works correctly.
+func sanitizeQueryThrottlerConfig(cfg *querythrottler.Config) {
+	if cfg == nil {
+		return
+	}
+
+	if cfg.GetStrategy() != querythrottler.ThrottlingStrategy_TABLET_THROTTLER {
+		return
+	}
+
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return
+	}
+
+	for _, stmtRuleSet := range tsc.GetTabletRules() {
+		for _, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for _, rule := range metricRuleSet.GetMetricRules() {
+				ts := rule.GetThresholds()
+				if len(ts) > 1 {
+					sort.Slice(ts, func(i, j int) bool {
+						return ts[i].GetAbove() < ts[j].GetAbove()
+					})
+				}
+			}
+		}
+	}
+}
+
+func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtctldatapb.UpdateQueryThrottlerConfigRequest) (resp *vtctldatapb.UpdateQueryThrottlerConfigResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateQueryThrottlerConfig")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	if err := validateQueryThrottlerConfigRequest(req); err != nil {
+		return nil, err
+	}
+
+	sanitizeQueryThrottlerConfig(req.GetQueryThrottlerConfig())
+
+	span.Annotate("keyspace", req.GetKeyspace())
+	span.Annotate("strategy", req.GetQueryThrottlerConfig().GetStrategy())
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "UpdateQueryThrottlerConfig")
+	if lockErr != nil {
+		return nil, topoErrorf(lockErr, "failed to lock keyspace %s", req.Keyspace)
+	}
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, topoErrorf(err, "failed to get keyspace %s", req.Keyspace)
+	}
+
+	update := func(_ *querythrottler.Config) *querythrottler.Config {
+		return req.GetQueryThrottlerConfig()
+	}
+
+	ki.QueryThrottlerConfig = update(ki.QueryThrottlerConfig)
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, topoErrorf(err, "failed to update keyspace %s", req.Keyspace)
+	}
+
+	_, err = s.ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, req.Keyspace, nil, update)
+	if err != nil {
+		// The Keyspace already holds the new config, and rewriting it is idempotent,
+		// so re-running the command is how to reach the cells that failed. Cells that
+		// fail make a PartialResult, which topoErrorf reports as UNAVAILABLE.
+		return nil, topoErrorf(err, "updated keyspace %s, but not all of its SrvKeyspaces; re-run the command to update the rest", req.Keyspace)
+	}
+
+	return &vtctldatapb.UpdateQueryThrottlerConfigResponse{}, nil
+}
+
+// topoErrorf adds context to a topo error and gives it a vtrpc code. Topo errors carry
+// no vtrpc code of their own, so callers would otherwise see UNKNOWN.
+func topoErrorf(err error, format string, args ...any) error {
+	code := vterrors.Code(err)
+	if code == vtrpcpb.Code_UNKNOWN {
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			code = vtrpcpb.Code_NOT_FOUND
+		case topo.IsErrType(err, topo.BadVersion):
+			code = vtrpcpb.Code_ABORTED
+		case topo.IsErrType(err, topo.Timeout):
+			code = vtrpcpb.Code_DEADLINE_EXCEEDED
+		case topo.IsErrType(err, topo.Interrupted):
+			code = vtrpcpb.Code_CANCELED
+		default:
+			code = vtrpcpb.Code_UNAVAILABLE
+		}
+	}
+	return vterrors.Errorf(code, "%s: %v", fmt.Sprintf(format, args...), err)
 }

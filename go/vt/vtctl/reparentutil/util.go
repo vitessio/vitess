@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -363,7 +364,12 @@ func ShardReplicationStatuses(ctx context.Context, ts *topo.Server, tmc tmclient
 	}
 	tablets := maps.Values(tabletMap)
 
-	log.Info(fmt.Sprintf("Gathering tablet replication status for: %v", tablets))
+	aliases := make([]string, 0, len(tablets))
+	for _, ti := range tablets {
+		aliases = append(aliases, ti.AliasString())
+	}
+	slices.Sort(aliases)
+	log.Info("Gathering tablet replication status", slog.Any("tablets", aliases))
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	result := make([]*replicationdatapb.Status, len(tablets))
@@ -578,4 +584,68 @@ func GetBackupCandidates(tablets []*topo.TabletInfo, stats []*replicationdatapb.
 		}
 	}
 	return res
+}
+
+// backupTabletTypes are the tablet types that can be chosen to back up a shard.
+// The primary is not one of them: it is only used through AllowPrimary.
+var backupTabletTypes = []topodatapb.TabletType{
+	topodatapb.TabletType_REPLICA,
+	topodatapb.TabletType_RDONLY,
+	topodatapb.TabletType_SPARE,
+}
+
+// UnsupportedBackupTabletTypes returns the given tablet types that cannot back up a shard.
+func UnsupportedBackupTabletTypes(tabletTypes []topodatapb.TabletType) []topodatapb.TabletType {
+	var unsupported []topodatapb.TabletType
+
+	for _, tabletType := range tabletTypes {
+		if !slices.Contains(backupTabletTypes, tabletType) {
+			unsupported = append(unsupported, tabletType)
+		}
+	}
+
+	return unsupported
+}
+
+// ChooseBackupTablet returns the tablet that should take a backup of the shard, or nil if none can.
+// tabletTypes is an ordered preference, empty meaning any of backupTabletTypes. A type outside backupTabletTypes never matches.
+func ChooseBackupTablet(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status, tabletTypes []topodatapb.TabletType) *topo.TabletInfo {
+	if len(tabletTypes) == 0 {
+		return lowestLagTablet(tablets, stats, backupTabletTypes)
+	}
+
+	for _, tabletType := range tabletTypes {
+		if !slices.Contains(backupTabletTypes, tabletType) {
+			continue
+		}
+		if tablet := lowestLagTablet(tablets, stats, []topodatapb.TabletType{tabletType}); tablet != nil {
+			return tablet
+		}
+	}
+
+	return nil
+}
+
+// lowestLagTablet returns the tablet of one of the given types with the lowest known lag.
+func lowestLagTablet(tablets []*topo.TabletInfo, stats []*replicationdatapb.Status, tabletTypes []topodatapb.TabletType) *topo.TabletInfo {
+	var (
+		chosen *topo.TabletInfo
+		lag    uint32
+	)
+
+	for i, tablet := range tablets {
+		if !slices.Contains(tabletTypes, tablet.Type) {
+			continue
+		}
+		// Ignore a tablet whose replication lag is missing or unknown.
+		if i >= len(stats) || stats[i] == nil || stats[i].ReplicationLagUnknown {
+			continue
+		}
+
+		if tabletLag := stats[i].ReplicationLagSeconds; chosen == nil || tabletLag < lag {
+			chosen, lag = tablet, tabletLag
+		}
+	}
+
+	return chosen
 }

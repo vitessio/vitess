@@ -18,6 +18,7 @@ package rbac
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -119,7 +120,7 @@ func (c *Config) Reify() error {
 		return rec.Error()
 	}
 
-	log.Info(fmt.Sprintf("[rbac]: loaded authorizer with %d rules", len(c.Rules)))
+	log.Info("[rbac]: loaded authorizer", slog.Int("rule_count", len(c.Rules)))
 
 	c.cfg = byResource
 	c.authorizer = &Authorizer{
@@ -172,6 +173,7 @@ func DefaultConfig() *Config {
 		string(GetAction),
 		string(CreateAction),
 		string(DeleteAction),
+		string(ExecuteAction),
 		string(PutAction),
 		string(CompleteAction),
 		string(PingAction),

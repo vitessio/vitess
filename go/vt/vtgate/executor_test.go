@@ -1791,6 +1791,41 @@ func TestGetPlanCacheNormalized(t *testing.T) {
 	})
 }
 
+// TestGetPlanCacheSetVarHintOrder checks that a session carrying several variables
+// in the SET_VAR hint plans the same query once: the hint is part of the plan cache
+// key and of the query sent to the tablet, so it must render the same way on every
+// request.
+func TestGetPlanCacheSetVarHintOrder(t *testing.T) {
+	r, sbc1, _, _, _ := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewSafeSession(&vtgatepb.Session{
+		TargetString: "@primary",
+		SystemVariables: map[string]string{
+			"sql_safe_updates":        "1",
+			"unique_checks":           "0",
+			"sql_mode":                "'ANSI'",
+			"max_execution_time":      "100",
+			"big_tables":              "1",
+			"join_buffer_size":        "262144",
+			"sort_buffer_size":        "262144",
+			"group_concat_max_len":    "4096",
+			"div_precision_increment": "6",
+		},
+	})
+
+	const query = "select id from `user` where id = 1"
+	for i := range 20 {
+		_, err := executorExecSession(t.Context(), r, session, query, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, r.plans.Len(), "request %d added a plan cache entry", i+1)
+		require.Len(t, sbc1.Queries, i+1)
+		require.Equal(t, sbc1.Queries[0].Sql, sbc1.Queries[i].Sql, "request %d sent different query text", i+1)
+	}
+	assert.Equal(t, "select /*+ SET_VAR(big_tables = 1) SET_VAR(div_precision_increment = 6) SET_VAR(group_concat_max_len = 4096) "+
+		"SET_VAR(join_buffer_size = 262144) SET_VAR(max_execution_time = 100) SET_VAR(sort_buffer_size = 262144) "+
+		"SET_VAR(sql_mode = 'ANSI') SET_VAR(sql_safe_updates = 1) SET_VAR(unique_checks = 0) */ id from `user` where id = :id /* INT64 */",
+		sbc1.Queries[0].Sql)
+}
+
 func TestGetPlanNormalized(t *testing.T) {
 	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
 
@@ -2435,6 +2470,134 @@ func TestExecutorOtherAdmin(t *testing.T) {
 			assert.Emptyf(t, diff, "stmt: %s\ntc: %+v\n-want,+got:\n%s", stmt, tc, diff)
 		}
 	}
+}
+
+// TestExecutorRewritesDoubleSlashComments checks that a statement that vtgate
+// forwards as written reaches the tablet with each "//" comment rewritten to
+// "#/", so that MySQL skips the text that Vitess skipped.
+func TestExecutorRewritesDoubleSlashComments(t *testing.T) {
+	executor, _, _, sbclookup, _ := createExecutorEnv(t)
+
+	_, err := executorExec(t.Context(), executor, &vtgatepb.Session{TargetString: KsTestUnsharded}, "repair table t1 //*x*/ , t2\n", nil)
+	require.NoError(t, err)
+	queries := sbclookup.GetQueries()
+	require.Len(t, queries, 1)
+	assert.Equal(t, "repair table t1 #/*x*/ , t2", queries[0].Sql)
+}
+
+// doubleSlashWarnings returns the warnings in the session that report a
+// deprecated // comment.
+func doubleSlashWarnings(session *vtgatepb.Session) []*querypb.QueryWarning {
+	var found []*querypb.QueryWarning
+	for _, w := range session.Warnings {
+		if w.Code == uint32(sqlerror.ERWarnDeprecatedSyntax) {
+			found = append(found, w)
+		}
+	}
+	return found
+}
+
+// TestExecutorCountsDoubleSlashComments checks that each executed statement
+// that uses a // comment is counted and warned about once, and that preparing
+// a statement is not.
+func TestExecutorCountsDoubleSlashComments(t *testing.T) {
+	executor, _, _, _, _ := createExecutorEnv(t)
+	ctx := t.Context()
+	before := warnings.Counts()["DoubleSlashComment"]
+
+	t.Run("execute", func(t *testing.T) {
+		session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+		_, err := executorExec(ctx, executor, session, "select id from music_user_map where id = 1 // x", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		require.Len(t, doubleSlashWarnings(session), 1)
+		assert.Equal(t, "'// comment' is deprecated and will be removed in a future release. Please use '-- ', '#' or '/* */' instead", doubleSlashWarnings(session)[0].Message)
+
+		// The next statement clears the warning.
+		_, err = executorExec(ctx, executor, session, "select id from music_user_map where id = 1 -- x", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Empty(t, doubleSlashWarnings(session))
+	})
+
+	t.Run("show warnings", func(t *testing.T) {
+		session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+		_, err := executorExec(ctx, executor, session, "select id from music_user_map where id = 1 // x", nil)
+		require.NoError(t, err)
+		qr, err := executorExec(ctx, executor, session, "show warnings", nil)
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		assert.Contains(t, qr.Rows[0][2].ToString(), "'// comment' is deprecated")
+
+		// A SHOW that has the comment neither counts nor adds a warning.
+		session = &vtgatepb.Session{TargetString: KsTestUnsharded}
+		before := warnings.Counts()["DoubleSlashComment"]
+		_, err = executorExec(ctx, executor, session, "show warnings // x", nil)
+		require.NoError(t, err)
+		assert.Empty(t, doubleSlashWarnings(session))
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+	})
+
+	t.Run("binary protocol prepare", func(t *testing.T) {
+		session := &vtgatepb.Session{TargetString: KsTestUnsharded}
+		before := warnings.Counts()["DoubleSlashComment"]
+		sql := "select id from music_user_map where id = :v1 // x"
+		bv := map[string]*querypb.BindVariable{"v1": sqltypes.Int64BindVariable(1)}
+
+		_, _, err := executorPrepare(ctx, executor, session, sql)
+		require.NoError(t, err)
+		assert.Equal(t, before, warnings.Counts()["DoubleSlashComment"])
+		assert.Empty(t, doubleSlashWarnings(session))
+
+		_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, true)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Len(t, doubleSlashWarnings(session), 1)
+
+		_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, true)
+		require.NoError(t, err)
+		assert.Equal(t, before+2, warnings.Counts()["DoubleSlashComment"])
+	})
+
+	t.Run("SQL prepare", func(t *testing.T) {
+		session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+		before := warnings.Counts()["DoubleSlashComment"]
+
+		// The session keeps the rewritten text, so PREPARE is where the
+		// comment is counted and warned about.
+		_, err := executorExecSession(ctx, executor, session, "prepare p from 'select id from music_user_map where id = ? // x'", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Len(t, doubleSlashWarnings(session.Session), 1)
+
+		_, err = executorExecSession(ctx, executor, session, "set @id = 1", nil)
+		require.NoError(t, err)
+		_, err = executorExecSession(ctx, executor, session, "execute p using @id", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Empty(t, doubleSlashWarnings(session.Session))
+	})
+}
+
+// TestExecutorCountsDoubleSlashCommentsOnceOnRetry checks that a statement
+// that VTGate retries after a denied-tables error is counted once, and that
+// the client gets one warning.
+func TestExecutorCountsDoubleSlashCommentsOnceOnRetry(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		sbc1.EphemeralShardErr = errors.New("enforce denied tables")
+
+		oldTimeout := vschemaWaitTimeout
+		vschemaWaitTimeout = 500 * time.Millisecond
+		t.Cleanup(func() { vschemaWaitTimeout = oldTimeout })
+
+		before := warnings.Counts()["DoubleSlashComment"]
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+		_, err := executorExecSession(ctx, executor, session, "select * from user // x", nil)
+		require.NoError(t, err)
+		assert.Equal(t, before+1, warnings.Counts()["DoubleSlashComment"])
+		assert.Len(t, doubleSlashWarnings(session.Session), 1)
+	})
 }
 
 func TestExecutorSavepointInTx(t *testing.T) {

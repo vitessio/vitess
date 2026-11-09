@@ -44,14 +44,13 @@ func newEvalTuple(values []*querypb.Value, collation collations.ID) (*evalTuple,
 	return &evalTuple{t: evals}, nil
 }
 
+// ToRawBytes encodes the members as the scalar path does: they are evalengine
+// output, not caller bytes, so they are trusted rather than re-parsed. A float
+// +Inf or a nested tuple is not a SQL literal and would fail NewValue.
 func (e *evalTuple) ToRawBytes() []byte {
 	vals := make([]sqltypes.Value, 0, len(e.t))
 	for _, e2 := range e.t {
-		v, err := sqltypes.NewValue(e2.SQLType(), e2.ToRawBytes())
-		if err != nil {
-			panic(err)
-		}
-		vals = append(vals, v)
+		vals = append(vals, evalToSQLValue(e2))
 	}
 	return sqltypes.TupleToProto(vals).Value
 }

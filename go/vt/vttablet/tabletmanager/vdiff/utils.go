@@ -18,7 +18,9 @@ package vdiff
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -26,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -69,11 +72,32 @@ func pkColsToGroupByParams(pkCols []int, collationEnv *collations.Environment) [
 	return res
 }
 
+// errWithoutQueryEcho returns err with the echoed failing statement removed from
+// its SQL error. A *sqlerror.SQLError keeps the human message, errno and sqlstate
+// separate from the echoed query, and only that query echo is unbounded -- it can
+// be arbitrarily large when the statement embeds a big payload such as a VDiff
+// report. The echo is dropped for any *sqlerror.SQLError that carries one,
+// regardless of the errno; it is applied at the report-write sites so the failure
+// can be recorded without the recording statement (last_error / vdiff_log) itself
+// exceeding max_allowed_packet -- the case (errno 1153) that motivates it. Non-SQL
+// errors, and SQL errors without a query echo, are returned unchanged.
+func errWithoutQueryEcho(err error) error {
+	sqlErr, ok := errors.AsType[*sqlerror.SQLError](err)
+	if !ok || sqlErr.Query == "" {
+		return err
+	}
+	// Clear the echoed query on a copy so SQLError.Error() emits only the message,
+	// errno and sqlstate (it appends " during query: ..." only when Query is set).
+	redacted := *sqlErr
+	redacted.Query = ""
+	return &redacted
+}
+
 func insertVDiffLog(ctx context.Context, dbClient binlogplayer.DBClient, vdiffID int64, message string) {
 	query := "insert into _vt.vdiff_log(vdiff_id, message) values (%d, %s)"
 	query = fmt.Sprintf(query, vdiffID, encodeString(message))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-		log.Error(fmt.Sprintf("Error inserting into _vt.vdiff_log: %v", err))
+		log.Error("Error inserting into _vt.vdiff_log", slog.Int64("vdiff_id", vdiffID), slog.Any("error", err))
 	}
 }
 

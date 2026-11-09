@@ -96,6 +96,11 @@ type BackupParams struct {
 	BackupEngine string
 	// Any SQL that you would like to run before initializing the backup.
 	InitSQL *tabletmanagerdatapb.BackupRequest_InitSQL
+	// IncludeBinlogs includes the source's binlogs in a full builtin backup.
+	IncludeBinlogs bool
+	// VerifyPosition, if set, is called with the position that the backup's MANIFEST will record,
+	// just before each attempt to write the MANIFEST. An error makes the backup unusable, so it is aborted.
+	VerifyPosition func(ctx context.Context, pos replication.Position) error
 }
 
 func (b *BackupParams) Copy() BackupParams {
@@ -116,7 +121,20 @@ func (b *BackupParams) Copy() BackupParams {
 		UpgradeSafe:          b.UpgradeSafe,
 		MysqlShutdownTimeout: b.MysqlShutdownTimeout,
 		InitSQL:              b.InitSQL,
+		IncludeBinlogs:       b.IncludeBinlogs,
+		VerifyPosition:       b.VerifyPosition,
 	}
+}
+
+// verifyPosition calls VerifyPosition, if it is set, with the position that the MANIFEST will record.
+func (b *BackupParams) verifyPosition(ctx context.Context, pos replication.Position) error {
+	if b.VerifyPosition == nil {
+		return nil
+	}
+	if err := b.VerifyPosition(ctx, pos); err != nil {
+		return vterrors.Wrap(err, "not writing the backup MANIFEST")
+	}
+	return nil
 }
 
 // RestoreParams is the struct that holds all params passed to ExecuteRestore
@@ -360,6 +378,10 @@ type BackupManifest struct {
 
 	// UpgradeSafe indicates whether the backup is safe to use for an upgrade to a newer MySQL version
 	UpgradeSafe bool
+
+	// IncludesBinlogs is true when the backup contains the source's binlogs, which
+	// a restore installs and keeps instead of resetting gtid_purged.
+	IncludesBinlogs bool `json:",omitempty"`
 
 	// IncrementalDetails is nil for non-incremental backups
 	IncrementalDetails *IncrementalBackupDetails

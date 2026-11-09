@@ -949,6 +949,51 @@ func TestGetDetectionAnalysisDecision(t *testing.T) {
 			codeWanted:     DeadPrimary,
 		},
 		{
+			// A replica whose replication was stopped when VTOrc last read it, and
+			// that VTOrc can no longer reach, still counts as not replicating.
+			name: "DeadPrimary when VTOrc is starting up and a stopped replica is now unreachable",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy: policy.DurabilityNone,
+				IsInvalid:        1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				LastCheckValid:     1,
+				ReplicationStopped: 1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 103},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6710,
+				},
+				LastCheckValid:     0,
+				ReplicationStopped: 1,
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     DeadPrimary,
+		},
+		{
 			name: "Invalid Primary",
 			info: []*test.InfoForRecoveryAnalysis{{
 				TabletInfo: &topodatapb.Tablet{
@@ -1203,6 +1248,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 		codeWanted     AnalysisCode
 		shardWanted    string
 		keyspaceWanted string
+		cellWanted     string
 	}{
 		{
 			name:       "No additions",
@@ -1217,6 +1263,30 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     PrimaryTabletDeleted,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
+		}, {
+			name: "PrimaryTabletDeleted cell comes from shard record, not surviving replica",
+			sql: []string{
+				// Simulate a cross-cell scenario: the shard's recorded primary is zone2-0000000200,
+				// but all surviving vitess_tablet rows are in zone1. Without the fix, AnalyzedCell
+				// would be zone1 (from the first replica row); with the fix it must be zone2.
+				`update vitess_shard set primary_alias = 'zone2-0000000200' where keyspace = 'ks' and shard = '0'`,
+				`delete from vitess_tablet where port = 6714`,
+			},
+			codeWanted:     PrimaryTabletDeleted,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			cellWanted:     "zone2",
+		}, {
+			name: "PrimaryTabletDeleted clears AnalyzedCell when shard primary alias is empty",
+			sql: []string{
+				`delete from vitess_tablet where port = 6714`,
+				`update vitess_shard set primary_alias = '' where keyspace = 'ks' and shard = '0'`,
+			},
+			codeWanted:     PrimaryTabletDeleted,
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			cellWanted:     "",
 		}, {
 			name: "Removing Primary Tablet's MySQL record",
 			sql: []string{
@@ -1229,6 +1299,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     InvalidPrimary,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
 		}, {
 			name: "Removing Replica Tablet's MySQL record",
 			sql: []string{
@@ -1242,6 +1313,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			codeWanted:     InvalidReplica,
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
+			cellWanted:     "zone1",
 		},
 	}
 
@@ -1267,6 +1339,7 @@ func TestGetDetectionAnalysis(t *testing.T) {
 			require.Equal(t, tt.codeWanted, got[0].Analysis)
 			require.Equal(t, tt.keyspaceWanted, got[0].AnalyzedKeyspace)
 			require.Equal(t, tt.shardWanted, got[0].AnalyzedShard)
+			require.Equal(t, tt.cellWanted, got[0].AnalyzedCell)
 		})
 	}
 }

@@ -119,6 +119,8 @@ func getConnectionNoError(t *testing.T, hostname string, port int) *mysql.Conn {
 		Host:  hostname,
 		Port:  port,
 		Uname: "vt_dba",
+		// Tests use these connections to run batches of statements.
+		EnableMultiStatements: true,
 	}
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -134,6 +136,8 @@ func getConnection(t *testing.T, hostname string, port int) *mysql.Conn {
 		Port:             port,
 		Uname:            "vt_dba",
 		ConnectTimeoutMs: 1000,
+		// Tests use these connections to run batches of statements.
+		EnableMultiStatements: true,
 	}
 	ctx := t.Context()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -824,15 +828,26 @@ const (
 	loadTestBufferingWindowDuration = 10 * time.Second
 	loadTestAvgWaitBetweenQueries   = 500 * time.Microsecond
 	loadTestDefaultConnections      = 100
+	// After a traffic switch, this many new successful queries prove that any
+	// buffering has drained and traffic is flowing again.
+	loadTestPostSwitchQueryCount = 100
 )
 
 type loadGenerator struct {
-	t           *testing.T
-	vc          *VitessCluster
-	ctx         context.Context
-	cancel      context.CancelFunc
-	connections int
-	wg          sync.WaitGroup
+	t                 *testing.T
+	vc                *VitessCluster
+	ctx               context.Context
+	cancel            context.CancelFunc
+	connections       int
+	wg                sync.WaitGroup
+	successfulQueries atomic.Int64
+
+	totalQueries        atomic.Int64
+	deniedErrors        atomic.Int64
+	ambiguousErrors     atomic.Int64
+	reshardedErrors     atomic.Int64
+	tableNotFoundErrors atomic.Int64
+	otherErrors         atomic.Int64
 }
 
 func newLoadGenerator(t *testing.T, vc *VitessCluster) *loadGenerator {
@@ -844,12 +859,39 @@ func newLoadGenerator(t *testing.T, vc *VitessCluster) *loadGenerator {
 }
 
 func (lg *loadGenerator) stop() {
-	// Wait for buffering to stop and additional records to be inserted by start
-	// after traffic is switched.
-	time.Sleep(loadTestBufferingWindowDuration * 2)
+	// Make sure fresh queries succeeded after the last traffic switch before
+	// canceling, so the final assertions cover the post-switch period.
+	lg.waitForTrafficToResume()
 	log.Info("Canceling load")
 	lg.cancel()
+	// Check the counters only once every worker has returned: a query that
+	// was still buffered in vtgate when the load was canceled must be
+	// counted before the assertions run.
 	lg.wg.Wait()
+	t := lg.t
+	log.Info(fmt.Sprintf("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d",
+		lg.totalQueries.Load(), lg.successfulQueries.Load(), lg.deniedErrors.Load(), lg.ambiguousErrors.Load(), lg.reshardedErrors.Load(), lg.tableNotFoundErrors.Load(), lg.otherErrors.Load()))
+	require.Equal(t, int64(0), lg.deniedErrors.Load())
+	require.Equal(t, int64(0), lg.otherErrors.Load())
+	require.Equal(t, int64(0), lg.reshardedErrors.Load())
+	require.Equal(t, lg.totalQueries.Load(), lg.successfulQueries.Load())
+}
+
+// waitForTrafficToResume waits until the load generator executes new
+// successful queries, proving that any buffering triggered by a preceding
+// traffic switch has drained and traffic is flowing again.
+//
+// The next switch needs no extra gap. vtgate does not buffer a failover that
+// starts within --buffer-min-time-between-failovers (1s in this cluster's
+// config, see extraVTGateArgs) of the previous one, but it tracks that per
+// shard, and consecutive switches buffer on different shards: the forward
+// switch on the source shard, the reverse switch on the target shards. A
+// shard's next failover therefore comes a whole switch later.
+func (lg *loadGenerator) waitForTrafficToResume() {
+	start := lg.successfulQueries.Load()
+	require.Eventually(lg.t, func() bool {
+		return lg.successfulQueries.Load()-start >= loadTestPostSwitchQueryCount
+	}, defaultTimeout, 100*time.Millisecond, "load generator did not run %d successful queries after a traffic switch", loadTestPostSwitchQueryCount)
 }
 
 func (lg *loadGenerator) start() {
@@ -860,22 +902,18 @@ func (lg *loadGenerator) start() {
 	var id atomic.Int64
 	log.Info("loadGenerator: starting")
 	queryTemplate := "insert into loadtest(id, name) values (%d, 'name-%d')"
-	var totalQueries, successfulQueries int64
-	var deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors int64
+	for _, counter := range []*atomic.Int64{
+		&lg.successfulQueries, &lg.totalQueries, &lg.deniedErrors,
+		&lg.ambiguousErrors, &lg.reshardedErrors, &lg.tableNotFoundErrors, &lg.otherErrors,
+	} {
+		counter.Store(0)
+	}
 	lg.wg.Add(1)
-	defer func() {
-		defer lg.wg.Done()
-		log.Info(fmt.Sprintf("loadGenerator: totalQueries: %d, successfulQueries: %d, deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", totalQueries, successfulQueries, deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
-	}()
+	defer lg.wg.Done()
 	for {
 		select {
 		case <-lg.ctx.Done():
 			log.Info("loadGenerator: context cancelled")
-			log.Info(fmt.Sprintf("loadGenerator: deniedErrors: %d, ambiguousErrors: %d, reshardedErrors: %d, tableNotFoundErrors: %d, otherErrors: %d", deniedErrors, ambiguousErrors, reshardedErrors, tableNotFoundErrors, otherErrors))
-			require.Equal(t, int64(0), deniedErrors)
-			require.Equal(t, int64(0), otherErrors)
-			require.Equal(t, int64(0), reshardedErrors)
-			require.Equal(t, totalQueries, successfulQueries)
 			return
 		default:
 			if int(connectionCount.Load()) < lg.connections {
@@ -893,30 +931,30 @@ func (lg *loadGenerator) start() {
 						newID := id.Add(1)
 						query := fmt.Sprintf(queryTemplate, newID, newID)
 						_, err := conn.ExecuteFetch(query, 1, false)
-						atomic.AddInt64(&totalQueries, 1)
+						lg.totalQueries.Add(1)
 						if err != nil {
 							sqlErr := err.(*sqlerror.SQLError)
 							if strings.Contains(strings.ToLower(err.Error()), "denied tables") {
 								if debugMode {
 									t.Logf("loadGenerator: denied tables error executing query: %d:%v", sqlErr.Number(), err)
 								}
-								atomic.AddInt64(&deniedErrors, 1)
+								lg.deniedErrors.Add(1)
 							} else if strings.Contains(strings.ToLower(err.Error()), "ambiguous") {
 								// This can happen when a second keyspace is setup with the same tables, but
 								// there are no routing rules set yet by MoveTables. So we ignore these errors.
-								atomic.AddInt64(&ambiguousErrors, 1)
+								lg.ambiguousErrors.Add(1)
 							} else if strings.Contains(strings.ToLower(err.Error()), "current keyspace is being resharded") {
-								atomic.AddInt64(&reshardedErrors, 1)
+								lg.reshardedErrors.Add(1)
 							} else if strings.Contains(strings.ToLower(err.Error()), "not found") {
-								atomic.AddInt64(&tableNotFoundErrors, 1)
+								lg.tableNotFoundErrors.Add(1)
 							} else {
 								if debugMode {
 									t.Logf("loadGenerator: error executing query: %d:%v", sqlErr.Number(), err)
 								}
-								atomic.AddInt64(&otherErrors, 1)
+								lg.otherErrors.Add(1)
 							}
 						} else {
-							atomic.AddInt64(&successfulQueries, 1)
+							lg.successfulQueries.Add(1)
 						}
 						time.Sleep(time.Duration(int64(float64(loadTestAvgWaitBetweenQueries.Microseconds()) * rand.Float64())))
 					}

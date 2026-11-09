@@ -101,7 +101,7 @@ func (se *SQLError) VtRpcErrorCode() vtrpcpb.Code {
 	case ERDiskFull, EROutOfMemory, EROutOfSortMemory, ERConCount, EROutOfResources, ERRecordFileFull, ERHostIsBlocked,
 		ERCantCreateThread, ERTooManyDelayedThreads, ERNetPacketTooLarge, ERTooManyUserConnections, ERLockTableFull, ERUserLimitReached:
 		return vtrpcpb.Code_RESOURCE_EXHAUSTED
-	case ERLockWaitTimeout:
+	case ERLockWaitTimeout, ERLockNowait:
 		return vtrpcpb.Code_DEADLINE_EXCEEDED
 	case CRServerGone, ERServerShutdown, ERServerIsntAvailable, CRConnectionError, CRConnHostError:
 		return vtrpcpb.Code_UNAVAILABLE
@@ -139,7 +139,7 @@ func (se *SQLError) VtRpcErrorCode() vtrpcpb.Code {
 		ERCantAggregate3Collations, ERCantAggregateNCollations, ERVariableIsNotStruct, ERUnknownCollation, ERWrongNameForIndex,
 		ERWrongNameForCatalog, ERBadFTColumn, ERTruncatedWrongValue, ERTooMuchAutoTimestampCols, ERInvalidOnUpdate, ERUnknownTimeZone,
 		ERInvalidCharacterString, ERIllegalReference, ERDerivedMustHaveAlias, ERTableNameNotAllowedHere, ERDataTooLong, ERDataOutOfRange,
-		ERTruncatedWrongValueForField, ERIllegalValueForType, ERWrongValue, ERWrongParamcountToNativeFct:
+		ERTruncatedWrongValueForField, ERIllegalValueForType, ERWrongValue, ERWrongParamcountToNativeFct, ERUnsupportedSQLMode:
 		return vtrpcpb.Code_INVALID_ARGUMENT
 	case ERSpecifiedAccessDenied:
 		if strings.Contains(se.Message, "failover in progress") {
@@ -346,6 +346,7 @@ var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.CTERecursiveForbidsAggregation:      {num: ERCTERecursiveForbidsAggregation, state: SSUnknownSQLState},
 	vterrors.CTERecursiveForbiddenJoinOrder:      {num: ERCTERecursiveForbiddenJoinOrder, state: SSUnknownSQLState},
 	vterrors.CTEMaxRecursionDepth:                {num: ERCTEMaxRecursionDepth, state: SSUnknownSQLState},
+	vterrors.UnsupportedSQLMode:                  {num: ERUnsupportedSQLMode, state: SSUnknownSQLState},
 }
 
 func getStateToMySQLState(state vterrors.State) mysqlCode {
@@ -390,11 +391,18 @@ func convertToMysqlError(err error) error {
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
 
+// QueryThrottledMarker prefixes every query-throttler RESOURCE_EXHAUSTED error so it maps
+// to ER_OUT_OF_RESOURCES (1041) instead of the default ER_TOO_MANY_USER_CONNECTIONS (1203),
+// matching what the transaction throttler does.
+const QueryThrottledMarker = "[QueryThrottler]"
+
 func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
 	case isGRPCOverflowRE.MatchString(msg):
 		return ERNetPacketTooLarge
 	case strings.Contains(msg, "Transaction throttled"):
+		return EROutOfResources
+	case strings.Contains(msg, QueryThrottledMarker):
 		return EROutOfResources
 	default:
 		return ERTooManyUserConnections

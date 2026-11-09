@@ -26,10 +26,10 @@ interface Props<T> {
     items: T[];
     itemToString?: (item: T) => string;
     label: string;
-    helpText?: string | JSX.Element;
+    helpText?: string | React.JSX.Element;
     onChange: (selectedItems: T[]) => void;
     placeholder: string;
-    renderItem?: (item: T) => JSX.Element | string;
+    renderItem?: (item: T) => React.JSX.Element | string;
     selectedItems: T[];
     description?: string;
     required?: boolean;
