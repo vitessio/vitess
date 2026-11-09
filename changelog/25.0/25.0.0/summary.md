@@ -305,7 +305,7 @@ Converted lines follow these conventions:
 - The message is a fixed sentence, and every value is in an attribute.
 - Errors are under `error`. Many lines that log a Vitess error also log its code, such as `INVALID_ARGUMENT`, under `error_code`.
 - Lines from a throttled logger carry the logger's name under `logger`, where it used to prefix the message. Their report of skipped lines is `skipped log messages`, with `logger` and `skipped`.
-- With the JSON format, durations are integer nanoseconds, and `--log-err-stacks` no longer adds stack traces to errors logged as attributes. The text format prints durations such as `1.5s` and still prints stack traces.
+- With the JSON format, durations are integer nanoseconds. The text format prints durations such as `1.5s`. With `--log-err-stacks` set, errors from `vterrors.New`, `Errorf`, `Wrap` and the like still include their stack traces when logged as attributes, in both formats; with the JSON format, `error` is then the error's text followed by its stack traces.
 
 **Impact**: alerts, dashboards, log searches, log-based rules and redaction rules that match on a line's old message text, or on a value inside it, stop matching once that line is converted. For example, `Error applying event for table <table> while processing position <position>: <error>` is now `Error applying event`, with `table`, `processing_position` and `error` attributes.
 
