@@ -19,6 +19,7 @@ package reference
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -191,4 +192,24 @@ func TestReferenceRowsPreservedByAnOuterJoinComeBackOnce(t *testing.T) {
 	utils.AssertMatches(t, conn,
 		"select z.id, f.id from "+shardedKeyspaceName+".zip_detail z left join (select id, zip_detail_id from "+shardedKeyspaceName+".delivery_failure where id = 1) as f on f.zip_detail_id = z.id where z.id <= 2 order by z.id",
 		`[[INT64(1) INT64(1)] [INT64(2) NULL]]`)
+	utils.AssertMatches(t, conn,
+		"select z.id, f.id from "+shardedKeyspaceName+".zip_detail z left join "+shardedKeyspaceName+".delivery_failure f on f.zip_detail_id = z.id where z.id <= 2 order by z.id limit 1 offset 1",
+		`[[INT64(2) INT64(2)]]`)
+	utils.AssertMatches(t, conn,
+		"select z.id, f.id from "+shardedKeyspaceName+".delivery_failure f right join "+shardedKeyspaceName+".zip_detail z on f.zip_detail_id = z.id where z.id <= 2 order by z.id",
+		`[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
+}
+
+// TestTheLimitOfAJoinedUpdateCapsTheRowsItWrites checks that the LIMIT of a multi-table UPDATE caps the
+// rows it writes, not only the rows on the right side of the join. It rolls back so the shared data stays.
+func TestTheLimitOfAJoinedUpdateCapsTheRowsItWrites(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	conn, closer := start(t)
+	defer closer()
+
+	utils.Exec(t, conn, "begin")
+	defer utils.Exec(t, conn, "rollback")
+	qr := utils.Exec(t, conn, "update "+shardedKeyspaceName+".delivery_failure f join "+shardedKeyspaceName+".delivery_failure f2 on f.reason = f2.reason set f.reason = 'x' limit 1")
+	assert.EqualValues(t, 1, qr.RowsAffected)
+	utils.AssertMatches(t, conn, "select count(*) from "+shardedKeyspaceName+".delivery_failure where reason = 'x'", `[[INT64(1)]]`)
 }
