@@ -150,7 +150,7 @@ Flags:
       --enable-consolidator-replicas                                     This option enables the query consolidator only on replicas.
       --enable-hot-row-protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.
       --enable-hot-row-protection-dry-run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
-      --enable-per-workload-table-metrics                                If true, query counts and query error metrics include a label that identifies the workload
+      --enable-per-workload-table-metrics                                If true, query counts and query error metrics, and the query throttler's metrics, include a label that identifies the workload
       --enable-replication-reporter                                      Use polling to track replication lag.
       --enable-transaction-limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
       --enable-transaction-limit-dry-run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.
@@ -272,7 +272,7 @@ Flags:
       --publish-retry-interval duration                                  how long vttablet waits to retry publishing the tablet record (default 30s)
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
       --query-log-stream-handler string                                  URL handler for streaming queries log (default "/debug/querylog")
-      --query-throttler-config-refresh-interval duration                 How frequently to refresh configuration for the query throttler (default 1m0s)
+      --query-throttler-cache-update-interval duration                   How frequently to refresh throttle check results for the query throttler TABLET_THROTTLER strategy (default 10s)
       --querylog-emit-on-any-condition-met                               Emit to query log when any of the conditions (row-threshold, time-threshold, filter-tag) is met (default false)
       --querylog-filter-tag string                                       string that must be present in the query for it to be logged; if using a value as the tag, you need to disable query normalization
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")

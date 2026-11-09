@@ -19,6 +19,7 @@ package srvtopo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type watchState int
@@ -65,6 +67,21 @@ type resilientWatcher struct {
 
 	mutex   sync.Mutex
 	entries map[string]*watchEntry
+}
+
+// keyAttrs returns the attributes that identify a cache key in log records,
+// followed by attrs.
+func keyAttrs(key fmt.Stringer, attrs ...slog.Attr) []slog.Attr {
+	logAttrs := make([]slog.Attr, 0, 2+len(attrs))
+	switch k := key.(type) {
+	case *srvKeyspaceKey:
+		logAttrs = append(logAttrs, slog.String("cell", k.cell), slog.String("keyspace", k.keyspace))
+	case cellName:
+		logAttrs = append(logAttrs, slog.String("cell", string(k)))
+	default:
+		logAttrs = append(logAttrs, slog.String("key", key.String()))
+	}
+	return append(logAttrs, attrs...)
 }
 
 func (w *resilientWatcher) getEntry(wkey fmt.Stringer) *watchEntry {
@@ -207,14 +224,16 @@ func (entry *watchEntry) onErrorLocked(ctx context.Context, err error, init bool
 		// TTL cache is only checked if the error is a known error i.e topo.Error.
 		_, isTopoErr := err.(topo.Error)
 		if entry.value != nil && isTopoErr && time.Since(entry.lastValueTime) > entry.rw.cacheTTL {
-			log.Error(fmt.Sprintf("WatchSrvKeyspace clearing cached entry for %v", entry.key))
+			log.Error("ResilientWatch clearing cached entry", keyAttrs(entry.key)...)
 			entry.value = nil
 		}
 	} else {
 		if !topo.IsErrType(err, topo.Interrupted) {
 			// No need to log if we're explicitly interrupted.
 			entry.lastError = fmt.Errorf("ResilientWatch stream failed for %v: %w", entry.key, err)
-			log.Error(fmt.Sprintf("%v", entry.lastError))
+			log.Error("ResilientWatch stream failed", keyAttrs(entry.key,
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))...)
 		}
 
 		// Even though we didn't get a new value, update the lastValueTime
