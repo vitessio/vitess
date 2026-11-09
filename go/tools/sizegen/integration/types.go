@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//go:generate go run ../sizegen.go --in . --gen vitess.io/vitess/go/tools/sizegen/integration.*
+//go:generate go run ../sizegen.go --in . --gen vitess.io/vitess/go/tools/sizegen/integration.* --shared vitess.io/vitess/go/tools/sizegen/integration.Shared
 
 package integration
 
@@ -80,4 +80,15 @@ type PtrToBasic struct {
 	field1 *bool
 	field2 *int
 	field3 *string
+}
+
+// Shared is referenced by pointer, but not owned, by HasShared.
+type Shared struct {
+	field1 [128]uint64
+}
+
+type HasShared struct {
+	field1 *Shared
+	field2 []*Shared
+	field3 uint64
 }
