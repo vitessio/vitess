@@ -172,6 +172,34 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	return tmpProcess.Run()
 }
 
+// Kill kills mysqld and mysqlctld without a graceful shutdown and waits for
+// mysqlctld to exit. Like MysqlctlProcess.Kill, it is safe only when the data
+// directory is discarded right after.
+func (mysqlctld *MysqlctldProcess) Kill() error {
+	proc := mysqlctld.process
+	if proc != nil {
+		mysqlctld.exitSignalReceived = true
+	}
+	// mysqld is killed through its pid file in any case: killing mysqlctld
+	// leaves its mysqld_safe and mysqld running, and mysqlctld exits by
+	// itself when a backup or restore stops mysqld, which is then started
+	// again without it.
+	mysqlctl := MysqlctlProcess{TabletUID: mysqlctld.TabletUID}
+	if err := mysqlctl.Kill(); err != nil {
+		return err
+	}
+	if proc == nil {
+		return nil
+	}
+	if err := proc.Process.Kill(); err != nil && !errors.Is(err, os.ErrProcessDone) {
+		return err
+	}
+	if !mysqlctld.WaitForMysqlCtldShutdown() {
+		return fmt.Errorf("mysqlctld for tablet %d did not exit after it was killed", mysqlctld.TabletUID)
+	}
+	return nil
+}
+
 // CleanupFiles clean the mysql files to make sure we can start the same process again
 func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
