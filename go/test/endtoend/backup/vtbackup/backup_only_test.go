@@ -387,27 +387,28 @@ func waitForRestoreComplete(t *testing.T, vttablet *cluster.VttabletProcess, tim
 // that removes everything the test left behind, so no test depends on what
 // ran before it.
 func setupTest(t *testing.T) {
+	tablets := []*cluster.Vttablet{primary, replica1, replica2}
+	for _, tablet := range tablets {
+		require.NoError(t, newTabletProcesses(tablet))
+	}
 	t.Cleanup(func() { cleanupTest(t) })
 
-	var mysqlProcs []*exec.Cmd
-	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
-		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shardName, keyspaceName)
-		tablet.VttabletProcess.DbPassword = dbPassword
-		tablet.VttabletProcess.ExtraArgs = commonTabletArg
-		tablet.VttabletProcess.SupportsBackup = true
-
-		mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
-		require.NoError(t, err)
-		tablet.MysqlctlProcess = *mysqlctlProcess
-		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
-		tablet.MysqlctlProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
+	// Wait for every mysqlctl that started, even after an error, so that the
+	// cleanup never deletes the files of a mysqld that is still initializing.
+	var procs []*exec.Cmd
+	var errs []error
+	for _, tablet := range tablets {
 		proc, err := tablet.MysqlctlProcess.StartProcess()
-		require.NoError(t, err)
-		mysqlProcs = append(mysqlProcs, proc)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("starting mysqld for tablet %s: %w", tablet.Alias, err))
+			continue
+		}
+		procs = append(procs, proc)
 	}
-	for _, proc := range mysqlProcs {
-		require.NoError(t, proc.Wait())
+	for _, proc := range procs {
+		errs = append(errs, proc.Wait())
 	}
+	require.NoError(t, errors.Join(errs...))
 }
 
 // cleanupTest stops the tablets' vttablets and mysqlds, deletes their data
