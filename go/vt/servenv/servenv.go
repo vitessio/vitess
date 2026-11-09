@@ -194,7 +194,7 @@ func fireOnCloseHooks(timeout time.Duration) bool {
 // fireHooksWithTimeout returns true iff all the hooks finish before the timeout.
 func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) bool {
 	defer log.Flush()
-	log.Info("Firing hooks and waiting up to timeout for them", slog.String("hooks", name), slog.Duration("timeout", timeout))
+	log.Info("Firing hooks and waiting up to timeout for them", slog.String("hook_group", name), slog.Duration("timeout", timeout))
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -207,10 +207,10 @@ func fireHooksWithTimeout(timeout time.Duration, name string, hookFn func()) boo
 
 	select {
 	case <-done:
-		log.Info("Hooks finished", slog.String("hooks", name))
+		log.Info("Hooks finished", slog.String("hook_group", name))
 		return true
 	case <-timer.C:
-		log.Info("Hooks timed out", slog.String("hooks", name))
+		log.Info("Hooks timed out", slog.String("hook_group", name))
 		return false
 	}
 }
