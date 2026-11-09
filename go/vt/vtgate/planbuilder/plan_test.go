@@ -73,6 +73,30 @@ func TestPlanTestSuite(t *testing.T) {
 	suite.Run(t, new(planTestSuite))
 }
 
+func TestReferenceUnionByDestinationHandlesLookupMiss(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		query               string
+		wantSpecialHandling bool
+	}{
+		{"select id from ref union all select id from music where id = 1", true},
+		{"select id from music where id = 1 union all select id from ref", true},
+		{"select id from music where id = 1", false},
+	} {
+		plan, err := TestBuilder(tc.query, vw, vw.CurrentDb())
+		require.NoError(t, err)
+
+		lookup, ok := plan.Instructions.(*engine.VindexLookup)
+		require.True(t, ok)
+		require.NotNil(t, lookup.SendTo)
+		assert.Equal(t, tc.wantSpecialHandling, lookup.SendTo.NoRoutesSpecialHandling)
+	}
+}
+
 func (s *planTestSuite) TestPlan() {
 	defer utils.EnsureNoLeaks(s.T())
 

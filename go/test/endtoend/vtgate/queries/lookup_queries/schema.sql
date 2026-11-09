@@ -20,3 +20,9 @@ create table lookup_unique
     keyspace_id   varbinary(100),
     primary key (lookup_unique)
 ) Engine = InnoDB;
+
+create table ref
+(
+    id bigint,
+    primary key (id)
+) Engine = InnoDB;

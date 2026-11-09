@@ -41,6 +41,10 @@ type (
 		// Routes that have been merged into this one.
 		MergedWith []*Route
 
+		// NoRoutesSpecialHandling is set when an empty destination can still
+		// produce rows from a reference or dual UNION input.
+		NoRoutesSpecialHandling bool
+
 		Routing Routing
 
 		Ordering []RouteOrdering

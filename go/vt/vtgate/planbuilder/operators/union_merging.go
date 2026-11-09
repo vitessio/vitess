@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // mergeUnionInputInAnyOrder merges sources the sources of the union in any order
@@ -110,6 +111,9 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
+	lhsInput, rhsInput := operatorsToRoutes(lhs, rhs)
+	noRoutesSpecialHandling := routeNeedsNoRoutesSpecialHandling(lhsInput) || routeNeedsNoRoutesSpecialHandling(rhsInput)
+
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
@@ -122,6 +126,7 @@ func mergeUnionInputs(
 	// incorrectly discard the other side's rows.
 	if a == none || b == none {
 		if op, exprs, merged := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b); merged {
+			markNoRoutesSpecialHandling(op, noRoutesSpecialHandling)
 			return op, exprs
 		}
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
@@ -132,13 +137,18 @@ func mergeUnionInputs(
 	// if either side is a dual query, we can always merge them together
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case b == dual || (b == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		markNoRoutesSpecialHandling(op, noRoutesSpecialHandling)
+		return op, exprs
 	case a == dual || (a == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		markNoRoutesSpecialHandling(op, noRoutesSpecialHandling)
+		return op, exprs
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
 		if res != nil {
+			markNoRoutesSpecialHandling(res, noRoutesSpecialHandling)
 			return res, exprs
 		}
 	}
@@ -147,6 +157,37 @@ func mergeUnionInputs(
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 
 	return nil, nil
+}
+
+func routeNeedsNoRoutesSpecialHandling(route *Route) bool {
+	if route == nil {
+		return false
+	}
+	if route.NoRoutesSpecialHandling {
+		return true
+	}
+	switch route.Routing.(type) {
+	case *AnyShardRouting, *DualRouting:
+		return true
+	}
+	return false
+}
+
+func markNoRoutesSpecialHandling(op Operator, needed bool) {
+	if !needed {
+		return
+	}
+	route, ok := op.(*Route)
+	if !ok {
+		return
+	}
+	sharded, ok := route.Routing.(*ShardedRouting)
+	if !ok {
+		return
+	}
+	if _, isLookupVindex := sharded.SelectedVindex().(vindexes.LookupPlanable); isLookupVindex {
+		route.NoRoutesSpecialHandling = true
+	}
 }
 
 // tryMergeNoneUnion merges a union pairing in which at least one side has a

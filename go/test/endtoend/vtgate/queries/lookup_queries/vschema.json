@@ -63,7 +63,9 @@
           "name": "md5_index"
         }
       ]
+    },
+    "ref": {
+      "type": "reference"
     }
   }
 }
-	
