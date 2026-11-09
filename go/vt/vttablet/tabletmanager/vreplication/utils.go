@@ -138,6 +138,29 @@ func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, para
 	insertLog(dbClient, action, vreplID, params["state"], message)
 }
 
+// isParallelApplyConflictError reports whether err is a duplicate-key or FK
+// violation error. From the parallel applier, such an error can mean that its
+// scheduler let two conflicting transactions run concurrently, because the
+// target has a unique key or FK it did not know about.
+func isParallelApplyConflictError(err error) bool {
+	if err == nil {
+		return false
+	}
+	sqlErr, isSQLErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+	if !isSQLErr {
+		return false
+	}
+	switch sqlErr.Num {
+	case sqlerror.ERDupEntry,
+		sqlerror.ERNoReferencedRow,
+		sqlerror.ERRowIsReferenced,
+		sqlerror.ERRowIsReferenced2,
+		sqlerror.ErNoReferencedRow2:
+		return true
+	}
+	return false
+}
+
 // isUnrecoverableError returns true if vreplication cannot recover from the given error and
 // should completely terminate.
 func isUnrecoverableError(err error) bool {

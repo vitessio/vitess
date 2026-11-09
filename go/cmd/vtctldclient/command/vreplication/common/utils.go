@@ -243,7 +243,25 @@ func ParseConfigOverrides(overrides []string) (map[string]string, error) {
 		if _, ok := defaultConfig.Map()[key]; !ok {
 			return nil, fmt.Errorf("unknown vreplication config flag: %s", key)
 		}
+		// A whitespace-only value is no value: send it as empty, which
+		// removes the override on update and is ignored on create, rather
+		// than as whitespace the tablet cannot parse.
+		if strings.TrimSpace(value) == "" {
+			value = ""
+		}
 		configOverrides[key] = value
+	}
+	// Validate the values too: a stored invalid value keeps the workflow's
+	// stream from starting. An empty value removes the override, so it is
+	// not validated.
+	values := make(map[string]string, len(configOverrides))
+	for key, value := range configOverrides {
+		if value != "" {
+			values[key] = value
+		}
+	}
+	if _, err := vttablet.NewVReplicationConfig(values); err != nil {
+		return nil, err
 	}
 	return configOverrides, nil
 }
