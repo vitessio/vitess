@@ -8,8 +8,10 @@ name: Warm Go caches
 # nothing stale. Pull requests restore the newest entries of their base branch.
 #
 # It is also the only writer of the tool download entries that jobs restore
-# through the tool-downloads action (see the tool-downloads job), and of the
-# Maven repository cache that docker_ci restores (see the maven job).
+# through the tool-downloads action (see the tool-downloads job), of the
+# Maven repository cache that docker_ci restores (see the maven job), and of
+# the bootstrap image build cache that the build-bootstrap action reads (see
+# the bootstrap job).
 on:
   push:
     branches:
@@ -282,6 +284,54 @@ jobs:
           PREFIX: ${{ steps.key.outputs.prefix }}
           KEY: ${{ steps.key.outputs.key }}
         run: tools/delete_superseded_cache_entries.sh "${PREFIX}" "${KEY}"
+
+  # The Docker build cache of the bootstrap image, which docker_ci and the
+  # local and region examples build through the build-bootstrap action. Every
+  # run builds the image from the previous run's cache and exports it again,
+  # so the cache follows changes to docker/bootstrap, bootstrap.sh and
+  # build.env.
+  bootstrap:
+    name: "Warm bootstrap image build cache (${{ matrix.flavor }})"
+    # Unlike the other jobs, this one also runs in vitess-security, whose pull
+    # requests build the bootstrap image too.
+    if: (github.repository == 'vitessio/vitess' || github.repository == 'vitessio/vitess-security') && !cancelled()
+    # Restores the tool download entries the tool-downloads job just saved.
+    # A failed or skipped tool-downloads job does not stop it: the image
+    # build checks each restored file's checksum and downloads what it is
+    # missing.
+    needs: tool-downloads
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # The flavors that the build-bootstrap callers build.
+        flavor: [mysql84]
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead, like docker_ci there.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Harden the runner (Audit all outbound calls)
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        with:
+          egress-policy: audit
+
+      - name: Check out code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Restore the tool downloads
+        uses: $/.github/actions/tool-downloads
+
+      - name: Build the bootstrap image and export its build cache
+        uses: $/.github/actions/build-bootstrap
+        with:
+          bootstrap-flavor: ${{ matrix.flavor }}
+          cache-export: "true"
 
   warm:
     name: "Warm Go build cache (${{ matrix.entry }}, ${{ matrix.arch }})"
