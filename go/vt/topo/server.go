@@ -296,24 +296,14 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	// Return a cached client if present.
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	cc, ok := ts.cellConns[cell]
-	if ok {
-		// Client exists in cache.
-		// Let's verify that it is the same cell as we are looking for.
-		// The cell name can be re-used with a different ServerAddress and/or Root
-		// in which case we should get a new connection and update the cache
-		if ci.ServerAddress == cc.cellInfo.ServerAddress && ci.Root == cc.cellInfo.Root {
-			return cc.conn, nil
-		}
-		// Close the cached connection, we don't need it anymore
-		if cc.conn != nil {
-			cc.conn.Close()
-		}
-		// Drop it from the cache too, so that if connecting below fails, no call can get the closed connection, even
-		// after the cell is pointed back at the topo server it was connected to.
-		delete(ts.cellConns, cell)
+	cc, cached := ts.cellConns[cell]
+	if cached && ci.ServerAddress == cc.cellInfo.ServerAddress && ci.Root == cc.cellInfo.Root {
+		// Client exists in cache, for the same ServerAddress and Root as the cell has now.
+		return cc.conn, nil
 	}
 
+	// Either we have no client for the cell yet, or the cell name was re-used with a different ServerAddress
+	// and/or Root, in which case we should get a new connection and update the cache.
 	// Connect to the cell topo server, while holding the lock.
 	// This ensures only one connection is established at any given time.
 	// Create the connection and cache it
@@ -322,9 +312,15 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 	case err == nil:
 		cellReadSem := semaphore.NewWeighted(DefaultReadConcurrency)
 		statsConn := NewStatsConn(cell, conn, cellReadSem)
-		// A Server that SetReadOnly made read-only stays read-only for the cells it connects to afterwards.
-		if globalCellConn, ok := ts.globalCell.(*StatsConn); ok && globalCellConn.IsReadOnly() {
-			statsConn.SetReadOnly(true)
+		if globalCellConn, ok := ts.globalCell.(*StatsConn); ok {
+			// All connections of a Server share its read-only state, see SetReadOnly.
+			statsConn.readOnly = globalCellConn.readOnly
+		}
+		if cached && cc.conn != nil {
+			// Close the cached connection only now that its replacement is up. If connecting fails, it stays
+			// cached: the watches on it keep running, and once the cell is pointed back at the topo server it is
+			// connected to, ConnForCell returns it again rather than a closed connection.
+			cc.conn.Close()
 		}
 		ts.cellConns[cell] = cellConn{ci, statsConn}
 		return statsConn, nil
@@ -407,24 +403,15 @@ func (ts *Server) OpenExternalVitessClusterServer(ctx context.Context, clusterNa
 	return externalTopo, nil
 }
 
-// SetReadOnly is initially ONLY implemented by StatsConn and used in ReadOnlyServer
+// SetReadOnly is initially ONLY implemented by StatsConn and used in ReadOnlyServer.
+// The global cell connection and every cell connection ConnForCell creates share one read-only state, so this
+// covers them all, including the cells the Server connects to afterwards.
 func (ts *Server) SetReadOnly(readOnly bool) error {
 	globalCellConn, ok := ts.globalCell.(*StatsConn)
 	if !ok {
 		return fmt.Errorf("invalid global cell connection type, expected StatsConn but found: %T", ts.globalCell)
 	}
 	globalCellConn.SetReadOnly(readOnly)
-
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	for _, cc := range ts.cellConns {
-		localCellConn, ok := cc.conn.(*StatsConn)
-		if !ok {
-			return fmt.Errorf("invalid local cell connection type, expected StatsConn but found: %T", cc.conn)
-		}
-		localCellConn.SetReadOnly(readOnly)
-	}
-
 	return nil
 }
 
@@ -434,23 +421,7 @@ func (ts *Server) IsReadOnly() (bool, error) {
 	if !ok {
 		return false, fmt.Errorf("invalid global cell connection type, expected StatsConn but found: %T", ts.globalCell)
 	}
-	if !globalCellConn.IsReadOnly() {
-		return false, nil
-	}
-
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	for _, cc := range ts.cellConns {
-		localCellConn, ok := cc.conn.(*StatsConn)
-		if !ok {
-			return false, fmt.Errorf("invalid local cell connection type, expected StatsConn but found: %T", cc.conn)
-		}
-		if !localCellConn.IsReadOnly() {
-			return false, nil
-		}
-	}
-
-	return true, nil
+	return globalCellConn.IsReadOnly(), nil
 }
 
 // GetKeyspaceRoutingRulesPath returns the path to the keyspace routing rules file in the topo.

@@ -23,49 +23,24 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/consul/api/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/topo"
 )
 
-// TestKVCallsEndWithContext verifies that each Consul KV call returns when its ctx is done, even if the
-// Consul server never answers, so that callers can bound a call that hangs.
-func TestKVCallsEndWithContext(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	// Accept connections and never answer on them.
-	var mu sync.Mutex
-	var conns []net.Conn
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			mu.Lock()
-			conns = append(conns, conn)
-			mu.Unlock()
-		}
-	}()
-	t.Cleanup(func() {
-		listener.Close()
-		mu.Lock()
-		defer mu.Unlock()
-		for _, conn := range conns {
-			conn.Close()
-		}
-	})
+// kvCall is one Consul KV call of a Server, for table tests over all of them.
+type kvCall struct {
+	name string
+	call func(ctx context.Context) error
+}
 
-	s, err := NewServer("cell", listener.Addr().String(), "root")
-	require.NoError(t, err)
-	t.Cleanup(s.Close)
+// kvCalls returns every KV call of s that passes its ctx to Consul.
+func kvCalls(t *testing.T, s *Server) []kvCall {
 	mp, err := s.NewLeaderParticipation("election", "id")
 	require.NoError(t, err)
-
-	tests := []struct {
-		name string
-		call func(ctx context.Context) error
-	}{{
+	return []kvCall{{
 		name: "Create",
 		call: func(ctx context.Context) error {
 			_, err := s.Create(ctx, "file", []byte("contents"))
@@ -107,7 +82,41 @@ func TestKVCallsEndWithContext(t *testing.T) {
 			return err
 		},
 	}}
-	for _, tt := range tests {
+}
+
+// TestKVCallsEndWithContext verifies that each Consul KV call returns when its ctx is done, even if the
+// Consul server never answers, so that callers can bound a call that hangs.
+func TestKVCallsEndWithContext(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	// Accept connections and never answer on them.
+	var mu sync.Mutex
+	var conns []net.Conn
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			conns = append(conns, conn)
+			mu.Unlock()
+		}
+	}()
+	t.Cleanup(func() {
+		listener.Close()
+		mu.Lock()
+		defer mu.Unlock()
+		for _, conn := range conns {
+			conn.Close()
+		}
+	})
+
+	s, err := NewServer("cell", listener.Addr().String(), "root")
+	require.NoError(t, err)
+	t.Cleanup(s.Close)
+
+	for _, tt := range kvCalls(t, s) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 			t.Cleanup(cancel)
@@ -121,4 +130,54 @@ func TestKVCallsEndWithContext(t *testing.T) {
 			require.True(t, topo.IsErrType(err, topo.Timeout), "expected a topo.Timeout error, got %v", err)
 		})
 	}
+}
+
+// TestKVCallsKeepDialTimeoutUnderLiveContext verifies that when dialing the Consul server times out while the
+// caller's ctx is still live, each KV call returns the transport error rather than a topo.Timeout. A dial
+// timeout also matches context.DeadlineExceeded, and srvtopo drops the values it has cached once a watch
+// fails with a topo error past the cache TTL, so a vtgate whose packets to Consul are dropped would otherwise
+// stop serving SrvKeyspace and SrvVSchema instead of keeping its last known values.
+func TestKVCallsKeepDialTimeoutUnderLiveContext(t *testing.T) {
+	timeoutErr := dialTimeoutError(t)
+	cfg := api.DefaultConfig()
+	cfg.Address = "127.0.0.1:1"
+	cfg.Transport.DialContext = func(context.Context, string, string) (net.Conn, error) {
+		return nil, timeoutErr
+	}
+	client, err := api.NewClient(cfg)
+	require.NoError(t, err)
+	s := &Server{
+		client: client,
+		kv:     client.KV(),
+		root:   "root",
+		locks:  make(map[string]*lockInstance),
+	}
+	t.Cleanup(s.Close)
+
+	for _, tt := range kvCalls(t, s) {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call(t.Context())
+			require.Error(t, err)
+			var opErr *net.OpError
+			require.ErrorAs(t, err, &opErr, "expected the dial error, got %v", err)
+			assert.True(t, opErr.Timeout())
+			assert.False(t, topo.IsErrType(err, topo.Timeout), "a dial timeout under a live ctx became a topo.Timeout: %v", err)
+		})
+	}
+}
+
+// dialTimeoutError returns the error that net returns when a dial times out, by dialing a listener with a ctx
+// whose deadline has passed. net reports that the same way as a Dialer whose Timeout ran out.
+func dialTimeoutError(t *testing.T) error {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+	expired, cancel := context.WithDeadline(t.Context(), time.Now())
+	defer cancel()
+	conn, err := (&net.Dialer{}).DialContext(expired, "tcp", listener.Addr().String())
+	if err == nil {
+		conn.Close()
+	}
+	require.Error(t, err, "dialing with an expired ctx did not fail")
+	return err
 }

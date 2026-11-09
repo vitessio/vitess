@@ -44,7 +44,7 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 	ok, resp, _, err := s.kv.Txn(ops, options.WithContext(ctx))
 	if err != nil {
 		// Communication error.
-		return nil, convertError(err, nodePath)
+		return nil, convertError(ctx, err, nodePath)
 	}
 	if !ok {
 		// Transaction was rolled back, means the node exists.
@@ -74,7 +74,7 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 	ok, resp, _, err := s.kv.Txn(ops, options.WithContext(ctx))
 	if err != nil {
 		// Communication error.
-		return nil, convertError(err, nodePath)
+		return nil, convertError(ctx, err, nodePath)
 	}
 	if !ok {
 		// Transaction was rolled back, means the node has a
@@ -91,7 +91,7 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 	options := &api.QueryOptions{}
 	pair, _, err := s.kv.Get(nodePath, options.WithContext(ctx))
 	if err != nil {
-		return nil, nil, convertError(err, nodePath)
+		return nil, nil, convertError(ctx, err, nodePath)
 	}
 	if pair == nil {
 		return nil, nil, topo.NewError(topo.NoNode, nodePath)
@@ -112,7 +112,7 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo
 	options := &api.QueryOptions{}
 	pairs, _, err := s.kv.List(nodePathPrefix, options.WithContext(ctx))
 	if err != nil {
-		return []topo.KVInfo{}, convertError(err, nodePathPrefix)
+		return []topo.KVInfo{}, convertError(ctx, err, nodePathPrefix)
 	}
 	if len(pairs) == 0 {
 		return []topo.KVInfo{}, topo.NewError(topo.NoNode, nodePathPrefix)
@@ -157,7 +157,7 @@ func (s *Server) Delete(ctx context.Context, filePath string, version topo.Versi
 	ok, resp, _, err := s.kv.Txn(ops, options.WithContext(ctx))
 	if err != nil {
 		// Communication error.
-		return convertError(err, nodePath)
+		return convertError(ctx, err, nodePath)
 	}
 	if !ok {
 		// Transaction was rolled back, means the Get failed,

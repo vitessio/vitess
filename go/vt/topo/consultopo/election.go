@@ -126,7 +126,7 @@ func (mp *consulLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (st
 	options := &api.QueryOptions{}
 	pair, _, err := mp.s.kv.Get(electionPath, options.WithContext(ctx))
 	if err != nil {
-		return "", convertError(err, electionPath)
+		return "", convertError(ctx, err, electionPath)
 	}
 	if pair == nil {
 		return "", nil

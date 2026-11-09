@@ -47,7 +47,7 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 		// easiest way to do this is to return convertError(err).
 		// It may lose some of the context, if this is an issue,
 		// maybe logging the error would work here.
-		return nil, convertError(err, dirPath)
+		return nil, convertError(ctx, err, dirPath)
 	}
 
 	return s.lock(ctx, dirPath, contents, s.lockTTL)
@@ -62,7 +62,7 @@ func (s *Server) LockWithTTL(ctx context.Context, dirPath, contents string, ttl 
 		// easiest way to do this is to return convertError(err).
 		// It may lose some of the context, if this is an issue,
 		// maybe logging the error would work here.
-		return nil, convertError(err, dirPath)
+		return nil, convertError(ctx, err, dirPath)
 	}
 
 	return s.lock(ctx, dirPath, contents, ttl.String())
@@ -83,7 +83,7 @@ func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.Lo
 		// easiest way to do this is to return convertError(err).
 		// It may lose some of the context, if this is an issue,
 		// maybe logging the error would work here.
-		return nil, convertError(err, dirPath)
+		return nil, convertError(ctx, err, dirPath)
 	}
 
 	// If there is a file 'lock' in it then we can assume that someone else already has a lock.
@@ -139,7 +139,7 @@ func (s *Server) lock(ctx context.Context, dirPath, contents, ttl string) (topo.
 		s.mu.Unlock()
 		select {
 		case <-ctx.Done():
-			return nil, convertError(ctx.Err(), dirPath)
+			return nil, convertError(ctx, ctx.Err(), dirPath)
 		case <-li.done:
 		}
 

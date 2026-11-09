@@ -51,18 +51,20 @@ const readOnlyErrorStrFormat = "cannot perform %s on %s as the topology server c
 
 // The StatsConn is a wrapper for a Conn that emits stats for every operation
 type StatsConn struct {
-	cell     string
-	conn     Conn
-	readOnly atomic.Bool
+	cell string
+	conn Conn
+	// readOnly is a pointer so that the connections of a Server can share one read-only state.
+	readOnly *atomic.Bool
 	readSem  *semaphore.Weighted
 }
 
 // NewStatsConn returns a StatsConn
 func NewStatsConn(cell string, conn Conn, readSem *semaphore.Weighted) *StatsConn {
 	return &StatsConn{
-		cell:    cell,
-		conn:    conn,
-		readSem: readSem,
+		cell:     cell,
+		conn:     conn,
+		readOnly: new(atomic.Bool),
+		readSem:  readSem,
 	}
 }
 
