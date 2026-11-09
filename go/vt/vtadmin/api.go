@@ -585,6 +585,10 @@ func (api *API) ApplySchema(ctx context.Context, req *vtadminpb.ApplySchemaReque
 		return nil, fmt.Errorf("%w: cannot create schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -629,6 +633,10 @@ func (api *API) CancelSchemaMigration(ctx context.Context, req *vtadminpb.Cancel
 		return nil, fmt.Errorf("%w: cannot cancel schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -648,6 +656,10 @@ func (api *API) CleanupSchemaMigration(ctx context.Context, req *vtadminpb.Clean
 		return nil, fmt.Errorf("%w: cannot cleanup schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -665,6 +677,10 @@ func (api *API) CompleteSchemaMigration(ctx context.Context, req *vtadminpb.Comp
 
 	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.CompleteSchemaMigrationAction) {
 		return nil, fmt.Errorf("%w: cannot complete schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -1288,6 +1304,10 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 	requestsByCluster := make(map[string][]*vtctldatapb.GetSchemaMigrationsRequest, len(req.ClusterRequests))
 
 	for _, r := range req.ClusterRequests {
+		if r.GetRequest() == nil {
+			return nil, fmt.Errorf("%w: cluster_requests.request is required", errors.ErrInvalidRequest)
+		}
+
 		clusterIDs = append(clusterIDs, r.ClusterId)
 		requestsByCluster[r.ClusterId] = append(requestsByCluster[r.ClusterId], r.Request)
 	}
@@ -1661,6 +1681,10 @@ func (api *API) GetTransactionInfo(ctx context.Context, req *vtadminpb.GetTransa
 		return nil, nil
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	return c.Vtctld.GetTransactionInfo(ctx, req.Request)
 }
 
@@ -1811,6 +1835,10 @@ func (api *API) VDiffCreate(ctx context.Context, req *vtadminpb.VDiffCreateReque
 		return nil, nil
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -1843,6 +1871,10 @@ func (api *API) VDiffShow(ctx context.Context, req *vtadminpb.VDiffShowRequest) 
 
 	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.ClusterResource, rbac.GetAction) {
 		return nil, nil
+	}
+
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -2113,6 +2145,10 @@ func (api *API) LaunchSchemaMigration(ctx context.Context, req *vtadminpb.Launch
 		return nil, fmt.Errorf("%w: cannot launch schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -2130,6 +2166,10 @@ func (api *API) MaterializeCreate(ctx context.Context, req *vtadminpb.Materializ
 
 	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
 		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	if req.Request.GetSettings() == nil {
+		return nil, fmt.Errorf("%w: request.settings is required", errors.ErrInvalidRequest)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -2164,6 +2204,10 @@ func (api *API) MoveTablesComplete(ctx context.Context, req *vtadminpb.MoveTable
 		return nil, fmt.Errorf("%w: cannot complete workflow in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -2183,6 +2227,10 @@ func (api *API) MoveTablesCreate(ctx context.Context, req *vtadminpb.MoveTablesC
 		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -2200,6 +2248,10 @@ func (api *API) ReshardCreate(ctx context.Context, req *vtadminpb.ReshardCreateR
 
 	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
 		return nil, fmt.Errorf("%w: cannot create workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -2431,6 +2483,10 @@ func (api *API) RetrySchemaMigration(ctx context.Context, req *vtadminpb.RetrySc
 
 	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.SchemaMigrationResource, rbac.RetryAction) {
 		return nil, fmt.Errorf("%w: cannot retry schema migration in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
@@ -2993,6 +3049,10 @@ func (api *API) WorkflowDelete(ctx context.Context, req *vtadminpb.WorkflowDelet
 		return nil, fmt.Errorf("%w: cannot delete workflow in %s", errors.ErrUnauthorized, req.ClusterId)
 	}
 
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
+	}
+
 	c, err := api.getClusterForRequest(req.ClusterId)
 	if err != nil {
 		return nil, err
@@ -3011,6 +3071,10 @@ func (api *API) WorkflowSwitchTraffic(ctx context.Context, req *vtadminpb.Workfl
 
 	if !api.authz.IsAuthorized(ctx, req.ClusterId, rbac.WorkflowResource, rbac.CreateAction) {
 		return nil, fmt.Errorf("%w: cannot switch traffic for workflow in %s", errors.ErrUnauthorized, req.ClusterId)
+	}
+
+	if req.Request == nil {
+		return nil, fmt.Errorf("%w: request is required", errors.ErrInvalidRequest)
 	}
 
 	c, err := api.getClusterForRequest(req.ClusterId)
