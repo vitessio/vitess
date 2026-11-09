@@ -414,10 +414,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 
 	tm.baseTabletType = tablet.Type
 
-	// From here on Start spawns the keyspace rebuild, shard sync and shard
-	// health monitor goroutines, which use the topo server. None of them may
-	// outlive a failed Start: the caller is free to close the topo server as
-	// soon as Start has returned. createKeyspaceShard can itself spawn the
+	// From here on Start spawns the keyspace rebuild and shard sync goroutines,
+	// which use the topo server. Neither may outlive a failed Start: the caller
+	// is free to close the topo server as soon as Start has returned. createKeyspaceShard can itself spawn the
 	// keyspace rebuild and then fail, so this has to be in place before it.
 	// (The mysql port lookup that checkMysql may spawn is not stopped here.)
 	startSucceeded := false
@@ -425,7 +424,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		if startSucceeded {
 			return
 		}
-		tm.stopShardHealthMonitor()
 		tm.stopShardSync()
 		tm.stopRebuildKeyspace()
 	}()
@@ -478,118 +476,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	tm.exportStats()
 	servenv.OnRun(tm.registerTabletManager)
 
-<<<<<<< HEAD
-||||||| parent of bbccb8e19a (tabletmanager: stop background goroutines when Start fails (#21052))
-	// Start the shard-peer health monitor before the restore handling below,
-	// which returns early when --restore-from-backup is set (even when there is
-	// no backup and the tablet starts up empty). Wiring it here ensures tablets
-	// that use --restore-from-backup still run the monitor.
-	if trackShardTabletHealth {
-		// Fail startup on an invalid configuration rather than silently running
-		// without the monitor: an operator who opted in expects the shard health
-		// reports (and the quorum protection built on them) to actually exist.
-		if shardTabletHealthInterval <= 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-				"--shard-tablet-health-interval must be positive when --track-shard-tablet-health is set, got %v",
-				shardTabletHealthInterval)
-		}
-		keyspace := tablet.Keyspace
-		shard := tablet.Shard
-		listPeers := func(ctx context.Context) (map[string]*topo.TabletInfo, error) {
-			return tm.TopoServer.GetTabletMapForShard(ctx, keyspace, shard)
-		}
-		// The shard record's PrimaryAlias is the authoritative current primary (the alias VTOrc
-		// evaluates quorum for), so the monitor probes exactly that tablet rather than relying on
-		// the possibly-lagging tablet-record Type.
-		shardPrimaryAlias := func(ctx context.Context) (*topodatapb.TabletAlias, error) {
-			si, err := tm.TopoServer.GetShard(ctx, keyspace, shard)
-			if err != nil {
-				return nil, err
-			}
-			return si.PrimaryAlias, nil
-		}
-		tm.shardHealthMonitor = newShardHealthMonitor(
-			monitorPinger(tm.tmc),
-			listPeers,
-			shardPrimaryAlias,
-			topoproto.TabletAliasString(tablet.Alias),
-			shardTabletHealthInterval,
-			// Ping timeout is decoupled from (and larger than) the interval: a momentarily slow but
-			// alive primary should not accrue failures from a too-tight deadline, while a genuinely
-			// dead vttablet fails fast (connection refused) regardless of the timeout.
-			2*shardTabletHealthInterval,
-		)
-		// Let the monitor release the pooled ping connection of a peer that
-		// leaves its probe set (e.g. a demoted primary): nothing will ping it
-		// again, so nothing else would ever close it. Set before Start so the
-		// refresh loop observes it without synchronization.
-		if closer, ok := tm.tmc.(interface {
-			CloseShardHealthPoolEntry(tablet *topodatapb.Tablet)
-		}); ok {
-			tm.shardHealthMonitor.evictPooledConn = closer.CloseShardHealthPoolEntry
-		}
-		tm.shardHealthMonitor.Start(tm.BatchCtx)
-	}
-	startSucceeded := false
-	defer func() {
-		if !startSucceeded {
-			tm.stopShardHealthMonitor()
-		}
-	}()
-
-=======
-	// Start the shard-peer health monitor before the restore handling below,
-	// which returns early when --restore-from-backup is set (even when there is
-	// no backup and the tablet starts up empty). Wiring it here ensures tablets
-	// that use --restore-from-backup still run the monitor.
-	if trackShardTabletHealth {
-		// Fail startup on an invalid configuration rather than silently running
-		// without the monitor: an operator who opted in expects the shard health
-		// reports (and the quorum protection built on them) to actually exist.
-		if shardTabletHealthInterval <= 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
-				"--shard-tablet-health-interval must be positive when --track-shard-tablet-health is set, got %v",
-				shardTabletHealthInterval)
-		}
-		keyspace := tablet.Keyspace
-		shard := tablet.Shard
-		listPeers := func(ctx context.Context) (map[string]*topo.TabletInfo, error) {
-			return tm.TopoServer.GetTabletMapForShard(ctx, keyspace, shard)
-		}
-		// The shard record's PrimaryAlias is the authoritative current primary (the alias VTOrc
-		// evaluates quorum for), so the monitor probes exactly that tablet rather than relying on
-		// the possibly-lagging tablet-record Type.
-		shardPrimaryAlias := func(ctx context.Context) (*topodatapb.TabletAlias, error) {
-			si, err := tm.TopoServer.GetShard(ctx, keyspace, shard)
-			if err != nil {
-				return nil, err
-			}
-			return si.PrimaryAlias, nil
-		}
-		tm.shardHealthMonitor = newShardHealthMonitor(
-			monitorPinger(tm.tmc),
-			listPeers,
-			shardPrimaryAlias,
-			topoproto.TabletAliasString(tablet.Alias),
-			shardTabletHealthInterval,
-			// Ping timeout is decoupled from (and larger than) the interval: a momentarily slow but
-			// alive primary should not accrue failures from a too-tight deadline, while a genuinely
-			// dead vttablet fails fast (connection refused) regardless of the timeout.
-			2*shardTabletHealthInterval,
-		)
-		// Let the monitor release the pooled ping connection of a peer that
-		// leaves its probe set (e.g. a demoted primary): nothing will ping it
-		// again, so nothing else would ever close it. Set before Start so the
-		// refresh loop observes it without synchronization.
-		if closer, ok := tm.tmc.(interface {
-			CloseShardHealthPoolEntry(tablet *topodatapb.Tablet)
-		}); ok {
-			tm.shardHealthMonitor.evictPooledConn = closer.CloseShardHealthPoolEntry
-		}
-		tm.shardHealthMonitor.Start(tm.BatchCtx)
-	}
-
->>>>>>> bbccb8e19a (tabletmanager: stop background goroutines when Start fails (#21052))
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
 		return err
@@ -597,6 +483,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if restoring {
 		// If restore was triggered, it will take care
 		// of updating the tablet state and initializing replication.
+		startSucceeded = true
 		return nil
 	}
 	// We should be re-read the tablet from tabletManager and use the type specified there.
@@ -613,6 +500,8 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		return err
 	}
 	tm.tmState.Open()
+
+	startSucceeded = true
 	return nil
 }
 
