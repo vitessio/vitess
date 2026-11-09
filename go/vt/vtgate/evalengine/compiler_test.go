@@ -930,6 +930,29 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `TRIM(TRAILING '0' FROM '1.500')`,
 			result:     `VARCHAR("1.5")`,
 		},
+		// The collations that pad with spaces compare two strings as if the
+		// shorter one ended in spaces, as MySQL 8.4.13 does; LIKE and
+		// utf8mb4_0900_ai_ci do not pad.
+		{
+			expression: "_latin1 'a' = _latin1 'a '",
+			result:     `INT64(1)`,
+		},
+		{
+			expression: "_utf8mb3 'a\t' < _utf8mb3 'a'",
+			result:     `INT64(1)`,
+		},
+		{
+			expression: "_utf8mb4 'a' = _utf8mb4 'a ' collate utf8mb4_unicode_ci",
+			result:     `INT64(1)`,
+		},
+		{
+			expression: "_utf8mb4 'a' = _utf8mb4 'a '",
+			result:     `INT64(0)`,
+		},
+		{
+			expression: "_latin1 'a' like _latin1 'a '",
+			result:     `INT64(0)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

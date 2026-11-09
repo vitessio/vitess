@@ -47,9 +47,11 @@ func (c *Collation_multibyte) IsBinary() bool {
 	return c.sort == nil
 }
 
+// Collate pads with spaces, as MySQL's multibyte collations do: the bytes of
+// the longer string that the shorter one does not have compare with a space.
 func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 	if c.sort == nil {
-		return collationBinary(left, right, isPrefix)
+		return collationBinaryPadSpace(left, right, isPrefix)
 	}
 
 	cmpLen := min(len(left), len(right))
@@ -94,8 +96,28 @@ func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {
 
 	if isPrefix {
 		left = left[:cmpLen]
+		return len(left) - len(right)
 	}
-	return len(left) - len(right)
+	if len(left) > cmpLen {
+		return c.compareWithSpace(left[cmpLen:])
+	}
+	return -c.compareWithSpace(right[cmpLen:])
+}
+
+// compareWithSpace returns how rest compares with as many spaces as it has
+// bytes. A byte of a multibyte character is above a space.
+func (c *Collation_multibyte) compareWithSpace(rest []byte) int {
+	space := c.sort[' ']
+	for _, ch := range rest {
+		w := ch
+		if ch <= 127 {
+			w = c.sort[ch]
+		}
+		if w != space {
+			return int(w) - int(space)
+		}
+	}
+	return 0
 }
 
 func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) []byte {
@@ -155,6 +177,19 @@ func (c *Collation_multibyte) Hash(hasher *vthash.Hasher, src []byte, numCodepoi
 	left := numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
+		// Collate pads with spaces, so the trailing bytes that weigh as a
+		// space are left out.
+		space := byte(' ')
+		if sortOrder != nil {
+			space = sortOrder[' ']
+		}
+		for len(src) > 0 {
+			last := src[len(src)-1]
+			if last > 127 || (sortOrder == nil && last != space) || (sortOrder != nil && sortOrder[last] != space) {
+				break
+			}
+			src = src[:len(src)-1]
+		}
 	}
 	for len(src) > 0 && left > 0 {
 		w := src[0]
@@ -184,5 +219,5 @@ func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {
 }
 
 func (c *Collation_multibyte) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newMultibyteWildcardMatcher(c.charset, c.sort, c.Collate, pat, matchOne, matchMany, escape)
+	return newMultibyteWildcardMatcher(c.charset, c.sort, c.Collate, trailingMultibyteSpaces(c.sort), pat, matchOne, matchMany, escape)
 }

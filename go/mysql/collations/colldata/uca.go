@@ -226,7 +226,7 @@ func (c *Collation_utf8mb4_uca_0900) Wildcard(pat []byte, matchOne rune, matchMa
 	// MySQL compares LIKE character by character and does not apply the
 	// expansions and contractions that Collate applies, so 'ß' = 'ss' is
 	// true and 'ß' LIKE 'ss' is false.
-	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca.WeightsEqual, nil, pat, matchOne, matchMany, escape)
+	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca.WeightsEqual, nil, nil, pat, matchOne, matchMany, escape)
 }
 
 func (c *Collation_utf8mb4_uca_0900) ToLower(dst, src []byte) []byte {
@@ -284,7 +284,7 @@ func (c *Collation_utf8mb4_0900_bin) Wildcard(pat []byte, matchOne rune, matchMa
 	equals := func(a, b rune) bool {
 		return a == b
 	}
-	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, equals, c.Collate, pat, matchOne, matchMany, escape)
+	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, equals, c.Collate, nil, pat, matchOne, matchMany, escape)
 }
 
 func (c *Collation_utf8mb4_0900_bin) ToLower(dst, src []byte) []byte {
@@ -319,6 +319,9 @@ func (c *Collation_uca_legacy) IsBinary() bool {
 	return false
 }
 
+// Collate pads with spaces, as MySQL's UCA collations before 9.0.0 do: the
+// weights of the longer string that the shorter one does not have compare
+// with the weight of a space.
 func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 	var (
 		l, r     uint16
@@ -337,8 +340,27 @@ func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
 		if !rok && isPrefix {
 			return 0
 		}
-		return int(l) - int(r)
+		if lok == rok || isPrefix {
+			return int(l) - int(r)
+		}
+		space := c.uca.WeightForSpace()
+		if lok {
+			return compareWeightsWithSpace(l, &itleft, space)
+		}
+		return -compareWeightsWithSpace(r, &itright, space)
 	}
+}
+
+// compareWeightsWithSpace returns how the weights from first on, the rest of
+// the longer of two strings, compare with the weight of a space, which pads
+// the shorter one.
+func compareWeightsWithSpace(first uint16, it *uca.WeightIteratorLegacy, space uint16) int {
+	for w, ok := first, true; ok; w, ok = it.Next() {
+		if w != space {
+			return int(w) - int(space)
+		}
+	}
+	return 0
 }
 
 func (c *Collation_uca_legacy) WeightString(dst, src []byte, numCodepoints int) []byte {
@@ -379,22 +401,47 @@ func (c *Collation_uca_legacy) Hash(hasher *vthash.Hasher, src []byte, numCodepo
 	it := c.uca.Iterator(src)
 
 	hasher.Write64(uint64(c.id))
+	// Collate pads with spaces, so the trailing weights of a space are left
+	// out when the string is not a CHAR(numCodepoints), which gets them back
+	// as padding. A space is counted until a weight that is not a space's
+	// follows it. The weights go to the hasher in big-endian chunks, which
+	// hash as writing each of them does.
+	space := c.uca.WeightForSpace()
+	spaces := 0
+	var buf [128]byte
+	n := 0
+	put := func(w uint16) {
+		if n == len(buf) {
+			_, _ = hasher.Write(buf[:n]) // writing to a hasher does not fail
+			n = 0
+		}
+		buf[n], buf[n+1] = byte(w>>8), byte(w)
+		n += 2
+	}
 	for {
 		w, ok := it.Next()
 		if !ok {
 			break
 		}
-		hasher.Write16(bits.ReverseBytes16(w))
+		if w == space {
+			spaces++
+			continue
+		}
+		for ; spaces > 0; spaces-- {
+			put(space)
+		}
+		put(w)
 	}
 
 	if numCodepoints > 0 {
-		weightForSpace := bits.ReverseBytes16(c.uca.WeightForSpace())
-		numCodepoints -= it.Length()
-		for numCodepoints > 0 {
-			hasher.Write16(weightForSpace)
-			numCodepoints--
+		for ; spaces > 0; spaces-- {
+			put(space)
+		}
+		for numCodepoints -= it.Length(); numCodepoints > 0; numCodepoints-- {
+			put(space)
 		}
 	}
+	_, _ = hasher.Write(buf[:n]) // writing to a hasher does not fail
 }
 
 func (c *Collation_uca_legacy) WeightStringLen(numBytes int) int {
@@ -407,5 +454,5 @@ func (c *Collation_uca_legacy) Wildcard(pat []byte, matchOne rune, matchMany run
 	// MySQL compares LIKE character by character, without contractions, and
 	// two different supplementary characters are not equal to each other in
 	// LIKE even when both weigh as the replacement character in Collate.
-	return newUnicodeWildcardMatcher(c.uca.Charset(), c.uca.WeightsEqual, nil, pat, matchOne, matchMany, escape)
+	return newUnicodeWildcardMatcher(c.uca.Charset(), c.uca.WeightsEqual, nil, nil, pat, matchOne, matchMany, escape)
 }

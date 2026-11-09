@@ -49,6 +49,9 @@ func (c *Collation_unicode_general_ci) IsBinary() bool {
 	return false
 }
 
+// Collate pads with spaces, as MySQL's general collations do: the characters
+// of the longer string that the shorter one does not have compare with a
+// space.
 func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool) int {
 	unicaseInfo := c.unicase
 	cs := c.charset
@@ -76,7 +79,10 @@ func (c *Collation_unicode_general_ci) Collate(left, right []byte, isPrefix bool
 	if isPrefix {
 		return len(right)
 	}
-	return len(left) - len(right)
+	if len(left) > 0 {
+		return compareRunesWithSpace(cs, left, unicaseInfo.unicodeSort)
+	}
+	return -compareRunesWithSpace(cs, right, unicaseInfo.unicodeSort)
 }
 
 func (c *Collation_unicode_general_ci) WeightString(dst, src []byte, numCodepoints int) []byte {
@@ -134,6 +140,10 @@ func (c *Collation_unicode_general_ci) Hash(hasher *vthash.Hasher, src []byte, n
 		left = math.MaxInt32
 	}
 
+	// Collate pads with spaces, so the trailing spaces, the only characters
+	// that weigh as a space, are left out. A CHAR(numCodepoints) gets them
+	// back as padding.
+	src = trimTrailingSpaces(cs, src)
 	for left > 0 {
 		r, width, ok := cs.DecodeRune(src)
 		if !ok {
@@ -161,7 +171,7 @@ func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, match
 	equals := func(a, b rune) bool {
 		return sort(a) == sort(b)
 	}
-	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
+	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, trailingCharsetSpaces(c.charset), pat, matchOne, matchMany, escape)
 }
 
 type Collation_unicode_bin struct {
@@ -186,8 +196,22 @@ func (c *Collation_unicode_bin) IsBinary() bool {
 	return true
 }
 
+// Collate pads with spaces, as MySQL's binary Unicode collations do: the
+// characters of the longer string that the shorter one does not have compare
+// with a space by their code points.
 func (c *Collation_unicode_bin) Collate(left, right []byte, isPrefix bool) int {
-	return collationBinary(left, right, isPrefix)
+	if isPrefix {
+		return collationBinary(left, right, true)
+	}
+	minLen := min(len(left), len(right))
+	if diff := bytes.Compare(left[:minLen], right[:minLen]); diff != 0 {
+		return diff
+	}
+	codepoint := func(r rune) rune { return r }
+	if len(left) > minLen {
+		return compareRunesWithSpace(c.charset, left[minLen:], codepoint)
+	}
+	return -compareRunesWithSpace(c.charset, right[minLen:], codepoint)
 }
 
 func (c *Collation_unicode_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
@@ -299,6 +323,9 @@ func (c *Collation_unicode_bin) hashUnicode(hasher *vthash.Hasher, src []byte, n
 	if left == 0 {
 		left = math.MaxInt32
 	}
+	// Collate pads with spaces, so the trailing spaces are left out. A
+	// CHAR(numCodepoints) gets them back as padding.
+	src = trimTrailingSpaces(cs, src)
 	for left > 0 {
 		r, width, ok := cs.DecodeRune(src)
 		if !ok {
@@ -324,6 +351,9 @@ func (c *Collation_unicode_bin) hashBMP(hasher *vthash.Hasher, src []byte, numCo
 	if left == 0 {
 		left = math.MaxInt32
 	}
+	// Collate pads with spaces, so the trailing spaces are left out. A
+	// CHAR(numCodepoints) gets them back as padding.
+	src = trimTrailingSpaces(cs, src)
 	for left > 0 {
 		r, width, ok := cs.DecodeRune(src)
 		if !ok {
@@ -349,7 +379,7 @@ func (c *Collation_unicode_bin) Wildcard(pat []byte, matchOne rune, matchMany ru
 	equals := func(a, b rune) bool {
 		return a == b
 	}
-	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
+	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, trailingCharsetSpaces(c.charset), pat, matchOne, matchMany, escape)
 }
 
 func collationBinary(left, right []byte, rightPrefix bool) int {

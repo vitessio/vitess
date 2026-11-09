@@ -17,6 +17,7 @@ limitations under the License.
 package colldata
 
 import (
+	"bytes"
 	"encoding/binary"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -67,8 +68,10 @@ func (c *Collation_8bit_bin) IsBinary() bool {
 	return true
 }
 
+// Collate pads with spaces, as MySQL's binary collations of 8-bit character
+// sets do.
 func (c *Collation_8bit_bin) Collate(left, right []byte, rightIsPrefix bool) int {
-	return collationBinary(left, right, rightIsPrefix)
+	return collationBinaryPadSpace(left, right, rightIsPrefix)
 }
 
 func (c *Collation_8bit_bin) WeightString(dst, src []byte, numCodepoints int) []byte {
@@ -91,7 +94,8 @@ func (c *Collation_8bit_bin) WeightString(dst, src []byte, numCodepoints int) []
 func (c *Collation_8bit_bin) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	hasher.Write64(0x8b8b0000 | uint64(c.id))
 	if numCodepoints == 0 {
-		hasher.Write(src)
+		// Collate pads with spaces, so the trailing spaces are left out.
+		hasher.Write(bytes.TrimRight(src, " "))
 		return
 	}
 
@@ -110,7 +114,7 @@ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
 }
 
 func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, trailingSortSpaces(&sortOrderIdentity), pat, matchOne, matchMany, escape)
 }
 
 func (c *Collation_8bit_bin) ToLower(dst, src []byte) []byte {
@@ -154,6 +158,8 @@ func (c *Collation_8bit_simple_ci) IsBinary() bool {
 	return false
 }
 
+// Collate pads with spaces, as MySQL's 8-bit collations do: the bytes of the
+// longer string that the shorter one does not have compare with a space.
 func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix bool) int {
 	sortOrder := c.sort
 	cmpLen := min(len(left), len(right))
@@ -166,13 +172,33 @@ func (c *Collation_8bit_simple_ci) Collate(left, right []byte, rightIsPrefix boo
 	}
 	if rightIsPrefix {
 		left = left[:cmpLen]
+		return len(left) - len(right)
 	}
-	return len(left) - len(right)
+	if len(left) > cmpLen {
+		return c.compareWithSpace(left[cmpLen:])
+	}
+	return -c.compareWithSpace(right[cmpLen:])
 }
 
+// compareWithSpace returns how rest compares with as many spaces as it has
+// bytes.
+func (c *Collation_8bit_simple_ci) compareWithSpace(rest []byte) int {
+	space := c.sort[' ']
+	for _, ch := range rest {
+		if w := c.sort[ch]; w != space {
+			return int(w) - int(space)
+		}
+	}
+	return 0
+}
+
+// TinyWeightString pads a string shorter than four bytes with the weight of a
+// space, as Collate pads it, so that the tiny weights of two strings order
+// them as Collate does when they differ.
 func (c *Collation_8bit_simple_ci) TinyWeightString(src []byte) uint32 {
-	var w32 [4]byte
 	sortOrder := c.sort
+	space := sortOrder[' ']
+	w32 := [4]byte{space, space, space, space}
 	sortLen := min(4, len(src))
 	for i := range sortLen {
 		w32[i] = sortOrder[src[i]]
@@ -209,6 +235,14 @@ func (c *Collation_8bit_simple_ci) Hash(hasher *vthash.Hasher, src []byte, numCo
 	}
 
 	hasher.Write64(uint64(c.id))
+	if numCodepoints == 0 {
+		// Collate pads with spaces, so the trailing bytes that weigh as a
+		// space are left out.
+		space := sortOrder[' ']
+		for tocopy > 0 && sortOrder[src[tocopy-1]] == space {
+			tocopy--
+		}
+	}
 	for _, ch := range src[:tocopy] {
 		hasher.Write8(sortOrder[ch])
 	}
@@ -227,7 +261,7 @@ func (c *Collation_8bit_simple_ci) WeightStringLen(numBytes int) int {
 }
 
 func (c *Collation_8bit_simple_ci) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newEightbitWildcardMatcher(c.sort, c.Collate, pat, matchOne, matchMany, escape)
+	return newEightbitWildcardMatcher(c.sort, c.Collate, trailingSortSpaces(c.sort), pat, matchOne, matchMany, escape)
 }
 
 func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padToMax bool) []byte {
@@ -324,7 +358,7 @@ func (c *Collation_binary) WeightStringLen(numBytes int) int {
 }
 
 func (c *Collation_binary) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
-	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, nil, pat, matchOne, matchMany, escape)
 }
 
 func (c *Collation_binary) ToLower(dst, raw []byte) []byte {

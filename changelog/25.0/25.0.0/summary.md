@@ -48,6 +48,7 @@
         - [MySQL-faithful validation and rejection of unsupported `sql_mode` values](#vtgate-sql-mode-rejection)
         - [New `VEXPLAIN MYSQLPLAN` statement](#vtgate-vexplain-mysqlplan)
         - [VStream metrics report live streams and can include the caller](#vtgate-vstream-metrics)
+        - [VTGate compares strings with MySQL's trailing-space padding](#vtgate-pad-space)
     - **[Reparent](#minor-changes-reparent)**
         - [`EmergencyReparentShard` no longer waits on replicas that cannot win the election](#ers-lagging-relay-log-wait)
         - [`EmergencyReparentShard` can explicitly recover from split brain](#ers-allow-split-brain-promotion)
@@ -599,6 +600,24 @@ Like a plain `EXPLAIN`, the per-shard `EXPLAIN FORMAT=JSON` queries `VEXPLAIN MY
 `VStreamsCount` now also drops streams that end without an error, such as a shard stream ended by a resharding journal event. Previously those streams were counted as active forever.
 
 The new `--vstream-metrics-include-caller` flag adds a `CallerID` label to `VStreamsCreated`, `VStreamsCount`, `VStreamsEventsStreamed`, `VStreamsEndedWithErrors`, `VStreamsLag`, and `VStreamsTransactionsChunked`, so each streaming application can be monitored separately. The label is set to the principal of the effective caller ID in the `VStreamRequest`, or to the MySQL user for SQL `VSTREAM`; streams without one get an empty `CallerID`. The `VStreamRequest` principal is set by the client and is not authenticated by VTGate. Each distinct principal adds a series per keyspace, shard, and tablet type, and the counters keep their series until VTGate restarts, so the number of series grows with the distinct principals seen over the process lifetime, not only those of open streams. For example, if each client instance sets its own principal, the number of series grows with every instance that has connected, so consider the cardinality before enabling the flag. The flag is off by default, and the metrics keep their existing labels when it is off.
+
+#### <a id="vtgate-pad-space"/>VTGate compares strings with MySQL's trailing-space padding</a>
+
+MySQL's collations pad with spaces (`PAD SPACE`), except `binary` and the `utf8mb4` collations of UCA 9.0.0, such as the default `utf8mb4_0900_ai_ci` (`NO PAD`). A padding collation compares two strings as if the shorter one ended in spaces: in `latin1_swedish_ci`, `utf8mb4_general_ci`, `utf8mb4_bin` or `utf8mb4_unicode_ci`, `'a' = 'a '` is 1, and `'a\t' < 'a'` is 1, because a tab weighs less than a space. VTGate compared such strings without the padding, so that `'a'` and `'a '` were different. This affected the results that VTGate computes itself from the rows of several shards: `DISTINCT`, `GROUP BY`, `COUNT(DISTINCT)`, `UNION`, `ORDER BY`, `MIN`, `MAX` and joins on a column in such a collation, and the expressions that it evaluates. VTGate now compares, hashes and orders strings in a padding collation as MySQL does. This was checked against MySQL 8.4.13 with 158,400 pairs of strings in 36 collations, 32 of them padding ones, and on a sharded keyspace. As in MySQL:
+
+- `LIKE` does not pad: `'a' LIKE 'a '` is 0.
+- `WEIGHT_STRING()` keeps the trailing spaces.
+- A `NO PAD` collation does not pad.
+
+VDiff compares rows in the column's collation too, so it now agrees with the order in which MySQL returns rows whose keys differ only in trailing spaces.
+
+Some limitations remain. They apply whether or not the strings have trailing spaces:
+
+- VTGate can compare a string in its column's collation only if it knows the collation, from the VSchema or from schema tracking. Otherwise it uses the column's `WEIGHT_STRING()` from the tablets, which keeps trailing spaces, as in MySQL, so that VTGate does not find `'a'` and `'a '` equal there.
+- When VTGate evaluates an expression on a value from a tablet, such as `MAX(v) = 'y'` on a sharded table, it can take the collation from the tablet's result, which is the connection's, `utf8mb4_0900_ai_ci`, rather than the column's.
+- A `UNION` of a column with a string literal in another collation, such as `SELECT v FROM t UNION SELECT 'x'` from a `utf8mb4` client on a `latin1` column, does not remove duplicates in the column's collation.
+
+**Impact**: on a column in a padding collation, VTGate now returns one row for `'a'` and `'a '` from `DISTINCT` and `GROUP BY`, and counts them as one value in `COUNT(DISTINCT)`, as MySQL does, where it used to return or count them separately when they came from different shards.
 
 ### <a id="minor-changes-reparent"/>Reparent</a>
 

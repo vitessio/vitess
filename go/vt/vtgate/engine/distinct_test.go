@@ -70,6 +70,19 @@ func TestDistinct(t *testing.T) {
 		inputs:         r("myid", "varchar", "monkey", "horse", "Horse", "Monkey", "horses", "MONKEY"),
 		expectedResult: r("myid", "varchar", "monkey", "horse", "horses"),
 	}, {
+		// A collation that pads with spaces, such as latin1_swedish_ci,
+		// finds 'x' and 'x ' equal, as MySQL does, but not 'x' and 'x\t'.
+		testName:       "varchar columns with a collation that pads with spaces",
+		collations:     []collations.ID{collations.ID(8)}, // latin1_swedish_ci
+		inputs:         r("myid", "varchar", "x", "x ", "X", "x\t", "x  ", "y", "y "),
+		expectedResult: r("myid", "varchar", "x", "x\t", "y"),
+	}, {
+		// utf8mb4_0900_ai_ci does not pad with spaces.
+		testName:       "varchar columns with a collation that does not pad",
+		collations:     []collations.ID{collations.CollationUtf8mb4ID},
+		inputs:         r("myid", "varchar", "x", "x ", "X"),
+		expectedResult: r("myid", "varchar", "x", "x "),
+	}, {
 		testName:       "mixed columns",
 		collations:     []collations.ID{collations.CollationUtf8mb4ID, collations.Unknown},
 		inputs:         r("myid|id", "varchar|int64", "monkey|1", "horse|1", "Horse|1", "Monkey|1", "horses|1", "MONKEY|2"),

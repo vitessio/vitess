@@ -91,10 +91,34 @@ type fastMatcher struct {
 	collate  func(left, right []byte, isPrefix bool) int
 	pattern  []byte
 	isPrefix bool
+	// trailingSpaces counts the characters at the end of a string that
+	// weigh as a space, for a collation that pads with spaces, and is nil
+	// for one that does not. patternSpaces is the pattern's count.
+	trailingSpaces func([]byte) int
+	patternSpaces  int
+}
+
+func newFastMatcher(collate func(left, right []byte, isPrefix bool) int, pattern []byte, isPrefix bool, trailingSpaces func([]byte) int) *fastMatcher {
+	cm := &fastMatcher{collate: collate, pattern: pattern, isPrefix: isPrefix, trailingSpaces: trailingSpaces}
+	if trailingSpaces != nil {
+		cm.patternSpaces = trailingSpaces(pattern)
+	}
+	return cm
 }
 
 func (cm *fastMatcher) Match(in []byte) bool {
-	return cm.collate(in, cm.pattern, cm.isPrefix) == 0
+	if cm.isPrefix {
+		return cm.collate(in, cm.pattern, true) == 0
+	}
+	if cm.collate(in, cm.pattern, false) != 0 {
+		return false
+	}
+	// LIKE does not pad with spaces, as the comparison of a collation that
+	// pads does: 'a' LIKE 'a ' is false. Two strings that compare as equal
+	// with the padding differ only in the characters that weigh as a space
+	// at the end of the longer one, so they are equal without it when they
+	// end in as many such characters.
+	return cm.trailingSpaces == nil || cm.trailingSpaces(in) == cm.patternSpaces
 }
 
 // unicodeWildcard is an implementation of WildcardPattern for multibyte charsets;
@@ -105,10 +129,14 @@ type unicodeWildcard struct {
 	pattern []rune
 }
 
+// trailingSpaces counts the characters that weigh as a space at the end of a
+// string, for a collation that pads with spaces; it is nil for one that does
+// not pad. See fastMatcher.
 func newUnicodeWildcardMatcher(
 	cs charset.Charset,
 	equals func(a rune, b rune) bool,
 	collate func(left []byte, right []byte, isPrefix bool) int,
+	trailingSpaces func([]byte) int,
 	pat []byte, chOne, chMany, chEsc rune,
 ) WildcardPattern {
 	var escape bool
@@ -186,18 +214,10 @@ func newUnicodeWildcardMatcher(
 		}
 		if chOneCount == 0 && chEscCount == 0 {
 			if chManyCount == 0 {
-				return &fastMatcher{
-					collate:  collate,
-					pattern:  patOriginal,
-					isPrefix: false,
-				}
+				return newFastMatcher(collate, patOriginal, false, trailingSpaces)
 			}
 			if chManyCount == 1 && chMany < utf8.RuneSelf && parsedPattern[len(parsedPattern)-1] == chMany {
-				return &fastMatcher{
-					collate:  collate,
-					pattern:  patOriginal[:len(patOriginal)-1],
-					isPrefix: true,
-				}
+				return newFastMatcher(collate, patOriginal[:len(patOriginal)-1], true, trailingSpaces)
 			}
 		}
 	}
@@ -368,9 +388,11 @@ type eightbitWildcard struct {
 	pattern []int16
 }
 
+// trailingSpaces is as for newUnicodeWildcardMatcher.
 func newEightbitWildcardMatcher(
 	sort *[256]byte,
 	collate func(left []byte, right []byte, isPrefix bool) int,
+	trailingSpaces func([]byte) int,
 	pat []byte, chOneRune, chManyRune, chEscRune rune,
 ) WildcardPattern {
 	var escape bool
@@ -427,18 +449,10 @@ func newEightbitWildcardMatcher(
 		}
 		if chOneCount == 0 && chEscCount == 0 {
 			if chManyCount == 0 {
-				return &fastMatcher{
-					collate:  collate,
-					pattern:  pat,
-					isPrefix: false,
-				}
+				return newFastMatcher(collate, pat, false, trailingSpaces)
 			}
 			if chManyCount == 1 && pat[len(pat)-1] == chMany {
-				return &fastMatcher{
-					collate:  collate,
-					pattern:  pat[:len(pat)-1],
-					isPrefix: true,
-				}
+				return newFastMatcher(collate, pat[:len(pat)-1], true, trailingSpaces)
 			}
 		}
 	}
@@ -603,6 +617,7 @@ func newMultibyteWildcardMatcher(
 	cs charset.Charset,
 	sortOrder *[256]byte,
 	collate func(left []byte, right []byte, isPrefix bool) int,
+	trailingSpaces func([]byte) int,
 	pat []byte, chOne, chMany, chEsc rune,
 ) WildcardPattern {
 	var escape bool
@@ -687,18 +702,10 @@ func newMultibyteWildcardMatcher(
 		}
 		if chOneCount == 0 && chEscCount == 0 {
 			if chManyCount == 0 {
-				return &fastMatcher{
-					collate:  collate,
-					pattern:  patOriginal,
-					isPrefix: false,
-				}
+				return newFastMatcher(collate, patOriginal, false, trailingSpaces)
 			}
 			if chManyCount == 1 && chMany < utf8.RuneSelf && lastMany {
-				return &fastMatcher{
-					collate:  collate,
-					pattern:  patOriginal[:len(patOriginal)-1],
-					isPrefix: true,
-				}
+				return newFastMatcher(collate, patOriginal[:len(patOriginal)-1], true, trailingSpaces)
 			}
 		}
 	}
