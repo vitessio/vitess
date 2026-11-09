@@ -199,6 +199,8 @@ We must remove everything that is now done in this release and add new items bas
 
 4. If we are doing an RC release it means we created a new branch from `main`. We need to update `main` with the next SNAPSHOT version. If `main` was on `15.0.0-SNAPSHOT`, we need to update it to `16.0.0-SNAPSHOT`. A simple find and replace in the IDE is sufficient, there only a handful of files that must be changed: `version.go` and several java files.
 
+   Once that change merges, the `tag_go_module_dev_version` workflow tags its commit `v0.16.0-dev`. Go then gives the later `main` commits pseudo-versions such as `v0.16.0-dev.0.<timestamp>-<commit>`, which sort after the `v0.15.x` releases, instead of versions based on an old `v0.10.2` tag that sort before every release. Don't delete or move that tag. If the workflow fails, re-run it rather than pushing the tag by hand: a tag pushed with your own credentials starts every CI workflow that runs on tag pushes.
+
 -----
 
 ## How To Release Vitess

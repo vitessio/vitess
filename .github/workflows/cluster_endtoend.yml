@@ -114,6 +114,7 @@ jobs:
               - '.github/actions/setup-mysql/action.yml'
               - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
+              - '.github/actions/tool-downloads/**'
               - '.github/actions/setup-microceph/action.yml'
 
   test:
@@ -145,7 +146,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -234,13 +235,9 @@ jobs:
 
       # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
       # There is no separate 'zookeeper' need, so 'consul' is the correct proxy for "this shard needs ZooKeeper".
-      - name: Cache ZooKeeper
+      - name: Restore tool downloads
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')
-        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: dist/vt-zookeeper-*
-          key: zookeeper-${{ hashFiles('build.env', 'bootstrap.sh') }}
+        uses: $/.github/actions/tool-downloads
 
       - name: Install Consul and ZooKeeper
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'consul')

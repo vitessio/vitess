@@ -46,6 +46,7 @@ jobs:
         filters: |
           vtadmin_changes:
             - 'bootstrap.sh'
+            - '.github/actions/tool-downloads/**'
             - 'tools/**'
             - 'build.env'
             - 'go.sum'
@@ -73,7 +74,7 @@ jobs:
       run: exit 1
 
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
       with:
         egress-policy: audit
 
@@ -106,6 +107,10 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
         sudo service etcd stop
+
+    - name: Restore tool downloads
+      if: needs.changes.outputs.vtadmin_changes == 'true'
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make minimaltools
       if: needs.changes.outputs.vtadmin_changes == 'true'

@@ -37,6 +37,7 @@ package acl
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"sync"
@@ -81,7 +82,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // functions when needed.
 func RegisterPolicy(name string, policy Policy) {
 	if _, ok := policies[name]; ok {
-		log.Error(fmt.Sprintf("policy %s is already registered", name))
+		log.Error("policy is already registered", slog.String("security_policy", name))
 		os.Exit(1)
 	}
 	policies[name] = policy
@@ -97,7 +98,7 @@ func savePolicy() {
 		currentPolicy = policy
 		return
 	}
-	log.Warn(fmt.Sprintf("security-policy %q not found; using fallback policy (deny-all)", securityPolicy))
+	log.Warn("security-policy not found; using fallback policy (deny-all)", slog.String("security_policy", securityPolicy))
 	currentPolicy = denyAllPolicy{}
 }
 

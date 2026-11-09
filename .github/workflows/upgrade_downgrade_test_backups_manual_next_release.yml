@@ -82,6 +82,7 @@ jobs:
             - '.github/actions/setup-mysql/action.yml'
             - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
+            - '.github/actions/tool-downloads/**'
             - 'examples/**'
 
   # This job usually execute in ± 20 minutes
@@ -100,7 +101,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
       with:
         egress-policy: audit
 
@@ -187,6 +188,9 @@ jobs:
         # This job builds two trees into the same GOMODCACHE/GOCACHE, so it
         # must not be the one saving the branch caches; restore on PRs only.
         cache: ${{ github.event_name == 'pull_request' }}
+
+    - name: Restore tool downloads
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make minimaltools
       timeout-minutes: 5

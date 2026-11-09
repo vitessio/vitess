@@ -68,6 +68,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/actions/tool-downloads/**'
             - 'examples/**'
             - '.github/workflows/local_example.yml'
             - '.github/actions/build-bootstrap/**'
@@ -90,7 +91,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
       with:
         egress-policy: audit
 
@@ -111,6 +112,10 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: 'false'
+
+    - name: Restore tool downloads
+      if: needs.changes.outputs.examples == 'true'
+      uses: $/.github/actions/tool-downloads
 
     - name: Build bootstrap images
       if: needs.changes.outputs.examples == 'true'

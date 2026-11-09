@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -91,6 +91,7 @@ jobs:
               - 'go.mod'
               - 'build.env'
               - 'bootstrap.sh'
+              - '.github/actions/tool-downloads/**'
               - 'tools/**'
               - '.github/workflows/static_checks_etc.yml'
             proto_changes:
@@ -172,6 +173,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
+
+      - name: Restore tool downloads
+        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        uses: $/.github/actions/tool-downloads
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
@@ -296,7 +301,7 @@ jobs:
           exit 1
 
       - name: Run zizmor 🌈
-        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
         with:
           advanced-security: false
           annotations: true
