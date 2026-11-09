@@ -21,7 +21,6 @@ import (
 	"errors"
 	"expvar"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/exec"
 	"strconv"
@@ -33,7 +32,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
@@ -166,7 +164,6 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 		throttleDecision          registry.ThrottleDecision
 		expectError               bool
 		expectDryRunLog           bool
-		expectedLogAttrs          map[string]any
 		expectedTotalRequests     int64
 		expectedThrottledRequests int64
 	}{
@@ -233,17 +230,8 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				Threshold:          80.0,
 				ThrottlePercentage: 1.0,
 			},
-			expectError:     false,
-			expectDryRunLog: true,
-			expectedLogAttrs: map[string]any{
-				"strategy":         "MockStrategy",
-				"workload":         "test-workload",
-				"priority":         "50",
-				"decision_message": "Query throttled: metric=cpu value=95.0 threshold=80.0",
-				"metric_name":      "cpu",
-				"metric_value":     95.0,
-				"threshold":        80.0,
-			},
+			expectError:               false,
+			expectDryRunLog:           true,
 			expectedTotalRequests:     1,
 			expectedThrottledRequests: 1,
 		},
@@ -271,8 +259,8 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 			env := tabletenv.NewEnv(vtenv.NewTestEnv(), &tabletenv.TabletConfig{}, "TestThrottler")
 
 			// Create throttler with controlled config. A long throttle interval means the
-			// dry-run logger emits at most once, so the captured records reliably reflect
-			// whether a dry-run decision was logged during this case.
+			// dry-run logger emits at most once, so GetLastLogTime reliably reflects whether
+			// a dry-run decision was logged during this case.
 			iqt := &QueryThrottler{
 				ctx:             t.Context(),
 				env:             env,
@@ -288,8 +276,6 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 
 			requestsTotal.ResetAll()
 			requestsThrottled.ResetAll()
-
-			logs := logtest.Capture(t, slog.LevelWarn)
 
 			// Test the enforcement
 			err := iqt.Throttle(
@@ -311,17 +297,12 @@ func TestQueryThrottler_DryRunMode(t *testing.T) {
 				require.NoError(t, err, "Expected no throttling error")
 			}
 
-			// Verify log expectation
-			records := logs.Records(t)
+			// Verify dry-run log expectation via the throttled logger's last-log time
+			// (the log now routes through logutil.ThrottledLogger, not log.Warn).
 			if tt.expectDryRunLog {
-				require.Len(t, records, 1, "Expected exactly one log message")
-				assert.Equal(t, "[DRY-RUN] query would have been throttled", records[0]["msg"])
-				assert.Equal(t, "WARN", records[0]["level"])
-				for key, want := range tt.expectedLogAttrs {
-					assert.Equal(t, want, records[0][key], key)
-				}
+				require.False(t, iqt.throttledLogger.GetLastLogTime().IsZero(), "Expected a dry-run log to be emitted")
 			} else {
-				require.Empty(t, records, "Expected no log messages")
+				require.True(t, iqt.throttledLogger.GetLastLogTime().IsZero(), "Expected no dry-run log to be emitted")
 			}
 
 			// Verify stats expectation

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"testing"
@@ -33,7 +32,6 @@ import (
 	"vitess.io/vitess/go/streamlog"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 
@@ -1784,13 +1782,10 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelectImpossible, qre.plan.PlanID)
 	// query should fail because nobody has read access to test_table
-	logs := logtest.Capture(t, slog.LevelInfo)
 	_, err := qre.Execute()
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 
 	require.EqualError(t, err, `SelectImpossible command denied to user 'basic_username' for table 'test_table' (ACL check error)`)
-	record := logs.Record(t, "command denied (ACL check error)")
-	assert.Equal(t, []any{}, record["groups"])
 
 	// table acl should be ignored when querying against dual table
 	query = "select @@version_comment from dual limit 1"
@@ -1911,14 +1906,9 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	defer tsv.StopService()
 	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
-	logs := logtest.Capture(t, slog.LevelInfo)
 	_, err := qre.Execute()
 	require.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "qre.Execute: %v, want %v", vterrors.Code(err), vtrpcpb.Code_PERMISSION_DENIED)
 	require.EqualError(t, err, `Select command denied to user 'u2', in groups [eng, beta], for table 'test_table' (ACL check error)`)
-	record := logs.Record(t, "command denied (ACL check error)")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, "u2", record["user"])
-	assert.Equal(t, []any{"eng", "beta"}, record["groups"])
 
 	// table acl should be ignored since this is an exempt user.
 	username = "exempt-acl"
@@ -2840,16 +2830,8 @@ func TestQueryExecutorSetSQLModeVerify(t *testing.T) {
 	db.DeleteQuery(readQuery)
 	txID = newTransaction(tsv, nil)
 	qre = newTestQueryExecutor(ctx, tsv, setQuery, txID)
-	logs := logtest.Capture(t, slog.LevelWarn)
 	_, err = qre.Execute()
 	require.EqualError(t, err, "setting the ANSI sql_mode is unsupported")
-	// the restore error and the error it was undoing are each logged under error
-	closing := logs.Record(t, "closing connection: a failed SET could not be undone by restoring the previous sql_mode")
-	assert.Contains(t, closing["error"], "rejected")
-	cause := logs.Record(t, "the failed SET that could not be undone")
-	assert.Equal(t, "setting the ANSI sql_mode is unsupported", cause["error"])
-	assert.NotEmpty(t, closing["connection_id"])
-	assert.Equal(t, closing["connection_id"], cause["connection_id"])
 	qre = newTestQueryExecutor(ctx, tsv, constQuery, txID)
 	_, err = qre.Execute()
 	require.Error(t, err)

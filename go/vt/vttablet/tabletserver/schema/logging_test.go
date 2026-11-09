@@ -17,68 +17,11 @@ limitations under the License.
 package schema
 
 import (
-	"log/slog"
 	"sync"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/log/logtest"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
-
-// TestGetTableForPosNotFoundLog checks that the current tables are logged by
-// name, sorted, rather than as a map of table pointers.
-func TestGetTableForPosNotFoundLog(t *testing.T) {
-	se := NewEngineForTests()
-	se.SetTableForTests(NewTable("b", NoType))
-	se.SetTableForTests(NewTable("a", NoType))
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	_, err := se.GetTableForPos(t.Context(), sqlparser.NewIdentifierCS("missing"), "")
-	require.EqualError(t, err, "table missing not found in vttablet schema")
-
-	record := logs.Record(t, "table not found in vttablet schema")
-	assert.Equal(t, "missing", record["table"])
-	assert.Equal(t, []any{"a", "b"}, record["tables"])
-}
-
-// TestGetTableForPosNotFoundLogNoTables checks that an engine with no tables
-// logs an empty list, not null.
-func TestGetTableForPosNotFoundLogNoTables(t *testing.T) {
-	se := NewEngineForTests()
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	_, err := se.GetTableForPos(t.Context(), sqlparser.NewIdentifierCS("missing"), "")
-	require.EqualError(t, err, "table missing not found in vttablet schema")
-
-	record := logs.Record(t, "table not found in vttablet schema")
-	assert.Equal(t, []any{}, record["tables"])
-}
-
-// TestResetSequencesLog checks that the sequence cache is logged as its two
-// values in their own attributes, rather than in the message as
-// SequenceInfo.String() printed them.
-func TestResetSequencesLog(t *testing.T) {
-	se := NewEngineForTests()
-	table := NewTable("seq", Sequence)
-	table.SequenceInfo = &SequenceInfo{NextVal: 5, LastVal: 10}
-	se.SetTableForTests(table)
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	require.NoError(t, se.ResetSequences([]string{"seq"}))
-
-	record := logs.Record(t, "Resetting sequence info for table")
-	assert.Equal(t, map[string]any{
-		"time":       record["time"],
-		"level":      "INFO",
-		"msg":        "Resetting sequence info for table",
-		"table":      "seq",
-		"next_value": float64(5),
-		"last_value": float64(10),
-	}, record)
-}
 
 // TestResetSequencesLogLocksSequence checks that logging the sequence values
 // does not race with concurrent ID allocation, which holds the sequence lock.

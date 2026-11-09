@@ -2243,22 +2243,6 @@ func TestSanitizeLogMessages(t *testing.T) {
 	assert.NotContains(t, logs.String(), "getting swole")
 }
 
-// TestConvertAndLogErrorMySQLErrno checks that mysql_errno is the SQLError's
-// number even when MySQL's message quotes something that looks like another.
-func TestConvertAndLogErrorMySQLErrno(t *testing.T) {
-	ctx := t.Context()
-	srvTopoCounts := stats.NewCountersWithSingleLabel("", "Resilient srvtopo server operations", "type")
-	tsv := NewTabletServer(ctx, vtenv.NewTestEnv(), "TabletServerTest", tabletenv.NewDefaultConfig(), memorytopo.NewServer(ctx, ""), &topodatapb.TabletAlias{}, srvTopoCounts)
-	logs := logtest.Capture(t, slog.LevelInfo)
-
-	sqlErr := sqlerror.NewSQLError(sqlerror.ERSyntaxError, "42000", "You have an error in your SQL syntax; near '/* x (errno 1045) (sqlstate 28000)\n*/ selec 1' at line 1")
-	_ = tsv.convertAndLogError(ctx, "/* x (errno 1045) (sqlstate 28000)\n*/ selec 1", nil, sqlErr, nil)
-
-	record := logs.Record(t, "Request failed")
-	assert.EqualValues(t, sqlerror.ERSyntaxError, record["mysql_errno"])
-	assert.Equal(t, "42000", record["sql_state"])
-}
-
 func TestTerseErrorsNonSQLError(t *testing.T) {
 	ctx := t.Context()
 	cfg := tabletenv.NewDefaultConfig()

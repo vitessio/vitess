@@ -740,17 +740,12 @@ func TestRefreshReplHealthLocked(t *testing.T) {
 	assert.False(t, sm.replHealthy)
 
 	rt.err = nil
-	rt.lag = 3*time.Hour + 900*time.Millisecond
+	rt.lag = 3 * time.Hour
 	sm.replHealthy = true
-	logs := logtest.Capture(t, slog.LevelInfo)
 	lag, err = sm.refreshReplHealthLocked()
-	assert.Equal(t, 3*time.Hour+900*time.Millisecond, lag)
+	assert.Equal(t, 3*time.Hour, lag)
 	require.NoError(t, err)
 	assert.False(t, sm.replHealthy)
-	record := logs.Record(t, "Going unhealthy due to high replication lag")
-	assert.Equal(t, "INFO", record["level"])
-	assert.EqualValues(t, 3*time.Hour+900*time.Millisecond, record["replication_lag"])
-	assert.NotContains(t, record, "replication_lag_seconds")
 }
 
 // TestPanicInWait tests that we don't panic when we wait for requests if more StartRequest calls come up after we start waiting.

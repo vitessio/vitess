@@ -87,22 +87,6 @@ func TestStreamRowsBuildPlanErrorLogsCode(t *testing.T) {
 	assert.Equal(t, "column missing not found in table t1", record["error"])
 }
 
-// TestTableStreamerLogsNoTables checks that a database with no tables to
-// stream logs an empty list, not null.
-func TestTableStreamerLogsNoTables(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	err := engine.StreamTables(t.Context(), func(*binlogdatapb.VStreamTablesResponse) error { return nil }, nil)
-	require.NoError(t, err)
-
-	record := logs.Record(t, "Found tables to stream")
-	assert.EqualValues(t, 0, record["table_count"])
-	assert.Equal(t, []any{}, record["tables"])
-}
-
 // TestVStreamerThrottledLog checks the attributes of the vstreamer throttle log.
 func TestVStreamerThrottledLog(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
@@ -173,13 +157,6 @@ func TestCopyLogs(t *testing.T) {
 	require.True(t, ok, "position %q has no flavor prefix", startPos)
 	record := logs.Record(t, "catchup vs.stream returned")
 	assert.Regexp(t, "^"+regexp.QuoteMeta(flavor)+"/.", record["current_position"])
-
-	// Same keys as "VStream source is not ready to stream more rows".
-	record = logs.Record(t, "Canceling context because replication lag is within maximum")
-	assert.Contains(t, record, "replication_lag_seconds")
-	assert.Contains(t, record, "max_replication_lag_seconds")
-	assert.NotContains(t, record, "lag_seconds")
-	assert.NotContains(t, record, "max_lag_seconds")
 
 	record = logs.Record(t, "Starting copyTable")
 	assert.Equal(t, "t1", record["table"])

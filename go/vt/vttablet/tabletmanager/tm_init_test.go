@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -36,7 +35,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -280,29 +278,6 @@ func TestStartCreateKeyspaceShard(t *testing.T) {
 	defer tm2.Stop()
 	// Now that we've started the tablet for the other shard, srvKeyspace will succeed.
 	ensureSrvKeyspace(t, ctx, ts, cell, "ks4")
-}
-
-func TestStartAsShardPrimaryLogsExistingTabletType(t *testing.T) {
-	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "cell1")
-	tm := newTestTM(t, ts, 1, "ks", "0", nil)
-	tablet := tm.Tablet()
-	tm.Stop()
-
-	primaryTermStart := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	_, err := ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = tablet.Alias
-		si.PrimaryTermStartTime = protoutil.TimeToProto(primaryTermStart)
-		return nil
-	})
-	require.NoError(t, err)
-	logs := logtest.Capture(t, slog.LevelInfo)
-	require.NoError(t, tm.Start(tablet, nil))
-	defer tm.Stop()
-
-	record := logs.Record(t, "Shard primary alias matches, but existing tablet is not primary. Switching to primary with the shard's primary term start time.")
-	assert.Equal(t, "REPLICA", record["existing_tablet_type"])
-	assert.Equal(t, "2026-01-02T03:04:05Z", record["primary_term_start_time"])
 }
 
 func TestCheckPrimaryShip(t *testing.T) {

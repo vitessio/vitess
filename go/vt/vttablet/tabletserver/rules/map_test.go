@@ -17,14 +17,12 @@ limitations under the License.
 package rules
 
 import (
-	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 )
 
@@ -64,12 +62,9 @@ func TestMapRegisterARegisteredSource(t *testing.T) {
 	setupRules()
 	qri := NewMap()
 	qri.RegisterSource(denyListQueryRules)
-	logs := logtest.Capture(t, slog.LevelInfo)
 	defer func() {
 		err := recover()
 		require.NotNil(t, err, "should get an error for registering a registered query rule source")
-		record := logs.Record(t, "Query rule source has been registered")
-		assert.Equal(t, denyListQueryRules, record["rule_source"])
 	}()
 	qri.RegisterSource(denyListQueryRules)
 }

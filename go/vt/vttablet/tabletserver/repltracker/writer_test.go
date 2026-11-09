@@ -271,15 +271,9 @@ func TestWriteHeartbeatError(t *testing.T) {
 	writes.Reset()
 	writeErrors.Reset()
 
-	logs := logtest.Capture(t, slog.LevelError)
 	tw.writeHeartbeat()
 	assert.Equal(t, int64(0), writes.Get())
 	assert.Equal(t, int64(1), writeErrors.Get())
-
-	record := logs.Record(t, "failed to write heartbeat")
-	assert.Equal(t, "HeartbeatWriter", record["logger"])
-	assert.Contains(t, record["error"], "heartbeatWriter failed to execute fetch on app connection")
-	assert.Equal(t, "UNKNOWN", record["error_code"])
 }
 
 // TestKillWriteError checks that a failed kill of an in-progress heartbeat

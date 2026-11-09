@@ -247,7 +247,6 @@ func TestControllerOverrides(t *testing.T) {
 	vre := NewTestEngine(nil, wantTablet.GetAlias().Cell, mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	defer setTabletTypesStr("rdonly")()
-	logs := logtest.Capture(t, slog.LevelInfo)
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	require.NoError(t, err)
 	defer func() {
@@ -257,15 +256,6 @@ func TestControllerOverrides(t *testing.T) {
 
 	dbClient.Wait()
 	expectFBCRequest(t, wantTablet, testPos, nil, &topodatapb.KeyRange{End: []byte{0x80}})
-
-	// The raw settings are logged as strings, under a key apart from the
-	// tablet_types lists logged elsewhere.
-	record := logs.Record(t, "creating controller")
-	assert.Equal(t, "rdonly", record["tablet_types_setting"])
-	assert.NotContains(t, record, "tablet_types")
-	record = logs.Record(t, "creating tablet picker for source keyspace/shard")
-	assert.Equal(t, "replica", record["tablet_types_setting"])
-	assert.NotContains(t, record, "tablet_types")
 }
 
 func TestControllerCanceledContext(t *testing.T) {

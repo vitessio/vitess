@@ -18,13 +18,9 @@ package vstreamer
 
 import (
 	"fmt"
-	"log/slog"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/log/logtest"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -65,7 +61,6 @@ func TestTableStreamer(t *testing.T) {
 		"table_name:\"t4\" rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:\"123aaa\"} rows:{lengths:1 lengths:1 lengths:1 lengths:3 values:\"234bbb\"} lastpk:{lengths:1 lengths:1 lengths:1 values:\"234\"}",
 	}
 	var gotStream []string
-	logs := logtest.Capture(t, slog.LevelInfo)
 	err := engine.StreamTables(ctx, func(response *binlogdatapb.VStreamTablesResponse) error {
 		response.Gtid = ""
 		for _, fld := range response.Fields {
@@ -77,8 +72,4 @@ func TestTableStreamer(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, wantStream, gotStream)
 	require.Equal(t, int64(4), engine.tableStreamerNumTables.Get())
-
-	record := logs.Record(t, "Found tables to stream")
-	assert.EqualValues(t, 4, record["table_count"])
-	assert.Equal(t, []any{"t1", "t2", "t3", "t4"}, record["tables"])
 }

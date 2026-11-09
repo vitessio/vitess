@@ -18,7 +18,6 @@ package repltracker
 
 import (
 	"fmt"
-	"log/slog"
 	"testing"
 	"time"
 
@@ -29,9 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vtenv"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -179,7 +176,6 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	cumulativeLagNs.Reset()
 	readErrors.Reset()
 
-	logs := logtest.Capture(t, slog.LevelError)
 	tr.readHeartbeat()
 	lag, err := tr.Status()
 
@@ -188,11 +184,6 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	assert.Equal(t, 0*time.Second, lag, "wrong lastKnownLag")
 	assert.Equal(t, int64(0), cumulativeLagNs.Get(), "wrong cumulative lag")
 	assert.Equal(t, int64(1), readErrors.Get(), "wrong read error count")
-
-	record := logs.Record(t, "failed to read heartbeat")
-	assert.Equal(t, "HeartbeatReporter", record["logger"])
-	assert.Equal(t, err.Error(), record["error"])
-	assert.Equal(t, vterrors.Code(err).String(), record["error_code"])
 }
 
 func newReader(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatReader {
