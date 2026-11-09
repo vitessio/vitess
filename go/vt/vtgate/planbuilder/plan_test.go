@@ -88,6 +88,7 @@ func TestReferenceUnionByDestinationHandlesLookupMiss(t *testing.T) {
 		{"select d.id from (select id from ref union all select id from music where id = 1) as d cross join ref r", true},
 		{"select id from music where id = 1", false},
 		{"select user_id from ref union all select user_id from user_metadata where non_planable = 'foo'", true},
+		{"select user_id from ref union all select user_id from user_metadata where non_planable in ('foo')", true},
 		{"select user_id from user_metadata where non_planable = 'foo'", false},
 	} {
 		plan, err := TestBuilder(tc.query, vw, vw.CurrentDb())

@@ -107,7 +107,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	deleteAll := func() {
 		_, _ = utils.ExecAllowError(t, mcmp.VtConn, "set workload = oltp")
 
-		tables := []string{"user", "lookup"}
+		tables := []string{"user", "lookup", "lookup_non_planable_map"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -170,6 +170,10 @@ func TestReferenceUnionAllLookupMiss(t *testing.T) {
 	)
 	mcmp.AssertMatches(
 		"select d.id from (select id from ref union all select id from user where lookup_unique = 'not there') as d cross join ref r",
+		"[[INT64(100)]]",
+	)
+	mcmp.AssertMatches(
+		"select id from ref union all select id from user where lookup_non_planable in ('not there')",
 		"[[INT64(100)]]",
 	)
 }

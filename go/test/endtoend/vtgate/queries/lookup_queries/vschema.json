@@ -26,6 +26,16 @@
         "autocommit": "true"
       },
       "owner": "user"
+    },
+    "lookup_non_planable_vdx": {
+      "type": "lookup_unicodeloosemd5_hash_unique",
+      "params": {
+        "table": "lookup_non_planable_map",
+        "from": "lookup_non_planable",
+        "to": "keyspace_id",
+        "autocommit": "true"
+      },
+      "owner": "user"
     }
   },
   "tables": {
@@ -45,6 +55,10 @@
         {
           "column": "lookup_unique",
           "name": "lookup_unique_vdx"
+        },
+        {
+          "column": "lookup_non_planable",
+          "name": "lookup_non_planable_vdx"
         }
       ]
     },
