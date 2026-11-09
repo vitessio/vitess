@@ -56,6 +56,8 @@ func TestNewVReplicationConfig(t *testing.T) {
 				"vstream-dynamic-packet-size":             "false",
 				"vstream_dynamic_packet_size":             "false",
 				"vstream_binlog_rotation_threshold":       "2048",
+				"vstream-memory-bounds":                   "false",
+				"vstream_memory_bounds":                   "false",
 			},
 			wantErr: 0,
 			want: &VReplicationConfig{
@@ -78,6 +80,8 @@ func TestNewVReplicationConfig(t *testing.T) {
 				VStreamPacketSizeOverride:              true,
 				VStreamDynamicPacketSizeOverride:       true,
 				VStreamBinlogRotationThresholdOverride: true,
+				VStreamMemoryBounds:                    false,
+				VStreamMemoryBoundsOverride:            true,
 			},
 		},
 		{
@@ -100,8 +104,10 @@ func TestNewVReplicationConfig(t *testing.T) {
 				"vstream-dynamic-packet-size":             "waar",
 				"vstream_dynamic_packet_size":             "waar",
 				"vstream_binlog_rotation_threshold":       "invalid",
+				"vstream-memory-bounds":                   "waar",
+				"vstream_memory_bounds":                   "waar",
 			},
-			wantErr: 17,
+			wantErr: 19,
 		},
 		{
 			name: "Partial values",
@@ -128,6 +134,7 @@ func TestNewVReplicationConfig(t *testing.T) {
 				VStreamPacketSize:                DefaultVReplicationConfig.VStreamPacketSize,
 				VStreamDynamicPacketSize:         !DefaultVReplicationConfig.VStreamDynamicPacketSize,
 				VStreamBinlogRotationThreshold:   DefaultVReplicationConfig.VStreamBinlogRotationThreshold,
+				VStreamMemoryBounds:              DefaultVReplicationConfig.VStreamMemoryBounds,
 				VStreamDynamicPacketSizeOverride: true,
 				TabletTypesStr:                   DefaultVReplicationConfig.TabletTypesStr,
 			},

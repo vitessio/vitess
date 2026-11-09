@@ -28,7 +28,7 @@ import (
 
 func TestDynamicPacketSizerMaxSize(t *testing.T) {
 	base := 25000
-	ps := newDynamicPacketSizer(base).(*dynamicPacketSizer)
+	ps := newDynamicPacketSizer(base, true).(*dynamicPacketSizer)
 	for range 1000 {
 		ps.growCandidate()
 	}
@@ -42,7 +42,7 @@ func TestDynamicPacketSizerMaxSize(t *testing.T) {
 func TestDynamicPacketSizerCapsGrowthThroughRecord(t *testing.T) {
 	base := 25000
 	maxSize := base * dynamicPacketSizerMaxGrowthFactor
-	ps := newDynamicPacketSizer(base)
+	ps := newDynamicPacketSizer(base, true)
 
 	reached := false
 	for i := range 20000 {
@@ -56,6 +56,13 @@ func TestDynamicPacketSizerCapsGrowthThroughRecord(t *testing.T) {
 		}
 	}
 	require.True(t, reached, "the packet size never reached the cap: %d", ps.Limit())
+
+	// Without the memory bounds the sizer grows as it did before the cap.
+	unbounded := newDynamicPacketSizer(base, false)
+	for i := range 20000 {
+		unbounded.Record(unbounded.Limit(), time.Millisecond+time.Duration(i%7)*time.Microsecond)
+	}
+	require.Greater(t, unbounded.Limit(), maxSize, "the unbounded sizer stopped at the cap")
 }
 
 type polynomial []float64
@@ -125,7 +132,7 @@ func TestPacketSizeSimulation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Simulate a replication using the given polynomial and the dynamic packet sizer
-			ps1 := newDynamicPacketSizer(tc.baseSize)
+			ps1 := newDynamicPacketSizer(tc.baseSize, true)
 			elapsed1, sent1 := simulate(t, ps1, tc.baseSize, tc.baseSize*1000, tc.p.fit)
 
 			// Simulate the same polynomial using a fixed packet size

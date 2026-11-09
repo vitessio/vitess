@@ -37,6 +37,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -1164,9 +1165,19 @@ func recordRowPool(got *[]rowPoolSeen, rows []*querypb.Row) {
 	*got = append(*got, rowPoolSeen{rows: len(rows), retained: sqltypes.RowPoolRetained(rows), first: rows[0]})
 }
 
-// checkRowPoolReuse checks what the receive loop handed its callback over the rowPoolPackets scenario.
-func checkRowPoolReuse(t *testing.T, got []rowPoolSeen) {
+// checkRowPoolReuse checks what the receive loop handed its callback over the rowPoolPackets scenario,
+// with the memory bounds on (the pool is trimmed) or off (today's behavior: it is never dropped).
+func checkRowPoolReuse(t *testing.T, got []rowPoolSeen, memoryBounds bool) {
 	require.Len(t, got, rowPoolUniformPackets+2*rowPoolBigPackets)
+
+	if !memoryBounds {
+		for i := 1; i < len(got); i++ {
+			assert.Same(t, got[0].first, got[i].first, "packet %d: the pool was dropped with the memory bounds off", i)
+		}
+		assert.Greater(t, got[len(got)-1].retained, rowPoolBigPackets*rowPoolBigBytes/2,
+			"with the memory bounds off the pool should keep every slot's high-water mark")
+		return
+	}
 
 	// Uniform phase: the pool is filled once and then reused as it is, rowless packets or not.
 	warm := got[0]
@@ -1211,14 +1222,26 @@ func testVStreamRows(t *testing.T, conn queryservice.QueryService, f *FakeQueryS
 	f.VStreamRowsResponses = packets
 	defer func() { f.VStreamRowsResponses = nil }()
 
-	var got []rowPoolSeen
-	ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
-	err := conn.VStreamRows(ctx, &binlogdatapb.VStreamRowsRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamRowsResponse) error {
-		recordRowPool(&got, resp.Rows)
-		return nil
-	})
-	require.NoError(t, err)
-	checkRowPoolReuse(t, got)
+	for _, memoryBounds := range []bool{true, false} {
+		var got []rowPoolSeen
+		withMemoryBounds(memoryBounds, func() {
+			ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
+			err := conn.VStreamRows(ctx, &binlogdatapb.VStreamRowsRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamRowsResponse) error {
+				recordRowPool(&got, resp.Rows)
+				return nil
+			})
+			require.NoError(t, err)
+		})
+		checkRowPoolReuse(t, got, memoryBounds)
+	}
+}
+
+// withMemoryBounds runs f with the vttablet memory bounds flag set as given.
+func withMemoryBounds(on bool, f func()) {
+	saved := vttablet.VStreamerMemoryBounds
+	vttablet.VStreamerMemoryBounds = on
+	defer func() { vttablet.VStreamerMemoryBounds = saved }()
+	f()
 }
 
 // testVStreamTables pushes the row-pool scenario through the real VStreamTables receive loop, which the
@@ -1238,12 +1261,16 @@ func testVStreamTables(t *testing.T, conn queryservice.QueryService, f *FakeQuer
 	f.VStreamTablesResponses = packets
 	defer func() { f.VStreamTablesResponses = nil }()
 
-	var got []rowPoolSeen
-	ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
-	err := conn.VStreamTables(ctx, &binlogdatapb.VStreamTablesRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamTablesResponse) error {
-		recordRowPool(&got, resp.Rows)
-		return nil
-	})
-	require.NoError(t, err)
-	checkRowPoolReuse(t, got)
+	for _, memoryBounds := range []bool{true, false} {
+		var got []rowPoolSeen
+		withMemoryBounds(memoryBounds, func() {
+			ctx := callerid.NewContext(context.Background(), TestCallerID, TestVTGateCallerID)
+			err := conn.VStreamTables(ctx, &binlogdatapb.VStreamTablesRequest{Target: TestTarget}, func(resp *binlogdatapb.VStreamTablesResponse) error {
+				recordRowPool(&got, resp.Rows)
+				return nil
+			})
+			require.NoError(t, err)
+		})
+		checkRowPoolReuse(t, got, memoryBounds)
+	}
 }

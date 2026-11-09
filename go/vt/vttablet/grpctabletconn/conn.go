@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
+	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -773,7 +774,9 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 		if err := send(r); err != nil {
 			return err
 		}
-		r.Rows = pool.trim(r.Rows)
+		if vttablet.VStreamerMemoryBounds {
+			r.Rows = pool.trim(r.Rows)
+		}
 		r.ResetVT()
 	}
 }
@@ -867,7 +870,9 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 		if err := send(r); err != nil {
 			return err
 		}
-		r.Rows = pool.trim(r.Rows)
+		if vttablet.VStreamerMemoryBounds {
+			r.Rows = pool.trim(r.Rows)
+		}
 		r.ResetVT()
 	}
 }

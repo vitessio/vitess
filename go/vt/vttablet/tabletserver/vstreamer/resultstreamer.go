@@ -56,7 +56,7 @@ func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string
 		query:   query,
 		send:    send,
 		vse:     vse,
-		pktsize: DefaultPacketSizer(vttablet.VStreamerUseDynamicPacketSize, vttablet.VStreamerDefaultPacketSize),
+		pktsize: DefaultPacketSizer(vttablet.VStreamerUseDynamicPacketSize, vttablet.VStreamerDefaultPacketSize, vttablet.VStreamerMemoryBounds),
 	}
 }
 

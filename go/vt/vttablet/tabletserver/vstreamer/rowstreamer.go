@@ -103,7 +103,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		send:    send,
 		vschema: vschema,
 		vse:     vse,
-		pktsize: DefaultPacketSizer(config.VStreamDynamicPacketSize, config.VStreamPacketSize),
+		pktsize: DefaultPacketSizer(config.VStreamDynamicPacketSize, config.VStreamPacketSize, config.VStreamMemoryBounds),
 		mode:    mode,
 		conn:    conn,
 		options: options,
@@ -500,13 +500,15 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 				return err
 			}
 			rs.pktsize.Record(byteCount, time.Since(startSend))
-			budget := sqltypes.RowPoolBudget(byteCount, rowCount, fieldCount)
+			if rs.config.VStreamMemoryBounds {
+				budget := sqltypes.RowPoolBudget(byteCount, rowCount, fieldCount)
+				var dropped bool
+				if rows, poolBytes, dropped = trimRowPool(rows, poolBytes, budget); dropped {
+					response.Rows = nil // release the dropped pool's backing array
+				}
+			}
 			rowCount = 0
 			byteCount = 0
-			var dropped bool
-			if rows, poolBytes, dropped = trimRowPool(rows, poolBytes, budget); dropped {
-				response.Rows = nil // release the dropped pool's backing array
-			}
 		}
 	}
 

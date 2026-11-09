@@ -985,8 +985,9 @@ func TestStreamRowsDropsDensePoolForLargeRows(t *testing.T) {
 
 // TestStreamRowsBoundsRowPoolRetention streams a table whose one large value lands in a new slot of the
 // reused row pool in every packet, and checks in the send callback what the pool retains
-// (rows[:cap(rows)]): without the trim after each packet, every slot would keep its high-water mark and
-// the pool would grow to about packets × the large value by the end of the stream
+// (rows[:cap(rows)]): with the memory bounds on, the trim after each packet keeps it near the budget;
+// with them off (--vstream-memory-bounds=false, here as the workflow override), every slot keeps its
+// high-water mark and the pool grows to about packets × the large value by the end of the stream
 // (vitessio/vitess#20954).
 func TestStreamRowsBoundsRowPoolRetention(t *testing.T) {
 	if testing.Short() {
@@ -1021,31 +1022,42 @@ func TestStreamRowsBoundsRowPoolRetention(t *testing.T) {
 	}
 	execStatements(t, stmts)
 
-	var options binlogdatapb.VStreamOptions
-	options.ConfigOverrides = map[string]string{
-		"vstream-dynamic-packet-size": "false",
-		"vstream-packet-size":         strconv.Itoa(bigBytes),
+	stream := func(t *testing.T, memoryBounds bool) (sent, maxRetained, lastRetained int) {
+		var options binlogdatapb.VStreamOptions
+		options.ConfigOverrides = map[string]string{
+			"vstream-dynamic-packet-size": "false",
+			"vstream-packet-size":         strconv.Itoa(bigBytes),
+			"vstream-memory-bounds":       strconv.FormatBool(memoryBounds),
+		}
+		err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+			if len(rows.Rows) == 0 {
+				return nil
+			}
+			sent++
+			retained := sqltypes.RowPoolRetained(rows.Rows)
+			maxRetained = max(maxRetained, retained)
+			lastRetained = retained
+			return nil
+		}, &options)
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, sent, packets, "every large row should have closed a packet")
+		return sent, maxRetained, lastRetained
 	}
 
-	sent, maxRetained, lastRetained := 0, 0, 0
-	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
-		if len(rows.Rows) == 0 {
-			return nil
-		}
-		sent++
-		retained := sqltypes.RowPoolRetained(rows.Rows)
-		maxRetained = max(maxRetained, retained)
-		lastRetained = retained
-		return nil
-	}, &options)
-	require.NoError(t, err)
-	require.GreaterOrEqual(t, sent, packets, "every large row should have closed a packet")
+	t.Run("bounded", func(t *testing.T) {
+		_, maxRetained, lastRetained := stream(t, true)
+		// The send callback sees the pool after the packet's rows were written into it and before the trim,
+		// so it holds at most the previous packet's budget (the 1 MiB floor here, as the packets are small)
+		// plus this packet's growth. Untrimmed, the last packet would retain about packets × bigBytes.
+		bound := sqltypes.RowPoolMinBytes + 2*bigBytes + packets*(2*8+64)
+		assert.LessOrEqual(t, maxRetained, bound, "the pool retained %d bytes at some packet, untrimmed it would reach %d", maxRetained, packets*bigBytes)
+		assert.LessOrEqual(t, lastRetained, bound)
+		assert.Less(t, lastRetained, packets*bigBytes/4, "the pool kept most high-water marks: %d bytes", lastRetained)
+	})
 
-	// The send callback sees the pool after the packet's rows were written into it and before the trim, so
-	// it holds at most the previous packet's budget (the 1 MiB floor here, as the packets are small) plus
-	// this packet's growth. Untrimmed, the last packet would retain about packets × bigBytes.
-	bound := sqltypes.RowPoolMinBytes + 2*bigBytes + packets*(2*8+64)
-	assert.LessOrEqual(t, maxRetained, bound, "the pool retained %d bytes at some packet, untrimmed it would reach %d", maxRetained, packets*bigBytes)
-	assert.LessOrEqual(t, lastRetained, bound)
-	assert.Less(t, lastRetained, packets*bigBytes/4, "the pool kept most high-water marks: %d bytes", lastRetained)
+	t.Run("unbounded", func(t *testing.T) {
+		_, _, lastRetained := stream(t, false)
+		// Today's behavior: every slot the large value visited keeps it.
+		assert.Greater(t, lastRetained, packets*bigBytes/2, "with the bounds off the pool should keep its high-water marks: %d bytes", lastRetained)
+	})
 }
