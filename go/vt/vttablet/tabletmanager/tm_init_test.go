@@ -1047,37 +1047,6 @@ func TestInitReplicationRecovery(t *testing.T) {
 	require.Equal(t, fmt.Sprintf("%s/%s", gtidFlavor, gtidPosition), gotPosition)
 	require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 }
-<<<<<<< HEAD
-||||||| parent of bbccb8e19a (tabletmanager: stop background goroutines when Start fails (#21052))
-
-func TestValidateFlags(t *testing.T) {
-	oldTimeout := demotePrimaryLockWaitTimeout
-	t.Cleanup(func() { demotePrimaryLockWaitTimeout = oldTimeout })
-
-	demotePrimaryLockWaitTimeout = -1 * time.Second
-	require.ErrorContains(t, validateFlags(), "--demote-primary-lock-wait-timeout cannot be negative")
-
-	demotePrimaryLockWaitTimeout = 0
-	require.NoError(t, validateFlags())
-
-	demotePrimaryLockWaitTimeout = time.Second
-	require.NoError(t, validateFlags())
-}
-=======
-
-func TestValidateFlags(t *testing.T) {
-	oldTimeout := demotePrimaryLockWaitTimeout
-	t.Cleanup(func() { demotePrimaryLockWaitTimeout = oldTimeout })
-
-	demotePrimaryLockWaitTimeout = -1 * time.Second
-	require.ErrorContains(t, validateFlags(), "--demote-primary-lock-wait-timeout cannot be negative")
-
-	demotePrimaryLockWaitTimeout = 0
-	require.NoError(t, validateFlags())
-
-	demotePrimaryLockWaitTimeout = time.Second
-	require.NoError(t, validateFlags())
-}
 
 // TestStartFailureStopsBackgroundGoroutines checks that a failed Start promptly
 // stops the keyspace rebuild and shard sync goroutines it has spawned. They use
@@ -1167,4 +1136,3 @@ func TestStartFailureStopsBackgroundGoroutines(t *testing.T) {
 		})
 	}
 }
->>>>>>> bbccb8e19a (tabletmanager: stop background goroutines when Start fails (#21052))
