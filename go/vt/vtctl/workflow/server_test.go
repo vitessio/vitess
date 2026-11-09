@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sort"
 	"strings"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -44,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -1618,9 +1621,13 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
 			Name: targetKeyspaceName,
 			Keyspace: &vschemapb.Keyspace{
-				Sharded: true,
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
 				Tables: map[string]*vschemapb.Table{
-					tableName: {AutoIncrement: &vschemapb.AutoIncrement{Column: "id", Sequence: sequence}},
+					tableName: {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{Column: "id", Name: "hash"}},
+						AutoIncrement:  &vschemapb.AutoIncrement{Column: "id", Sequence: sequence},
+					},
 				},
 			},
 		})
@@ -1646,6 +1653,9 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		// wantCanceled means that the failed switch must have been canceled,
 		// leaving writes on the source.
 		wantCanceled bool
+		// wantRefreshWarnings means that the forced partial refreshes of the
+		// failing source and target tablets must be logged.
+		wantRefreshWarnings bool
 	}{
 		{
 			name: "basic forward",
@@ -1688,6 +1698,16 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			},
 			setUp: func(t *testing.T, env *testEnv) {
 				setUpSequence(t, env, fmt.Sprintf("`%s`.`%s`", sequenceKeyspaceName, sequenceTableName))
+				// VTGate uses the table names in a vschema as they are, so
+				// this entry, whose name is in backticks, doesn't define the
+				// backing table.
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: sequenceKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{Tables: map[string]*vschemapb.Table{
+						fmt.Sprintf("`%s`", sequenceTableName): {Type: "sequence"},
+					}},
+				})
+				require.NoError(t, err)
 				// The target shards report different maxima, and the highest
 				// one initializes the sequence.
 				for i, maxValue := range []int64{5, 7} {
@@ -1719,14 +1739,25 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				CurrentState: "All Reads Switched. Writes Switched",
 			},
 			check: func(t *testing.T, env *testEnv, _ error) {
-				// The backing table is added to the sequence keyspace's vschema,
-				// and the switch's routing rebuild publishes it.
+				// The backing table is added to the sequence keyspace's vschema
+				// under its raw name, and the switch's routing rebuild
+				// publishes it, so VTGate resolves the target table's sequence
+				// to it.
 				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
 				require.NoError(t, err)
-				assert.Equal(t, map[string]*vschemapb.Table{sequenceTableName: {Type: "sequence"}}, kvs.Tables)
+				assert.Equal(t, map[string]*vschemapb.Table{
+					fmt.Sprintf("`%s`", sequenceTableName): {Type: "sequence"},
+					sequenceTableName:                      {Type: "sequence"},
+				}, kvs.Tables)
 				srvVSchema, err := env.ts.GetSrvVSchema(ctx, defaultCellName)
 				require.NoError(t, err)
-				assert.Equal(t, "sequence", srvVSchema.Keyspaces[sequenceKeyspaceName].GetTables()[sequenceTableName].GetType())
+				vschema := vindexes.BuildVSchema(srvVSchema, env.ws.SQLParser())
+				targetVSchema := vschema.Keyspaces[targetKeyspaceName]
+				require.NoError(t, targetVSchema.Error)
+				usingTable := targetVSchema.Tables[tableName]
+				require.NotNil(t, usingTable)
+				require.NotNil(t, usingTable.AutoIncrement)
+				assert.Equal(t, vindexes.TypeSequence, usingTable.AutoIncrement.Sequence.Type)
 				// Both maxima were read, and the sequence was initialized.
 				env.tmc.mu.Lock()
 				defer env.tmc.mu.Unlock()
@@ -2017,6 +2048,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				StartState:   "Reads Not Switched. Writes Not Switched",
 				CurrentState: "All Reads Switched. Writes Switched",
 			},
+			wantRefreshWarnings: true,
 		},
 		{
 			name: "forward with an error reading the source positions",
@@ -2149,6 +2181,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				}
 			}
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
 			if tc.check != nil {
 				defer tc.check(t, env, err)
@@ -2175,6 +2208,26 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
+
+			if tc.wantRefreshWarnings {
+				refreshed := make(map[string]bool)
+				for _, record := range logs.Records(t) {
+					msg := record["msg"]
+					if msg != "failed to successfully refresh all tablets in the source shard" &&
+						msg != "failed to successfully refresh all tablets in the target shard" {
+						continue
+					}
+					assert.Equal(t, "WARN", record["level"])
+					assert.Equal(t, workflowName, record["workflow"])
+					assert.Contains(t, record["partial_refresh_details"], "tablet refresh error")
+					// The refresh RPC failed but the topo read didn't, so there
+					// is no error to log.
+					assert.NotContains(t, record, "error")
+					refreshed[fmt.Sprintf("%s %s/%s", msg, record["keyspace"], record["shard"])] = true
+				}
+				assert.True(t, refreshed["failed to successfully refresh all tablets in the source shard "+sourceKeyspaceName+"/0"], refreshed)
+				assert.True(t, refreshed["failed to successfully refresh all tablets in the target shard "+targetKeyspaceName+"/-80"], refreshed)
+			}
 
 			if tc.multiTenant { // Confirm the keyspace routing rules
 				gotKrrs, err := env.ts.GetKeyspaceRoutingRules(ctx)
