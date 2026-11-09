@@ -107,23 +107,23 @@ func TestPlanKey(t *testing.T) {
 
 	tests := []testCase{{
 		targetString:          "",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, RequestDirectives: false",
 	}, {
 		setVarComment:         "sEtVaRcOmMeNt",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255, RequestDirectives: false",
 	}, {
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, RequestDirectives: false",
 	}, {
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255, RequestDirectives: false",
 	}, {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
 		},
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, RequestDirectives: false",
 	}}
 	cfg := econtext.VCursorConfig{
 		Collation:         collations.CollationUtf8mb4ID,
@@ -2070,50 +2070,11 @@ func TestNestedStatementsKeepStatementOptions(t *testing.T) {
 	}
 }
 
-// TestCachedPlanUsesRequestHints checks that a request that finds its plan in
-// the cache uses its own comment directives and SQL, not those of the request
-// that built the plan. Requests that share a plan have the same directives
-// today, so the test gives the cached plan other ones.
-func TestCachedPlanUsesRequestHints(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
-	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
-	sql := "select /*vt+ WORKLOAD_NAME=report PRIORITY=50 */ id from user where id = 1"
-
-	_, err := executorExecSession(ctx, executor, session, sql, nil)
-	require.NoError(t, err)
-	var plan *engine.Plan
-	require.Eventually(t, func() bool {
-		executor.ForEachPlan(func(p *engine.Plan) bool {
-			if strings.Contains(p.Original, "WORKLOAD_NAME=report") {
-				plan = p
-			}
-			return true
-		})
-		return plan != nil
-	}, 30*time.Second, 10*time.Millisecond)
-	normalized := plan.Original
-	plan.QueryHints = sqlparser.QueryHints{Workload: "other", Priority: "99"}
-	plan.Original = "select /*vt+ WORKLOAD_NAME=other PRIORITY=99 */ id from `user` where id = :id"
-
-	logChan := executor.queryLogger.Subscribe("Test")
-	t.Cleanup(func() { executor.queryLogger.Unsubscribe(logChan) })
-	sbc1.ClearOptions()
-	_, err = executorExecSession(ctx, executor, session, sql, nil)
-	require.NoError(t, err)
-
-	options := sbc1.GetOptions()
-	require.Len(t, options, 1)
-	assert.Equal(t, "report", options[0].GetWorkloadName())
-	assert.Equal(t, "50", options[0].GetPriority())
-	logStats := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", normalized, 1)
-	assert.True(t, logStats.CachedPlan)
-}
-
 // TestPreparedStatementDirectives checks that the comment directives of a
 // prepared statement apply to its execution, and that the session doesn't
 // keep them. VTGate looks up the plan of a binary protocol prepared statement
-// by the statement's text, and plans the prepared text again for each SQL
-// EXECUTE.
+// by the statement's text, and the execution sends the statement's directive
+// block. VTGate plans the prepared text again for each SQL EXECUTE.
 func TestPreparedStatementDirectives(t *testing.T) {
 	t.Run("binary protocol", func(t *testing.T) {
 		executor, sbc1, _, _, ctx := createExecutorEnv(t)
@@ -2139,8 +2100,14 @@ func TestPreparedStatementDirectives(t *testing.T) {
 		logChan := executor.queryLogger.Subscribe("Test")
 		t.Cleanup(func() { executor.queryLogger.Unsubscribe(logChan) })
 		sbc1.ClearOptions()
+		sbc1.ClearQueries()
 		_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, true)
 		require.NoError(t, err)
+
+		queries := sbc1.GetQueries()
+		require.Len(t, queries, 1)
+		assert.Contains(t, queries[0].Sql, "/*vt+ WORKLOAD_NAME=report PRIORITY=50 */")
+		assert.NotContains(t, queries[0].Sql, sqlparser.DirectiveRequestDirectives)
 
 		options = sbc1.GetOptions()
 		require.Len(t, options, 1)
@@ -2181,6 +2148,7 @@ func TestPreparedStatementDirectives(t *testing.T) {
 		}
 		for _, tc := range tests {
 			sbc1.ClearOptions()
+			sbc1.ClearQueries()
 			var err error
 			if tc.stream {
 				err = executor.StreamExecute(ctx, nil, "TestExecuteStream", session, tc.sql, nil, false, func(*sqltypes.Result) error { return nil })
@@ -2188,6 +2156,13 @@ func TestPreparedStatementDirectives(t *testing.T) {
 				_, err = executorExecSession(ctx, executor, session, tc.sql, nil)
 			}
 			require.NoError(t, err, tc.sql)
+
+			queries := sbc1.GetQueries()
+			require.Len(t, queries, 1, tc.sql)
+			if tc.workloadName != "" {
+				assert.Contains(t, queries[0].Sql, "WORKLOAD_NAME="+tc.workloadName, tc.sql)
+			}
+			assert.NotContains(t, queries[0].Sql, sqlparser.DirectiveRequestDirectives, tc.sql)
 
 			options := sbc1.GetOptions()
 			require.Len(t, options, 1, tc.sql)

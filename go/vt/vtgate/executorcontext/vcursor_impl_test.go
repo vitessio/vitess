@@ -686,6 +686,36 @@ func TestClonesKeepStatementPriority(t *testing.T) {
 	}
 }
 
+// TestClonesKeepRequestDirectives checks that the vcursors that VTGate clones
+// for a statement's mirrored queries, warming reads and standalone primitives
+// put the statement's request-only comment directive blocks back into the
+// queries that they send.
+func TestClonesKeepRequestDirectives(t *testing.T) {
+	const sql = "select /*vt+ WORKLOAD_NAME=w1 PRIORITY=10 */ id from t"
+	stmt, err := sqlparser.NewTestParser().Parse(sql)
+	require.NoError(t, err)
+	vc := &VCursorImpl{SafeSession: NewSafeSession(&vtgatepb.Session{})}
+	vc.SetRequestDirectives(sqlparser.ReplaceRequestDirectives(stmt))
+	query := sqlparser.String(stmt)
+	require.Contains(t, query, sqlparser.DirectiveRequestDirectives)
+
+	clones := []struct {
+		name string
+		vc   engine.VCursor
+	}{
+		{name: "mirroring", vc: vc.CloneForMirroring(t.Context())},
+		{name: "replica warming", vc: vc.CloneForReplicaWarming(t.Context())},
+		{name: "autocommit", vc: vc.cloneWithAutocommitSession()},
+	}
+	for _, clone := range clones {
+		t.Run(clone.name, func(t *testing.T) {
+			got := clone.vc.(*VCursorImpl).outgoingQuery(query)
+			require.Contains(t, got, "select /*vt+ WORKLOAD_NAME=w1 PRIORITY=10 */ id from t")
+			require.NotContains(t, got, sqlparser.DirectiveRequestDirectives)
+		})
+	}
+}
+
 // TestPrepareSetVarCommentSortsVariables checks that the SET_VAR hint lists the
 // session's variables sorted by name, on every rendering, skipping the variables
 // that SET_VAR cannot carry.

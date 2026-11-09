@@ -1450,6 +1450,16 @@ func (e *Executor) getCachedOrBuildPlan(
 	}
 	vcursor.SetForeignKeyCheckState(qh.ForeignKeyChecks)
 
+	// Plan the statement with marker blocks in place of its request-only
+	// directives, which VTGate has already read, so that requests that differ
+	// only in them share a plan. A prepared statement's plan is looked up by
+	// its text, which keeps the directives.
+	var rd *sqlparser.RequestDirectives
+	if !preparedPlan && !ignoreCache && sqlparser.CachePlan(stmt) && vcursor.CachePlan() {
+		rd = sqlparser.ReplaceRequestDirectives(stmt)
+		vcursor.SetRequestDirectives(rd)
+	}
+
 	paramsCount := uint16(0)
 	if preparedPlan {
 		// We need to count the number of arguments in the statement before we plan the query.
@@ -1486,14 +1496,15 @@ func (e *Executor) getCachedOrBuildPlan(
 		if !preparedPlan {
 			// build Plan key
 			planKey = buildPlanKey(ctx, vcursor, query, setVarComment)
+			planKey.RequestDirectives = rd != nil
 		}
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
 		})
-		return plan, cached, stmt, qh, query, err
+		return plan, cached, stmt, qh, rd.Restore(query), err
 	}
 	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
-	return plan, false, stmt, qh, query, err
+	return plan, false, stmt, qh, rd.Restore(query), err
 }
 
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {
