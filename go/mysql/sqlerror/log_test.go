@@ -124,6 +124,18 @@ func TestMySQLErrno(t *testing.T) {
 	}
 }
 
+// TestFindSQLErrorBudget checks that the plain errors in an errors.Join count
+// against the bound on the errors findSQLError visits.
+func TestFindSQLErrorBudget(t *testing.T) {
+	errs := make([]error, maxChainErrors, maxChainErrors+1)
+	for i := range errs {
+		errs[i] = errors.New("plain")
+	}
+	budget := maxChainErrors
+	assert.Nil(t, findSQLError(errors.Join(append(errs, dupEntryError())...), &budget))
+	assert.Zero(t, budget)
+}
+
 // TestParseErrnoLarge checks that reading a large error takes linear time. The
 // bound leaves room for -race on a loaded machine; a quadratic parse of broken
 // takes minutes.

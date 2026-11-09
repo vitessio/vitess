@@ -39,19 +39,20 @@ func addLogAttrs(r *slog.Record, v slog.Value) {
 	// "!PANIC", so recover from any panic rather than crash where slog didn't.
 	defer func() { _ = recover() }()
 
-	errno, ok := mysqlErrno(v)
-	// Numbers below 1000 are Vitess's own errors, such as ERNotReplica.
-	if !ok || errno < 1000 {
-		return
-	}
 	set := false
 	r.Attrs(func(a slog.Attr) bool {
 		set = a.Key == "mysql_errno"
 		return !set
 	})
-	if !set {
-		r.AddAttrs(slog.Int("mysql_errno", int(errno)))
+	if set {
+		return
 	}
+	errno, ok := mysqlErrno(v)
+	// Numbers below 1000 are Vitess's own errors, such as ERNotReplica.
+	if !ok || errno < 1000 {
+		return
+	}
+	r.AddAttrs(slog.Int("mysql_errno", int(errno)))
 }
 
 // mysqlErrno returns the MySQL error number of v, a logged error or error
@@ -82,7 +83,8 @@ const maxChainErrors = 100
 // findSQLError returns the first *SQLError in err's chain, following both
 // Unwrap and vterrors' Cause, and visiting at most *budget errors.
 func findSQLError(err error, budget *int) *SQLError {
-	for ; err != nil && *budget > 0; *budget-- {
+	for err != nil && *budget > 0 {
+		*budget--
 		switch e := err.(type) {
 		case *SQLError:
 			return e
@@ -91,8 +93,10 @@ func findSQLError(err error, budget *int) *SQLError {
 		case interface{ Unwrap() error }:
 			err = e.Unwrap()
 		case interface{ Unwrap() []error }:
-			*budget--
 			for _, inner := range e.Unwrap() {
+				if *budget <= 0 {
+					return nil
+				}
 				if se := findSQLError(inner, budget); se != nil {
 					return se
 				}
