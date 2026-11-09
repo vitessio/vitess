@@ -185,7 +185,7 @@ func markNoRoutesSpecialHandling(op Operator, needed bool) {
 	if !ok {
 		return
 	}
-	if _, isLookupVindex := sharded.SelectedVindex().(vindexes.LookupPlanable); isLookupVindex {
+	if _, isLookupVindex := sharded.SelectedVindex().(vindexes.Lookup); isLookupVindex {
 		route.NoRoutesSpecialHandling = true
 	}
 }

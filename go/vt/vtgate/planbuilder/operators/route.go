@@ -120,6 +120,15 @@ type (
 	}
 )
 
+func inheritNoRoutesSpecialHandling(route *Route, sources ...*Route) {
+	for _, source := range sources {
+		if source != nil && source.NoRoutesSpecialHandling {
+			route.NoRoutesSpecialHandling = true
+			return
+		}
+	}
+}
+
 // UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, in sqlparser.Expr, r Routing) Routing {
 	if nr, ok := r.(*NoneRouting); ok {

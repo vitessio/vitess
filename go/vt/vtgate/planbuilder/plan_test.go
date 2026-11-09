@@ -85,15 +85,23 @@ func TestReferenceUnionByDestinationHandlesLookupMiss(t *testing.T) {
 	}{
 		{"select id from ref union all select id from music where id = 1", true},
 		{"select id from music where id = 1 union all select id from ref", true},
+		{"select d.id from (select id from ref union all select id from music where id = 1) as d cross join ref r", true},
 		{"select id from music where id = 1", false},
+		{"select user_id from ref union all select user_id from user_metadata where non_planable = 'foo'", true},
+		{"select user_id from user_metadata where non_planable = 'foo'", false},
 	} {
 		plan, err := TestBuilder(tc.query, vw, vw.CurrentDb())
 		require.NoError(t, err)
 
-		lookup, ok := plan.Instructions.(*engine.VindexLookup)
-		require.True(t, ok)
-		require.NotNil(t, lookup.SendTo)
-		assert.Equal(t, tc.wantSpecialHandling, lookup.SendTo.NoRoutesSpecialHandling)
+		var route *engine.Route
+		switch instructions := plan.Instructions.(type) {
+		case *engine.Route:
+			route = instructions
+		case *engine.VindexLookup:
+			route = instructions.SendTo
+		}
+		require.NotNil(t, route, "expected a route for query %q", tc.query)
+		assert.Equal(t, tc.wantSpecialHandling, route.NoRoutesSpecialHandling, tc.query)
 	}
 }
 
