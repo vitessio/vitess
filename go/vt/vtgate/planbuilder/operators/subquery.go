@@ -240,7 +240,8 @@ func (sq *SubQuery) addLimit() {
 	sq.Subquery = newLimit(sq.Subquery, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")}, true)
 }
 
-// countSubqueries reports how many subqueries a predicate holds. A SubQuery carries a
+// countSubqueries reports how many subqueries a predicate holds at its own level, without
+// counting the ones nested inside them. A SubQuery carries a
 // single has-values argument, so a predicate with more than one cannot be rebuilt from it.
 func countSubqueries(expr sqlparser.Expr) (count int) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
