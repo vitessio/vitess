@@ -6421,5 +6421,117 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A correlated EXISTS merged into the right side of a join keeps the predicate around it when the left side merges several tables",
+    "query": "select u.id from `user` as u join user_extra as ue on u.id = ue.user_id straight_join music as m on u.col = m.col where ue.col = 1 or exists (select 1 from user_extra as ue2 where ue2.user_id = m.user_id)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.id from `user` as u join user_extra as ue on u.id = ue.user_id straight_join music as m on u.col = m.col where ue.col = 1 or exists (select 1 from user_extra as ue2 where ue2.user_id = m.user_id)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1,
+          "ue_col": 2
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, u.col, ue.col from `user` as u, user_extra as ue where 1 != 1",
+            "Query": "select u.id, u.col, ue.col from `user` as u, user_extra as ue where u.id = ue.user_id"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ and (:ue_col /* INT16 */ = 1 or exists (select 1 from user_extra as ue2 where ue2.user_id = m.user_id))"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A correlated EXISTS merged into the right side of a join keeps the predicate around it when the left side is a cross-shard join",
+    "query": "select u.id from `user` as u join user_extra as ue on u.col = ue.col straight_join music as m on u.col = m.col where ue.col = 1 or exists (select 1 from user_extra as ue2 where ue2.user_id = m.user_id)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.id from `user` as u join user_extra as ue on u.col = ue.col straight_join music as m on u.col = m.col where ue.col = 1 or exists (select 1 from user_extra as ue2 where ue2.user_id = m.user_id)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1,
+          "ue_col": 2
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1,R:0",
+            "JoinVars": {
+              "u_col": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+                "Query": "select u.id, u.col from `user` as u"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.col from user_extra as ue where 1 != 1",
+                "Query": "select ue.col from user_extra as ue where ue.col = :u_col /* INT16 */"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ and (:ue_col /* INT16 */ = 1 or exists (select 1 from user_extra as ue2 where ue2.user_id = m.user_id))"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]

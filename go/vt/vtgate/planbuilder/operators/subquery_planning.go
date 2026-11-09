@@ -424,9 +424,29 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 // instead of the column names
 func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) sqlparser.Expr {
 	outerID := TableID(outer.LHS)
-	result := sqlparser.CopyOnRewrite(expression, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+	// Outside the subqueries, any column the LHS solves is fed from it, even when the LHS
+	// spans several tables. Inside them, only an exact match is: a sibling subquery that
+	// already merged into the LHS adds its own tables to outerID.
+	fedFromLHS := func(col *sqlparser.ColName) bool {
+		deps := ctx.SemTable.RecursiveDeps(col)
+		return deps.NotEmpty() && deps.IsSolvedBy(outerID)
+	}
+	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, dontEnterSubqueries, fedFromLHS)
+	return rewriteColumnsFedFromLHS(ctx, expression, outer, nil, func(col *sqlparser.ColName) bool {
+		return ctx.SemTable.RecursiveDeps(col) == outerID
+	})
+}
+
+func rewriteColumnsFedFromLHS(
+	ctx *plancontext.PlanningContext,
+	expression sqlparser.Expr,
+	outer *ApplyJoin,
+	pre func(node, parent sqlparser.SQLNode) bool,
+	fedFromLHS func(*sqlparser.ColName) bool,
+) sqlparser.Expr {
+	result := sqlparser.CopyOnRewrite(expression, pre, func(cursor *sqlparser.CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*sqlparser.ColName)
-		if !ok || ctx.SemTable.RecursiveDeps(col) != outerID {
+		if !ok || !fedFromLHS(col) {
 			// we are only interested in columns that are coming from the LHS of the join
 			return
 		}
