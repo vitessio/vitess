@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -42,6 +43,40 @@ type testcase struct {
 	versionString string
 	version       ServerVersion
 	flavor        MySQLFlavor
+}
+
+func TestStartNoWaitCanceledWithMissingHook(t *testing.T) {
+	t.Setenv("VTROOT", t.TempDir())
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	err := (&Mysqld{}).startNoWait(ctx, &Mycnf{})
+	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestNewMysqldContextCancellation(t *testing.T) {
+	mysqlRoot := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(mysqlRoot, "bin"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(mysqlRoot, "bin", "mysqld"), []byte("#!/bin/sh\nsleep 60\n"), 0o755))
+	t.Setenv("VT_MYSQL_ROOT", mysqlRoot)
+
+	globalDBConfigs := dbconfigs.GlobalDBConfigs
+	dbconfigs.GlobalDBConfigs = dbconfigs.DBConfigs{}
+	t.Cleanup(func() {
+		dbconfigs.GlobalDBConfigs = globalDBConfigs
+	})
+	networkSocketFile := socketFile
+	socketFile = ""
+	t.Cleanup(func() {
+		socketFile = networkSocketFile
+	})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	mysqld, err := newMysqld(ctx, &dbconfigs.DBConfigs{})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Nil(t, mysqld)
 }
 
 func TestParseVersionString(t *testing.T) {

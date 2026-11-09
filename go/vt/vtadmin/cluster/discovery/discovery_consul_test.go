@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"context"
 	"sort"
 	"testing"
 	"text/template"
@@ -35,10 +36,15 @@ type fakeConsulClient struct {
 func (c *fakeConsulClient) Health() ConsulHealth { return c.health }
 
 type fakeConsulHealth struct {
-	entries map[string][]*consul.ServiceEntry
+	entries            map[string][]*consul.ServiceEntry
+	returnContextError bool
 }
 
 func (health *fakeConsulHealth) ServiceMultipleTags(service string, tags []string, passingOnly bool, q *consul.QueryOptions) ([]*consul.ServiceEntry, *consul.QueryMeta, error) {
+	if health.returnContextError {
+		return nil, nil, q.Context().Err()
+	}
+
 	if health.entries == nil {
 		return nil, nil, assert.AnError
 	}
@@ -83,6 +89,43 @@ func consulServiceEntry(name string, tags []string, meta map[string]string) *con
 			Meta: meta,
 			Tags: tags,
 		},
+	}
+}
+
+func TestConsulDiscoveryPropagatesCancellation(t *testing.T) {
+	tests := []struct {
+		name     string
+		discover func(context.Context, *ConsulDiscovery) error
+	}{
+		{
+			name: "vtgates",
+			discover: func(ctx context.Context, discovery *ConsulDiscovery) error {
+				_, err := discovery.DiscoverVTGates(ctx, nil)
+				return err
+			},
+		},
+		{
+			name: "vtctlds",
+			discover: func(ctx context.Context, discovery *ConsulDiscovery) error {
+				_, err := discovery.DiscoverVtctlds(ctx, nil)
+				return err
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			discovery := &ConsulDiscovery{
+				client: &fakeConsulClient{
+					health: &fakeConsulHealth{returnContextError: true},
+				},
+			}
+			ctx, cancel := context.WithCancel(t.Context())
+			cancel()
+
+			err := tt.discover(ctx, discovery)
+			require.ErrorIs(t, err, context.Canceled)
+		})
 	}
 }
 

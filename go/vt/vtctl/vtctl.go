@@ -2345,7 +2345,7 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 		}
 	}
 
-	printCopyProgress := func() error {
+	printCopyProgress := func() error { //nolint:contextcheck,nolintlint // The workflow retains the command context.
 		copyProgress, err := wf.GetCopyProgress()
 		if err != nil {
 			return err
@@ -2477,9 +2477,9 @@ func commandVReplicationWorkflow(ctx context.Context, wr *wrangler.Wrangler, sub
 			}
 		}
 	case vReplicationWorkflowActionSwitchTraffic:
-		dryRunResults, err = wf.SwitchTraffic(workflow.DirectionForward)
+		dryRunResults, err = wf.SwitchTraffic(workflow.DirectionForward) //nolint:contextcheck,nolintlint // The workflow retains the command context.
 	case vReplicationWorkflowActionReverseTraffic:
-		dryRunResults, err = wf.ReverseTraffic()
+		dryRunResults, err = wf.ReverseTraffic() //nolint:contextcheck,nolintlint // The workflow retains the command context.
 	case vReplicationWorkflowActionComplete:
 		dryRunResults, err = wf.Complete()
 	case vReplicationWorkflowActionCancel:

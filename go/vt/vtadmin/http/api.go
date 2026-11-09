@@ -66,12 +66,11 @@ func NewAPI(server vtadminpb.VTAdminServer, opts Options) *API {
 type VTAdminHandler func(ctx context.Context, r Request, api *API) *JSONResponse
 
 // Adapt converts a VTAdminHandler into an http.HandlerFunc. It deals with
-// wrapping the request in a wrapper for some convenience functions and starts
-// a new context, after extracting any potential spans that were set by an
-// upstream middleware in the request context.
+// wrapping the request for convenience while preserving cancellation and any
+// values set by upstream middleware.
 func (api *API) Adapt(handler VTAdminHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.Background()
+		ctx := r.Context()
 
 		span, _ := trace.FromContext(r.Context())
 		if span != nil {

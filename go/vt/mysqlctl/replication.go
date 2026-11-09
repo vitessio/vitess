@@ -491,7 +491,7 @@ func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, co
 		// Try to kill the connection to effectively cancel the status read.
 		connID := conn.ID()
 		log.Info(fmt.Sprintf("Mysqld.showReplicationStatusDirectContext(): killing connID %v due to timeout", connID))
-		if killErr := mysqld.killConnection(connID); killErr != nil {
+		if killErr := mysqld.killConnection(ctx, connID); killErr != nil {
 			log.Warn(fmt.Sprintf("Mysqld.showReplicationStatusDirectContext(): failed to kill connID %v: %v", connID, killErr))
 		}
 		// Close the connection before waiting: if the server cannot service
