@@ -473,7 +473,7 @@ func (vse *Engine) setWatch() {
 			keyspace: vse.keyspace,
 			vschema:  vschema,
 		}
-		log.V(2).Info("Updated vschema", slog.Any("vschema", lazyString(func() string {
+		log.V(2).Info("Updated vschema", slog.Any("vschema", log.LazyString(func() string {
 			b, _ := json.Marshal(vschema)
 			return string(b)
 		})))

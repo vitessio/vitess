@@ -19,6 +19,7 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/tb"
@@ -49,7 +50,13 @@ func (tm *TabletManager) unlock() {
 func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, reply any, verbose bool, err *error) {
 	// panic handling
 	if x := recover(); x != nil {
-		log.Error(fmt.Sprintf("TabletManager.%v(%v) on %v panic: %v\n%s", name, args, topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4)))
+		log.Error("TabletManager RPC panic",
+			slog.String("rpc", name),
+			slog.String("request", fmt.Sprintf("%v", args)),
+			slog.String("tablet", topoproto.TabletAliasString(tm.tabletAlias)),
+			slog.Any("panic", x),
+			slog.String("stack", string(tb.Stack(4))),
+		)
 		*err = fmt.Errorf("caught panic during %v: %v", name, x)
 		return
 	}
@@ -76,11 +83,23 @@ func (tm *TabletManager) HandleRPCPanic(ctx context.Context, name string, args, 
 			*err = vterrors.New(sqlErr.VtRpcErrorCode(), (*err).Error())
 		}
 
-		log.Warn(fmt.Sprintf("TabletManager.%v(%v)(on %v from %v) error: %v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, (*err).Error()))
+		log.Warn("TabletManager RPC error",
+			slog.String("rpc", name),
+			slog.String("request", fmt.Sprintf("%v", args)),
+			slog.String("tablet", topoproto.TabletAliasString(tm.tabletAlias)),
+			slog.String("caller", from),
+			slog.String("error", (*err).Error()),
+			slog.String("error_code", vterrors.Code(*err).String()),
+		)
 		*err = vterrors.ToGRPC(vterrors.Wrapf(*err, "TabletManager.%v on %v", name, topoproto.TabletAliasString(tm.tabletAlias)))
 	} else {
 		// success case
-		log.Info(fmt.Sprintf("TabletManager.%v(%v)(on %v from %v): %#v", name, args, topoproto.TabletAliasString(tm.tabletAlias), from, reply))
+		log.Info("TabletManager RPC succeeded",
+			slog.String("rpc", name),
+			slog.String("request", fmt.Sprintf("%v", args)),
+			slog.String("tablet", topoproto.TabletAliasString(tm.tabletAlias)),
+			slog.String("caller", from),
+		)
 	}
 }
 

@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"sync"
 	"sync/atomic"
@@ -714,7 +715,10 @@ func (sbc *SandboxConn) popVStreamEvents() ([]*binlogdatapb.VEvent, bool, error)
 func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStreamRequest, send func([]*binlogdatapb.VEvent) error) error {
 	sbc.VStreamRequests = append(sbc.VStreamRequests, request)
 	if sbc.StartPos != "" && sbc.StartPos != request.Position {
-		log.Error(fmt.Sprintf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos))
+		log.Error("unexpected startPos",
+			slog.String("target", fmt.Sprint(request.Target)),
+			slog.String("start_position", request.Position),
+			slog.String("expected_start_position", sbc.StartPos))
 		return fmt.Errorf("startPos(%v): %v, want %v", request.Target, request.Position, sbc.StartPos)
 	}
 	done := false
@@ -739,7 +743,7 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 				}}
 
 				if err := send(events); err != nil {
-					log.Info("error sending event in test sandbox " + err.Error())
+					log.Info("error sending event in test sandbox", slog.Any("error", err))
 					return err
 				}
 				lastTimestamp++
@@ -749,7 +753,7 @@ func (sbc *SandboxConn) VStream(ctx context.Context, request *binlogdatapb.VStre
 					done = true
 				}
 				if err := send([]*binlogdatapb.VEvent{ev}); err != nil {
-					log.Info("error sending event in test sandbox " + err.Error())
+					log.Info("error sending event in test sandbox", slog.Any("error", err))
 					return err
 				}
 				lastTimestamp = ev.Timestamp

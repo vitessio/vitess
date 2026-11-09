@@ -14,21 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vstreamer
+package log
 
 import "log/slog"
 
-// lazyString defers building an expensive attribute value, such as proto text
-// or JSON, until the record is written, so log.V calls that are turned off
-// don't pay for it.
-type lazyString func() string
+// LazyString defers building an expensive attribute value, such as proto text
+// or JSON, until the record is written, so records that are dropped (a V(n)
+// level that is off, or a throttled logger) don't pay for it.
+//
+//	log.V(2).Info("Updated vschema", slog.Any("vschema", log.LazyString(func() string { ... })))
+type LazyString func() string
 
-func (f lazyString) LogValue() slog.Value {
+func (f LazyString) LogValue() slog.Value {
 	return slog.StringValue(f())
 }
 
 // String returns the value for loggers that format attributes with fmt, such
 // as the glog backend.
-func (f lazyString) String() string {
+func (f LazyString) String() string {
 	return f()
 }
