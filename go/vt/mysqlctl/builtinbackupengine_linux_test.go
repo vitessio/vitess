@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 	"path"
@@ -124,16 +125,13 @@ func TestRestoreChunksWriteMode(t *testing.T) {
 	const fileSize = 4*64*1024 + 1000
 
 	tests := []struct {
-		name          string
-		mode          string
-		chunkSize     int64
-		concurrency   int
-		compress      bool
-		rejectODirect bool
+		name        string
+		mode        string
+		chunkSize   int64
+		concurrency int
+		compress    bool
 		// expectDirect is whether the chunks should be written with O_DIRECT.
 		expectDirect bool
-		// expectErr is the error createChunkedDestinations should fail with, before any chunk is restored.
-		expectErr string
 	}{
 		{
 			name:        "buffered",
@@ -163,26 +161,11 @@ func TestRestoreChunksWriteMode(t *testing.T) {
 			concurrency:  4,
 			expectDirect: true,
 		},
-		{
-			name:        "direct fails for unaligned chunk offsets",
-			mode:        restoreWriteModeDirect,
-			chunkSize:   6000,
-			concurrency: 1,
-			expectErr:   "starts at offset 6000, which is not a multiple of 4096",
-		},
-		{
-			name:          "direct fails when O_DIRECT is rejected",
-			mode:          restoreWriteModeDirect,
-			chunkSize:     64 * 1024,
-			concurrency:   1,
-			rejectODirect: true,
-			expectErr:     "O_DIRECT is not supported",
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cnf := &Mycnf{DataDir: t.TempDir()}
-			if tt.mode == restoreWriteModeDirect && tt.expectErr == "" {
+			if tt.mode == restoreWriteModeDirect {
 				requireDirectIO(t, cnf.DataDir)
 				requireFallocate(t, cnf.DataDir)
 			}
@@ -215,9 +198,6 @@ func TestRestoreChunksWriteMode(t *testing.T) {
 			oldOpenFile := openFile
 			t.Cleanup(func() { openFile = oldOpenFile })
 			openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
-				if flag&unix.O_DIRECT != 0 && tt.rejectODirect {
-					return nil, &os.PathError{Op: "open", Path: name, Err: syscall.EINVAL}
-				}
 				f, err := os.OpenFile(name, flag, perm)
 				if err == nil {
 					mu.Lock()
@@ -239,14 +219,7 @@ func TestRestoreChunksWriteMode(t *testing.T) {
 				Concurrency: tt.concurrency,
 			}
 
-			err = createChunkedDestinations(t.Context(), fes, cnf, "", tt.mode == restoreWriteModeDirect, params.Logger)
-			if tt.expectErr != "" {
-				require.ErrorContains(t, err, tt.expectErr)
-				require.ErrorContains(t, err, "--builtinbackup-restore-write-mode=buffered", "the error must say how to restore the backup")
-				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "the restore must not be retried")
-				return
-			}
-			require.NoError(t, err)
+			require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", tt.mode == restoreWriteModeDirect, params.Logger))
 			// Only count the opens made to restore the chunks.
 			directOpens = nil
 			be := &BuiltinBackupEngine{}
@@ -310,9 +283,6 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cnf := &Mycnf{DataDir: t.TempDir()}
-			if tt.mode == restoreWriteModeDirect {
-				requireDirectIO(t, cnf.DataDir)
-			}
 			if tt.expectAllocated {
 				requireFallocate(t, cnf.DataDir)
 			}
@@ -357,6 +327,98 @@ func TestCreateChunkedDestinationsSizing(t *testing.T) {
 	}
 }
 
+// TestCheckDirectRestore checks the requirements of direct write mode that a restore checks
+// before it changes anything, and that each root directory of the chunked files is probed once,
+// with a scratch file that is removed.
+func TestCheckDirectRestore(t *testing.T) {
+	const fileSize = 3*1024*1024 + 123
+
+	tests := []struct {
+		name          string
+		chunkSize     int64
+		rejectODirect bool
+		fallocateErr  error
+		expectErr     string
+	}{
+		{
+			name:      "aligned chunks on a filesystem that supports O_DIRECT and fallocate",
+			chunkSize: 1024 * 1024,
+		},
+		{
+			name:      "unaligned chunk offsets",
+			chunkSize: 6000,
+			expectErr: "starts at offset 6000, which is not a multiple of 4096",
+		},
+		{
+			name:          "O_DIRECT is rejected",
+			chunkSize:     1024 * 1024,
+			rejectODirect: true,
+			expectErr:     "O_DIRECT is not supported",
+		},
+		{
+			name:         "fallocate is unsupported",
+			chunkSize:    1024 * 1024,
+			fallocateErr: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "fallocate is not supported"),
+			expectErr:    "fallocate is not supported",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			if tt.expectErr == "" || tt.fallocateErr != nil {
+				requireDirectIO(t, root)
+			}
+			if tt.expectErr == "" {
+				requireFallocate(t, root)
+			}
+			// The directories don't exist yet, as on a tablet that is restored for the first time.
+			cnf := &Mycnf{DataDir: path.Join(root, "data"), InnodbDataHomeDir: path.Join(root, "innodb")}
+
+			var directOpens atomic.Int32
+			oldOpenFile, oldFallocate := openFile, fallocate
+			t.Cleanup(func() { openFile, fallocate = oldOpenFile, oldFallocate })
+			openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+				if flag&unix.O_DIRECT != 0 {
+					directOpens.Add(1)
+					if tt.rejectODirect {
+						return nil, &os.PathError{Op: "open", Path: name, Err: syscall.EINVAL}
+					}
+				}
+				return oldOpenFile(name, flag, perm)
+			}
+			if tt.fallocateErr != nil {
+				fallocate = func(*os.File, int64) error { return tt.fallocateErr }
+			}
+
+			// Two chunked files under the data directory, one under the InnoDB data directory, and a
+			// file that isn't chunked, so isn't restored with O_DIRECT.
+			fes := []FileEntry{
+				{Base: backupData, Name: "vt_test/t1.ibd", Chunks: computeFileChunks(0, fileSize, tt.chunkSize)},
+				{Base: backupData, Name: "vt_test/t2.ibd", Chunks: computeFileChunks(1, fileSize, tt.chunkSize)},
+				{Base: backupInnodbDataHomeDir, Name: "ibdata1", Chunks: computeFileChunks(2, fileSize, tt.chunkSize)},
+				{Base: backupInnodbLogGroupHomeDir, Name: "ib_logfile0"},
+			}
+			err := checkDirectRestore(cnf, fes)
+
+			for _, dir := range []string{cnf.DataDir, cnf.InnodbDataHomeDir} {
+				entries, _ := os.ReadDir(dir)
+				assert.Empty(t, entries, "no scratch file may be left in %v", dir)
+			}
+			if tt.expectErr != "" {
+				require.ErrorContains(t, err, tt.expectErr)
+				require.ErrorContains(t, err, "--builtinbackup-restore-write-mode=buffered", "the error must say how to restore the backup")
+				assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "the restore must not be retried")
+				return
+			}
+			require.NoError(t, err)
+			assert.EqualValues(t, 2, directOpens.Load(), "each root directory must be probed once")
+			assert.DirExists(t, cnf.DataDir)
+			assert.DirExists(t, cnf.InnodbDataHomeDir)
+			assert.NoDirExists(t, path.Join(cnf.DataDir, "vt_test"), "only the root directories may be created")
+		})
+	}
+}
+
 // TestBackupRestoreWithManyChunksDirect runs the backup and restore of TestBackupRestoreWithManyChunks
 // through ExecuteBackup and ExecuteRestore with --builtinbackup-restore-write-mode=direct, and checks
 // that every chunk is written with O_DIRECT.
@@ -383,6 +445,33 @@ func TestBackupRestoreWithManyChunksDirect(t *testing.T) {
 
 	assert.Zero(t, bufferedOpens.Load(), "no chunk may be written without O_DIRECT")
 	assert.GreaterOrEqual(t, directOpens.Load(), int32(256), "each of the 256 chunks must be written with O_DIRECT")
+}
+
+// TestExecuteRestoreDirectChecksBeforeRemovingData checks that a restore that can't be done in
+// direct write mode fails before it marks the restore as in progress, shuts down mysqld and
+// removes the existing data.
+func TestExecuteRestoreDirectChecksBeforeRemovingData(t *testing.T) {
+	backupRoot := t.TempDir()
+	filePath, originalChecksum := backupWithManyChunks(t, backupRoot)
+
+	setRestoreWriteMode(t, restoreWriteModeDirect)
+	oldOpenFile := openFile
+	t.Cleanup(func() { openFile = oldOpenFile })
+	openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+		if flag&unix.O_DIRECT != 0 {
+			return nil, &os.PathError{Op: "open", Path: name, Err: syscall.EINVAL}
+		}
+		return oldOpenFile(name, flag, perm)
+	}
+
+	_, err := restoreWithManyChunks(t, backupRoot)
+	require.ErrorContains(t, err, "O_DIRECT is not supported")
+	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "the restore must not be retried")
+
+	data, err := os.ReadFile(filePath)
+	require.NoError(t, err, "the existing data must not be removed")
+	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(data), "the existing data must not be changed")
+	assert.NoFileExists(t, path.Join(backupRoot, RestoreState), "the restore must not be marked as in progress")
 }
 
 // TestRestoreIncrementalBackupBuffered checks that the chunks of an incremental backup are written

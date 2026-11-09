@@ -754,6 +754,22 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 // backupRestoreWithManyChunks backs up a 16MiB file in 256 chunks to file backup storage under
 // backupRoot, restores it, checks that the restored file matches and returns the manifest.
 func backupRestoreWithManyChunks(t *testing.T, backupRoot string) *BackupManifest {
+	filePath, originalChecksum := backupWithManyChunks(t, backupRoot)
+
+	bm, err := restoreWithManyChunks(t, backupRoot)
+	require.NoError(t, err)
+	require.NotNil(t, bm)
+
+	// Verify restored file matches the original.
+	restoredData, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
+	return bm
+}
+
+// backupWithManyChunks backs up a 16MiB file of random data in 256 chunks to file backup storage
+// under backupRoot, and returns the path and checksum of the file.
+func backupWithManyChunks(t *testing.T, backupRoot string) (string, uint32) {
 	ctx := context.Background()
 
 	const (
@@ -821,12 +837,17 @@ func backupRestoreWithManyChunks(t *testing.T, backupRoot string) *BackupManifes
 
 	require.NoError(t, err)
 	require.Equal(t, BackupUsable, backupResult)
+	return filePath, originalChecksum
+}
 
+// restoreWithManyChunks restores the backup taken by backupWithManyChunks.
+func restoreWithManyChunks(t *testing.T, backupRoot string) (*BackupManifest, error) {
 	// Restore: read back all 256 chunks and reassemble into the original file.
 	restoreBh := filebackupstorage.NewBackupHandle(nil, "", "", true)
 	mysqld2 := newBackupTestMysqld(t)
 
-	bm, err := be.ExecuteRestore(ctx, RestoreParams{
+	be := &BuiltinBackupEngine{}
+	return be.ExecuteRestore(context.Background(), RestoreParams{
 		Cnf: &Mycnf{
 			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
@@ -851,15 +872,6 @@ func backupRestoreWithManyChunks(t *testing.T, backupRoot string) *BackupManifes
 		Stats:                backupstats.NoStats(),
 		MysqlShutdownTimeout: time.Minute,
 	}, restoreBh)
-
-	require.NoError(t, err)
-	require.NotNil(t, bm)
-
-	// Verify restored file matches the original.
-	restoredData, err := os.ReadFile(filePath)
-	require.NoError(t, err)
-	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
-	return bm
 }
 
 // TestBackupRestoreWithBinlogs backs up a source with binlogs and checks that

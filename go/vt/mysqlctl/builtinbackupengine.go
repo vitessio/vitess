@@ -281,7 +281,7 @@ func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&builtinIncrementalRestorePath, "builtinbackup-incremental-restore-path", builtinIncrementalRestorePath, "the directory where incremental restore files, namely binlog files, are extracted to. In k8s environments, this should be set to a directory that is shared between the vttablet and mysqld pods. The path should exist. When empty, the default OS temp dir is assumed.")
 	fs.Uint64Var(&backupFileChunkThreshold, "builtinbackup-file-chunk-threshold", backupFileChunkThreshold, "Files larger than this size (in bytes) are split into chunks for parallel backup/restore. 0 disables chunking.")
 	fs.Uint64Var(&backupFileChunkSize, "builtinbackup-file-chunk-size", backupFileChunkSize, "Size of each chunk (in bytes) when splitting large files for parallel backup/restore.")
-	fs.Var(builtinBackupRestoreWriteMode, "builtinbackup-restore-write-mode", "How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 4096; otherwise the restore fails before any data is downloaded. Incremental backups are always restored buffered.")
+	fs.Var(builtinBackupRestoreWriteMode, "builtinbackup-restore-write-mode", "How chunks of chunked files are written to disk during restores: 'buffered' writes through the page cache, 'direct' uses O_DIRECT to bypass it. Direct mode requires Linux, a filesystem that supports O_DIRECT and fallocate, and a backup taken with a --builtinbackup-file-chunk-size that is a multiple of 4096; otherwise the restore fails before the existing data is removed. Incremental backups are always restored buffered.")
 }
 
 // errInvalidBinlogEntry is returned for a stripped binlog whose name is not binlog.<seq>.
@@ -291,18 +291,7 @@ var errInvalidBinlogEntry = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "inva
 // It validates that the resolved path does not escape the base directory
 // via path traversal (e.g. "../../" sequences in fe.Name).
 func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
-	// find the root to use
-	var root string
-	switch fe.Base {
-	case backupInnodbDataHomeDir:
-		root = cnf.InnodbDataHomeDir
-	case backupInnodbLogGroupHomeDir:
-		root = cnf.InnodbLogGroupHomeDir
-	case backupData:
-		root = cnf.DataDir
-	case backupBinlogDir:
-		root = filepath.Dir(cnf.BinLogPath)
-	case backupBinlogStripped:
+	if fe.Base == backupBinlogStripped {
 		seq, ok := strings.CutPrefix(fe.Name, "binlog.")
 		if !ok || !binlogSeqRE.MatchString(seq) {
 			return "", errInvalidBinlogEntry
@@ -312,11 +301,35 @@ func (fe *FileEntry) fullPath(cnf *Mycnf) (string, error) {
 			return "", err
 		}
 		return path.Join(fe.ParentPath, basename+"."+seq), nil
+	}
+
+	root, err := fe.rootDir(cnf)
+	if err != nil {
+		return "", err
+	}
+	return fileutil.SafePathJoin(path.Join(fe.ParentPath, root), fe.Name)
+}
+
+// rootDir returns the directory that the entry is restored under, before fe.ParentPath is applied.
+func (fe *FileEntry) rootDir(cnf *Mycnf) (string, error) {
+	switch fe.Base {
+	case backupInnodbDataHomeDir:
+		return cnf.InnodbDataHomeDir, nil
+	case backupInnodbLogGroupHomeDir:
+		return cnf.InnodbLogGroupHomeDir, nil
+	case backupData:
+		return cnf.DataDir, nil
+	case backupBinlogDir:
+		return filepath.Dir(cnf.BinLogPath), nil
+	case backupBinlogStripped:
+		basename, _, err := binlogLocation(cnf)
+		if err != nil {
+			return "", err
+		}
+		return filepath.Dir(basename), nil
 	default:
 		return "", vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unknown base: %v", fe.Base)
 	}
-
-	return fileutil.SafePathJoin(path.Join(fe.ParentPath, root), fe.Name)
 }
 
 // open attempts to open the file
@@ -1370,6 +1383,14 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 			backupManifestFileName, bm.IncludesBinlogs, len(bm.BinlogFileEntries), bm.Incremental)
 	}
 
+	// A restore that can't be done in direct write mode fails here, while mysqld and its data
+	// are still in place.
+	if restoreWithDirectIO(bm) {
+		if err := checkDirectRestore(params.Cnf, append(slices.Clip(bm.FileEntries), bm.BinlogFileEntries...)); err != nil {
+			return nil, err
+		}
+	}
+
 	// mark restore as in progress
 	if err := createStateFile(params.Cnf); err != nil {
 		return nil, err
@@ -1521,10 +1542,10 @@ func restoreWithDirectIO(bm builtinBackupManifest) bool {
 
 // createChunkedDestinations pre-creates and pre-sizes destination files for chunked
 // entries. This is called once before any restore pass so that restoreFileEntries can
-// always open them with O_WRONLY (no truncation), making retries safe.
+// always open them with O_WRONLY (no truncation), making retries safe. When direct is
+// set, the files are preallocated for O_DIRECT writes; checkDirectRestore already
+// checked that they can be.
 func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf, createdDir string, direct bool, logger logutil.Logger) error {
-	// When the chunks are restored with O_DIRECT, the requirements are checked here, before any
-	// chunk is downloaded.
 	for i := range fes {
 		fe := &fes[i]
 		if len(fe.Chunks) == 0 {
@@ -1537,21 +1558,10 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 		if err != nil {
 			return err
 		}
-		if direct {
-			if err := checkChunksAligned(fe); err != nil {
-				return err
-			}
-		}
 
 		dest, err := fe.open(cnf, false)
 		if err != nil {
 			return vterrors.Wrapf(err, "can't create destination for chunked file %v", fe.Name)
-		}
-		if direct {
-			if err := checkDirectIO(dest.Name()); err != nil {
-				closeWithRetry(ctx, logger, dest, fe.Name)
-				return vterrors.Wrapf(err, "can't open chunked file %v with O_DIRECT", fe.Name)
-			}
 		}
 		if err := sizeChunkedDestination(dest, totalSize, direct); err != nil {
 			closeWithRetry(ctx, logger, dest, fe.Name)
@@ -1562,6 +1572,57 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 		}
 	}
 	return nil
+}
+
+// checkDirectRestore checks that the chunked files in fes can be restored in direct write mode,
+// before the restore changes anything: that their chunks are aligned, and that the directories
+// they are restored under support O_DIRECT and fallocate. Each of those root directories is
+// probed once, with a scratch file.
+func checkDirectRestore(cnf *Mycnf, fes []FileEntry) error {
+	var roots []string
+	for i := range fes {
+		fe := &fes[i]
+		if len(fe.Chunks) == 0 {
+			continue
+		}
+		if err := checkChunksAligned(fe); err != nil {
+			return err
+		}
+		root, err := fe.rootDir(cnf)
+		if err != nil {
+			return vterrors.Wrapf(err, "can't get the directory of chunked file %v", fe.Name)
+		}
+		if !slices.Contains(roots, root) {
+			roots = append(roots, root)
+		}
+	}
+	for _, root := range roots {
+		if err := probeDirectIO(root); err != nil {
+			return vterrors.Wrapf(err, "can't restore chunked files under %v with O_DIRECT", root)
+		}
+	}
+	return nil
+}
+
+// probeDirectIO checks that files in dir, which it creates if needed, can be opened with O_DIRECT
+// and preallocated, using a scratch file that it removes.
+func probeDirectIO(dir string) (err error) {
+	if err := os2.MkdirAll(dir); err != nil {
+		return vterrors.Wrapf(err, "can't create directory %v", dir)
+	}
+	f, err := os.CreateTemp(dir, ".direct-io-probe-*")
+	if err != nil {
+		return vterrors.Wrapf(err, "can't create a scratch file in %v", dir)
+	}
+	defer func() {
+		if cleanupErr := errors.Join(f.Close(), os.Remove(f.Name())); cleanupErr != nil && err == nil {
+			err = vterrors.Wrapf(cleanupErr, "can't remove scratch file %v", f.Name())
+		}
+	}()
+	if err := checkDirectIO(f.Name()); err != nil {
+		return err
+	}
+	return sizeChunkedDestination(f, directIOAlignment, true)
 }
 
 // directModeErrorf returns the error of a restore that can't be done in direct write mode. It is
@@ -1873,7 +1934,7 @@ func (be *BuiltinBackupEngine) restoreFileChunk(ctx context.Context, params Rest
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	// createChunkedDestinations already checked that direct write mode can be used.
+	// checkDirectRestore already checked that direct write mode can be used.
 	direct := restoreWithDirectIO(bm)
 	openDestAt := time.Now()
 	dest, err := openChunkDestination(destPath, direct)
