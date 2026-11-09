@@ -162,7 +162,7 @@ func TestTabletBackupOnly(t *testing.T) {
 	initTablets(t, true, true)
 	firstBackupTest(t, true)
 
-	tearDown(t, true)
+	tearDown(t, false)
 }
 
 func firstBackupTest(t *testing.T, removeBackup bool) {
