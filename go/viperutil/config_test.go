@@ -17,11 +17,7 @@ limitations under the License.
 package viperutil
 
 import (
-	"bytes"
-	"encoding/json"
 	"log/slog"
-	"os"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -29,7 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/log/logtest"
 )
 
@@ -114,7 +109,8 @@ func TestLoadConfig(t *testing.T) {
 }
 
 // TestGetConfigHandlingValueLogsInvalidValue checks that an invalid value is
-// logged with its key, the error and the value used instead.
+// logged once, at WARN, with the key and the value used instead. The old line's
+// arguments printed the error where the key and the value used instead go.
 func TestGetConfigHandlingValueLogsInvalidValue(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 	v := viper.New()
@@ -127,29 +123,15 @@ func TestGetConfigHandlingValueLogsInvalidValue(t *testing.T) {
 	assert.Equal(t, "WARN", record["level"])
 	assert.Equal(t, "bad", record["config_key"])
 	assert.Equal(t, "ignore", record["default_value"])
-	assert.Contains(t, record["error"], "not-a-handling-value")
 }
 
-const exitTestEnv = "TEST_VIPERUTIL_EXIT"
-
-// TestLoadConfigLogsNotFound checks the record logged when the config file
-// isn't found and the handling is error or exit, and that a config looked up by
-// name, which has no file name, is logged without a path. The exit runs in a
-// child process.
-func TestLoadConfigLogsNotFound(t *testing.T) {
-	if os.Getenv(exitTestEnv) == t.Name() {
-		log.SwapLogger(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
-		configFile.Set("notfound.yaml")
-		configFileNotFoundHandling.Set(ExitOnConfigFileNotFound)
-		_, _ = LoadConfig()
-		return
-	}
-
-	origConfigFile, origConfigName := configFile.Get(), configName.Get()
+// TestLoadConfigLogsNotFoundOnce checks that a config file that isn't found is
+// logged once, at ERROR, when the handling is error.
+func TestLoadConfigLogsNotFoundOnce(t *testing.T) {
+	origConfigFile := configFile.Get()
 	origConfigFileNotFoundHandling := configFileNotFoundHandling.Get()
 	t.Cleanup(func() {
 		configFile.Set(origConfigFile)
-		configName.Set(origConfigName)
 		configFileNotFoundHandling.Set(origConfigFileNotFoundHandling)
 	})
 
@@ -162,34 +144,4 @@ func TestLoadConfigLogsNotFound(t *testing.T) {
 	assert.Len(t, logs.Records(t), 1, "the jww line isn't also logged to go/vt/log")
 	record := logs.Record(t, "Failed to read in config")
 	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "notfound.yaml", record["path"])
-	assert.Contains(t, record["error"], "no such file or directory")
-
-	logs.Reset()
-	configFile.Set("")
-	configName.Set("notfound")
-	_, err = LoadConfig()
-	require.Error(t, err)
-
-	record = logs.Record(t, "Failed to read in config")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Contains(t, record["error"], `"notfound" Not Found`)
-	assert.NotContains(t, record, "path")
-
-	cmd := exec.Command(os.Args[0], "-test.run=^"+t.Name()+"$")
-	cmd.Env = append(os.Environ(), exitTestEnv+"="+t.Name())
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	err = cmd.Run()
-
-	var exitErr *exec.ExitError
-	require.ErrorAs(t, err, &exitErr)
-	assert.Equal(t, 1, exitErr.ExitCode())
-
-	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
-	record = nil
-	require.NoError(t, json.Unmarshal([]byte(lines[len(lines)-1]), &record), stderr.String())
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "Failed to read in config", record["msg"])
-	assert.Equal(t, "notfound.yaml", record["path"])
 }

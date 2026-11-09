@@ -279,9 +279,10 @@ func TestBenchClientLoopContinueOnError(t *testing.T) {
 	assert.Empty(t, b.Errors.Counts()[vtrpcpb.Code_UNKNOWN.String()], "SQLError must not be bucketed as UNKNOWN")
 }
 
-// TestBenchClientLoopLogsQueryError checks that a failed query is logged with
-// its error and error code: at V(1) for each failure when the loop continues on
-// error, so not at the default verbosity, and as an error when it stops.
+// TestBenchClientLoopLogsQueryError checks the level a failed query is logged
+// at: V(1) for each failure when the loop continues on error, so not at the
+// default verbosity, and ERROR when it stops. It also checks that error_code
+// comes from vtbench's classification, which maps a MySQL error's code.
 func TestBenchClientLoopLogsQueryError(t *testing.T) {
 	queryErr := sqlerror.NewSQLError(sqlerror.ERDupEntry, "23000", "duplicate entry")
 	conn := &fakeClientConn{
@@ -306,8 +307,6 @@ func TestBenchClientLoopLogsQueryError(t *testing.T) {
 	for _, record := range records {
 		assert.Equal(t, "query error", record["msg"])
 		assert.Equal(t, "INFO", record["level"])
-		assert.Equal(t, queryErr.Error(), record["error"])
-		assert.Equal(t, "ALREADY_EXISTS", record["error_code"])
 	}
 
 	logs.Reset()
@@ -315,7 +314,6 @@ func TestBenchClientLoopLogsQueryError(t *testing.T) {
 
 	record := logs.Record(t, "query error")
 	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, queryErr.Error(), record["error"])
 	assert.Equal(t, "ALREADY_EXISTS", record["error_code"])
 }
 

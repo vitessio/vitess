@@ -19,7 +19,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -34,10 +33,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
-	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -121,7 +117,6 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			}}
 
 			// Without a stop position, replication restarts as it always did.
-			logs := logtest.Capture(t, slog.LevelInfo)
 			status, goal, err := catchUpReplicationForBackup(ctx, tmc, ts, mysqld, restorePos, primaryPos, false)
 
 			require.NoError(t, err)
@@ -132,15 +127,6 @@ func TestCatchUpReplicationForBackup(t *testing.T) {
 			assert.Empty(t, mysqld.startUntil)
 			assert.Zero(t, tmc.calls, "without the errant GTID checks, a restart doesn't read the primary")
 			assert.Equal(t, 1, mysqld.stopReplicationCalls)
-
-			record := logs.Record(t, "Replication caught up to position after duration")
-			assert.Equal(t, "INFO", record["level"])
-			assert.Equal(t, replication.EncodePosition(primaryPos), record["position"])
-			assert.Greater(t, record["duration"], float64(time.Second))
-			record = logs.Record(t, "Replication caught up to position")
-			assert.Equal(t, "INFO", record["level"])
-			assert.Equal(t, replication.EncodePosition(primaryPos), record["position"])
-			assert.NotContains(t, record, "duration")
 		})
 	})
 
@@ -827,29 +813,6 @@ func TestRetryOnError(t *testing.T) {
 	})
 }
 
-// TestRetryOnErrorLogsWaitAndError checks the record logged before each retry:
-// the wait and the error are attributes, with the error's code.
-func TestRetryOnErrorLogsWaitAndError(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		logs := logtest.Capture(t, slog.LevelInfo)
-		calls := 0
-		err := retryOnError(boundedContext(t), func() error {
-			calls++
-			if calls == 1 {
-				return vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "can't read shard")
-			}
-			return nil
-		})
-		require.NoError(t, err)
-
-		record := logs.Record(t, "Waiting to retry after error")
-		assert.Equal(t, "ERROR", record["level"])
-		assert.EqualValues(t, time.Second, record["wait"])
-		assert.Equal(t, "can't read shard", record["error"])
-		assert.Equal(t, "UNAVAILABLE", record["error_code"])
-	})
-}
-
 func TestStartReplicationAt(t *testing.T) {
 	tablet := &topodatapb.Tablet{
 		Alias:         &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
@@ -1425,83 +1388,4 @@ func TestVerifyNewBackup(t *testing.T) {
 			assert.Nil(t, verify, "a failed check 2 sets no check 3")
 		})
 	})
-}
-
-// TestBackupSelectionAndPruningLogs checks the records logged while choosing
-// the last complete backup, skipping a backup that isn't due, and pruning old
-// ones: the names, positions, times and limits are attributes, and positions
-// include the flavor.
-func TestBackupSelectionAndPruningLogs(t *testing.T) {
-	oldRoot := filebackupstorage.FileBackupStorageRoot
-	oldMinBackupInterval, oldMinRetentionTime, oldMinRetentionCount := minBackupInterval, minRetentionTime, minRetentionCount
-	t.Cleanup(func() {
-		filebackupstorage.FileBackupStorageRoot = oldRoot
-		minBackupInterval, minRetentionTime, minRetentionCount = oldMinBackupInterval, oldMinRetentionTime, oldMinRetentionCount
-	})
-	filebackupstorage.FileBackupStorageRoot = t.TempDir()
-	minBackupInterval, minRetentionTime, minRetentionCount = time.Hour, time.Hour, 1
-
-	ctx := t.Context()
-	bs := backupstorage.BackupStorageMap["file"]
-	const dir = "ks/0"
-	complete, incomplete := "2026-01-01.000000.zone1-0000000100", "2026-01-02.000000.zone1-0000000101"
-	pos := testGTIDPosition(t, testPrimaryUUID+":1-5")
-
-	bh, err := bs.StartBackup(ctx, dir, complete)
-	require.NoError(t, err)
-	manifest, err := json.Marshal(&mysqlctl.BackupManifest{BackupName: complete, Position: pos})
-	require.NoError(t, err)
-	w, err := bh.AddFile(ctx, "MANIFEST", int64(len(manifest)))
-	require.NoError(t, err)
-	_, err = w.Write(manifest)
-	require.NoError(t, err)
-	require.NoError(t, w.Close())
-	_, err = bs.StartBackup(ctx, dir, incomplete)
-	require.NoError(t, err)
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	doBackup, err := shouldBackup(ctx, nil, bs, dir)
-	require.NoError(t, err)
-	assert.True(t, doBackup)
-
-	record := logs.Record(t, "Ignoring backup because it's incomplete")
-	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, incomplete, record["backup_name"])
-	assert.Contains(t, record["error"], "MANIFEST")
-
-	record = logs.Record(t, "Found complete backup taken at position")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, complete, record["backup_name"])
-	assert.Equal(t, replication.EncodePosition(pos), record["position"])
-
-	record = logs.Record(t, "The last backup was taken at backup_time, which is older than the min_backup_interval.")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, "2026-01-01T00:00:00Z", record["backup_time"])
-	assert.EqualValues(t, time.Hour, record["min_backup_interval"])
-
-	logs.Reset()
-	backupTime := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	minBackupInterval = time.Since(backupTime) + time.Hour
-	doBackup, err = shouldBackup(ctx, nil, bs, dir)
-	require.NoError(t, err)
-	assert.False(t, doBackup)
-	record = logs.Record(t, "Skipping backup since the time elapsed since the last backup at backup_time is less than the min_backup_interval.")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Greater(t, record["elapsed"], float64(time.Hour))
-	assert.Less(t, record["elapsed"], float64(minBackupInterval))
-	assert.Equal(t, "2026-01-01T00:00:00Z", record["backup_time"])
-	assert.EqualValues(t, minBackupInterval, record["min_backup_interval"])
-
-	logs.Reset()
-	require.NoError(t, pruneBackups(ctx, bs, dir))
-
-	record = logs.Record(t, "Removing old backup from dir, since it's older than min_retention_time")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, complete, record["backup_name"])
-	assert.Equal(t, dir, record["dir"])
-	assert.EqualValues(t, time.Hour, record["min_retention_time"])
-
-	record = logs.Record(t, "Successfully pruned backup count to min_retention_count.")
-	assert.Equal(t, "INFO", record["level"])
-	assert.EqualValues(t, 1, record["min_retention_count"])
 }

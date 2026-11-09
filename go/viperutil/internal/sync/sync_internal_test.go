@@ -146,7 +146,7 @@ func jitter(min, max int) int {
 }
 
 // TestPersistConfigLogsWriteError checks that a failed write back to disk is
-// logged.
+// logged to go/vt/log, which the internal log package no longer writes to.
 func TestPersistConfigLogsWriteError(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 

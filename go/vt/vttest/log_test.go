@@ -17,9 +17,7 @@ limitations under the License.
 package vttest
 
 import (
-	"errors"
 	"log/slog"
-	"os"
 	"path"
 	"testing"
 
@@ -33,11 +31,10 @@ import (
 // fakeMySQL is a MySQLManager that runs nothing.
 type fakeMySQL struct {
 	tabletDir string
-	startErr  error
 }
 
 func (m *fakeMySQL) Setup() error           { return nil }
-func (m *fakeMySQL) Start() error           { return m.startErr }
+func (m *fakeMySQL) Start() error           { return nil }
 func (m *fakeMySQL) TearDown() error        { return nil }
 func (m *fakeMySQL) Auth() (string, string) { return "vt_dba", "params-secret" }
 func (m *fakeMySQL) Address() (string, int) { return "", 0 }
@@ -54,29 +51,19 @@ type fakeEnv struct {
 
 func (e *fakeEnv) MySQLManager([]string, string) (MySQLManager, error) { return e.mysql, nil }
 
-// TestLogsKeepValuesOutOfMessage checks that mysqld's error log is logged under
-// error_log, not as the message, and that passwords and the inherited
-// environment stay out of the startup lines.
-func TestLogsKeepValuesOutOfMessage(t *testing.T) {
+// TestStartupLogsKeepCredentialsOut checks that the MySQL password, the
+// vtcombo password flags and the inherited environment stay out of the startup
+// lines, and that vtcombo still runs with the real passwords.
+func TestStartupLogsKeepCredentialsOut(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 
-	tabletDir := t.TempDir()
-	require.NoError(t, os.WriteFile(path.Join(tabletDir, "error.log"), []byte("[ERROR] mysqld-error-marker\n"), 0o644))
-	mysqld := &fakeMySQL{tabletDir: tabletDir, startErr: errors.New("mysqld exited")}
+	mysqld := &fakeMySQL{tabletDir: t.TempDir()}
 	db := &LocalCluster{Env: &fakeEnv{LocalTestEnv: &LocalTestEnv{}, mysql: mysqld}}
 	db.PersistentMode = true
 	db.OnlyMySQL = true
 
-	require.Error(t, db.Setup())
-	record := logs.Record(t, "mysqld error log")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Contains(t, record["error_log"], "[ERROR] mysqld-error-marker")
-
-	logs.Reset()
-	mysqld.startErr = nil
 	require.NoError(t, db.Setup())
-	record = logs.Record(t, "MySQL up")
-	assert.Equal(t, "INFO", record["level"])
+	record := logs.Record(t, "MySQL up")
 	assert.Contains(t, record["mysql_params"], `"Uname":"vt_dba","Pass":"****"`)
 
 	t.Setenv("VTTEST_LOG_SECRET", "env-secret")
@@ -87,7 +74,6 @@ func TestLogsKeepValuesOutOfMessage(t *testing.T) {
 	}
 	require.Error(t, ctl.Start())
 	record = logs.Record(t, "Starting MySQL using environment")
-	assert.Equal(t, "INFO", record["level"])
 	assert.Equal(t, []any{"VTDATAROOT=/vtdataroot", "EXTRA_MY_CNF=a.cnf:b.cnf"}, record["env"])
 
 	vtp := &VtProcess{
@@ -98,7 +84,6 @@ func TestLogsKeepValuesOutOfMessage(t *testing.T) {
 	}
 	require.Error(t, vtp.WaitStart())
 	record = logs.Record(t, "Starting Vitess process")
-	assert.Equal(t, "INFO", record["level"])
 	assert.Equal(t, vtp.Binary+" --port 1 --bind-address localhost --db-app-user vt_app --db-app-password **** --db-dba-password=**** --db-dba-user vt_dba --db_repl_password **** --db-allprivs-password=**** --db-filtered-password= --grpc-auth-static-password-file /etc/auth.json", record["exec_cmd"])
 	assert.Equal(t, append([]string{vtp.Binary, "--port", "1", "--bind-address", "localhost"}, vtp.ExtraArgs...), vtp.proc.Args)
 

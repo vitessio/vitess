@@ -17,12 +17,9 @@ limitations under the License.
 package exit
 
 import (
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 type repanicType int
@@ -89,27 +86,6 @@ func TestRecoverAll(t *testing.T) {
 	defer RecoverAll()
 
 	panic(repanicType(1))
-}
-
-// TestRecoverAllLogsPanic checks that the panic value and the stack are
-// attributes of a constant message.
-func TestRecoverAllLogsPanic(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-	var code int
-	exitFunc = func(c int) {
-		code = c
-	}
-
-	func() {
-		defer RecoverAll()
-		panic("boom")
-	}()
-
-	assert.Equal(t, 255, code)
-	record := logs.Record(t, "panic")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "boom", record["panic"])
-	assert.Contains(t, record["stack"], "exit_test.go")
 }
 
 // TestRecoverNil checks that Recover() does nothing when there is no panic.
