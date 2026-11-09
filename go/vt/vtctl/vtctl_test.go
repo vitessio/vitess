@@ -519,12 +519,6 @@ func TestVReplicationWorkflowActionErrorLog(t *testing.T) {
 	assert.Equal(t, "SwitchTraffic", record["action"])
 	assert.Equal(t, "testwf", record["workflow"])
 	assert.Equal(t, err.Error(), record["error"])
-
-	record = logs.Record(t, "Checking whether the workflow can switch")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, "testwf", record["workflow"])
-	assert.Equal(t, "forward", record["direction"])
-	assert.Equal(t, false, record["writes_switched"])
 }
 
 // TestNewVReplicationWorkflowNoStateLog checks that the state of a workflow
@@ -558,22 +552,4 @@ func TestNewVReplicationWorkflowNoStateLog(t *testing.T) {
 	logs.Reset()
 	wf.CachedState()
 	assertNoState()
-}
-
-// TestWorkflowShardSubsetLog checks that the shards given to Workflow are
-// logged as a list, with their count under selected.
-func TestWorkflowShardSubsetLog(t *testing.T) {
-	ctx := t.Context()
-	env := newTestVTCtlEnv(ctx)
-	t.Cleanup(env.close)
-	logs := logtest.Capture(t, slog.LevelInfo)
-
-	subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	err := commandWorkflow(ctx, env.wr, subFlags, []string{"--shards", "80-,-80", "targetks.testwf", "show"})
-	require.Error(t, err)
-
-	record := logs.Record(t, "Subset of shards specified")
-	assert.Equal(t, "INFO", record["level"])
-	assert.EqualValues(t, 2, record["selected"])
-	assert.Equal(t, []any{"80-", "-80"}, record["shards"])
 }

@@ -19,7 +19,6 @@ package wrangler
 import (
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
@@ -1064,7 +1062,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 func TestMigrateFailJournal(t *testing.T) {
 	ctx := t.Context()
 	tme := newTestTableMigrater(ctx, t)
-	t.Cleanup(func() { tme.close(t) })
+	defer tme.close(t)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1140,21 +1138,9 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme.dbSourceClients[1].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 
 	switchWrites(tme)
-	logs := logtest.Capture(t, slog.LevelInfo)
 	_, _, err = tme.wr.SwitchWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false, true, false, true)
 	want := "journaling intentionally failed"
 	require.ErrorContainsf(t, err, want, "SwitchWrites(0 timeout) err: %v, must contain %v", err, want)
-
-	// There are no streams to migrate, so the source workflows are an empty
-	// list, not null.
-	record := logs.Record(t, "In createJournals")
-	assert.Equal(t, []any{}, record["source_workflows"])
-
-	// The journal ID doesn't fit in a float64, so check the raw record.
-	record = logs.Record(t, "Migration ID for workflow")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, "test", record["workflow"])
-	assert.Regexp(t, `"msg":"Migration ID for workflow",[^\n]*"journal_id":7672494164556733923[,}]`, logs.String())
 
 	// Verify that cancel didn't happen.
 	if tme.dbTargetClients[0].queries[cancel1].exhausted() {

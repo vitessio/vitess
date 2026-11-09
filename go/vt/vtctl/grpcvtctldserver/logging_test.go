@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtenv"
 
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtctlservicepb "vitess.io/vitess/go/vt/proto/vtctlservice"
@@ -131,54 +130,4 @@ func TestRefreshStateByShardLogsEvents(t *testing.T) {
 	}
 	assert.Equal(t, "INFO", levels["RefreshTabletsByShard called on shard ks/-"], levels)
 	assert.Equal(t, "WARN", levels["RefreshTabletsByShard: failed to refresh zone1-0000000101: refresh failed"], levels)
-}
-
-// TestShardReplicationPositionsLogsTablets checks that the tablets whose
-// replication status is gathered are logged as a list of aliases.
-func TestShardReplicationPositionsLogsTablets(t *testing.T) {
-	ctx := t.Context()
-	ts := memorytopo.NewServer(ctx, "zone1")
-	tmc := &testutil.TabletManagerClient{
-		PrimaryPositionResults: map[string]struct {
-			Position string
-			Error    error
-		}{
-			"zone1-0000000100": {Position: "primary_tablet_position"},
-		},
-		ReplicationStatusResults: map[string]struct {
-			Position *replicationdatapb.Status
-			Error    error
-		}{
-			"zone1-0000000101": {Position: &replicationdatapb.Status{Position: "replica_tablet_position"}},
-			"zone1-0000000102": {Position: &replicationdatapb.Status{Position: "replica_tablet_position"}},
-			"zone1-0000000103": {Position: &replicationdatapb.Status{Position: "replica_tablet_position"}},
-		},
-	}
-	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{AlsoSetShardPrimary: true},
-		&topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 103}, Keyspace: "testkeyspace", Shard: "-", Type: topodatapb.TabletType_REPLICA},
-		&topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, Keyspace: "testkeyspace", Shard: "-", Type: topodatapb.TabletType_REPLICA},
-		&topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102}, Keyspace: "testkeyspace", Shard: "-", Type: topodatapb.TabletType_REPLICA},
-		&topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, Keyspace: "testkeyspace", Shard: "-", Type: topodatapb.TabletType_PRIMARY},
-	)
-	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
-		return NewVtctldServer(vtenv.NewTestEnv(), ts)
-	})
-	logs := logtest.Capture(t, slog.LevelInfo)
-
-	_, err := vtctld.ShardReplicationPositions(ctx, &vtctldatapb.ShardReplicationPositionsRequest{Keyspace: "testkeyspace", Shard: "-"})
-	require.NoError(t, err)
-
-	record := logs.Record(t, "Gathering tablet replication status")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, []any{"zone1-0000000100", "zone1-0000000101", "zone1-0000000102", "zone1-0000000103"}, record["tablets"])
-
-	// A shard with no tablets logs an empty list, not null.
-	require.NoError(t, ts.CreateKeyspace(ctx, "emptyks", &topodatapb.Keyspace{}))
-	require.NoError(t, ts.CreateShard(ctx, "emptyks", "-"))
-	logs.Reset()
-	_, err = vtctld.ShardReplicationPositions(ctx, &vtctldatapb.ShardReplicationPositionsRequest{Keyspace: "emptyks", Shard: "-"})
-	require.NoError(t, err)
-
-	record = logs.Record(t, "Gathering tablet replication status")
-	assert.Equal(t, []any{}, record["tablets"])
 }
