@@ -229,16 +229,13 @@ func (stc *ScatterConn) executeMultiShard(
 		go stc.runLockQuery(ctx, session)
 	}
 
-	// Build a per-call copy of the execute options carrying the requested
-	// FetchLastInsertId. Mutating the shared session options in place races
-	// with concurrent sources marshalling them (e.g. a streamed UNION runs
-	// each source through its own StreamExecuteMulti against the same session).
-	var callOptions *querypb.ExecuteOptions
-	// The explicit session.Session selector spells out why the nil check
-	// on the embedded session is needed.
-	//nolint:staticcheck // QF1008
-	if session != nil && session.Session != nil && session.Session.Options != nil {
-		callOptions = session.Session.Options.CloneVT()
+	// Build a per-call copy of the execute options carrying the statement's
+	// options and the requested FetchLastInsertId. Mutating the shared session
+	// options in place races with concurrent sources marshalling them (e.g. a
+	// streamed UNION runs each source through its own StreamExecuteMulti
+	// against the same session).
+	callOptions := econtext.ExecuteOptions(ctx, session)
+	if callOptions != nil {
 		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
@@ -461,16 +458,13 @@ func (stc *ScatterConn) StreamExecuteMulti(
 		return callback(reply)
 	}
 
-	// Build a per-call copy of the execute options carrying the requested
-	// FetchLastInsertId. Mutating the shared session options in place races
-	// with concurrent sources marshalling them (e.g. a streamed UNION runs
-	// each source through its own StreamExecuteMulti against the same session).
-	var callOptions *querypb.ExecuteOptions
-	// The explicit session.Session selector spells out why the nil check
-	// on the embedded session is needed.
-	//nolint:staticcheck // QF1008
-	if session != nil && session.Session != nil && session.Session.Options != nil {
-		callOptions = session.Session.Options.CloneVT()
+	// Build a per-call copy of the execute options carrying the statement's
+	// options and the requested FetchLastInsertId. Mutating the shared session
+	// options in place races with concurrent sources marshalling them (e.g. a
+	// streamed UNION runs each source through its own StreamExecuteMulti
+	// against the same session).
+	callOptions := econtext.ExecuteOptions(ctx, session)
+	if callOptions != nil {
 		callOptions.FetchLastInsertId = fetchLastInsertID
 	}
 
@@ -840,7 +834,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 		return nil, vterrors.VT13001("session cannot be nil")
 	}
 
-	opts = session.Options
+	opts = econtext.ExecuteOptions(ctx, session)
 	info, err := lockInfo(rs.Target, session, lockFuncType)
 	// Lock session is created on alphabetic sorted keyspace.
 	// This error will occur if the existing session target does not match the current target.

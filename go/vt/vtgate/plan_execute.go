@@ -87,6 +87,11 @@ func (e *Executor) newExecute(
 		cancel             context.CancelFunc
 	)
 
+	// The options of the statement that this one runs on behalf of, if any.
+	// Each attempt sets its own options on top of them, rather than taking
+	// those of the previous attempt from ctx.
+	parentOptions, _ := econtext.StatementOptionsFromContext(ctx)
+
 	for try := range MaxBufferingRetries {
 		if try > 0 && !vs.GetCreated().After(lastVSchemaCreated) { // We need to wait for a vschema update
 			// Without a wait we fail non-deterministically since the previous vschema will not have
@@ -119,13 +124,17 @@ func (e *Executor) newExecute(
 		// the vtgate to clear the cached plans when processing the new serving vschema.
 		// When buffering ends, many queries might be getting planned at the same time and we then
 		// take full advatange of the cached plan.
-		plan, vcursor, stmt, err = e.fetchOrCreatePlan(ctx, safeSession, sql, bindVars, parameterize, prepared, logStats, true)
+		plan, vcursor, stmt, err = e.fetchOrCreatePlan(econtext.WithStatementOptions(ctx, parentOptions), safeSession, sql, bindVars, parameterize, prepared, logStats, true)
 		execStart := e.logPlanningFinished(logStats, plan)
 
 		if err != nil {
 			safeSession.ClearWarnings()
 			return err
 		}
+
+		// The statement's calls to vttablet, and the statements that VTGate
+		// runs on its behalf, use the statement's execute options.
+		ctx = econtext.WithStatementOptions(ctx, vcursor.StatementOptions())
 
 		// Start an implicit transaction if necessary. This is done after plan
 		// creation so we can check whether the plan actually accesses real table
@@ -459,11 +468,18 @@ func (e *Executor) rollbackPartialExec(ctx context.Context, safeSession *econtex
 	var errMsg strings.Builder
 
 	// If the context got cancelled we still have to revert the partial DML execution.
-	// We cannot use the parent context here anymore.
+	// We cannot use the parent context here anymore. The revert then keeps the
+	// statement's options but not its timeout, which may be what ran out. A
+	// revert on the parent context keeps them all, timeout included, as the
+	// other statements that VTGate runs on the statement's behalf do.
 	if ctx.Err() != nil {
 		errMsg.WriteString("context canceled: ")
+		revertCtx := context.Background()
+		if opts, ok := econtext.StatementOptionsFromContext(ctx); ok {
+			revertCtx = econtext.WithStatementOptions(revertCtx, opts.WithoutTimeout())
+		}
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel = context.WithTimeout(revertCtx, 1*time.Second)
 		defer cancel()
 	}
 
