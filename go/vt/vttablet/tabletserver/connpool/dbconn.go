@@ -480,7 +480,7 @@ func (dbc *Conn) kill(ctx context.Context, reason string, elapsed time.Duration)
 	}
 	defer killConn.Recycle()
 
-	ch := make(chan error)
+	ch := make(chan error, 1)
 	sql := fmt.Sprintf("kill %d", dbc.conn.ID())
 	go func() {
 		_, err := killConn.Conn.ExecuteFetch(sql, -1, false)
@@ -523,7 +523,7 @@ func (dbc *Conn) killQuery(ctx context.Context, reason string, elapsed time.Dura
 	}
 	defer killConn.Recycle()
 
-	ch := make(chan error)
+	ch := make(chan error, 1)
 	sql := fmt.Sprintf("kill query %d", dbc.conn.ID())
 	go func() {
 		_, err := killConn.Conn.ExecuteFetch(sql, -1, false)

@@ -32,9 +32,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// outstandingQueryWorkers counts goroutines started by execOnce or streamOnce
-// that have not exited, whatever they are waiting on.
-func outstandingQueryWorkers() int {
+// outstandingGoroutines counts the goroutines whose stack contains any of the
+// given function names, whatever they are waiting on.
+func outstandingGoroutines(functions ...string) int {
 	buf := make([]byte, 1<<20)
 	for {
 		n := runtime.Stack(buf, true)
@@ -47,12 +47,26 @@ func outstandingQueryWorkers() int {
 
 	count := 0
 	for _, goroutine := range strings.Split(string(buf), "\n\n") {
-		if strings.Contains(goroutine, "connpool.(*Conn).execOnce") ||
-			strings.Contains(goroutine, "connpool.(*Conn).streamOnce") {
-			count++
+		for _, function := range functions {
+			if strings.Contains(goroutine, function) {
+				count++
+				break
+			}
 		}
 	}
 	return count
+}
+
+// outstandingQueryWorkers counts goroutines started by execOnce or streamOnce
+// that have not exited, whatever they are waiting on.
+func outstandingQueryWorkers() int {
+	return outstandingGoroutines("connpool.(*Conn).execOnce", "connpool.(*Conn).streamOnce")
+}
+
+// outstandingKillWorkers counts goroutines started by kill or killQuery that
+// have not exited, whatever they are waiting on.
+func outstandingKillWorkers() int {
+	return outstandingGoroutines("connpool.(*Conn).kill.func", "connpool.(*Conn).killQuery.func")
 }
 
 // TestDBConnKillDoesNotLeakGoroutines kills statements whose context is
@@ -147,6 +161,69 @@ func TestDBConnKillDoesNotLeakGoroutines(t *testing.T) {
 			assert.Eventually(t, func() bool {
 				return outstandingQueryWorkers() <= workersBefore
 			}, 5*time.Second, 20*time.Millisecond, "query goroutines still running after %d kills", kills)
+		})
+	}
+}
+
+// TestDBConnKillTimeoutDoesNotLeakGoroutines issues kills that MySQL does not
+// answer before the kill timeout, through Kill and KillQuery, and verifies that
+// the goroutines that sent the KILL statements exit once the timeout has
+// abandoned them. The server holds each KILL until the test ends, so every kill
+// times out.
+func TestDBConnKillTimeoutDoesNotLeakGoroutines(t *testing.T) {
+	const kills = 5
+
+	testCases := []struct {
+		name string
+		kill func(dbConn *Conn) error
+		hung string
+	}{
+		{
+			name: "kill connection",
+			kill: func(dbConn *Conn) error { return dbConn.Kill("test", 0) },
+			hung: "HungConnection",
+		},
+		{
+			name: "kill query",
+			kill: func(dbConn *Conn) error { return dbConn.KillQuery("test", 0) },
+			hung: "HungQuery",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			db := fakesqldb.New(t)
+			defer db.Close()
+			connPool := newPool()
+			params := dbconfigs.New(db.ConnParams())
+			connPool.Open(params, params, params)
+			defer connPool.Close()
+
+			release := make(chan struct{})
+			defer close(release)
+			db.AddQueryPatternWithCallback(`kill( query)? \d+`, &sqltypes.Result{}, func(string) {
+				<-release
+			})
+
+			workersBefore := outstandingKillWorkers()
+			hungBefore := connPool.env.Stats().InternalErrors.Counts()[testCase.hung]
+
+			for range kills {
+				dbConn, err := newPooledConn(context.Background(), connPool, params)
+				require.NoError(t, err)
+				// The timeout also covers getting the connection that sends the KILL, so it
+				// needs room to spare when the machine is busy.
+				dbConn.killTimeout = 250 * time.Millisecond
+
+				err = testCase.kill(dbConn)
+				require.ErrorIs(t, err, context.DeadlineExceeded)
+				dbConn.Close()
+			}
+
+			assert.EqualValues(t, kills, connPool.env.Stats().InternalErrors.Counts()[testCase.hung]-hungBefore, "every kill must have timed out")
+			assert.Eventually(t, func() bool {
+				return outstandingKillWorkers() <= workersBefore
+			}, 5*time.Second, 20*time.Millisecond, "kill goroutines still running after %d timed out kills", kills)
 		})
 	}
 }
