@@ -49,6 +49,7 @@ type (
 		err       error
 		inDerived int
 		inSelect  int
+		inUnion   int
 
 		bindVarNeeds              *BindVarNeeds
 		shouldRewriteDatabaseFunc bool
@@ -184,9 +185,14 @@ func (nz *normalizer) walkDown(node, _ SQLNode) bool {
 		return false
 	case *DerivedTable:
 		nz.inDerived++
+	case *Union:
+		nz.inUnion++
 	case *Select:
 		nz.inSelect++
-		if nz.selectLimit > 0 && node.Limit == nil && nz.inSelect == 1 {
+		// Only the statement-level SELECT gets sql_select_limit. A SELECT that is a
+		// UNION branch must not be limited: the limit belongs to the UNION as a whole
+		// (see rewriteUnion), and limiting branches before DISTINCT / ORDER BY changes results.
+		if nz.selectLimit > 0 && node.Limit == nil && nz.inSelect == 1 && nz.inUnion == 0 {
 			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
 		}
 	case *AliasedExpr:
@@ -269,6 +275,7 @@ func (nz *normalizer) walkUp(cursor *Cursor) bool {
 			delete(nz.onLeave, node)
 		}
 	case *Union:
+		nz.inUnion--
 		nz.rewriteUnion(node)
 	case *FuncExpr:
 		nz.funcRewrite(cursor, node)
@@ -589,9 +596,10 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 	return tableName.Name.String() == "dual"
 }
 
-// rewriteUnion sets the SELECT limit for UNION statements if not already set.
+// rewriteUnion sets the SELECT limit on a statement-level UNION if not already set.
+// Nested unions (inside another union, a derived table or a subquery) are left alone.
 func (nz *normalizer) rewriteUnion(node *Union) {
-	if nz.selectLimit > 0 && node.Limit == nil && nz.inSelect == 0 {
+	if nz.selectLimit > 0 && node.Limit == nil && nz.inSelect == 0 && nz.inUnion == 0 {
 		node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(nz.selectLimit))}
 	}
 }
