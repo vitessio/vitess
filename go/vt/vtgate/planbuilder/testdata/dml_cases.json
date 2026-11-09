@@ -7531,5 +7531,81 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "The LIMIT of a multi-table update without a reference table stays above the join",
+    "query": "update `user` as u join music as m on u.col = m.col set u.foo = 1 limit 5",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "UPDATE",
+      "Original": "update `user` as u join music as m on u.col = m.col set u.foo = 1 limit 5",
+      "Instructions": {
+        "OperatorType": "DMLWithInput",
+        "Offset": [
+          "0:[0]"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "5",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0",
+                "JoinVars": {
+                  "u_col": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+                    "Query": "select u.id, u.col from `user` as u lock in share mode"
+                  },
+                  {
+                    "OperatorType": "Limit",
+                    "Count": "5",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from music as m where 1 != 1",
+                        "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ limit :__upper_limit lock in share mode"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "OperatorType": "Update",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Query": "update `user` as u set u.foo = 1 where u.id in ::dml_vals",
+            "Values": [
+              "::dml_vals"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]
