@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -57,8 +58,9 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
-	ms.resolveUnknownOrderTypes(result.Fields)
-	if err = ms.OrderBy.SortResult(result); err != nil {
+	orderBy := slices.Clone(ms.OrderBy)
+	resolveUnknownOrderTypes(orderBy, result.Fields)
+	if err = orderBy.SortResult(result); err != nil {
 		return nil, err
 	}
 	if len(result.Rows) > count {
@@ -80,8 +82,9 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return callback(qr.Truncate(ms.TruncateColumnCount))
 	}
 
+	orderBy := slices.Clone(ms.OrderBy)
 	sorter := &evalengine.Sorter{
-		Compare: ms.OrderBy,
+		Compare: orderBy,
 		Limit:   count,
 	}
 
@@ -90,7 +93,7 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		mu.Lock()
 		defer mu.Unlock()
 		if len(qr.Fields) != 0 {
-			ms.resolveUnknownOrderTypes(qr.Fields)
+			resolveUnknownOrderTypes(orderBy, qr.Fields)
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
@@ -109,9 +112,9 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	return cb(&sqltypes.Result{Rows: sorter.Sorted()})
 }
 
-func (ms *MemorySort) resolveUnknownOrderTypes(fields []*querypb.Field) {
-	for idx := range ms.OrderBy {
-		order := &ms.OrderBy[idx]
+func resolveUnknownOrderTypes(orderBy evalengine.Comparison, fields []*querypb.Field) {
+	for idx := range orderBy {
+		order := &orderBy[idx]
 		if (order.Type.Type() == sqltypes.Unknown || order.Type.Collation() == collations.Unknown) && order.Col >= 0 && order.Col < len(fields) {
 			order.Type = evalengine.NewTypeFromField(fields[order.Col])
 		}

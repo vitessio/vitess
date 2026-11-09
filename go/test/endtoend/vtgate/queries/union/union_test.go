@@ -157,6 +157,10 @@ func TestUnionAllWildcardOrdering(t *testing.T) {
 		"select t.marker as x from (select *, id1 as marker from t1 union all select *, id1 as marker from t1) t order by t.marker",
 		`[[INT64(1)] [INT64(1)] [INT64(2)] [INT64(2)]]`,
 	)
+	mcmp.AssertMatches(
+		"select id1 as x from t1 union all select 0 as y from dual order by x limit 1",
+		`[[INT64(0)]]`,
+	)
 }
 
 func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {

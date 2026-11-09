@@ -584,12 +584,15 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		debugNoRewrite("limit push blocked: distinct union needs all arm rows")
 		return in, NoRewrite
 	}
+	orderToPush, safe := findOrderingInSourceChain(in.Source)
+	if !safe {
+		debugNoRewrite("limit push blocked: UNION requires all rows or ordering mapped to each arm")
+		return in, NoRewrite
+	}
 	in.Pushed = true
 	visitor := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		return op, NoRewrite
 	}
-
-	orderToPush := findOrderingInSourceChain(in.Source)
 
 	var result *ApplyResult
 	shouldVisit := func(op Operator) VisitRule {
@@ -620,30 +623,34 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	return in, result
 }
 
-// findOrderingInSourceChain walks down unary operators for an Ordering above a
-// Window, so it can be pushed into the route with the limit. Window queries need
-// this because DISTINCT stays (not converted to GROUP BY), leaving Ordering unpushed.
-// Resolved upfront to avoid leaking across branches during the TopDown walk.
-func findOrderingInSourceChain(op Operator) []OrderBy {
+// findOrderingInSourceChain finds an Ordering above a Window that can be pushed
+// into a route with the limit. A limit cannot safely cross an ordered UNION
+// unless the ordering expression is mapped to every arm. The boolean is false
+// when UNION semantics require all arm rows or that per-arm mapping.
+func findOrderingInSourceChain(op Operator) ([]OrderBy, bool) {
 	var order []OrderBy
+	window := false
 	for {
 		switch src := op.(type) {
 		case *Ordering:
 			// Clone the slice to avoid aliasing with src.Order, which may be rewritten later.
 			order = append([]OrderBy(nil), src.Order...)
 		case *Window:
-			return order
+			window = true
 		case *Union:
-			if src.distinct {
-				return nil
-			}
-			return order
+			return nil, len(order) == 0 && !src.distinct
 		case *Route:
-			return nil
+			if window {
+				return order, true
+			}
+			return nil, true
 		}
 		inputs := op.Inputs()
 		if len(inputs) != 1 {
-			return nil
+			if window {
+				return order, true
+			}
+			return nil, true
 		}
 		op = inputs[0]
 	}

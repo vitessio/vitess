@@ -262,7 +262,7 @@ func (route *Route) streamExecuteShards(
 				if err != nil {
 					return err
 				}
-				return callback(route.trimHiddenColumns(r))
+				return callback(r)
 			}
 			return nil
 		}
@@ -371,7 +371,7 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 	if err != nil {
 		return nil, err
 	}
-	return qr.Truncate(route.TruncateColumnCount), nil
+	return route.trimHiddenColumns(qr.Truncate(route.TruncateColumnCount)), nil
 }
 
 func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {

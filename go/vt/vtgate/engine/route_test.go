@@ -1122,6 +1122,35 @@ func TestRouteGetFields(t *testing.T) {
 	expectResult(t, result, &sqltypes.Result{})
 }
 
+func TestRouteGetFieldsTrimsHiddenColumns(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id|__weight", "int64|varbinary")
+	result := &sqltypes.Result{Fields: fields}
+	route := NewRoute(
+		Scatter,
+		&vindexes.Keyspace{Name: "ks", Sharded: true},
+		"dummy_select",
+		"dummy_select_field",
+	)
+	route.HiddenColumnNames = []string{"__weight"}
+	vc := &loggingVCursor{shards: []string{"-20"}, results: []*sqltypes.Result{result}}
+
+	got, err := route.GetFields(t.Context(), vc, nil)
+	require.NoError(t, err)
+	require.Len(t, got.Fields, 1)
+	assert.Equal(t, "id", got.Fields[0].Name)
+
+	vc.Rewind()
+	var streamed *sqltypes.Result
+	err = route.streamExecuteShards(t.Context(), vc, nil, true, func(qr *sqltypes.Result) error {
+		streamed = qr
+		return nil
+	}, nil, nil)
+	require.NoError(t, err)
+	require.NotNil(t, streamed)
+	require.Len(t, streamed.Fields, 1)
+	assert.Equal(t, "id", streamed.Fields[0].Name)
+}
+
 func TestRouteSort(t *testing.T) {
 	sel := NewRoute(
 		Scatter,
