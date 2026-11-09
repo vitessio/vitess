@@ -3,8 +3,6 @@
 # log messages constant and add its import path here.
 vitess.io/vitess/go/acl
 vitess.io/vitess/go/cmd/vtadmin
-vitess.io/vitess/go/cmd/vtclient/cli
-vitess.io/vitess/go/cmd/zkctld/cli
 vitess.io/vitess/go/pools
 vitess.io/vitess/go/pools/smartconnpool
 vitess.io/vitess/go/pools/smartconnpool/benchmarking/legacy
@@ -41,18 +39,13 @@ vitess.io/vitess/go/vt/vtadmin/cluster/resolver
 vitess.io/vitess/go/vt/vtadmin/grpcserver
 vitess.io/vitess/go/vt/vtadmin/http
 vitess.io/vitess/go/vt/vtadmin/http/handlers
-vitess.io/vitess/go/vt/vtadmin/internal/backoff
 vitess.io/vitess/go/vt/vtadmin/rbac
-vitess.io/vitess/go/vt/vtadmin/vtctldclient
-vitess.io/vitess/go/vt/vtadmin/vtsql
 vitess.io/vitess/go/vt/vtctl/reparentutil
 vitess.io/vitess/go/vt/vtctl/reparentutil/policy
 vitess.io/vitess/go/vt/vtctl/workflow
 vitess.io/vitess/go/vt/vtctl/workflow/vexec
 vitess.io/vitess/go/vt/vterrors
-vitess.io/vitess/go/vt/vtorc/server
 vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff
 vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication
 vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer
 vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv
-vitess.io/vitess/go/vt/vttls
