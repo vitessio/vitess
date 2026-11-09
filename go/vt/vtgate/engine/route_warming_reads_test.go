@@ -146,9 +146,12 @@ func TestWarmingReadsSkipsForUpdate(t *testing.T) {
 				tc.query,
 				"dummy_select_field",
 			)
-			// Parse and set QueryStatement to match how Routes are created in production
-			parser, _ := sqlparser.NewTestParser().Parse(tc.query)
-			route.QueryStatement = parser
+			// Set WarmingReadQuery to match how Routes are created in production
+			stmt, parseErr := sqlparser.NewTestParser().Parse(tc.query)
+			require.NoError(t, parseErr)
+			if warmingQuery, ok := RemoveForUpdateLocks(stmt.(sqlparser.SelectStatement)); ok {
+				route.WarmingReadQuery = warmingQuery
+			}
 			route.Vindex = vindex.(vindexes.SingleColumn)
 			route.Values = []evalengine.Expr{
 				evalengine.NewLiteralInt(1),
@@ -232,8 +235,6 @@ func TestWarmingReadsDroppedWhenSemaphoreFull(t *testing.T) {
 		"SELECT * FROM users WHERE id = 1",
 		"dummy_select_field",
 	)
-	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
-	route.QueryStatement = parser
 	route.Vindex = vindex.(vindexes.SingleColumn)
 	route.Values = []evalengine.Expr{
 		evalengine.NewLiteralInt(1),
@@ -285,8 +286,6 @@ func TestWarmingReadsPriorityWeight(t *testing.T) {
 		"SELECT * FROM users WHERE id = 1",
 		"dummy_select_field",
 	)
-	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
-	route.QueryStatement = parser
 	route.Vindex = vindex.(vindexes.SingleColumn)
 	route.Values = []evalengine.Expr{
 		evalengine.NewLiteralInt(1),
@@ -365,8 +364,6 @@ func TestWarmingReadsContextTimeout(t *testing.T) {
 		"SELECT * FROM users WHERE id = 1",
 		"dummy_select_field",
 	)
-	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
-	route.QueryStatement = parser
 	route.Vindex = vindex.(vindexes.SingleColumn)
 	route.Values = []evalengine.Expr{
 		evalengine.NewLiteralInt(1),
@@ -412,8 +409,6 @@ func TestWarmingReadsDroppedOnPriorityError(t *testing.T) {
 		"SELECT * FROM users WHERE id = 1",
 		"dummy_select_field",
 	)
-	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
-	route.QueryStatement = parser
 	route.Vindex = vindex.(vindexes.SingleColumn)
 	route.Values = []evalengine.Expr{
 		evalengine.NewLiteralInt(1),
@@ -458,8 +453,6 @@ func TestWarmingReadsErrorsOnFindRouteFailure(t *testing.T) {
 		"SELECT * FROM users WHERE id = 1",
 		"dummy_select_field",
 	)
-	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
-	route.QueryStatement = parser
 	route.Vindex = vindex.(vindexes.SingleColumn)
 	route.Values = []evalengine.Expr{
 		evalengine.NewLiteralInt(1),
@@ -497,8 +490,6 @@ func TestWarmingReadsErrorsOnExecuteMultiShardFailure(t *testing.T) {
 		"SELECT * FROM users WHERE id = 1",
 		"dummy_select_field",
 	)
-	parser, _ := sqlparser.NewTestParser().Parse("SELECT * FROM users WHERE id = 1")
-	route.QueryStatement = parser
 	route.Vindex = vindex.(vindexes.SingleColumn)
 	route.Values = []evalengine.Expr{
 		evalengine.NewLiteralInt(1),

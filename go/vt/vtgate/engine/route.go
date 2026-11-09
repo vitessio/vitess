@@ -81,8 +81,9 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// QueryStatement is the parsed AST of Query
-	QueryStatement sqlparser.Statement
+	// WarmingReadQuery is Query without its FOR UPDATE lock clause. It is only set
+	// when Query has one, and is used instead of Query for warming replica reads.
+	WarmingReadQuery string
 
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
@@ -538,11 +539,11 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 
 	// Remove FOR UPDATE locks for warming reads if present
 	warmingQueries := queries
-	if modifiedQuery, ok := removeForUpdateLocks(route.QueryStatement); ok {
+	if route.WarmingReadQuery != "" {
 		warmingQueries = make([]*querypb.BoundQuery, len(queries))
 		for i, query := range queries {
 			warmingQueries[i] = &querypb.BoundQuery{
-				Sql:           modifiedQuery,
+				Sql:           route.WarmingReadQuery,
 				BindVariables: query.BindVariables,
 			}
 		}
@@ -592,12 +593,9 @@ func (route *Route) executeWarmingReplicaRead(ctx context.Context, vcursor VCurs
 	}(replicaVCursor)
 }
 
-func removeForUpdateLocks(stmt sqlparser.Statement) (string, bool) {
-	sel, ok := stmt.(sqlparser.SelectStatement)
-	if !ok {
-		return "", false
-	}
-
+// RemoveForUpdateLocks returns the query for sel with its FOR UPDATE lock clause
+// removed, and whether sel had such a clause.
+func RemoveForUpdateLocks(sel sqlparser.SelectStatement) (string, bool) {
 	lock := sel.GetLock()
 	if lock != sqlparser.ForUpdateLock &&
 		lock != sqlparser.ForUpdateLockNoWait &&
