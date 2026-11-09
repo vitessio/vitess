@@ -624,8 +624,9 @@ func mysqlShellCommandString(cmd *exec.Cmd) string {
 // maskMySQLShellPasswords returns a copy of mysqlsh's arguments with each
 // password replaced by "****":
 //   - the value of --password, --password1, --password2, --password3 and the
-//     older --dbpassword, after "=" or as the next argument (mysqlsh ignores
-//     that one, but it was meant as a password). Names match in any case,
+//     older --dbpassword, after "=" or as the next argument (mysqlsh reads
+//     that one only for --password2 and --password3, but it was meant as a
+//     password in every case). Names match in any case,
 //     without "-" and "_", and after "loose-" prefixes;
 //   - the rest of a group of short options from -p on (-p<password>,
 //     -Ep<password>), or the argument after a lone -p;
@@ -633,7 +634,9 @@ func mysqlShellCommandString(cmd *exec.Cmd) string {
 //     given to --uri or --ssh, or as an argument of its own.
 //
 // The value of another short option that takes one, such as -h or -e, is
-// kept as given.
+// kept as given. -C, -S and -i take an optional value, and mysqlsh takes the
+// next argument as it, but that argument is masked like any other, as it may
+// be meant as a connection string.
 func maskMySQLShellPasswords(args []string) []string {
 	optionName := func(option string) string {
 		name := strings.ToLower(strings.TrimPrefix(option, "--"))
@@ -674,7 +677,7 @@ func maskMySQLShellPasswords(args []string) []string {
 			}
 		case strings.HasPrefix(arg, "-") && len(arg) > 1:
 			// The first short option that takes a value takes the rest of
-			// the group, or else the next argument.
+			// the group, or else the next argument if its value is required.
 			j := strings.IndexAny(arg[1:], "CDPScefhipu") + 1
 			switch {
 			case j == 0:
@@ -683,7 +686,7 @@ func maskMySQLShellPasswords(args []string) []string {
 			case arg[j] == 'p' && isValue(i+1):
 				i++
 				masked[i] = "****"
-			case j+1 == len(arg) && isValue(i+1):
+			case j+1 == len(arg) && isValue(i+1) && !strings.ContainsRune("CSi", rune(arg[j])):
 				i++
 			}
 		default:

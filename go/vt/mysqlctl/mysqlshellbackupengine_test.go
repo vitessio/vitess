@@ -524,11 +524,13 @@ func TestMySQLShellLogsMaskPasswords(t *testing.T) {
 	mysqlShellFlags = strings.ReplaceAll("--defaults-file=/dev/null --js -h localhost -uroot --user root "+
 		"--password={pw} --password {pw} -p{pw} -p {pw} -Ep{pw} --password1={pw} --password2 {pw} --password3={pw} "+
 		"--dbpassword={pw} --dbPassword={pw} --db-password={pw} --loose-password={pw} "+
-		"--uri=root:{pw}@localhost --uri root:{pw}@localhost mysql://root:{pw}@localhost:3306 --ssh=me:{pw}@bastion", "{pw}", secret)
+		"--uri=root:{pw}@localhost --uri root:{pw}@localhost mysql://root:{pw}@localhost:3306 --ssh=me:{pw}@bastion "+
+		"-C root:{pw}@localhost -S root:{pw}@localhost -i root:{pw}@localhost", "{pw}", secret)
 	wantArgs := "--defaults-file=/dev/null --js -h localhost -uroot --user root " +
 		"--password=**** --password **** -p**** -p **** -Ep**** --password1=**** --password2 **** --password3=**** " +
 		"--dbpassword=**** --dbPassword=**** --db-password=**** --loose-password=**** " +
-		"--uri=root:****@localhost --uri root:****@localhost mysql://root:****@localhost:3306 --ssh=me:****@bastion -e util."
+		"--uri=root:****@localhost --uri root:****@localhost mysql://root:****@localhost:3306 --ssh=me:****@bastion " +
+		"-C root:****@localhost -S root:****@localhost -i root:****@localhost -e util."
 
 	newMysqld := func(t *testing.T) *FakeMysqlDaemon {
 		fakedb := fakesqldb.New(t)
