@@ -6187,5 +6187,239 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "An OR'd IN subquery over a join filters above the join",
+    "query": "select u.col from `user` as u join music as m on u.col = m.col where m.col = 1 or u.id in (select user_id from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select u.col from `user` as u join music as m on u.col = m.col where m.col = 1 or u.id in (select user_id from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id from user_extra where 1 != 1",
+            "Query": "select user_id from user_extra"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Filter",
+            "Predicate": "m.col = 1 or :__sq_has_values and u.id in ::__sq1",
+            "ResultColumns": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,L:1",
+                "JoinVars": {
+                  "u_col": 0,
+                  "u_id": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
+                    "Query": "select u.col, u.id from `user` as u"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select m.col from music as m where 1 != 1",
+                    "Query": "select m.col from music as m where m.col = :u_col /* INT16 */"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "An OR'd value subquery over a join filters above the join",
+    "query": "select u.col from `user` as u join music as m on u.col = m.col where m.col = 1 or u.id = (select max(user_id) from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select u.col from `user` as u join music as m on u.col = m.col where m.col = 1 or u.id = (select max(user_id) from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "max(0|1) AS max(user_id)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(user_id), weight_string(max(user_id)) from user_extra where 1 != 1",
+                "Query": "select max(user_id), weight_string(max(user_id)) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Filter",
+            "Predicate": "m.col = 1 or u.id = :__sq1",
+            "ResultColumns": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,L:1",
+                "JoinVars": {
+                  "u_col": 0
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col, u.id from `user` as u where 1 != 1",
+                    "Query": "select u.col, u.id from `user` as u"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select m.col from music as m where 1 != 1",
+                    "Query": "select m.col from music as m where m.col = :u_col /* INT16 */"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "EXISTS beside predicates on both sides of a join filters above the join",
+    "query": "select u.col from `user` as u join music as m on u.col = m.col where m.col = 1 or u.col = 2 or exists (select 1 from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select u.col from `user` as u join music as m on u.col = m.col where m.col = 1 or u.col = 2 or exists (select 1 from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutExists",
+        "PulloutVars": [
+          "__sq_has_values"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra limit 1"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Filter",
+            "Predicate": "m.col = 1 or u.col = 2 or :__sq_has_values",
+            "ResultColumns": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "JoinVars": {
+                  "u_col": 0
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col from `user` as u where 1 != 1",
+                    "Query": "select u.col from `user` as u"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select m.col from music as m where 1 != 1",
+                    "Query": "select m.col from music as m where m.col = :u_col /* INT16 */"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
