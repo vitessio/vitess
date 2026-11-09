@@ -1200,12 +1200,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream, sh
 				// The statement will be replicated, so that in case there's a PRS/ERS shortly after cut-over, the
 				// promoted replica will have good statistics.
 				analyzeQuery := buildIdentifierQuery(sqlAnalyzeTable, vreplTable)
-				if _, err := preparationsConn.Conn.Exec(ctx, analyzeQuery, -1, false); err != nil {
-					// Best effort only. Do not fail the mgiration if this fails.
-					_ = e.updateMigrationMessage(ctx, s.workflow, "failed ANALYZE shadow table")
-				} else {
-					_ = e.updateMigrationTimestamp(ctx, "shadow_analyzed_timestamp", s.workflow)
-				}
+				_, analyzeErr := preparationsConn.Conn.Exec(ctx, analyzeQuery, -1, false)
+				e.recordShadowTableAnalysis(ctx, s.workflow, analyzeErr)
 				// This command will have blocked the table for writes, presumably only for a brief time. But this can cause
 				// vreplication to now lag. Thankfully we're gonna create the sentry table and waitForPos.
 			}
@@ -4631,6 +4627,16 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 		)
 	}
 	return err
+}
+
+// recordShadowTableAnalysis records the result of running `ANALYZE TABLE` on the shadow table while
+// preparing the cut-over. It's best effort only: a failure doesn't fail the migration.
+func (e *Executor) recordShadowTableAnalysis(ctx context.Context, uuid string, analyzeErr error) {
+	if analyzeErr != nil {
+		_ = e.updateMigrationMessage(ctx, uuid, "failed ANALYZE shadow table")
+		return
+	}
+	_ = e.updateMigrationTimestamp(ctx, "shadow_analyzed_timestamp", uuid)
 }
 
 func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts ...string) error {

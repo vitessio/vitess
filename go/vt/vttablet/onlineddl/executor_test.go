@@ -2391,3 +2391,31 @@ func TestGetNonConflictingMigrationCancellationIntent(t *testing.T) {
 		assert.False(t, *h.transitionAttempted)
 	})
 }
+
+func TestRecordShadowTableAnalysis(t *testing.T) {
+	uuid := "1cbcd662_8ed6_11ee_bc8f_0a43f95f28a3"
+	record := func(t *testing.T, analyzeErr error) []string {
+		var queries []string
+		e := &Executor{
+			execQuery: func(ctx context.Context, query string) (*sqltypes.Result, error) {
+				queries = append(queries, query)
+				return &sqltypes.Result{}, nil
+			},
+		}
+		e.recordShadowTableAnalysis(t.Context(), uuid, analyzeErr)
+		return queries
+	}
+
+	t.Run("failed ANALYZE updates the migration's message", func(t *testing.T) {
+		queries := record(t, errors.New("analyze failed"))
+		require.Len(t, queries, 1)
+		assert.Contains(t, queries[0], "message='failed ANALYZE shadow table'")
+		assert.Contains(t, queries[0], "migration_uuid='"+uuid+"'")
+	})
+	t.Run("successful ANALYZE sets shadow_analyzed_timestamp", func(t *testing.T) {
+		queries := record(t, nil)
+		require.Len(t, queries, 1)
+		assert.Contains(t, queries[0], "SET shadow_analyzed_timestamp=NOW(6)")
+		assert.Contains(t, queries[0], "migration_uuid='"+uuid+"'")
+	})
+}
