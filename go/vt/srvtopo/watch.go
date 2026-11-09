@@ -165,6 +165,11 @@ func (entry *watchEntry) currentValueLocked(ctx context.Context) (any, error) {
 	if entry.value != nil {
 		return entry.value, nil
 	}
+	// A cancelled context starts no watch, so there is neither a value nor an earlier error to
+	// return. Say why: callers that get no error go on to use the value.
+	if entry.lastError == nil {
+		return nil, ctx.Err()
+	}
 	return nil, entry.lastError
 }
 

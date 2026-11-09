@@ -33,12 +33,12 @@ import (
 // TestWatchSrvKeyspaceCallbackAfterContextCancelled covers a Throttler that is closed after
 // Open() started the goroutine that reads the throttler config, but before that goroutine starts
 // watching SrvKeyspace. Close() cancels the context the watch uses. srvtopo does not start a
-// watch for a cancelled context, so it calls the listener back with neither a SrvKeyspace nor an
-// error, and WatchSrvKeyspaceCallback must tolerate that.
+// watch for a cancelled context, and it calls the listener back with the context error, which
+// WatchSrvKeyspaceCallback ignores because the throttler was closed on purpose.
 func TestWatchSrvKeyspaceCallbackAfterContextCancelled(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "cell1")
-	defer ts.Close()
+	t.Cleanup(ts.Close)
 	require.NoError(t, ts.UpdateSrvKeyspace(ctx, "cell1", "ks", &topodatapb.SrvKeyspace{}))
 	srvTopoServer := srvtopo.NewResilientServer(ctx, ts, stats.NewCountersWithSingleLabel("", "", "Operation"))
 	throttler := &Throttler{}

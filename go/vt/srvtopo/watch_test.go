@@ -17,6 +17,7 @@ limitations under the License.
 package srvtopo
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"sync/atomic"
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
@@ -244,4 +246,68 @@ func TestWatcherShouldOnlyNotifyOnActualChanges(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return callCount.Load() > callsAfterSameUpdate
 	}, 1*time.Second, 10*time.Millisecond)
+}
+
+// TestCancelledContextReportsTheContextError covers a watch or a read whose context is already
+// cancelled, with nothing cached. srvtopo does not start watching the topology server for a
+// cancelled context, so there is no value and no earlier error to report. The caller has to be
+// told why: callers that see no error go on to use the value, and a nil value crashes them.
+func TestCancelledContextReportsTheContextError(t *testing.T) {
+	newServer := func(t *testing.T) (*ResilientServer, context.Context) {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, "test_cell")
+		require.NoError(t, ts.UpdateSrvKeyspace(ctx, "test_cell", "test_ks", &topodatapb.SrvKeyspace{}))
+		require.NoError(t, ts.UpdateSrvVSchema(ctx, "test_cell", &vschemapb.SrvVSchema{}))
+		rs := NewResilientServer(ctx, ts, stats.NewCountersWithSingleLabel("", "", "type"))
+
+		cancelled, cancel := context.WithCancel(ctx)
+		cancel()
+		return rs, cancelled
+	}
+
+	t.Run("WatchSrvKeyspace calls the listener with the context error", func(t *testing.T) {
+		rs, cancelled := newServer(t)
+
+		var calls atomic.Int32
+		rs.WatchSrvKeyspace(cancelled, "test_cell", "test_ks", func(srvKeyspace *topodatapb.SrvKeyspace, err error) bool {
+			calls.Add(1)
+			assert.Nil(t, srvKeyspace)
+			assert.ErrorIs(t, err, context.Canceled)
+			return true
+		})
+
+		assert.EqualValues(t, 1, calls.Load(), "the listener must be called once, as it is for a context that is not cancelled")
+	})
+
+	t.Run("WatchSrvVSchema calls the listener with the context error", func(t *testing.T) {
+		rs, cancelled := newServer(t)
+
+		var calls atomic.Int32
+		rs.WatchSrvVSchema(cancelled, "test_cell", func(vschema *vschemapb.SrvVSchema, err error) bool {
+			calls.Add(1)
+			assert.Nil(t, vschema)
+			assert.ErrorIs(t, err, context.Canceled)
+			return true
+		})
+
+		assert.EqualValues(t, 1, calls.Load())
+	})
+
+	t.Run("GetSrvKeyspace returns the context error", func(t *testing.T) {
+		rs, cancelled := newServer(t)
+
+		srvKeyspace, err := rs.GetSrvKeyspace(cancelled, "test_cell", "test_ks")
+
+		assert.Nil(t, srvKeyspace)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
+
+	t.Run("GetSrvVSchema returns the context error", func(t *testing.T) {
+		rs, cancelled := newServer(t)
+
+		vschema, err := rs.GetSrvVSchema(cancelled, "test_cell")
+
+		assert.Nil(t, vschema)
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
