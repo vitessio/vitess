@@ -193,11 +193,9 @@ func secureCredentials(cert, key, ca, crl, name string) (credentials.TransportCr
 	if (cert == "" || key == "") && ca == "" && crl == "" {
 		return insecure.NewCredentials(), nil
 	}
-	config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, crl, name, tls.VersionTLS12)
-	if err != nil {
-		return nil, err
-	}
-	return credentials.NewTLS(config), nil
+	return newReloadingCreds(func() (*tls.Config, error) {
+		return vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, crl, name, tls.VersionTLS12)
+	})
 }
 
 var dialConcurrencyLimitOpt grpc.DialOption
