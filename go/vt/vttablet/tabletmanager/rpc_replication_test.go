@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -487,7 +486,7 @@ func TestFullStatusConsolidatesConcurrentCalls(t *testing.T) {
 					ServerId:          42,
 					ReplicationStatus: &replicationdatapb.Status{SourceHost: "source"},
 				}
-				collectorErr := vterrors.New(vtrpc.Code_UNAVAILABLE, "collector failed")
+				collectorErr := vterrors.New(vtrpcpb.Code_UNAVAILABLE, "collector failed")
 				daemon := &consolidatingFullStatusDaemon{
 					collect: func(context.Context) (*replicationdatapb.FullStatus, error) {
 						<-release
@@ -533,11 +532,11 @@ func TestFullStatusConsolidatesConcurrentCalls(t *testing.T) {
 					switch outcome {
 					case "error":
 						require.ErrorIs(t, errs[i], collectorErr)
-						assert.Equal(t, vtrpc.Code_UNAVAILABLE, vterrors.Code(errs[i]))
+						assert.Equal(t, vtrpcpb.Code_UNAVAILABLE, vterrors.Code(errs[i]))
 						assert.Nil(t, statuses[i])
 					case "panic":
 						require.ErrorContains(t, errs[i], "collector panicked")
-						assert.Equal(t, vtrpc.Code_INTERNAL, vterrors.Code(errs[i]))
+						assert.Equal(t, vtrpcpb.Code_INTERNAL, vterrors.Code(errs[i]))
 						assert.NotContains(t, errs[i].Error(), ".go:", "stack must stay server-side")
 						assert.Nil(t, statuses[i])
 					default:
