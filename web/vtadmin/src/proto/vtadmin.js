@@ -54313,6 +54313,20 @@ export const topodata = $root.topodata = (() => {
         return values;
     })();
 
+    /**
+     * TabletMySQLMode enum.
+     * @name topodata.TabletMySQLMode
+     * @enum {number}
+     * @property {number} MANAGED=0 MANAGED value
+     * @property {number} UNMANAGED=1 UNMANAGED value
+     */
+    topodata.TabletMySQLMode = (function() {
+        const valuesById = $Object.create(null), values = $Object.create(valuesById);
+        values[valuesById[0] = "MANAGED"] = 0;
+        values[valuesById[1] = "UNMANAGED"] = 1;
+        return values;
+    })();
+
     topodata.Tablet = (function() {
 
         /**
@@ -54333,6 +54347,7 @@ export const topodata = $root.topodata = (() => {
          * @property {number|null} [default_conn_collation] Tablet default_conn_collation
          * @property {vttime.Time.$Properties|null} [tablet_start_time] Tablet tablet_start_time
          * @property {vttime.Time.$Properties|null} [tablet_shutdown_time] Tablet tablet_shutdown_time
+         * @property {topodata.TabletMySQLMode|null} [mysql_mode] Tablet mysql_mode
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -54487,6 +54502,14 @@ export const topodata = $root.topodata = (() => {
         Tablet.prototype.tablet_shutdown_time = null;
 
         /**
+         * Tablet mysql_mode.
+         * @member {topodata.TabletMySQLMode} mysql_mode
+         * @memberof topodata.Tablet
+         * @instance
+         */
+        Tablet.prototype.mysql_mode = 0;
+
+        /**
          * Creates a new Tablet instance using the specified properties.
          * @function create
          * @memberof topodata.Tablet
@@ -54550,6 +54573,8 @@ export const topodata = $root.topodata = (() => {
                 $root.vttime.Time.encode(message.tablet_start_time, writer.uint32(/* id 17, wireType 2 =*/138).fork(), _depth + 1).ldelim();
             if (message.tablet_shutdown_time != null && $Object.hasOwnProperty.call(message, "tablet_shutdown_time"))
                 $root.vttime.Time.encode(message.tablet_shutdown_time, writer.uint32(/* id 18, wireType 2 =*/146).fork(), _depth + 1).ldelim();
+            if (message.mysql_mode != null && $Object.hasOwnProperty.call(message, "mysql_mode") && message.mysql_mode !== 0)
+                writer.uint32(/* id 19, wireType 0 =*/152).int32(message.mysql_mode);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -54781,6 +54806,15 @@ export const topodata = $root.topodata = (() => {
                         message.tablet_shutdown_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_shutdown_time);
                         continue;
                     }
+                case 19: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.mysql_mode = value;
+                        else
+                            delete message.mysql_mode;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -54894,6 +54928,9 @@ export const topodata = $root.topodata = (() => {
                 if (error)
                     return "tablet_shutdown_time." + error;
             }
+            if (message.mysql_mode != null && $Object.hasOwnProperty.call(message, "mysql_mode"))
+                if (typeof message.mysql_mode !== "number" || (message.mysql_mode | 0) !== message.mysql_mode)
+                    return "mysql_mode: enum value expected";
             return null;
         };
 
@@ -55031,6 +55068,20 @@ export const topodata = $root.topodata = (() => {
                     throw $TypeError(".topodata.Tablet.tablet_shutdown_time: object expected");
                 message.tablet_shutdown_time = $root.vttime.Time.fromObject(object.tablet_shutdown_time, _depth + 1);
             }
+            if (object.mysql_mode !== 0 && (typeof object.mysql_mode !== "string" || $root.topodata.TabletMySQLMode[object.mysql_mode] !== 0))
+                switch (object.mysql_mode) {
+                case "MANAGED":
+                case 0:
+                    message.mysql_mode = 0;
+                    break;
+                case "UNMANAGED":
+                case 1:
+                    message.mysql_mode = 1;
+                    break;
+                default:
+                    if (typeof object.mysql_mode === "number" && (object.mysql_mode | 0) === object.mysql_mode)
+                        message.mysql_mode = object.mysql_mode;
+                }
             return message;
         };
 
@@ -55069,6 +55120,7 @@ export const topodata = $root.topodata = (() => {
                 object.default_conn_collation = 0;
                 object.tablet_start_time = null;
                 object.tablet_shutdown_time = null;
+                object.mysql_mode = options.enums === $String ? "MANAGED" : 0;
             }
             if (message.alias != null && $Object.hasOwnProperty.call(message, "alias"))
                 object.alias = $root.topodata.TabletAlias.toObject(message.alias, options, _depth + 1);
@@ -55113,6 +55165,8 @@ export const topodata = $root.topodata = (() => {
                 object.tablet_start_time = $root.vttime.Time.toObject(message.tablet_start_time, options, _depth + 1);
             if (message.tablet_shutdown_time != null && $Object.hasOwnProperty.call(message, "tablet_shutdown_time"))
                 object.tablet_shutdown_time = $root.vttime.Time.toObject(message.tablet_shutdown_time, options, _depth + 1);
+            if (message.mysql_mode != null && $Object.hasOwnProperty.call(message, "mysql_mode"))
+                object.mysql_mode = options.enums === $String ? $root.topodata.TabletMySQLMode[message.mysql_mode] === $undefined ? message.mysql_mode : $root.topodata.TabletMySQLMode[message.mysql_mode] : message.mysql_mode;
             return object;
         };
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -955,4 +956,88 @@ func TestValidateCellsNoRecovery(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRefreshTabletsSkipsUnmanaged checks that a tablet started with --unmanaged never enters
+// VTOrc's backend at all. Staying out of vitess_tablet is what keeps it out of analysis and out of
+// every recovery, so VTOrc can never issue a reparent RPC against the external MySQL behind it.
+func TestRefreshTabletsSkipsUnmanaged(t *testing.T) {
+	oldTs := ts
+	t.Cleanup(func() {
+		ts = oldTs
+		db.ClearVTOrcDatabase()
+	})
+
+	inst.InitializeForgetAliasesCache()
+
+	ctx := t.Context()
+	ts = memorytopo.NewServer(ctx, cell1)
+	_, err := ts.GetOrCreateShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+
+	managed := tab100.CloneVT()
+	managed.MysqlMode = topodatapb.TabletMySQLMode_MANAGED
+	unmanaged := tab101.CloneVT()
+	unmanaged.MysqlMode = topodatapb.TabletMySQLMode_UNMANAGED
+	// A tablet record written by a vttablet too old to set the mode carries no mode at all, which
+	// reads back as MANAGED. VTOrc must keep watching it, otherwise an upgrade would silently stop
+	// managing every tablet that has not restarted yet.
+	modeUnset := tab102.CloneVT()
+	require.Equal(t, topodatapb.TabletMySQLMode_MANAGED, modeUnset.GetMysqlMode())
+
+	for _, tablet := range []*topodatapb.Tablet{managed, unmanaged, modeUnset} {
+		require.NoError(t, ts.CreateTablet(ctx, tablet))
+	}
+
+	var refreshed atomic.Int32
+	var refreshedAliases sync.Map
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(alias *topodatapb.TabletAlias) {
+		refreshed.Add(1)
+		refreshedAliases.Store(topoproto.TabletAliasString(alias), true)
+	}, false, nil)
+
+	assert.EqualValues(t, 2, refreshed.Load())
+	_, probedUnmanaged := refreshedAliases.Load(topoproto.TabletAliasString(unmanaged.Alias))
+	assert.False(t, probedUnmanaged, "VTOrc probed the unmanaged tablet")
+
+	verifyTabletCount(t, 2)
+	verifyTabletInfo(t, managed, "")
+	verifyTabletInfo(t, modeUnset, "")
+	verifyTabletInfo(t, unmanaged, inst.ErrTabletAliasNil.Error())
+}
+
+// TestRefreshTabletsForgetsTabletThatBecomesUnmanaged checks the flip case: a tablet VTOrc already
+// watches, restarted with --unmanaged, is dropped from the backend rather than left behind as a
+// stale row that analysis would keep acting on.
+func TestRefreshTabletsForgetsTabletThatBecomesUnmanaged(t *testing.T) {
+	oldTs := ts
+	t.Cleanup(func() {
+		ts = oldTs
+		db.ClearVTOrcDatabase()
+	})
+
+	inst.InitializeForgetAliasesCache()
+
+	ctx := t.Context()
+	ts = memorytopo.NewServer(ctx, cell1)
+	_, err := ts.GetOrCreateShard(ctx, keyspace, shard)
+	require.NoError(t, err)
+
+	tablet := tab100.CloneVT()
+	tablet.MysqlMode = topodatapb.TabletMySQLMode_MANAGED
+	require.NoError(t, ts.CreateTablet(ctx, tablet))
+
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(*topodatapb.TabletAlias) {}, false, nil)
+	verifyTabletCount(t, 1)
+	verifyTabletInfo(t, tablet, "")
+
+	_, err = ts.UpdateTabletFields(ctx, tablet.Alias, func(t *topodatapb.Tablet) error {
+		t.MysqlMode = topodatapb.TabletMySQLMode_UNMANAGED
+		return nil
+	})
+	require.NoError(t, err)
+
+	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(*topodatapb.TabletAlias) {}, false, nil)
+	verifyTabletCount(t, 0)
+	verifyTabletInfo(t, tablet, inst.ErrTabletAliasNil.Error())
 }
