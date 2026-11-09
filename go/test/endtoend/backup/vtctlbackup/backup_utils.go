@@ -1156,6 +1156,7 @@ func chunkedRestoreNonChunkedBackup(t *testing.T) {
 
 func verifyBackupChunking(t *testing.T, expectChunked bool, chunkSizeBytes int64) {
 	verifyInitialReplication(t)
+	chunkedTableChecksum := createChunkedTestTable(t)
 
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
@@ -1227,6 +1228,16 @@ func verifyBackupChunking(t *testing.T, expectChunked bool, chunkSizeBytes int64
 			}
 		}
 		assert.True(t, foundSmallFile, "expected vt_insert_test table file in manifest")
+
+		// Verify that the table grown past the chunk threshold was chunked.
+		foundChunkedTable := false
+		for _, fe := range manifest.FileEntries {
+			if strings.Contains(fe.Name, chunkedTestTable) {
+				foundChunkedTable = true
+				assert.NotEmpty(t, fe.Chunks, "file %s should be chunked", fe.Name)
+			}
+		}
+		assert.True(t, foundChunkedTable, "expected %s table file in manifest", chunkedTestTable)
 	} else {
 		assert.Equal(t, 0, chunkedFileCount, "expected no chunked files with threshold=0")
 		assert.Equal(t, 0, totalChunks, "expected no chunking with threshold=0")
@@ -1235,6 +1246,10 @@ func verifyBackupChunking(t *testing.T, expectChunked bool, chunkSizeBytes int64
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
+	// The checksum reads every row, so all of the restored data file of the table is read back.
+	restoredChecksum, err := chunkedTestTableChecksum(replica2)
+	require.NoError(t, err)
+	assert.Equal(t, chunkedTableChecksum, restoredChecksum, "%s must be restored intact", chunkedTestTable)
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 	err = replica2.VttabletProcess.TearDown()
@@ -1243,6 +1258,52 @@ func verifyBackupChunking(t *testing.T, expectChunked bool, chunkSizeBytes int64
 	require.NoError(t, err)
 	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
 	require.NoError(t, err)
+	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE "+chunkedTestTable, keyspaceName, true)
+	require.NoError(t, err)
+}
+
+const (
+	// chunkedTestTable is grown by createChunkedTestTable past the chunk threshold of the chunked
+	// backup tests, so that its data file is chunked.
+	chunkedTestTable = "vt_chunked_test"
+	// chunkedTestTableRows rows of 1KiB make a data file of more than 4MiB.
+	chunkedTestTableRows = 6000
+)
+
+// createChunkedTestTable creates chunkedTestTable on the primary, waits until it is replicated to
+// replica1 and returns its checksum.
+func createChunkedTestTable(t *testing.T) string {
+	_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("CREATE TABLE %s (id BIGINT PRIMARY KEY, data VARBINARY(1024))", chunkedTestTable), keyspaceName, true)
+	require.NoError(t, err)
+	const batchSize = 1000
+	for first := 1; first <= chunkedTestTableRows; first += batchSize {
+		values := make([]string, 0, batchSize)
+		for id := first; id < first+batchSize; id++ {
+			values = append(values, fmt.Sprintf("(%d, REPEAT(SHA2('%d', 256), 16))", id, id))
+		}
+		_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("INSERT INTO %s (id, data) VALUES %s", chunkedTestTable, strings.Join(values, ", ")), keyspaceName, true)
+		require.NoError(t, err)
+	}
+
+	checksum, err := chunkedTestTableChecksum(primary)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		replicaChecksum, err := chunkedTestTableChecksum(replica1)
+		return err == nil && replicaChecksum == checksum
+	}, 30*time.Second, 100*time.Millisecond, "%s must be replicated to %s", chunkedTestTable, replica1.Alias)
+	return checksum
+}
+
+// chunkedTestTableChecksum returns the checksum of chunkedTestTable on tablet.
+func chunkedTestTableChecksum(tablet *cluster.Vttablet) (string, error) {
+	qr, err := tablet.VttabletProcess.QueryTablet("CHECKSUM TABLE "+chunkedTestTable, keyspaceName, true)
+	if err != nil {
+		return "", err
+	}
+	if len(qr.Rows) != 1 || qr.Rows[0][1].IsNull() {
+		return "", fmt.Errorf("unexpected checksum of %s: %v", chunkedTestTable, qr.Rows)
+	}
+	return qr.Rows[0][1].ToString(), nil
 }
 
 func InitTestTable(t *testing.T) {
