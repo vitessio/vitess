@@ -19,7 +19,6 @@ package consultopo
 import (
 	"context"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -90,23 +89,22 @@ func TestKVCallsEndWithContext(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	// Accept connections and never answer on them.
-	var mu sync.Mutex
 	var conns []net.Conn
+	accepted := make(chan struct{})
 	go func() {
+		defer close(accepted)
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
-			mu.Lock()
 			conns = append(conns, conn)
-			mu.Unlock()
 		}
 	}()
 	t.Cleanup(func() {
+		// Closing the listener makes Accept fail; wait for the loop to exit before closing what it accepted.
 		listener.Close()
-		mu.Lock()
-		defer mu.Unlock()
+		<-accepted
 		for _, conn := range conns {
 			conn.Close()
 		}
