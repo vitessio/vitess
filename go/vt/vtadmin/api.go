@@ -1304,7 +1304,8 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 	requestsByCluster := make(map[string][]*vtctldatapb.GetSchemaMigrationsRequest, len(req.ClusterRequests))
 
 	for _, r := range req.ClusterRequests {
-		if r.GetRequest() == nil {
+		// Requests for clusters the caller can't see are skipped below, so only reject the others.
+		if r.GetRequest() == nil && api.authz.IsAuthorized(ctx, r.ClusterId, rbac.SchemaMigrationResource, rbac.GetAction) {
 			return nil, fmt.Errorf("%w: cluster_requests.request is required", errors.ErrInvalidRequest)
 		}
 

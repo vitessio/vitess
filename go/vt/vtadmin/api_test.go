@@ -6089,6 +6089,22 @@ func TestMissingNestedRequest(t *testing.T) {
 			assert.Nil(t, resp)
 		})
 	}
+
+	t.Run("GetSchemaMigrations skips a cluster the caller can't see", func(t *testing.T) {
+		opts := Options{RBAC: &rbac.Config{}}
+		require.NoError(t, opts.RBAC.Reify())
+		c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{
+			Cluster: &vtadminpb.Cluster{Id: "c2", Name: "cluster2"},
+		})
+		api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{c}, opts)
+		t.Cleanup(func() { _ = api.Close() })
+
+		resp, err := api.GetSchemaMigrations(rbac.NewContext(ctx, &rbac.Actor{Name: "unauthorized"}), &vtadminpb.GetSchemaMigrationsRequest{
+			ClusterRequests: []*vtadminpb.GetSchemaMigrationsRequest_ClusterRequest{{ClusterId: "c2"}},
+		})
+		require.NoError(t, err)
+		assert.Empty(t, resp.SchemaMigrations)
+	})
 }
 
 //go:generate -command authztestgen go run ./testutil/authztestgen
