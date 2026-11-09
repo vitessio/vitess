@@ -674,24 +674,25 @@ func TestMysqlApplyArgsStayBinlogged(t *testing.T) {
 	}
 }
 
-// runFakeMysqldSafe starts a mysqld_safe that writes stdout and stderr as
-// given, and waits for it to exit. It returns a directory where the script
-// leaves stdout-is-pipe and stderr-is-pipe files if its output was a pipe.
-func runFakeMysqldSafe(t *testing.T, stdout, stderr string) string {
+// TestStartNoWaitMysqldOutput checks that each line the started mysqld_safe
+// writes to stdout or stderr is logged as an INFO record with its start_id.
+func TestStartNoWaitMysqldOutput(t *testing.T) {
+	const (
+		outLine = "mysqld_safe Logging to '/vt/output-sentinel.err'."
+		errLine = `{ "prio" : 1, "msg" : "Duplicate entry 'output-sentinel' for key 't.PRIMARY'", "label" : "Error" }`
+	)
 	root := t.TempDir()
 	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
 	outFile, errFile := path.Join(root, "out"), path.Join(root, "err")
-	require.NoError(t, os.WriteFile(outFile, []byte(stdout), 0o644))
-	require.NoError(t, os.WriteFile(errFile, []byte(stderr), 0o644))
-	script := "#!/bin/sh\ncat '" + outFile + "'\ncat '" + errFile + "' >&2\n" +
-		"[ -p /dev/stdout ] && touch '" + path.Join(root, "stdout-is-pipe") + "'\n" +
-		"[ -p /dev/stderr ] && touch '" + path.Join(root, "stderr-is-pipe") + "'\n" +
-		"exit 0\n"
+	require.NoError(t, os.WriteFile(outFile, []byte(outLine+"\n"), 0o644))
+	require.NoError(t, os.WriteFile(errFile, []byte(errLine+"\n"), 0o644))
+	script := "#!/bin/sh\ncat '" + outFile + "'\ncat '" + errFile + "' >&2\n"
 	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqld_safe"), []byte(script), 0o755))
 	t.Setenv("VTROOT", root)
 	t.Setenv("VT_MYSQL_ROOT", root)
 	t.Setenv("VT_MYSQL_BASEDIR", root)
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	exited := make(chan struct{})
 	mysqld := &Mysqld{}
 	mysqld.OnTerm(func() { close(exited) })
@@ -701,54 +702,12 @@ func runFakeMysqldSafe(t *testing.T, stdout, stderr string) string {
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "mysqld_safe did not exit")
 	}
-	return root
-}
 
-// TestStartNoWaitMysqldOutput checks where the output of the started
-// mysqld_safe goes: by default through pipes into INFO log records, and with
-// --mysqlctl-mysqld-output-to-stderr the child writes to our stderr itself,
-// so its output arrives unchanged and isn't logged.
-func TestStartNoWaitMysqldOutput(t *testing.T) {
-	const (
-		outLine = "mysqld_safe Logging to '/vt/output-sentinel.err'."
-		errLine = `{ "prio" : 1, "msg" : "Duplicate entry 'output-sentinel' for key 't.PRIMARY'", "label" : "Error" }`
-	)
-
-	t.Run("logged by default", func(t *testing.T) {
-		logs := logtest.Capture(t, slog.LevelInfo)
-		root := runFakeMysqldSafe(t, outLine+"\n", errLine+"\n")
-
-		assert.FileExists(t, path.Join(root, "stdout-is-pipe"))
-		assert.FileExists(t, path.Join(root, "stderr-is-pipe"))
-		stdout, stderr := logs.Wait(t, "mysqld stdout"), logs.Wait(t, "mysqld stderr")
-		assert.Equal(t, "INFO", stdout["level"])
-		assert.Equal(t, "INFO", stderr["level"])
-		assert.Equal(t, outLine, stdout["stdout"])
-		assert.Equal(t, errLine, stderr["stderr"])
-		assert.NotEmpty(t, stderr["start_id"])
-		assert.Equal(t, stdout["start_id"], stderr["start_id"])
-	})
-
-	t.Run("written to stderr", func(t *testing.T) {
-		mysqldOutputToStderr = true
-		t.Cleanup(func() { mysqldOutputToStderr = false })
-		stderrFile, err := os.Create(path.Join(t.TempDir(), "stderr"))
-		require.NoError(t, err)
-		savedStderr := os.Stderr
-		os.Stderr = stderrFile
-		t.Cleanup(func() {
-			os.Stderr = savedStderr
-			stderrFile.Close()
-		})
-		logs := logtest.Capture(t, slog.LevelInfo)
-
-		root := runFakeMysqldSafe(t, outLine+"\n", errLine+"\n")
-
-		assert.NoFileExists(t, path.Join(root, "stdout-is-pipe"))
-		assert.NoFileExists(t, path.Join(root, "stderr-is-pipe"))
-		written, err := os.ReadFile(stderrFile.Name())
-		require.NoError(t, err)
-		assert.Equal(t, outLine+"\n"+errLine+"\n", string(written))
-		assert.NotContains(t, logs.String(), "output-sentinel")
-	})
+	stdout, stderr := logs.Wait(t, "mysqld stdout"), logs.Wait(t, "mysqld stderr")
+	assert.Equal(t, "INFO", stdout["level"])
+	assert.Equal(t, "INFO", stderr["level"])
+	assert.Equal(t, outLine, stdout["stdout"])
+	assert.Equal(t, errLine, stderr["stderr"])
+	assert.NotEmpty(t, stderr["start_id"])
+	assert.Equal(t, stdout["start_id"], stderr["start_id"])
 }

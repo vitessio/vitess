@@ -261,7 +261,6 @@ Flags:
       --mysql-slow-connect-warn-threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql-tcp-version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
       --mysqlctl-mycnf-template string                                   template file to use for generating the my.cnf file during server init
-      --mysqlctl-mysqld-output-to-stderr                                 send the stdout and stderr of a mysqld or mysqld_safe started by this process straight to this process's stderr, unchanged, instead of logging each line (not used when a mysqld_start hook starts mysqld)
       --mysqlctl-socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --no-scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize-queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)

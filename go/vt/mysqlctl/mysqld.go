@@ -120,10 +120,9 @@ var (
 	// and reconnect if necessary
 	PoolDynamicHostnameResolution time.Duration
 
-	mycnfTemplateFile    string
-	socketFile           string
-	mysqlCloneEnabled    bool
-	mysqldOutputToStderr bool
+	mycnfTemplateFile string
+	socketFile        string
+	mysqlCloneEnabled bool
 
 	replicationConnectRetry = 10 * time.Second
 
@@ -265,9 +264,6 @@ func init() {
 	for _, cmd := range []string{"vtcombo", "vttablet", "vtbackup", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerMySQLDCloneFlags)
 	}
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtbackup", "vtcombo", "vttablet"} {
-		servenv.OnParseFor(cmd, registerMySQLDOutputFlags)
-	}
 }
 
 func registerMySQLDFlags(fs *pflag.FlagSet) {
@@ -275,10 +271,6 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &mycnfTemplateFile, "mysqlctl-mycnf-template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	utils.SetFlagStringVar(fs, &socketFile, "mysqlctl-socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
 	utils.SetFlagDurationVar(fs, &replicationConnectRetry, "replication-connect-retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
-}
-
-func registerMySQLDOutputFlags(fs *pflag.FlagSet) {
-	utils.SetFlagBoolVar(fs, &mysqldOutputToStderr, "mysqlctl-mysqld-output-to-stderr", mysqldOutputToStderr, "send the stdout and stderr of a mysqld or mysqld_safe started by this process straight to this process's stderr, unchanged, instead of logging each line (not used when a mysqld_start hook starts mysqld)")
 }
 
 // MySQLCloneEnabled returns whether MySQL CLONE support is enabled.
@@ -560,9 +552,26 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		cmd.Dir = vtMysqlRoot
 		cmd.Env = env
 		log.Info("Starting mysqld", slog.String("start_id", ts), slog.String("exec_cmd", cmd.String()))
-		if err := connectMysqldOutput(cmd, ts); err != nil {
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
 			return err
 		}
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return err
+		}
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				log.Info("mysqld stderr", slog.String("start_id", ts), slog.String("stderr", scanner.Text()))
+			}
+		}()
+		go func() {
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				log.Info("mysqld stdout", slog.String("start_id", ts), slog.String("stdout", scanner.Text()))
+			}
+		}()
 		err = cmd.Start()
 		if err != nil {
 			return vterrors.Wrapf(err, "failed to start mysqld")
@@ -607,39 +616,6 @@ func (mysqld *Mysqld) startNoWait(cnf *Mycnf, mysqldArgs ...string) error {
 		return fmt.Errorf("postflight_mysqld_start hook failed: %v", hr.String())
 	}
 
-	return nil
-}
-
-// connectMysqldOutput sends the output of the started mysqld or mysqld_safe
-// either straight to our stderr or, by default, to the log one line at a time.
-func connectMysqldOutput(cmd *exec.Cmd, ts string) error {
-	if mysqldOutputToStderr {
-		// os.Stderr is an *os.File, so the child gets the descriptor itself.
-		// Any other io.Writer would make os/exec copy through a pipe.
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-		return nil
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			log.Info("mysqld stderr", slog.String("start_id", ts), slog.String("stderr", scanner.Text()))
-		}
-	}()
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			log.Info("mysqld stdout", slog.String("start_id", ts), slog.String("stdout", scanner.Text()))
-		}
-	}()
 	return nil
 }
 

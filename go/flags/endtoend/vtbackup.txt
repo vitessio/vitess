@@ -209,7 +209,6 @@ Flags:
       --mysql-shutdown-timeout duration                             how long to wait for mysqld shutdown (default 5m0s)
       --mysql-socket string                                         Path to the mysqld socket file
       --mysql-timeout duration                                      how long to wait for mysqld startup (default 5m0s)
-      --mysqlctl-mysqld-output-to-stderr                            send the stdout and stderr of a mysqld or mysqld_safe started by this process straight to this process's stderr, unchanged, instead of logging each line (not used when a mysqld_start hook starts mysqld)
       --opentsdb-uri string                                         URI of opentsdb /api/put method
       --port int                                                    port for the server
       --pprof strings                                               enable profiling
