@@ -110,6 +110,7 @@ func TestExistsKeepsTheRestOfThePredicate(t *testing.T) {
 		`select id2 from t1 where (case when exists (select 1 from t2) then id1 = 1 else id1 = 2 end) order by id2`,
 		`select t1.id2 from t1 join t2 on t1.id2 = t2.id4 or exists (select 1 from t2 where id3 = 7) order by t1.id2, t2.id3`,
 		`select t1.id2 from t1 join t2 on t1.id2 = t2.id4 or exists (select 1 from t2 where id3 > 100) order by t1.id2, t2.id3`,
+		`select t1.id2 from t1 straight_join t2 on t1.id2 = t2.id4 where t2.id3 = 1 and (t2.id4 = 100 or (select max(x.id4) from t2 as x where x.id3 = 1) = 100) order by t1.id2`,
 	}
 	for _, query := range queries {
 		mcmp.Exec(query)

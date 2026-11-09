@@ -395,6 +395,9 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		return nil, nil
 	}
 
+	if !inner.TopLevel && !inner.IsArgument {
+		newOp.Source = newFilter(newOp.Source, newExpr)
+	}
 	outer.RHS = newOp
 	ctx.MergedSubqueries[inner.ArgName] = inner.originalSubquery
 	return outer, Rewrote("merged subquery with rhs of join")

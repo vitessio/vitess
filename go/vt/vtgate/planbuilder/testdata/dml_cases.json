@@ -7634,5 +7634,65 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "An INSERT ... SELECT whose value subquery is merged into the right side of a join keeps the predicate around it",
+    "query": "insert into user_extra(user_id, col) select u.id, u.col from `user` as u join music as m on u.col = m.col where m.col = 1 or (select max(col) from ref) = 3",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, col) select u.id, u.col from `user` as u join music as m on u.col = m.col where m.col = 1 or (select max(col) from ref) = 3",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(2)",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,L:1",
+            "JoinVars": {
+              "u_col": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+                "Query": "select u.id, u.col from `user` as u lock in share mode"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from music as m where 1 != 1",
+                "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ and (m.col = 1 or (select max(col) from ref) = 3) lock in share mode"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]

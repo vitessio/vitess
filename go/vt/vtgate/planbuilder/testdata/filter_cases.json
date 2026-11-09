@@ -6097,5 +6097,95 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A value subquery merged into the right side of a join keeps the predicate around it",
+    "query": "select u.id from `user` as u join music as m on u.col = m.col where m.col = 1 or (select max(col) from ref) = 3",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.id from `user` as u join music as m on u.col = m.col where m.col = 1 or (select max(col) from ref) = 3",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+            "Query": "select u.id, u.col from `user` as u"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ and (m.col = 1 or (select max(col) from ref) = 3)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A correlated EXISTS merged into the right side of a join keeps the predicate around it",
+    "query": "select u.id from `user` as u join music as m on u.col = m.col where u.col = 1 or exists (select 1 from user_extra as ue where ue.user_id = m.user_id)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.id from `user` as u join music as m on u.col = m.col where u.col = 1 or exists (select 1 from user_extra as ue where ue.user_id = m.user_id)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, u.col from `user` as u where 1 != 1",
+            "Query": "select u.id, u.col from `user` as u"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ and (:u_col /* INT16 */ = 1 or exists (select 1 from user_extra as ue where ue.user_id = m.user_id))"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
