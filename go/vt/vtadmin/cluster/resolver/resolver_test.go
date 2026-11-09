@@ -19,6 +19,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/url"
 	"sort"
@@ -33,6 +34,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	grpcresolver "google.golang.org/grpc/resolver"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
@@ -178,6 +180,28 @@ func TestResolveNow(t *testing.T) {
 	cc.assertUpdateWithin(t, time.Millisecond*100, expectedUpdate)
 	cc.close()
 	r.Close()
+}
+
+func TestResolveLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	disco := fakediscovery.New()
+	disco.AddTaggedVtctlds(nil, &vtadminpb.Vtctld{Hostname: "one"}, &vtadminpb.Vtctld{Hostname: "two"})
+	testopts := testopts
+	testopts.Discovery = disco
+
+	cc := newMockClientConn(1)
+	defer cc.close()
+	r := mustBuild(t, &builder{clusterID: "c1", opts: testopts}, grpcresolver.Target{
+		URL: url.URL{Host: "vtctld"},
+	}, cc, grpcresolver.BuildOptions{})
+	defer r.Close()
+
+	record := logs.Wait(t, logPrefix+": found addresses")
+	assert.Equal(t, "INFO", record["level"])
+	assert.InDelta(t, 2, record["address_count"], 0)
+	assert.Equal(t, "vtctld", record["component"])
+	assert.Equal(t, "c1", record["cluster_id"])
 }
 
 func TestResolveWithTags(t *testing.T) {
