@@ -1,6 +1,7 @@
 create table t1(
                    id1 bigint,
                    id2 bigint,
+                   gbname varchar(255) character set gb18030 collate gb18030_bin,
                    primary key(id1)
 ) Engine=InnoDB;
 

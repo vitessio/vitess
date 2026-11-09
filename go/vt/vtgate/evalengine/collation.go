@@ -114,6 +114,15 @@ type collationAggregation struct {
 func (ca *collationAggregation) add(tc collations.TypedCollation, env *collations.Environment) error {
 	if ca.cur.Collation == collations.Unknown {
 		ca.cur = tc
+	} else if ca.cur.Collation == tc.Collation {
+		// Equal collation IDs need no coercion, even when Vitess does not
+		// have collation metadata for the ID.
+		if tc.Coercibility < ca.cur.Coercibility {
+			tc.Repertoire |= ca.cur.Repertoire
+			ca.cur = tc
+		} else {
+			ca.cur.Repertoire |= tc.Repertoire
+		}
 	} else {
 		var err error
 		ca.cur, _, _, err = colldata.Merge(env, ca.cur, tc, colldata.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})

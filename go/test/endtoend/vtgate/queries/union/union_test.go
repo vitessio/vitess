@@ -148,7 +148,11 @@ func TestUnionAllWildcardOrdering(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2)")
+	mcmp.Exec("insert into t1(id1, id2, gbname) values (1, 1, 'z'), (2, 2, 'a')")
+	mcmp.AssertMatches(
+		"select * from t1 union all select * from t1 order by gbname",
+		`[[INT64(2) INT64(2) VARBINARY("a")] [INT64(2) INT64(2) VARBINARY("a")] [INT64(1) INT64(1) VARBINARY("z")] [INT64(1) INT64(1) VARBINARY("z")]]`,
+	)
 	mcmp.AssertMatches(
 		"select t.marker as x from (select *, id1 as marker from t1 union all select *, id1 as marker from t1) t order by t.marker",
 		`[[INT64(1)] [INT64(1)] [INT64(2)] [INT64(2)]]`,
