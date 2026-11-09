@@ -55,6 +55,24 @@ func TestClusterFromString(t *testing.T) {
 			expectedID: "dynamic_cluster",
 		},
 		{
+			name: "true id",
+			s: `{
+				"id": true,
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"vtctld.invalid:15000\", \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }"
+			}`,
+			expectedID: "true",
+		},
+		{
+			name: "false id",
+			s: `{
+				"id": false,
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"vtctld.invalid:15000\", \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }"
+			}`,
+			expectedID: "false",
+		},
+		{
 			name:      "empty id",
 			s:         `{"id": ""}`,
 			shouldErr: true,
@@ -119,6 +137,7 @@ func TestClusterFromString(t *testing.T) {
 			assert.Equal(t, tt.expectedID, id)
 			require.NotNil(t, c, "when err == nil, cluster should not be nil")
 			t.Cleanup(func() { _ = c.Close() })
+			assert.Equal(t, id, c.ID, "the cluster's ID must match the id it is registered under")
 		})
 	}
 }

@@ -5757,7 +5757,8 @@ func TestDynamicClusterReplaceLogs(t *testing.T) {
 	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
 	t.Cleanup(func() { _ = api.Close() })
 
-	// A spec with "id": true is looked up under "true", but its cluster's ID is "1".
+	// The cluster's ID differs from its id only so the test can tell
+	// existing_cluster_id and cluster_id apart; real callers pass matching ids.
 	_, err := api.WithCluster(newCluster("1", true), "true")
 	require.NoError(t, err)
 	_, err = api.WithCluster(newCluster("1", false), "true")
@@ -5778,6 +5779,14 @@ func TestDynamicClusterReplaceLogs(t *testing.T) {
 	logs.Reset()
 	_, err = api.WithCluster(newCluster("c2", false), "c2")
 	require.NoError(t, err)
+	_, err = api.WithCluster(newCluster("c2", false), "c2")
+	require.NoError(t, err)
+	record = logs.Record(t, "failed to close duplicate dynamic cluster; some connections and goroutines may linger")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "c2", record["cluster_id"])
+	assert.Contains(t, record["error"], assert.AnError.Error())
+
+	logs.Reset()
 	api.EjectDynamicCluster("c2", nil)
 	record = logs.Record(t, "failed to close cluster; some connections and goroutines may linger")
 	assert.Equal(t, "ERROR", record["level"])

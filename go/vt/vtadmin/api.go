@@ -370,7 +370,7 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) 
 		} else {
 			log.Info("API already has an equal cluster, using that instead", slog.String("cluster_id", id))
 			if err := c.Close(); err != nil {
-				log.Error("failed to close duplicate dynamic cluster; some connections and goroutines may linger", slog.Any("error", err))
+				log.Error("failed to close duplicate dynamic cluster; some connections and goroutines may linger", slog.String("cluster_id", id), slog.Any("error", err))
 			}
 		}
 	}
