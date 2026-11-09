@@ -208,9 +208,21 @@ func TestConnForCellNewConnKeepsReadOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ts.SetReadOnly(true))
 
+	// assertReadOnly tries every kind of write that StatsConn guards; the lock calls all go through internalLock.
 	assertReadOnly := func(t *testing.T, conn topo.Conn) {
-		_, err := conn.Create(ctx, "read_only_probe", nil)
-		assert.Equal(t, vtrpcpb.Code_READ_ONLY, vterrors.Code(err), "a write through the connection was not rejected: %v", err)
+		writes := []struct {
+			name  string
+			write func() error
+		}{
+			{"Create", func() error { _, err := conn.Create(ctx, "read_only_probe", nil); return err }},
+			{"Update", func() error { _, err := conn.Update(ctx, "read_only_probe", nil, nil); return err }},
+			{"Delete", func() error { return conn.Delete(ctx, "read_only_probe", nil) }},
+			{"Lock", func() error { _, err := conn.Lock(ctx, "read_only_probe", "contents"); return err }},
+		}
+		for _, w := range writes {
+			err := w.write()
+			assert.Equal(t, vtrpcpb.Code_READ_ONLY, vterrors.Code(err), "%s through the connection was not rejected: %v", w.name, err)
+		}
 	}
 
 	t.Run("re-pointed cell", func(t *testing.T) {
