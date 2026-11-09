@@ -170,7 +170,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(128)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
@@ -495,7 +495,7 @@ func (cached *Insert) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(224)
+		size += int64(208)
 	}
 	// field InsertCommon vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
 	size += cached.InsertCommon.CachedSize(false)
@@ -545,7 +545,7 @@ func (cached *InsertCommon) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(144)
+		size += int64(128)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)
@@ -578,7 +578,7 @@ func (cached *InsertSelect) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(192)
+		size += int64(176)
 	}
 	// field InsertCommon vitess.io/vitess/go/vt/vtgate/engine.InsertCommon
 	size += cached.InsertCommon.CachedSize(false)
@@ -1214,7 +1214,7 @@ func (cached *Send) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(48)
 	}
 	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
 	size += cached.Keyspace.CachedSize(true)

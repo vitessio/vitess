@@ -54,26 +54,21 @@ func setCommentDirectivesOnPlan(plan engine.Primitive, stmt sqlparser.Statement)
 
 	directives = cmt.GetParsedComments().Directives()
 	scatterAsWarns := directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings)
-	timeout := queryTimeout(directives)
 	multiShardAutoCommit := directives.IsSet(sqlparser.DirectiveMultiShardAutocommit)
 
-	setDirective(plan, multiShardAutoCommit, timeout, scatterAsWarns)
+	setDirective(plan, multiShardAutoCommit, scatterAsWarns)
 }
 
-func setDirective(prim engine.Primitive, msac bool, timeout int, scatterAsWarns bool) {
+func setDirective(prim engine.Primitive, msac bool, scatterAsWarns bool) {
 	switch prim := prim.(type) {
 	case *engine.Insert:
 		prim.MultiShardAutocommit = msac
-		prim.QueryTimeout = timeout
 	case *engine.Update:
 		prim.MultiShardAutocommit = msac
-		prim.QueryTimeout = timeout
 	case *engine.Delete:
 		prim.MultiShardAutocommit = msac
-		prim.QueryTimeout = timeout
 	case *engine.Route:
 		prim.ScatterErrorsAsWarnings = scatterAsWarns
-		prim.QueryTimeout = timeout
 	}
 }
 

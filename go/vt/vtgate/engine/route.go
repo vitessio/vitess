@@ -23,7 +23,6 @@ import (
 	"math/rand/v2"
 	"sort"
 	"strings"
-	"time"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/vt/log"
@@ -96,9 +95,6 @@ type Route struct {
 	// in the final result. Rest of the columns are truncated
 	// from the result received. If 0, no truncation happens.
 	TruncateColumnCount int
-
-	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-	QueryTimeout int
 
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
@@ -229,11 +225,6 @@ func (route *Route) TryStreamExecute(
 	wantfields bool,
 	callback func(*sqltypes.Result) error,
 ) error {
-	if route.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(route.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
 	rss, bvs, err := route.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
@@ -429,9 +420,6 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	if route.ScatterErrorsAsWarnings {
 		other["ScatterErrorsAsWarnings"] = true
-	}
-	if route.QueryTimeout > 0 {
-		other["QueryTimeout"] = route.QueryTimeout
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",

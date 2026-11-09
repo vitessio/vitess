@@ -62,9 +62,6 @@ type (
 		// succeed in order to get the performance benefits of autocommit.
 		MultiShardAutocommit bool
 
-		// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-		QueryTimeout int
-
 		// ForceNonStreaming is true when the insert table and select table are same.
 		// This will avoid locking by the select table.
 		ForceNonStreaming bool

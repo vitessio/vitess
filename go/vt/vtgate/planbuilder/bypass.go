@@ -65,7 +65,6 @@ func buildPlanForBypass(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vsc
 		IsDML:                sqlparser.IsDMLStatement(stmt),
 		SingleShardOnly:      false,
 		MultishardAutocommit: hints.multiShardAutocommit,
-		QueryTimeout:         hints.queryTimeout,
 	}
 	return newPlanResult(send), nil
 }

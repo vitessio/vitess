@@ -60,9 +60,6 @@ type Send struct {
 	MultishardAutocommit bool
 
 	ReservedConnectionNeeded bool
-
-	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-	QueryTimeout int
 }
 
 // ShardName as key for setting shard name in bind variables map
@@ -184,7 +181,6 @@ func (s *Send) description() PrimitiveDescription {
 		"ShardNameNeeded":          s.ShardNameNeeded,
 		"MultishardAutocommit":     s.MultishardAutocommit,
 		"ReservedConnectionNeeded": s.ReservedConnectionNeeded,
-		"QueryTimeout":             s.QueryTimeout,
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Send",
