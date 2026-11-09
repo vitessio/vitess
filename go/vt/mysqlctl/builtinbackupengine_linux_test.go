@@ -121,6 +121,68 @@ func TestDirectIOWriterDisablesDirectIOOnlyForUnalignedTail(t *testing.T) {
 	assert.False(t, directIOEnabled(t, f), "an unaligned tail must be written with O_DIRECT disabled")
 }
 
+// TestDirectIOWriterBufferSizes checks that buffer sizes that aren't a multiple of the alignment,
+// which --builtinbackup-file-write-buffer-size allows, are rounded up to one that O_DIRECT accepts.
+func TestDirectIOWriterBufferSizes(t *testing.T) {
+	for _, size := range []int{0, 1, 5000} {
+		t.Run(fmt.Sprintf("size=%d", size), func(t *testing.T) {
+			data := make([]byte, 3*directIOAlignment+123)
+			_, err := rand.Read(data)
+			require.NoError(t, err)
+
+			dir := t.TempDir()
+			requireDirectIO(t, dir)
+			p := path.Join(dir, "file")
+			require.NoError(t, os.WriteFile(p, nil, 0o644))
+			require.NoError(t, os.Truncate(p, int64(len(data))))
+			f, err := openForDirectWrite(p)
+			require.NoError(t, err)
+			t.Cleanup(func() { assert.NoError(t, f.Close()) })
+
+			w := newDirectIOWriter(f, &offsetWriter{f: f}, size)
+			n, err := w.ReadFrom(bytes.NewReader(data))
+			require.NoError(t, err)
+			require.EqualValues(t, len(data), n)
+			require.NoError(t, w.Flush())
+
+			got, err := os.ReadFile(p)
+			require.NoError(t, err)
+			assert.True(t, bytes.Equal(data, got), "written data does not match")
+		})
+	}
+}
+
+// shortWriter writes all but the last byte it is given, without an error.
+type shortWriter struct{}
+
+func (shortWriter) Write(p []byte) (int, error) {
+	return len(p) - 1, nil
+}
+
+// TestDirectIOWriterShortWrite checks that a write that writes less than it was given, without an
+// error, fails with io.ErrShortWrite.
+func TestDirectIOWriterShortWrite(t *testing.T) {
+	w := newDirectIOWriter(nil, shortWriter{}, directIOAlignment)
+	_, err := w.Write(make([]byte, directIOAlignment))
+	require.NoError(t, err)
+	assert.ErrorIs(t, w.Flush(), io.ErrShortWrite)
+}
+
+// emptyReader returns neither data nor an error.
+type emptyReader struct{}
+
+func (emptyReader) Read([]byte) (int, error) {
+	return 0, nil
+}
+
+// TestDirectIOWriterReadFromNoProgress checks that ReadFrom gives up on a reader that keeps
+// returning neither data nor an error, like bufio.Writer does, instead of looping forever.
+func TestDirectIOWriterReadFromNoProgress(t *testing.T) {
+	w := newDirectIOWriter(nil, io.Discard, directIOAlignment)
+	_, err := w.ReadFrom(emptyReader{})
+	assert.ErrorIs(t, err, io.ErrNoProgress)
+}
+
 func TestRestoreChunksWriteMode(t *testing.T) {
 	const fileSize = 4*64*1024 + 1000
 
