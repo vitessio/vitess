@@ -21,6 +21,7 @@
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
+        - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -293,6 +294,16 @@ VTGate used to report a planned `REPLACE` statement with the `INSERT` statement 
 **Impact**: dashboards, alerts and query-log parsing that count `INSERT` no longer include `REPLACE` statements. Planning, routing, transactions and results are unchanged.
 
 **Migration**: match `REPLACE` as well as `INSERT` wherever `REPLACE` statements should be included.
+
+#### <a id="vtgate-qualified-star-join-using"/>Qualified stars are no longer coalesced by `JOIN ... USING`</a>
+
+MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` only: a qualified `tbl.*` returns every column of the named table, join columns included. VTGate previously applied the coalescing to qualified stars too, omitting the join columns from the right-hand table's `tbl.*` and moving them to the front of the left-hand table's. Qualified stars now expand to every column of the named table in table order, matching MySQL, and unqualified `*` is unchanged.
+
+**Impact**: The right-hand table's `tbl.*` returns additional columns. The left-hand table's `tbl.*` keeps its column count and raises no error, so clients that read it by position get different columns, `ORDER BY` positions sort by a different column, and `INSERT ... SELECT tbl.*` writes values into different columns and can route rows to a different shard. Statements written against the old expansion now fail: a derived table selecting both stars has a duplicate column name, and an `INSERT ... SELECT` column list or a `UNION` whose column count matched the old expansion fails as it does on MySQL, although a `UNION` that VTGate deduplicates itself can fail with the existing `VT13001: [BUG] weight_string offsets did not line up for UNION` instead. A derived table or CTE column list sized for the old expansion no longer matches it.
+
+**Migration**: before upgrading, replace a qualified `tbl.*` selected from a `JOIN ... USING` with an explicit column list wherever its columns or their order matter, since an explicit list returns the same columns before and after the upgrade.
+
+See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
