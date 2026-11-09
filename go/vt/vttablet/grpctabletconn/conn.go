@@ -768,7 +768,9 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, request *binlogdat
 	defer func() {
 		// Don't hand this stream's row pool, however large it grew, to the
 		// next stream that takes a response from the pool.
-		r.Rows = nil
+		if vttablet.VStreamerMemoryBounds {
+			r.Rows = nil
+		}
 		r.ReturnToVTPool()
 	}()
 	var pool rowPoolTracker
@@ -865,7 +867,9 @@ func (conn *gRPCQueryClient) VStreamTables(ctx context.Context, request *binlogd
 	}
 	r := binlogdatapb.VStreamTablesResponseFromVTPool()
 	defer func() {
-		r.Rows = nil // see VStreamRows
+		if vttablet.VStreamerMemoryBounds {
+			r.Rows = nil // see VStreamRows
+		}
 		r.ReturnToVTPool()
 	}()
 	var pool rowPoolTracker

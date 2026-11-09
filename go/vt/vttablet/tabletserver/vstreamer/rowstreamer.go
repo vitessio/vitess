@@ -88,10 +88,10 @@ type rowStreamer struct {
 func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string,
 	lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error, vse *Engine,
 	mode RowStreamerMode, conn *snapshotConn, options *binlogdatapb.VStreamOptions,
-) *rowStreamer {
+) (*rowStreamer, error) {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		return nil
+		return nil, vterrors.Wrap(err, "invalid VStream options")
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
@@ -109,7 +109,7 @@ func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engi
 		conn:    conn,
 		options: options,
 		config:  config,
-	}
+	}, nil
 }
 
 func (rs *rowStreamer) Cancel() {

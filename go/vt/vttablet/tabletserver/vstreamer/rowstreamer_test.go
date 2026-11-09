@@ -1061,3 +1061,48 @@ func TestStreamRowsBoundsRowPoolRetention(t *testing.T) {
 		assert.Greater(t, lastRetained, packets*bigBytes/2, "with the bounds off the pool should keep its high-water marks: %d bytes", lastRetained)
 	})
 }
+
+// TestRowStreamerMemoryBoundsFlag checks that the vttablet flag, not only the workflow override, reaches
+// the row streamer: with --vstream-memory-bounds=false and no override the streamer runs without the
+// bounds and its dynamic packet sizer has no cap, and with the flag on it gets both.
+func TestRowStreamerMemoryBoundsFlag(t *testing.T) {
+	origFlag := vttablet.VStreamerMemoryBounds
+	t.Cleanup(func() {
+		vttablet.VStreamerMemoryBounds = origFlag
+		vttablet.GetVReplicationConfigDefaults(false)
+	})
+
+	for _, bounds := range []bool{true, false} {
+		t.Run(strconv.FormatBool(bounds), func(t *testing.T) {
+			vttablet.VStreamerMemoryBounds = bounds
+			vttablet.GetVReplicationConfigDefaults(false)
+
+			rs, err := newRowStreamer(t.Context(), engine.env.Config().DB.FilteredWithDB(), engine.se, "select * from t1", nil,
+				engine.lvschema, nil, engine, RowStreamerModeSingleTable, nil, nil)
+			require.NoError(t, err)
+			t.Cleanup(rs.Cancel)
+
+			assert.Equal(t, bounds, rs.config.VStreamMemoryBounds, "the flag must reach the streamer's config")
+			ps, ok := rs.pktsize.(*dynamicPacketSizer)
+			require.True(t, ok, "dynamic packet sizing is on by default")
+			if bounds {
+				assert.Equal(t, dynamicPacketSizerMaxGrowthFactor*vttablet.VStreamerDefaultPacketSize, ps.maxSize)
+			} else {
+				assert.Zero(t, ps.maxSize, "no packet-size cap with the flag off")
+			}
+		})
+	}
+}
+
+// TestStreamRowsRejectsUnknownOverride checks that an override the source does not know fails the stream
+// with an error that names the key, instead of a nil streamer and a panic.
+func TestStreamRowsRejectsUnknownOverride(t *testing.T) {
+	options := &binlogdatapb.VStreamOptions{ConfigOverrides: map[string]string{"no-such-override": "1"}}
+	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(*binlogdatapb.VStreamRowsResponse) error {
+		return nil
+	}, options)
+	require.ErrorContains(t, err, "no-such-override")
+
+	err = engine.StreamTables(t.Context(), func(*binlogdatapb.VStreamTablesResponse) error { return nil }, options)
+	require.ErrorContains(t, err, "no-such-override")
+}
