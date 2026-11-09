@@ -18,7 +18,7 @@ package dynamic
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"strings"
 
 	"google.golang.org/grpc"
@@ -45,12 +45,12 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 		case id == "":
 			// There was a cluster spec in the metadata, but we couldn't even
 			// get an id out of it. Warn and fallback to static API.
-			log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from incoming context metadata; falling back to static API; error: %v", err))
+			log.Warn("failed to unmarshal dynamic cluster spec from incoming context metadata; falling back to static API", slog.Any("error", err))
 			return handler(srv, ss)
 		}
 
 		if err != nil {
-			log.Warn(fmt.Sprintf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err))
+			log.Warn("failed to extract valid cluster from incoming metadata; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 		}
 
 		dynamicAPI := withCluster(ss.Context(), api, c, id)
@@ -73,12 +73,12 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 		case id == "":
 			// There was a cluster spec in the metadata, but we couldn't even
 			// get an id out of it. Warn and fallback to static API.
-			log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from incoming context metadata; falling back to static API; error: %v", err))
+			log.Warn("failed to unmarshal dynamic cluster spec from incoming context metadata; falling back to static API", slog.Any("error", err))
 			return handler(ctx, req)
 		}
 
 		if err != nil {
-			log.Warn(fmt.Sprintf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err))
+			log.Warn("failed to extract valid cluster from incoming metadata; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 		}
 
 		dynamicAPI := withCluster(ctx, api, c, id)

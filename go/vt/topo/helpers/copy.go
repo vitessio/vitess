@@ -21,6 +21,7 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"google.golang.org/protobuf/proto"
 
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -48,9 +50,9 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server, parser *sqlpa
 
 		if err := toTS.CreateKeyspace(ctx, keyspace, ki.Keyspace); err != nil {
 			if topo.IsErrType(err, topo.NodeExists) {
-				log.Warn(fmt.Sprintf("keyspace %v already exists", keyspace))
+				log.Warn("keyspace already exists", slog.String("keyspace", keyspace))
 			} else {
-				log.Error(fmt.Sprintf("CreateKeyspace(%v): %v", keyspace, err))
+				log.Error("CreateKeyspace failed", slog.String("keyspace", keyspace), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}
 
@@ -59,16 +61,16 @@ func CopyKeyspaces(ctx context.Context, fromTS, toTS *topo.Server, parser *sqlpa
 		case err == nil:
 			_, err = vindexes.BuildKeyspace(ksvs.Keyspace, parser)
 			if err != nil {
-				log.Error(fmt.Sprintf("BuildKeyspace(%v): %v", keyspace, err))
+				log.Error("BuildKeyspace failed", slog.String("keyspace", keyspace), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				break
 			}
 			if err := toTS.SaveVSchema(ctx, ksvs); err != nil {
-				log.Error(fmt.Sprintf("SaveVSchema(%v): %v", keyspace, err))
+				log.Error("SaveVSchema failed", slog.String("keyspace", keyspace), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		case topo.IsErrType(err, topo.NoNode):
 			// Nothing to do.
 		default:
-			log.Error(fmt.Sprintf("GetVSchema(%v): %v", keyspace, err))
+			log.Error("GetVSchema failed", slog.String("keyspace", keyspace), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 
@@ -96,7 +98,7 @@ func CopyShards(ctx context.Context, fromTS, toTS *topo.Server) error {
 
 			if err := toTS.CreateShard(ctx, keyspace, shard); err != nil {
 				if topo.IsErrType(err, topo.NodeExists) {
-					log.Warn(fmt.Sprintf("shard %v/%v already exists", keyspace, shard))
+					log.Warn("shard already exists", slog.String("keyspace", keyspace), slog.String("shard", shard))
 				} else {
 					return fmt.Errorf("CreateShard(%v, %v): %w", keyspace, shard, err)
 				}
@@ -136,7 +138,7 @@ func CopyTablets(ctx context.Context, fromTS, toTS *topo.Server) error {
 				err = toTS.CreateTablet(ctx, ti.Tablet)
 				if topo.IsErrType(err, topo.NodeExists) {
 					// update the destination tablet
-					log.Warn(fmt.Sprintf("tablet %v already exists, updating it", tabletAlias))
+					log.Warn("tablet already exists, updating it", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)))
 					_, err = toTS.UpdateTabletFields(ctx, tabletAlias, func(t *topodatapb.Tablet) error {
 						proto.Merge(t, ti.Tablet)
 						return nil
@@ -201,7 +203,13 @@ func CopyShardReplications(ctx context.Context, fromTS, toTS *topo.Server) error
 					oldSR.Nodes = nodes
 					return nil
 				}); err != nil {
-					log.Warn(fmt.Sprintf("UpdateShardReplicationFields(%v, %v, %v): %v", cell, keyspace, shard, err))
+					log.Warn("UpdateShardReplicationFields failed",
+						slog.String("cell", cell),
+						slog.String("keyspace", keyspace),
+						slog.String("shard", shard),
+						slog.Any("error", err),
+						slog.String("error_code", vterrors.Code(err).String()),
+					)
 				}
 			}
 		}
@@ -217,7 +225,11 @@ func CopyRoutingRules(ctx context.Context, fromTS, toTS *topo.Server) error {
 		return fmt.Errorf("GetRoutingRules: %w", err)
 	}
 	if err := toTS.SaveRoutingRules(ctx, rr); err != nil {
-		log.Error(fmt.Sprintf("SaveRoutingRules(%v): %v", rr, err))
+		rules := make(map[string][]string, len(rr.GetRules()))
+		for _, r := range rr.GetRules() {
+			rules[r.FromTable] = r.ToTables
+		}
+		log.Error("SaveRoutingRules failed", slog.Any("routing_rules", rules), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 
 	return nil

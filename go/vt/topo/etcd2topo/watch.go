@@ -18,7 +18,7 @@ package etcd2topo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"path"
 	"strings"
 	"time"
@@ -116,7 +116,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 					watchCtx, watchCancel = context.WithCancel(ctx)
 					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(rev))
 					if newWatcher == nil {
-						log.Warn(fmt.Sprintf("watch %v failed and get a nil channel returned, rev: %v", nodePath, rev))
+						log.Warn("watch failed and get a nil channel returned", slog.String("path", nodePath), slog.Int64("revision", rev))
 					} else {
 						watcher = newWatcher
 					}
@@ -240,7 +240,7 @@ func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.Wa
 
 					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(rev), clientv3.WithPrefix())
 					if newWatcher == nil {
-						log.Warn(fmt.Sprintf("watch %v failed and get a nil channel returned, rev: %v", nodePath, rev))
+						log.Warn("watch failed and get a nil channel returned", slog.String("path", nodePath), slog.Int64("revision", rev))
 					} else {
 						watcher = newWatcher
 					}

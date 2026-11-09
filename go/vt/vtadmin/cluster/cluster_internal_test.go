@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vitessdriver"
@@ -382,10 +384,11 @@ func TestEmergencyFailoverShard(t *testing.T) {
 	}
 }
 
-func Test_getShardSets(t *testing.T) {
-	t.Parallel()
-
-	c := &Cluster{
+// newShardSetsTestCluster returns a cluster with keyspaces ks1 (shards -80
+// and 80-) and ks2 (shard -), and a ks3 that GetKeyspace reports as missing.
+func newShardSetsTestCluster() *Cluster {
+	return &Cluster{
+		ID: "c1",
 		Vtctld: &vtctldProxy{
 			VtctldClient: &fakevtctldclient.VtctldClient{
 				GetKeyspaceResults: map[string]struct {
@@ -463,6 +466,12 @@ func Test_getShardSets(t *testing.T) {
 		},
 		topoReadPool: pools.NewRPCPool(5, 0, nil),
 	}
+}
+
+func Test_getShardSets(t *testing.T) {
+	t.Parallel()
+
+	c := newShardSetsTestCluster()
 
 	tests := []struct {
 		name           string
@@ -521,6 +530,19 @@ func Test_getShardSets(t *testing.T) {
 			assert.Equal(t, tt.result, result)
 		})
 	}
+}
+
+func Test_getShardSetsLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	_, err := newShardSetsTestCluster().getShardSets(t.Context(), nil, []string{"ks1/80-", "ks1/c0-", "ks1/-40"})
+	require.NoError(t, err)
+
+	record := logs.Record(t, "getShardSets(): keyspace is missing specified shards in cluster")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "c1", record["cluster_id"])
+	assert.Equal(t, "ks1", record["keyspace"])
+	assert.Equal(t, []any{"-40", "c0-"}, record["shards"])
 }
 
 func TestPlannedFailoverShard(t *testing.T) {

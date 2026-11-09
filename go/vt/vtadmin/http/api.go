@@ -18,7 +18,7 @@ package http
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"net/http"
 
 	"vitess.io/vitess/go/sets"
@@ -107,7 +107,9 @@ func deprecateQueryParam(r *http.Request, newName string, oldName string) {
 	q := r.URL.Query()
 
 	if q.Has(oldName) {
-		log.Warn(fmt.Sprintf("query param %s is deprecated in favor of %s. support for %s will be dropped in the next version", oldName, newName, oldName))
+		log.Warn("query param is deprecated in favor of a new one. support for it will be dropped in the next version",
+			slog.String("query_param", oldName),
+			slog.String("new_query_param", newName))
 
 		newVals := sets.New(q[newName]...)
 		for _, oldVal := range q[oldName] {
