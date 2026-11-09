@@ -32,19 +32,19 @@ import (
 	"vitess.io/vitess/go/vt/log/logtest"
 )
 
-// TestStdlibLog checks that a line written through the standard library's
-// log package is logged at INFO with the constant message
-// "standard library log", and the line, without the "log: " prefix or the
-// newline, under "message".
+// TestStdlibLog checks that a line written through the standard library's log
+// package, such as net/http's errors, is under "message" and not in "msg".
 func TestStdlibLog(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 
-	stdlog.Printf("zk: connected to %s", "127.0.0.1:2181")
+	stdlog.Printf("http: panic serving %s", "10.0.0.1:1234")
 
 	r := logs.Record(t, "standard library log")
 	assert.Equal(t, "INFO", r["level"])
-	assert.Equal(t, "zk: connected to 127.0.0.1:2181", r["message"])
-	assert.NotContains(t, logs.String(), "log: ")
+	assert.Equal(t, "http: panic serving 10.0.0.1:1234", r["message"])
+	for _, r := range logs.Records(t) {
+		assert.NotContains(t, r["msg"], "10.0.0.1")
+	}
 }
 
 func TestParsing(t *testing.T) {

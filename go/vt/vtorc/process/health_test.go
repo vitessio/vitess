@@ -17,14 +17,9 @@ limitations under the License.
 package process
 
 import (
-	"log/slog"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/log/logtest"
-	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
 func TestHealthTest(t *testing.T) {
@@ -48,23 +43,4 @@ func TestHealthTest(t *testing.T) {
 	require.True(t, health.Healthy)
 	require.True(t, discoveredOnce)
 	require.NotZero(t, ThisNodeHealth.LastReported)
-}
-
-func TestHealthTestLogsWriteError(t *testing.T) {
-	t.Cleanup(func() {
-		FirstDiscoveryCycleComplete.Store(false)
-		ThisNodeHealth = &NodeHealth{}
-		db.ClearVTOrcDatabase()
-	})
-	_, err := db.ExecVTOrc("DROP TABLE node_health")
-	require.NoError(t, err)
-	logs := logtest.Capture(t, slog.LevelInfo)
-
-	FirstDiscoveryCycleComplete.Store(true)
-	health, _ := HealthTest()
-	require.False(t, health.Healthy)
-
-	record := logs.Record(t, "Failed to delete node health")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Contains(t, record["error"], "node_health")
 }

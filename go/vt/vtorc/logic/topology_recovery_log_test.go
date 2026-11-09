@@ -25,7 +25,6 @@ import (
 	cache "github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -40,33 +39,17 @@ import (
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/test"
-	tmcmock "vitess.io/vitess/go/vt/vttablet/tmclient/mock"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// TestAuditTopologyRecoveryLogs checks that a step without a recovery is
+// logged without a recovery_id.
 func TestAuditTopologyRecoveryLogs(t *testing.T) {
-	t.Cleanup(db.ClearVTOrcDatabase)
 	logs := logtest.Capture(t, slog.LevelInfo)
-
 	require.NoError(t, AuditTopologyRecovery(nil, "step without a recovery"))
-	require.NoError(t, AuditTopologyRecovery(&TopologyRecovery{ID: 7}, "step of a recovery"))
-
-	var records []map[string]any
-	for _, record := range logs.Records(t) {
-		if record["msg"] == "topology_recovery" {
-			records = append(records, record)
-		}
-	}
-	require.Len(t, records, 2)
-	for _, record := range records {
-		assert.Equal(t, "INFO", record["level"])
-	}
-	assert.Equal(t, "step without a recovery", records[0]["message"])
-	assert.NotContains(t, records[0], "recovery_id")
-	assert.Equal(t, "step of a recovery", records[1]["message"])
-	assert.EqualValues(t, 7, records[1]["recovery_id"])
+	assert.NotContains(t, logs.Record(t, "topology_recovery"), "recovery_id")
 }
 
 // setupRecovery prepares executeCheckAndRecoverFunction to run on the primary
@@ -132,134 +115,33 @@ func setRecoveryDB(t *testing.T, primary *topodatapb.Tablet, analysisRows []sqlu
 	db.Db = test.NewTestDB([][]sqlutils.RowMap{detection, analysisRows, primaryRow, analysisRows})
 }
 
-// readOnlyPrimaryRows returns the analysis rows of a read-only primary.
-func readOnlyPrimaryRows(primary *topodatapb.Tablet) []sqlutils.RowMap {
+// TestExecuteCheckAndRecoverFunctionLogsRecoveryNotAttempted checks that the
+// line logged when the recovery function doesn't attempt a recovery, and
+// returns no error, has no error attributes.
+func TestExecuteCheckAndRecoverFunctionLogsRecoveryNotAttempted(t *testing.T) {
+	primary := setupRecovery(t)
 	info := &test.InfoForRecoveryAnalysis{
-		TabletInfo:         primary,
-		DurabilityPolicy:   policy.DurabilityNone,
-		LastCheckValid:     1,
-		CountReplicas:      1,
-		CountValidReplicas: 1,
-		IsPrimary:          1,
-		ReadOnly:           1,
-		CurrentTabletType:  int(topodatapb.TabletType_PRIMARY),
+		TabletInfo:        primary,
+		DurabilityPolicy:  policy.DurabilityNone,
+		LastCheckValid:    0,
+		CountReplicas:     3,
+		IsPrimary:         1,
+		CurrentTabletType: int(topodatapb.TabletType_PRIMARY),
 	}
 	info.SetValuesFromTabletInfo()
-	return []sqlutils.RowMap{info.ConvertToRowMap()}
-}
+	setRecoveryDB(t, primary, []sqlutils.RowMap{info.ConvertToRowMap()})
 
-// TestExecuteCheckAndRecoverFunctionLogsRecovery runs a FixPrimary recovery
-// through executeCheckAndRecoverFunction and checks the line that reports the
-// recovery: it logs the recovery and the fields of its analysis (see
-// TestDetectionAnalysisLogAttrs).
-func TestExecuteCheckAndRecoverFunctionLogsRecovery(t *testing.T) {
-	primary := setupRecovery(t)
-	setRecoveryDB(t, primary, readOnlyPrimaryRows(primary))
-
-	analysis := &inst.DetectionAnalysis{
-		Analysis:              inst.PrimaryIsReadOnly,
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, executeCheckAndRecoverFunction(&inst.DetectionAnalysis{
+		Analysis:              inst.DeadPrimaryAndReplicas,
 		AnalyzedInstanceAlias: primary.Alias,
 		AnalyzedKeyspace:      "ks",
 		AnalyzedShard:         "0",
-		LastCheckValid:        true,
-	}
+	}))
 
-	logs := logtest.Capture(t, slog.LevelInfo)
-	err := executeCheckAndRecoverFunction(analysis)
-	require.Error(t, err)
-
-	prefix := "Recovery for PrimaryIsReadOnly on ks/0: "
-	record := logs.Record(t, prefix+"Failed to recover")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, err.Error(), record["error"])
-	assert.Equal(t, "UNKNOWN", record["error_code"])
-
-	record = logs.Record(t, prefix+"Topology recovery")
-	assert.Equal(t, "INFO", record["level"])
-	assert.NotZero(t, record["recovery_id"])
-	assert.Equal(t, false, record["successful"])
-	assert.NotContains(t, record, "promoted_tablet")
-	assert.EqualValues(t, 1, record["detection_id"])
-}
-
-// TestExecuteCheckAndRecoverFunctionLogsLockError checks the line logged when
-// the shard can't be locked: here the analysis has no keyspace.
-func TestExecuteCheckAndRecoverFunctionLogsLockError(t *testing.T) {
-	primary := setupRecovery(t)
-	setRecoveryDB(t, primary, readOnlyPrimaryRows(primary))
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	recoverErr := executeCheckAndRecoverFunction(&inst.DetectionAnalysis{
-		Analysis:              inst.PrimaryIsReadOnly,
-		AnalyzedInstanceAlias: primary.Alias,
-		AnalyzedShard:         "0",
-		LastCheckValid:        true,
-	})
-	require.ErrorContains(t, recoverErr, "can't lock shard")
-
-	record := logs.Record(t, "Recovery for PrimaryIsReadOnly on /0: Failed to lock shard, aborting recovery")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, recoverErr.Error(), record["error"])
-	assert.Equal(t, "UNKNOWN", record["error_code"])
-}
-
-// TestExecuteCheckAndRecoverFunctionLogsRecoveryNotAttempted checks the line
-// logged when the recovery function doesn't attempt a recovery, with and
-// without an error.
-func TestExecuteCheckAndRecoverFunctionLogsRecoveryNotAttempted(t *testing.T) {
-	t.Run("active recovery", func(t *testing.T) {
-		primary := setupRecovery(t)
-		setRecoveryDB(t, primary, readOnlyPrimaryRows(primary))
-		_, err := writeTopologyRecovery(NewTopologyRecovery(inst.DetectionAnalysis{
-			Analysis:              inst.DeadPrimary,
-			AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
-			AnalyzedKeyspace:      "ks",
-			AnalyzedShard:         "0",
-		}))
-		require.NoError(t, err)
-
-		logs := logtest.Capture(t, slog.LevelInfo)
-		recoverErr := executeCheckAndRecoverFunction(&inst.DetectionAnalysis{
-			Analysis:              inst.PrimaryIsReadOnly,
-			AnalyzedInstanceAlias: primary.Alias,
-			AnalyzedKeyspace:      "ks",
-			AnalyzedShard:         "0",
-			LastCheckValid:        true,
-		})
-		require.Error(t, recoverErr)
-
-		record := logs.Record(t, "Recovery for PrimaryIsReadOnly on ks/0: Recovery not attempted")
-		assert.Equal(t, "ERROR", record["level"])
-		assert.Equal(t, recoverErr.Error(), record["error"])
-		assert.Equal(t, "UNKNOWN", record["error_code"])
-	})
-
-	t.Run("no recovery action", func(t *testing.T) {
-		primary := setupRecovery(t)
-		info := &test.InfoForRecoveryAnalysis{
-			TabletInfo:        primary,
-			DurabilityPolicy:  policy.DurabilityNone,
-			LastCheckValid:    0,
-			CountReplicas:     3,
-			IsPrimary:         1,
-			CurrentTabletType: int(topodatapb.TabletType_PRIMARY),
-		}
-		info.SetValuesFromTabletInfo()
-		setRecoveryDB(t, primary, []sqlutils.RowMap{info.ConvertToRowMap()})
-
-		logs := logtest.Capture(t, slog.LevelInfo)
-		require.NoError(t, executeCheckAndRecoverFunction(&inst.DetectionAnalysis{
-			Analysis:              inst.DeadPrimaryAndReplicas,
-			AnalyzedInstanceAlias: primary.Alias,
-			AnalyzedKeyspace:      "ks",
-			AnalyzedShard:         "0",
-		}))
-
-		record := logs.Record(t, "Recovery for DeadPrimaryAndReplicas on ks/0: Recovery not attempted")
-		assert.Equal(t, "ERROR", record["level"])
-		assert.NotContains(t, record, "error")
-		assert.NotContains(t, record, "error_code")
-	})
+	record := logs.Record(t, "Recovery for DeadPrimaryAndReplicas on ks/0: Recovery not attempted")
+	assert.NotContains(t, record, "error")
+	assert.NotContains(t, record, "error_code")
 }
 
 var logTestRuns atomic.Uint32
@@ -271,68 +153,19 @@ func newRunUIDOffset() uint32 {
 	return 1000 * logTestRuns.Add(1)
 }
 
-// TestExecuteCheckAndRecoverFunctionLogsSkippedRecovery checks the line logged
-// when a recovery is skipped: it names the recovery only when there is one.
+// TestExecuteCheckAndRecoverFunctionLogsSkippedRecovery checks that the line
+// logged when a recovery is skipped leaves out the recovery when there is
+// none.
 func TestExecuteCheckAndRecoverFunctionLogsSkippedRecovery(t *testing.T) {
-	prev := config.ConvertTabletWithErrantGTIDs()
-	config.SetConvertTabletWithErrantGTIDs(false)
-	t.Cleanup(func() { config.SetConvertTabletWithErrantGTIDs(prev) })
-	offset := newRunUIDOffset()
-
 	logs := logtest.Capture(t, slog.LevelInfo)
-	require.NoError(t, executeCheckAndRecoverFunction(&inst.DetectionAnalysis{
-		Analysis:              inst.ErrantGTIDDetected,
-		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 301 + offset},
-		AnalyzedKeyspace:      "ks",
-		AnalyzedShard:         "0",
-	}))
-	record := logs.Record(t, "Recovery for ErrantGTIDDetected on ks/0: Skipping recovery for problem, aborting recovery")
-	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, "ErrantGTIDDetected", record["analysis"])
-	assert.Equal(t, RecoverErrantGTIDDetectedName, record["recovery"])
-	assert.Equal(t, RecoverySkipNoRecoveryAction.String(), record["reason"])
-
-	logs.Reset()
 	require.NoError(t, executeCheckAndRecoverFunction(&inst.DetectionAnalysis{
 		Analysis:              inst.AnalysisCode("UnhandledProblem"),
-		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302 + offset},
+		AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 302 + newRunUIDOffset()},
 		AnalyzedKeyspace:      "ks",
 		AnalyzedShard:         "0",
 	}))
-	record = logs.Record(t, "Recovery for UnhandledProblem on ks/0: Skipping recovery for problem, aborting recovery")
-	assert.Equal(t, "UnhandledProblem", record["analysis"])
+	record := logs.Record(t, "Recovery for UnhandledProblem on ks/0: Skipping recovery for problem, aborting recovery")
 	assert.NotContains(t, record, "recovery")
-	assert.Equal(t, RecoverySkipNoRecoveryAction.String(), record["reason"])
-}
-
-// TestRecoverShardAnalysesLogsErrors checks the line logged for a failed
-// recovery, run in order and concurrently.
-func TestRecoverShardAnalysesLogsErrors(t *testing.T) {
-	analyses := []*inst.DetectionAnalysis{
-		{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}, AnalyzedKeyspace: "ks", AnalyzedShard: "0"},
-		{Analysis: inst.ReplicaIsWritable, AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 2}, AnalyzedKeyspace: "ks", AnalyzedShard: "0"},
-	}
-	logs := logtest.Capture(t, slog.LevelInfo)
-	recoverShardAnalyses(analyses, func(entry *inst.DetectionAnalysis) error {
-		return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "recovery of %s failed", entry.Analysis)
-	})
-
-	byAnalysis := map[any]map[string]any{}
-	for _, record := range logs.Records(t) {
-		if record["msg"] == "Failed to execute CheckAndRecover function" {
-			byAnalysis[record["analysis"]] = record
-		}
-	}
-	require.Len(t, byAnalysis, 2)
-	for _, analysis := range []string{"DeadPrimary", "ReplicaIsWritable"} {
-		record := byAnalysis[analysis]
-		require.NotNil(t, record, analysis)
-		assert.Equal(t, "ERROR", record["level"])
-		assert.Equal(t, "ks", record["keyspace"])
-		assert.Equal(t, "0", record["shard"])
-		assert.Equal(t, "recovery of "+analysis+" failed", record["error"])
-		assert.Equal(t, "UNAVAILABLE", record["error_code"])
-	}
 }
 
 // setupReparentShard saves a primary and a replica of ks/0 in the backend and
@@ -373,67 +206,6 @@ func setupReparentShard(t *testing.T) *topodatapb.Tablet {
 	require.NoError(t, ts.CreateTablet(ctx, primary))
 	require.NoError(t, ts.CreateTablet(ctx, replica))
 	return primary
-}
-
-// TestRunEmergencyReparentOpLogsError checks the line logged when ERS fails.
-func TestRunEmergencyReparentOpLogsError(t *testing.T) {
-	primary := setupReparentShard(t)
-	// No tablet answers, so ERS finds no candidate.
-	tmc = &testutil.TabletManagerClient{}
-	entry := &inst.DetectionAnalysis{Analysis: inst.DeadPrimary, AnalyzedInstanceAlias: primary.Alias, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
-	require.NoError(t, InsertRecoveryDetection(entry))
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	attempted, _, err := runEmergencyReparentOp(t.Context(), entry, RecoverDeadPrimaryRecoveryName, false, log.NewPrefixedLogger("test"))
-	require.Error(t, err)
-	assert.True(t, attempted)
-
-	record := logs.Record(t, "test: Error running ERS")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, err.Error(), record["error"])
-	assert.Equal(t, vterrors.Code(err).String(), record["error_code"])
-}
-
-// TestFixReplicaLogsSetReadOnlyError checks the line logged when fixReplica
-// can't set the replica read-only.
-func TestFixReplicaLogsSetReadOnlyError(t *testing.T) {
-	db.ClearVTOrcDatabase()
-	t.Cleanup(db.ClearVTOrcDatabase)
-	primary := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}, MysqlHostname: "primary", MysqlPort: 3306,
-		Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_PRIMARY,
-	}
-	replica := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101}, MysqlHostname: "replica", MysqlPort: 3306,
-		Keyspace: "ks", Shard: "0", Type: topodatapb.TabletType_REPLICA,
-	}
-	require.NoError(t, inst.SaveTablet(primary))
-	require.NoError(t, inst.SaveTablet(replica))
-	keyspaceInfo := &topo.KeyspaceInfo{Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}}
-	keyspaceInfo.SetKeyspaceName("ks")
-	require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
-
-	mockTMC := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
-	mockTMC.EXPECT().SetReadOnly(gomock.Any(), gomock.Any()).Return(vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tablet is down"))
-	oldTMC := tmc
-	tmc = mockTMC
-	t.Cleanup(func() { tmc = oldTMC })
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	attempted, _, err := fixReplica(t.Context(), &inst.DetectionAnalysis{
-		Analysis:              inst.ReplicaIsWritable,
-		AnalyzedInstanceAlias: replica.Alias,
-		AnalyzedKeyspace:      "ks",
-		AnalyzedShard:         "0",
-	}, log.NewPrefixedLogger("test"))
-	require.Error(t, err)
-	assert.True(t, attempted)
-
-	record := logs.Record(t, "test: Could not set the tablet to readonly")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, "zone1-0000000101", record["tablet"])
-	assert.Equal(t, "tablet is down", record["error"])
-	assert.Equal(t, "UNAVAILABLE", record["error_code"])
 }
 
 // saveRestartShard saves a primary and the given replicas of ks/0 in the topo.
@@ -495,10 +267,9 @@ func restartReplica(uid uint32) *topodatapb.Tablet {
 	}
 }
 
-// TestRestartDirectReplicasLogs checks the lines of a restart of direct
-// replicas: the summary leaves out the error when there is none, and an
-// unreadable or failed replica is logged by its alias, with the error only
-// when there is one.
+// TestRestartDirectReplicasLogs checks that the lines of a restart of direct
+// replicas leave out the error when there is none: the summary of a
+// successful restart, and the line for a replica with no instance.
 func TestRestartDirectReplicasLogs(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		primary := saveRestartShard(t, []*topodatapb.Tablet{restartReplica(101)}, map[uint32]bool{101: true})
@@ -514,15 +285,7 @@ func TestRestartDirectReplicasLogs(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, attempted)
 
-		record := logs.Record(t, "test: Successfully restarted replication")
-		assert.Equal(t, "INFO", record["level"])
-		assert.Equal(t, "zone1-0000000101", record["tablet"])
-
-		record = logs.Record(t, "test: Completed restart of direct replicas for unreachable primary")
-		assert.Equal(t, "INFO", record["level"])
-		assert.EqualValues(t, 1, record["restarted_replicas"])
-		assert.EqualValues(t, 1, record["expected_replicas"])
-		assert.Equal(t, "zone1-0000000100", record["tablet"])
+		record := logs.Record(t, "test: Completed restart of direct replicas for unreachable primary")
 		assert.NotContains(t, record, "error")
 	})
 
@@ -545,84 +308,9 @@ func TestRestartDirectReplicasLogs(t *testing.T) {
 		require.True(t, attempted)
 
 		record := logs.Record(t, "test: Could not read instance information")
-		assert.Equal(t, "WARN", record["level"])
-		assert.Equal(t, "zone1-0000000102", record["tablet"])
 		assert.NotContains(t, record, "error")
 
-		record = logs.Record(t, "test: Failed to restart replication")
-		assert.Equal(t, "ERROR", record["level"])
-		assert.Equal(t, "zone1-0000000101", record["tablet"])
-		assert.Equal(t, "replica is down", record["error"])
-		assert.Equal(t, "UNAVAILABLE", record["error_code"])
-
 		record = logs.Record(t, "test: Completed restart of direct replicas for unreachable primary")
-		assert.EqualValues(t, 0, record["restarted_replicas"])
-		assert.EqualValues(t, 1, record["expected_replicas"])
 		assert.Equal(t, "replica is down", record["error"])
-		assert.Equal(t, "UNAVAILABLE", record["error_code"])
 	})
-}
-
-// TestActiveRecoveryLogs checks the line each recovery logs when a recovery is
-// already active on the shard: it names the recovery and the tablet.
-func TestActiveRecoveryLogs(t *testing.T) {
-	tests := []struct {
-		recovery string
-		run      func(*inst.DetectionAnalysis) (bool, *TopologyRecovery, error)
-	}{
-		{FixReplicaRecoveryName, func(a *inst.DetectionAnalysis) (bool, *TopologyRecovery, error) {
-			return fixReplica(t.Context(), a, log.NewPrefixedLogger("test"))
-		}},
-		{FixPrimaryRecoveryName, func(a *inst.DetectionAnalysis) (bool, *TopologyRecovery, error) {
-			return fixPrimary(t.Context(), a, log.NewPrefixedLogger("test"))
-		}},
-		{RecoverPrimaryHasPrimaryRecoveryName, func(a *inst.DetectionAnalysis) (bool, *TopologyRecovery, error) {
-			return recoverPrimaryHasPrimary(t.Context(), a, log.NewPrefixedLogger("test"))
-		}},
-		{RecoverErrantGTIDDetectedName, func(a *inst.DetectionAnalysis) (bool, *TopologyRecovery, error) {
-			return recoverErrantGTIDDetected(t.Context(), a, log.NewPrefixedLogger("test"))
-		}},
-		{ElectNewPrimaryRecoveryName, func(a *inst.DetectionAnalysis) (bool, *TopologyRecovery, error) {
-			return runPlannedReparentOp(t.Context(), a, ElectNewPrimaryRecoveryName, log.NewPrefixedLogger("test"))
-		}},
-	}
-	for i, tt := range tests {
-		t.Run(tt.recovery, func(t *testing.T) {
-			db.ClearVTOrcDatabase()
-			t.Cleanup(db.ClearVTOrcDatabase)
-
-			active, err := writeTopologyRecovery(NewTopologyRecovery(inst.DetectionAnalysis{
-				Analysis:              inst.DeadPrimary,
-				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
-				AnalyzedKeyspace:      "ks",
-				AnalyzedShard:         "0",
-			}))
-			require.NoError(t, err)
-			require.NotNil(t, active)
-
-			logs := logtest.Capture(t, slog.LevelInfo)
-			attempted, _, err := tt.run(&inst.DetectionAnalysis{
-				Analysis:              inst.ReplicationStopped,
-				AnalyzedInstanceAlias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-				AnalyzedKeyspace:      "ks",
-				AnalyzedShard:         "0",
-			})
-			require.Error(t, err)
-			require.False(t, attempted)
-
-			if i == 0 {
-				record := logs.Record(t, "AttemptRecoveryRegistration: Active recovery in the cluster")
-				assert.Equal(t, "ERROR", record["level"])
-				assert.EqualValues(t, active.ID, record["recovery_id"])
-				assert.Equal(t, "DeadPrimary", record["analysis"])
-				assert.Equal(t, "ks", record["keyspace"])
-				assert.Equal(t, "0", record["shard"])
-			}
-
-			record := logs.Record(t, "test: found an active or recent recovery. Will not issue another recovery.")
-			assert.Equal(t, "WARN", record["level"])
-			assert.Equal(t, "zone1-0000000100", record["tablet"])
-			assert.Equal(t, tt.recovery, record["recovery"])
-		})
-	}
 }

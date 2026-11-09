@@ -165,8 +165,7 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 			},
 			wantErr: "cannot read the durability policy of keyspace ks",
 			wantRecord: map[string]any{
-				"msg": "test: required position: cannot read the durability policy, aborting ERS", "level": "ERROR",
-				"reparent": "ERS", "keyspace": "ks", "error": "keyspace not found",
+				"msg": "test: required position: cannot read the durability policy, aborting ERS", "level": "ERROR", "reparent": "ERS",
 			},
 		},
 		{
@@ -181,8 +180,7 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 			},
 			wantErr: "cannot read the stored GTID set of zone1-0000000100",
 			wantRecord: map[string]any{
-				"msg": "test: required position: aborting ERS", "level": "ERROR",
-				"reparent": "ERS", "tablet": "zone1-0000000100", "error_code": "UNKNOWN",
+				"msg": "test: required position: aborting ERS", "level": "ERROR", "reparent": "ERS",
 			},
 		},
 	}

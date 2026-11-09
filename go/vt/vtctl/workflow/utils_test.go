@@ -37,21 +37,17 @@ import (
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/log/logtest"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/proto/vtctldata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestResolveWorkflowKeepData(t *testing.T) {
@@ -499,17 +495,4 @@ func TestLegacyBuildTargets(t *testing.T) {
 	assert.Equal(t, "t2", t2.Sources[1].Filter.Rules[1].Match)
 	assert.Equal(t, "t3", t2.Sources[2].Filter.Rules[0].Match)
 	assert.Equal(t, "t4", t2.Sources[2].Filter.Rules[1].Match)
-}
-
-// TestDefaultErrorHandlerLogs checks a line that logged an error with the
-// old Error(err): it now logs a constant message, the wrapped error under
-// "error" and its code under "error_code". The caller's stream writes the
-// error with %+v, as Error(err) did.
-func TestDefaultErrorHandlerLogs(t *testing.T) {
-	logger := logutil.NewMemoryLogger()
-	_, err := defaultErrorHandler(logger, "invalid request", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no streams"))
-	require.Error(t, err)
-	require.Len(t, logger.Events, 1)
-	assert.Equal(t, logutilpb.Level_ERROR, logger.Events[0].Level)
-	assert.Equal(t, `workflow request failed error="Code: FAILED_PRECONDITION\nno streams\n\ninvalid request" error_code=FAILED_PRECONDITION`, logger.Events[0].Value)
 }

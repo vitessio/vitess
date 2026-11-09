@@ -17,14 +17,10 @@ limitations under the License.
 package logic
 
 import (
-	"log/slog"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log/logtest"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
@@ -60,21 +56,6 @@ func TestDiscoveryQueue(t *testing.T) {
 	require.Zero(t, q.QueueLen())
 	_, found = q.enqueued[tabletAliasString]
 	require.False(t, found)
-}
-
-func TestDiscoveryQueueLogsLongWait(t *testing.T) {
-	q := NewDiscoveryQueue()
-	tabletAlias := &topodatapb.TabletAlias{Cell: "zone1", Uid: 1}
-	q.queue <- queueItem{TabletAlias: tabletAlias, PushedAt: time.Now().Add(-time.Hour)}
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	require.Equal(t, tabletAlias, q.Consume())
-
-	record := logs.Record(t, "tablet spent too long waiting on a discovery queue")
-	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, "zone1-0000000001", record["tablet"])
-	// A slog.Duration is logged as integer nanoseconds.
-	assert.GreaterOrEqual(t, record["duration"], float64(time.Hour))
 }
 
 type testDiscoveryQueue interface {

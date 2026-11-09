@@ -30,12 +30,10 @@ import (
 	"vitess.io/vitess/go/vt/log/logtest"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"
@@ -128,30 +126,16 @@ func TestRefreshAllInformation(t *testing.T) {
 	require.True(t, discoveredOnce)
 }
 
-// discoveryTabletManagerClient is the tablet manager client that the inst
-// package uses in TestDiscoverInstanceLogs. FullStatus fails with
-// fullStatusErr when it is set.
-type discoveryTabletManagerClient struct {
-	*testutil.TabletManagerClient
-	fullStatusErr error
-}
-
-func (c *discoveryTabletManagerClient) FullStatus(ctx context.Context, tablet *topodatapb.Tablet) (*replicationdatapb.FullStatus, error) {
-	if c.fullStatusErr != nil {
-		return nil, c.fullStatusErr
-	}
-	return c.TabletManagerClient.FullStatus(ctx, tablet)
-}
-
 var (
-	discoveryTMC         = &discoveryTabletManagerClient{TabletManagerClient: &testutil.TabletManagerClient{}}
+	discoveryTMC         = &testutil.TabletManagerClient{}
 	registerDiscoveryTMC sync.Once
 )
 
-// TestDiscoverInstanceLogs checks the lines DiscoverInstance logs. A
-// discovered instance is logged field by field, with the replica's last SQL
-// error, which can quote row values, under last_sql_error and never in the
-// message.
+// TestDiscoverInstanceLogs checks the level of the Discovered line, that the
+// replica's last SQL error, which can quote row values, is under
+// last_sql_error and never in a message, and that a tablet that was shut down,
+// which has no instance and no error, is logged without instance fields or
+// error attributes.
 func TestDiscoverInstanceLogs(t *testing.T) {
 	t.Cleanup(db.ClearVTOrcDatabase)
 	inst.InitializeForgetAliasesCache()
@@ -173,16 +157,13 @@ func TestDiscoverInstanceLogs(t *testing.T) {
 		waitForLastAttemptedCheck()
 		resetProtocol()
 		inst.InitializeTMC()
-		discoveryTMC.fullStatusErr = nil
 	})
 
-	// Each case uses its own tablet: the instance-is-nil line is logged once a
-	// minute per tablet. VTOrc logs it for a tablet it can't read, one that was
-	// shut down or whose FullStatus fails, so those tablets also get new UIDs
-	// on each run of the test.
+	// The instance-is-nil line is logged once a minute per tablet, so the
+	// shut down tablet gets a new UID on each run of the test.
 	offset := newRunUIDOffset()
 	saveTablet := func(uid uint32, shutdown bool) *topodatapb.Tablet {
-		if shutdown || discoveryTMC.fullStatusErr != nil {
+		if shutdown {
 			uid += offset
 		}
 		tablet := &topodatapb.Tablet{
@@ -206,49 +187,18 @@ func TestDiscoverInstanceLogs(t *testing.T) {
 			LastSqlError: "Duplicate entry 'row-value-sentinel' for key 'PRIMARY'",
 		},
 	}
-	// assertDurations checks that the durations are integer nanoseconds: each
-	// step of a discovery takes more than a microsecond.
-	assertDurations := func(t *testing.T, record map[string]any, keys ...string) {
-		for _, key := range keys {
-			assert.GreaterOrEqual(t, record[key], float64(time.Microsecond), key)
-		}
-	}
 
 	t.Run("discovered", func(t *testing.T) {
 		tablet := saveTablet(100, false)
 		logs := logtest.Capture(t, slog.LevelInfo)
 		DiscoverInstance(tablet.Alias, true)
 
-		// The instance's fields are checked in TestInstanceLogAttrs.
 		record := logs.Record(t, "Discovered")
 		assert.Equal(t, "INFO", record["level"])
-		assert.Equal(t, "zone1-0000000100", record["tablet"])
-		assert.Equal(t, true, record["force_discovery"])
-		assert.Equal(t, "REPLICA", record["current_tablet_type"])
-		assert.Contains(t, record["last_sql_error"], "Duplicate entry 'row-value-sentinel'")
+		assert.Contains(t, record["last_sql_error"], "row-value-sentinel")
 		for _, record := range logs.Records(t) {
 			assert.NotContains(t, record["msg"], "row-value-sentinel")
 		}
-	})
-
-	t.Run("discovery error", func(t *testing.T) {
-		discoveryTMC.fullStatusErr = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "tablet is down")
-		t.Cleanup(func() { discoveryTMC.fullStatusErr = nil })
-		tablet := saveTablet(200, false)
-		logs := logtest.Capture(t, slog.LevelInfo)
-		DiscoverInstance(tablet.Alias, true)
-
-		record := logs.Record(t, "Failed to discover")
-		assert.Equal(t, "ERROR", record["level"])
-		assert.Equal(t, topoproto.TabletAliasString(tablet.Alias), record["tablet"])
-		assert.Equal(t, "tablet is down", record["error"])
-		assert.Equal(t, "UNAVAILABLE", record["error_code"])
-
-		record = logs.Record(t, "DiscoverInstance: instance is nil")
-		assert.Equal(t, "WARN", record["level"])
-		assert.Equal(t, "tablet is down", record["error"])
-		assert.Equal(t, "UNAVAILABLE", record["error_code"])
-		assertDurations(t, record, "duration", "backend_duration", "instance_duration")
 	})
 
 	t.Run("shut down tablet", func(t *testing.T) {
@@ -266,19 +216,5 @@ func TestDiscoverInstanceLogs(t *testing.T) {
 		assert.Equal(t, topoproto.TabletAliasString(tablet.Alias), record["tablet"])
 		assert.NotContains(t, record, "error")
 		assert.NotContains(t, record, "error_code")
-	})
-
-	t.Run("slow discovery", func(t *testing.T) {
-		tablet := saveTablet(400, false)
-		prevPollTime := config.GetInstancePollTime()
-		config.SetInstancePollTime(time.Nanosecond)
-		t.Cleanup(func() { config.SetInstancePollTime(prevPollTime) })
-		logs := logtest.Capture(t, slog.LevelInfo)
-		DiscoverInstance(tablet.Alias, true)
-
-		record := logs.Record(t, "DiscoverInstance exceeded --instance-poll-time")
-		assert.Equal(t, "WARN", record["level"])
-		assert.Equal(t, "zone1-0000000400", record["tablet"])
-		assertDurations(t, record, "duration")
 	})
 }

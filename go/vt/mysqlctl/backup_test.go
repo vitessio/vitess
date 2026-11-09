@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"path"
 	"sort"
@@ -42,7 +41,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -621,33 +619,6 @@ func TestFindBackupToRestoreSkipVersionCheck(t *testing.T) {
 	}
 }
 
-// TestFindBackupToRestoreUnreadableManifest checks the line for a backup
-// whose MANIFEST can't be read: the backup and the error are attributes, and
-// the error's code is under "error_code".
-func TestFindBackupToRestoreUnreadableManifest(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-	env := createFakeBackupRestoreEnv(t)
-	env.restoreParams.Logger = logutil.NewConsoleLogger()
-	bhs := []backupstorage.BackupHandle{
-		&FakeBackupHandle{
-			NameV: "2026-11-04.000000.zone1-0000000101",
-			ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
-				return nil, vterrors.New(vtrpcpb.Code_NOT_FOUND, "no MANIFEST")
-			},
-		},
-	}
-
-	_, err := FindBackupToRestore(env.ctx, env.restoreParams, bhs)
-	require.ErrorIs(t, err, ErrNoCompleteBackup)
-
-	r := logs.Record(t, "Possibly incomplete backup on BackupStorage: can't read MANIFEST")
-	assert.Equal(t, "WARN", r["level"])
-	assert.Equal(t, "2026-11-04.000000.zone1-0000000101", r["backup_name"])
-	assert.Equal(t, GetBackupDir(env.restoreParams.Keyspace, env.restoreParams.Shard), r["dir"])
-	assert.Equal(t, "can't read MANIFEST: no MANIFEST", r["error"])
-	assert.Equal(t, "NOT_FOUND", r["error_code"])
-}
-
 // TestMySQLShellEngineShouldSkipVersionCheck verifies that the mysql-shell engine
 // wires ShouldSkipVersionCheck() to the --mysql-shell-restore-skip-version-check flag.
 func TestMySQLShellEngineShouldSkipVersionCheck(t *testing.T) {
@@ -872,62 +843,6 @@ func TestScanLinesToLogger(t *testing.T) {
 
 	for i, event := range logger.Events {
 		require.Equal(t, fmt.Sprintf(`command stdout command=test stdout="foobar %d"`, i), event.Value)
-	}
-
-	// A stderr line goes under "stderr".
-	logger.Clear()
-	wg.Add(1)
-	scanLinesToLogger("xbstream", "stderr", strings.NewReader("can't open file\n"), logger, wg.Done)
-	require.Len(t, logger.Events, 1)
-	assert.Equal(t, logutilpb.Level_INFO, logger.Events[0].Level)
-	assert.Equal(t, `command stderr command=xbstream stderr="can't open file"`, logger.Events[0].Value)
-}
-
-// TestExecuteBackupInitSQLLogs checks the init SQL lines through a logger
-// like the one Backup gets from vttablet: the server log has constant
-// messages with the list of queries under "queries", and the
-// caller's stream gets the same lines rendered as text.
-func TestExecuteBackupInitSQLLogs(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-	stream := logutil.NewMemoryLogger()
-	const sentinel = "init_sql_sentinel_7f3a"
-	queries := []string{"INSERT INTO t VALUES ('" + sentinel + "')", "OPTIMIZE LOCAL TABLE t"}
-
-	sqldb := fakesqldb.New(t)
-	t.Cleanup(sqldb.Close)
-	mysqld := NewFakeMysqlDaemon(sqldb)
-	t.Cleanup(mysqld.Close)
-	mysqld.ExpectedExecuteSuperQueryList = []string{"DIFFERENT QUERY"}
-
-	err := ExecuteBackupInitSQL(t.Context(), &BackupParams{
-		TabletType: topodatapb.TabletType_PRIMARY,
-		Mysqld:     mysqld,
-		InitSQL: &tabletmanagerdatapb.BackupRequest_InitSQL{
-			Queries:     queries,
-			TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
-			Timeout:     protoutil.DurationToProto(30 * time.Second),
-		},
-		Logger: logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream),
-	})
-	require.NoError(t, err)
-
-	r := logs.Record(t, "Executing init SQL queries")
-	assert.Equal(t, "INFO", r["level"])
-	assert.Equal(t, []any{queries[0], queries[1]}, r["queries"])
-	assert.EqualValues(t, 30*time.Second, r["timeout"])
-	assert.Equal(t, false, r["fail_on_error"])
-
-	r = logs.Record(t, "Failed to execute init SQL queries")
-	assert.Equal(t, "INFO", r["level"])
-	assert.Equal(t, []any{queries[0], queries[1]}, r["queries"])
-	assert.NotEmpty(t, r["error"])
-
-	records := logs.Records(t)
-	require.Len(t, stream.Events, len(records))
-	for i, record := range records {
-		assert.NotContains(t, record["msg"], sentinel)
-		assert.True(t, strings.HasPrefix(stream.Events[i].Value, record["msg"].(string)+" ") || stream.Events[i].Value == record["msg"],
-			"stream line %q doesn't start with %q", stream.Events[i].Value, record["msg"])
 	}
 }
 

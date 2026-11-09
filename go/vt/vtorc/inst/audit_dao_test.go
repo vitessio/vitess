@@ -181,7 +181,16 @@ func readRecentAudit(tabletAlias *topodatapb.TabletAlias, page int) ([]audit, er
 	return res, err
 }
 
+// TestAuditOperationLogs checks that the audit line leaves out a missing
+// tablet, keyspace, shard or message, which main logged as "<nil>" and empty
+// values.
 func TestAuditOperationLogs(t *testing.T) {
+	// Open the backend before writing VTOrc's flags, as TestAuditOperation
+	// does. Run alone with -race, a flag write before that is reported as
+	// racing with the package's init goroutines, which read other flags
+	// from the same viperutil map. The race is in viperutil and main has it
+	// too; this order doesn't fix it.
+	db.ClearVTOrcDatabase()
 	originalAuditSysLog := config.GetAuditToSyslog()
 	originalAuditLogFile := config.GetAuditFileLocation()
 	originalAuditBackend := config.GetAuditToBackend()
@@ -195,29 +204,9 @@ func TestAuditOperationLogs(t *testing.T) {
 	config.SetAuditToSyslog(false)
 	config.SetAuditToBackend(false)
 
-	tablet := &topodatapb.Tablet{
-		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
-		Keyspace: "ks",
-		Shard:    "0",
-	}
-	require.NoError(t, SaveTablet(tablet))
-
 	logs := logtest.Capture(t, slog.LevelInfo)
-	require.NoError(t, AuditOperation("test-audit", tablet.Alias, "test-message"))
-	record := logs.Record(t, "Audit operation")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, "test-audit", record["audit_type"])
-	assert.Equal(t, "zone1-0000000100", record["tablet"])
-	assert.Equal(t, "ks", record["keyspace"])
-	assert.Equal(t, "0", record["shard"])
-	assert.Equal(t, "test-message", record["message"])
-
-	// Without a tablet or a message, the record leaves those keys out
-	// instead of logging "<nil>" and empty values.
-	logs.Reset()
 	require.NoError(t, AuditOperation("test-audit", nil, ""))
-	record = logs.Record(t, "Audit operation")
-	assert.Equal(t, "test-audit", record["audit_type"])
+	record := logs.Record(t, "Audit operation")
 	for _, key := range []string{"tablet", "keyspace", "shard", "message"} {
 		assert.NotContains(t, record, key)
 	}

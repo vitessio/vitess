@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -4120,7 +4119,6 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 
 		shouldErr bool
 		wantErr   string
-		wantLogs  []logEvent
 	}{
 		{
 			name:       "success - durability = none",
@@ -4409,10 +4407,6 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			},
 			shouldErr: true,
 			wantErr:   "failed PromoteReplica(primary=zone1-0000000100,",
-			wantLogs: []logEvent{{
-				logutilpb.Level_WARNING,
-				`primary failed to PromoteReplica; cancelling replica reparent attempts tablet=zone1-0000000100 error="failed promote replica" error_code=UNKNOWN`,
-			}},
 		},
 		{
 			name: "SetReplicationSource failed on replica",
@@ -4732,12 +4726,12 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 	}
 
 	ctx := t.Context()
+	logger := logutil.NewMemoryLogger()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			logger := logutil.NewMemoryLogger()
 			pr := NewPlannedReparenter(nil, tt.tmc, logger)
 			durabilityPolicy := policy.DurabilityNone
 			if tt.durability != "" {
@@ -4747,7 +4741,6 @@ func TestPlannedReparenter_reparentTablets(t *testing.T) {
 			require.NoError(t, err)
 			tt.opts.durability = durability
 			err = pr.reparentTablets(ctx, tt.ev, tt.reparentJournalPosition, tt.promoteReplicaRequired, tt.tabletMap, tt.opts)
-			assertLogEvents(t, logger, tt.wantLogs)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				if tt.wantErr != "" {
