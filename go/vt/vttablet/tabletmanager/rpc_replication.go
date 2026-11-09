@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -161,8 +160,9 @@ func (tm *TabletManager) warnManagedReplicationDeprecation(ctx context.Context) 
 		log.Warn("failed to get MySQL GTID mode while checking the managed-tablet replication deprecation", slog.Any("error", err))
 		return
 	}
-	gtidMode = strings.TrimSpace(gtidMode)
-	if gtidMode == "" || strings.EqualFold(gtidMode, "ON") {
+	// MariaDB reports an empty gtid_mode without an error, so a MariaDB tablet
+	// whose version lookup failed must not use up the warn-once guard here.
+	if gtidMode == "" || gtidMode == "ON" {
 		return
 	}
 

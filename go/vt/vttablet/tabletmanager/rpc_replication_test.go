@@ -1683,6 +1683,13 @@ func TestManagedFilePositionDeprecationWarning(t *testing.T) {
 			gtidModeErr:           assert.AnError,
 			expectedGTIDModeCalls: 2,
 		},
+		{
+			// MariaDB's gtidMode returns an empty value with no error.
+			name:                  "empty GTID mode does not use up the warning guard",
+			version:               "Ver 8.0.35",
+			gtidMode:              "",
+			expectedGTIDModeCalls: 2,
+		},
 	}
 
 	for _, tt := range tests {
