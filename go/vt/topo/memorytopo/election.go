@@ -18,7 +18,7 @@ package memorytopo
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"path"
 
 	"vitess.io/vitess/go/vt/log"
@@ -108,7 +108,7 @@ func (mp *cLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	go func() {
 		<-mp.stop
 		if err := ld.Unlock(context.Background()); err != nil {
-			log.Error(fmt.Sprintf("failed to unlock LockDescriptor %v: %v", electionPath, err))
+			log.Error("failed to unlock LockDescriptor", slog.String("path", electionPath), slog.Any("error", err))
 		}
 		lockCancel()
 		close(mp.done)
