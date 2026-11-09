@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -2570,6 +2572,130 @@ func TestPlannedReparenter_performPotentialPromotion(t *testing.T) {
 	}
 }
 
+// callRecordingTMC records the DemotePrimary and PromoteReplica calls, so that a test can assert that
+// PlannedReparentShard did not change which tablet is the primary.
+type callRecordingTMC struct {
+	tmclient.TabletManagerClient
+
+	mu       sync.Mutex
+	demoted  []string
+	promoted []string
+}
+
+func newCallRecordingTMC(tmc tmclient.TabletManagerClient) *callRecordingTMC {
+	return &callRecordingTMC{TabletManagerClient: tmc}
+}
+
+func (c *callRecordingTMC) DemotePrimary(ctx context.Context, tablet *topodatapb.Tablet, force bool) (*replicationdatapb.PrimaryStatus, error) {
+	c.mu.Lock()
+	c.demoted = append(c.demoted, topoproto.TabletAliasString(tablet.Alias))
+	c.mu.Unlock()
+
+	return c.TabletManagerClient.DemotePrimary(ctx, tablet, force)
+}
+
+func (c *callRecordingTMC) PromoteReplica(ctx context.Context, tablet *topodatapb.Tablet, semiSync bool) (string, error) {
+	c.mu.Lock()
+	c.promoted = append(c.promoted, topoproto.TabletAliasString(tablet.Alias))
+	c.mu.Unlock()
+
+	return c.TabletManagerClient.PromoteReplica(ctx, tablet, semiSync)
+}
+
+func (c *callRecordingTMC) demotedAliases() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return append([]string(nil), c.demoted...)
+}
+
+func (c *callRecordingTMC) promotedAliases() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	return append([]string(nil), c.promoted...)
+}
+
+func assertNoPrimaryChangingCalls(t *testing.T, tmc tmclient.TabletManagerClient) {
+	t.Helper()
+
+	rec := tmc.(*callRecordingTMC)
+	assert.Empty(t, rec.demotedAliases(), "no tablet may be demoted when PRS refuses")
+	assert.Empty(t, rec.promotedAliases(), "no tablet may be promoted when PRS refuses")
+}
+
+func restoreTestAlias(uid uint32) *topodatapb.TabletAlias {
+	return &topodatapb.TabletAlias{Cell: "zone1", Uid: uid}
+}
+
+func restoreTestTablet(uid uint32, tabletType topodatapb.TabletType) *topodatapb.Tablet {
+	tablet := &topodatapb.Tablet{
+		Alias:    restoreTestAlias(uid),
+		Type:     tabletType,
+		Keyspace: "testkeyspace",
+		Shard:    "-",
+	}
+	if tabletType == topodatapb.TabletType_PRIMARY {
+		tablet.PrimaryTermStartTime = &vttime.Time{Seconds: 1000}
+	}
+
+	return tablet
+}
+
+// restoreTestShard returns a shard whose record names the tablet with the given uid as its primary, and
+// says that it has had a primary term, which is what makes PRS treat a missing PRIMARY tablet as "no clear
+// primary" and not as a shard that was never initialized.
+func restoreTestShard(primaryUID uint32) []*vtctldatapb.Shard {
+	return []*vtctldatapb.Shard{{
+		Keyspace: "testkeyspace",
+		Name:     "-",
+		Shard: &topodatapb.Shard{
+			IsPrimaryServing:     true,
+			PrimaryAlias:         restoreTestAlias(primaryUID),
+			PrimaryTermStartTime: &vttime.Time{Seconds: 1000},
+		},
+	}}
+}
+
+func restoreTestStatusVars(aliases ...string) map[string]struct {
+	Statuses map[string]string
+	Error    error
+} {
+	results := make(map[string]struct {
+		Statuses map[string]string
+		Error    error
+	}, len(aliases))
+	for _, alias := range aliases {
+		results[alias] = struct {
+			Statuses map[string]string
+			Error    error
+		}{Statuses: map[string]string{InnodbBufferPoolsDataVar: "123"}}
+	}
+
+	return results
+}
+
+// restoreTestDemotePosition is the position that a demoted tablet reports.
+const restoreTestDemotePosition = "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-10"
+
+func restoreTestDemoteResults(aliases ...string) map[string]struct {
+	Status *replicationdatapb.PrimaryStatus
+	Error  error
+} {
+	results := make(map[string]struct {
+		Status *replicationdatapb.PrimaryStatus
+		Error  error
+	}, len(aliases))
+	for _, alias := range aliases {
+		results[alias] = struct {
+			Status *replicationdatapb.PrimaryStatus
+			Error  error
+		}{Status: &replicationdatapb.PrimaryStatus{Position: restoreTestDemotePosition}}
+	}
+
+	return results
+}
+
 func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 	t.Parallel()
 
@@ -2588,6 +2714,8 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 		shouldErr        bool
 		errShouldContain string
 		expectedEvent    *events.Reparent
+		// assertTMC, when set, is called after reparentShardLocked returns, to check what it asked the tablets to do.
+		assertTMC func(t *testing.T, tmc tmclient.TabletManagerClient)
 	}{
 		{
 			name: "success: current primary cannot be determined", // "Case (1)"
@@ -3416,6 +3544,161 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			errShouldContain: "primary zone1-0000000100 is not equal to expected alias zone1-0000000200",
 			expectedEvent:    nil,
 		},
+		{
+			// A primary that restarted on an empty data directory is RESTORE while the shard record still names it.
+			// Without a PRIMARY tablet, PRS takes the no-clear-primary path, which compares the positions of the
+			// tablets that are left. The restoring primary is the one tablet that may hold transactions that no
+			// other tablet has, so PRS must leave the failover to EmergencyReparentShard.
+			name: "refuses: the shard primary is restoring from a backup and there is no clear primary",
+			tmc: newCallRecordingTMC(&testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: restoreTestStatusVars("zone1-0000000200", "zone1-0000000300"),
+				DemotePrimaryResults:       restoreTestDemoteResults("zone1-0000000200", "zone1-0000000300"),
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{"zone1-0000000200": {Result: "reparent journal position"}},
+				PopulateReparentJournalResults: map[string]error{"zone1-0000000200": nil},
+				SetReplicationSourceResults:    map[string]error{"zone1-0000000300": nil},
+			}),
+			shards: restoreTestShard(100),
+			tablets: []*topodatapb.Tablet{
+				restoreTestTablet(100, topodatapb.TabletType_RESTORE),
+				restoreTestTablet(200, topodatapb.TabletType_REPLICA),
+				restoreTestTablet(300, topodatapb.TabletType_REPLICA),
+			},
+			ev:               &events.Reparent{},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			opts:             PlannedReparentOptions{NewPrimaryAlias: restoreTestAlias(200)},
+			shouldErr:        true,
+			errShouldContain: "zone1-0000000100 is restoring from a backup",
+			assertTMC:        assertNoPrimaryChangingCalls,
+		},
+		{
+			// The restoring tablet here is a replica, which is the case PRS has to keep working for: it has no
+			// transactions of its own to preserve, and it must not hold up the reparent for the hours that a
+			// restore can take.
+			name: "success: a restoring replica is skipped when there is no clear primary",
+			tmc: newCallRecordingTMC(&testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: restoreTestStatusVars("zone1-0000000100", "zone1-0000000200"),
+				DemotePrimaryResults:       restoreTestDemoteResults("zone1-0000000100", "zone1-0000000200"),
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{"zone1-0000000200": {Result: "reparent journal position"}},
+				PopulateReparentJournalResults: map[string]error{"zone1-0000000200": nil},
+				SetReplicationSourceResults:    map[string]error{"zone1-0000000100": nil},
+			}),
+			shards: restoreTestShard(100),
+			tablets: []*topodatapb.Tablet{
+				restoreTestTablet(100, topodatapb.TabletType_REPLICA),
+				restoreTestTablet(200, topodatapb.TabletType_REPLICA),
+				restoreTestTablet(300, topodatapb.TabletType_RESTORE),
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts:     PlannedReparentOptions{NewPrimaryAlias: restoreTestAlias(200)},
+			assertTMC: func(t *testing.T, tmc tmclient.TabletManagerClient) {
+				rec := tmc.(*callRecordingTMC)
+				assert.ElementsMatch(t, []string{"zone1-0000000100", "zone1-0000000200"}, rec.demotedAliases(), "the restoring tablet must not be asked to demote")
+				assert.Equal(t, []string{"zone1-0000000200"}, rec.promotedAliases())
+			},
+		},
+		{
+			// Only a primary that is RESTORE is refused. A shard record that names a tablet which no longer exists
+			// is not a restore in progress, and PRS has always been able to recover from it.
+			name: "success: the tablet that the shard record names as primary was deleted",
+			tmc: newCallRecordingTMC(&testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: restoreTestStatusVars("zone1-0000000200", "zone1-0000000300"),
+				DemotePrimaryResults:       restoreTestDemoteResults("zone1-0000000200", "zone1-0000000300"),
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{"zone1-0000000200": {Result: "reparent journal position"}},
+				PopulateReparentJournalResults: map[string]error{"zone1-0000000200": nil},
+				SetReplicationSourceResults:    map[string]error{"zone1-0000000300": nil},
+			}),
+			shards: restoreTestShard(100),
+			tablets: []*topodatapb.Tablet{
+				restoreTestTablet(200, topodatapb.TabletType_REPLICA),
+				restoreTestTablet(300, topodatapb.TabletType_REPLICA),
+			},
+			ev:       &events.Reparent{},
+			keyspace: "testkeyspace",
+			shard:    "-",
+			opts:     PlannedReparentOptions{NewPrimaryAlias: restoreTestAlias(200)},
+			assertTMC: func(t *testing.T, tmc tmclient.TabletManagerClient) {
+				assert.Equal(t, []string{"zone1-0000000200"}, tmc.(*callRecordingTMC).promotedAliases())
+			},
+		},
+		{
+			// PRS only demotes and promotes tablets that it can reach, and a restoring tablet's MySQL is not
+			// serving. An explicit --new-primary bypasses the replica-only election filter, so the tablet has to
+			// be refused here, before the other tablets are demoted.
+			name: "refuses: the requested primary-elect is restoring and there is no clear primary",
+			tmc: newCallRecordingTMC(&testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: restoreTestStatusVars("zone1-0000000100", "zone1-0000000200"),
+				DemotePrimaryResults:       restoreTestDemoteResults("zone1-0000000100", "zone1-0000000200"),
+			}),
+			shards: restoreTestShard(100),
+			tablets: []*topodatapb.Tablet{
+				restoreTestTablet(100, topodatapb.TabletType_REPLICA),
+				restoreTestTablet(200, topodatapb.TabletType_REPLICA),
+				restoreTestTablet(300, topodatapb.TabletType_RESTORE),
+			},
+			ev:               &events.Reparent{},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			opts:             PlannedReparentOptions{NewPrimaryAlias: restoreTestAlias(300)},
+			shouldErr:        true,
+			errShouldContain: "zone1-0000000300 is restoring from a backup",
+			assertTMC:        assertNoPrimaryChangingCalls,
+		},
+		{
+			// The fake answers every call that PRS makes when it goes ahead, so that without the refusal the
+			// healthy primary is demoted and the restoring tablet is promoted.
+			name: "refuses: the requested primary-elect is restoring and the primary is healthy",
+			tmc: newCallRecordingTMC(&testutil.TabletManagerClient{
+				GetGlobalStatusVarsResults: restoreTestStatusVars("zone1-0000000100", "zone1-0000000200"),
+				DemotePrimaryResults:       restoreTestDemoteResults("zone1-0000000100", "zone1-0000000200"),
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {Position: "position1"},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000100": nil,
+					"zone1-0000000200": nil,
+					"zone1-0000000300": nil,
+				},
+				WaitForPositionResults: map[string]map[string]error{
+					"zone1-0000000300": {restoreTestDemotePosition: nil},
+				},
+				PromoteReplicaResults: map[string]struct {
+					Result string
+					Error  error
+				}{
+					"zone1-0000000300": {Result: "position2"},
+				},
+				PopulateReparentJournalResults: map[string]error{"zone1-0000000300": nil},
+				SetReadWriteResults:            map[string]error{"zone1-0000000300": nil},
+			}),
+			shards: restoreTestShard(100),
+			tablets: []*topodatapb.Tablet{
+				restoreTestTablet(100, topodatapb.TabletType_PRIMARY),
+				restoreTestTablet(200, topodatapb.TabletType_REPLICA),
+				restoreTestTablet(300, topodatapb.TabletType_RESTORE),
+			},
+			ev:               &events.Reparent{},
+			keyspace:         "testkeyspace",
+			shard:            "-",
+			opts:             PlannedReparentOptions{NewPrimaryAlias: restoreTestAlias(300)},
+			shouldErr:        true,
+			errShouldContain: "zone1-0000000300 is restoring from a backup",
+			assertTMC:        assertNoPrimaryChangingCalls,
+		},
 	}
 
 	logger := logutil.NewMemoryLogger()
@@ -3460,6 +3743,9 @@ func TestPlannedReparenter_reparentShardLocked(t *testing.T) {
 			pr := NewPlannedReparenter(ts, tt.tmc, logger)
 
 			err := pr.reparentShardLocked(ctx, tt.ev, tt.keyspace, tt.shard, tt.opts)
+			if tt.assertTMC != nil {
+				tt.assertTMC(t, tt.tmc)
+			}
 			if tt.shouldErr {
 				assert.Error(t, err)
 				assert.ErrorContains(t, err, tt.errShouldContain)
