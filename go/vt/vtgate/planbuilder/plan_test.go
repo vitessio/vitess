@@ -124,6 +124,20 @@ func (s *planTestSuite) TestPlan() {
 	s.testFile("cte_cases.json", vw, false)
 }
 
+func (s *planTestSuite) TestReferenceUnionLookupMissUsesFallbackRoute() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("select id from ref union all select id from music where id = 1", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	lookup, ok := plan.Instructions.(*engine.VindexLookup)
+	s.Require().True(ok)
+	s.Require().True(lookup.SendTo.NoRoutesSpecialHandling)
+}
+
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
 func (s *planTestSuite) TestForeignKeyPlanning() {
 	env := vtenv.NewTestEnv()

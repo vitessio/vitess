@@ -2295,14 +2295,12 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "(0|1) ASC",
-        "ResultColumns": 1,
+        "OrderBy": "0 ASC",
         "Inputs": [
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "0",
-              "1"
+              "0"
             ],
             "Inputs": [
               {
@@ -2312,8 +2310,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select 3, weight_string(3) from dual where 1 != 1",
-                "Query": "select id, weight_string(id) from `user` union select 3, weight_string(3) from dual"
+                "FieldQuery": "select id from `user` where 1 != 1 union select 3 from dual where 1 != 1",
+                "Query": "select id from `user` union select 3 from dual"
               }
             ]
           }
@@ -2334,15 +2332,14 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "(0|2) ASC",
+        "OrderBy": "0 ASC",
         "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "(0:3)",
-              "(1:4)",
-              "2"
+              "(0:2)",
+              "(1:3)"
             ],
             "Inputs": [
               {
@@ -2352,8 +2349,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, id, weight_string(id), weight_string(id), weight_string(id) from `user` where 1 != 1 union select id, bar, weight_string(id), weight_string(id), weight_string(bar) from user_extra where 1 != 1",
-                "Query": "select id, id, weight_string(id), weight_string(id), weight_string(id) from `user` union select id, bar, weight_string(id), weight_string(id), weight_string(bar) from user_extra"
+                "FieldQuery": "select id, id, weight_string(id), weight_string(id) from `user` where 1 != 1 union select id, bar, weight_string(id), weight_string(bar) from user_extra where 1 != 1",
+                "Query": "select id, id, weight_string(id), weight_string(id) from `user` union select id, bar, weight_string(id), weight_string(bar) from user_extra"
               }
             ]
           }
@@ -3460,6 +3457,169 @@
       },
       "TablesUsed": [
         "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "ordered UNION ALL applies the upper limit after ordering",
+    "query": "select id from user union all select id from unsharded order by id limit 5",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user union all select id from unsharded order by id limit 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "0 ASC",
+            "ResultColumns": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, id, weight_string(id) from `user` where 1 != 1",
+                    "OrderBy": "(1|2) ASC",
+                    "Query": "select id, id, weight_string(id) from `user` order by id asc limit :__upper_limit"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select id from unsharded where 1 != 1",
+                    "Query": "select id from unsharded order by id asc limit :__upper_limit"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "outer DISTINCT over UNION ALL does not cap arms before deduplication",
+    "query": "select distinct id from (select id from user union all select id from unsharded) t limit 5",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select distinct id from (select id from user union all select id from unsharded) t limit 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:1)"
+            ],
+            "ResultColumns": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  ":0 as id",
+                  "weight_string(id) as weight_string(id)"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Concatenate",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id from `user` where 1 != 1",
+                        "Query": "select id from `user`"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Unsharded",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select id from unsharded where 1 != 1",
+                        "Query": "select id from unsharded"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "UNION sort defers unknown collation resolution to result fields",
+    "query": "select 'All' as name from unsharded union all select name from user order by name",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select 'All' as name from unsharded union all select name from user order by name",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "0 ASC",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 'All' as `name` from unsharded where 1 != 1",
+                "Query": "select 'All' as `name` from unsharded"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name` from `user` where 1 != 1",
+                "Query": "select `name` from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
         "user.user"
       ]
     },

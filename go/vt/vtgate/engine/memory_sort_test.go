@@ -29,6 +29,32 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
+func TestMemorySortResolvesUnknownOrderCollationFromFields(t *testing.T) {
+	field := &querypb.Field{Name: "name", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)}
+	sort := &MemorySort{OrderBy: evalengine.Comparison{{Col: 0, Type: evalengine.NewUnknownType()}}}
+
+	sort.resolveUnknownOrderTypes([]*querypb.Field{field})
+
+	require.Equal(t, evalengine.NewTypeFromField(field), sort.OrderBy[0].Type)
+}
+
+func TestMemorySortUsesUnionResultCollation(t *testing.T) {
+	fields := []*querypb.Field{{Name: "name", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)}}
+	input := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "All", "Mango", "apple", "Zed")}}
+	sort := &MemorySort{
+		Input:   input,
+		OrderBy: evalengine.Comparison{{Col: 0, Type: evalengine.NewUnknownType(), WeightStringCol: -1, CollationEnv: collations.MySQL8()}},
+	}
+
+	result, err := sort.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	var got []string
+	for _, row := range result.Rows {
+		got = append(got, row[0].ToString())
+	}
+	require.Equal(t, []string{"All", "apple", "Mango", "Zed"}, got)
+}
+
 func TestMemorySortExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"c1|c2",

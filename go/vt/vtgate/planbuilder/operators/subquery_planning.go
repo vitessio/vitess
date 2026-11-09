@@ -766,7 +766,7 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 
 	// we can merge dual-outer subqueries only if the
 	// inner is guaranteed to hit a single shard
-	case inRoute.IsSingleShard() &&
+	case inRoute.IsSingleShard() && len(joinPredicates) == 0 &&
 		(outer == dual || (outer == anyShard && sameKeyspace)):
 		return m.merge(ctx, inRoute, outRoute, inRouting)
 

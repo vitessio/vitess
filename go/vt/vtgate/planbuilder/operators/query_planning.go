@@ -19,6 +19,7 @@ package operators
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 
 	"vitess.io/vitess/go/slice"
@@ -579,6 +580,10 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		debugNoRewrite("limit push blocked: upper limit already set")
 		return in, NoRewrite
 	}
+	if hasDistinctUnion(in.Source) {
+		debugNoRewrite("limit push blocked: distinct union needs all arm rows")
+		return in, NoRewrite
+	}
 	in.Pushed = true
 	visitor := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		return op, NoRewrite
@@ -628,6 +633,11 @@ func findOrderingInSourceChain(op Operator) []OrderBy {
 			order = append([]OrderBy(nil), src.Order...)
 		case *Window:
 			return order
+		case *Union:
+			if src.distinct {
+				return nil
+			}
+			return order
 		case *Route:
 			return nil
 		}
@@ -637,6 +647,23 @@ func findOrderingInSourceChain(op Operator) []OrderBy {
 		}
 		op = inputs[0]
 	}
+}
+
+func hasDistinctUnion(op Operator) bool {
+	switch op := op.(type) {
+	case *Distinct:
+		if containsUnionAll(op.Source) {
+			return true
+		}
+	}
+	return slices.ContainsFunc(op.Inputs(), hasDistinctUnion)
+}
+
+func containsUnionAll(op Operator) bool {
+	if union, ok := op.(*Union); ok && !union.distinct {
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), containsUnionAll)
 }
 
 func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, *ApplyResult) {

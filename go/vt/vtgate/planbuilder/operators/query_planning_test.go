@@ -253,3 +253,19 @@ func TestTryPushDistinctWithWindow(t *testing.T) {
 		})
 	}
 }
+
+func TestUpperLimitAcrossUnion(t *testing.T) {
+	t.Run("ordered UNION ALL carries order to each arm", func(t *testing.T) {
+		order := []OrderBy{{SimplifiedExpr: sqlparser.NewColName("id")}}
+		op := &Ordering{unaryOperator: newUnaryOp(&Union{}), Order: order}
+		assert.Equal(t, order, findOrderingInSourceChain(op))
+	})
+
+	t.Run("outer DISTINCT over UNION ALL keeps all arm rows", func(t *testing.T) {
+		limit := newLimit(newDistinct(&Union{}, nil, true), &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, true)
+		result, rewrite := setUpperLimit(limit)
+		assert.Same(t, limit, result)
+		assert.Equal(t, NoRewrite, rewrite)
+		assert.False(t, limit.Pushed)
+	})
+}
