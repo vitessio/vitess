@@ -19,11 +19,13 @@ package srvtopo
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type queryEntry struct {
@@ -107,7 +109,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 		go func() {
 			defer func() {
 				if err := recover(); err != nil {
-					log.Error(fmt.Sprintf("ResilientQuery uncaught panic, cell :%v, err :%v)", key, err))
+					log.Error("ResilientQuery uncaught panic", keyAttrs(wkey, slog.Any("panic", err))...)
 				}
 			}()
 
@@ -131,15 +133,20 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 				entry.value = result
 			} else {
 				q.counts.Add(errorCategory, 1)
+				attrs := keyAttrs(wkey,
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()))
 				if entry.insertionTime.IsZero() {
-					log.Error(fmt.Sprintf("ResilientQuery(%v, %v) failed: %v (no cached value, caching and returning error)", ctx, wkey, err))
+					log.Error("ResilientQuery failed (no cached value, caching and returning error)", attrs...)
 				} else if newCtx.Err() == context.DeadlineExceeded {
-					log.Error(fmt.Sprintf("ResilientQuery(%v, %v) failed: %v (request timeout), (keeping cached value: %v)", ctx, wkey, err, entry.value))
+					log.Error("ResilientQuery failed (request timeout), keeping cached value",
+						append(attrs, cachedValueAttr(entry.value))...)
 				} else if entry.value != nil && time.Since(entry.insertionTime) < q.cacheTTL {
 					q.counts.Add(cachedCategory, 1)
-					log.Warn(fmt.Sprintf("ResilientQuery(%v, %v) failed: %v (cached value still considered valid: %v)", ctx, wkey, err, entry.value))
+					log.Warn("ResilientQuery failed (cached value still considered valid)",
+						append(attrs, cachedValueAttr(entry.value))...)
 				} else {
-					log.Error(fmt.Sprintf("ResilientQuery(%v, %v) failed: %v (cached value expired, keeping cached value)", ctx, wkey, err))
+					log.Error("ResilientQuery failed (cached value expired, keeping cached value)", attrs...)
 				}
 			}
 
@@ -174,4 +181,13 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 	}
 
 	return entry.value, nil
+}
+
+// cachedValueAttr logs a cached value. A nil list of names logs as an
+// empty list, not null.
+func cachedValueAttr(value any) slog.Attr {
+	if names, ok := value.([]string); ok && names == nil {
+		value = []string{}
+	}
+	return slog.Any("cached_value", value)
 }

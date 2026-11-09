@@ -18,10 +18,14 @@ package vterrors
 
 import (
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 const (
@@ -82,7 +86,20 @@ func TestLastErrorRepeatedError(t *testing.T) {
 
 	// same error happens after maxTimeInError, so it should retry
 	time.Sleep(longWait)
+	logs := logtest.Capture(t, slog.LevelInfo)
 	require.False(t, le.ShouldRetry())
 	le.Record(err1)
 	require.True(t, le.ShouldRetry())
+
+	record := logs.Record(t, "the same error was encountered continuously, it is now assumed to be unrecoverable; any affected operations will need to be manually restarted once the error has been addressed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "test", record["last_error_name"])
+	assert.Equal(t, "error1", record["error"])
+	firstSeen, err := time.Parse(time.RFC3339Nano, record["first_seen"].(string))
+	require.NoError(t, err)
+	assert.Equal(t, time.UTC, firstSeen.Location())
+
+	record = logs.Record(t, "Resetting firstSeen, since it is too long since the last one")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "test", record["last_error_name"])
 }

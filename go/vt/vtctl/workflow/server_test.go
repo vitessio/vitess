@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sort"
 	"strings"
@@ -31,11 +32,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/prototext"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/ptr"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
@@ -43,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -1542,6 +1546,19 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		query:  "/select val from _vt.resharding_journal.*",
 		result: &querypb.QueryResult{},
 	}
+	// The journal that an earlier attempt at switching writes created.
+	journal, err := prototext.Marshal(&binlogdatapb.Journal{
+		Id:            1,
+		MigrationType: binlogdatapb.MigrationType_TABLES,
+		Tables:        []string{tableName},
+	})
+	require.NoError(t, err)
+	journalExistsQR := &queryResult{
+		query: "/select val from _vt.resharding_journal.*",
+		result: sqltypes.ResultToProto3(sqltypes.MakeTestResult([]*querypb.Field{
+			{Name: "val", Type: querypb.Type_BLOB},
+		}, string(journal))),
+	}
 	lockTableQR := &queryResult{
 		query:  fmt.Sprintf("LOCK TABLES `%s` READ", tableName),
 		result: &querypb.QueryResult{},
@@ -1595,12 +1612,40 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		return false
 	}
 
+	// For the cases that initialize sequences, the target table uses one in
+	// an unsharded sequence keyspace, whose vschema doesn't define it yet.
+	sequenceKeyspaceName := "global-ks"
+	sequenceTableName := "t1_seq"
+	sequenceTabletUID := 300
+	setUpSequence := func(t *testing.T, env *testEnv, sequence string) {
+		err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+			Name: targetKeyspaceName,
+			Keyspace: &vschemapb.Keyspace{
+				Sharded:  true,
+				Vindexes: map[string]*vschemapb.Vindex{"hash": {Type: "hash"}},
+				Tables: map[string]*vschemapb.Table{
+					tableName: {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{Column: "id", Name: "hash"}},
+						AutoIncrement:  &vschemapb.AutoIncrement{Column: "id", Sequence: sequence},
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+		env.addTablet(t, ctx, sequenceTabletUID, sequenceKeyspaceName, "0", topodatapb.TabletType_PRIMARY, true)
+		require.NoError(t, env.ts.RebuildSrvVSchema(ctx, nil))
+	}
+
 	testcases := []struct {
 		name                           string
 		sourceKeyspace, targetKeyspace *testKeyspace
 		req                            *vtctldatapb.WorkflowSwitchTrafficRequest
 		multiTenant                    bool
 		preFunc                        func(env *testEnv)
+		// setUp, when set, runs after preFunc.
+		setUp func(t *testing.T, env *testEnv)
+		// check, when set, runs after the switch, whether or not it failed.
+		check func(t *testing.T, env *testEnv, err error)
 		// expectQueries, when set, replaces the default expected queries.
 		expectQueries func(env *testEnv, source, target *testKeyspace)
 		want          *vtctldatapb.WorkflowSwitchTrafficResponse
@@ -1608,6 +1653,9 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 		// wantCanceled means that the failed switch must have been canceled,
 		// leaving writes on the source.
 		wantCanceled bool
+		// wantRefreshWarnings means that the forced partial refreshes of the
+		// failing source and target tablets must be logged.
+		wantRefreshWarnings bool
 	}{
 		{
 			name: "basic forward",
@@ -1629,6 +1677,241 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
 				StartState:   "Reads Not Switched. Writes Not Switched",
 				CurrentState: "All Reads Switched. Writes Switched",
+			},
+		},
+		{
+			name: "forward with sequence initialization",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:                  targetKeyspaceName,
+				Workflow:                  workflowName,
+				Direction:                 int32(DirectionForward),
+				TabletTypes:               allTabletTypes,
+				InitializeTargetSequences: true,
+			},
+			setUp: func(t *testing.T, env *testEnv) {
+				setUpSequence(t, env, fmt.Sprintf("`%s`.`%s`", sequenceKeyspaceName, sequenceTableName))
+				// VTGate uses the table names in a vschema as they are, so
+				// this entry, whose name is in backticks, doesn't define the
+				// backing table.
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+					Name: sequenceKeyspaceName,
+					Keyspace: &vschemapb.Keyspace{Tables: map[string]*vschemapb.Table{
+						fmt.Sprintf("`%s`", sequenceTableName): {Type: "sequence"},
+					}},
+				})
+				require.NoError(t, err)
+				// The target shards report different maxima, and the highest
+				// one initializes the sequence.
+				for i, maxValue := range []int64{5, 7} {
+					env.tmc.expectGetMaxValueForSequencesRequest(uint32(startingTargetTabletUID+i*tabletUIDStep), &getMaxValueForSequencesRequestResponse{
+						req: &tabletmanagerdatapb.GetMaxValueForSequencesRequest{
+							Sequences: []*tabletmanagerdatapb.GetMaxValueForSequencesRequest_SequenceMetadata{{
+								BackingTableName:        sequenceTableName,
+								UsingColEscaped:         "`id`",
+								UsingTableNameEscaped:   fmt.Sprintf("`%s`", tableName),
+								UsingTableDbNameEscaped: fmt.Sprintf("`vt_%s`", targetKeyspaceName),
+							}},
+						},
+						res: &tabletmanagerdatapb.GetMaxValueForSequencesResponse{
+							MaxValuesBySequenceTable: map[string]int64{sequenceTableName: maxValue},
+						},
+					})
+				}
+				env.tmc.expectUpdateSequenceTablesRequest(uint32(sequenceTabletUID), &tabletmanagerdatapb.UpdateSequenceTablesRequest{
+					Sequences: []*tabletmanagerdatapb.UpdateSequenceTablesRequest_SequenceMetadata{{
+						BackingTableName:   sequenceTableName,
+						BackingTableDbName: "vt_" + sequenceKeyspaceName,
+						MaxValue:           7,
+					}},
+				})
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "Reads Not Switched. Writes Not Switched",
+				CurrentState: "All Reads Switched. Writes Switched",
+			},
+			check: func(t *testing.T, env *testEnv, _ error) {
+				// The backing table is added to the sequence keyspace's vschema
+				// under its raw name, and the switch's routing rebuild
+				// publishes it, so VTGate resolves the target table's sequence
+				// to it.
+				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
+				require.NoError(t, err)
+				assert.Equal(t, map[string]*vschemapb.Table{
+					fmt.Sprintf("`%s`", sequenceTableName): {Type: "sequence"},
+					sequenceTableName:                      {Type: "sequence"},
+				}, kvs.Tables)
+				srvVSchema, err := env.ts.GetSrvVSchema(ctx, defaultCellName)
+				require.NoError(t, err)
+				vschema := vindexes.BuildVSchema(srvVSchema, env.ws.SQLParser())
+				targetVSchema := vschema.Keyspaces[targetKeyspaceName]
+				require.NoError(t, targetVSchema.Error)
+				usingTable := targetVSchema.Tables[tableName]
+				require.NotNil(t, usingTable)
+				require.NotNil(t, usingTable.AutoIncrement)
+				assert.Equal(t, vindexes.TypeSequence, usingTable.AutoIncrement.Sequence.Type)
+				// Both maxima were read, and the sequence was initialized.
+				env.tmc.mu.Lock()
+				defer env.tmc.mu.Unlock()
+				assert.Empty(t, env.tmc.getMaxValueForSequencesRequests)
+				assert.Empty(t, env.tmc.updateSequenceTablesRequests)
+			},
+		},
+		{
+			name: "forward with sequence initialization that fails to create the backing table",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:                  targetKeyspaceName,
+				Workflow:                  workflowName,
+				Direction:                 int32(DirectionForward),
+				TabletTypes:               allTabletTypes,
+				InitializeTargetSequences: true,
+			},
+			setUp: func(t *testing.T, env *testEnv) {
+				// No keyspace defines the unqualified sequence, so it's created
+				// in the workflow's global keyspace, which fails.
+				setUpSequence(t, env, sequenceTableName)
+				env.tmc.expectReadVReplicationWorkflowRequestOnTargetTablets(&readVReplicationWorkflowRequestResponse{
+					req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: workflowName},
+					res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+						Workflow:     workflowName,
+						WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+						Options:      fmt.Sprintf(`{"global_keyspace": %q}`, sequenceKeyspaceName),
+						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Tables:   []string{tableName},
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{{Match: tableName, Filter: "select * from " + tableName}},
+								},
+							},
+						}},
+					},
+				})
+				env.tmc.expectApplySchemaRequest(uint32(sequenceTabletUID), &applySchemaRequestResponse{
+					matchSqlOnly: true,
+					change:       &tmutils.SchemaChange{SQL: fmt.Sprintf("/create table if not exists `%s`", sequenceTableName)},
+					err:          errors.New("create failed"),
+				})
+			},
+			// Only the queries that switching reads runs, and the journal check
+			// of switching writes, as the failure comes before switching writes
+			// runs any other.
+			expectQueries: func(env *testEnv, source, target *testKeyspace) {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, copyTableQR)
+				// Switching reads and switching writes each check the journal.
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalQR)
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalQR)
+			},
+			wantErr: true,
+			check: func(t *testing.T, env *testEnv, err error) {
+				require.ErrorContains(t, err, fmt.Sprintf("failed to prepare the sequences used in the %s keyspace", targetKeyspaceName))
+				require.ErrorContains(t, err, "create failed")
+				// The switch failed before writes stopped, so the source still
+				// takes them, and nothing was added to a vschema.
+				si, err := env.ts.GetShard(ctx, sourceKeyspaceName, "0")
+				require.NoError(t, err)
+				assert.False(t, hasDeniedTableEntry(si))
+				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
+				require.NoError(t, err)
+				assert.Empty(t, kvs.Tables)
+				env.tmc.mu.Lock()
+				defer env.tmc.mu.Unlock()
+				assert.Empty(t, env.tmc.applySchemaRequests[uint32(sequenceTabletUID)])
+				for tabletID, queries := range env.tmc.vrQueries {
+					assert.Empty(t, queries, "queries not run on tablet %d", tabletID)
+				}
+			},
+		},
+		{
+			// An earlier attempt created the journal, so this one only finishes
+			// the switch. Preparing the sequences would fail, as in the case
+			// above, but it isn't attempted.
+			name: "forward with sequence initialization after the journal was created",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:                  targetKeyspaceName,
+				Workflow:                  workflowName,
+				Direction:                 int32(DirectionForward),
+				TabletTypes:               allTabletTypes,
+				InitializeTargetSequences: true,
+			},
+			setUp: func(t *testing.T, env *testEnv) {
+				setUpSequence(t, env, sequenceTableName)
+				env.tmc.expectReadVReplicationWorkflowRequestOnTargetTablets(&readVReplicationWorkflowRequestResponse{
+					req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: workflowName},
+					res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+						Workflow:     workflowName,
+						WorkflowType: binlogdatapb.VReplicationWorkflowType_MoveTables,
+						Options:      fmt.Sprintf(`{"global_keyspace": %q}`, sequenceKeyspaceName),
+						Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+							Id: 1,
+							Bls: &binlogdatapb.BinlogSource{
+								Keyspace: sourceKeyspaceName,
+								Shard:    "0",
+								Tables:   []string{tableName},
+								Filter: &binlogdatapb.Filter{
+									Rules: []*binlogdatapb.Rule{{Match: tableName, Filter: "select * from " + tableName}},
+								},
+							},
+						}},
+					},
+				})
+				env.tmc.expectApplySchemaRequest(uint32(sequenceTabletUID), &applySchemaRequestResponse{
+					matchSqlOnly: true,
+					change:       &tmutils.SchemaChange{SQL: fmt.Sprintf("/create table if not exists `%s`", sequenceTableName)},
+					err:          errors.New("create failed"),
+				})
+			},
+			expectQueries: func(env *testEnv, source, target *testKeyspace) {
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, copyTableQR)
+				// Switching reads and switching writes each check the journal.
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalExistsQR)
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(source.KeyspaceName, journalExistsQR)
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(target.KeyspaceName, freezeWFQR)
+			},
+			want: &vtctldatapb.WorkflowSwitchTrafficResponse{
+				Summary:      fmt.Sprintf("SwitchTraffic was successful for workflow %s.%s", targetKeyspaceName, workflowName),
+				StartState:   "Reads Not Switched. Writes Not Switched",
+				CurrentState: "All Reads Switched. Writes Switched",
+			},
+			check: func(t *testing.T, env *testEnv, _ error) {
+				// The sequences weren't prepared: no backing table was created
+				// and nothing was added to a vschema.
+				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
+				require.NoError(t, err)
+				assert.Empty(t, kvs.Tables)
+				env.tmc.mu.Lock()
+				defer env.tmc.mu.Unlock()
+				assert.Len(t, env.tmc.applySchemaRequests[uint32(sequenceTabletUID)], 1)
+				// The rest of the switch ran, through freezing the workflow.
+				for tabletID, queries := range env.tmc.vrQueries {
+					assert.Empty(t, queries, "queries not run on tablet %d", tabletID)
+				}
 			},
 		},
 		{
@@ -1765,6 +2048,7 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				StartState:   "Reads Not Switched. Writes Not Switched",
 				CurrentState: "All Reads Switched. Writes Switched",
 			},
+			wantRefreshWarnings: true,
 		},
 		{
 			name: "forward with an error reading the source positions",
@@ -1857,6 +2141,9 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			if tc.preFunc != nil {
 				tc.preFunc(env)
 			}
+			if tc.setUp != nil {
+				tc.setUp(t, env)
+			}
 
 			if tc.multiTenant {
 				rwr := &readVReplicationWorkflowRequestResponse{
@@ -1894,7 +2181,11 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 				}
 			}
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			got, err := env.ws.WorkflowSwitchTraffic(ctx, tc.req)
+			if tc.check != nil {
+				defer tc.check(t, env, err)
+			}
 			if tc.wantErr {
 				require.Error(t, err)
 				if tc.wantCanceled {
@@ -1917,6 +2208,26 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
+
+			if tc.wantRefreshWarnings {
+				refreshed := make(map[string]bool)
+				for _, record := range logs.Records(t) {
+					msg := record["msg"]
+					if msg != "failed to successfully refresh all tablets in the source shard" &&
+						msg != "failed to successfully refresh all tablets in the target shard" {
+						continue
+					}
+					assert.Equal(t, "WARN", record["level"])
+					assert.Equal(t, workflowName, record["workflow"])
+					assert.Contains(t, record["partial_refresh_details"], "tablet refresh error")
+					// The refresh RPC failed but the topo read didn't, so there
+					// is no error to log.
+					assert.NotContains(t, record, "error")
+					refreshed[fmt.Sprintf("%s %s/%s", msg, record["keyspace"], record["shard"])] = true
+				}
+				assert.True(t, refreshed["failed to successfully refresh all tablets in the source shard "+sourceKeyspaceName+"/0"], refreshed)
+				assert.True(t, refreshed["failed to successfully refresh all tablets in the target shard "+targetKeyspaceName+"/-80"], refreshed)
+			}
 
 			if tc.multiTenant { // Confirm the keyspace routing rules
 				gotKrrs, err := env.ts.GetKeyspaceRoutingRules(ctx)
@@ -2245,9 +2556,26 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 		result: &querypb.QueryResult{},
 	}
 
+	// A target vschema whose table uses a qualified auto_increment sequence
+	// in an unsharded keyspace whose vschema doesn't define it yet.
+	sequenceKeyspaceName := "global-ks"
+	targetVSchemaWithSequence := &vschemapb.Keyspace{
+		Sharded: true,
+		Tables: map[string]*vschemapb.Table{
+			table1Name: {
+				AutoIncrement: &vschemapb.AutoIncrement{
+					Column:   "id",
+					Sequence: fmt.Sprintf("`%s`.`t1_seq`", sequenceKeyspaceName),
+				},
+			},
+			table2Name: {},
+		},
+	}
+
 	testcases := []struct {
 		name                           string
 		sourceKeyspace, targetKeyspace *testKeyspace
+		targetVSchema                  *vschemapb.Keyspace
 		req                            *vtctldatapb.WorkflowSwitchTrafficRequest
 		want                           []string
 	}{
@@ -2281,6 +2609,52 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position, sourceKeyspaceName, position),
 				"Wait for vreplication on stopped streams to catchup for up to 30s",
 				"Create reverse vreplication workflow " + ReverseWorkflowName(workflowName),
+				"Create journal entries on source databases",
+				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", targetKeyspaceName, tablesStr),
+				fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", sourceKeyspaceName, targetKeyspaceName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				fmt.Sprintf("Switch writes completed, freeze and delete vreplication streams on: [tablet:%d,tablet:%d]", startingTargetTabletUID, startingTargetTabletUID+tabletUIDStep),
+				fmt.Sprintf("Mark vreplication streams frozen on: [keyspace:%s;shard:-80;tablet:%d;workflow:%s;dbname:vt_%s,keyspace:%s;shard:80-;tablet:%d;workflow:%s;dbname:vt_%s]",
+					targetKeyspaceName, startingTargetTabletUID, workflowName, targetKeyspaceName, targetKeyspaceName, startingTargetTabletUID+tabletUIDStep, workflowName, targetKeyspaceName),
+				"Unlock keyspace " + targetKeyspaceName,
+				"Unlock keyspace " + sourceKeyspaceName,
+			},
+		},
+		{
+			name: "forward with sequence initialization",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			targetVSchema: targetVSchemaWithSequence,
+			req: &vtctldatapb.WorkflowSwitchTrafficRequest{
+				Keyspace:                  targetKeyspaceName,
+				Workflow:                  workflowName,
+				Direction:                 int32(DirectionForward),
+				TabletTypes:               allTabletTypes,
+				DryRun:                    true,
+				InitializeTargetSequences: true,
+			},
+			want: []string{
+				"Lock keyspace " + sourceKeyspaceName,
+				"Lock keyspace " + targetKeyspaceName,
+				fmt.Sprintf("Switch reads for tables [%s] to keyspace %s for tablet types [REPLICA,RDONLY]", tablesStr, targetKeyspaceName),
+				fmt.Sprintf("Routing rules for tables [%s] will be updated", tablesStr),
+				"Unlock keyspace " + targetKeyspaceName,
+				"Unlock keyspace " + sourceKeyspaceName,
+				"Lock keyspace " + sourceKeyspaceName,
+				"Lock keyspace " + targetKeyspaceName,
+				fmt.Sprintf("Sequence backing tables [%s.t1_seq] will be added to the vschema of their keyspace", sequenceKeyspaceName),
+				fmt.Sprintf("Stop writes on keyspace %s for tables [%s]: [keyspace:%s;shard:0;position:%s]",
+					sourceKeyspaceName, tablesStr, sourceKeyspaceName, position),
+				"Wait for vreplication on stopped streams to catchup for up to 30s",
+				"Create reverse vreplication workflow " + ReverseWorkflowName(workflowName),
+				"The following sequence backing tables used by tables being moved will be initialized:",
+				"\tBacking table: t1_seq, will be created, new value 1",
 				"Create journal entries on source databases",
 				fmt.Sprintf("Enable writes on keyspace %s for tables [%s]", targetKeyspaceName, tablesStr),
 				fmt.Sprintf("Switch routing from keyspace %s to keyspace %s", sourceKeyspaceName, targetKeyspaceName),
@@ -2369,6 +2743,17 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			env := newTestEnv(t, ctx, defaultCellName, tc.sourceKeyspace, tc.targetKeyspace)
 			defer env.close()
 			env.tmc.schema = schema
+			if tc.targetVSchema != nil {
+				err := env.ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: tc.targetKeyspace.KeyspaceName, Keyspace: tc.targetVSchema})
+				require.NoError(t, err)
+				env.addTablet(t, ctx, 300, sequenceKeyspaceName, "0", topodatapb.TabletType_PRIMARY, true)
+				require.NoError(t, env.ts.RebuildSrvVSchema(ctx, nil))
+				// The backing table doesn't exist yet either.
+				env.tmc.expectVRQueryResultOnKeyspaceTablets(sequenceKeyspaceName, &queryResult{
+					query: "/select next_id from `vt_global-ks`.`t1_seq`.*",
+					err:   sqlerror.NewSQLError(sqlerror.ERNoSuchTable, sqlerror.SSUnknownTable, "Table 'vt_global-ks.t1_seq' doesn't exist"),
+				})
+			}
 			if tc.req.Direction == int32(DirectionForward) {
 				env.tmc.expectVRQueryResultOnKeyspaceTablets(tc.targetKeyspace.KeyspaceName, copyTableQR)
 				for i := 0; i < len(tc.targetKeyspace.ShardNames); i++ { // Per stream
@@ -2400,6 +2785,12 @@ func TestMoveTablesTrafficSwitchingDryRun(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, tc.want, got.DryRunResults, "Server.WorkflowSwitchTraffic(DryRun:true) = %v, want %v", got.DryRunResults, tc.want)
+			if tc.targetVSchema != nil {
+				// A dry run changes no vschema.
+				kvs, err := env.ts.GetVSchema(ctx, sequenceKeyspaceName)
+				require.NoError(t, err)
+				assert.Empty(t, kvs.Tables)
+			}
 		})
 	}
 }

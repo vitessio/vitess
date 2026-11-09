@@ -450,6 +450,22 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 
 	tm.baseTabletType = tablet.Type
 
+	// From here on Start spawns the keyspace rebuild, shard sync and shard
+	// health monitor goroutines, which use the topo server. None of them may
+	// outlive a failed Start: the caller is free to close the topo server as
+	// soon as Start has returned. createKeyspaceShard can itself spawn the
+	// keyspace rebuild and then fail, so this has to be in place before it.
+	// (The mysql port lookup that checkMysql may spawn is not stopped here.)
+	startSucceeded := false
+	defer func() {
+		if startSucceeded {
+			return
+		}
+		tm.stopShardHealthMonitor()
+		tm.stopShardSync()
+		tm.stopRebuildKeyspace()
+	}()
+
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
 	defer cancel()
 	si, err := tm.createKeyspaceShard(ctx)
@@ -548,12 +564,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		}
 		tm.shardHealthMonitor.Start(tm.BatchCtx)
 	}
-	startSucceeded := false
-	defer func() {
-		if !startSucceeded {
-			tm.stopShardHealthMonitor()
-		}
-	}()
 
 	restoring, err := tm.handleRestore(tm.BatchCtx, config)
 	if err != nil {
@@ -819,7 +829,11 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 			)
 		}
 		firstTime = false
-		time.Sleep(retryInterval)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retryInterval):
+		}
 	}
 }
 

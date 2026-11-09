@@ -42,7 +42,6 @@ func Register(name querythrottlerpb.ThrottlingStrategy, factory StrategyFactory)
 	}
 
 	factories[name] = factory
-	log.Info("Registered throttling strategy", slog.String("strategy", name.String()))
 }
 
 // Get retrieves a strategy factory by name.
@@ -57,7 +56,7 @@ func Get(name querythrottlerpb.ThrottlingStrategy) (StrategyFactory, bool) {
 
 // CreateStrategy creates a new strategy instance using the registered factory.
 // Falls back to NoOpStrategy for unknown strategies or factory errors.
-func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
+func CreateStrategy(cfg *querythrottlerpb.Config, deps Deps) ThrottlingStrategyHandler {
 	// If the requested strategy name is unknown or the factory panics/returns error, CreateStrategy() directly constructs &NoOpStrategy{} as its unconditional fallback.
 	// Configuration files or runtime switches never list "NoOp" as a valid strategy choice; they list "TabletThrottler", "Cinnamon", etc.
 	// The design intent is:
@@ -69,7 +68,7 @@ func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
 		return &NoOpStrategy{}
 	}
 
-	strategy, err := factory.New(deps, cfg)
+	strategy, err := factory.New(deps)
 	if err != nil {
 		log.Error("Strategy failed to init, using NoOp",
 			slog.String("strategy", cfg.GetStrategy().String()),

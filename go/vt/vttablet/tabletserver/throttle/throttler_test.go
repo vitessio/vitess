@@ -34,6 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -42,6 +43,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/base"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/config"
@@ -1804,6 +1806,276 @@ func TestDormant(t *testing.T) {
 	})
 }
 
+// Enable marks the throttler enabled before Operate creates the rate limiter that checks mark, and the query
+// throttler's strategy checks the dedicated query throttler on a timer of its own, so its refresh can land in
+// between when the query throttler is first enabled. A check there, or during any later Enable, must neither
+// dereference a nil rate limiter nor race with Operate.
+func TestCheckWhileEnabling(t *testing.T) {
+	for range 20 {
+		throttler := newTestThrottler()
+		throttler.isOpen.Store(true)
+
+		ctx, cancel := context.WithCancel(t.Context())
+		checksDone := make(chan struct{})
+		go func() {
+			defer close(checksDone)
+			for ctx.Err() == nil {
+				throttler.Check(ctx, throttlerapp.TestingName.String(), nil, &CheckFlags{})
+			}
+		}()
+		for range 3 {
+			wg := throttler.Enable()
+			require.NotNil(t, wg)
+			throttler.Disable()
+			wg.Wait()
+		}
+		cancel()
+		<-checksDone
+		throttler.isOpen.Store(false)
+	}
+}
+
+// Before its first Operate, a throttler has no rate limiter to tell when it was last checked, and reports itself
+// neither dormant nor recently checked.
+func TestRecentCheckBeforeOperate(t *testing.T) {
+	throttler := newTestThrottler()
+	require.Nil(t, throttler.recentCheckRateLimiter.Load())
+	assert.False(t, throttler.isDormant())
+	assert.False(t, throttler.recentlyChecked())
+}
+
+// Disable doesn't wait for Operate to exit, so after a Disable and an Enable the old Operate can exit after the new
+// one stored its rate limiter. The old Operate must stop its own rate limiter: a stopped one reads as checked just
+// now, forever, so the throttler would report itself recently checked and never go dormant.
+func TestOperateStopsItsOwnRateLimiter(t *testing.T) {
+	throttler := newTestThrottler()
+
+	oldCtx, cancelOld := context.WithCancel(t.Context())
+	oldWG := &sync.WaitGroup{}
+	throttler.Operate(oldCtx, oldWG)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	wg := &sync.WaitGroup{}
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+	throttler.Operate(ctx, wg)
+
+	cancelOld()
+	oldWG.Wait()
+	assert.False(t, throttler.recentlyChecked(), "nothing checked the throttler")
+}
+
+// Disable doesn't wait for Operate to exit, so a Disable and an Enable in quick succession start an Operate while the
+// previous one still runs. The new Operate must not run its loop until the previous one has exited: the loops share
+// the throttler's channels and inventory, and the previous one's cleanup clears inventory.TabletMetrics, a plain map,
+// which the new one writes to.
+func TestOperateWaitsForPreviousOperate(t *testing.T) {
+	throttler := newTestThrottler()
+
+	oldCtx, cancelOld := context.WithCancel(t.Context())
+	oldWG := &sync.WaitGroup{}
+	throttler.Operate(oldCtx, oldWG)
+	// Hold the old Operate inside its loop, then cancel it, as Disable does.
+	entered, release := make(chan struct{}), make(chan struct{})
+	throttler.serialFuncChan <- func() {
+		close(entered)
+		<-release
+	}
+	<-entered
+	cancelOld()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	wg := &sync.WaitGroup{}
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+	throttler.Operate(ctx, wg)
+
+	metric := &base.ThrottleMetric{Name: base.LagMetricName, Scope: base.SelfScope, Alias: "cell1-101", Value: 1}
+	sendMetric := func() bool {
+		select {
+		case throttler.throttleMetricChan <- metric:
+			return true
+		default:
+			return false
+		}
+	}
+	assert.Never(t, sendMetric, time.Second, 10*time.Millisecond, "no loop may take a metric while the old Operate still runs")
+
+	close(release)
+	oldWG.Wait()
+	assert.Eventually(t, sendMetric, 30*time.Second, 10*time.Millisecond, "the new Operate must run its loop once the old one has exited")
+}
+
+// The query throttler's strategy checks the dedicated query throttler only once per refresh interval, which can
+// outlast an on-demand heartbeat lease. The dedicated query throttler on the primary must therefore keep renewing the
+// lease even when nothing checks it, or the lag read on the next refresh includes the paused heartbeats. It must do
+// so whatever metrics the rules use, or a lag rule added later reads the age of the last heartbeat as lag.
+func TestQueryThrottlerRenewsHeartbeatLease(t *testing.T) {
+	// A lease lasts at least MinimalOnDemandDuration. Renewing at least twice per shortest lease keeps it from
+	// lapsing even when one renewal comes late.
+	require.LessOrEqual(t, queryThrottlerHeartbeatLeaseInterval, heartbeat.MinimalOnDemandDuration/2)
+
+	tcases := []struct {
+		name    string
+		metrics []string
+	}{
+		{name: "lag rule", metrics: []string{"loadavg", "shard/lag"}},
+		{name: "no lag rule", metrics: []string{"loadavg", "threads_running"}},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+
+			throttler := newTestThrottler()
+			throttler.throttlerType = QueryTabletThrottler
+			heartbeatWriter, ok := throttler.heartbeatWriter.(*FakeHeartbeatWriter)
+			require.True(t, ok)
+
+			runThrottler(t, ctx, throttler, time.Minute, func(t *testing.T, ctx context.Context) {
+				defer cancel() // early termination
+				throttler.applyThrottlerConfig(ctx, &topodatapb.ThrottlerConfig{
+					Enabled: true,
+					AppCheckedMetrics: map[string]*topodatapb.ThrottlerConfig_MetricNames{
+						throttlerapp.QueryThrottlerName.String(): {Names: tcase.metrics},
+					},
+				})
+
+				// Nothing checks the throttler, so every request from here on renews the lease by itself.
+				requests := heartbeatWriter.Requests()
+				assert.Eventually(t, func() bool {
+					return heartbeatWriter.Requests() >= requests+2
+				}, 30*time.Second, 100*time.Millisecond, "the dedicated query throttler must renew the heartbeat lease without being checked")
+			})
+		})
+	}
+}
+
+// A promoted tablet's dedicated query throttler is already open, so it learns that its tablet is the primary only from
+// its leader check, and renews the heartbeat lease only from then on. With the default heartbeat flags, the primary
+// writes heartbeats only while a throttler renews the lease, so the dedicated query throttler checks every second,
+// rather than every 5 seconds as the lag throttler still does, to keep the lag that a lag rule reads after a reparent
+// short.
+func TestQueryThrottlerLeaderCheckInterval(t *testing.T) {
+	t.Run("intervals", func(t *testing.T) {
+		env := tabletenv.NewEnv(vtenv.NewTestEnv(), tabletenv.NewDefaultConfig(), "LeaderCheckTest")
+		lagThrottler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{}, nil, nil, DefaultTabletThrottler)
+		assert.Equal(t, 5*time.Second, lagThrottler.leaderCheckInterval)
+		queryThrottler := NewThrottler(env, nil, nil, &topodatapb.TabletAlias{}, nil, nil, QueryTabletThrottler)
+		assert.Equal(t, time.Second, queryThrottler.leaderCheckInterval)
+	})
+	// Operate checks at the throttler's own interval, so with an interval of an hour, a promotion after Operate's first
+	// check goes unseen for longer than the lag throttler's 5 seconds.
+	t.Run("Operate checks at the interval", func(t *testing.T) {
+		throttler := newTestThrottler()
+		throttler.leaderCheckInterval = time.Hour
+		var tabletType atomic.Int32
+		tabletType.Store(int32(topodatapb.TabletType_REPLICA))
+		// Nothing checks this throttler, so it never stimulates the primary, and only the leader check reads the tablet
+		// type. The count goes up only after the read, so a promotion after it can't reach that same check.
+		var leaderChecks atomic.Int64
+		throttler.tabletTypeFunc = func() topodatapb.TabletType {
+			read := topodatapb.TabletType(tabletType.Load())
+			leaderChecks.Add(1)
+			return read
+		}
+		throttler.isOpen.Store(true)
+		wg := throttler.Enable()
+		require.NotNil(t, wg)
+		t.Cleanup(func() {
+			throttler.Disable()
+			wg.Wait()
+			throttler.isOpen.Store(false)
+		})
+
+		require.Eventually(t, func() bool { return leaderChecks.Load() > 0 }, 30*time.Second, 10*time.Millisecond,
+			"Operate checks once as it starts")
+		tabletType.Store(int32(topodatapb.TabletType_PRIMARY))
+		assert.Never(t, throttler.isLeader.Load, 6*time.Second, 50*time.Millisecond)
+	})
+}
+
+// notRunningTMClient answers a throttler check as a tablet manager does when the throttler isn't running, for example
+// on a tablet that isn't serving: OK, with only the "default" metric.
+type notRunningTMClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (notRunningTMClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return &tabletmanagerdatapb.CheckThrottlerResponse{
+		ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+		Metrics: map[string]*tabletmanagerdatapb.CheckThrottlerResponse_Metric{
+			base.DefaultMetricName.String(): {ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_OK},
+		},
+	}, nil
+}
+
+// The dedicated query throttler on a primary leaves a replica whose own dedicated query throttler isn't running out of
+// shard metrics, as it does a replica that it can't probe. Otherwise every shard metric reads as not collected yet,
+// which the query throttler can't throttle on, so one replica that isn't serving would turn off every shard rule. The
+// lag throttler still reads the replica's metrics as not collected yet.
+func TestQueryThrottlerLeavesOutTabletsWhoseThrottlerIsNotRunning(t *testing.T) {
+	probe := &base.Probe{
+		Alias:  "cell1-101",
+		Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "cell1", Uid: 101}},
+	}
+	// shardMetrics probes the replica whose throttler isn't running and, if withLaggingReplica, adds a replica whose
+	// every metric reads 30. It stores the metrics in the inventory as Operate does, by the tablet alias and the name
+	// each metric carries, and returns every known metric aggregated over the shard.
+	shardMetrics := func(t *testing.T, throttlerType ThrottlerType, withLaggingReplica bool) map[base.MetricName]base.MetricResult {
+		throttler := newTestThrottler()
+		throttler.throttlerType = throttlerType
+		throttler.inventory.TabletMetrics = base.TabletResultMap{}
+		store := func(metrics base.ThrottleMetrics) {
+			for _, metric := range metrics {
+				metricResults, ok := throttler.inventory.TabletMetrics[metric.GetTabletAlias()]
+				if !ok {
+					metricResults = base.NewMetricResultMap()
+					throttler.inventory.TabletMetrics[metric.GetTabletAlias()] = metricResults
+				}
+				metricResults[metric.Name] = metric
+			}
+		}
+		store(throttler.generateTabletProbeFunction(base.ShardScope, probe)(t.Context(), notRunningTMClient{}))
+		if withLaggingReplica {
+			lagging := base.ThrottleMetrics{}
+			for _, name := range base.KnownMetricNames {
+				lagging[name] = &base.ThrottleMetric{Name: name, Scope: base.ShardScope, Alias: "cell1-102", Value: 30}
+			}
+			store(lagging)
+		}
+		require.NoError(t, throttler.aggregateMetrics())
+		results := map[base.MetricName]base.MetricResult{}
+		for _, name := range base.KnownMetricNames {
+			results[name] = throttler.getAggregatedMetric(name.AggregatedName(base.ShardScope))
+		}
+		return results
+	}
+
+	t.Run("dedicated query throttler", func(t *testing.T) {
+		for name, result := range shardMetrics(t, QueryTabletThrottler, true) {
+			value, err := result.Get()
+			if assert.NoError(t, err, name) {
+				assert.Equal(t, 30.0, value, "%v: the lagging replica's value, without the replica whose throttler isn't running", name)
+			}
+		}
+	})
+	t.Run("dedicated query throttler, no other replica", func(t *testing.T) {
+		for name, result := range shardMetrics(t, QueryTabletThrottler, false) {
+			assert.Equal(t, base.NoHostsMetricResult, result, "%v: no replica left to read it from", name)
+		}
+	})
+	t.Run("lag throttler", func(t *testing.T) {
+		for name, result := range shardMetrics(t, DefaultTabletThrottler, true) {
+			assert.Equal(t, base.NoMetricResultYet, result, name)
+		}
+	})
+}
+
 func TestChecks(t *testing.T) {
 	ctx := t.Context() // for development, replace with	ctx := utils.LeakCheckContext(t)
 	ctx, cancel := context.WithCancel(ctx)
@@ -2352,15 +2624,17 @@ func (ts *stimulateTopoServer) FindAllTabletAliasesInShard(ctx context.Context, 
 	return ts.FakeTopoServer.FindAllTabletAliasesInShard(ctx, keyspace, shard)
 }
 
-// stimulateTMClient records which tablets were sent a CheckThrottler request.
+// stimulateTMClient records which tablets were sent a CheckThrottler request, and the requests.
 type stimulateTMClient struct {
 	tmclient.TabletManagerClient
 	checked  []*topodatapb.Tablet
+	requests []*tabletmanagerdatapb.CheckThrottlerRequest
 	checkErr error
 }
 
 func (c *stimulateTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
 	c.checked = append(c.checked, tablet)
+	c.requests = append(c.requests, req)
 	if c.checkErr != nil {
 		return nil, c.checkErr
 	}
@@ -2568,4 +2842,117 @@ func TestStimulatePrimaryThrottlerLogs(t *testing.T) {
 			assert.Equal(t, tcase.expectCode, record["error_code"])
 		})
 	}
+}
+
+// Both requests a throttler sends to another tablet, the stimulation of the primary and the
+// shard probe, name the sender's throttler type. Otherwise the dedicated query throttler would
+// wake, and read its shard metrics from, the other tablet's lag throttler.
+func TestThrottlerRequestsCarryThrottlerType(t *testing.T) {
+	primary := &topodatapb.TabletAlias{Cell: "fakezone1", Uid: 101}
+	for _, throttlerType := range []ThrottlerType{DefaultTabletThrottler, QueryTabletThrottler} {
+		t.Run(throttlerType.ToProto().String(), func(t *testing.T) {
+			throttler := &Throttler{
+				keyspace: "ks",
+				shard:    "-80",
+				ts: &stimulateTopoServer{
+					primaryAlias: primary,
+					tabletTypes:  map[uint32]topodatapb.TabletType{101: topodatapb.TabletType_PRIMARY},
+				},
+				dormantPeriod:  time.Minute,
+				throttlerType:  throttlerType,
+				tabletTypeFunc: func() topodatapb.TabletType { return topodatapb.TabletType_REPLICA },
+			}
+			tmClient := &stimulateTMClient{}
+
+			require.NoError(t, throttler.stimulatePrimaryThrottler(t.Context(), tmClient))
+			probe := &base.Probe{Alias: "fakezone1-101", Tablet: &topodatapb.Tablet{Alias: primary}}
+			throttler.generateTabletProbeFunction(base.ShardScope, probe)(t.Context(), tmClient)
+
+			require.Len(t, tmClient.requests, 2)
+			for _, req := range tmClient.requests {
+				assert.Equal(t, throttlerType.ToProto(), req.ThrottlerType)
+			}
+		})
+	}
+}
+
+// The dedicated query throttler records its metrics under its own prefix, so its probes
+// and checks don't mix into the lag throttler's Throttler* metrics.
+func TestQueryThrottlerMetricsPrefix(t *testing.T) {
+	lagThrottler := newTestThrottler()
+	assert.Equal(t, "Throttler", lagThrottler.metricsPrefix())
+	assert.Same(t, statsThrottlerCheckAnyTotal, lagThrottler.counter(statsThrottlerCheckAnyTotal, "CheckAnyTotal", ""))
+
+	queryThrottler := newTestThrottler()
+	queryThrottler.throttlerType = QueryTabletThrottler
+	assert.Equal(t, "QueryThrottlerDedicated", queryThrottler.metricsPrefix())
+	assert.NotSame(t, statsThrottlerCheckAnyTotal, queryThrottler.counter(statsThrottlerCheckAnyTotal, "CheckAnyTotal", ""))
+
+	checkAnyTotal := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckAnyTotal", "")
+	checkAnyError := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckAnyError", "")
+	checkSelfLagTotal := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckSelfLagTotal", "")
+	checkSelfLagError := stats.GetOrNewCounter("QueryThrottlerDedicatedCheckSelfLagError", "")
+	checks, failedChecks := checkAnyTotal.Get(), checkAnyError.Get()
+	lagChecks, failedLagChecks := checkSelfLagTotal.Get(), checkSelfLagError.Get()
+	// The throttler has collected no lag, so the check fails.
+	checkResult := queryThrottler.check.Check(t.Context(), testAppName.String(), base.SelfScope, base.MetricNames{base.LagMetricName}, &CheckFlags{})
+	require.False(t, checkResult.IsOK())
+	assert.Eventually(t, func() bool {
+		return checkAnyTotal.Get() > checks && checkAnyError.Get() > failedChecks &&
+			checkSelfLagTotal.Get() > lagChecks && checkSelfLagError.Get() > failedLagChecks
+	}, 30*time.Second, 10*time.Millisecond, "a check on the dedicated query throttler must count under its own prefix")
+
+	// localCheck reports how long ago the metric was last healthy. The check fails, so it doesn't mark the
+	// metric healthy again.
+	selfLag := base.LagMetricName.AggregatedName(base.SelfScope)
+	secondsSinceHealthy := stats.GetOrNewGauge("QueryThrottlerDedicatedCheckSelfSecondsSinceHealthy", "")
+	queryThrottler.metricsHealth.Set(selfLag, time.Now().Add(-time.Hour), cache.DefaultExpiration)
+	queryThrottler.check.localCheck(t.Context(), selfLag)
+	assert.Eventually(t, func() bool {
+		return secondsSinceHealthy.Get() >= int64(time.Hour.Seconds())
+	}, 30*time.Second, 10*time.Millisecond, "a local check on the dedicated query throttler must report under its own prefix")
+
+	queryThrottler.check.reportAggregated(selfLag, base.NewSimpleMetricResult(42.5))
+	assert.Equal(t, 42.5, stats.GetOrNewGaugeFloat64("QueryThrottlerDedicatedAggregatedSelfLag", "").Get(),
+		"an aggregated metric of the dedicated query throttler must report under its own prefix")
+}
+
+// recentlyCheckedTMClient answers every probe as a tablet that something checked recently.
+type recentlyCheckedTMClient struct {
+	tmclient.TabletManagerClient
+}
+
+func (recentlyCheckedTMClient) CheckThrottler(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	return &tabletmanagerdatapb.CheckThrottlerResponse{
+		ResponseCode:    tabletmanagerdatapb.CheckThrottlerResponseCode_OK,
+		RecentlyChecked: true,
+	}, nil
+}
+
+// The dedicated query throttler's probes, and the heartbeat requests they make, record their metrics under its own
+// prefix too.
+func TestQueryThrottlerProbeMetricsPrefix(t *testing.T) {
+	throttler := newTestThrottler()
+	throttler.throttlerType = QueryTabletThrottler
+	throttler.isLeader.Store(true)
+
+	probesTotal := stats.GetOrNewCounter("QueryThrottlerDedicatedProbesTotal", "")
+	probeRecentlyChecked := stats.GetOrNewCounter("QueryThrottlerDedicatedProbeRecentlyChecked", "")
+	heartbeatRequests := stats.GetOrNewCounter("QueryThrottlerDedicatedHeartbeatRequests", "")
+
+	selfAlias := throttler.tabletAliasString()
+	throttler.inventory = &base.Inventory{ClustersProbes: base.Probes{selfAlias: {Alias: selfAlias}}}
+	probes := probesTotal.Get()
+	throttler.collectSelfMetrics(t.Context(), recentlyCheckedTMClient{})
+	assert.Eventually(t, func() bool {
+		return probesTotal.Get() > probes
+	}, 30*time.Second, 10*time.Millisecond, "a self probe of the dedicated query throttler must count under its own prefix")
+
+	const replicaAlias = "zone1-0000000101"
+	throttler.inventory = &base.Inventory{ClustersProbes: base.Probes{replicaAlias: {Alias: replicaAlias, Tablet: &topodatapb.Tablet{}}}}
+	probes, recentlyChecked, requests := probesTotal.Get(), probeRecentlyChecked.Get(), heartbeatRequests.Get()
+	throttler.collectShardMetrics(t.Context(), recentlyCheckedTMClient{})
+	assert.Eventually(t, func() bool {
+		return probesTotal.Get() > probes && probeRecentlyChecked.Get() > recentlyChecked && heartbeatRequests.Get() > requests
+	}, 30*time.Second, 10*time.Millisecond, "a shard probe of the dedicated query throttler, and the heartbeat request it makes, must count under its own prefix")
 }

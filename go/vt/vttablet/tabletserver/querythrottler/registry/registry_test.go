@@ -43,7 +43,7 @@ type testStrategyFactory struct{}
 // Compile-time interface compliance check
 var _ StrategyFactory = (*testStrategyFactory)(nil)
 
-func (f testStrategyFactory) New(deps Deps, cfg StrategyConfig) (ThrottlingStrategyHandler, error) {
+func (f testStrategyFactory) New(deps Deps) (ThrottlingStrategyHandler, error) {
 	return &NoOpStrategy{}, nil
 }
 
@@ -112,7 +112,7 @@ func TestCreateStrategyUnknown(t *testing.T) {
 // failingStrategyFactory is a factory whose strategies fail to init.
 type failingStrategyFactory struct{}
 
-func (f failingStrategyFactory) New(deps Deps, cfg StrategyConfig) (ThrottlingStrategyHandler, error) {
+func (f failingStrategyFactory) New(deps Deps) (ThrottlingStrategyHandler, error) {
 	return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no throttler client")
 }
 

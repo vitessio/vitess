@@ -17,7 +17,7 @@ limitations under the License.
 package throttler
 
 import (
-	"fmt"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
@@ -87,13 +87,13 @@ func listThrottlers(w http.ResponseWriter, m *managerImpl) {
 	if err := listTemplate.Execute(w, map[string]any{
 		"Throttlers": throttlers,
 	}); err != nil {
-		log.Error(fmt.Sprintf("listThrottlers failed :%v", err))
+		log.Error("listThrottlers failed", slog.Any("error", err))
 	}
 }
 
 func showThrottlerDetails(w http.ResponseWriter, name string) {
 	// Log error
 	if err := detailsTemplate.Execute(w, name); err != nil {
-		log.Error(fmt.Sprintf("showThrottlerDetails failed :%v", err))
+		log.Error("showThrottlerDetails failed", slog.Any("error", err))
 	}
 }
