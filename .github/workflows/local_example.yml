@@ -1,10 +1,5 @@
 name: local_example
 on:
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
-    tags: '**'
   pull_request:
     branches: '**'
 concurrency:
@@ -20,11 +15,11 @@ env:
 
 jobs:
 
-  # Path filtering runs once here, on a GitHub-hosted runner, so that the
-  # job below (on a large runner) is not started at all when nothing relevant
-  # changed.
+  # Path filtering runs once here, on a small runner (a CNCF container in
+  # vitess-security), so that the job below (on a large runner) is not started
+  # at all when nothing relevant changed.
   changes:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     timeout-minutes: 5
     outputs:
       examples: ${{ steps.changes.outputs.examples }}
@@ -68,6 +63,7 @@ jobs:
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
+            - '.github/actions/tool-downloads/**'
             - 'examples/**'
             - '.github/workflows/local_example.yml'
             - '.github/actions/build-bootstrap/**'
@@ -80,17 +76,17 @@ jobs:
     if: ${{ !cancelled() }}
     name: Local example using ${{ matrix.topo }} on Ubuntu
     # When nothing relevant changed the legs still run (so their required
-    # status checks are reported), but on a GitHub-hosted runner with every
-    # step below skipped. The 'Skip CI' label also gets the small runner, since
-    # the legs then only fail at that step.
-    runs-on: ${{ needs.changes.outputs.examples == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository == 'vitessio/vitess' && 'oracle-vm-16cpu-64gb-x86-64' || 'ubuntu-24.04') || 'ubuntu-24.04' }}
+    # status checks are reported), but on a small runner (a CNCF container in
+    # vitess-security) with every step below skipped. The 'Skip CI' label also
+    # gets the small runner, since the legs then only fail at that step.
+    runs-on: ${{ needs.changes.outputs.examples == 'true' && !contains(github.event.pull_request.labels.*.name, 'Skip CI') && (github.repository_owner == 'vitessio' && 'cncf-ubuntu-24.04-16-64-x86' || 'ubuntu-24.04') || github.repository == 'vitessio/vitess-security' && 'cncf-c-ubuntu-2-8-x86' || 'ubuntu-24.04' }}
     strategy:
       matrix:
         topo: [etcd, zk2]
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@351661ca32ac09a36dc5ee2d536e3128f2a3c8ed # v2.22.0
+      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
       with:
         egress-policy: audit
 
@@ -111,6 +107,10 @@ jobs:
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: 'false'
+
+    - name: Restore tool downloads
+      if: needs.changes.outputs.examples == 'true'
+      uses: $/.github/actions/tool-downloads
 
     - name: Build bootstrap images
       if: needs.changes.outputs.examples == 'true'

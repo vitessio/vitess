@@ -1,0 +1,672 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package grpcvtctldserver
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+)
+
+func TestValidateQueryThrottlerConfigRequest(t *testing.T) {
+	validTabletThrottlerConfig := &querythrottlerpb.Config{
+		Enabled:  true,
+		Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+		TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+			TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+				"PRIMARY": {
+					StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+						"SELECT": {
+							MetricRules: map[string]*querythrottlerpb.MetricRule{
+								"lag": {
+									Thresholds: []*querythrottlerpb.ThrottleThreshold{
+										{Above: 5.0, Throttle: 100},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		req     *vtctldatapb.UpdateQueryThrottlerConfigRequest
+		wantErr string
+	}{
+		{
+			name: "valid tablet throttler config",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace:             "ks1",
+				QueryThrottlerConfig: validTabletThrottlerConfig,
+			},
+		},
+		{
+			name: "disabled config with UNKNOWN strategy is valid",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace:             "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{Enabled: false},
+			},
+		},
+		{
+			name: "disabled config with zero-value proto is valid",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace:             "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{},
+			},
+		},
+		{
+			name: "empty keyspace",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace:             "",
+				QueryThrottlerConfig: validTabletThrottlerConfig,
+			},
+			wantErr: "keyspace is required",
+		},
+		{
+			name: "nil config",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+			},
+			wantErr: "query_throttler_config is required",
+		},
+		{
+			name: "enabled with UNKNOWN strategy",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_UNKNOWN,
+				},
+			},
+			wantErr: "strategy must be TABLET_THROTTLER when enabled is true",
+		},
+		{
+			name: "TABLET_THROTTLER without tablet_strategy_config",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+				},
+			},
+			wantErr: "tablet_strategy_config is required when strategy is TABLET_THROTTLER",
+		},
+		{
+			name: "TABLET_THROTTLER with empty tablet_rules",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{},
+					},
+				},
+			},
+			wantErr: "tablet_rules cannot be empty when strategy is TABLET_THROTTLER",
+		},
+		{
+			name: "negative threshold above value",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: -1.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "threshold[0] 'above' must be >= 0, got -1 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name: "throttle percentage out of range (above 100)",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 150},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "threshold[0] 'throttle' must be between 0 and 100, got 150 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name: "throttle percentage negative",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: -10},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "threshold[0] 'throttle' must be between 0 and 100, got -10 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name: "unknown metric name",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lags": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `unknown metric name "lags" (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			name: "unknown tablet type",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMAY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `unsupported tablet type "PRIMAY"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
+		},
+		{
+			name: "unknown statement type",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELEC": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `unsupported statement type "SELEC" (tablet_type=PRIMARY)`,
+		},
+		{
+			name: "custom metric rejected",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"custom": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `custom metric is not supported by the query throttler (tablet_type=PRIMARY, statement=SELECT, metric=custom)`,
+		},
+		{
+			name: "duplicate bare metric across scopes rejected",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"self/lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+									"INSERT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"shard/lag": {
+												Thresholds: []*querythrottlerpb.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
+		},
+		{
+			// Only a second spelling of a metric is refused; the same key may appear in any number of rules.
+			name: "same metric key under several statement and tablet types accepted",
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "ks1",
+				QueryThrottlerConfig: &querythrottlerpb.Config{
+					Enabled:  true,
+					Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"shard/lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+										},
+									},
+									"INSERT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"shard/lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+										},
+									},
+								},
+							},
+							"REPLICA": {
+								StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottlerpb.MetricRule{
+											"shard/lag": {Thresholds: []*querythrottlerpb.ThrottleThreshold{{Above: 5.0, Throttle: 100}}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "RDONLY tablet type and REPLACE statement type are accepted",
+			req:  singleRuleRequest("RDONLY", "REPLACE", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+		},
+		{
+			name: "EXPERIMENTAL tablet type is accepted",
+			req:  singleRuleRequest("EXPERIMENTAL", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+		},
+		{
+			name:    "non-serving tablet type rejected",
+			req:     singleRuleRequest("SPARE", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported tablet type "SPARE"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
+		},
+		{
+			name:    "BATCH alias rejected",
+			req:     singleRuleRequest("BATCH", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported tablet type "BATCH"; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL`,
+		},
+		{
+			name:    "statement type that never reaches the query throttler rejected",
+			req:     singleRuleRequest("PRIMARY", "BEGIN", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}),
+			wantErr: `unsupported statement type "BEGIN" (tablet_type=PRIMARY)`,
+		},
+		{
+			// The case for 150 above is far from the boundary: an off-by-one limit of 101 would still reject 150.
+			name:    "throttle just above 100 rejected",
+			req:     singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 101}),
+			wantErr: "threshold[0] 'throttle' must be between 0 and 100, got 101 (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			// The lower bounds are inclusive, as in vtctldclient's validation.
+			name: "above 0 accepted",
+			req:  singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 0, Throttle: 50}),
+		},
+		{
+			name: "throttle 0 accepted",
+			req:  singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 0}),
+		},
+		{
+			name:    "default metric rejected",
+			req:     withMetric(singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}), "default"),
+			wantErr: `metric "default" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			name:    "shard alias of the default metric rejected",
+			req:     withMetric(singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}), "shard"),
+			wantErr: `metric "shard" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			name:    "self alias of the default metric rejected",
+			req:     withMetric(singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}), "self"),
+			wantErr: `metric "self" names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=PRIMARY, statement=SELECT)`,
+		},
+		{
+			// The spelling check spans tablet types, not only the statement types of one tablet type.
+			name: "a second spelling of a metric under another tablet type rejected",
+			req: func() *vtctldatapb.UpdateQueryThrottlerConfigRequest {
+				req := singleRuleRequest("PRIMARY", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50})
+				req.QueryThrottlerConfig.TabletStrategyConfig.TabletRules["REPLICA"] = withMetric(
+					singleRuleRequest("REPLICA", "SELECT", &querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50}), "self/lag",
+				).QueryThrottlerConfig.TabletStrategyConfig.TabletRules["REPLICA"]
+				return req
+			}(),
+			wantErr: `metric "lag" is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config`,
+		},
+		{
+			name: "duplicate above rejected",
+			req: singleRuleRequest("PRIMARY", "INSERT",
+				&querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 50},
+				&querythrottlerpb.ThrottleThreshold{Above: 10, Throttle: 80},
+				&querythrottlerpb.ThrottleThreshold{Above: 5, Throttle: 100},
+			),
+			wantErr: `threshold[0] and threshold[2] have the same 'above' 5 (tablet_type=PRIMARY, statement=INSERT, metric=lag)`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateQueryThrottlerConfigRequest(tt.req)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// singleRuleRequest returns an enabled TABLET_THROTTLER request with one lag rule.
+func singleRuleRequest(tabletType, stmtType string, thresholds ...*querythrottlerpb.ThrottleThreshold) *vtctldatapb.UpdateQueryThrottlerConfigRequest {
+	return &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+		Keyspace: "ks1",
+		QueryThrottlerConfig: &querythrottlerpb.Config{
+			Enabled:  true,
+			Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+					tabletType: {
+						StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+							stmtType: {
+								MetricRules: map[string]*querythrottlerpb.MetricRule{
+									"lag": {Thresholds: thresholds},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// withMetric renames the lag rule of a singleRuleRequest request to metric.
+func withMetric(req *vtctldatapb.UpdateQueryThrottlerConfigRequest, metric string) *vtctldatapb.UpdateQueryThrottlerConfigRequest {
+	for _, stmtRules := range req.QueryThrottlerConfig.TabletStrategyConfig.TabletRules {
+		for _, metricRules := range stmtRules.StatementRules {
+			metricRules.MetricRules[metric] = metricRules.MetricRules["lag"]
+			delete(metricRules.MetricRules, "lag")
+		}
+	}
+	return req
+}
+
+func TestSanitizeQueryThrottlerConfig(t *testing.T) {
+	tests := []struct {
+		name           string
+		cfg            *querythrottlerpb.Config
+		wantThresholds []*querythrottlerpb.ThrottleThreshold
+	}{
+		{
+			name: "sorts thresholds ascending by Above",
+			cfg: &querythrottlerpb.Config{
+				Enabled:  true,
+				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottlerpb.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottlerpb.ThrottleThreshold{
+												{Above: 50, Throttle: 100},
+												{Above: 10, Throttle: 50},
+												{Above: 30, Throttle: 75},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantThresholds: []*querythrottlerpb.ThrottleThreshold{
+				{Above: 10, Throttle: 50},
+				{Above: 30, Throttle: 75},
+				{Above: 50, Throttle: 100},
+			},
+		},
+		{
+			name: "already sorted thresholds unchanged",
+			cfg: &querythrottlerpb.Config{
+				Enabled:  true,
+				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottlerpb.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottlerpb.ThrottleThreshold{
+												{Above: 5, Throttle: 10},
+												{Above: 15, Throttle: 50},
+												{Above: 25, Throttle: 100},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantThresholds: []*querythrottlerpb.ThrottleThreshold{
+				{Above: 5, Throttle: 10},
+				{Above: 15, Throttle: 50},
+				{Above: 25, Throttle: 100},
+			},
+		},
+		{
+			name: "single threshold is a no-op",
+			cfg: &querythrottlerpb.Config{
+				Enabled:  true,
+				Strategy: querythrottlerpb.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottlerpb.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottlerpb.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottlerpb.MetricRuleSet{
+								"SELECT": {
+									MetricRules: map[string]*querythrottlerpb.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottlerpb.ThrottleThreshold{
+												{Above: 10, Throttle: 100},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantThresholds: []*querythrottlerpb.ThrottleThreshold{
+				{Above: 10, Throttle: 100},
+			},
+		},
+		{
+			name:           "nil config is a no-op",
+			cfg:            nil,
+			wantThresholds: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.NotPanics(t, func() {
+				sanitizeQueryThrottlerConfig(tt.cfg)
+			})
+
+			if tt.wantThresholds == nil {
+				return
+			}
+
+			thresholds := tt.cfg.TabletStrategyConfig.TabletRules["PRIMARY"].
+				StatementRules["SELECT"].MetricRules["lag"].Thresholds
+			require.Len(t, thresholds, len(tt.wantThresholds))
+			for i, want := range tt.wantThresholds {
+				require.Equal(t, want.Above, thresholds[i].Above)
+				require.Equal(t, want.Throttle, thresholds[i].Throttle)
+			}
+		})
+	}
+}
+
+// topoErrorf maps a topo error to the code a client can act on, and keeps a code the error
+// already has.
+func TestTopoErrorf(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want vtrpcpb.Code
+	}{
+		{name: "NoNode", err: topo.NewError(topo.NoNode, "ks"), want: vtrpcpb.Code_NOT_FOUND},
+		{name: "BadVersion", err: topo.NewError(topo.BadVersion, "ks"), want: vtrpcpb.Code_ABORTED},
+		{name: "Timeout", err: topo.NewError(topo.Timeout, "ks"), want: vtrpcpb.Code_DEADLINE_EXCEEDED},
+		{name: "Interrupted", err: topo.NewError(topo.Interrupted, "ks"), want: vtrpcpb.Code_CANCELED},
+		{name: "other error", err: errors.New("connection refused"), want: vtrpcpb.Code_UNAVAILABLE},
+		{name: "error with a code", err: vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "bad"), want: vtrpcpb.Code_INVALID_ARGUMENT},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := topoErrorf(tt.err, "failed to update keyspace %s", "ks")
+			require.Equal(t, tt.want, vterrors.Code(err))
+			require.ErrorContains(t, err, "failed to update keyspace ks: ")
+		})
+	}
+}

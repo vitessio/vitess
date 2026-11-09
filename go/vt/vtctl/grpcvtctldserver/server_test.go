@@ -21,11 +21,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -65,6 +67,7 @@ import (
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	mysqlctlpb "vitess.io/vitess/go/vt/proto/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/querythrottler"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -1110,6 +1113,420 @@ func TestBackupShard(t *testing.T) {
 				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
 				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
 				assert.True(t, includeBinlogsTMC.BackupRequests["zone1-0000000100"].GetIncludeBinlogs())
+			},
+		},
+		{
+			name: "tablet types with allow primary, a listed type matches",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
+					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:     "ks",
+				Shard:        "-",
+				AllowPrimary: true,
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_REPLICA},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.NotEmpty(t, responses)
+				for _, resp := range responses {
+					assert.Equal(t, 101, int(resp.TabletAlias.Uid), "expected the replica, not the primary")
+				}
+			},
+		},
+		{
+			name: "allow primary falls back to the primary after the listed types",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
+					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:     "ks",
+				Shard:        "-",
+				AllowPrimary: true,
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				require.NotEmpty(t, responses)
+				for _, resp := range responses {
+					assert.Equal(t, 200, int(resp.TabletAlias.Uid), "expected the primary, as no rdonly tablet exists")
+				}
+			},
+		},
+		{
+			name: "a listed primary is rejected even with allow primary",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:     "ks",
+				Shard:        "-",
+				AllowPrimary: true,
+				TabletTypes:  []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorContains(t, err, "type PRIMARY cannot be listed in tablet types")
+				assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "primary in tablet types without allow primary",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc:  &testutil.TabletManagerClient{},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:    "ks",
+				Shard:       "-",
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY, topodatapb.TabletType_PRIMARY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorContains(t, err, "type PRIMARY cannot be listed in tablet types")
+				assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "a tablet type that cannot back up a shard",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc:  &testutil.TabletManagerClient{},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_DRAINED,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:    "ks",
+				Shard:       "-",
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_DRAINED},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorContains(t, err, "tablet type drained cannot take a backup of a shard")
+				assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "no listed type can take the backup",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
+					"zone1-0000000200": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:    "ks",
+				Shard:       "-",
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorContains(t, err, "no tablet available for backup")
+				assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "the listed tablet could not report its status",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}}},
+					"zone1-0000000102": {Events: []*logutilpb.Event{{}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 5}},
+					"zone1-0000000102": {Error: assert.AnError},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 102},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_RDONLY,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace:    "ks",
+				Shard:       "-",
+				TabletTypes: []topodatapb.TabletType{topodatapb.TabletType_RDONLY},
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorContains(t, err, "no tablet available for backup")
+				require.ErrorContains(t, err, assert.AnError.Error(), "expected the status error as the reason")
+				assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "a tablet could not report its status, without tablet types",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000101": {Error: assert.AnError},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.EqualError(t, err, "no tablet available for backup")
+				assert.Equal(t, vtrpc.Code_FAILED_PRECONDITION, vterrors.Code(err))
+				assert.Empty(t, responses, "expected no backupclient messages")
+			},
+		},
+		{
+			name: "replication status error on one replica",
+			ts:   memorytopo.NewServer(ctx, "zone1"),
+			tmc: &testutil.TabletManagerClient{
+				Backups: map[string]struct {
+					Events        []*logutilpb.Event
+					EventInterval time.Duration
+					EventJitter   time.Duration
+					ErrorAfter    time.Duration
+				}{
+					"zone1-0000000101": {Events: []*logutilpb.Event{{}, {}, {}}},
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000200": {Position: "some-position"},
+				},
+				ReplicationStatusResults: map[string]struct {
+					Position *replicationdatapb.Status
+					Error    error
+				}{
+					"zone1-0000000100": {Error: assert.AnError},
+					"zone1-0000000101": {Position: &replicationdatapb.Status{ReplicationLagSeconds: 1}},
+				},
+			},
+			tablets: []*topodatapb.Tablet{
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 101},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_REPLICA,
+				},
+				{
+					Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 200},
+					Keyspace: "ks",
+					Shard:    "-",
+					Type:     topodatapb.TabletType_PRIMARY,
+				},
+			},
+			req: &vtctldatapb.BackupShardRequest{
+				Keyspace: "ks",
+				Shard:    "-",
+			},
+			assertion: func(t *testing.T, responses []*vtctldatapb.BackupResponse, err error) {
+				require.ErrorIs(t, err, io.EOF, "expected Recv loop to end with io.EOF")
+				assert.Len(t, responses, 3, "expected 3 messages from backupclient stream")
+				for _, resp := range responses {
+					assert.Equal(t, 101, int(resp.TabletAlias.Uid))
+				}
 			},
 		},
 		{
@@ -3832,6 +4249,40 @@ func TestDeleteShards(t *testing.T) {
 				},
 			},
 			shouldErr: false,
+		},
+		{
+			name: "repeated shard",
+			shards: []*vtctldatapb.Shard{
+				{
+					Keyspace: "testkeyspace",
+					Name:     "-",
+				},
+				{
+					Keyspace: "otherkeyspace",
+					Name:     "-",
+				},
+			},
+			tablets: nil,
+			topoErr: nil,
+			req: &vtctldatapb.DeleteShardsRequest{
+				Shards: []*vtctldatapb.Shard{
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+					{
+						Keyspace: "otherkeyspace",
+						Name:     "-",
+					},
+					{
+						Keyspace: "testkeyspace",
+						Name:     "-",
+					},
+				},
+			},
+			expected:                &vtctldatapb.DeleteShardsResponse{},
+			expectedRemainingShards: []*vtctldatapb.Shard{},
+			shouldErr:               false,
 		},
 		{
 			name: "topo is down",
@@ -7970,6 +8421,63 @@ func TestGetSrvVSchemas(t *testing.T) {
 
 			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+// throttlerTypeTMClient records the throttler type of each throttler request it gets.
+type throttlerTypeTMClient struct {
+	tmclient.TabletManagerClient
+	checkType  tabletmanagerdatapb.ThrottlerType
+	statusType tabletmanagerdatapb.ThrottlerType
+}
+
+func (c *throttlerTypeTMClient) CheckThrottler(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.CheckThrottlerRequest) (*tabletmanagerdatapb.CheckThrottlerResponse, error) {
+	c.checkType = req.ThrottlerType
+	return &tabletmanagerdatapb.CheckThrottlerResponse{}, nil
+}
+
+func (c *throttlerTypeTMClient) GetThrottlerStatus(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.GetThrottlerStatusRequest) (*tabletmanagerdatapb.GetThrottlerStatusResponse, error) {
+	c.statusType = req.ThrottlerType
+	return &tabletmanagerdatapb.GetThrottlerStatusResponse{}, nil
+}
+
+// CheckThrottler and GetThrottlerStatus must pass the requested throttler type on to the
+// tablet, so a request for the dedicated query throttler doesn't reach the lag one.
+func TestThrottlerRPCsForwardThrottlerType(t *testing.T) {
+	t.Parallel()
+
+	for _, throttlerType := range []tabletmanagerdatapb.ThrottlerType{
+		tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER,
+		tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER,
+	} {
+		t.Run(throttlerType.String(), func(t *testing.T) {
+			ctx := t.Context()
+			ts := memorytopo.NewServer(ctx, "cell1")
+			// Start from the other value, so a forwarded zero value can't pass by accident.
+			initial := tabletmanagerdatapb.ThrottlerType_DEDICATED_QUERY_THROTTLER
+			if throttlerType == initial {
+				initial = tabletmanagerdatapb.ThrottlerType_DEFAULT_LAG_THROTTLER
+			}
+			tmc := &throttlerTypeTMClient{checkType: initial, statusType: initial}
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+			alias := &topodatapb.TabletAlias{Cell: "cell1", Uid: 100}
+			testutil.AddTablet(ctx, t, ts, &topodatapb.Tablet{
+				Alias:    alias,
+				Keyspace: "testkeyspace",
+				Shard:    "-",
+				Type:     topodatapb.TabletType_PRIMARY,
+			}, nil)
+
+			_, err := vtctld.CheckThrottler(ctx, &vtctldatapb.CheckThrottlerRequest{TabletAlias: alias, ThrottlerType: throttlerType})
+			require.NoError(t, err)
+			require.Equal(t, throttlerType, tmc.checkType)
+
+			_, err = vtctld.GetThrottlerStatus(ctx, &vtctldatapb.GetThrottlerStatusRequest{TabletAlias: alias, ThrottlerType: throttlerType})
+			require.NoError(t, err)
+			require.Equal(t, throttlerType, tmc.statusType)
 		})
 	}
 }
@@ -14247,6 +14755,81 @@ func TestValidate(t *testing.T) {
 	}, resp)
 }
 
+// permissionsCountingTMC counts a fake tablet manager client's GetPermissions
+// calls by tablet alias.
+type permissionsCountingTMC struct {
+	*testutil.TabletManagerClient
+
+	mu    sync.Mutex
+	calls map[string]int
+}
+
+func (tmc *permissionsCountingTMC) GetPermissions(ctx context.Context, tablet *topodatapb.Tablet) (*tabletmanagerdatapb.Permissions, error) {
+	tmc.mu.Lock()
+	tmc.calls[topoproto.TabletAliasString(tablet.Alias)]++
+	tmc.mu.Unlock()
+	return tmc.TabletManagerClient.GetPermissions(ctx, tablet)
+}
+
+func TestValidatePermissionsKeyspace(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	tmc := &permissionsCountingTMC{
+		TabletManagerClient: &testutil.TabletManagerClient{
+			GetPermissionsResults: map[string]struct {
+				Permissions *tabletmanagerdatapb.Permissions
+				Error       error
+			}{
+				"zone1-0000000100": {Permissions: &tabletmanagerdatapb.Permissions{}},
+				"zone1-0000000101": {Permissions: &tabletmanagerdatapb.Permissions{}},
+			},
+		},
+		calls: map[string]int{},
+	}
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks1",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+	}, &topodatapb.Tablet{
+		Keyspace: "ks1",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	}, &topodatapb.Tablet{
+		Keyspace: "ks1",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_REPLICA,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  101,
+		},
+	})
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	// A repeated shard is validated once: each tablet's permissions are read
+	// once.
+	_, err := vtctld.ValidatePermissionsKeyspace(ctx, &vtctldatapb.ValidatePermissionsKeyspaceRequest{
+		Keyspace: "ks1",
+		Shards:   []string{"-", "-"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]int{
+		"zone1-0000000100": 1,
+		"zone1-0000000101": 1,
+	}, tmc.calls)
+}
+
 func TestValidateSchemaKeyspace(t *testing.T) {
 	ctx := t.Context()
 	ts := memorytopo.NewServer(ctx, "zone1", "zone2", "zone3")
@@ -14475,6 +15058,29 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 			},
 		},
 		{
+			name: "repeated shard",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace: "ks1",
+				Shards:   []string{"-", "-"},
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{"zone1-0000000100 has an extra table named not_in_vschema"},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{"zone1-0000000100 has an extra table named not_in_vschema"}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  100,
+				}, schema1)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  101,
+				}, schema2)
+			},
+		},
+		{
 			name: "skip-no-primary: no primary",
 			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
 				Keyspace:      "ks2",
@@ -14511,6 +15117,84 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 
 			require.NoError(t, err)
 			utils.MustMatch(t, tt.expected, resp)
+		})
+	}
+}
+
+func TestValidateVSchema(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	tmc := testutil.TabletManagerClient{
+		GetSchemaResults: map[string]struct {
+			Schema *tabletmanagerdatapb.SchemaDefinition
+			Error  error
+		}{
+			"zone1-0000000100": {
+				Schema: &tabletmanagerdatapb.SchemaDefinition{
+					TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+						Name:    "not_in_vschema",
+						Columns: []string{"c1"},
+					}},
+				},
+			},
+		},
+	}
+	testutil.AddKeyspace(ctx, t, ts, &vtctldatapb.Keyspace{
+		Name: "ks1",
+		Keyspace: &topodatapb.Keyspace{
+			KeyspaceType: topodatapb.KeyspaceType_NORMAL,
+		},
+	})
+	testutil.AddTablets(ctx, t, ts, &testutil.AddTabletOptions{
+		AlsoSetShardPrimary:  true,
+		ForceSetShardPrimary: true,
+	}, &topodatapb.Tablet{
+		Keyspace: "ks1",
+		Shard:    "-",
+		Type:     topodatapb.TabletType_PRIMARY,
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone1",
+			Uid:  100,
+		},
+	})
+	require.NoError(t, ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name:     "ks1",
+		Keyspace: &vschemapb.Keyspace{},
+	}))
+
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	tests := []struct {
+		name   string
+		shards []string
+	}{
+		{
+			name:   "one shard",
+			shards: []string{"-"},
+		},
+		{
+			name:   "repeated shard",
+			shards: []string{"-", "-"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := vtctld.ValidateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{
+				Keyspace: "ks1",
+				Shards:   tt.shards,
+			})
+			require.NoError(t, err)
+
+			result := "ks1/- has tables that are not in the vschema: [not_in_vschema]"
+			utils.MustMatch(t, &vtctldatapb.ValidateVSchemaResponse{
+				Results: []string{result},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-": {Results: []string{result}},
+				},
+			}, resp)
 		})
 	}
 }
@@ -15500,7 +16184,398 @@ func TestValidateShard(t *testing.T) {
 	}
 }
 
+func TestUpdateQueryThrottlerConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cells    []string
+		keyspace *vtctldatapb.Keyspace
+		req      *vtctldatapb.UpdateQueryThrottlerConfigRequest
+		expected *vtctldatapb.UpdateQueryThrottlerConfigResponse
+		// wantConfig is the config that the Keyspace and every SrvKeyspace must store, when it differs from
+		// the request's. The server normalizes the request in place, so comparing with tt.req can't show
+		// that it normalized anything.
+		wantConfig *querythrottler.Config
+		// failSrvKeyspaceUpdate makes every SrvKeyspace write fail after the Keyspace write.
+		failSrvKeyspaceUpdate bool
+		// failCellListRead makes reading the list of cells time out after the Keyspace write.
+		failCellListRead bool
+		wantCode         vtrpc.Code
+		wantErrContains  string
+	}{
+		{
+			name:  "successfully update query throttler config",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					DryRun:   false,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "update with dry run enabled",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					DryRun:   true,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+		},
+		{
+			name:  "thresholds are stored sorted by above",
+			cells: []string{"zone1", "zone2"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"INSERT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													// Throttle descends as above ascends, so a sort on the wrong field fails.
+													{Above: 10, Throttle: 25},
+													{Above: 2, Throttle: 100},
+													{Above: 5, Throttle: 50},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expected: &vtctldatapb.UpdateQueryThrottlerConfigResponse{},
+			wantConfig: &querythrottler.Config{
+				Enabled:  true,
+				Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+				TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+					TabletRules: map[string]*querythrottler.StatementRuleSet{
+						"PRIMARY": {
+							StatementRules: map[string]*querythrottler.MetricRuleSet{
+								"INSERT": {
+									MetricRules: map[string]*querythrottler.MetricRule{
+										"lag": {
+											Thresholds: []*querythrottler.ThrottleThreshold{
+												{Above: 2, Throttle: 100},
+												{Above: 5, Throttle: 50},
+												{Above: 10, Throttle: 25},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name:  "keyspace not found",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "otherkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "nonexistent",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			wantCode:        vtrpc.Code_NOT_FOUND,
+			wantErrContains: "failed to lock keyspace nonexistent",
+		},
+		{
+			name:  "SrvKeyspace update fails",
+			cells: []string{"zone1", "zone2"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace: "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{
+					Enabled:  true,
+					Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+					TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+						TabletRules: map[string]*querythrottler.StatementRuleSet{
+							"PRIMARY": {
+								StatementRules: map[string]*querythrottler.MetricRuleSet{
+									"SELECT": {
+										MetricRules: map[string]*querythrottler.MetricRule{
+											"lag": {
+												Thresholds: []*querythrottler.ThrottleThreshold{
+													{Above: 5.0, Throttle: 100},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			failSrvKeyspaceUpdate: true,
+			wantCode:              vtrpc.Code_UNAVAILABLE,
+			wantErrContains:       "re-run the command",
+		},
+		{
+			name:  "reading the cells times out after the keyspace update",
+			cells: []string{"zone1"},
+			keyspace: &vtctldatapb.Keyspace{
+				Name:     "testkeyspace",
+				Keyspace: &topodatapb.Keyspace{},
+			},
+			req: &vtctldatapb.UpdateQueryThrottlerConfigRequest{
+				Keyspace:             "testkeyspace",
+				QueryThrottlerConfig: &querythrottler.Config{Enabled: false},
+			},
+			failCellListRead: true,
+			wantCode:         vtrpc.Code_DEADLINE_EXCEEDED,
+			wantErrContains:  "re-run the command",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := t.Context()
+
+			ts, factory := memorytopo.NewServerAndFactory(ctx, tt.cells...)
+			vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, nil, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+				return NewVtctldServer(vtenv.NewTestEnv(), ts)
+			})
+
+			// Add the keyspace
+			testutil.AddKeyspace(ctx, t, ts, tt.keyspace)
+
+			// Add SrvKeyspace for the keyspace in all cells
+			for _, cell := range tt.cells {
+				err := ts.UpdateSrvKeyspace(ctx, cell, tt.keyspace.Name, &topodatapb.SrvKeyspace{})
+				require.NoError(t, err)
+			}
+
+			if tt.failSrvKeyspaceUpdate {
+				factory.AddOperationError(memorytopo.Update, "SrvKeyspace$", errors.New("cell unreachable"))
+			}
+			if tt.failCellListRead {
+				factory.AddOperationError(memorytopo.ListDir, "cells$", topo.NewError(topo.Timeout, "cells"))
+			}
+
+			// Call the RPC
+			resp, err := vtctld.UpdateQueryThrottlerConfig(ctx, tt.req)
+
+			if tt.wantCode != vtrpc.Code_OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, vterrors.Code(err), "error: %v", err)
+				assert.ErrorContains(t, err, tt.wantErrContains)
+				if tt.failSrvKeyspaceUpdate || tt.failCellListRead {
+					// The Keyspace is written before the SrvKeyspaces, so it already holds the config.
+					ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
+					require.NoError(t, err)
+					utils.MustMatch(t, tt.req.QueryThrottlerConfig, ks.QueryThrottlerConfig)
+				}
+				return
+			}
+
+			require.NoError(t, err)
+			utils.MustMatch(t, tt.expected, resp)
+
+			wantConfig := tt.wantConfig
+			if wantConfig == nil {
+				wantConfig = tt.req.QueryThrottlerConfig
+			}
+
+			// Verify the keyspace was updated
+			ks, err := ts.GetKeyspace(ctx, tt.req.Keyspace)
+			require.NoError(t, err)
+			utils.MustMatch(t, wantConfig, ks.QueryThrottlerConfig)
+
+			// Verify SrvKeyspace was updated in all cells
+			for _, cell := range tt.cells {
+				srvKs, err := ts.GetSrvKeyspace(ctx, cell, tt.req.Keyspace)
+				require.NoError(t, err)
+				utils.MustMatch(t, wantConfig, srvKs.QueryThrottlerConfig)
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
+}
+
+// TestValidateTabletThrottlerStrategyConfig_RejectsUnenforceableRules covers configs that would be
+// accepted as enabled while containing a rule that can never throttle a query.
+func TestValidateTabletThrottlerStrategyConfig_RejectsUnenforceableRules(t *testing.T) {
+	// config builds an enabled TABLET_THROTTLER config with a single PRIMARY rule set.
+	config := func(stmtRules map[string]*querythrottler.MetricRuleSet) *querythrottler.Config {
+		return &querythrottler.Config{
+			Enabled:  true,
+			Strategy: querythrottler.ThrottlingStrategy_TABLET_THROTTLER,
+			TabletStrategyConfig: &querythrottler.TabletStrategyConfig{
+				TabletRules: map[string]*querythrottler.StatementRuleSet{
+					"PRIMARY": {StatementRules: stmtRules},
+				},
+			},
+		}
+	}
+	// rule builds a single-metric rule set for stmtType.
+	rule := func(stmtType string, thresholds ...*querythrottler.ThrottleThreshold) map[string]*querythrottler.MetricRuleSet {
+		return map[string]*querythrottler.MetricRuleSet{
+			stmtType: {MetricRules: map[string]*querythrottler.MetricRule{
+				"lag": {Thresholds: thresholds},
+			}},
+		}
+	}
+
+	tests := []struct {
+		name    string
+		config  *querythrottler.Config
+		wantErr string
+	}{
+		{
+			name:    "empty statement_rules",
+			config:  config(nil),
+			wantErr: "statement_rules cannot be empty (tablet_type=PRIMARY)",
+		},
+		{
+			name:    "empty metric_rules",
+			config:  config(map[string]*querythrottler.MetricRuleSet{"SELECT": {}}),
+			wantErr: "metric_rules cannot be empty (tablet_type=PRIMARY, statement=SELECT)",
+		},
+		{
+			name: "nil metric rule",
+			config: config(map[string]*querythrottler.MetricRuleSet{
+				"SELECT": {MetricRules: map[string]*querythrottler.MetricRule{"lag": nil}},
+			}),
+			wantErr: "thresholds cannot be empty (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "empty thresholds",
+			config:  config(rule("SELECT")),
+			wantErr: "thresholds cannot be empty (tablet_type=PRIMARY, statement=SELECT, metric=lag)",
+		},
+		{
+			name:    "NaN above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.NaN(), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got NaN",
+		},
+		{
+			name:    "positive infinity above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(1), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got +Inf",
+		},
+		{
+			name:    "negative infinity above",
+			config:  config(rule("SELECT", &querythrottler.ThrottleThreshold{Above: math.Inf(-1), Throttle: 100})),
+			wantErr: "threshold[0] 'above' must be a finite number, got -Inf",
+		},
+	}
+	// DDL plans can reach the throttler without a parsed query, and their rules still apply,
+	// so DDL is a valid statement type like the data-plane ones.
+	for _, stmtType := range []string{"SELECT", "INSERT", "REPLACE", "UPDATE", "DELETE", "DDL"} {
+		tests = append(tests, struct {
+			name    string
+			config  *querythrottler.Config
+			wantErr string
+		}{
+			name:   stmtType + " statement type is supported",
+			config: config(rule(stmtType, &querythrottler.ThrottleThreshold{Above: 5, Throttle: 100})),
+		})
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateTabletThrottlerStrategyConfig(tt.config)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorContains(t, err, tt.wantErr)
+		})
+	}
 }
