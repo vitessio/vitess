@@ -68,6 +68,13 @@ type (
 		Query           string                // Query is the original or normalized SQL statement used to build the plan.
 		SetVarComment   string                // SetVarComment holds any embedded SET_VAR hints within the query.
 		Collation       collations.ID         // Collation is the character collation ID that governs string comparison.
+
+		// RequestDirectives is set when the statement was planned with marker
+		// blocks in place of its request-only comment directives. The queries
+		// of such a plan carry the markers, which only a request that replaced
+		// its own directives can restore, so it never shares a plan with a
+		// statement that was planned as written.
+		RequestDirectives bool
 	}
 )
 
@@ -257,13 +264,18 @@ func getPlanTypeForUpsert(prim *Upsert) PlanType {
 }
 
 func (pk PlanKey) DebugString() string {
-	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation)
+	return fmt.Sprintf("CurrentKeyspace: %s, TabletType: %s, Destination: %s, Query: %s, SetVarComment: %s, Collation: %d, RequestDirectives: %t", pk.CurrentKeyspace, pk.TabletType.String(), pk.Destination, pk.Query, pk.SetVarComment, pk.Collation, pk.RequestDirectives)
 }
 
 func (pk PlanKey) Hash() theine.HashKey256 {
 	hasher := vthash.New256()
 	_, _ = hasher.WriteUint16(uint16(pk.Collation))
 	_, _ = hasher.WriteUint16(uint16(pk.TabletType))
+	var requestDirectives uint16
+	if pk.RequestDirectives {
+		requestDirectives = 1
+	}
+	_, _ = hasher.WriteUint16(requestDirectives)
 	_, _ = hasher.WriteString(pk.CurrentKeyspace)
 	_, _ = hasher.WriteString(pk.Destination)
 	_, _ = hasher.WriteString(pk.SetVarComment)
