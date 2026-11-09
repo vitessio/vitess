@@ -86,15 +86,9 @@ workflows:
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e'
-<<<<<<< HEAD
-        - 'step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1'
-||||||| parent of 210c6a1b1a (CI: stop running test-only workflows on pushes (#21943))
-        - 'step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2'
-=======
         - 'docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc'
         - 'docker/setup-buildx-action@594f3bf4285d9ea8dc53c9a0c9c4092420091003'
-        - 'step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2'
->>>>>>> 210c6a1b1a (CI: stop running test-only workflows on pushes (#21943))
+        - 'step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1'
     '.github/workflows/local_example.yml':
         - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
