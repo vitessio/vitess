@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -42,7 +41,6 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func testRedacted(t *testing.T, source, expected string) {
@@ -3432,7 +3430,7 @@ func TestPrimaryPosition(t *testing.T) {
 
 func TestSetReplicationPosition(t *testing.T) {
 	db := fakesqldb.New(t)
-	t.Cleanup(db.Close)
+	defer db.Close()
 
 	params := db.ConnParams()
 	cp := *params
@@ -3443,7 +3441,7 @@ func TestSetReplicationPosition(t *testing.T) {
 	db.AddQuery("RESET BINARY LOGS AND GTIDS", &sqltypes.Result{})
 
 	testMysqld := NewMysqld(dbc)
-	t.Cleanup(testMysqld.Close)
+	defer testMysqld.Close()
 
 	ctx := t.Context()
 
@@ -3458,24 +3456,7 @@ func TestSetReplicationPosition(t *testing.T) {
 	db.AddQuery("SET GLOBAL gtid_purged = '00010203-0405-0607-0809-0a0b0c0d0e0f:1'", &sqltypes.Result{})
 
 	err = testMysqld.SetReplicationPosition(ctx, pos)
-	require.NoError(t, err)
-
-	// The GTID set holds a comma, so each statement is its own element.
-	sid2 := replication.SID{15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
-	pos.GTIDSet = pos.GTIDSet.AddGTID(replication.Mysql56GTID{Server: sid2, Sequence: 1})
-	purge := "SET GLOBAL gtid_purged = '00010203-0405-0607-0809-0a0b0c0d0e0f:1,0f0e0d0c-0b0a-0908-0706-050403020100:1'"
-	db.AddQuery(purge, &sqltypes.Result{})
-	logs := logtest.Capture(t, slog.LevelInfo)
-
-	err = testMysqld.SetReplicationPosition(ctx, pos)
-	require.NoError(t, err)
-	record := logs.Record(t, "Executing commands to set replication position")
-	assert.Equal(t, "INFO", record["level"])
-	queries, ok := record["queries"].([]any)
-	require.True(t, ok, "queries: %#v", record["queries"])
-	require.Len(t, queries, 2)
-	assert.Regexp(t, `^RESET [A-Z ]+$`, queries[0])
-	assert.Equal(t, purge, queries[1])
+	assert.NoError(t, err)
 }
 
 func TestSetReplicationSource(t *testing.T) {

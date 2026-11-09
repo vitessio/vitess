@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -35,7 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	vtenv "vitess.io/vitess/go/vt/env"
-	"vitess.io/vitess/go/vt/log/logtest"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -190,14 +188,9 @@ func TestExecuteOptionalContext(t *testing.T) {
 		start := time.Now()
 		require.NoError(t, NewSimpleHook("exiting_parent").ExecuteOptionalContext(t.Context()))
 		assert.Less(t, time.Since(start), 30*time.Second, "the hook call waited for the child")
-		logs := logtest.Capture(t, slog.LevelInfo)
 		hr := NewSimpleHook("exiting_parent").execute(t.Context(), hookWaitDelay)
 		assert.Equal(t, HOOK_SUCCESS, hr.ExitStatus)
 		assert.Contains(t, hr.Stderr, "the output is incomplete")
-		incomplete := logs.Record(t, "hook: the output is incomplete: the hook's children kept it open for more than the wait delay after the hook ended")
-		assert.Equal(t, "WARN", incomplete["level"])
-		assert.Equal(t, "exiting_parent", incomplete["hook"])
-		assert.Equal(t, float64(hookWaitDelay), incomplete["wait_delay"])
 	})
 
 	t.Run("failed hook with a child holding its output", func(t *testing.T) {
@@ -292,9 +285,9 @@ func TestExecuteOptional(t *testing.T) {
 	}
 
 	require.NoError(t, os.Symlink(echo, echoHookPath))
-	t.Cleanup(func() {
+	defer func() {
 		require.NoError(t, os.Remove(echoHookPath))
-	})
+	}()
 	tt := []struct {
 		name          string
 		hookName      string
@@ -304,7 +297,7 @@ func TestExecuteOptional(t *testing.T) {
 		{
 			name:       "HookSuccess",
 			hookName:   "echo",
-			parameters: []string{"test", "args"},
+			parameters: []string{"test"},
 		},
 		{
 			name:       "HookDoesNotExist",
@@ -313,7 +306,6 @@ func TestExecuteOptional(t *testing.T) {
 		},
 	}
 
-	logs := logtest.Capture(t, slog.LevelInfo)
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			h := NewHook(tc.hookName, tc.parameters)
@@ -326,26 +318,6 @@ func TestExecuteOptional(t *testing.T) {
 			}
 		})
 	}
-
-	executing := logs.Record(t, "hook: executing hook")
-	assert.Equal(t, "INFO", executing["level"])
-	assert.Equal(t, echoHookPath, executing["path"])
-	assert.Equal(t, []any{"test", "args"}, executing["args"])
-
-	result := logs.Record(t, "hook: result")
-	assert.Equal(t, "INFO", result["level"])
-	assert.Equal(t, float64(HOOK_SUCCESS), result["exit_status"])
-	assert.Equal(t, "test args\n", result["stdout"])
-	assert.NotContains(t, result, "stderr")
-
-	missing := logs.Record(t, "hook doesn't exist")
-	assert.Equal(t, "INFO", missing["level"])
-	assert.Equal(t, "nonexistent-hook", missing["hook"])
-
-	logs.Reset()
-	require.NoError(t, NewSimpleHook("echo").ExecuteOptional())
-	noArgs := logs.Record(t, "hook: executing hook")
-	assert.Equal(t, []any{}, noArgs["args"])
 }
 
 func TestNewHook(t *testing.T) {

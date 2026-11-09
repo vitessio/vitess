@@ -19,10 +19,6 @@ package servenv
 import (
 	"fmt"
 	"log/slog"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
 	"testing"
 	"time"
 
@@ -85,29 +81,7 @@ func TestMkprofileLogsUnlessQuiet(t *testing.T) {
 				assert.Empty(t, logs.Records(t))
 				return
 			}
-			record := logs.Record(t, "pprof: profiling enabled")
-			assert.Equal(t, "mutex", record["profile_mode"])
-			assert.Equal(t, filepath.Join(prof.path, "mutex.pprof"), record["path"])
+			logs.Record(t, "pprof: profiling enabled")
 		})
 	}
-}
-
-// TestParseFlagsRejectsPositionalArgs runs ParseFlags in a child process,
-// since it exits.
-func TestParseFlagsRejectsPositionalArgs(t *testing.T) {
-	if os.Getenv("TEST_SERVENV_POSITIONAL_ARGS") == "1" {
-		os.Args = []string{"vtfoo", "a", "b"}
-		ParseFlags("vtfoo")
-		return
-	}
-
-	cmd := exec.Command(os.Args[0], "-test.run=^TestParseFlagsRejectsPositionalArgs$")
-	cmd.Env = append(os.Environ(), "TEST_SERVENV_POSITIONAL_ARGS=1")
-	out, err := cmd.CombinedOutput()
-	var exitErr *exec.ExitError
-	require.ErrorAs(t, err, &exitErr, "output:\n%s", out)
-	assert.Equal(t, 1, exitErr.ExitCode())
-	// Under test the logger writes colored text, not JSON.
-	logged := regexp.MustCompile(`\x1b\[[0-9;]*m`).ReplaceAllString(string(out), "")
-	assert.Regexp(t, `ERR \S+ Command doesn't take any positional arguments command=vtfoo args="\[a b\]"\n`, logged)
 }

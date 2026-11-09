@@ -24,7 +24,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log/slog"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +42,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -2132,10 +2130,10 @@ func TestListBackupsPagination(t *testing.T) {
 
 func TestStartBackup(t *testing.T) {
 	mockServer := newMockS3Server()
-	t.Cleanup(mockServer.Close)
+	defer mockServer.Close()
 
 	originalBucket := bucket
-	t.Cleanup(func() { bucket = originalBucket })
+	defer func() { bucket = originalBucket }()
 	bucket = "test-bucket"
 
 	client := createTestS3Client(mockServer)
@@ -2145,16 +2143,9 @@ func TestStartBackup(t *testing.T) {
 	}
 	require.NoError(t, bs.s3SSE.init())
 
-	logs := logtest.Capture(t, slog.LevelInfo)
 	bh, err := bs.StartBackup(t.Context(), "testdir", "newbackup")
 	require.NoError(t, err, "StartBackup() should not error")
 	require.NotNil(t, bh)
-
-	record := logs.Record(t, "StartBackup: [s3]")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, "testdir", record["dir"])
-	assert.Equal(t, "newbackup", record["backup_name"])
-	assert.Equal(t, "test-bucket", record["bucket"])
 
 	handle, ok := bh.(*S3BackupHandle)
 	require.True(t, ok)

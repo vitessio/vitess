@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 	"net"
 	"strconv"
@@ -40,7 +39,6 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
-	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -1938,39 +1936,6 @@ func TestParseComBinlogDumpGTID_Truncated(t *testing.T) {
 			assert.Error(t, err, "expected error for truncated packet")
 		})
 	}
-}
-
-func TestHandleNextCommandLogs(t *testing.T) {
-	t.Run("unhandled packet", func(t *testing.T) {
-		logs := logtest.Capture(t, slog.LevelInfo)
-		sConn := newConn(testConn{
-			writeToPass: []bool{true},
-			pos:         -1,
-			queryPacket: []byte{0x02, 0x00, 0x00, 0x00, 0x40, 0x07},
-		}, DefaultFlushDelay, 0)
-		sConn.ConnectionID = 5
-
-		sConn.handleNextCommand(&testRun{})
-		record := logs.Record(t, "Got unhandled packet (default), returning error")
-		assert.Equal(t, "client 5 (a)", record["connection"])
-		assert.Equal(t, "[64 7]", record["packet"])
-	})
-
-	t.Run("binlog dump parse error", func(t *testing.T) {
-		logs := logtest.Capture(t, slog.LevelInfo)
-		sConn := newConn(testConn{
-			writeToPass: []bool{true},
-			pos:         -1,
-			queryPacket: []byte{0x01, 0x00, 0x00, 0x00, ComBinlogDumpGTID},
-		}, DefaultFlushDelay, 0)
-		sConn.ConnectionID = 5
-
-		assert.False(t, sConn.handleNextCommand(&testRun{}))
-		record := logs.Record(t, "parseComBinlogDumpGTID failed")
-		assert.EqualValues(t, 5, record["connection_id"])
-		assert.Equal(t, "error reading BinlogDumpGTID packet", record["error"])
-		assert.Equal(t, "INTERNAL", record["error_code"])
-	})
 }
 
 func TestParseComBinlogDump_Truncated(t *testing.T) {

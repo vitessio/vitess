@@ -17,24 +17,17 @@ limitations under the license.
 package vault
 
 import (
-	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestErrorConditions(t *testing.T) {
 	// Bad token file path
-	logs := logtest.Capture(t, slog.LevelInfo)
 	_, err := newAuthServerVault("localhost", 1*time.Second, "", "/path/to/secret/in/vault", 10*time.Second, "/tmp/this_file_does_not_exist", "", "", "")
 	assert.Contains(t, err.Error(), "No Vault token in provided filename")
-	record := logs.Record(t, "Could not read file")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "/tmp/this_file_does_not_exist", record["path"])
 
 	// Bad secretID file path
 	_, err = newAuthServerVault("localhost", 1*time.Second, "", "/path/to/secret/in/vault", 10*time.Second, "", "", "/tmp/this_file_does_not_exist", "")

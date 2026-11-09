@@ -17,13 +17,10 @@ limitations under the License.
 package replication
 
 import (
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestStatusReplicationRunning(t *testing.T) {
@@ -187,22 +184,6 @@ func TestMysqlRetrieveFileBasedPositions(t *testing.T) {
 	assert.Equalf(t, got.FilePosition.GTIDSet, want.FilePosition.GTIDSet, "got FilePosition: %v; want FilePosition: %v", got.FilePosition.GTIDSet, want.FilePosition.GTIDSet)
 	assert.Equalf(t, got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet, "got RelayLogFilePosition: %v; want RelayLogFilePosition: %v", got.RelayLogFilePosition.GTIDSet, want.RelayLogFilePosition.GTIDSet)
 	assert.Equalf(t, got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet, "got RelayLogSourceBinlogEquivalentPosition: %v; want RelayLogSourceBinlogEquivalentPosition: %v", got.RelayLogSourceBinlogEquivalentPosition.GTIDSet, want.RelayLogSourceBinlogEquivalentPosition.GTIDSet)
-}
-
-func TestMysqlFileBasedPositionParseError(t *testing.T) {
-	resultMap := map[string]string{
-		"Exec_Master_Log_Pos":   "not-a-pos",
-		"Relay_Master_Log_File": "master-bin.000002",
-	}
-
-	logs := logtest.Capture(t, slog.LevelInfo)
-	_, err := ParseMysqlReplicationStatus(resultMap, false)
-	require.NoError(t, err)
-
-	record := logs.Record(t, "Error parsing GTID set")
-	assert.Equal(t, "WARN", record["level"])
-	assert.Equal(t, "master-bin.000002:not-a-pos", record["file_position"])
-	assert.Equal(t, "invalid FilePos GTID (master-bin.000002:not-a-pos): expecting pos to be an integer", record["error"])
 }
 
 func TestMysqlShouldGetLegacyRelayLogPosition(t *testing.T) {

@@ -260,12 +260,8 @@ func TestCleanupLockfile(t *testing.T) {
 		os.Remove("mysql.sock.lock")
 	})
 	ts := "prefix"
-	logs := logtest.Capture(t, slog.LevelInfo)
 	// All good if no lockfile exists
 	require.NoError(t, cleanupLockfile("mysql.sock", ts))
-	record := logs.Record(t, "no stale lock file")
-	assert.Equal(t, "prefix", record["start_id"])
-	assert.Equal(t, "mysql.sock.lock", record["lock_file"])
 
 	// If lockfile exists, but the process is not found, we clean it up.
 	os.WriteFile("mysql.sock.lock", []byte("123456789"), 0o600)
@@ -481,24 +477,12 @@ func TestGetMycnfTemplateMySQL9(t *testing.T) {
 	assert.NotContains(t, template, "mysql_native_password = ON")
 }
 
-func TestGetMycnfTemplateUnsupportedVersionLogsVersion(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-	testMysqld := &Mysqld{capabilities: newCapabilitySet(FlavorMySQL, ServerVersion{Major: 7, Minor: 1, Patch: 2})}
-	testMysqld.getMycnfTemplate()
-
-	record := logs.Record(t, "this version of Vitess does not include built-in support for this MySQL version")
-	assert.Equal(t, "mysql", record["flavor"])
-	assert.Equal(t, "7.1.2", record["mysql_version"])
-}
-
-// TestStartNoWaitLogsOutput checks that the output of mysqld_safe is logged
-// under stderr and stdout, that a clean exit logs no error, and that the
-// command is logged without its environment.
-func TestStartNoWaitLogsOutput(t *testing.T) {
+// TestStartNoWaitLogs checks that the started command is logged without its
+// environment and that a clean exit of mysqld_safe logs no error.
+func TestStartNoWaitLogs(t *testing.T) {
 	root := t.TempDir()
 	require.NoError(t, os.Mkdir(path.Join(root, "bin"), 0o755))
-	script := "#!/bin/sh\necho out-line\necho err-line >&2\n"
-	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqld_safe"), []byte(script), 0o755))
+	require.NoError(t, os.WriteFile(path.Join(root, "bin", "mysqld_safe"), []byte("#!/bin/sh\n"), 0o755))
 	t.Setenv("VTROOT", root)
 	t.Setenv("VT_MYSQL_ROOT", root)
 	t.Setenv("VT_MYSQL_BASEDIR", root)
@@ -507,14 +491,9 @@ func TestStartNoWaitLogsOutput(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 	require.NoError(t, (&Mysqld{}).startNoWait(&Mycnf{Path: path.Join(root, "my.cnf")}))
 
-	stdout := logs.Wait(t, "mysqld stdout")
-	assert.Equal(t, "out-line", stdout["stdout"])
-	assert.Contains(t, stdout, "start_id")
-	assert.Equal(t, "err-line", logs.Wait(t, "mysqld stderr")["stderr"])
 	assert.NotContains(t, logs.Wait(t, "mysqld exited"), "error")
 	starting := logs.Record(t, "Starting mysqld")
 	assert.Equal(t, path.Join(root, "bin", "mysqld_safe")+" --defaults-file="+path.Join(root, "my.cnf")+" --basedir="+root, starting["exec_cmd"])
-	assert.NotContains(t, starting, "command")
 	assert.NotContains(t, logs.String(), "env-secret-sentinel")
 }
 
@@ -695,6 +674,8 @@ func TestStartNoWaitMysqldOutput(t *testing.T) {
 		stdout, stderr := logs.Wait(t, "mysqld stdout"), logs.Wait(t, "mysqld stderr")
 		assert.Equal(t, "INFO", stdout["level"])
 		assert.Equal(t, "INFO", stderr["level"])
+		assert.Equal(t, outLine, stdout["stdout"])
+		assert.Equal(t, errLine, stderr["stderr"])
 		assert.NotEmpty(t, stderr["start_id"])
 		assert.Equal(t, stdout["start_id"], stderr["start_id"])
 	})

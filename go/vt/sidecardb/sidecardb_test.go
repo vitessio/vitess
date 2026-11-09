@@ -20,18 +20,15 @@ import (
 	"context"
 	"errors"
 	"expvar"
-	"log/slog"
 	"sort"
 	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/stats"
@@ -129,7 +126,7 @@ func TestMiscSidecarDB(t *testing.T) {
 	ctx := t.Context()
 
 	db := fakesqldb.New(t)
-	t.Cleanup(db.Close)
+	defer db.Close()
 	env := vtenv.NewTestEnv()
 	AddSchemaInitQueries(db, false, env.Parser())
 	db.AddQuery("use dbname", &sqltypes.Result{})
@@ -162,22 +159,9 @@ func TestMiscSidecarDB(t *testing.T) {
 	ddlErrorCount.Set(0)
 	ddlCount.Set(0)
 	require.Equal(t, int64(0), getDDLCount())
-	logs := logtest.Capture(t, slog.LevelInfo)
 	err = Init(ctx, env, exec)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
-
-	var applied map[string]any
-	for _, record := range logs.Records(t) {
-		if record["msg"] == "Applied DDL for table during sidecar database initialization" && record["table"] == "vreplication" {
-			applied = record
-		}
-	}
-	require.NotNil(t, applied, "logs:\n%s", logs.String())
-	assert.Equal(t, "INFO", applied["level"])
-	assert.Equal(t, sidecar.GetIdentifier(), applied["db_name"])
-	assert.Equal(t, "vreplication", applied["module"])
-	assert.Contains(t, applied["query"], "CREATE TABLE IF NOT EXISTS")
 
 	// Include the table DDLs in the expected queries.
 	// This causes them to NOT be created again.

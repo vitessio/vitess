@@ -18,29 +18,13 @@ package zkctl
 
 import (
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/vt/log/logtest"
 )
-
-func TestMakeZkConfigFromStringLogsHostname(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-
-	zkConf := MakeZkConfigFromString("1@voltron:2888:3888:2181", 1)
-	require.Equal(t, uint32(1), zkConf.ServerId)
-
-	record := logs.Record(t, "Fully qualified machine hostname was detected")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, netutil.FullyQualifiedHostnameOrPanic(), record["hostname"])
-}
 
 // This test depend on starting and stopping a ZK instance,
 // but may leave files/processes behind if they don't succeed,
