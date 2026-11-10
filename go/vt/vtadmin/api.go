@@ -832,6 +832,10 @@ func (api *API) EmergencyFailoverShard(ctx context.Context, req *vtadminpb.Emerg
 		return nil, nil
 	}
 
+	if req.Options == nil {
+		return nil, fmt.Errorf("%w: options is required", errors.ErrInvalidRequest)
+	}
+
 	return c.EmergencyFailoverShard(ctx, req.Options)
 }
 
@@ -1304,6 +1308,10 @@ func (api *API) GetSchemaMigrations(ctx context.Context, req *vtadminpb.GetSchem
 	requestsByCluster := make(map[string][]*vtctldatapb.GetSchemaMigrationsRequest, len(req.ClusterRequests))
 
 	for _, r := range req.ClusterRequests {
+		if r == nil {
+			return nil, fmt.Errorf("%w: cluster_requests entry cannot be null", errors.ErrInvalidRequest)
+		}
+
 		// Requests for clusters the caller can't see are skipped below, so only reject the others.
 		if r.GetRequest() == nil && api.authz.IsAuthorized(ctx, r.ClusterId, rbac.SchemaMigrationResource, rbac.GetAction) {
 			return nil, fmt.Errorf("%w: cluster_requests.request is required", errors.ErrInvalidRequest)
@@ -2302,6 +2310,10 @@ func (api *API) PlannedFailoverShard(ctx context.Context, req *vtadminpb.Planned
 		return nil, nil
 	}
 
+	if req.Options == nil {
+		return nil, fmt.Errorf("%w: options is required", errors.ErrInvalidRequest)
+	}
+
 	return c.PlannedFailoverShard(ctx, req.Options)
 }
 
@@ -3139,6 +3151,10 @@ func (api *API) getTabletForResourceAndAction(
 	alias *topodatapb.TabletAlias,
 	clusterIDs []string,
 ) (*vtadminpb.Tablet, *cluster.Cluster, error) {
+	if alias == nil {
+		return nil, nil, fmt.Errorf("%w: alias is required", errors.ErrInvalidRequest)
+	}
+
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(alias))
 	span.Annotate("tablet_cell", alias.Cell)
 	span.Annotate("tablet_uid", alias.Uid)

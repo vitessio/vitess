@@ -17,8 +17,10 @@ limitations under the License.
 package vtadmin
 
 import (
+	"bytes"
 	_ "embed"
 	"flag"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -101,6 +103,23 @@ func TestVtadminAPIs(t *testing.T) {
 	t.Run("keyspaces api", func(t *testing.T) {
 		resp := clusterInstance.VtadminProcess.MakeAPICallRetry(t, "api/keyspaces")
 		require.Contains(t, resp, uks)
+	})
+
+	// The handler reads the request in a goroutine, so a missing one used to exit vtadmin.
+	t.Run("missing migrations request does not crash", func(t *testing.T) {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+clusterInstance.VtadminProcess.Address()+"/api/migrations/", bytes.NewBufferString(`{"cluster_requests":[{"cluster_id":"local_test"}]}`))
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(body), "cluster_requests.request is required")
+
+		code, got, err := clusterInstance.VtadminProcess.MakeAPICall("api/keyspaces")
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, code)
+		assert.Contains(t, got, uks)
 	})
 
 	// A VEXPLAIN that runs the statement it explains needs the execute action,

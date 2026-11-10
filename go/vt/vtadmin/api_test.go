@@ -6039,10 +6039,21 @@ func TestMissingNestedRequest(t *testing.T) {
 		{"CompleteSchemaMigration", func() (any, error) {
 			return api.CompleteSchemaMigration(ctx, &vtadminpb.CompleteSchemaMigrationRequest{ClusterId: "c1"})
 		}},
+		{"EmergencyFailoverShard", func() (any, error) {
+			return api.EmergencyFailoverShard(ctx, &vtadminpb.EmergencyFailoverShardRequest{ClusterId: "c1"})
+		}},
 		{"GetSchemaMigrations", func() (any, error) {
 			return api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{
 				ClusterRequests: []*vtadminpb.GetSchemaMigrationsRequest_ClusterRequest{{ClusterId: "c1"}},
 			})
+		}},
+		{"GetSchemaMigrations null cluster request", func() (any, error) {
+			return api.GetSchemaMigrations(ctx, &vtadminpb.GetSchemaMigrationsRequest{
+				ClusterRequests: []*vtadminpb.GetSchemaMigrationsRequest_ClusterRequest{nil},
+			})
+		}},
+		{"GetTablet", func() (any, error) {
+			return api.GetTablet(ctx, &vtadminpb.GetTabletRequest{ClusterIds: []string{"c1"}})
 		}},
 		{"GetTransactionInfo", func() (any, error) {
 			return api.GetTransactionInfo(ctx, &vtadminpb.GetTransactionInfoRequest{ClusterId: "c1"})
@@ -6061,6 +6072,9 @@ func TestMissingNestedRequest(t *testing.T) {
 		}},
 		{"MoveTablesCreate", func() (any, error) {
 			return api.MoveTablesCreate(ctx, &vtadminpb.MoveTablesCreateRequest{ClusterId: "c1"})
+		}},
+		{"PlannedFailoverShard", func() (any, error) {
+			return api.PlannedFailoverShard(ctx, &vtadminpb.PlannedFailoverShardRequest{ClusterId: "c1"})
 		}},
 		{"ReshardCreate", func() (any, error) {
 			return api.ReshardCreate(ctx, &vtadminpb.ReshardCreateRequest{ClusterId: "c1"})
