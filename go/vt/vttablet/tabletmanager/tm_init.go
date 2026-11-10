@@ -379,6 +379,20 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 
 	tm.baseTabletType = tablet.Type
 
+	// From here on Start spawns the keyspace rebuild and shard sync goroutines,
+	// which use the topo server. Neither may outlive a failed Start: the caller
+	// is free to close the topo server as soon as Start has returned. createKeyspaceShard can itself spawn the
+	// keyspace rebuild and then fail, so this has to be in place before it.
+	// (The mysql port lookup that checkMysql may spawn is not stopped here.)
+	startSucceeded := false
+	defer func() {
+		if startSucceeded {
+			return
+		}
+		tm.stopShardSync()
+		tm.stopRebuildKeyspace()
+	}()
+
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
 	defer cancel()
 	si, err := tm.createKeyspaceShard(ctx)
@@ -434,6 +448,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 	if restoring {
 		// If restore was triggered, it will take care
 		// of updating the tablet state and initializing replication.
+		startSucceeded = true
 		return nil
 	}
 	// We should be re-read the tablet from tabletManager and use the type specified there.
@@ -450,6 +465,8 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		return err
 	}
 	tm.tmState.Open()
+
+	startSucceeded = true
 	return nil
 }
 
@@ -661,7 +678,11 @@ func (tm *TabletManager) rebuildKeyspace(ctx context.Context, done chan<- struct
 			log.Warningf("rebuildKeyspace failed, will retry every %v: %v", retryInterval, err)
 		}
 		firstTime = false
-		time.Sleep(retryInterval)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(retryInterval):
+		}
 	}
 }
 
