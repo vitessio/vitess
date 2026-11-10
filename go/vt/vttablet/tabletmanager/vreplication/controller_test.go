@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"maps"
 	"slices"
 	"strings"
 	"sync"
@@ -824,15 +823,72 @@ func TestControllerErrorLogMessages(t *testing.T) {
 
 // TestControllerSetStateErrorLogs checks that when the controller can't save a
 // terminal error, it logs the save failure and the terminal error as separate
-// records, each under error.
+// records, each under error, and that the save-failure record reports the real
+// save failure's mysql_errno (the number of the error that actually broke the
+// save, or none), never the MySQL error the save happens to quote.
+//
+// mysql.Conn sets SQLError.Query on every query error, so the saved terminal
+// error carries its own "(errno 1062) (sqlstate 23000) during query: ..."
+// marker. The failed save quotes that marker in its own text, and without the
+// fix the save-failure record reads it and reports 1062 whatever actually broke
+// the save.
 func TestControllerSetStateErrorLogs(t *testing.T) {
+	const rowValue = "zq7rowvalue"
+
+	// A MySQL save failure carrying its own query, as mysql.Conn produces it.
+	mysqlSaveErr := sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction")
+	mysqlSaveErr.Query = "update _vt.vreplication set state='Error', message=left('terminal error', 1000) where id=1"
+
+	cases := []struct {
+		name      string
+		saveErr   error
+		wantErrno sqlerror.ErrorCode // 0 means no mysql_errno expected
+		wantInErr string
+	}{
+		{"save failure is not a MySQL error", errors.New("zq7setstatefailure"), 0, "zq7setstatefailure"},
+		{"save failure is a MySQL error", mysqlSaveErr, sqlerror.ERLockWaitTimeout, "Lock wait timeout"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			setStateRecord, errorTextRecord := runControllerSetStateError(t, rowValue, tc.saveErr)
+
+			for _, record := range []map[string]any{setStateRecord, errorTextRecord} {
+				assert.Equal(t, "ERROR", record["level"])
+				assert.Equal(t, "test_workflow", record["workflow"])
+				assert.EqualValues(t, 1, record["stream_id"])
+			}
+
+			// The terminal error record always carries the MySQL error's number.
+			assert.EqualValues(t, sqlerror.ERDupEntry, errorTextRecord["mysql_errno"])
+			assert.Contains(t, errorTextRecord["error"], rowValue)
+			assert.NotContains(t, errorTextRecord["error"], tc.wantInErr)
+			assert.Equal(t, "UNKNOWN", errorTextRecord["error_code"])
+
+			// The save-failure record reports the real save failure, never the
+			// MySQL error (1062) it quotes.
+			assert.Contains(t, setStateRecord["error"], tc.wantInErr)
+			assert.NotEqualValues(t, sqlerror.ERDupEntry, setStateRecord["mysql_errno"])
+			if tc.wantErrno == 0 {
+				assert.NotContains(t, setStateRecord, "mysql_errno")
+			} else {
+				assert.EqualValues(t, tc.wantErrno, setStateRecord["mysql_errno"])
+			}
+		})
+	}
+}
+
+// runControllerSetStateError drives a stream to an unrecoverable copy-phase
+// error (a duplicate key carrying rowValue) and makes the terminal-error save
+// fail with saveErr. It returns the "unable to setState()" and "could not set
+// error text" log records.
+func runControllerSetStateError(t *testing.T, rowValue string, saveErr error) (setStateRecord, errorTextRecord map[string]any) {
 	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
-	defer func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay }()
+	t.Cleanup(func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay })
 	vttablet.DefaultVReplicationConfig.RetryDelay = time.Hour
 
-	defer deleteTablet(addTablet(100))
+	tablet := addTablet(100)
+	t.Cleanup(func() { deleteTablet(tablet) })
 
-	const rowValue = "zq7rowvalue"
 	params := map[string]string{
 		"id":           "1",
 		"workflow":     "test_workflow",
@@ -852,39 +908,25 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 	dbClient.AddInvariant("set @@session.", testDMLResponse)
 	dbClient.AddInvariant("set names", testDMLResponse)
 	dbClient.AddInvariant("select rows_copied", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"))
-	// An unrecoverable error, like a duplicate key carrying a row value, makes
-	// the controller save the error, and saving it fails.
-	dbClient.ExpectRequestRE("from _vt.copy_state", nil, sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '"+rowValue+"' for key 'val'"))
-	dbClient.ExpectRequestRE("update _vt.vreplication set state='Error'", nil, errors.New("zq7setstatefailure"))
+	copyStateErr := sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '"+rowValue+"' for key 'val'")
+	copyStateErr.Query = "insert into t1(id, val) values (5, '" + rowValue + "')"
+	dbClient.ExpectRequestRE("from _vt.copy_state", nil, copyStateErr)
+	dbClient.ExpectRequestRE("update _vt.vreplication set state='Error'", nil, saveErr)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &mysqlctl.FakeMysqlDaemon{}
 	mysqld.MysqlPort.Store(3306)
 	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
-	defer setTabletTypesStr("replica")()
+	t.Cleanup(setTabletTypesStr("replica"))
 
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	require.NoError(t, err)
 
-	setStateRecord := logs.Wait(t, "INTERNAL: unable to setState() in controller")
-	errorTextRecord := logs.Wait(t, "INTERNAL: could not set error text")
+	setStateRecord = logs.Wait(t, "INTERNAL: unable to setState() in controller")
+	errorTextRecord = logs.Wait(t, "INTERNAL: could not set error text")
 	ct.Stop(true)
-
-	for _, record := range []map[string]any{setStateRecord, errorTextRecord} {
-		assert.Equal(t, "ERROR", record["level"])
-		assert.Equal(t, "test_workflow", record["workflow"])
-		assert.EqualValues(t, 1, record["stream_id"])
-	}
-	// Each record carries only its own error. The failed update quotes the
-	// MySQL error, which must not make it look like one.
-	assert.Equal(t, []string{"error", "level", "msg", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(setStateRecord)))
-	assert.Equal(t, []string{"error", "error_code", "level", "msg", "mysql_errno", "stream_id", "time", "workflow"}, slices.Sorted(maps.Keys(errorTextRecord)))
-	assert.EqualValues(t, sqlerror.ERDupEntry, errorTextRecord["mysql_errno"])
-	assert.Contains(t, setStateRecord["error"], "zq7setstatefailure")
-	assert.Contains(t, errorTextRecord["error"], rowValue)
-	assert.NotContains(t, errorTextRecord["error"], "zq7setstatefailure")
-	assert.Equal(t, "UNKNOWN", errorTextRecord["error_code"])
+	return setStateRecord, errorTextRecord
 }
 
 // TestTerminalVReplicationError tests the terminal error messages: the
