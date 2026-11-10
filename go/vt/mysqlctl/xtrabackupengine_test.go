@@ -356,16 +356,16 @@ echo "backup data"
 	}
 }
 
-// TestExtractFilesLogsXbstreamArgs checks that the xbstream command line that
-// a restore logs has the --encrypt-key value replaced in every form xbstream
-// accepts, so a key from --xbstream-restore-flags is not logged in clear.
-func TestExtractFilesLogsXbstreamArgs(t *testing.T) {
+// TestExtractFilesLogOmitsXbstreamFlags checks that the xbstream command line
+// that a restore logs leaves out the operator's --xbstream-restore-flags, which
+// can hold an --encrypt-key, and keeps the arguments that Vitess adds.
+func TestExtractFilesLogOmitsXbstreamFlags(t *testing.T) {
 	const secret = "encrypt_key_sentinel_5c1d"
 	oldEnginePath, oldFlags := xtrabackupEnginePath, xbstreamRestoreFlags
 	// No xbstream binary in the directory, so extractFiles fails right after
 	// logging the command.
 	xtrabackupEnginePath = t.TempDir()
-	xbstreamRestoreFlags = "--decrypt=AES256 --encrypt-key=" + secret + "1 --encrypt-key " + secret + "2 --loose_encrypt_key=" + secret + "3 -k " + secret + "4 -vk" + secret + "5 --loose-loose-encrypt-key=" + secret + "6 --skip-loose-encrypt-key=" + secret + "7 --maximum-loose_encrypt-key " + secret + "8 --encrypt-key-file=/keys/xbstream"
+	xbstreamRestoreFlags = "--decrypt=AES256 --encrypt-key=" + secret + "1 -k " + secret + "2 -vk" + secret + "3"
 	t.Cleanup(func() { xtrabackupEnginePath, xbstreamRestoreFlags = oldEnginePath, oldFlags })
 
 	stream := logutil.NewMemoryLogger()
@@ -381,10 +381,6 @@ func TestExtractFilesLogsXbstreamArgs(t *testing.T) {
 
 	logged := stream.String()
 	assert.Contains(t, logged, "Executing xbstream cmd")
+	assert.Contains(t, logged, " -C "+tempDir+" -xv <--xbstream-restore-flags>")
 	assert.NotContains(t, logged, secret)
-	// The key is redacted in every form, but the unrelated --encrypt-key-file
-	// path is kept as given.
-	assert.Contains(t, logged, "--encrypt-key=****")
-	assert.Contains(t, logged, "-vk****")
-	assert.Contains(t, logged, "--encrypt-key-file=/keys/xbstream")
 }
