@@ -17,13 +17,20 @@ limitations under the License.
 package cli
 
 import (
+	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TestRunFailsToStartTabletManager tests the code path in 'run' where we fail to start the TabletManager
@@ -68,4 +75,23 @@ func TestRunFailsToStartTabletManager(t *testing.T) {
 
 	err := Main.ExecuteContext(ctx)
 	require.ErrorContains(t, err, "you cannot enable --restore-from-backup or --restore-with-clone without a my.cnf file")
+}
+
+// TestInitConfigLogsRedactedConfig checks that the logged config has the
+// database passwords from the config file redacted.
+func TestInitConfigLogsRedactedConfig(t *testing.T) {
+	const password = "cfg-password-sentinel"
+	cfgFile := filepath.Join(t.TempDir(), "tablet.yaml")
+	require.NoError(t, os.WriteFile(cfgFile, []byte("db:\n  host: localhost\n  app:\n    user: vt_app_cfg\n    password: "+password+"\n"), 0o644))
+	oldTabletConfig := tabletConfig
+	t.Cleanup(func() { tabletConfig = oldTabletConfig })
+	tabletConfig = cfgFile
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, _, _ = initConfig(&topodatapb.TabletAlias{Cell: "cell", Uid: 1}, collations.MySQL8())
+
+	record := logs.Record(t, "Loaded config file successfully")
+	assert.Contains(t, record["config"], "user: vt_app_cfg")
+	assert.Contains(t, record["config"], "password: '****'")
+	assert.NotContains(t, logs.String(), password)
 }

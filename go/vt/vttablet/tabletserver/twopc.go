@@ -19,6 +19,8 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"strconv"
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -272,14 +274,14 @@ func (tpc *TwoPC) ReadAllRedo(ctx context.Context) (prepared, failed []*tx.Prepa
 			}
 			st, err := row[1].ToCastInt64()
 			if err != nil {
-				log.Error(fmt.Sprintf("Error parsing state for dtid %s: %v.", dtid, err))
+				log.Error("Error parsing state for dtid", slog.String("dtid", dtid), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 			switch st {
 			case RedoStatePrepared:
 				prepared = append(prepared, curTx)
 			default:
 				if st != RedoStateFailed {
-					log.Error(fmt.Sprintf("Unexpected state for dtid %s: %d. Treating it as a failure.", dtid, st))
+					log.Error("Unexpected state for dtid. Treating it as a failure.", slog.String("dtid", dtid), slog.String("state", strconv.FormatInt(st, 10)))
 				}
 				failed = append(failed, curTx)
 			}
@@ -488,11 +490,11 @@ func (tpc *TwoPC) ReadAllTransactions(ctx context.Context) ([]*tx.DistributedTx,
 			// Just log on error and continue. The state will show up as UNKNOWN
 			// on the display.
 			if err != nil {
-				log.Error(fmt.Sprintf("Error parsing state for dtid %s: %v.", dtid, err))
+				log.Error("Error parsing state for dtid", slog.String("dtid", dtid), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 			protostate := querypb.TransactionState(st)
 			if protostate < DTStatePrepare || protostate > DTStateCommit {
-				log.Error(fmt.Sprintf("Unexpected state for dtid %s: %v.", dtid, protostate))
+				log.Error("Unexpected state for dtid", slog.String("dtid", dtid), slog.String("state", protostate.String()))
 			}
 			curTx = &tx.DistributedTx{
 				Dtid:    dtid,

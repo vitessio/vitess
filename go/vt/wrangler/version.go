@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -32,7 +33,7 @@ func (wr *Wrangler) GetVersion(ctx context.Context, tabletAlias *topodatapb.Tabl
 	resp, err := wr.VtctldServer().GetVersion(ctx, &vtctldatapb.GetVersionRequest{
 		TabletAlias: tabletAlias,
 	})
-	log.Info(fmt.Sprintf("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), resp.Version))
+	log.Info("Tablet is running version", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)), slog.String("version", resp.Version))
 	return resp.Version, err
 }
 
