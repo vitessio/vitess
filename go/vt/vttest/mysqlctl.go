@@ -18,10 +18,11 @@ package vttest
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -94,11 +95,13 @@ func (ctl *Mysqlctl) Start() error {
 	)
 
 	myCnf := strings.Join(ctl.MyCnf, ":")
+	env := append(slices.Clone(ctl.Env), "EXTRA_MY_CNF="+myCnf)
 
 	cmd.Env = append(cmd.Env, os.Environ()...)
-	cmd.Env = append(cmd.Env, ctl.Env...)
-	cmd.Env = append(cmd.Env, "EXTRA_MY_CNF="+myCnf)
-	log.Info(fmt.Sprintf("Starting MySQL using: %+v", cmd.Env))
+	cmd.Env = append(cmd.Env, env...)
+	// The inherited environment can hold credentials, so only the variables
+	// vttest sets are logged.
+	log.Info("Starting MySQL using environment", slog.Any("env", env))
 	_, err := cmd.Output()
 	return err
 }

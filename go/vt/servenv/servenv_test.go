@@ -17,12 +17,16 @@ limitations under the License.
 package servenv
 
 import (
+	"fmt"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/event"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestFireOnTermSyncHooksFinished(t *testing.T) {
@@ -65,4 +69,19 @@ func TestFireOnCloseHooksTimeout(t *testing.T) {
 
 	finished, want := fireOnCloseHooks(1*time.Nanosecond), false
 	assert.Equalf(t, want, finished, "finished = %v, want %v", finished, want)
+}
+
+func TestMkprofileLogsUnlessQuiet(t *testing.T) {
+	for _, quiet := range []bool{false, true} {
+		t.Run(fmt.Sprintf("quiet=%v", quiet), func(t *testing.T) {
+			logs := logtest.Capture(t, slog.LevelInfo)
+			prof := &profile{mode: profileMutex, path: t.TempDir(), quiet: quiet}
+			require.NoError(t, prof.mkprofile().Close())
+			if quiet {
+				assert.Empty(t, logs.Records(t))
+				return
+			}
+			logs.Record(t, "pprof: profiling enabled")
+		})
+	}
 }
