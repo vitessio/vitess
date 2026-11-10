@@ -211,6 +211,12 @@ func (rt routingType) String() string {
 // getRoutesOrAlternates gets the Routings from each Route. If they are from different keyspaces,
 // we check if this is a table with alternates in other keyspaces that we can use
 func getRoutesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, Routing, bool) {
+	return routesOrAlternates(ctx, lhsRoute, rhsRoute, func(*Route) bool { return true })
+}
+
+// routesOrAlternates is getRoutesOrAlternates for callers that only trust the alternates of the
+// routes that the filter accepts.
+func routesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute *Route, usable func(*Route) bool) (*Route, *Route, Routing, Routing, bool) {
 	routingA := lhsRoute.Routing
 	routingB := rhsRoute.Routing
 	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
@@ -225,14 +231,14 @@ func getRoutesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute 
 	// If we have a reference route, we will try to find an alternate route in same keyspace as other routing keyspace.
 	// If the reference route is part of DML table update target, alternate keyspace route cannot be considered.
 	if refA, ok := routingA.(*AnyShardRouting); ok &&
-		!TableID(lhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
+		!TableID(lhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) && usable(lhsRoute) {
 		if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
 			return altARoute, rhsRoute, altARoute.Routing, routingB, true
 		}
 	}
 
 	if refB, ok := routingB.(*AnyShardRouting); ok &&
-		!TableID(rhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
+		!TableID(rhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) && usable(rhsRoute) {
 		if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
 			return lhsRoute, altBRoute, routingA, altBRoute.Routing, true
 		}
@@ -310,9 +316,12 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 	if owed && isDirectDMLRowSource(ctx, op1, op2) {
 		owed = false
 	}
-	if owed && !canCarryReferenceRows(r) {
+	// A recursive term cannot be an ApplyJoin, and one that reads a single shard returns the
+	// preserved rows once, so it keeps merging as on main.
+	inTerm := TableID(op1).Merge(TableID(op2)).IsSolvedBy(ctx.RecursiveTermTables)
+	if owed && !canCarryReferenceRows(r) && !(inTerm && pinnedToOneShard(ctx, r)) {
 		debugNoRewrite("apply join merge blocked: the reference rows an outer join preserves cannot be read through %s routing", r.OpCode().String())
-		ctx.RefusedReferenceMerge = true
+		ctx.RefusedReferenceMerge = ctx.RefusedReferenceMerge.Merge(TableID(op1)).Merge(TableID(op2))
 		return nil
 	}
 

@@ -52,11 +52,15 @@ type PlanningContext struct {
 	// statement is then part of that SELECT, and its rows are read like those of any other query.
 	DMLReadsItsRows bool
 
-	// RefusedReferenceMerge is set once a join merge was refused because the reference rows an outer
-	// join preserves cannot be read through the merged routing. The joins that stay ApplyJoins after
-	// that read a reference table through its copy in the other side's keyspace, as they would
-	// have when the merge went through.
-	RefusedReferenceMerge bool
+	// RefusedReferenceMerge holds the tables of the joins whose merge was refused because the
+	// reference rows an outer join preserves cannot be read through the merged routing. A later join
+	// that includes one of them and stays an ApplyJoin reads a reference table through its copy in
+	// the other side's keyspace, as it would have when the merge went through.
+	RefusedReferenceMerge semantics.TableSet
+
+	// RecursiveTermTables holds the tables read by the recursive term of a recursive CTE. MySQL
+	// runs a term once per iteration on whichever tablet the whole CTE is sent to.
+	RecursiveTermTables semantics.TableSet
 
 	// MergedSubqueries tracks subqueries that have been merged into routes,
 	// keyed by their arg name.

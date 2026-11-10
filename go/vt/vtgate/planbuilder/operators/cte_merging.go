@@ -81,7 +81,7 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	// Every row of the recursive term is paired with a row of the CTE, which the seed placed on one
 	// shard, so what the term preserved only stays owed next to a seed that is not sharded.
 	preserved := seed.PreservesReferenceRows || passesOnReferenceRows(term, seed)
-	if preserved && !canCarryReferenceRows(r) {
+	if preserved && !canCarryReferenceRows(r) && !pinnedToOneShard(ctx, r) {
 		debugNoRewrite("CTE merge blocked: the reference rows an outer join preserves cannot be read through %s routing", r.OpCode().String())
 		return nil
 	}

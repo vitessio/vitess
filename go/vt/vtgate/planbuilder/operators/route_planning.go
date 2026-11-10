@@ -302,7 +302,12 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 		return newPlan, Rewrote("merge routes into single operator")
 	}
 
-	if ctx.RefusedReferenceMerge {
+	if ctx.RefusedReferenceMerge.IsOverlapping(TableID(lhs).Merge(TableID(rhs))) {
+		// Two references to one CTE read the same tables, so a join predicate between them
+		// cannot tell the sides apart and is planned as a condition that is always true.
+		if TableID(lhs).IsOverlapping(TableID(rhs)) {
+			panic(vterrors.VT12001("join of a CTE referenced more than once with a reference table that an outer join preserves"))
+		}
 		lhs, rhs = useAlternatesInTheOtherKeyspace(ctx, lhs, rhs)
 	}
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "JOIN")
@@ -347,11 +352,11 @@ func alternateIn(ctx *plancontext.PlanningContext, op, other Operator) Operator 
 		return op
 	}
 	routing, ok := route.Routing.(*AnyShardRouting)
-	if !ok || TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
+	if !ok || TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) || !readsWhatItsAlternatesRead(route.Source) {
 		return op
 	}
 	keyspaces := operatorKeyspaces(other)
-	if len(keyspaces) != 1 || keyspaces[0] == routing.Keyspace() {
+	if len(keyspaces) != 1 {
 		return op
 	}
 	if alternate := routing.AlternateInKeyspace(keyspaces[0]); alternate != nil {
@@ -834,6 +839,19 @@ func hexEqual(a, b *sqlparser.Literal) bool {
 			return false
 		}
 		return bytes.Equal(v, v2)
+	}
+	return false
+}
+
+// readsWhatItsAlternatesRead reports whether the alternates of a route still read the same rows as
+// the route. They are built from its tables and their predicates when the route is created or
+// merged, so a filter, derived table, limit or merged subquery pushed into it later is not in them.
+func readsWhatItsAlternatesRead(op Operator) bool {
+	switch op := op.(type) {
+	case *Table:
+		return true
+	case *ApplyJoin:
+		return readsWhatItsAlternatesRead(op.LHS) && readsWhatItsAlternatesRead(op.RHS)
 	}
 	return false
 }

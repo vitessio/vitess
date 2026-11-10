@@ -623,6 +623,9 @@ type subqueryRouteMerger struct {
 	outer    *Route
 	original sqlparser.Expr
 	subq     *SubQuery
+	// onEveryShard is set when the merged route asks the subquery on every shard, where only the
+	// shard with its rows lets an outer row through, preserved or not.
+	onEveryShard bool
 }
 
 func (s *subqueryRouteMerger) mergeShardedRouting(
@@ -693,7 +696,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	// cannot duplicate them into the result: each outer row lives on one shard and asks the
 	// question there. Only the rows the outer route preserved are owed.
 	preserved := outer.PreservesReferenceRows
-	if preserved && !canCarryReferenceRows(routing) {
+	if preserved && !canCarryReferenceRows(routing) && !s.onEveryShard {
 		debugNoRewrite("subquery merge blocked: the reference rows an outer join preserves cannot be read through %s routing", routing.OpCode().String())
 		return nil
 	}
@@ -804,7 +807,16 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 		return nil
 	}
 
-	inRoute, outRoute, inRouting, outRouting, sameKeyspace := getRoutesOrAlternates(ctx, inRoute, outRoute)
+	if inCopy := sameNameCopy(ctx, inRoute, outRoute); inCopy != nil {
+		inRoute = inCopy
+	}
+	// A merged subquery is rewritten from the SQL of the inner route, which an alternate does not
+	// have when the inner route has more than its table. A sharded outer route keeps its own text.
+	_, innerSharded := inRoute.Routing.(*ShardedRouting)
+	_, outerSharded := outRoute.Routing.(*ShardedRouting)
+	inRoute, outRoute, inRouting, outRouting, sameKeyspace := routesOrAlternates(ctx, inRoute, outRoute, func(r *Route) bool {
+		return innerSharded || outerSharded || readsWhatItsAlternatesRead(r.Source)
+	})
 	inner, outer := getRoutingType(inRouting), getRoutingType(outRouting)
 
 	switch {
@@ -822,6 +834,13 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 	case inRoute.IsSingleShard() &&
 		(outer == dual || (outer == anyShard && sameKeyspace)):
 		if routedByOuterColumns(m.subq, inRouting) {
+			// Every row of the subquery lives on the shard its outer value routes to, so a reference
+			// outer route can ask the question on every shard: only that shard answers it. A write
+			// to the reference table has to reach all of its copies, so it is not asked that way.
+			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(m.subq) {
+				m.onEveryShard = true
+				return m.merge(ctx, inRoute, outRoute, scatterOf(inRouting.(*ShardedRouting)))
+			}
 			debugNoRewrite("subquery merge blocked: the inner route is routed by a bind variable that only the outer query provides")
 			return nil
 		}
@@ -848,7 +867,7 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 // variable that nothing binds once the two queries are one.
 func routedByOuterColumns(subq *SubQuery, routing Routing) bool {
 	sr, ok := routing.(*ShardedRouting)
-	if !ok || sr.Selected == nil {
+	if !ok {
 		return false
 	}
 	var found bool
@@ -868,6 +887,100 @@ func routedByOuterColumns(subq *SubQuery, routing Routing) bool {
 		}, expr)
 	}
 	return found
+}
+
+// answeredOnlyWhereItsRowsLive reports whether a top level IN or comparison against a subquery is
+// false or NULL on a shard that has none of the subquery's rows, so that running it on every shard
+// returns each outer row at most once. That needs a subquery whose rows all come from its tables
+// through inner joins, or a max, min, sum or avg over them, which are NULL over no rows.
+func answeredOnlyWhereItsRowsLive(subq *SubQuery) bool {
+	if !subq.TopLevel || subq.IsArgument {
+		return false
+	}
+	cmp, ok := subq.Original.(*sqlparser.ComparisonExpr)
+	if !ok || cmp.Modifier != sqlparser.Missing {
+		return false
+	}
+	switch cmp.Operator {
+	case sqlparser.InOp, sqlparser.EqualOp, sqlparser.LessThanOp, sqlparser.GreaterThanOp, sqlparser.LessEqualOp, sqlparser.GreaterEqualOp, sqlparser.NotEqualOp:
+	default:
+		return false
+	}
+	sel, ok := subq.originalSubquery.Select.(*sqlparser.Select)
+	if !ok || sel.GroupBy != nil || sel.Having != nil || slices.ContainsFunc(sel.From, func(te sqlparser.TableExpr) bool { return !innerJoinsOfTables(te) }) {
+		return false
+	}
+	// An aggregate in ORDER BY makes the query return a row over no rows, like one in the select list.
+	if slices.ContainsFunc(sel.OrderBy, func(o *sqlparser.Order) bool { return sqlparser.ContainsAggregation(o.Expr) }) {
+		return false
+	}
+	for _, col := range sel.GetColumns() {
+		ae, ok := col.(*sqlparser.AliasedExpr)
+		if !ok {
+			continue
+		}
+		switch ae.Expr.(type) {
+		case *sqlparser.Max, *sqlparser.Min, *sqlparser.Sum, *sqlparser.Avg:
+			continue
+		}
+		if sqlparser.ContainsAggregation(ae.Expr) {
+			return false
+		}
+	}
+	return true
+}
+
+func innerJoinsOfTables(te sqlparser.TableExpr) bool {
+	switch te := te.(type) {
+	case *sqlparser.AliasedTableExpr:
+		_, ok := te.Expr.(sqlparser.TableName)
+		return ok
+	case *sqlparser.JoinTableExpr:
+		return te.Join.IsInner() && innerJoinsOfTables(te.LeftExpr) && innerJoinsOfTables(te.RightExpr)
+	case *sqlparser.ParenTableExpr:
+		return !slices.ContainsFunc(te.Exprs, func(e sqlparser.TableExpr) bool { return !innerJoinsOfTables(e) })
+	}
+	return false
+}
+
+func scatterOf(sr *ShardedRouting) *ShardedRouting {
+	return &ShardedRouting{keyspace: sr.keyspace, RouteOpCode: engine.Scatter}
+}
+
+// sameNameCopy reads an inner reference route through its copy in the outer route's keyspace when
+// the copy has the same table names, so that the inner route's own SQL, select list included, reads
+// the copy there.
+func sameNameCopy(ctx *plancontext.PlanningContext, inner, outer *Route) *Route {
+	routing, ok := inner.Routing.(*AnyShardRouting)
+	if !ok {
+		return nil
+	}
+	keyspace := outer.Routing.Keyspace()
+	if keyspace == nil {
+		return nil
+	}
+	alternate := routing.AlternateInKeyspace(keyspace)
+	if alternate == nil {
+		return nil
+	}
+	names := tableNames(inner.Source)
+	if !slices.Equal(names, tableNames(alternate.Source)) {
+		return nil
+	}
+	onTheCopy := *inner
+	onTheCopy.Routing = alternate.Routing
+	return &onTheCopy
+}
+
+func tableNames(op Operator) []string {
+	var names []string
+	_ = Visit(op, func(op Operator) error {
+		if t, ok := op.(*Table); ok {
+			names = append(names, t.VTable.Name.String())
+		}
+		return nil
+	})
+	return names
 }
 
 func mergedWith(inner *Route, outer *Route) []*Route {

@@ -17,6 +17,8 @@ limitations under the License.
 package operators
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -24,11 +26,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -565,6 +570,55 @@ func TestHasInfoSchemaTables(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, hasInfoSchemaTables(tt.op))
+		})
+	}
+}
+
+type vindexThatFailsToMap struct{ vindexes.SingleColumn }
+
+func (vindexThatFailsToMap) Map(context.Context, vindexes.VCursor, []sqltypes.Value) ([]key.ShardDestination, error) {
+	return nil, errors.New("cannot map")
+}
+
+type vindexThatNeedsACursor struct{ vindexes.SingleColumn }
+
+func (vindexThatNeedsACursor) NeedsVCursor() bool { return true }
+
+func TestPinnedToOneShard(t *testing.T) {
+	hash, err := vindexes.CreateVindex("hash", "hash", nil)
+	require.NoError(t, err)
+	lookup, err := vindexes.CreateVindex("lookup_unique", "lookup", map[string]string{"table": "t", "from": "a", "to": "b"})
+	require.NoError(t, err)
+	ctx := &plancontext.PlanningContext{SemTable: &semantics.SemTable{}, VSchema: &mockVSchema{}}
+
+	sharded := func(opcode engine.Opcode, vindex vindexes.Vindex, values ...evalengine.Expr) Routing {
+		return &ShardedRouting{
+			RouteOpCode: opcode,
+			Selected:    &VindexOption{FoundVindex: vindex, Values: values},
+		}
+	}
+	one := evalengine.NewLiteralInt(1)
+	functional := hash.(vindexes.SingleColumn)
+
+	tests := []struct {
+		name    string
+		routing Routing
+		want    bool
+	}{
+		{"unique functional vindex on a constant", sharded(engine.EqualUnique, hash, one), true},
+		{"a negative constant", sharded(engine.EqualUnique, hash, evalengine.NewLiteralInt(-1)), true},
+		{"a constant that hash cannot map finds no shard", sharded(engine.EqualUnique, hash, evalengine.NewLiteralString([]byte("abc"), collations.TypedCollation{})), false},
+		{"a bind variable can be NULL", sharded(engine.EqualUnique, hash, evalengine.NewBindVar("x", evalengine.NewType(sqltypes.Int64, collations.CollationBinaryID))), false},
+		{"a lookup vindex can find no shard", sharded(engine.EqualUnique, lookup, one), false},
+		{"a vindex that needs a cursor cannot be mapped at planning", sharded(engine.EqualUnique, vindexThatNeedsACursor{functional}, one), false},
+		{"a vindex that fails to map", sharded(engine.EqualUnique, vindexThatFailsToMap{functional}, one), false},
+		{"a scatter reads every shard", &ShardedRouting{RouteOpCode: engine.Scatter}, false},
+		{"IN reads one shard per value", sharded(engine.IN, hash, one), false},
+		{"a reference routing is not sharded", &AnyShardRouting{}, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, pinnedToOneShard(ctx, tc.routing))
 		})
 	}
 }

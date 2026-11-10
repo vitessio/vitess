@@ -383,6 +383,7 @@ func createRecursiveCTE(ctx *plancontext.PlanningContext, def *semantics.CTE, ou
 	ctx.PushCTE(def, *def.IDForRecurse)
 
 	term := translateQueryToOp(ctx, union.Right)
+	ctx.RecursiveTermTables = ctx.RecursiveTermTables.Merge(TableID(term))
 	horizon, ok := term.(*Horizon)
 	if !ok {
 		panic(vterrors.VT09027(def.Name))

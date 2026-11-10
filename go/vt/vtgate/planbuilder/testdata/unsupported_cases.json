@@ -553,5 +553,150 @@
     "comment": "a select-list subquery over a reference outer join correlated through the null-extended side is refused",
     "query": "select r.col, (select r1.col from ref r1 left join `user` x on x.id = r.col limit 1) from ref r",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to a scatter of a table is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join `user` u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to two shards of a table is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id in (1, 2)) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to no shard of a table is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = null) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to a shard that is only known at execution of a table is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :x) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to a constant that the vindex maps to no shard is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 'abc') u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to a decimal constant that the vindex maps to no shard is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1.5) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to a hex constant that the vindex maps to no shard is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 0x01) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to a constant beyond 64 bits that the vindex maps to no shard is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 18446744073709551616) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to a constant that is not known at planning is not merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = now()) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": "VT13001: [BUG] dont know how to <nil>"
+  },
+  {
+    "comment": "a not in subquery routed by a column of the outer query is true on a shard without its rows and is not asked on every shard",
+    "query": "select a.col from ref a where a.col not in (select x.col from user x where x.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a count over a subquery routed by a column of the outer query is not asked on every shard",
+    "query": "select a.col from ref a where a.col = (select count(*) from user x where x.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "an in subquery with a union inside routed by a column of the outer query is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col union select 5) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "an all comparison routed by a column of the outer query is true over no rows and is not asked on every shard",
+    "query": "select a.col from ref a where a.col > all (select x.col from user x where x.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a null safe comparison routed by a column of the outer query is not asked on every shard",
+    "query": "select a.col from ref a where a.col <=> (select max(x.col) from user x where x.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "an in subquery with an outer join inside routed by a column of the outer query is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from user x left join user_extra e on e.user_id = x.id where x.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "an in subquery with a group by routed by a column of the outer query is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col group by x.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery routed by a column of the outer query next to the write of the reference table is not asked on every shard",
+    "query": "delete from ref where col in (select x.col from user x where x.id = ref.col)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery that returns a row on a shard without its rows is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select 1 from user x where x.id = a.col having count(*) = 0) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery with an aggregate in its order by returns a row on a shard without its rows and is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select 1 from user x where x.id = a.col order by max(x.col)) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery next to a derived table is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from user x, (select 1 c) d where x.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery over a parenthesized outer join is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from (user x left join user_extra e on e.user_id = x.id) where x.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery over a derived table is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select d.col from (select * from user where id = 5) d where d.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery in the select list is true on one shard and false on every other, so it is not asked on every shard",
+    "query": "select a.col, a.col in (select x.col from user x where x.id = a.col) from ref a",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a scalar subquery in the select list is not asked on every shard",
+    "query": "select a.col, (select max(x.col) from user x where x.id = a.col) from ref a union all select col, 1 from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery compared inside a larger predicate is not asked on every shard, since the predicate would be evaluated on every shard",
+    "query": "select a.col from ref a where (a.col in (select x.col from user x where x.id = a.col)) = true",
+    "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
+  },
+  {
+    "comment": "a subquery inside a case is not asked on every shard",
+    "query": "select a.col from ref a where case when a.col in (select x.col from user x where x.id = a.col) then 1 else 0 end = 1",
+    "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
+  },
+  {
+    "comment": "a subquery over a parenthesized cross join with a derived table is not asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from (user x, (select 1 c) d) where x.id = a.col) union all select col from user",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a CTE referenced twice around a refused outer join merge is not planned with a join condition that is always true",
+    "query": "with c as (select col from source_of_ref) select c1.col from c c1 left join user u on u.col = c1.col join c c2 on c2.col = c1.col",
+    "plan": "VT12001: unsupported: join of a CTE referenced more than once with a reference table that an outer join preserves"
+  },
+  {
+    "comment": "a CTE of a reference table referenced twice around a refused outer join merge is not planned with a join condition that is always true",
+    "query": "with c as (select col from ref) select c1.col from c c1 left join user u on u.col = c1.col join c c2 on c2.col = c1.col",
+    "plan": "VT12001: unsupported: join of a CTE referenced more than once with a reference table that an outer join preserves"
   }
 ]

@@ -1721,5 +1721,536 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term that preserves reference rows next to one shard of a table is merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = 1) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term with a subquery routed by a literal keeps the recursion value bound next to one shard of a table",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1) u on u.col = r.col join c on c.col = r.col where r.col in (select col from user where id = 3)) select col from c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1) u on u.col = r.col join c on c.col = r.col where r.col in (select col from user where id = 3)) select col from c",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "c_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from ref where 1 != 1",
+            "Query": "select col from ref"
+          },
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user` where id = 3",
+                "Values": [
+                  "3"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col where 1 != 1",
+                "Query": "select r.col from ref as r left join (select * from `user` where id = 1) as u on u.col = r.col where r.col = :c_col and :__sq_has_values and r.col in ::__sq1",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term with a predicate is merged next to one shard of a table",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1) u on u.col = r.col join c on c.col = r.col where r.col < 5) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1) u on u.col = r.col join c on c.col = r.col where r.col < 5) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = 1) as u on u.col = r.col, c where c.col = r.col and r.col < 5) select col from c",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to one shard of a table is merged into a seed that is routed to the same shard",
+    "query": "with recursive c as (select col from user where id = 1 union all select r.col from ref r left join (select * from user where id = 1) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from user where id = 1 union all select r.col from ref r left join (select * from user where id = 1) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from `user` where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from `user` where id = 1 union all select r.col from ref as r left join (select * from `user` where id = 1) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to one shard of another table is merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from music where user_id = 1) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from music where user_id = 1) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from music where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from music where user_id = 1) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to a negative constant is merged into the seed because the vindex maps it to one shard",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = -1) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = -1) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = -1) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "-1"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to a cast constant is merged into the seed because the vindex maps it to one shard",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = cast(1 as char)) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = cast(1 as char)) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = cast(1 as char)) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "'1'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "an in subquery routed by a column of the outer query is asked on every shard of a reference outer route",
+    "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a where 1 != 1",
+        "Query": "select a.col from ref as a where a.col in (select x.col from `user` as x where x.id = a.col)"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "an in subquery routed by a column of the outer query is asked on every shard next to a sharded branch of a union",
+    "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col) union all select col from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col) union all select col from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a where 1 != 1 union all select col from `user` where 1 != 1",
+        "Query": "select a.col from ref as a where a.col in (select x.col from `user` as x where x.id = a.col) union all select col from `user`"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a comparison with a max routed by a column of the outer query is asked on every shard of a reference outer route",
+    "query": "select a.col from ref a where a.col = (select max(x.col) from user x where x.id = a.col) union all select col from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col = (select max(x.col) from user x where x.id = a.col) union all select col from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a where 1 != 1 union all select col from `user` where 1 != 1",
+        "Query": "select a.col from ref as a where a.col = (select max(x.col) from `user` as x where x.id = a.col) union all select col from `user`"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a comparison with a subquery joining another table routed by a column of the outer query is asked on every shard",
+    "query": "select a.col from ref a where a.col < (select x.col from user x join user_extra e on e.user_id = x.id where x.id = a.col) union all select col from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col < (select x.col from user x join user_extra e on e.user_id = x.id where x.id = a.col) union all select col from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a where 1 != 1 union all select col from `user` where 1 != 1",
+        "Query": "select a.col from ref as a where a.col < (select x.col from `user` as x join user_extra as e on e.user_id = x.id where x.id = a.col) union all select col from `user`"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "an in subquery routed by an expression of the outer query is asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col + 1 and x.col = a.foo) union all select col from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col + 1 and x.col = a.foo) union all select col from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a where 1 != 1 union all select col from `user` where 1 != 1",
+        "Query": "select a.col from ref as a where a.col in (select x.col from `user` as x where x.id = a.col + 1 and x.col = a.foo) union all select col from `user`"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery routed by a column of the outer query next to the preserved side of a reference outer join is asked on every shard, where the outer rows of the other side have no rows",
+    "query": "select a.col from ref a left join ref b on a.col = b.col where b.col in (select x.col from user x where x.id = b.col) union all select col from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a left join ref b on a.col = b.col where b.col in (select x.col from user x where x.id = b.col) union all select col from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a left join ref as b on a.col = b.col where 1 != 1 union all select col from `user` where 1 != 1",
+        "Query": "select a.col from ref as a left join ref as b on a.col = b.col where b.col in (select x.col from `user` as x where x.id = b.col) union all select col from `user`"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery routed by a column of the outer query over a comma join of its tables is asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from user x, user_extra e where e.user_id = x.id and x.id = a.col) union all select col from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col in (select x.col from user x, user_extra e where e.user_id = x.id and x.id = a.col) union all select col from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a where 1 != 1 union all select col from `user` where 1 != 1",
+        "Query": "select a.col from ref as a where a.col in (select x.col from `user` as x, user_extra as e where e.user_id = x.id and x.id = a.col) union all select col from `user`"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery routed by a column of the outer query over a parenthesized join of its tables is asked on every shard",
+    "query": "select a.col from ref a where a.col in (select x.col from (user x join user_extra e on e.user_id = x.id) where x.id = a.col) union all select col from user",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col in (select x.col from (user x join user_extra e on e.user_id = x.id) where x.id = a.col) union all select col from user",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a where 1 != 1 union all select col from `user` where 1 != 1",
+        "Query": "select a.col from ref as a where a.col in (select x.col from (`user` as x join user_extra as e on e.user_id = x.id) where x.id = a.col) union all select col from `user`"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery of a reference route with an outer join inside is merged from its own SQL into a sharded outer route",
+    "query": "select a.col from user a where a.col in (select r1.col from source_of_ref r1 left join source_of_ref x on x.col = r1.col)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.col from user a where a.col in (select r1.col from source_of_ref r1 left join source_of_ref x on x.col = r1.col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from `user` as a where 1 != 1",
+        "Query": "select a.col from `user` as a where a.col in (select r1.col from source_of_ref as r1 left join source_of_ref as x on x.col = r1.col)"
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery routed to one shard keeps merging into a derived table over a reference table",
+    "query": "select d.col from (select distinct col from global_ref) d where d.col in (select u.col from user u where u.id = 5)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select d.col from (select distinct col from global_ref) d where d.col in (select u.col from user u where u.id = 5)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select d.col from (select col from global_ref where 1 != 1) as d where 1 != 1",
+        "Query": "select d.col from (select distinct col from global_ref) as d where d.col in (select u.col from `user` as u where u.id = 5)",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery of an unsharded table is merged into the reference route that reads the table from the source of its copy",
+    "query": "select a.col from ref_with_source a left join user b on a.col = b.col where exists (select 1 from unsharded x where x.col = a.col)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref_with_source a left join user b on a.col = b.col where exists (select 1 from unsharded x where x.col = a.col)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "a_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select a.col from ref_with_source as a where 1 != 1",
+            "Query": "select a.col from ref_with_source as a where exists (select 1 from unsharded as x where x.col = a.col)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as b where 1 != 1",
+            "Query": "select 1 from `user` as b where b.col = :a_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.source_of_ref",
+        "main.unsharded",
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
