@@ -590,6 +590,9 @@ func scanStringReference(tkn *Tokenizer, delim uint16, typ int) (int, string) {
 
 		case '\\':
 			var buffer strings.Builder
+			if rest := strings.IndexByte(tkn.buf[tkn.Pos+1:], byte(delim)); rest >= 0 {
+				buffer.Grow(tkn.Pos + 1 + rest - start)
+			}
 			buffer.WriteString(tkn.buf[start:tkn.Pos])
 			return scanStringSlowReference(tkn, &buffer, delim, typ)
 
@@ -693,6 +696,16 @@ func TestScanStringBoundaries(t *testing.T) {
 				t.Run(fmt.Sprintf("clean/%d", n), func(t *testing.T) {
 					requireScansLikeReference(t, body(n)+d+" and more", delim)
 				})
+				// A clean literal must stay on the fast path, which returns a slice of
+				// the query rather than copying it.
+				t.Run(fmt.Sprintf("clean-allocs/%d", n), func(t *testing.T) {
+					tkn := NewTestParser().NewStringTokenizer(body(n) + d + " and more")
+					allocs := testing.AllocsPerRun(100, func() {
+						tkn.Pos = 0
+						tkn.scanString(uint16(delim), STRING)
+					})
+					assert.Zero(t, allocs)
+				})
 				t.Run(fmt.Sprintf("unterminated/%d", n), func(t *testing.T) {
 					requireScansLikeReference(t, body(n), delim)
 				})
@@ -763,6 +776,20 @@ func TestScanStringBoundaries(t *testing.T) {
 					require.Equal(t, STRING, id)
 					require.Equal(t, decodedHead+tail, got)
 					require.Equal(t, len(encodedHead)+len(tail)+1, tkn.Pos)
+				})
+
+				// Past the slow path's scalar prefix, the search has to stop at the
+				// next escape, or the escaped delimiter would end the literal.
+				t.Run(fmt.Sprintf("slow-run-escape/%d", run), func(t *testing.T) {
+					tail := body(run)
+					sql := `\n` + tail + `\` + d + "b" + d + " rest"
+					requireScansLikeReference(t, sql, delim)
+
+					tkn := NewTestParser().NewStringTokenizer(sql)
+					id, got := tkn.scanString(uint16(delim), STRING)
+					require.Equal(t, STRING, id)
+					require.Equal(t, "\n"+tail+d+"b", got)
+					require.Equal(t, len(tail)+6, tkn.Pos)
 				})
 			}
 
