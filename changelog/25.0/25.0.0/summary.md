@@ -22,6 +22,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
+        - [Backup, restore, healthcheck, reparent, and VTOrc log lines use constant messages](#constant-log-messages)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -303,6 +304,38 @@ MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` on
 **Migration**: before upgrading, replace a qualified `tbl.*` selected from a `JOIN ... USING` with an explicit column list wherever its columns or their order matter, since an explicit list returns the same columns before and after the upgrade.
 
 See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
+
+#### <a id="constant-log-messages"/>Backup, restore, healthcheck, reparent, and VTOrc log lines use constant messages</a>
+
+Log lines written by backup and restore, the healthcheck, reparents, and VTOrc now have a constant message. The values that used to be formatted into the message are logged as attributes. For example, VTOrc used to log:
+
+```
+{"level":"INFO","msg":"Recovery for DeadPrimary on commerce/0: ERS - intermediate source selected tablet=zone1-0000000101"}
+```
+
+It now logs:
+
+```
+{"level":"INFO","msg":"Recovery for DeadPrimary on commerce/0: intermediate source selected","reparent":"ERS","tablet":"zone1-0000000101"}
+```
+
+Other changes to what these lines contain:
+
+- VTOrc's emergency and planned reparent lines no longer include `ERS - ` or `PRS - ` in the message. They carry a `reparent` attribute set to `ERS` or `PRS`.
+- Tablet aliases print as `zone1-0000000100` rather than as a proto (`cell:"zone1" uid:100`).
+- Output from tar, xbstream, xtrabackup, mysqlsh, and external compressors moves from the message to `stdout` or `stderr`, with the program under `command`. Backup retries log `attempt` and `max_attempts` instead of `(attempt N/M)`.
+- Lines written through Go's standard library `log` package are logged with the message `standard library log` and the original text under `message`. This includes the `http: panic serving ...` lines from the HTTP servers in `vtgate`, `vttablet`, and `vtctld`.
+- With `--log-format=json`, duration values such as the init SQL `timeout`, `retry_delay`, and VTOrc's discovery times are integer nanoseconds. VTOrc's discovery times used to print as seconds.
+
+The text streamed to clients changes the same way. The output of `vtctldclient Backup`, `BackupShard`, `RestoreFromBackup`, `EmergencyReparentShard`, and `PlannedReparentShard`, and the reparent steps in VTOrc's recovery audit, now show the constant message followed by `key=value` pairs, for example `Copying file file=vt_commerce/corder.ibd file_name=10 attempt=1 max_attempts=2`. An error in that text is one quoted value with its newlines written as `\n`, so with `--log-err-stacks` a stack trace in `vtctldclient` output is on one line.
+
+**Impact**: Log searches, alerts, and scripts that match on the old message text stop matching. The lines most likely to be affected include `Starting backup`, `Copying file`, `Restore: complete`, `Restore: got a restore manifest`, `HealthCheckUpdate(Serving State)`, `will initiate emergency reparent shard`, `elected new primary candidate`, `Discovered`, `Discovered tablet`, `Error running ERS`, `Running recovery`, `Failed to recover`, `Topology recovery`, `Audit operation`, and `Failed to discover`.
+
+For code built on Vitess's Go packages, the `logutil.Logger` interface has new `Info`, `Warn`, and `Error` methods that take a message and `slog.Attr` attributes, and `InfoDepth`, `WarningDepth`, and `ErrorDepth` take a trailing `attrs ...slog.Attr`. `Error(err)` is now `Error(msg, attrs...)`. Out-of-tree `Logger` implementations and callers of `Error(err)` fail to compile until they're updated. `mysqlctl.EmptyBackupMessage` is now a constant, so code that assigns to it or takes its address no longer compiles.
+
+**Migration**: Before upgrading, update log queries and alerts to match on the new constant messages and their attributes. Match on the `reparent` attribute instead of `ERS - ` or `PRS - `. Update scripts that parse `vtctldclient` backup, restore, or reparent output for the `key=value` format. Add the new methods to any out-of-tree `logutil.Logger` implementation, and pass a message to `Error`.
+
+See [#21986](https://github.com/vitessio/vitess/pull/21986) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
