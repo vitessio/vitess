@@ -194,7 +194,7 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 	}
 
 	defer func() {
-		attrs := []slog.Attr{slog.Int("exit_status", result.ExitStatus)}
+		attrs := []slog.Attr{slog.Int("exit_status", result.ExitStatus), slog.String("hook_status", statusText(result.ExitStatus))}
 		if result.Stdout != "" {
 			attrs = append(attrs, slog.String("stdout", result.Stdout))
 		}
@@ -429,25 +429,31 @@ func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, err
 	}, HOOK_SUCCESS, nil
 }
 
+// statusText returns an exit status as HookResult.String renders it: the name
+// of a HOOK_* status that has one, and exit(N) for any other status, including
+// the exit status of the hook itself.
+func statusText(status int) string {
+	switch status {
+	case HOOK_SUCCESS:
+		return "HOOK_SUCCESS"
+	case HOOK_DOES_NOT_EXIST:
+		return "HOOK_DOES_NOT_EXIST"
+	case HOOK_STAT_FAILED:
+		return "HOOK_STAT_FAILED"
+	case HOOK_CANNOT_GET_EXIT_STATUS:
+		return "HOOK_CANNOT_GET_EXIT_STATUS"
+	case HOOK_INVALID_NAME:
+		return "HOOK_INVALID_NAME"
+	case HOOK_VTROOT_ERROR:
+		return "HOOK_VTROOT_ERROR"
+	default:
+		return fmt.Sprintf("exit(%v)", status)
+	}
+}
+
 // String returns a printable version of the HookResult
 func (hr *HookResult) String() string {
-	result := "result: "
-	switch hr.ExitStatus {
-	case HOOK_SUCCESS:
-		result += "HOOK_SUCCESS"
-	case HOOK_DOES_NOT_EXIST:
-		result += "HOOK_DOES_NOT_EXIST"
-	case HOOK_STAT_FAILED:
-		result += "HOOK_STAT_FAILED"
-	case HOOK_CANNOT_GET_EXIT_STATUS:
-		result += "HOOK_CANNOT_GET_EXIT_STATUS"
-	case HOOK_INVALID_NAME:
-		result += "HOOK_INVALID_NAME"
-	case HOOK_VTROOT_ERROR:
-		result += "HOOK_VTROOT_ERROR"
-	default:
-		result += fmt.Sprintf("exit(%v)", hr.ExitStatus)
-	}
+	result := "result: " + statusText(hr.ExitStatus)
 	if hr.Stdout != "" {
 		result += "\nstdout:\n" + hr.Stdout
 	}
