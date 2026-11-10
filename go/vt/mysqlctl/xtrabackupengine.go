@@ -812,7 +812,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			flagsToExec = append(flagsToExec, restoreFlags...)
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
-		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
+		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, redactEncryptKey(flagsToExec))
 		xbstreamCmd.Stdin = reader
 		xbstreamOut, err := xbstreamCmd.StdoutPipe()
 		if err != nil {
@@ -1053,6 +1053,56 @@ func (be *XtrabackupEngine) ShouldStartMySQLAfterRestore() bool {
 }
 
 func (be *XtrabackupEngine) Name() string { return xtrabackupEngineName }
+
+// redactEncryptKey returns a copy of xbstream's arguments with the value of
+// --encrypt-key (-k) replaced by "****". xbstream parses options like other
+// MySQL tools: "_" and "-" are the same in option names, any number of
+// "loose-", "skip-", "disable-", "enable-" and "maximum-" prefixes still set
+// the option, a value follows "=" or is the next argument, and in a group of
+// short options the first one that takes a value (-C, -d, -f or -k) takes the
+// rest of the group or the next argument.
+func redactEncryptKey(args []string) []string {
+	prefixes := []string{"loose-", "skip-", "disable-", "enable-", "maximum-"}
+	isEncryptKey := func(option string) bool {
+		name := strings.ReplaceAll(strings.TrimPrefix(option, "--"), "_", "-")
+		for {
+			trimmed := name
+			for _, prefix := range prefixes {
+				trimmed = strings.TrimPrefix(trimmed, prefix)
+			}
+			if trimmed == name {
+				return name == "encrypt-key"
+			}
+			name = trimmed
+		}
+	}
+	redacted := make([]string, len(args))
+	copy(redacted, args)
+	for i := 0; i < len(redacted); i++ {
+		arg := redacted[i]
+		valueIsNext := false
+		if option, _, hasValue := strings.Cut(arg, "="); strings.HasPrefix(arg, "--") {
+			if isEncryptKey(option) {
+				if hasValue {
+					redacted[i] = option + "=****"
+				} else {
+					valueIsNext = true
+				}
+			}
+		} else if j := strings.IndexAny(arg, "Cdfk"); strings.HasPrefix(arg, "-") && j > 0 && arg[j] == 'k' {
+			if j+1 < len(arg) {
+				redacted[i] = arg[:j+1] + "****"
+			} else {
+				valueIsNext = true
+			}
+		}
+		if valueIsNext && i+1 < len(redacted) {
+			i++
+			redacted[i] = "****"
+		}
+	}
+	return redacted
+}
 
 func init() {
 	BackupRestoreEngineMap[xtrabackupEngineName] = &XtrabackupEngine{}
