@@ -20,6 +20,7 @@ package vtctlclient
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -65,7 +66,7 @@ var factories = make(map[string]Factory)
 // RegisterFactory allows a client implementation to register itself.
 func RegisterFactory(name string, factory Factory) {
 	if _, ok := factories[name]; ok {
-		log.Error(fmt.Sprintf("RegisterFactory: %s already exists", name))
+		log.Error("RegisterFactory: factory already exists", slog.String("protocol", name))
 		os.Exit(1)
 	}
 	factories[name] = factory

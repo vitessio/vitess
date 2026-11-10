@@ -33,8 +33,8 @@ limitations under the License.
 // Keys that can hold data include:
 //
 //   - error
-//   - query, simplified_query, filter, expression, simplified_expression and
-//     full_expression
+//   - query, simplified_query, filter, expression, simplified_expression,
+//     full_expression and result
 //   - last_pk, row, values, event, transaction, message, request and panic
 package logcheck
 
