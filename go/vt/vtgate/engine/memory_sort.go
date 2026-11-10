@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -56,7 +58,9 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
-	if err = ms.OrderBy.SortResult(result); err != nil {
+	orderBy := slices.Clone(ms.OrderBy)
+	resolveUnknownOrderTypes(orderBy, result.Fields)
+	if err = orderBy.SortResult(result); err != nil {
 		return nil, err
 	}
 	if len(result.Rows) > count {
@@ -78,8 +82,9 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return callback(qr.Truncate(ms.TruncateColumnCount))
 	}
 
+	orderBy := slices.Clone(ms.OrderBy)
 	sorter := &evalengine.Sorter{
-		Compare: ms.OrderBy,
+		Compare: orderBy,
 		Limit:   count,
 	}
 
@@ -88,6 +93,7 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		mu.Lock()
 		defer mu.Unlock()
 		if len(qr.Fields) != 0 {
+			resolveUnknownOrderTypes(orderBy, qr.Fields)
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
 			}
@@ -104,6 +110,18 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 		return err
 	}
 	return cb(&sqltypes.Result{Rows: sorter.Sorted()})
+}
+
+func resolveUnknownOrderTypes(orderBy evalengine.Comparison, fields []*querypb.Field) {
+	for i := range orderBy {
+		order := &orderBy[i]
+		if order.Col < 0 || order.Col >= len(fields) {
+			continue
+		}
+		if order.Type.Type() == sqltypes.Unknown || order.Type.Collation() == collations.Unknown {
+			order.Type = evalengine.NewTypeFromField(fields[order.Col])
+		}
+	}
 }
 
 // GetFields satisfies the Primitive interface.

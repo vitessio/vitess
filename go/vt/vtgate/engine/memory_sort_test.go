@@ -342,6 +342,78 @@ func TestMemorySortExecuteCollation(t *testing.T) {
 	utils.MustMatch(t, wantResult, result)
 }
 
+func TestMemorySortResolvesUnknownCollationPerExecution(t *testing.T) {
+	collationID, ok := collations.MySQL8().LookupID("utf8mb4_0900_ai_ci")
+	require.True(t, ok)
+	fields := []*querypb.Field{{
+		Name:    "name",
+		Type:    querypb.Type_VARCHAR,
+		Charset: uint32(collationID),
+	}}
+	fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "B", "a")}}
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			Col:             0,
+			WeightStringCol: -1,
+			Type:            evalengine.NewType(sqltypes.Unknown, collations.Unknown),
+			CollationEnv:    collations.MySQL8(),
+		}},
+		Input: fp,
+	}
+
+	result, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	utils.MustMatch(t, sqltypes.MakeTestResult(fields, "a", "B"), result)
+	assert.Equal(t, sqltypes.Unknown, ms.OrderBy[0].Type.Type())
+	assert.Equal(t, collations.Unknown, ms.OrderBy[0].Type.Collation())
+
+	fp.rewind()
+	var results []*sqltypes.Result
+	err = ms.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+	utils.MustMatch(t, sqltypes.MakeTestStreamingResults(fields, "a", "B"), results)
+	assert.Equal(t, sqltypes.Unknown, ms.OrderBy[0].Type.Type())
+	assert.Equal(t, collations.Unknown, ms.OrderBy[0].Type.Collation())
+}
+
+func TestMemorySortFallsBackToWeightStringForUnsupportedCollation(t *testing.T) {
+	unsupportedCollation := collations.ID(65534)
+	fields := []*querypb.Field{
+		{Name: "name", Type: querypb.Type_VARCHAR, Charset: uint32(unsupportedCollation)},
+		{Name: "weight", Type: querypb.Type_VARBINARY},
+	}
+	fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "z|z", "a|a")}}
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			Col:             0,
+			WeightStringCol: 1,
+			Type:            evalengine.NewType(sqltypes.Unknown, collations.Unknown),
+			CollationEnv:    collations.MySQL8(),
+		}},
+		Input: fp,
+	}
+
+	result, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	utils.MustMatch(t, sqltypes.MakeTestResult(fields, "a|a", "z|z"), result)
+	assert.Equal(t, 0, ms.OrderBy[0].Col)
+	assert.Equal(t, 1, ms.OrderBy[0].WeightStringCol)
+
+	fp.rewind()
+	var results []*sqltypes.Result
+	err = ms.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	require.NoError(t, err)
+	utils.MustMatch(t, sqltypes.MakeTestStreamingResults(fields, "a|a", "z|z"), results)
+	assert.Equal(t, 0, ms.OrderBy[0].Col)
+	assert.Equal(t, 1, ms.OrderBy[0].WeightStringCol)
+}
+
 func TestMemorySortStreamExecute(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"c1|c2",

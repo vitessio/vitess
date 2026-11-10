@@ -160,6 +160,18 @@ func TestUnionAllOrderedLimitPushdown(t *testing.T) {
 		"select id1 as id from t1 union all select id3 from t2 order by id desc limit 3",
 		"[[INT64(25)] [INT64(24)] [INT64(23)]]",
 	)
+	mcmp.AssertMatches(
+		"select 'All' as name from dual union all select cast(id1 as char) as name from t1 order by name",
+		`[[VARCHAR("1")] [VARCHAR("2")] [VARCHAR("20")] [VARCHAR("21")] [VARCHAR("22")] [VARCHAR("23")] [VARCHAR("24")] [VARCHAR("25")] [VARCHAR("All")]]`,
+	)
+	mcmp.AssertMatches(
+		"select cast(id1 as signed) as id from t1 union all select cast(id3 as signed) from t2 union select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+	)
+	mcmp.AssertMatches(
+		"select cast(id1 as signed) as id from t1 union all select cast(0 as signed) from dual order by id limit 5",
+		"[[INT64(0)] [INT64(1)] [INT64(2)] [INT64(20)] [INT64(21)]]",
+	)
 }
 
 func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
@@ -178,6 +190,10 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 	mcmp.AssertMatchesNoOrder(
 		"select id from ref union all select id1 from t1",
 		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 union select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
 	)
 	mcmp.AssertMatchesNoOrder(
 		"select id from ref union all select id1 from t1 where id1 = 1 union all select id1 from t1",

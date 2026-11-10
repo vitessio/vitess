@@ -3368,7 +3368,6 @@
             "OperatorType": "Sort",
             "Variant": "Memory",
             "OrderBy": "0 ASC",
-            "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Concatenate",
@@ -3382,7 +3381,8 @@
                     },
                     "FieldQuery": "select cast(id as signed) as id, weight_string(cast(id as signed)) from `user` where 1 != 1",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select cast(id as signed) as id, weight_string(cast(id as signed)) from `user` order by cast(id as signed) asc limit :__upper_limit"
+                    "Query": "select cast(id as signed) as id, weight_string(cast(id as signed)) from `user` order by cast(id as signed) asc limit :__upper_limit",
+                    "ResultColumns": 1
                   },
                   {
                     "OperatorType": "Route",
@@ -3392,7 +3392,8 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select cast(id as signed) as id from unsharded where 1 != 1",
-                    "Query": "select cast(id as signed) as id from unsharded order by cast(id as signed) asc limit :__upper_limit"
+                    "Query": "select cast(id as signed) as id from unsharded order by cast(id as signed) asc limit :__upper_limit",
+                    "ResultColumns": 1
                   }
                 ]
               }
@@ -3572,8 +3573,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id, id from (select cast(id as signed) as id from ref where 1 != 1 union select cast(id as signed) from `user` where 1 != 1 union select cast(id as signed) from music where 1 != 1) as dt(c0) where 1 != 1) as dt(c0, c1) where 1 != 1",
-                    "Query": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id, id from (select cast(id as signed) as id from ref union select cast(id as signed) from `user` union select cast(id as signed) from music) as dt(c0) limit :__upper_limit) as dt(c0, c1)"
+                    "FieldQuery": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select dt.c0 as id, dt.c0 as id from (select cast(id as signed) as id from ref where 1 != 1 union select cast(id as signed) from `user` where 1 != 1 union select cast(id as signed) from music where 1 != 1) as dt(c0) where 1 != 1) as dt(c0, c1) where 1 != 1",
+                    "Query": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select dt.c0 as id, dt.c0 as id from (select cast(id as signed) as id from ref union select cast(id as signed) from `user` union select cast(id as signed) from music) as dt(c0) limit :__upper_limit) as dt(c0, c1)"
                   }
                 ]
               }
@@ -3586,7 +3587,6 @@
         "user.ref",
         "user.user"
       ]
-    },
-    "skip_e2e": true
+    }
   }
 ]

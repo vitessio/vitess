@@ -612,6 +612,11 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
 			src := op.Source
 			if order, ok := orderToPush[op]; ok && len(order) > 0 {
+				if hasUnionOperator(in.Source) && op.ResultColumns == 0 {
+					// The route-local ordering may add helper columns. Trim them
+					// before Concatenate combines this UNION arm with its peers.
+					op.setTruncateColumnCount(len(op.GetColumns(ctx)))
+				}
 				src = newOrdering(src, order)
 			}
 			op.Source = newLimit(src, ast, false)

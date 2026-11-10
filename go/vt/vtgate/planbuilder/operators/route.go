@@ -719,6 +719,19 @@ func wrapInDerivedProjection(
 	op Operator,
 ) (projection *Projection) {
 	unionColumns := op.GetColumns(ctx)
+	derivedColumnCount, hasUnionOutputCount := unionOutputColumnCount(op)
+	rebindDerivedColumns := hasUnionOutputCount && derivedColumnCount < len(unionColumns)
+	if rebindDerivedColumns {
+		for _, col := range unionColumns[derivedColumnCount:] {
+			if findDerivedUnionColumn(ctx, unionColumns[:derivedColumnCount], col) < 0 {
+				rebindDerivedColumns = false
+				break
+			}
+		}
+	}
+	if !rebindDerivedColumns || derivedColumnCount > len(unionColumns) {
+		derivedColumnCount = len(unionColumns)
+	}
 	columns := make(sqlparser.Columns, 0, len(unionColumns))
 	for i := range unionColumns {
 		columns = append(columns, sqlparser.NewIdentifierCI(fmt.Sprintf("c%d", i)))
@@ -732,9 +745,20 @@ func wrapInDerivedProjection(
 			Columns: columns,
 		},
 	}
+	// Hidden columns added for post-processing are not part of a UNION's SQL
+	// output. Rebind projections through the UNION's actual output columns.
+	tbl := sqlparser.NewTableName("dt")
+	if rebindDerivedColumns {
+		for i, col := range unionColumns {
+			sourceOffset := i
+			if sourceOffset >= derivedColumnCount {
+				sourceOffset = findDerivedUnionColumn(ctx, unionColumns[:derivedColumnCount], col)
+			}
+			derivedProj.Columns.(AliasedProjections)[i].EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", sourceOffset), tbl)
+		}
+	}
 
 	proj := newAliasedProjection(derivedProj)
-	tbl := sqlparser.NewTableName("dt")
 	for i, col := range unionColumns {
 		projExpr := newProjExpr(col)
 		projExpr.EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", i), tbl)
@@ -742,6 +766,45 @@ func wrapInDerivedProjection(
 	}
 
 	return proj
+}
+
+func unionOutputColumnCount(op Operator) (int, bool) {
+	switch op := op.(type) {
+	case *Union:
+		return len(op.unionColumns), true
+	case *Horizon:
+		if _, ok := op.Query.(*sqlparser.Union); ok {
+			selectExprs, found := queryOutputSelectExprs(op.Query)
+			return len(selectExprs), found
+		}
+	case *Route:
+		return unionOutputColumnCount(op.Source)
+	case *Distinct:
+		return unionOutputColumnCount(op.Source)
+	case *Filter:
+		return unionOutputColumnCount(op.Source)
+	case *Limit:
+		return unionOutputColumnCount(op.Source)
+	case *Ordering:
+		return unionOutputColumnCount(op.Source)
+	case *LockAndComment:
+		return unionOutputColumnCount(op.Source)
+	}
+	for _, input := range op.Inputs() {
+		if count, ok := unionOutputColumnCount(input); ok {
+			return count, true
+		}
+	}
+	return 0, false
+}
+
+func findDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []*sqlparser.AliasedExpr, col *sqlparser.AliasedExpr) int {
+	for i, source := range sourceColumns {
+		if sqlparser.Equals.Expr(source.Expr, col.Expr) || ctx.SemTable.EqualsExprWithDeps(source.Expr, col.Expr) {
+			return i
+		}
+	}
+	return -1
 }
 
 func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
