@@ -384,7 +384,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		return nil, nil
 	}
 
-	newExpr := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
+	newExpr, exactVars := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
 	sqm := &subqueryRouteMerger{
 		outer:    outerRoute,
 		original: newExpr,
@@ -392,6 +392,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 	newOp := mergeSubqueryInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
 	if newOp == nil {
+		outer.ExtraLHSVars = outer.ExtraLHSVars[:exactVars]
 		return nil, nil
 	}
 
@@ -422,19 +423,23 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 // rewriteOriginalPushedToRHS rewrites the original expression to use the argument names instead of the column names
 // this is necessary because we are pushing the subquery into the RHS of the join, and we need to use the argument names
 // instead of the column names
-func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) sqlparser.Expr {
+func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) (sqlparser.Expr, int) {
 	outerID := TableID(outer.LHS)
+	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, nil, func(col *sqlparser.ColName) bool {
+		return ctx.SemTable.RecursiveDeps(col) == outerID
+	})
+	// Only a successful merge needs the variables that the second pass adds. Otherwise the left
+	// side would select columns that nothing groups on, so the caller truncates ExtraLHSVars to
+	// the length returned here.
+	exactVars := len(outer.ExtraLHSVars)
 	// Outside the subqueries, any column the LHS solves is fed from it, even when the LHS
 	// spans several tables. Inside them, only an exact match is: a sibling subquery that
 	// already merged into the LHS adds its own tables to outerID.
-	fedFromLHS := func(col *sqlparser.ColName) bool {
+	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, dontEnterSubqueries, func(col *sqlparser.ColName) bool {
 		deps := ctx.SemTable.RecursiveDeps(col)
 		return deps.NotEmpty() && deps.IsSolvedBy(outerID)
-	}
-	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, dontEnterSubqueries, fedFromLHS)
-	return rewriteColumnsFedFromLHS(ctx, expression, outer, nil, func(col *sqlparser.ColName) bool {
-		return ctx.SemTable.RecursiveDeps(col) == outerID
 	})
+	return expression, exactVars
 }
 
 func rewriteColumnsFedFromLHS(

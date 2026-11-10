@@ -6533,5 +6533,209 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A subquery that can't merge into the right side of a join adds no left-side column that the aggregation doesn't group on",
+    "query": "select count(*) from `user` as u join user_extra as ue on u.id = ue.user_id join music as m on m.user_id = u.col where u.foo in (select col from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*) from `user` as u join user_extra as ue on u.id = ue.user_id join music as m on m.user_id = u.col where u.foo in (select col from user_extra)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * count(*) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "JoinVars": {
+                  "u_col": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "UncorrelatedSubquery",
+                    "Variant": "PulloutIn",
+                    "PulloutVars": [
+                      "__sq_has_values",
+                      "__sq1"
+                    ],
+                    "Inputs": [
+                      {
+                        "InputName": "SubQuery",
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select col from user_extra where 1 != 1",
+                        "Query": "select col from user_extra"
+                      },
+                      {
+                        "InputName": "Outer",
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), u.col from `user` as u, user_extra as ue where 1 != 1 group by u.col",
+                        "Query": "select count(*), u.col from `user` as u, user_extra as ue where u.id = ue.user_id and :__sq_has_values and u.foo in ::__sq1 group by u.col"
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from music as m where 1 != 1 group by .0",
+                    "Query": "select count(*) from music as m where m.user_id = :u_col /* INT16 */ group by .0",
+                    "Values": [
+                      ":u_col"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "An OR'd IN subquery that can't merge into the right side of a join groups the left side by the columns the filter above the join reads",
+    "query": "select count(*) from `user` as u straight_join user_extra as ue on u.col = ue.col straight_join music as m on m.col = ue.col where u.foo = 1 or ue.foo in (select col from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*) from `user` as u straight_join user_extra as ue on u.col = ue.col straight_join music as m on m.col = ue.col where u.foo = 1 or ue.foo in (select col from user_extra)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * count(*) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "JoinVars": {
+                  "ue_col": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "UncorrelatedSubquery",
+                    "Variant": "PulloutIn",
+                    "PulloutVars": [
+                      "__sq_has_values",
+                      "__sq1"
+                    ],
+                    "Inputs": [
+                      {
+                        "InputName": "SubQuery",
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select col from user_extra where 1 != 1",
+                        "Query": "select col from user_extra"
+                      },
+                      {
+                        "InputName": "Outer",
+                        "OperatorType": "Projection",
+                        "Expressions": [
+                          "count(*) * count(*) as count(*)",
+                          ":2 as col"
+                        ],
+                        "Inputs": [
+                          {
+                            "OperatorType": "Filter",
+                            "Predicate": "u.foo = 1 or :__sq_has_values and ue.foo in ::__sq1",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:0,R:0,R:1,L:2,R:2",
+                                "JoinVars": {
+                                  "u_col": 1,
+                                  "u_foo": 2
+                                },
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "user",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(*), u.col, u.foo from `user` as u where 1 != 1 group by u.col, u.foo",
+                                    "Query": "select count(*), u.col, u.foo from `user` as u group by u.col, u.foo"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "user",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(*), ue.col, ue.foo from user_extra as ue where 1 != 1 group by ue.col, ue.foo",
+                                    "Query": "select count(*), ue.col, ue.foo from user_extra as ue where ue.col = :u_col /* INT16 */ group by ue.col, ue.foo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from music as m where 1 != 1 group by .0",
+                    "Query": "select count(*) from music as m where m.col = :ue_col /* INT16 */ group by .0"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
