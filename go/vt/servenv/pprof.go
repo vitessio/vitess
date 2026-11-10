@@ -169,7 +169,6 @@ func (prof *profile) mkprofile() io.WriteCloser {
 	var (
 		path string
 		err  error
-		logf = func(string, ...slog.Attr) {}
 	)
 
 	if prof.path != "" {
@@ -179,21 +178,19 @@ func (prof *profile) mkprofile() io.WriteCloser {
 		path, err = os.MkdirTemp("", "profile")
 	}
 	if err != nil {
-		log.Error(fmt.Sprintf("pprof: could not create initial output directory: %v", err))
+		log.Error("pprof: could not create initial output directory", slog.Any("error", err))
 		os.Exit(1)
-	}
-
-	if !prof.quiet {
-		logf = log.Info
 	}
 
 	fn := filepath.Join(path, prof.mode.filename())
 	f, err := os.Create(fn)
 	if err != nil {
-		log.Error(fmt.Sprintf("pprof: could not create profile %q: %v", fn, err))
+		log.Error("pprof: could not create profile", slog.String("path", fn), slog.Any("error", err))
 		os.Exit(1)
 	}
-	logf(fmt.Sprintf("pprof: %s profiling enabled, %s", string(prof.mode), fn))
+	if !prof.quiet {
+		log.Info("pprof: profiling enabled", slog.String("profile_mode", string(prof.mode)), slog.String("path", fn))
+	}
 
 	return f
 }
@@ -276,7 +273,7 @@ func (prof *profile) init() (start func(), stop func()) {
 		start = startCallback(func() {
 			pf = prof.mkprofile()
 			if err := trace.Start(pf); err != nil {
-				log.Error(fmt.Sprintf("pprof: could not start trace: %v", err))
+				log.Error("pprof: could not start trace", slog.Any("error", err))
 				os.Exit(1)
 			}
 		})

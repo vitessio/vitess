@@ -33,9 +33,12 @@ limitations under the License.
 // Keys that can hold data include:
 //
 //   - error
-//   - query, filter, expression, schema, request, result and throttler_config
+//   - query, queries, schema_diff, filter, expression, schema, request, result and
+//     throttler_config
 //   - last_pk, row, row_range, values, next_value, last_value, event,
-//     transaction, message, stage, stderr and panic
+//     transaction, message, packet, stage, stderr and panic
+//   - exec_cmd, args, process_name, stdout, stderr and error_log
+//   - settings and azblob_message
 package logcheck
 
 import (
