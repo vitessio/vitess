@@ -18,7 +18,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cmd/vtctldclient/command"
@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/grpcclientcommon"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -60,7 +61,7 @@ func main() {
 	command.Root.SetGlobalNormalizationFunc(flagUtils.NormalizeUnderscoresToDashes)
 	// back to your regularly scheduled cobra programming
 	if err := command.Root.Execute(); err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("command failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		exit.Return(1)
 	}
 }

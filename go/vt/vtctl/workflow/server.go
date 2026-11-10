@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"slices"
 	"sort"
@@ -1618,6 +1619,19 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		opts = append(opts, IgnoreSourceKeyspace())
 	}
 
+	// Lock the workflow for deletion before reading its state. SwitchTraffic
+	// holds this lock while it switches traffic, so a state read before the
+	// lock can say that writes are not switched when they are by the time we
+	// get the lock, and we would then drop the target tables that take writes.
+	lockName := fmt.Sprintf("%s/%s", req.GetKeyspace(), req.GetWorkflow())
+	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "WorkflowDelete")
+	if lockErr != nil {
+		s.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
+		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
+	}
+	var err error
+	defer workflowUnlock(&err)
+
 	ts, state, err := s.getWorkflowState(ctx, req.GetKeyspace(), req.GetWorkflow(), opts...)
 	if err != nil {
 		s.Logger().Errorf("failed to get VReplication workflow state for %s.%s: %v", req.GetKeyspace(), req.GetWorkflow(), err)
@@ -1632,15 +1646,6 @@ func (s *Server) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDe
 		// If only reads have been switched, then we can delete the
 		// workflow and its related artifacts.
 	}
-
-	// Lock the workflow for deletion.
-	lockName := fmt.Sprintf("%s/%s", ts.TargetKeyspaceName(), ts.WorkflowName())
-	ctx, workflowUnlock, lockErr := s.ts.LockName(ctx, lockName, "WorkflowDelete")
-	if lockErr != nil {
-		ts.Logger().Errorf("Locking the workflow %s failed: %v", lockName, lockErr)
-		return nil, vterrors.Wrapf(lockErr, "failed to lock the %s workflow", lockName)
-	}
-	defer workflowUnlock(&err)
 
 	if state.WorkflowType == TypeMigrate {
 		_, err := s.finalizeMigrateWorkflow(ctx, ts, "", true, keepData, req.GetKeepRoutingRules(), false)
@@ -2701,11 +2706,12 @@ func (s *Server) DeleteShard(ctx context.Context, keyspace, shard string, recurs
 	return s.ts.DeleteShard(ctx, keyspace, shard)
 }
 
-// updateShardRecords updates the shard records based on 'from' or 'to' direction.
+// updateShardRecords updates QueryServiceDisabled for the shards based on 'from'
+// or 'to' direction. See topotools.UpdateShardRecords.
 func (s *Server) updateShardRecords(ctx context.Context, keyspace string, shards []*topo.ShardInfo, cells []string,
-	servedType topodatapb.TabletType, isFrom bool, clearSourceShards bool, logger logutil.Logger,
+	servedType topodatapb.TabletType, isFrom bool, logger logutil.Logger,
 ) (err error) {
-	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, clearSourceShards, shardTabletRefreshTimeout, logger)
+	return topotools.UpdateShardRecords(ctx, s.ts, s.tmc, keyspace, shards, cells, servedType, isFrom, shardTabletRefreshTimeout, logger)
 }
 
 // refreshPrimaryTablets will just RPC-ping all the primary tablets with RefreshState
@@ -3240,21 +3246,6 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 		}
 	}
 
-	// Find out if the target is using any sequence tables for auto_increment
-	// value generation. If so, then we'll need to ensure that they are
-	// initialized properly before allowing new writes on the target.
-	sequenceMetadata := make(map[string]*sequenceMetadata)
-	// For sharded to sharded migrations the sequence must already be setup.
-	// For reshards the sequence usage is not changed.
-	if req.InitializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
-		ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
-		!ts.SourceKeyspaceSchema().Keyspace.Sharded {
-		sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
-		if err != nil {
-			return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
-		}
-	}
-
 	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := ts.checkJournals(ctx)
 	if err != nil {
@@ -3262,6 +3253,28 @@ func (s *Server) switchWrites(ctx context.Context, req *vtctldatapb.WorkflowSwit
 	}
 	if !journalsExist {
 		ts.Logger().Infof("No previous journals were found. Proceeding normally.")
+
+		// Find out if the target is using any sequence tables for auto_increment
+		// value generation. If so, then we'll need to ensure that they are
+		// initialized properly before allowing new writes on the target. This
+		// only runs before the journals are created: the sequences are
+		// initialized before then, so a switch that finds the journals has
+		// nothing left to set up for them and only has to finish.
+		sequenceMetadata := make(map[string]*sequenceMetadata)
+		// For sharded to sharded migrations the sequence must already be setup.
+		// For reshards the sequence usage is not changed.
+		if req.InitializeTargetSequences && ts.workflowType == binlogdatapb.VReplicationWorkflowType_MoveTables &&
+			ts.SourceKeyspaceSchema() != nil && ts.SourceKeyspaceSchema().Keyspace != nil &&
+			!ts.SourceKeyspaceSchema().Keyspace.Sharded {
+			sequenceMetadata, err = ts.getTargetSequenceMetadata(ctx)
+			if err != nil {
+				return handleError(fmt.Sprintf("failed to get the sequence information in the %s keyspace", ts.TargetKeyspaceName()), err)
+			}
+			if err := sw.prepareTargetSequences(ctx, sequenceMetadata); err != nil {
+				return handleError(fmt.Sprintf("failed to prepare the sequences used in the %s keyspace", ts.TargetKeyspaceName()), err)
+			}
+		}
+
 		sm, err := BuildStreamMigrator(ctx, ts, cancel, s.env.Parser())
 		if err != nil {
 			return handleError("failed to migrate the workflow streams", err)
@@ -3496,11 +3509,15 @@ func (s *Server) canSwitch(ctx context.Context, ts *trafficSwitcher, maxAllowedR
 	defer cancel()
 	refreshTablets := func(si *topo.ShardInfo, stype string) {
 		if partial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, s.ts, s.tmc, si, nil, ts.Logger()); err != nil || partial {
-			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
-				si.Keyspace(), si.ShardName(), stype, err, partialDetails)
 			if partial && ts.force {
-				log.Warn(msg)
+				if stype == "source" {
+					log.Warn("failed to successfully refresh all tablets in the source shard", ts.partialRefreshAttrs(si, partialDetails, err)...)
+				} else {
+					log.Warn("failed to successfully refresh all tablets in the target shard", ts.partialRefreshAttrs(si, partialDetails, err)...)
+				}
 			} else {
+				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s %s shard (%v):\n  %v\n",
+					si.Keyspace(), si.ShardName(), stype, err, partialDetails)
 				m.Lock()
 				refreshErrors.WriteString(msg)
 				m.Unlock()
@@ -3607,7 +3624,10 @@ func (s *Server) CopySchemaShard(ctx context.Context, sourceTabletAlias *topodat
 	defer cancel()
 	_, ok := schematools.ReloadShard(reloadCtx, s.ts, s.tmc, s.Logger(), destKeyspace, destShard, destPrimaryPos, nil, true)
 	if !ok {
-		s.Logger().Error(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "CopySchemaShard: failed to reload schema on all replicas"))
+		s.Logger().Error("CopySchemaShard: failed to reload schema on all replicas",
+			slog.String("keyspace", destKeyspace),
+			slog.String("shard", destShard),
+			slog.String("error_code", vtrpcpb.Code_INTERNAL.String()))
 	}
 
 	return err
@@ -3783,7 +3803,12 @@ func (s *Server) WorkflowMirrorTraffic(ctx context.Context, req *vtctldatapb.Wor
 func (s *Server) mirrorTraffic(ctx context.Context, req *vtctldatapb.WorkflowMirrorTrafficRequest, ts *trafficSwitcher, state *State) (err error) {
 	// Consistently handle errors by logging and returning them.
 	handleError := func(message string, err error) error {
-		ts.Logger().Error(err)
+		ts.Logger().Error("failed to mirror traffic",
+			slog.String("workflow", ts.workflow),
+			slog.String("keyspace", ts.targetKeyspace),
+			slog.String("reason", message),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 

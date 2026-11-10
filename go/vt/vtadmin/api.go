@@ -20,12 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"maps"
 	"math"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"net/url"
+	"slices"
 	stdsort "sort"
 	"strings"
 	"sync"
@@ -285,12 +287,16 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			c, id, err := dynamic.ClusterFromString(r.Context(), urlDecoded)
 			if id != "" {
 				if err != nil {
-					log.Warn(fmt.Sprintf("failed to extract valid cluster from cookie; attempting to use existing cluster with id=%s; error: %s", id, err))
+					log.Warn("failed to extract valid cluster from cookie; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 				}
 
-				dynamicAPI = api.WithCluster(c, id)
+				dynamicAPI, err = api.WithCluster(c, id)
+				if err != nil {
+					vtadminhttp.NewJSONResponse(nil, &errors.ErrInvalidCluster{Err: err}).Write(w)
+					return
+				}
 			} else {
-				log.Warn(fmt.Sprintf("failed to unmarshal dynamic cluster spec from cookie; falling back to static API; error: %s", err))
+				log.Warn("failed to unmarshal dynamic cluster spec from cookie; falling back to static API", slog.Any("error", err))
 			}
 		}
 	}
@@ -299,8 +305,18 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // WithCluster returns a dynamic API with the given cluster. If `c` is non-nil,
-// it is used as the selected cluster. If the cluster is nil, then a cluster
-// with the given id is retrieved from the API and used in the dynamic API.
+// WithCluster takes ownership of it and selects the cluster registered under
+// the given id afterwards:
+//   - If no cluster is registered under the id, `c` is registered.
+//   - If a different cluster is registered under the id, that cluster is
+//     closed and replaced by `c`.
+//   - If an equal cluster is registered under the id, `c` is closed, so
+//     callers must not use `c` afterwards.
+//   - If `c` is the registered cluster itself, nothing changes.
+//
+// If the cluster is nil, then a cluster with the given id is retrieved from
+// the API and used in the dynamic API. If the cluster is nil and the API has
+// no cluster with the given id, WithCluster returns a NOT_FOUND error.
 //
 // Callers must ensure that:
 // 1. If c is non-nil, c.ID == id.
@@ -308,7 +324,7 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 // Note that using dynamic.ClusterFromString ensures both of these
 // preconditions.
-func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
+func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) {
 	api.clusterMu.Lock()
 	defer api.clusterMu.Unlock()
 
@@ -320,26 +336,34 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 		env:     api.env,
 	}
 
-	if c != nil {
+	// c may already be the cluster registered under id, which must not be
+	// closed or replaced.
+	if c != nil && c != api.clusterMap[id] {
 		existingCluster, exists := api.clusterMap[id]
 		shouldAddCluster := !exists
 		if exists {
 			isEqual, err := existingCluster.Equal(c)
 			if err != nil {
-				log.Error(fmt.Sprintf("Error checking for existing cluster %s equality with new cluster %s: %v", existingCluster.ID, id, err))
+				log.Error("Error checking for existing cluster equality with new cluster",
+					slog.String("existing_cluster_id", existingCluster.ID),
+					slog.String("cluster_id", id),
+					slog.Any("error", err))
 			}
 			shouldAddCluster = shouldAddCluster || !isEqual
 		}
 		if shouldAddCluster {
 			if existingCluster != nil {
 				if err := existingCluster.Close(); err != nil {
-					log.Error(err.Error() + "; some connections and goroutines may linger")
+					log.Error("failed to close cluster; some connections and goroutines may linger",
+						slog.String("existing_cluster_id", existingCluster.ID),
+						slog.String("cluster_id", id),
+						slog.Any("error", err))
 				}
 
-				idx := stdsort.Search(len(api.clusters), func(i int) bool {
-					return api.clusters[i].ID == existingCluster.ID
+				idx := slices.IndexFunc(api.clusters, func(c *cluster.Cluster) bool {
+					return c.ID == existingCluster.ID
 				})
-				if idx >= 0 && idx < len(api.clusters) {
+				if idx >= 0 {
 					api.clusters = append(api.clusters[:idx], api.clusters[idx+1:]...)
 				}
 			}
@@ -352,15 +376,22 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) dynamic.API {
 
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
-			log.Info(fmt.Sprintf("API already has cluster with id %s, using that instead", id))
+			log.Info("API already has an equal cluster, using that instead", slog.String("cluster_id", id))
+			if err := c.Close(); err != nil {
+				log.Error("failed to close duplicate dynamic cluster; some connections and goroutines may linger", slog.String("cluster_id", id), slog.Any("error", err))
+			}
 		}
 	}
 
 	selectedCluster := api.clusterMap[id]
+	if selectedCluster == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: no cluster with id %s", errors.ErrUnsupportedCluster, id)
+	}
+
 	dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
 	dynamicAPI.clusterMap = map[string]*cluster.Cluster{id: selectedCluster}
 
-	return dynamicAPI
+	return dynamicAPI, nil
 }
 
 // rejectCrossSiteRequests refuses a state-changing request that a browser sent on
@@ -551,14 +582,17 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	if ok {
 		delete(api.clusterMap, key)
 		if err := c.Close(); err != nil {
-			log.Error(err.Error() + "; some connections and goroutines may linger")
+			log.Error("failed to close cluster; some connections and goroutines may linger", slog.String("cluster_id", key), slog.Any("error", err))
 		}
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
-	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
-	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
-		log.Error(fmt.Sprintf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters)))
+	clusterIndex := slices.IndexFunc(api.clusters, func(c *cluster.Cluster) bool { return c.ID == key })
+	if clusterIndex < 0 {
+		log.Error("Cannot remove cluster from api.clusters. Cluster not found.",
+			slog.String("cluster_id", key),
+			slog.Int("cluster_count", len(api.clusters)))
+		return
 	}
 
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
@@ -855,7 +889,7 @@ func (api *API) FindSchema(ctx context.Context, req *vtadminpb.FindSchemaRequest
 				}
 			}
 
-			log.Info(fmt.Sprintf("cluster %s has no tables named %s", c.ID, req.Table))
+			log.Info("cluster has no table with the requested name", slog.String("cluster_id", c.ID), slog.String("table", req.Table))
 		}(c)
 	}
 
@@ -2839,7 +2873,7 @@ func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) 
 	defer api.vtexplainLock.Unlock()
 
 	lockWaitTime := time.Since(lockWaitStart)
-	log.Info(fmt.Sprintf("vtexplain lock wait time: %s", lockWaitTime))
+	log.Info("vtexplain lock wait time", slog.Duration("wait_time", lockWaitTime))
 
 	span.Annotate("vtexplain_lock_wait_time", lockWaitTime.String())
 

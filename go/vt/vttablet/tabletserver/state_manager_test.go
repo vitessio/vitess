@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -317,12 +319,10 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	sm := newTestStateManager()
 	defer sm.StopService()
 	sm.se.(*testSchemaEngine).failMySQL = true
+	logs := logtest.Capture(t, slog.LevelError)
 
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.Error(t, err)
-
-	// Calling retryTransition while retrying should be a no-op.
-	sm.retryTransition("")
 
 	// Steal the lock and wait long enough for the retry
 	// to fail, and then release it. The retry will have
@@ -343,6 +343,22 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.Target().TabletType)
 	assert.Equal(t, StateServing, sm.State())
+
+	// The failure is logged once, when the retries start.
+	record := logs.Record(t, "Error transitioning to the desired state, will keep retrying")
+	assert.Equal(t, "PRIMARY", record["tablet_type"])
+	assert.Equal(t, "Serving", record["state"])
+	assert.Equal(t, "intentional error", record["error"])
+
+	// Calling retryTransition while retrying should be a no-op. The retry
+	// above has finished, so set the flag directly.
+	sm.mu.Lock()
+	sm.retrying = true
+	sm.mu.Unlock()
+	sm.retryTransition(func() { t.Error("retryTransition logged while already retrying") })
+	sm.mu.Lock()
+	sm.retrying = false
+	sm.mu.Unlock()
 }
 
 func TestStateManagerNotConnectedType(t *testing.T) {

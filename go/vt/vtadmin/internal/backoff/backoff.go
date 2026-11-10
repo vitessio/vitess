@@ -26,6 +26,7 @@ limitations under the License.
 package backoff
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"strings"
 	"time"
@@ -122,5 +123,16 @@ func Get(strategy string, cfg grpcbackoff.Config) Strategy {
 		return None{}
 	default:
 		panic("unknown backoff strategy: " + strategy)
+	}
+}
+
+// Validate returns an error if Get does not support the specified strategy
+// name.
+func Validate(strategy string) error {
+	switch strings.ToLower(strategy) {
+	case "", "exponential", "linear", "none":
+		return nil
+	default:
+		return fmt.Errorf("unknown backoff strategy %s; must be one of exponential, linear, none", strategy)
 	}
 }

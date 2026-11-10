@@ -1,10 +1,5 @@
 name: docker_ci
 on:
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
-    tags: "**"
   pull_request:
     branches: "**"
 concurrency:
@@ -72,6 +67,7 @@ jobs:
               - 'java/**'
               - '.github/workflows/docker_ci.yml'
               - '.github/actions/build-bootstrap/**'
+              - '.github/actions/tool-downloads/**'
 
   build:
     name: ${{ matrix.name }}
@@ -102,7 +98,7 @@ jobs:
         run: exit 1
 
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
         with:
           egress-policy: audit
 
@@ -119,6 +115,12 @@ jobs:
         with:
           persist-credentials: "false"
 
+      # The bootstrap image build and docker/test/run.sh use the downloads,
+      # and bootstrap.sh checks each file's checksum before it uses it.
+      - name: Restore tool downloads
+        if: needs.changes.outputs.end_to_end == 'true'
+        uses: $/.github/actions/tool-downloads
+
       - name: Build bootstrap images
         if: needs.changes.outputs.end_to_end == 'true'
         timeout-minutes: 20
@@ -126,11 +128,40 @@ jobs:
         with:
           bootstrap-version: ${{ env.BOOTSTRAP_VERSION }}
           bootstrap-flavor: ${{ env.BOOTSTRAP_FLAVOR }}
-          cache-export: ${{ matrix.shard == 'java' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')) }}
 
       - name: Set up Go
         if: needs.changes.outputs.end_to_end == 'true'
         uses: $/.github/actions/setup-go
+
+      # The test containers run as the vitess user (uid 1000), not as the
+      # runner user that restored the caches, and add to them.
+      - name: Share the Go caches with the test containers
+        if: needs.changes.outputs.end_to_end == 'true'
+        run: |
+          gomodcache=$(go env GOMODCACHE)
+          gocache=$(go env GOCACHE)
+          mkdir -p "${gomodcache}" "${gocache}"
+          chmod -R a+rwX "${gomodcache}" "${gocache}"
+          echo "DOCKER_TEST_GOMODCACHE=${gomodcache}" >> "${GITHUB_ENV}"
+          echo "DOCKER_TEST_GOCACHE=${gocache}" >> "${GITHUB_ENV}"
+
+      # docker/test/run.sh shares /tmp/mavencache as the containers' ~/.m2.
+      # Only the java shard uses it. The go_cache_warm workflow is the only
+      # writer of this cache.
+      - name: Restore the Maven cache
+        if: needs.changes.outputs.end_to_end == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /tmp/mavencache
+          key: docker-maven-${{ hashFiles('build.env', 'tools/warm_maven_cache.sh', 'java/**/pom.xml') }}
+          restore-keys: |
+            docker-maven-
+
+      - name: Share the Maven cache with the test containers
+        if: needs.changes.outputs.end_to_end == 'true'
+        run: |
+          mkdir -p /tmp/mavencache
+          chmod -R a+rwX /tmp/mavencache
 
       - name: Tune the OS
         if: needs.changes.outputs.end_to_end == 'true'
@@ -142,3 +173,4 @@ jobs:
         timeout-minutes: 30
         run: |
           go run test.go -docker=true -pull=false -flavor=${{ env.BOOTSTRAP_FLAVOR }} -bootstrap-version=${{ env.BOOTSTRAP_VERSION }} --follow -shard ${{ matrix.shard }}
+

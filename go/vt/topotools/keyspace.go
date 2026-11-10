@@ -27,6 +27,7 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -102,8 +103,16 @@ func RefreshTabletsByShard(ctx context.Context, ts *topo.Server, tmc tmclient.Ta
 	return isPartialRefresh, prd.String(), err
 }
 
-// UpdateShardRecords updates the shard records based on 'from' or 'to'
-// direction.
+// lockCheckInterval is how often UpdateShardRecords checks the keyspace lock
+// while it waits for the tablet refresh. With the etcd topo, checking the lock
+// renews its lease, so the lease does not expire during a long refresh.
+const lockCheckInterval = time.Second
+
+// UpdateShardRecords updates QueryServiceDisabled for servedType on the shards
+// in the SrvKeyspace of the cells, based on 'from' or 'to' direction, and
+// refreshes the tablets of the 'to' shards within refreshTimeout. It checks the
+// keyspace lock every lockCheckInterval while it waits for the refresh. If a
+// check fails, it cancels the refresh and returns the error.
 func UpdateShardRecords(
 	ctx context.Context,
 	ts *topo.Server,
@@ -113,7 +122,6 @@ func UpdateShardRecords(
 	cells []string,
 	servedType topodatapb.TabletType,
 	isFrom bool,
-	clearSourceShards bool,
 	refreshTimeout time.Duration,
 	logger logutil.Logger,
 ) error {
@@ -121,23 +129,10 @@ func UpdateShardRecords(
 	if err := ts.UpdateDisableQueryService(ctx, keyspace, shards, servedType, cells, disableQueryService); err != nil {
 		return err
 	}
-	for i, si := range shards {
-		updatedShard, err := ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(si *topo.ShardInfo) error {
-			if clearSourceShards {
-				si.SourceShards = nil
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-		shards[i] = updatedShard
-	}
 	// For 'to' shards, refresh to make them serve. The 'from' shards will
 	// be refreshed after traffic has migrated. The shards are refreshed
-	// concurrently because the caller holds the keyspace lock, and refreshing
-	// many shards one at a time can outlast the lock's lease. For the same
-	// reason one slow tablet must not stall the refresh past refreshTimeout.
+	// concurrently, and within refreshTimeout, because the caller holds the
+	// keyspace lock for the whole refresh.
 	if !isFrom {
 		refreshCtx, cancel := context.WithTimeout(ctx, refreshTimeout)
 		defer cancel()
@@ -149,7 +144,25 @@ func UpdateShardRecords(
 				}
 			})
 		}
-		wg.Wait()
+		refreshed := make(chan struct{})
+		go func() {
+			wg.Wait()
+			close(refreshed)
+		}()
+		ticker := time.NewTicker(lockCheckInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-refreshed:
+				return nil
+			case <-ticker.C:
+				if err := topo.CheckKeyspaceLocked(ctx, keyspace); err != nil {
+					cancel()
+					<-refreshed
+					return vterrors.Wrapf(err, "%s keyspace lock was lost while refreshing the tablets", keyspace)
+				}
+			}
+		}
 	}
 	return nil
 }

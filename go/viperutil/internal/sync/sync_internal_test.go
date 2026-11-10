@@ -18,6 +18,7 @@ package sync
 
 import (
 	"encoding/json"
+	"log/slog"
 	"math/rand/v2"
 	"sync"
 	"testing"
@@ -27,6 +28,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestPersistConfig(t *testing.T) {
@@ -169,4 +172,31 @@ func TestGetterDoesNotRaceWithSetOrReload(t *testing.T) {
 		}
 	})
 	wg.Wait()
+}
+
+// TestPersistConfigLogsWriteError checks that a failed write back to disk is
+// logged to go/vt/log, which the internal log package no longer writes to.
+func TestPersistConfigLogsWriteError(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	fs := afero.NewMemMapFs()
+	require.NoError(t, afero.WriteFile(fs, "config.json", []byte(`{"foo": 1}`), 0o644))
+	static := viper.New()
+	static.SetFs(fs)
+	static.SetConfigFile("config.json")
+	require.NoError(t, static.ReadInConfig())
+
+	v := New()
+	get := AdaptGetter("foo", func(v *viper.Viper) func(key string) int { return v.GetInt }, v)
+	v.SetFs(afero.NewReadOnlyFs(fs))
+	cancel, err := v.Watch(t.Context(), static, 0)
+	require.NoError(t, err)
+	t.Cleanup(cancel)
+
+	v.Set("foo", 2)
+	assert.Equal(t, 2, get("foo"))
+
+	record := logs.Wait(t, "failed to persist config changes back to disk")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Contains(t, record["error"], "operation not permitted")
 }

@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -150,7 +151,7 @@ func (mysqld *Mysqld) ConfigureGroupReplication(ctx context.Context, cfg mysql.G
 	}
 	cmds = append(cmds, mysql.ConfigureGroupReplicationCommands(cfg)...)
 	cmds = append(cmds, mysql.GroupReplicationCredentialsCommand(params.Uname, params.Pass))
-	log.Info(fmt.Sprintf("Configuring group replication: group %s, local address %s, seeds %v", cfg.GroupName, cfg.LocalAddress, cfg.Seeds))
+	log.Info("Configuring group replication", slog.String("group_name", cfg.GroupName), slog.String("local_address", cfg.LocalAddress), slog.Any("seeds", cfg.Seeds))
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
 		return err
 	}
@@ -198,15 +199,15 @@ func (mysqld *Mysqld) disableSuperReadOnlyActionLocally(ctx context.Context, con
 	if superReadOnly {
 		cmds = append(cmds, "SET GLOBAL super_read_only = ON")
 	}
-	log.Info(fmt.Sprintf("Disabling the group replication member action %s in the member's own configuration (version %d)",
-		mysql.GroupReplicationSuperReadOnlyAction, actions.ConfigurationVersion))
+	log.Info("Disabling a group replication member action in the member's own configuration",
+		slog.String("member_action", mysql.GroupReplicationSuperReadOnlyAction), slog.Int64("configuration_version", actions.ConfigurationVersion))
 	err = mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 	if err != nil && superReadOnly {
 		// Never leave super_read_only off on a member that had it on.
 		resetCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bootstrapFlagResetTimeout)
 		defer cancel()
 		if _, resetErr := mysqld.SetSuperReadOnly(resetCtx, true); resetErr != nil {
-			log.Warn(fmt.Sprintf("Failed to set super_read_only again after failing to disable %s: %v", mysql.GroupReplicationSuperReadOnlyAction, resetErr))
+			log.Warn("Failed to set super_read_only again after failing to disable a group replication member action", slog.String("member_action", mysql.GroupReplicationSuperReadOnlyAction), slog.Any("error", resetErr))
 		}
 	}
 	if err != nil {
@@ -296,7 +297,7 @@ func (mysqld *Mysqld) ensureGroupReplicationPrivileges(ctx context.Context, conn
 	for _, row := range qr.Rows {
 		grants = append(grants, "GRANT "+required+" ON *.* TO "+sqltypes.EncodeStringSQL(user)+"@"+sqltypes.EncodeStringSQL(row[0].ToString()))
 	}
-	log.Info(fmt.Sprintf("Granting %s to the replication user %s, which Group Replication needs", required, user))
+	log.Info("Granting the privileges that Group Replication needs to the replication user", slog.String("privileges", required), slog.String("user", user))
 	if err := mysqld.grantWithoutBinlog(ctx, conn, superReadOnly, grants); err != nil {
 		return refuse(err)
 	}
@@ -364,7 +365,7 @@ func (mysqld *Mysqld) StartGroupReplication(ctx context.Context, bootstrap bool)
 		}
 	}
 	cmds := mysql.StartGroupReplicationCommands(bootstrap)
-	log.Info(fmt.Sprintf("Starting group replication (bootstrap: %v)", bootstrap))
+	log.Info("Starting group replication", slog.Bool("bootstrap", bootstrap))
 	err = mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 	if err != nil && bootstrap {
 		// Never leave the bootstrap flag on: a later START GROUP_REPLICATION would create a
@@ -374,7 +375,7 @@ func (mysqld *Mysqld) StartGroupReplication(ctx context.Context, bootstrap bool)
 		resetCtx, cancel := context.WithTimeout(context.Background(), bootstrapFlagResetTimeout)
 		defer cancel()
 		if resetErr := mysqld.ExecuteSuperQueryList(resetCtx, []string{"SET GLOBAL group_replication_bootstrap_group = OFF"}); resetErr != nil {
-			log.Warn(fmt.Sprintf("Failed to reset group_replication_bootstrap_group: %v", resetErr))
+			log.Warn("Failed to reset group_replication_bootstrap_group", slog.Any("error", resetErr))
 		}
 	}
 	return err
@@ -398,7 +399,7 @@ func (mysqld *Mysqld) ApplyGroupReplicationRelayLog(ctx context.Context, until r
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bootstrapFlagResetTimeout)
 		defer cancel()
 		if err := mysqld.ExecuteSuperQueryList(stopCtx, []string{mysql.StopGroupReplicationApplierCommand()}); err != nil {
-			log.Warn(fmt.Sprintf("Failed to stop the applier of the %s channel: %v", mysql.GroupReplicationApplierChannel, err))
+			log.Warn("Failed to stop the applier of the group replication applier channel", slog.String("channel", mysql.GroupReplicationApplierChannel), slog.Any("error", err))
 		}
 	}()
 	for {

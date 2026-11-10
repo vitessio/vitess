@@ -110,7 +110,9 @@ func testPoisonedBaseBackup(t *testing.T) {
 	require.NotEmpty(t, backups)
 
 	err := startVtbackup(t).wait(t)
-	require.ErrorContains(t, err, fmt.Sprintf("restored backup %q has errant GTIDs %s", backups[len(backups)-1], errantGTID))
+	// The text log format escapes the quotes around the backup name, so check it apart from the message.
+	require.ErrorContains(t, err, backups[len(backups)-1])
+	require.ErrorContains(t, err, "has errant GTIDs "+errantGTID)
 	require.ErrorContains(t, err, "came from the restored backup")
 	assert.Len(t, listBackups(t), len(backups))
 
@@ -213,14 +215,14 @@ func backupPosition(t *testing.T, backup string) replication.Position {
 // ERS elects a primary that lacks it. vtbackup must not complete a backup with
 // the write.
 //
-// Tablet action locks order the steps. replica1's lock is held while ERS stops
-// replication, so the replicas answer while the primary's forced demotion is
-// still running, held up by closing the semi-sync monitor, which waits for the
-// monitor's blocked writes until the pool's close timeout (10s, longer than the
-// first sleep): ERS cancels the demotion and leaves the primary's position out. ERS then repoints the primary, which disables its primary-side
-// semi-sync and commits the write. A second sleep on replica1, queued behind ERS's RPC,
-// outlasts the promotion's timeout (topo.RemoteOperationTimeout, 15s), so the
-// promotion fails and the shard record keeps naming the repointed old primary.
+// Tablet action locks order the steps. The primary's lock is held until after
+// replica1's, so ERS's request to the primary is still waiting when the replicas
+// answer: ERS cancels it, so the primary is not demoted and its position is left
+// out. ERS then repoints the primary once its lock is free, which disables its
+// primary-side semi-sync and commits the write. A second sleep on replica1, queued
+// behind ERS's RPC, outlasts the promotion's timeout (topo.RemoteOperationTimeout,
+// 15s), so the promotion fails and the shard record keeps naming the repointed old
+// primary.
 func testERSWithReachablePrimary(t *testing.T) {
 	const msg = "released-by-repoint"
 	backups := listBackups(t)
@@ -239,16 +241,15 @@ func testERSWithReachablePrimary(t *testing.T) {
 	writeInBackground(t, primary, msg)
 	run.waitForRow(t, msg)
 	run.waitForLog(t, "has not committed")
-	// The forced demotion closes the semi-sync monitor before it disables
-	// semi-sync, and the close waits for the monitor's blocked writes.
-	require.Eventually(t, func() bool {
-		blocked, ok := primary.VttabletProcess.GetVars()["SemiSyncMonitorWritesBlocked"].(float64)
-		return ok && blocked > 0
-	}, time.Minute, 500*time.Millisecond, "the primary's semi-sync monitor never blocked on a write")
 
+	// The primary's sleep starts once replica1's holds its lock, and is longer,
+	// so it ends after replica1's. It ends long before the promotion's timeout.
 	firstSleep := sleepTablet(replica1, 8*time.Second)
 	require.Eventually(t, func() bool { return actionLockHeld(replica1) }, 30*time.Second, 100*time.Millisecond,
 		"%s never held its action lock", replica1.Alias)
+	primarySleep := sleepTablet(primary, 12*time.Second)
+	require.Eventually(t, func() bool { return actionLockHeld(primary) }, 30*time.Second, 100*time.Millisecond,
+		"%s never held its action lock", primary.Alias)
 	stopRPCs := countInFile(replica1.VttabletProcess.ErrorLog, "StopReplicationAndGetStatus")
 	ers := make(chan error, 1)
 	go func() {
@@ -278,8 +279,14 @@ func testERSWithReachablePrimary(t *testing.T) {
 	oldPrimary, err := localCluster.VtctldClientProcess.GetTablet(primary.Alias)
 	require.NoError(t, err)
 	require.Equal(t, topodatapb.TabletType_REPLICA, oldPrimary.Type, "ERS didn't repoint %s, so the scenario is invalid", primary.Alias)
-	qr := execOnTablet(t, primary, fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
-	require.Equal(t, "1", qr.Rows[0][0].ToString(), "%s didn't commit %q, so the scenario is invalid", primary.Alias, msg)
+	// ERS doesn't wait for the repoint, which can still be running. A vttablet
+	// without #21667 disables primary-side semi-sync only after closing its
+	// semi-sync monitor, which waits for the monitor's blocked write until the
+	// pool's close timeout (10s), so it can commit the write after ERS returns.
+	require.Eventually(t, func() bool {
+		qr, err := vtbackupQuery(t, tabletSocketPath(primary), fmt.Sprintf("select count(*) from vt_insert_test where msg = '%s'", msg))
+		return err == nil && qr.Rows[0][0].ToString() == "1"
+	}, 30*time.Second, 250*time.Millisecond, "%s didn't commit %q, so the scenario is invalid", primary.Alias, msg)
 	requireRowAbsent(t, replica1, msg)
 
 	// vtbackup must wait while the shard record names a repointed primary. If
@@ -296,7 +303,7 @@ func testERSWithReachablePrimary(t *testing.T) {
 	}, 3*time.Minute, 250*time.Millisecond, "vtbackup neither finished nor waited for the repointed primary")
 
 	// Elect replica1, which lacks the write, once its action lock is free.
-	for _, sleep := range []<-chan error{firstSleep, secondSleep} {
+	for _, sleep := range []<-chan error{primarySleep, firstSleep, secondSleep} {
 		select {
 		case <-sleep:
 		case <-time.After(2 * time.Minute):

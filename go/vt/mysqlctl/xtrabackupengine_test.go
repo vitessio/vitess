@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"testing"
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -262,6 +264,45 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 
 	assert.Contains(t, logger.String(), "Timed out waiting for Close()")
 	assert.Error(t, ctx.Err())
+}
+
+// TestExtractFilesLogsXbstreamArgs checks that the xbstream command line is
+// logged as a list, with the --encrypt-key value replaced in every form
+// xbstream accepts.
+func TestExtractFilesLogsXbstreamArgs(t *testing.T) {
+	const secret = "encrypt_key_sentinel_5c1d"
+	oldEnginePath, oldFlags := xtrabackupEnginePath, xbstreamRestoreFlags
+	// No xbstream binary in the directory, so extractFiles fails right after
+	// logging the command.
+	xtrabackupEnginePath = t.TempDir()
+	xbstreamRestoreFlags = "--decrypt=AES256 --encrypt-key=" + secret + "1 --encrypt-key " + secret + "2 --loose_encrypt_key=" + secret + "3 -k " + secret + "4 -vk" + secret + "5 --loose-loose-encrypt-key=" + secret + "6 --skip-loose-encrypt-key=" + secret + "7 --maximum-loose_encrypt-key " + secret + "8 --encrypt-key-file=/keys/xbstream"
+	t.Cleanup(func() { xtrabackupEnginePath, xbstreamRestoreFlags = oldEnginePath, oldFlags })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	stream := logutil.NewMemoryLogger()
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(nil)), nil
+		},
+	}
+	tempDir := t.TempDir()
+	bm := xtraBackupManifest{SkipCompress: true, StreamMode: xbstream, FileName: "backup.xbstream"}
+	err := (&XtrabackupEngine{}).extractFiles(t.Context(), logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream), bh, bm, tempDir)
+	require.ErrorContains(t, err, "xbstream")
+
+	r := logs.Record(t, "Executing xbstream cmd")
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, path.Join(xtrabackupEnginePath, xbstream), r["command"])
+	assert.Equal(t, []any{
+		"-C", tempDir, "-xv", "--decrypt=AES256",
+		"--encrypt-key=****", "--encrypt-key", "****", "--loose_encrypt_key=****", "-k", "****", "-vk****",
+		"--loose-loose-encrypt-key=****", "--skip-loose-encrypt-key=****", "--maximum-loose_encrypt-key", "****",
+		"--encrypt-key-file=/keys/xbstream",
+	}, r["args"])
+	assert.NotContains(t, logs.String(), secret)
+	for _, event := range stream.Events {
+		assert.NotContains(t, event.Value, secret)
+	}
 }
 
 // TestXtrabackupExecuteBackupVerifiesPosition runs a full backup with a fake

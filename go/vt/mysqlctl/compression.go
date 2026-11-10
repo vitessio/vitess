@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os/exec"
 	"slices"
 	"sync"
@@ -182,7 +183,7 @@ func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
 
 // This returns a writer that writes the compressed output of the external command to the provided writer.
 func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
-	logger.Infof("Compressing using external command: %q", cmdStr)
+	logger.Info("Compressing using external command", slog.String("exec_cmd", cmdStr))
 	// validate value of compression engine name
 	if err := validateExternalCompressionEngineName(CompressionEngineName); err != nil {
 		return nil, err
@@ -209,14 +210,14 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 	}
 
 	compressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the writer
-	go scanLinesToLogger("compressor stderr", cmdErr, logger, compressor.wg.Done)
+	go scanLinesToLogger("compressor", "stderr", cmdErr, logger, compressor.wg.Done)
 	return compressor, nil
 }
 
 // This returns a reader that reads the compressed input and passes it to the external command to be decompressed. Calls to its
 // Read() will return the uncompressed data until EOF.
 func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
-	logger.Infof("Decompressing using external command: %q", cmdStr)
+	logger.Info("Decompressing using external command", slog.String("exec_cmd", cmdStr))
 
 	cmd, err := prepareExternalCmd(ctx, cmdStr)
 	if err != nil {
@@ -239,14 +240,14 @@ func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reade
 	}
 
 	decompressor.wg.Add(1) // we wait for the gorouting to finish when we call Close() on the reader
-	go scanLinesToLogger("decompressor stderr", cmdErr, logger, decompressor.wg.Done)
+	go scanLinesToLogger("decompressor", "stderr", cmdErr, logger, decompressor.wg.Done)
 	return decompressor, nil
 }
 
 // This returns a reader that will decompress the underlying provided reader and will use the specified supported engine.
 func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logger) (decompressor io.ReadCloser, err error) {
 	if engine == PargzipCompressor {
-		logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
+		logger.Warn(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
 		engine = PgzipCompressor
 	}
 
@@ -270,7 +271,7 @@ func newBuiltinDecompressor(engine string, reader io.Reader, logger logutil.Logg
 		return decompressor, err
 	}
 
-	logger.Infof("Decompressing backup using engine %q", engine)
+	logger.Info("Decompressing backup using engine", slog.String("compression_engine", engine))
 	return decompressor, err
 }
 
@@ -346,7 +347,7 @@ func newBuiltinCompressor(engine string, writer io.Writer, logger logutil.Logger
 		return compressor, err
 	}
 
-	logger.Infof("Compressing backup using engine %q", engine)
+	logger.Info("Compressing backup using engine", slog.String("compression_engine", engine))
 	return
 }
 

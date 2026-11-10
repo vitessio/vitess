@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"reflect"
 	"sync"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 )
@@ -97,11 +99,18 @@ func newTopoCustomRule(qsc tabletserver.Controller, cell, filePath string) (*top
 	}, nil
 }
 
+// logAttrs returns the attribute that identifies the rule file in log
+// records, followed by attrs.
+func (cr *topoCustomRule) logAttrs(attrs ...slog.Attr) []slog.Attr {
+	return append([]slog.Attr{slog.String("path", cr.filePath)}, attrs...)
+}
+
 func (cr *topoCustomRule) start() {
 	go func() {
 		for {
 			if err := cr.oneWatch(); err != nil {
-				log.Warn(fmt.Sprintf("Background watch of topo custom rule failed: %v", err))
+				log.Warn("Background watch of topo custom rule failed",
+					cr.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 			}
 
 			cr.mu.Lock()
@@ -109,11 +118,11 @@ func (cr *topoCustomRule) start() {
 			cr.mu.Unlock()
 
 			if stopped {
-				log.Warn("Topo custom rule was terminated")
+				log.Warn("Topo custom rule was terminated", cr.logAttrs()...)
 				return
 			}
 
-			log.Warn(fmt.Sprintf("Sleeping for %v before trying again", sleepDuringTopoFailure))
+			log.Warn("Sleeping before trying again", cr.logAttrs(slog.Duration("retry_delay", sleepDuringTopoFailure))...)
 			time.Sleep(sleepDuringTopoFailure)
 		}
 	}()
@@ -137,7 +146,8 @@ func (cr *topoCustomRule) apply(wd *topo.WatchData) error {
 	if !reflect.DeepEqual(cr.qrs, qrs) {
 		cr.qrs = qrs.Copy()
 		cr.qsc.SetQueryRules(topoCustomRuleSource, qrs)
-		log.Info(fmt.Sprintf("Custom rule version %v fetched from topo and applied to vttablet", wd.Version))
+		log.Info("Custom rule version fetched from topo and applied to vttablet",
+			cr.logAttrs(slog.String("topo_version", fmt.Sprint(wd.Version)))...)
 	}
 
 	return nil
@@ -205,7 +215,11 @@ func activateTopoCustomRules(qsc tabletserver.Controller) {
 
 		cr, err := newTopoCustomRule(qsc, ruleCell, rulePath)
 		if err != nil {
-			log.Error(fmt.Sprintf("cannot start TopoCustomRule: %v", err))
+			log.Error("cannot start TopoCustomRule",
+				slog.String("cell", ruleCell),
+				slog.String("path", rulePath),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			os.Exit(1)
 		}
 		cr.start()

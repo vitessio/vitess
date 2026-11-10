@@ -739,7 +739,7 @@ func TestTxEngineFailReserve(t *testing.T) {
 	// settings must parse as SET statements; an arbitrary string is rejected before
 	// any connection is acquired
 	_, err = te.Reserve(ctx, options, 0, []string{"dummy_query"})
-	require.ErrorContains(t, err, "failed to parse connection setting: dummy_query")
+	require.ErrorContains(t, err, "failed to parse connection setting at position 1")
 
 	failingSetting := "set @@dummy = 1"
 	db.AddRejectedQuery(failingSetting, errors.New("failed executing set"))

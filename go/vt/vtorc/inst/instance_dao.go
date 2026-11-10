@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -144,7 +145,11 @@ func logReadTopologyInstanceError(tabletAlias *topodatapb.TabletAlias, hint stri
 			strings.ReplaceAll(hint, "%", "%%"), // escape %
 			err)
 	}
-	log.Error(msg)
+	attrs := []slog.Attr{slog.String("tablet", tabletAliasString)}
+	if hint != "" {
+		attrs = append(attrs, slog.String("hint", hint))
+	}
+	log.Error("ReadTopologyInstance failed", append(attrs, slog.Any("error", err))...)
 	return errors.New(msg)
 }
 
@@ -334,7 +339,9 @@ func ReadTopologyInstanceBufferable(tabletAlias *topodatapb.TabletAlias, latency
 			instance.SecondsBehindPrimary.Int64 = int64(fs.ReplicationStatus.ReplicationLagSeconds)
 		}
 		if instance.SecondsBehindPrimary.Valid && instance.SecondsBehindPrimary.Int64 < 0 {
-			log.Warn(fmt.Sprintf("Alias: %+v, instance.SecondsBehindPrimary < 0 [%+v], correcting to 0", tabletAlias, instance.SecondsBehindPrimary.Int64))
+			log.Warn("instance.SecondsBehindPrimary < 0, correcting to 0",
+				slog.String("tablet", topoproto.TabletAliasString(tabletAlias)),
+				slog.Int64("replication_lag_seconds", instance.SecondsBehindPrimary.Int64))
 			instance.SecondsBehindPrimary.Int64 = 0
 		}
 		// And until told otherwise:
@@ -606,7 +613,7 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 		return nil
 	})
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read primary instance attributes", slog.Any("error", err))
 		return err
 	}
 
@@ -763,7 +770,7 @@ func readInstancesByCondition(condition string, args []any, sort string) ([](*In
 			return nil
 		})
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to read instances", slog.Any("error", err))
 			return instances, err
 		}
 		return instances, err
@@ -861,7 +868,7 @@ func GetKeyspaceShardName(tabletAlias *topodatapb.TabletAlias) (keyspace, shard 
 		return nil
 	})
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read keyspace and shard of tablet", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)), slog.Any("error", err))
 	}
 	return keyspace, shard, err
 }
@@ -911,7 +918,7 @@ func ReadOutdatedInstances() ([]*topodatapb.TabletAlias, error) {
 		return nil
 	})
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read outdated instances", slog.Any("error", err))
 	}
 	return res, err
 }
@@ -1137,7 +1144,7 @@ func mkInsertForInstances(instances []*Instance, instanceWasActuallyFound bool, 
 	sql, err := mkInsert("database_instance", columns, values, len(instances), insertIgnore)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to build query: %v", err)
-		log.Error(errMsg)
+		log.Error("Failed to build query", slog.Any("error", err))
 		return sql, args, errors.New(errMsg)
 	}
 
@@ -1169,7 +1176,7 @@ func writeManyInstances(instances []*Instance, instanceWasActuallyFound bool, up
 // WriteInstance stores an instance in the vtorc backend
 func WriteInstance(instance *Instance, instanceWasActuallyFound bool, lastError error) error {
 	if lastError != nil {
-		log.Info(fmt.Sprintf("writeInstance: will not update database_instance due to error: %+v", lastError))
+		log.Info("writeInstance: will not update database_instance due to error", slog.Any("error", lastError))
 		return nil
 	}
 	return writeManyInstances([]*Instance{instance}, instanceWasActuallyFound, true)
@@ -1192,7 +1199,7 @@ func UpdateInstanceLastChecked(tabletAlias *topodatapb.TabletAlias, partialSucce
 			topoproto.TabletAliasString(tabletAlias),
 		)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to update instance last checked", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)), slog.Any("error", err))
 		}
 		return err
 	}
@@ -1218,7 +1225,7 @@ func UpdateInstanceLastAttemptedCheck(tabletAlias *topodatapb.TabletAlias) error
 			topoproto.TabletAliasString(tabletAlias),
 		)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to update instance last attempted check", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)), slog.Any("error", err))
 		}
 		return err
 	}
@@ -1238,13 +1245,13 @@ func InstanceIsForgotten(tabletAlias *topodatapb.TabletAlias) bool {
 func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 	if tabletAlias == nil {
 		errMsg := "ForgetInstance(): empty tabletAlias"
-		log.Error(errMsg)
+		log.Error("ForgetInstance(): empty tabletAlias")
 		return errors.New(errMsg)
 	}
 	initForgetAliasesCache()
 	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
 	forgetAliases.Set(tabletAliasString, true, cache.DefaultExpiration)
-	log.Info(fmt.Sprintf("Forgetting: %v", tabletAliasString))
+	log.Info("Forgetting", slog.String("tablet", tabletAliasString))
 
 	// Remove this tablet from errant GTID count metric.
 	currentErrantGTIDCount.Reset(tabletAliasString)
@@ -1261,7 +1268,7 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		tabletAliasString,
 	)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to delete tablet", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 		return err
 	}
 
@@ -1273,18 +1280,18 @@ func ForgetInstance(tabletAlias *topodatapb.TabletAlias) error {
 		tabletAliasString,
 	)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to delete instance", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 		return err
 	}
 	// Get the number of rows affected. If they are zero, then we tried to forget an instance that doesn't exist.
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read rows affected by instance delete", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 		return err
 	}
 	if rows == 0 {
 		errMsg := fmt.Sprintf("ForgetInstance(): tablet %+v not found", tabletAliasString)
-		log.Error(errMsg)
+		log.Error("ForgetInstance(): tablet not found", slog.String("tablet", tabletAliasString))
 		return errors.New(errMsg)
 	}
 	_ = AuditOperation("forget", tabletAlias, "")
@@ -1301,12 +1308,12 @@ func ForgetLongUnseenInstances() error {
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to forget long unseen instances", slog.Any("error", err))
 		return err
 	}
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read rows affected by forgetting long unseen instances", slog.Any("error", err))
 		return err
 	}
 	if rows > 0 {
@@ -1326,7 +1333,7 @@ func ExpireStaleInstanceBinlogCoordinates() error {
 			expireSeconds,
 		)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to expire stale instance binlog coordinates", slog.Any("error", err))
 		}
 		return err
 	}

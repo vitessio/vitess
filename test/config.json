@@ -614,6 +614,23 @@
         "limit-resources"
       ]
     },
+    "reparent_failover": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/reparent/failover"
+      ],
+      "Args": [
+        "-timeout",
+        "20m"
+      ],
+      "Command": [],
+      "Manual": false,
+      "Shard": "ers_prs_newfeatures_heavy",
+      "Tags": [],
+      "Needs": [
+        "limit-resources"
+      ]
+    },
     "plannedreparent": {
       "File": "unused.go",
       "Packages": [
@@ -673,7 +690,7 @@
       ],
       "Args": [
         "-timeout",
-        "5m"
+        "15m"
       ],
       "Command": [],
       "Manual": false,
@@ -812,6 +829,20 @@
       "Needs": [
         "consul"
       ]
+    },
+    "tabletmanager_query_throttler": {
+      "File": "unused.go",
+      "Packages": [
+        "vitess.io/vitess/go/test/endtoend/tabletmanager/query_throttler"
+      ],
+      "Args": [],
+      "Command": [],
+      "Manual": false,
+      "Shard": "tabletmanager_query_throttler",
+      "Tags": [
+        "site_test"
+      ],
+      "Needs": []
     },
     "tabletmanager_throttler_topo": {
       "File": "unused.go",

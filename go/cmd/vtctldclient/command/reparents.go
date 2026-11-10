@@ -19,6 +19,8 @@ package command
 import (
 	"errors"
 	"fmt"
+	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -205,7 +207,7 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, event := range resp.Events {
-		log.Info(fmt.Sprintf("%v", event))
+		log.Info("InitShardPrimary event", slices.Concat([]slog.Attr{slog.String("keyspace", keyspace), slog.String("shard", shard)}, logutil.EventAttrs(event))...)
 	}
 
 	return err

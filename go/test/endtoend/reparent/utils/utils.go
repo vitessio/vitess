@@ -80,7 +80,35 @@ func SetupRangeBasedCluster(ctx context.Context, t *testing.T) *cluster.LocalPro
 
 // SetupShardedReparentCluster is used to setup a sharded cluster for testing
 func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletFlags []string) *cluster.LocalProcessCluster {
+	return setupShardedCluster(t, durability, extraVttabletFlags)
+}
+
+// setupShardedCluster passes its customizers to StartKeyspace.
+func setupShardedCluster(t *testing.T, durability string, extraVttabletFlags []string, customizers ...any) *cluster.LocalProcessCluster {
 	clusterInstance := cluster.NewCluster(cell1, Hostname)
+	// A failed setup returns no cluster for the caller to tear down, so stop
+	// the processes it started here.
+	setupDone := false
+	t.Cleanup(func() {
+		if setupDone {
+			return
+		}
+		clusterInstance.Teardown()
+		var mysqlCtlProcessList []*exec.Cmd
+		for _, keyspace := range clusterInstance.Keyspaces {
+			for _, shard := range keyspace.Shards {
+				for _, tablet := range shard.Vttablets {
+					if tablet.MysqlctlInit != nil {
+						mysqlCtlProcessList = append(mysqlCtlProcessList, tablet.MysqlctlInit)
+					}
+				}
+			}
+		}
+		stopMySQLInits(mysqlCtlProcessList)
+		// Teardown has already run; this removes the data directory on CI.
+		TeardownCluster(clusterInstance)
+	})
+
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err)
@@ -112,12 +140,14 @@ func SetupShardedReparentCluster(t *testing.T, durability string, extraVttabletF
 		VSchema:          `{"sharded": true, "vindexes": {"hash_index": {"type": "hash"}}, "tables": {"vt_insert_test": {"column_vindexes": [{"column": "id", "name": "hash_index"}]}}}`,
 		DurabilityPolicy: durability,
 	}
-	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell)
+	customizers = append(customizers, func(mysqlctl *cluster.MysqlctlProcess) { mysqlctl.ProcessGroup = true })
+	err = clusterInstance.StartKeyspace(*keyspace, []string{"-40", "40-80", "80-"}, 2, false, clusterInstance.Cell, customizers...)
 	require.NoError(t, err)
 
 	// Start Vtgate
 	err = clusterInstance.StartVtgate()
 	require.NoError(t, err)
+	setupDone = true
 	return clusterInstance
 }
 

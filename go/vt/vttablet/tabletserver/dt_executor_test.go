@@ -20,9 +20,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -30,11 +30,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/event/syslogger"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -241,8 +241,7 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	txe, tsv, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()
 
-	tl := syslogger.NewTestLogger()
-	defer tl.Close()
+	logs := logtest.Capture(t, slog.LevelWarn)
 
 	// start a transaction.
 	txid := newTxForPrep(ctx, tsv)
@@ -263,8 +262,9 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cannot commit dtid bb, err: VT09025: atomic transaction error: failed to commit")
 
-	require.Contains(t, strings.Join(tl.GetAllLogs(), "|"),
-		"failed to commit the prepared transaction 'bb' with error: unknown error: delete redo log fail")
+	record := logs.Wait(t, "failed to commit the prepared transaction")
+	assert.Equal(t, "bb", record["dtid"])
+	assert.Contains(t, record["error"], "unknown error: delete redo log fail")
 }
 
 func TestTxExecutorCommitRedoCommitFail(t *testing.T) {

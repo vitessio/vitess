@@ -74,7 +74,7 @@ func TestRestoreReplicationAfterBackupWithUnknownDurabilityPolicy(t *testing.T) 
 
 	logger := logutil.NewMemoryLogger()
 	require.NotPanics(t, func() { tm.restoreReplicationAfterBackupLocked(ctx, tm.Tablet(), logger) })
-	assert.Contains(t, logger.String(), "Failed to get durability with name a_policy_of_a_newer_version")
+	assert.Contains(t, logger.String(), "Failed to get durability with name durability_policy=a_policy_of_a_newer_version")
 	mu.Lock()
 	defer mu.Unlock()
 	assert.False(t, sourceSet, "the tablet must leave replication alone")

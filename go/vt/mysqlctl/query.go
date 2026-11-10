@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -40,6 +41,26 @@ type execError struct {
 func (e *execError) Error() string { return e.msg }
 func (e *execError) Unwrap() error { return e.cause }
 
+// recycle returns conn to its pool. For a closed connection, the pool opens a
+// replacement before Recycle returns, with no deadline, so this waits for it
+// only until ctx ends: a timed-out query closes its connection, and a server
+// that does not answer must not keep the caller waiting on the replacement.
+func recycle(ctx context.Context, conn *dbconnpool.PooledDBConnection) {
+	if !conn.Conn.IsClosed() {
+		conn.Recycle()
+		return
+	}
+	recycled := make(chan struct{})
+	go func() {
+		conn.Recycle()
+		close(recycled)
+	}()
+	select {
+	case <-recycled:
+	case <-ctx.Done():
+	}
+}
+
 // getPoolReconnect gets a connection from a pool, tests it, and reconnects if
 // the connection is lost.
 func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*dbconnpool.PooledDBConnection, error) {
@@ -47,17 +68,32 @@ func getPoolReconnect(ctx context.Context, pool *dbconnpool.ConnectionPool) (*db
 	if err != nil {
 		return conn, err
 	}
-	// Run a test query to see if this connection is still good.
-	if _, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false); err != nil {
+	// Run a test query to see if this connection is still good. A server that
+	// does not answer it would hold the caller indefinitely, so close the
+	// connection when ctx ends first.
+	checked := make(chan error, 1)
+	go func() {
+		_, err := conn.Conn.ExecuteFetch("SELECT 1", 1, false)
+		checked <- err
+	}()
+	select {
+	case err = <-checked:
+	case <-ctx.Done():
+		conn.Close()
+		<-checked
+		recycle(ctx, conn)
+		return nil, ctx.Err()
+	}
+	if err != nil {
 		// If we get a connection error, try to reconnect.
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.CRServerGone || sqlErr.Number() == sqlerror.CRServerLost) {
 			if err := conn.Conn.Reconnect(ctx); err != nil {
-				conn.Recycle()
+				recycle(ctx, conn)
 				return nil, err
 			}
 			return conn, nil
 		}
-		conn.Recycle()
+		recycle(ctx, conn)
 		return nil, err
 	}
 	return conn, nil
@@ -74,7 +110,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 	if err != nil {
 		return err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
 }
@@ -105,7 +141,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryListMulti(ctx context.Context, queryList 
 		return err
 	}
 	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	defer conn.Close()
 
 	// The exchange is a blocking write and read of its own, so it is bounded the
@@ -134,7 +170,7 @@ func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryLis
 		return err
 	}
 	// A closed connection is discarded upon Recycle rather than reused.
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	defer conn.Close()
 
 	return mysqld.executeSuperQueryListConn(ctx, conn, queryList)
@@ -145,10 +181,10 @@ func (mysqld *Mysqld) ExecuteSuperQueryListTainted(ctx context.Context, queryLis
 func executeQueryList(queryList []string, name string, exec func(query string) error) error {
 	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
+		log.Info("exec", slog.String("query", limitString(redactPassword(query), LogQueryLengthLimit)))
 		if err := exec(query); err != nil {
 			msg := fmt.Sprintf("%s(%v) failed: %v", name, redactPassword(query), redactPassword(err.Error()))
-			log.Error(msg)
+			log.Error("query failed", slog.String("function", name), slog.String("query", redactPassword(query)), slog.String("error", redactPassword(err.Error())))
 			return &execError{msg: msg, cause: err}
 		}
 	}
@@ -175,7 +211,7 @@ func (mysqld *Mysqld) FetchSuperQuery(ctx context.Context, query string) (*sqlty
 	if connErr != nil {
 		return nil, connErr
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
 	qr, err := mysqld.executeFetchContext(ctx, conn, query, 10000, true)
 	if err != nil {
 		return nil, err
@@ -235,10 +271,10 @@ func (mysqld *Mysqld) executeWithContext(ctx context.Context, conn *dbconnpool.P
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the query.
 		connID := conn.Conn.ID()
-		log.Info(fmt.Sprintf("Mysqld.executeWithContext(): killing connID %v due to timeout of query: %v", connID, redactPassword(query)))
+		log.Info("Mysqld.executeWithContext(): killing connection due to timeout of query", slog.Int64("connection_id", connID), slog.String("query", redactPassword(query)))
 		if killErr := mysqld.killConnection(connID); killErr != nil {
 			// Log it, but go ahead and wait for the query anyway.
-			log.Warn(fmt.Sprintf("Mysqld.executeWithContext(): failed to kill connID %v: %v", connID, killErr))
+			log.Warn("Mysqld.executeWithContext(): failed to kill connection", slog.Int64("connection_id", connID), slog.Any("error", killErr))
 		}
 		// Waiting for exec() to come back is not enough on its own: a kill that
 		// was not delivered leaves a read the server never answers, and nothing
@@ -247,7 +283,7 @@ func (mysqld *Mysqld) executeWithContext(ctx context.Context, conn *dbconnpool.P
 		select {
 		case <-done:
 		case <-time.After(killGraceTimeout):
-			log.Warn(fmt.Sprintf("Mysqld.executeWithContext(): connID %v did not come back after the kill, closing the connection to interrupt it", connID))
+			log.Warn("Mysqld.executeWithContext(): connection did not come back after the kill, closing the connection to interrupt it", slog.Int64("connection_id", connID))
 			conn.Close()
 			<-done
 		}
@@ -300,9 +336,9 @@ func (mysqld *Mysqld) executeFetchDirectContext(ctx context.Context, conn *dbcon
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the ExecuteFetch().
 		connID := conn.ID()
-		log.Info(fmt.Sprintf("Mysqld.executeFetchDirectContext(): killing connID %v due to timeout of query: %v", connID, query))
+		log.Info("Mysqld.executeFetchDirectContext(): killing connection due to timeout of query", slog.Int64("connection_id", connID), slog.String("query", redactPassword(query)))
 		if killErr := mysqld.killConnection(connID); killErr != nil {
-			log.Warn(fmt.Sprintf("Mysqld.executeFetchDirectContext(): failed to kill connID %v: %v", connID, killErr))
+			log.Warn("Mysqld.executeFetchDirectContext(): failed to kill connection", slog.Int64("connection_id", connID), slog.Any("error", killErr))
 		}
 		// Close the connection before waiting: if the server cannot service
 		// the KILL (it is wedged), closing the socket is what unblocks the
@@ -323,10 +359,10 @@ func (mysqld *Mysqld) executeFetchDirectContext(ctx context.Context, conn *dbcon
 func (mysqld *Mysqld) executeSuperQueryListDirectContext(ctx context.Context, conn *dbconnpool.DBConnection, queryList []string) error {
 	const LogQueryLengthLimit = 200
 	for _, query := range queryList {
-		log.Info("exec " + limitString(redactPassword(query), LogQueryLengthLimit))
+		log.Info("exec", slog.String("query", limitString(redactPassword(query), LogQueryLengthLimit)))
 		if _, err := mysqld.executeFetchDirectContext(ctx, conn, query); err != nil {
 			msg := fmt.Sprintf("ExecuteFetch(%v) failed: %v", redactPassword(query), redactPassword(err.Error()))
-			log.Error(msg)
+			log.Error("query failed", slog.String("function", "ExecuteFetch"), slog.String("query", redactPassword(query)), slog.String("error", redactPassword(err.Error())))
 			return &execError{msg: msg, cause: err}
 		}
 	}
@@ -425,7 +461,7 @@ func (mysqld *Mysqld) AcquireGlobalReadLock(ctx context.Context) error {
 
 	err = mysqld.executeSuperQueryListConn(ctx, conn, []string{"FLUSH TABLES WITH READ LOCK"})
 	if err != nil {
-		conn.Recycle()
+		recycle(ctx, conn)
 		return err
 	}
 
@@ -443,7 +479,7 @@ func (mysqld *Mysqld) ReleaseGlobalReadLock(ctx context.Context) error {
 		return err
 	}
 
-	mysqld.lockConn.Recycle()
+	recycle(ctx, mysqld.lockConn)
 	mysqld.lockConn = nil
 	return nil
 }

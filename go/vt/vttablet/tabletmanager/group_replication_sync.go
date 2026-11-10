@@ -573,7 +573,7 @@ func (s *groupReplicationSync) promote(ctx context.Context, tabletType topodatap
 	// MySQL's status once more, once its election ended, against the shard's recorded group (see
 	// groupReplicationServingReason): DBActionSetReadWrite then makes MySQL writable and redoes
 	// prepared transactions, and MySQL stays read-only otherwise.
-	if err := tm.changeTypeWithGroupRecordLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone, rec); err != nil {
+	if err := tm.changeTypeWithGroupRecordLocked(ctx, ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone, rec); err != nil {
 		log.Error("Group replication sync: failed to promote the tablet to PRIMARY", slog.Any("error", err))
 	}
 }

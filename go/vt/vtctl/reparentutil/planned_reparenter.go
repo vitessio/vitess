@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strconv"
 	"sync"
@@ -209,7 +210,7 @@ func (pr *PlannedReparenter) preflightChecks(
 		return true, err
 	}
 
-	pr.logger.Infof("elected new primary candidate %v", topoproto.TabletAliasString(opts.NewPrimaryAlias))
+	pr.logger.Info("elected new primary candidate", slog.String("tablet", topoproto.TabletAliasString(opts.NewPrimaryAlias)))
 	event.DispatchUpdate(ev, "elected new primary candidate")
 
 	primaryElectAliasStr := topoproto.TabletAliasString(opts.NewPrimaryAlias)
@@ -279,7 +280,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	// is working from the old primary to the primary-elect. If replication is
 	// not working, a PlannedReparent is not safe to do, because the candidate
 	// won't catch up and we'll potentially miss transactions.
-	pr.logger.Infof("checking replication on primary-elect %v", primaryElectAliasStr)
+	pr.logger.Info("checking replication on primary-elect", slog.String("tablet", primaryElectAliasStr))
 
 	// First, we find the position of the current primary. Note that this is
 	// just a snapshot of the position, since we let it keep accepting writes
@@ -315,7 +316,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 	// Next up, demote the current primary and get its replication position.
 	// It's fine if the current primary was already demoted, since DemotePrimary
 	// is idempotent.
-	pr.logger.Infof("demoting current primary: %v", currentPrimary.AliasString())
+	pr.logger.Info("demoting current primary", slog.String("tablet", currentPrimary.AliasString()))
 	event.DispatchUpdate(ev, "demoting old primary")
 
 	demoteCtx, demoteCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
@@ -371,7 +372,7 @@ func (pr *PlannedReparenter) performGracefulPromotion(
 		defer undoCancel()
 
 		if undoErr := pr.tmc.UndoDemotePrimary(undoCtx, currentPrimary.Tablet, policy.SemiSyncAckers(opts.durability, currentPrimary.Tablet) > 0); undoErr != nil {
-			pr.logger.Warningf("encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
+			pr.logger.Warn("encountered error while performing UndoDemotePrimary", slog.String("tablet", currentPrimary.AliasString()), slog.Any("error", undoErr), slog.String("error_code", vterrors.Code(undoErr).String()))
 			finalWaitErr = vterrors.Wrapf(finalWaitErr, "encountered error while performing UndoDemotePrimary(%v): %v", currentPrimary.AliasString(), undoErr)
 		}
 
@@ -837,7 +838,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 ) error {
 	primaryElectAliasStr := topoproto.TabletAliasString(primaryElect.Alias)
 
-	pr.logger.Infof("no clear winner found for current primary term; checking if it's safe to recover by electing %v", primaryElectAliasStr)
+	pr.logger.Info("no clear winner found for current primary term; checking if it's safe to recover by electing the primary-elect", slog.String("tablet", primaryElectAliasStr))
 
 	type tabletPos struct {
 		alias  string
@@ -884,7 +885,7 @@ func (pr *PlannedReparenter) performPotentialPromotion(
 			// read-only, and to check its replication position. DemotePrimary is
 			// idempotent, so it's fine to call it on a replica (or other
 			// tablet type), that's already in read-only.
-			pr.logger.Infof("demoting tablet %v", alias)
+			pr.logger.Info("demoting tablet", slog.String("tablet", alias))
 
 			primaryStatus, err := pr.tmc.DemotePrimary(stopAllCtx, tablet, false)
 			if err != nil {
@@ -968,7 +969,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		return err
 	}
 
-	pr.logger.Infof("Getting a new durability policy for %v", shardDurability)
+	pr.logger.Info("Getting a new durability policy", slog.String("durability_policy", shardDurability))
 	opts.durability, err = policy.GetDurabilityPolicy(shardDurability)
 	if err != nil {
 		return err
@@ -1106,7 +1107,7 @@ func (pr *PlannedReparenter) reparentShardLocked(
 		// This is best-effort — internal components retry initialization on their own, and
 		// returning an error here would report a functionally-successful reparent as failed.
 		if err := pr.tmc.RefreshState(ctx, ev.NewPrimary); err != nil {
-			pr.logger.Warningf("RefreshState failed on new primary %v: %v", topoproto.TabletAliasString(ev.NewPrimary.Alias), err)
+			pr.logger.Warn("RefreshState failed on new primary", slog.String("tablet", topoproto.TabletAliasString(ev.NewPrimary.Alias)), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 	return nil
@@ -1157,7 +1158,7 @@ func (pr *PlannedReparenter) reparentTablets(
 
 		go func(alias string, tablet *topodatapb.Tablet) {
 			defer replicasWg.Done()
-			pr.logger.Infof("setting new primary on replica %v", alias)
+			pr.logger.Info("setting new primary on replica", slog.String("tablet", alias))
 
 			// Note: we used to force replication to start on the old primary,
 			// but now that we support "resuming" a previously-failed PRS
@@ -1177,7 +1178,7 @@ func (pr *PlannedReparenter) reparentTablets(
 		// Promote the candidate primary to type:PRIMARY.
 		primaryPosition, err := pr.tmc.PromoteReplica(replCtx, ev.NewPrimary, policy.SemiSyncAckers(opts.durability, ev.NewPrimary) > 0)
 		if err != nil {
-			pr.logger.Warningf("primary %v failed to PromoteReplica; cancelling replica reparent attempts", primaryElectAliasStr)
+			pr.logger.Warn("primary failed to PromoteReplica; cancelling replica reparent attempts", slog.String("tablet", primaryElectAliasStr), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			replCancel()
 			replicasWg.Wait()
 
@@ -1192,9 +1193,9 @@ func (pr *PlannedReparenter) reparentTablets(
 	//
 	// If we fail to populate the reparent journal, there's no way the replicas
 	// will work, so we cancel the ongoing reparent RPCs and bail out.
-	pr.logger.Infof("populating reparent journal on new primary %v", primaryElectAliasStr)
+	pr.logger.Info("populating reparent journal on new primary", slog.String("tablet", primaryElectAliasStr))
 	if err := pr.tmc.PopulateReparentJournal(replCtx, ev.NewPrimary, reparentJournalTimestamp, "PlannedReparentShard", ev.NewPrimary.Alias, reparentJournalPosition); err != nil {
-		pr.logger.Warningf("primary failed to PopulateReparentJournal (position: %v); cancelling replica reparent attempts", reparentJournalPosition)
+		pr.logger.Warn("primary failed to PopulateReparentJournal; cancelling replica reparent attempts", slog.String("tablet", primaryElectAliasStr), slog.String("position", reparentJournalPosition), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		replCancel()
 		replicasWg.Wait()
 
@@ -1207,7 +1208,7 @@ func (pr *PlannedReparenter) reparentTablets(
 
 	if err := rec.Error(); err != nil {
 		msg := "some replicas failed to reparent; retry PlannedReparentShard with the same new primary alias (%v) to retry failed replicas"
-		pr.logger.Errorf2(err, msg, primaryElectAliasStr)
+		pr.logger.Error("some replicas failed to reparent; retry PlannedReparentShard with the same new primary alias to retry failed replicas", slog.String("tablet", primaryElectAliasStr), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return vterrors.Wrapf(err, msg, primaryElectAliasStr)
 	}
 
@@ -1244,8 +1245,7 @@ func (pr *PlannedReparenter) verifyAllTabletsReachable(ctx context.Context, tabl
 			}
 			val, err := strconv.Atoi(rawVal)
 			if err != nil {
-				pr.logger.Warningf("could not parse %s=%q for tablet %v as int: %v",
-					InnodbBufferPoolsDataVar, rawVal, tblStr, err)
+				pr.logger.Warn("could not parse status variable for tablet as int", slog.String("tablet", tblStr), slog.String("status_variable", InnodbBufferPoolsDataVar), slog.String("status_value", rawVal), slog.Any("error", err))
 				return nil
 			}
 			mu.Lock()

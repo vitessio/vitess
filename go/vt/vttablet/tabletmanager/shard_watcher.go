@@ -18,7 +18,7 @@ package tabletmanager
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -36,7 +36,7 @@ func (sw *shardWatcher) active() bool {
 // start starts the watch, and returns the shard record as it is when the watch starts: the events
 // only carry the changes after it.
 func (sw *shardWatcher) start(ts *topo.Server, keyspace, shard string) (*topo.WatchShardData, error) {
-	log.Info(fmt.Sprintf("Starting shard watch of %v/%v", keyspace, shard))
+	log.Info("Starting shard watch", slog.String("keyspace", keyspace), slog.String("shard", shard))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	current, c, err := ts.WatchShard(ctx, keyspace, shard)

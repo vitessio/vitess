@@ -18,7 +18,7 @@ package logic
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
 
 	"golang.org/x/exp/maps"
@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 )
 
@@ -124,12 +123,12 @@ func refreshShard(keyspaceName, shardName string) error {
 func refreshKeyspaceHelper(ctx context.Context, keyspaceName string) error {
 	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspaceName)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read keyspace", slog.String("keyspace", keyspaceName), slog.Any("error", err))
 		return err
 	}
 	err = inst.SaveKeyspace(keyspaceInfo)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to save keyspace", slog.String("keyspace", keyspaceName), slog.Any("error", err))
 	}
 	return err
 }
@@ -144,7 +143,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 		Concurrency: 8,
 	})
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read shards", slog.String("keyspace", keyspaceName), slog.Any("error", err))
 		return err
 	}
 
@@ -155,7 +154,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			continue
 		}
 		if err = inst.SaveShard(shardInfo); err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to save shard", slog.String("keyspace", keyspaceName), slog.String("shard", shardInfo.ShardName()), slog.Any("error", err))
 			return err
 		}
 		restoreDeletedGroupVoters(ctx, shardInfo)
@@ -165,17 +164,16 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 	// delete shards that were not saved, indicating they are stale.
 	shards, err := inst.ReadShardNames(keyspaceName)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read shard names", slog.String("keyspace", keyspaceName), slog.Any("error", err))
 		return err
 	}
 	for _, shard := range shards {
 		if savedShards[shard] {
 			continue
 		}
-		shardName := topoproto.KeyspaceShardString(keyspaceName, shard)
-		log.Info("Forgetting shard: " + shardName)
+		log.Info("Forgetting shard", slog.String("keyspace", keyspaceName), slog.String("shard", shard))
 		if err = inst.DeleteShard(keyspaceName, shard); err != nil {
-			log.Error(fmt.Sprintf("Failed to delete shard %s: %+v", shardName, err))
+			log.Error("Failed to delete shard", slog.String("keyspace", keyspaceName), slog.String("shard", shard), slog.Any("error", err))
 			return err
 		}
 	}
@@ -187,12 +185,12 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 func refreshSingleShardHelper(ctx context.Context, keyspaceName string, shardName string) error {
 	shardInfo, err := ts.GetShard(ctx, keyspaceName, shardName)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read shard", slog.String("keyspace", keyspaceName), slog.String("shard", shardName), slog.Any("error", err))
 		return err
 	}
 	err = inst.SaveShard(shardInfo)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to save shard", slog.String("keyspace", keyspaceName), slog.String("shard", shardName), slog.Any("error", err))
 	}
 	return err
 }

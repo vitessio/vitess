@@ -114,6 +114,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	// TODO(sougou); deprecate ReduceDetectionAnalysisCount
 	args := sqlutils.Args(config.GetReasonableReplicationLagSeconds(), ValidSecondsFromSeenToLastAttemptedCheck(), config.GetReasonableReplicationLagSeconds(), keyspace, shard)
 	query := `SELECT
+		vitess_tablet.alias AS alias,
 		vitess_tablet.info AS tablet_info,
 		vitess_tablet.tablet_type,
 		vitess_tablet.primary_timestamp,
@@ -397,7 +398,12 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		tablet := &topodatapb.Tablet{}
 		opts := prototext.UnmarshalOptions{DiscardUnknown: true}
 		if err := opts.Unmarshal([]byte(m.GetString("tablet_info")), tablet); err != nil {
-			log.Error(fmt.Sprintf("could not read tablet %v: %v", m.GetString("tablet_info"), err))
+			log.Error("could not read tablet",
+				slog.String("tablet", m.GetString("alias")),
+				slog.String("keyspace", m.GetString("keyspace")),
+				slog.String("shard", m.GetString("shard")),
+				slog.String("tablet_info", m.GetString("tablet_info")),
+				slog.Any("error", err))
 			return nil
 		}
 
@@ -424,7 +430,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		if _, ok := grVoters[grKeyspaceShard]; !ok {
 			voters, err := parseGroupReplicationVoters(m.GetString("shard_group_replication_voters"))
 			if err != nil {
-				log.Warn(fmt.Sprintf("failed to parse the group replication voters of %s: %v", grKeyspaceShard, err))
+				log.Warn("failed to parse the group replication voters", slog.String("shard", grKeyspaceShard), slog.Any("error", err))
 			}
 			grVoters[grKeyspaceShard] = voters
 		}
@@ -442,7 +448,12 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		primaryTablet := &topodatapb.Tablet{}
 		if str := m.GetString("primary_tablet_info"); str != "" {
 			if err := opts.Unmarshal([]byte(str), primaryTablet); err != nil {
-				log.Error(fmt.Sprintf("could not read tablet %v: %v", str, err))
+				log.Error("could not read primary tablet",
+					slog.String("tablet", m.GetString("alias")),
+					slog.String("keyspace", m.GetString("keyspace")),
+					slog.String("shard", m.GetString("shard")),
+					slog.String("primary_tablet_info", str),
+					slog.Any("error", err))
 				return nil
 			}
 		}
@@ -464,7 +475,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
 		if keyspaceType := topodatapb.KeyspaceType(m.GetInt32("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
-			log.Error(fmt.Sprintf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace))
+			log.Error("keyspace is a snapshot keyspace. Skipping.", slog.String("keyspace", a.AnalyzedKeyspace))
 			return nil
 		}
 
@@ -543,12 +554,24 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 		}
 
 		if !a.LastCheckValid {
-			analysisMessage := fmt.Sprintf(
+			analysisKey := fmt.Sprintf(
 				"analysis: Alias: %+v, Keyspace: %+v, Shard: %+v, IsPrimary: %+v, PrimaryHealthUnhealthy: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v",
 				a.AnalyzedInstanceAlias, a.AnalyzedKeyspace, a.AnalyzedShard, a.IsPrimary, a.PrimaryHealthUnhealthy, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas,
 			)
-			if util.ClearToLog("analysis_dao", analysisMessage) {
-				log.Info(analysisMessage)
+			if util.ClearToLog("analysis_dao", analysisKey) {
+				log.Info("analysis: tablet's last check is not valid",
+					slog.String("tablet", topoproto.TabletAliasString(a.AnalyzedInstanceAlias)),
+					slog.String("keyspace", a.AnalyzedKeyspace),
+					slog.String("shard", a.AnalyzedShard),
+					slog.Bool("is_primary", a.IsPrimary),
+					slog.Bool("primary_health_unhealthy", a.PrimaryHealthUnhealthy),
+					slog.Bool("last_check_valid", a.LastCheckValid),
+					slog.Bool("last_check_partial_success", a.LastCheckPartialSuccess),
+					slog.Uint64("count_replicas", uint64(a.CountReplicas)),
+					slog.Uint64("count_valid_replicas", uint64(a.CountValidReplicas)),
+					slog.Uint64("count_valid_replicating_replicas", uint64(a.CountValidReplicatingReplicas)),
+					slog.Uint64("count_lagging_replicas", uint64(a.CountLaggingReplicas)),
+					slog.Uint64("count_delayed_replicas", uint64(a.CountDelayedReplicas)))
 			}
 		}
 		keyspaceShard := getKeyspaceShardName(a.AnalyzedKeyspace, a.AnalyzedShard)
@@ -563,7 +586,11 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				if alias, err := topoproto.ParseTabletAlias(shardPrimaryAliasStr); err == nil {
 					clusters[keyspaceShard].shardPrimaryAlias = alias
 				} else {
-					log.Warn(fmt.Sprintf("failed to parse shard primary alias %q: %v", shardPrimaryAliasStr, err))
+					log.Warn("failed to parse shard primary alias",
+						slog.String("keyspace", a.AnalyzedKeyspace),
+						slog.String("shard", a.AnalyzedShard),
+						slog.String("primary_tablet", shardPrimaryAliasStr),
+						slog.Any("error", err))
 				}
 			}
 			// The shard's own policy applies over the keyspace's: a shard that MigrateReplicationMode
@@ -574,12 +601,15 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 				MigrationSourceDurabilityPolicy: m.GetString("keyspace_migration_source_durability_policy"),
 			}, &topodatapb.Shard{DurabilityPolicy: m.GetString("shard_durability_policy")})
 			if durabilityPolicy == "" {
-				log.Error(fmt.Sprintf("ignoring keyspace %v because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", a.AnalyzedKeyspace))
+				log.Error("ignoring keyspace because no durability_policy is set. Please set it using SetKeyspaceDurabilityPolicy", slog.String("keyspace", a.AnalyzedKeyspace))
 				return nil
 			}
 			durability, err := policy.GetDurabilityPolicy(durabilityPolicy)
 			if err != nil {
-				log.Error(fmt.Sprintf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace))
+				log.Error("can't get the durability policy. Skipping keyspace.",
+					slog.String("durability_policy", durabilityPolicy),
+					slog.String("keyspace", a.AnalyzedKeyspace),
+					slog.Any("error", err))
 				return nil
 			}
 			clusters[keyspaceShard].durability = durability
@@ -790,7 +820,7 @@ func GetDetectionAnalysis(keyspace string, shard string, hints *DetectionAnalysi
 	result = postProcessAnalyses(result, clusters)
 
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read detection analysis", slog.Any("error", err))
 	}
 	// TODO: result, err = getConcensusDetectionAnalysis(result)
 	return result, err
@@ -908,7 +938,9 @@ func postProcessAnalyses(result []*DetectionAnalysis, clusters map[string]*clust
 			if ca.shardPrimaryAlias != nil {
 				analysis.AnalyzedCell = ca.shardPrimaryAlias.GetCell()
 			} else {
-				log.Warn(fmt.Sprintf("PrimaryTabletDeleted: no primary alias recorded for shard %v/%v; AnalyzedCell cleared so --cells-no-recovery fails closed", analysis.AnalyzedKeyspace, analysis.AnalyzedShard))
+				log.Warn("PrimaryTabletDeleted: no primary alias recorded for shard; AnalyzedCell cleared so --cells-no-recovery fails closed",
+					slog.String("keyspace", analysis.AnalyzedKeyspace),
+					slog.String("shard", analysis.AnalyzedShard))
 				analysis.AnalyzedCell = ""
 			}
 		}
@@ -948,12 +980,12 @@ func auditInstanceAnalysisInChangelog(tabletAlias *topodatapb.TabletAlias, analy
 			string(analysisCode),
 		)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to update last analysis", slog.String("tablet", tabletAliasString), slog.String("analysis", string(analysisCode)), slog.Any("error", err))
 			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to read rows affected by last analysis update", slog.String("tablet", tabletAliasString), slog.String("analysis", string(analysisCode)), slog.Any("error", err))
 			return err
 		}
 		lastAnalysisChanged = rows > 0
@@ -979,12 +1011,12 @@ func auditInstanceAnalysisInChangelog(tabletAlias *topodatapb.TabletAlias, analy
 			string(analysisCode),
 		)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to insert last analysis", slog.String("tablet", tabletAliasString), slog.String("analysis", string(analysisCode)), slog.Any("error", err))
 			return err
 		}
 		rows, err := sqlResult.RowsAffected()
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to read rows affected by last analysis insert", slog.String("tablet", tabletAliasString), slog.String("analysis", string(analysisCode)), slog.Any("error", err))
 			return err
 		}
 		firstInsertion = rows > 0
@@ -1012,7 +1044,7 @@ func auditInstanceAnalysisInChangelog(tabletAlias *topodatapb.TabletAlias, analy
 	if err == nil {
 		analysisChangeWriteCounter.Add(1)
 	} else {
-		log.Error(err.Error())
+		log.Error("Failed to write analysis changelog", slog.String("tablet", tabletAliasString), slog.String("analysis", string(analysisCode)), slog.Any("error", err))
 	}
 	return err
 }
@@ -1028,7 +1060,7 @@ func ExpireInstanceAnalysisChangelog() error {
 		config.UnseenInstanceForgetHours,
 	)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to expire analysis changelog", slog.Any("error", err))
 	}
 	return err
 }

@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -45,7 +46,7 @@ const (
 )
 
 // Backup takes a db backup and sends it to the BackupStorage.
-func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) error {
+func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req *tabletmanagerdatapb.BackupRequest) (retErr error) {
 	if tm.Cnf == nil {
 		return errors.New("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
@@ -131,23 +132,67 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			return err
 		}
 		originalType = tablet.Type
-		// Update our type to `BACKUP`.
-		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
-			return err
+		// A primary's semi-sync is restored from the policy in effect now, so a
+		// policy that can't be read refuses the backup before the type changes.
+		// VTOrc reconciles a later policy change once the primary serves again.
+		var primarySemiSync SemiSyncAction
+		if originalType == topodatapb.TabletType_PRIMARY {
+			if primarySemiSync, err = tm.primarySemiSyncAction(ctx, tablet.Tablet); err != nil {
+				return err
+			}
 		}
-
-		// Adding defer to original value in case of any failures.
+		// Restore the original type even if the change to BACKUP fails after
+		// publishing it.
 		defer func() {
-			bgCtx := context.Background()
+			// An earlier error explains why the backup failed; keep it.
+			fail := func(err error) {
+				if retErr == nil {
+					err = vterrors.Wrap(err, "backup completed, but tablet restoration failed")
+					retErr = err
+				}
+				l.Error("Failed to restore tablet after backup", slog.Any("error", err))
+			}
+			// Each restore step gets a fresh context independent of the RPC. This
+			// bounds semi-sync restoration and the primary topology update;
+			// subsystem startup and subsequent cleanup may outlive those deadlines.
+			withBudget := func(step func(context.Context) error) error {
+				ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+				defer cancel()
+				return step(ctx)
+			}
+			// Entering BACKUP turned off semi-sync. A primary turns it back on as
+			// its policy required when the backup started, before it serves again.
+			restoreSemiSync := originalType == topodatapb.TabletType_PRIMARY && primarySemiSync == SemiSyncActionSet
+			if restoreSemiSync {
+				if err := withBudget(func(ctx context.Context) error {
+					return tm.MysqlDaemon.SetSemiSyncEnabled(ctx, true, true)
+				}); err != nil {
+					fail(vterrors.Wrapf(err, "failed to restore primary semi-sync, keeping tablet type %v", topodatapb.TabletType_BACKUP))
+					return
+				}
+			}
 			// Change our type back to the original value.
 			// Original type could be primary so pass in a real value for PrimaryTermStartTime
-			if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
-				l.Errorf("Failed to change tablet type from %v to %v, error: %v", topodatapb.TabletType_BACKUP, originalType, err)
+			bgCtx := context.Background()
+			err := withBudget(func(topoCtx context.Context) error {
+				return tm.changeTypeLockedWithTopoContext(bgCtx, topoCtx, originalType, DBActionNone, SemiSyncActionNone)
+			})
+			// The semi-sync monitor runs only on a primary, so it starts once the
+			// tablet is PRIMARY locally, even if a later step of the change failed.
+			if restoreSemiSync && tm.SemiSyncMonitor != nil && tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+				tm.SemiSyncMonitor.Open()
+			}
+			if err != nil {
+				fail(vterrors.Wrapf(err, "failed to change tablet type from %v to %v", topodatapb.TabletType_BACKUP, originalType))
 				return
 			}
 
 			tm.restoreReplicationAfterBackupLocked(bgCtx, tablet.Tablet, l)
 		}()
+
+		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
+			return err
+		}
 	}
 
 	// Now we can run the backup.
@@ -167,7 +212,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 func (tm *TabletManager) restoreReplicationAfterBackupLocked(ctx context.Context, tablet *topodatapb.Tablet, l logutil.Logger) {
 	tabletInfo, err := tm.TopoServer.GetTablet(ctx, tablet.Alias)
 	if err != nil {
-		l.Errorf("Failed to fetch updated tablet info, error: %v", err)
+		l.Error("Failed to fetch updated tablet info", slog.Any("error", err))
 		return
 	}
 
@@ -183,33 +228,47 @@ func (tm *TabletManager) restoreReplicationAfterBackupLocked(ctx context.Context
 
 	si, err := tm.TopoServer.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		l.Errorf("Failed to get the shard record, error: %v", err)
+		l.Error("Failed to get the shard record", slog.String("keyspace", tablet.Keyspace), slog.String("shard", tablet.Shard), slog.Any("error", err))
 		return
 	}
 	durabilityName, err := tm.TopoServer.GetShardInfoDurability(ctx, si)
 	if err != nil {
-		l.Errorf("Failed to get durability policy, error: %v", err)
+		l.Error("Failed to get durability policy", slog.String("keyspace", tablet.Keyspace), slog.String("shard", tablet.Shard), slog.Any("error", err))
 		return
 	}
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
-		l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
+		l.Error("Failed to get durability with name", slog.String("durability_policy", durabilityName), slog.Any("error", err))
 		return
 	}
 	if groupMemberOfShard(durability, si.GroupReplicationVoters, tabletInfo.Tablet) {
-		l.Infof("Not configuring replication after the backup: the tablet is a member of the shard's replication group, which it rejoins on its own")
+		l.Info("Not configuring replication after the backup: the tablet is a member of the shard's replication group, which it rejoins on its own")
 		return
 	}
 
 	isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, isSemiSync)
 	if err != nil {
-		l.Errorf("Failed to convert bool to semisync action, error: %v", err)
+		l.Error("Failed to convert bool to semisync action", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 	if err := tm.setReplicationSourceLocked(ctx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
-		l.Errorf("Failed to set replication source, error: %v", err)
+		l.Error("Failed to set replication source", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
+}
+
+// primarySemiSyncAction returns the semi-sync action that the shard's
+// durability policy requires for the primary.
+func (tm *TabletManager) primarySemiSyncAction(ctx context.Context, tablet *topodatapb.Tablet) (SemiSyncAction, error) {
+	durabilityName, err := tm.TopoServer.GetShardDurability(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot read the durability policy of shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+	durability, err := policy.GetDurabilityPolicy(durabilityName)
+	if err != nil {
+		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
+	}
+	return tm.convertBoolToSemiSyncAction(ctx, policy.SemiSyncAckers(durability, tablet) > 0)
 }
 
 // RestoreFromBackup deletes all local data and then restores the data from the latest backup [at
@@ -287,7 +346,7 @@ func (tm *TabletManager) endBackup(backupMode string) {
 func shutdownTimeout(l logutil.Logger, tm *vttime.Duration) time.Duration {
 	timeout, ok, err := protoutil.DurationFromProto(tm)
 	if err != nil {
-		l.Errorf("failed to parse mysql shutdown timeout, falling back to default: %v", err)
+		l.Error("failed to parse mysql shutdown timeout, falling back to default", slog.Any("error", err))
 		return mysqlShutdownTimeout
 	}
 	if !ok {

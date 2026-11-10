@@ -19,8 +19,8 @@ package mysql
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"strings"
 	"sync/atomic"
@@ -388,7 +388,7 @@ func (l *Listener) Accept() {
 			if l.PreHandleFunc != nil {
 				conn, err = l.PreHandleFunc(ctx, conn, connectionID)
 				if err != nil {
-					log.Error(fmt.Sprintf("mysql_server pre hook: %s", err))
+					log.Error("mysql_server pre hook", slog.Any("error", err))
 					return
 				}
 			}
@@ -410,7 +410,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	// Catch panics, and close the connection in any case.
 	defer func() {
 		if x := recover(); x != nil {
-			log.Error(fmt.Sprintf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4)))
+			log.Error("mysql_server caught panic", slog.Any("panic", x), slog.String("stack", string(tb.Stack(4))))
 		}
 		// We call endWriterBuffering here in case there's a premature return after
 		// startWriterBuffering is called
@@ -434,7 +434,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	serverAuthPluginData, err := c.writeHandshakeV10(l.ServerVersion, l.authServer, uint8(l.charset), l.TLSConfig.Load() != nil)
 	if err != nil {
 		if err != io.EOF {
-			log.Error(fmt.Sprintf("Cannot send HandshakeV10 packet to %s: %v", c, err))
+			log.Error("Cannot send HandshakeV10 packet", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 		return
 	}
@@ -445,13 +445,13 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam, same as main read loop.
 		if err != io.EOF {
-			log.Info(fmt.Sprintf("Cannot read client handshake response from %s: %v, it may not be a valid MySQL client", c, err))
+			log.Info("Cannot read client handshake response, it may not be a valid MySQL client", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 		return
 	}
 	user, clientAuthMethod, clientAuthResponse, err := l.parseClientHandshakePacket(c, true, response)
 	if err != nil {
-		log.Error(fmt.Sprintf("Cannot parse client handshake response from %s: %v", c, err))
+		log.Error("Cannot parse client handshake response", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 
@@ -461,14 +461,14 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// SSL was enabled. We need to re-read the auth packet.
 		response, err = c.readEphemeralPacket()
 		if err != nil {
-			log.Error(fmt.Sprintf("Cannot read post-SSL client handshake response from %s: %v", c, err))
+			log.Error("Cannot read post-SSL client handshake response", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 
 		// Returns copies of the data, so we can recycle the buffer.
 		user, clientAuthMethod, clientAuthResponse, err = l.parseClientHandshakePacket(c, false, response)
 		if err != nil {
-			log.Error(fmt.Sprintf("Cannot parse post-SSL client handshake response from %s: %v", c, err))
+			log.Error("Cannot parse post-SSL client handshake response", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 		c.recycleReadPacket()
@@ -525,18 +525,18 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 		serverAuthPluginData, err = negotiatedAuthMethod.AuthPluginData()
 		if err != nil {
-			log.Error(fmt.Sprintf("Error generating auth switch packet for %s: %v", c, err))
+			log.Error("Error generating auth switch packet", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 
 		if err := c.writeAuthSwitchRequest(string(negotiatedAuthMethod.Name()), serverAuthPluginData); err != nil {
-			log.Error(fmt.Sprintf("Error writing auth switch packet for %s: %v", c, err))
+			log.Error("Error writing auth switch packet", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 
 		clientAuthResponse, err = c.readEphemeralPacket()
 		if err != nil {
-			log.Error(fmt.Sprintf("Error reading auth switch response for %s: %v", c, err))
+			log.Error("Error reading auth switch response", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			return
 		}
 		c.recycleReadPacket()
@@ -544,7 +544,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	userData, err := negotiatedAuthMethod.HandleAuthPluginData(c, user, serverAuthPluginData, clientAuthResponse, conn.RemoteAddr())
 	if err != nil {
-		log.Warn(fmt.Sprintf("Error authenticating user %s using: %s", user, negotiatedAuthMethod.Name()))
+		log.Warn("Error authenticating user", slog.String("user", user), slog.String("auth_method", string(negotiatedAuthMethod.Name())))
 		c.writeErrorPacketFromError(err)
 		return
 	}
@@ -570,7 +570,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	// Negotiation worked, send OK packet.
 	if err := c.writeOKPacket(&PacketOK{statusFlags: c.StatusFlags}); err != nil {
-		log.Error(fmt.Sprintf("Cannot write OK packet to %s: %v", c, err))
+		log.Error("Cannot write OK packet", slog.String("connection", c.String()), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return
 	}
 
@@ -581,7 +581,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	connectTime := time.Since(acceptTime).Nanoseconds()
 	if threshold := l.SlowConnectWarnThreshold.Load(); threshold != 0 && connectTime > threshold {
 		connSlow.Add(1)
-		log.Warn(fmt.Sprintf("Slow connection from %s: %v", c, connectTime))
+		log.Warn("Slow connection", slog.String("connection", c.String()), slog.Duration("duration", time.Duration(connectTime)))
 	}
 
 	// Tell our handler that we're finished handshake and are ready to
@@ -846,7 +846,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 	if clientFlags&CapabilityClientConnAttr != 0 {
 		clientAttributes, _, err := parseConnAttrs(data, pos)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Decode connection attributes send by the client: %v", err))
+			log.Warn("Decode connection attributes sent by the client", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 
 		c.Attributes = clientAttributes

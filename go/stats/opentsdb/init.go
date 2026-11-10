@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sort"
@@ -40,7 +41,7 @@ func Init(prefix string) {
 		log.Info("Initializing opentsdb backend...")
 		backend, err := InitWithoutServenv(prefix)
 		if err != nil {
-			log.Info(fmt.Sprintf("Failed to initialize singleton opentsdb backend: %v", err))
+			log.Info("Failed to initialize singleton opentsdb backend", slog.Any("error", err))
 		} else {
 			singletonBackend = backend
 			log.Info("Initialized opentsdb backend.")

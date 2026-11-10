@@ -23,6 +23,7 @@ This file handles the reparenting operations.
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/event"
@@ -32,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -110,7 +112,10 @@ func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard 
 func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAlias *topodatapb.TabletAlias) error {
 	tabletInfo, err := wr.ts.GetTablet(ctx, newPrimaryAlias)
 	if err != nil {
-		log.Warn(fmt.Sprintf("TabletExternallyReparented: failed to read tablet record for %v: %v", newPrimaryAlias, err))
+		log.Warn("TabletExternallyReparented: failed to read tablet record",
+			slog.String("tablet", topoproto.TabletAliasString(newPrimaryAlias)),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 
@@ -118,7 +123,11 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 	tablet := tabletInfo.Tablet
 	si, err := wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		log.Warn(fmt.Sprintf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err))
+		log.Warn("TabletExternallyReparented: failed to read global shard record",
+			slog.String("keyspace", tablet.Keyspace),
+			slog.String("shard", tablet.Shard),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 
@@ -130,7 +139,7 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		if err != nil {
 			return err
 		}
-		log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+		log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 		durability, err := policy.GetDurabilityPolicy(durabilityName)
 		if err != nil {
 			return err
@@ -153,7 +162,10 @@ func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newPrimaryAl
 		event.DispatchUpdate(ev, "starting external reparent")
 
 		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_PRIMARY, policy.SemiSyncAckers(durability, tablet) > 0); err != nil {
-			log.Warn(fmt.Sprintf("Error calling ChangeType on new primary %v: %v", topoproto.TabletAliasString(newPrimaryAlias), err))
+			log.Warn("Error calling ChangeType on new primary",
+				slog.String("tablet", topoproto.TabletAliasString(newPrimaryAlias)),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return err
 		}
 		event.DispatchUpdate(ev, "finished")

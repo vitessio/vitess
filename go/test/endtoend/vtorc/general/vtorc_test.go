@@ -20,8 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -126,6 +124,69 @@ func TestErrantGTIDOnPreviousPrimary(t *testing.T) {
 
 	// Wait for the tablet to be drained.
 	utils.WaitForTabletType(t, curPrimary, "drained")
+}
+
+// TestErrantGTIDDrainWithdrawsSemiSyncAck checks that draining a connected
+// replica with errant GTIDs stops its semi-sync ACKs by restarting only its
+// receiver: the primary loses it as a semi-sync client, and its applier keeps
+// running.
+func TestErrantGTIDDrainWithdrawsSemiSyncAck(t *testing.T) {
+	defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 3, 0, []string{"--change-tablets-with-errant-gtid-to-drained"}, cluster.VTOrcConfiguration{}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
+	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
+	shard0 := &keyspace.Shards[0]
+
+	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
+	require.NotNil(t, primary, "should have elected a primary")
+	var errantReplica, ackingReplica *cluster.Vttablet
+	for _, tablet := range shard0.Vttablets {
+		if tablet.Alias == primary.Alias {
+			continue
+		}
+		if errantReplica == nil {
+			errantReplica = tablet
+		} else {
+			ackingReplica = tablet
+		}
+	}
+	require.NotNil(t, ackingReplica, "should be able to find two replicas")
+	utils.CheckReplication(t, clusterInfo, primary, []*cluster.Vttablet{errantReplica, ackingReplica}, 15*time.Second)
+
+	semiSyncClients := func() string {
+		clients, err := primary.VttabletProcess.GetDBStatus("Rpl_semi_sync_source_clients", "")
+		require.NoError(t, err)
+		return clients
+	}
+	require.Eventually(t, func() bool { return semiSyncClients() == "2" }, 30*time.Second, time.Second, "both replicas should send semi-sync ACKs")
+
+	threadID := func(names string) string {
+		qr, err := utils.RunSQL(t, "SELECT THREAD_ID FROM performance_schema.threads WHERE NAME IN ("+names+")", errantReplica, "")
+		require.NoError(t, err)
+		require.Len(t, qr.Rows, 1)
+		return qr.Rows[0][0].ToString()
+	}
+	const receiverThread, applierThread = "'thread/sql/replica_io', 'thread/sql/slave_io'", "'thread/sql/replica_sql', 'thread/sql/slave_sql'"
+
+	// Insert an errant GTID while the replica stays connected, with recoveries
+	// off so that only the errant GTID recovery acts on it.
+	vtOrcProcess := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+	vtOrcProcess.DisableGlobalRecoveries(t)
+	receiverBefore, applierBefore := threadID(receiverThread), threadID(applierThread)
+	err := utils.RunSQLs(t, []string{
+		"SET GLOBAL read_only = OFF",
+		"INSERT INTO vt_ks.vt_insert_test(id, msg) VALUES (10174, 'errant')",
+		"SET GLOBAL super_read_only = ON",
+	}, errantReplica, "")
+	require.NoError(t, err)
+	vtOrcProcess.EnableGlobalRecoveries(t)
+
+	utils.WaitForTabletType(t, errantReplica, "drained")
+	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, errantReplica, "OFF"))
+	assert.True(t, utils.IsSemiSyncSetupCorrectly(t, ackingReplica, "ON"))
+	assert.Eventually(t, func() bool { return semiSyncClients() == "1" }, 30*time.Second, time.Second, "the drained replica should stop sending semi-sync ACKs")
+	assert.NotEqual(t, receiverBefore, threadID(receiverThread), "the receiver should have been restarted")
+	assert.Equal(t, applierBefore, threadID(applierThread), "the applier should have kept running")
+	assert.True(t, cluster.ValidateReplicationIsHealthy(t, errantReplica))
 }
 
 // TestClustersToWatch verifies that VTOrc elects a primary and sets up replication when it is
@@ -989,7 +1050,6 @@ func TestReplicationStoppedWithSemiSyncBlocked(t *testing.T) {
 func TestRecoveryDeadlocks(t *testing.T) {
 	t.Run("PrimaryIsReadOnly+PrimarySemiSyncBlocked", func(t *testing.T) {
 		defer utils.PrintVTOrcLogsOnFailure(t, clusterInfo.ClusterInstance)
-		disableSemiSyncOnAllTablets(t)
 		utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
 			PreventCrossCellFailover: true,
 		}, cluster.DefaultVtorcsByCell, policy.DurabilitySemiSync)
@@ -1072,18 +1132,18 @@ func TestSetupWithOrphanedSemiSyncSource(t *testing.T) {
 		return utils.IsPrimarySemiSyncSetupCorrectly(t, primary, "ON")
 	}, 30*time.Second, time.Second, "expected VTOrc to enable semi-sync on the primary")
 
-	// If the test fails before the second setup finishes, the primary must not
-	// stay a blocked semi-sync source for the rest of the package.
-	t.Cleanup(func() {
-		semiSyncType, err := utils.SemiSyncExtensionLoaded(t, primary)
-		require.NoError(t, err)
-		switch semiSyncType {
-		case mysql.SemiSyncTypeSource:
-			_, _ = utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_source_enabled = false", primary, "")
-		case mysql.SemiSyncTypeMaster:
-			_, _ = utils.RunSQL(t, "SET GLOBAL rpl_semi_sync_master_enabled = false", primary, "")
+	// disableSemiSync releases any statement blocked in the primary's
+	// semi-sync wait. If the test fails before the second setup finishes, the
+	// primary must not stay a blocked semi-sync source for the rest of the
+	// package.
+	disableSemiSync := func() {
+		cmd, err := primary.VttabletProcess.DisableSemiSyncCommand()
+		if assert.NoError(t, err) && cmd != "" {
+			_, err = utils.RunSQL(t, cmd, primary, "")
+			assert.NoError(t, err)
 		}
-	})
+	}
+	t.Cleanup(disableSemiSync)
 
 	// Stop VTOrc first so it cannot repair replication, then orphan the
 	// semi-sync source: stop replication on every other tablet so no acker
@@ -1112,42 +1172,19 @@ func TestSetupWithOrphanedSemiSyncSource(t *testing.T) {
 	}()
 	select {
 	case <-done:
+		return
 	case <-time.After(3 * time.Minute):
-		require.Fail(t, "cluster setup did not complete, instance cleanup is blocked on an orphaned semi-sync source")
 	}
-}
 
-// disableSemiSyncOnAllTablets clears `rpl_semi_sync_source_enabled` and
-// `rpl_semi_sync_replica_enabled` on every tablet's mysqld in the shared
-// cluster. Required before SetupVttabletsAndVTOrcs when the previous test
-// left a primary with semi-sync source on: vttablet's TearDown does not
-// disable semi-sync, and `cleanAndStartVttablet` issues a DROP DATABASE
-// before restarting vttablet, which hangs forever in the semi-sync wait
-// because no acker is connected.
-//
-// Uses mysql.Connect directly (not utils.RunSQL) so that tablets whose
-// mysqld is not yet running (e.g., first subtest) are silently skipped
-// rather than failing the test.
-func disableSemiSyncOnAllTablets(t *testing.T) {
-	t.Helper()
-	for _, cellInfo := range clusterInfo.CellInfos {
-		all := append([]*cluster.Vttablet{}, cellInfo.ReplicaTablets...)
-		all = append(all, cellInfo.RdonlyTablets...)
-		for _, tablet := range all {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			params := mysql.ConnParams{
-				Uname:      "vt_dba",
-				UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", tablet.TabletUID)),
-			}
-			conn, err := mysql.Connect(ctx, &params)
-			cancel()
-			if err != nil {
-				continue
-			}
-			_, _ = conn.ExecuteFetch("SET GLOBAL rpl_semi_sync_source_enabled = 0, GLOBAL rpl_semi_sync_replica_enabled = 0", 1, false)
-			conn.Close()
-		}
+	// Setup is blocked. Release it and wait for it to return before failing:
+	// once this test ends, the next test sets up the same cluster, and a setup
+	// still running from here would race with it.
+	disableSemiSync()
+	select {
+	case <-done:
+	case <-time.After(time.Minute):
 	}
+	require.Fail(t, "cluster setup did not complete, instance cleanup is blocked on an orphaned semi-sync source")
 }
 
 // waitForPrimaryAndPick blocks until VTOrc has elected a primary and returns

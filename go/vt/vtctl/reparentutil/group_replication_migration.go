@@ -20,6 +20,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -688,7 +689,7 @@ func checkDurabilityPolicyChange(ctx context.Context, ts *topo.Server, ki *topo.
 	keyspace := ki.KeyspaceName()
 	if source := ki.GetMigrationSourceDurabilityPolicy(); source != "" {
 		if warning := sourceNextToAsyncPolicyWarning(ki); warning != "" {
-			log.Warn(warning)
+			log.Warn("The keyspace's migration source is next to a durability policy that is not a group replication policy", slog.String("keyspace", keyspace), slog.String("warning", warning))
 			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, warning)
 		}
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,

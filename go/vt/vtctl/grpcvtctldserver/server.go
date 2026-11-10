@@ -22,6 +22,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
+	"maps"
+	"math"
 	"net/http"
 	"path/filepath"
 	"runtime/debug"
@@ -35,6 +38,8 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
+
+	"vitess.io/vitess/go/vt/proto/querythrottler"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
@@ -238,7 +243,11 @@ func (s *VtctldServer) ApplyShardRoutingRules(ctx context.Context, req *vtctldat
 
 // ApplySchema is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySchemaRequest) (resp *vtctldatapb.ApplySchemaResponse, err error) {
-	log.Info(fmt.Sprintf("VtctldServer.ApplySchema: keyspace=%s, migrationContext=%v, ddlStrategy=%v, batchSize=%v", req.Keyspace, req.MigrationContext, req.DdlStrategy, req.BatchSize))
+	log.Info("VtctldServer.ApplySchema",
+		slog.String("keyspace", req.Keyspace),
+		slog.String("migration_context", req.MigrationContext),
+		slog.String("ddl_strategy", req.DdlStrategy),
+		slog.Int64("batch_size", req.BatchSize))
 
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ApplySchema")
 	defer span.Finish()
@@ -694,7 +703,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -734,7 +743,7 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 
 	changedTabletInfo, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		log.Warn(fmt.Sprintf("error while reading the tablet we just changed back out of the topo: %v", err))
+		log.Warn("error while reading the tablet we just changed back out of the topo", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	} else {
 		changedTablet = changedTabletInfo.Tablet
 	}
@@ -766,6 +775,7 @@ func (s *VtctldServer) CheckThrottler(ctx context.Context, req *vtctldatapb.Chec
 		Scope:                 req.Scope,
 		SkipRequestHeartbeats: req.SkipRequestHeartbeats,
 		OkIfNotExists:         req.OkIfNotExists,
+		ThrottlerType:         req.ThrottlerType,
 	}
 	r, err := s.tmc.CheckThrottler(ctx, ti.Tablet, tmReq)
 	if err != nil {
@@ -793,7 +803,9 @@ func (s *VtctldServer) GetThrottlerStatus(ctx context.Context, req *vtctldatapb.
 		return nil, err
 	}
 
-	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{})
+	r, err := s.tmc.GetThrottlerStatus(ctx, ti.Tablet, &tabletmanagerdatapb.GetThrottlerStatusRequest{
+		ThrottlerType: req.ThrottlerType,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -850,7 +862,7 @@ func (s *VtctldServer) ForceCutOverSchemaMigration(ctx context.Context, req *vtc
 		return nil, err
 	}
 
-	log.Info("Calling ApplySchema to force cut-over migration " + req.Uuid)
+	log.Info("Calling ApplySchema to force cut-over migration", slog.String("uuid", req.Uuid))
 	qr, err := s.ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
 		Keyspace:            req.Keyspace,
 		Sql:                 []string{query},
@@ -963,7 +975,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)
 	if req.Force && topo.IsErrType(err, topo.NodeExists) {
-		log.Info(fmt.Sprintf("keyspace %v already exists (ignoring error with Force=true)", req.Name))
+		log.Info("keyspace already exists (ignoring error with Force=true)", slog.String("keyspace", req.Name))
 		err = nil
 
 		// Get the actual keyspace out of the topo; it may differ in structure,
@@ -987,9 +999,12 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 	if req.Type == topodatapb.KeyspaceType_SNAPSHOT {
 		bksvs, err := s.ts.GetVSchema(ctx, req.BaseKeyspace)
 		if err != nil {
-			log.Info(fmt.Sprintf("error from GetVSchema(%v) = %v", req.BaseKeyspace, err))
+			log.Info("error from GetVSchema",
+				slog.String("base_keyspace", req.BaseKeyspace),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			if topo.IsErrType(err, topo.NoNode) {
-				log.Info(fmt.Sprintf("base keyspace %v does not exist; continuing with bare, unsharded vschema", req.BaseKeyspace))
+				log.Info("base keyspace does not exist; continuing with bare, unsharded vschema", slog.String("base_keyspace", req.BaseKeyspace))
 				bksvs = &topo.KeyspaceVSchemaInfo{
 					Name: req.Name,
 					Keyspace: &vschemapb.Keyspace{
@@ -1046,10 +1061,10 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 	span.Annotate("include_parent", req.IncludeParent)
 
 	if req.IncludeParent {
-		log.Info("Creating empty keyspace for " + req.Keyspace)
+		log.Info("Creating empty keyspace", slog.String("keyspace", req.Keyspace))
 		if err2 := s.ts.CreateKeyspace(ctx, req.Keyspace, &topodatapb.Keyspace{}); err2 != nil {
 			if req.Force && topo.IsErrType(err2, topo.NodeExists) {
-				log.Info(fmt.Sprintf("keyspace %v already exists; ignoring error because Force = true", req.Keyspace))
+				log.Info("keyspace already exists; ignoring error because Force = true", slog.String("keyspace", req.Keyspace))
 			} else {
 				err = err2
 				return nil, err
@@ -1061,7 +1076,7 @@ func (s *VtctldServer) CreateShard(ctx context.Context, req *vtctldatapb.CreateS
 
 	if err = s.ts.CreateShard(ctx, req.Keyspace, req.ShardName); err != nil {
 		if req.Force && topo.IsErrType(err, topo.NodeExists) {
-			log.Info(fmt.Sprintf("shard %v/%v already exists; ignoring error because Force = true", req.Keyspace, req.ShardName))
+			log.Info("shard already exists; ignoring error because Force = true", slog.String("keyspace", req.Keyspace), slog.String("shard", req.ShardName))
 			shardExists = true
 			err = nil
 		} else {
@@ -1154,7 +1169,7 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 		err = fmt.Errorf("failed to lock %s; if you really want to delete this keyspace, re-run with Force=true: %w", req.Keyspace, lerr)
 		return nil, err
 	default:
-		log.Warn(fmt.Sprintf("%s: failed to lock keyspace %s for deletion, but force=true, proceeding anyway ...", lerr, req.Keyspace))
+		log.Warn("failed to lock keyspace for deletion, but force=true, proceeding anyway ...", slog.String("keyspace", req.Keyspace), slog.Any("error", lerr))
 	}
 
 	if unlock != nil {
@@ -1184,13 +1199,13 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 			return nil, err
 		}
 
-		log.Info(fmt.Sprintf("Deleting all %d shards (and their tablets) in keyspace %v", len(shards), req.Keyspace))
+		log.Info("Deleting all shards (and their tablets) in keyspace", slog.Int("shard_count", len(shards)), slog.String("keyspace", req.Keyspace))
 		recursive := true
 		evenIfServing := true
 		force := req.Force
 
 		for _, shard := range shards {
-			log.Info(fmt.Sprintf("Recursively deleting shard %v/%v", req.Keyspace, shard))
+			log.Info("Recursively deleting shard", slog.String("keyspace", req.Keyspace), slog.String("shard", shard))
 			err = deleteShard(ctx, s.ts, req.Keyspace, shard, recursive, evenIfServing, force)
 			if err != nil {
 				err = fmt.Errorf("cannot delete shard %v/%v: %w", req.Keyspace, shard, err)
@@ -1206,11 +1221,19 @@ func (s *VtctldServer) DeleteKeyspace(ctx context.Context, req *vtctldatapb.Dele
 
 	for _, cell := range cells {
 		if err := s.ts.DeleteKeyspaceReplication(ctx, cell, req.Keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			log.Warn(fmt.Sprintf("Cannot delete KeyspaceReplication in cell %v for %v: %v", cell, req.Keyspace, err))
+			log.Warn("Cannot delete KeyspaceReplication in cell",
+				slog.String("cell", cell),
+				slog.String("keyspace", req.Keyspace),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 		}
 
 		if err := s.ts.DeleteSrvKeyspace(ctx, cell, req.Keyspace); err != nil && !topo.IsErrType(err, topo.NoNode) {
-			log.Warn(fmt.Sprintf("Cannot delete SrvKeyspace in cell %v for %v: %v", cell, req.Keyspace, err))
+			log.Warn("Cannot delete SrvKeyspace in cell",
+				slog.String("cell", cell),
+				slog.String("keyspace", req.Keyspace),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 
@@ -2101,7 +2124,7 @@ func (s *VtctldServer) GetSrvKeyspaces(ctx context.Context, req *vtctldatapb.Get
 				return nil, err
 			}
 
-			log.Warn(fmt.Sprintf("no srvkeyspace for keyspace %s in cell %s", req.Keyspace, cell))
+			log.Warn("no srvkeyspace for keyspace in cell", slog.String("keyspace", req.Keyspace), slog.String("cell", cell))
 
 			srvKeyspace = nil
 		}
@@ -2275,7 +2298,7 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 				return nil, err
 			}
 
-			log.Warn("no SrvVSchema for cell " + cell)
+			log.Warn("no SrvVSchema for cell", slog.String("cell", cell))
 			sv = nil
 		}
 
@@ -2367,7 +2390,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			if req.Strict {
 				return nil, err
 			}
-			log.Warn(fmt.Sprintf("GetTablets encountered non-fatal error %s; continuing because Strict=false", err))
+			log.Warn("GetTablets encountered non-fatal error; continuing because Strict=false", slog.Any("error", err))
 		default:
 			return nil, err
 		}
@@ -2427,7 +2450,7 @@ func (s *VtctldServer) GetTablets(ctx context.Context, req *vtctldatapb.GetTable
 			tablets, err := s.ts.GetTabletsByCell(ctx, cell, nil)
 			if err != nil {
 				if req.Strict {
-					log.Info(fmt.Sprintf("GetTablets got an error from cell %s: %s. Running in strict mode, so canceling other cell RPCs", cell, err))
+					log.Info("GetTablets got an error from cell. Running in strict mode, so canceling other cell RPCs", slog.String("cell", cell), slog.Any("error", err))
 					cancel()
 				}
 				rec.RecordError(fmt.Errorf("GetTabletsByCell(%s) failed: %w", cell, err))
@@ -2743,7 +2766,7 @@ func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersi
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("Tablet %v is running version '%v'", topoproto.TabletAliasString(tabletAlias), version))
+	log.Info("Tablet is running version", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)), slog.String("version", version))
 	return &vtctldatapb.GetVersionResponse{Version: version}, err
 }
 
@@ -2877,7 +2900,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return err
@@ -3070,7 +3093,7 @@ func (s *VtctldServer) InitShardPrimaryLocked(
 	}
 	// Refresh the state to force the tabletserver to reconnect after db has been created.
 	if err := tmc.RefreshState(ctx, primaryElectTabletInfo.Tablet); err != nil {
-		log.Warn(fmt.Sprintf("RefreshState failed: %v", err))
+		log.Warn("RefreshState failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 
 	return nil
@@ -3539,13 +3562,18 @@ func (s *VtctldServer) RefreshStateByShard(ctx context.Context, req *vtctldatapb
 	}
 
 	isPartial, partialDetails, err := topotools.RefreshTabletsByShard(ctx, s.ts, s.tmc, si, req.Cells, logutil.NewCallbackLogger(func(e *logutilpb.Event) {
+		attrs := []slog.Attr{
+			slog.String("keyspace", req.Keyspace),
+			slog.String("shard", req.Shard),
+			slog.String("message", e.Value),
+		}
 		switch e.Level {
 		case logutilpb.Level_WARNING:
-			log.Warn(e.Value)
+			log.Warn("RefreshTabletsByShard event", attrs...)
 		case logutilpb.Level_ERROR:
-			log.Error(e.Value)
+			log.Error("RefreshTabletsByShard event", attrs...)
 		default:
-			log.Info(e.Value)
+			log.Info("RefreshTabletsByShard event", attrs...)
 		}
 	}))
 	if err != nil {
@@ -3711,7 +3739,10 @@ func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.
 
 	// Remove all the shards, serially. Stop immediately if any fail.
 	for _, shard := range shards {
-		log.Info(fmt.Sprintf("Removing cell %v from shard %v/%v", req.Cell, req.Keyspace, shard))
+		log.Info("Removing cell from shard",
+			slog.String("cell", req.Cell),
+			slog.String("keyspace", req.Keyspace),
+			slog.String("shard", shard))
 		if err2 := removeShardCell(ctx, s.ts, req.Cell, req.Keyspace, shard, req.Recursive, req.Force); err2 != nil {
 			err = fmt.Errorf("cannot remove cell %v from shard %v/%v: %w", req.Cell, req.Keyspace, shard, err2)
 			return nil, err
@@ -3719,7 +3750,7 @@ func (s *VtctldServer) RemoveKeyspaceCell(ctx context.Context, req *vtctldatapb.
 	}
 
 	// Last, remove the SrvKeyspace object.
-	log.Info(fmt.Sprintf("Removing cell %v keyspace %v SrvKeyspace object", req.Cell, req.Keyspace))
+	log.Info("Removing SrvKeyspace object for cell and keyspace", slog.String("cell", req.Cell), slog.String("keyspace", req.Keyspace))
 	if err = s.ts.DeleteSrvKeyspace(ctx, req.Cell, req.Keyspace); err != nil {
 		err = fmt.Errorf("cannot delete SrvKeyspace from cell %v for keyspace %v: %w", req.Cell, req.Keyspace, err)
 		return nil, err
@@ -3802,7 +3833,7 @@ func (s *VtctldServer) ReparentTablet(ctx context.Context, req *vtctldatapb.Repa
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
@@ -4154,7 +4185,10 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		log.Error(fmt.Sprintf("SetWritable: failed to read tablet record for %v: %v", alias, err))
+		log.Error("SetWritable: failed to read tablet record",
+			slog.String("tablet", alias),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
@@ -4167,7 +4201,11 @@ func (s *VtctldServer) SetWritable(ctx context.Context, req *vtctldatapb.SetWrit
 	}
 
 	if err = f(ctx, tablet.Tablet); err != nil {
-		log.Error(fmt.Sprintf("SetWritable: failed to set writable=%v on %v: %v", req.Writable, alias, err))
+		log.Error("SetWritable: failed to set writable",
+			slog.Bool("writable", req.Writable),
+			slog.String("tablet", alias),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
@@ -4234,7 +4272,9 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 		return nil, err
 	}
 
-	log.Info(fmt.Sprintf("Gathering tablet replication status for: %v", tabletInfoMap))
+	tablets := slices.AppendSeq(make([]string, 0, len(tabletInfoMap)), maps.Keys(tabletInfoMap))
+	slices.Sort(tablets)
+	log.Info("Gathering tablet replication status", slog.Any("tablets", tablets))
 
 	var (
 		m         sync.Mutex
@@ -4274,9 +4314,9 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 				if err != nil {
 					switch ctx.Err() {
 					case context.Canceled:
-						log.Warn(fmt.Sprintf("context canceled before obtaining primary position from %s: %s", alias, err))
+						log.Warn("context canceled before obtaining primary position", slog.String("tablet", alias), slog.Any("error", err))
 					case context.DeadlineExceeded:
-						log.Warn(fmt.Sprintf("context deadline exceeded before obtaining primary position from %s: %s", alias, err))
+						log.Warn("context deadline exceeded before obtaining primary position", slog.String("tablet", alias), slog.Any("error", err))
 					default:
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
@@ -4314,9 +4354,9 @@ func (s *VtctldServer) ShardReplicationPositions(ctx context.Context, req *vtctl
 				if err != nil {
 					switch ctx.Err() {
 					case context.Canceled:
-						log.Warn(fmt.Sprintf("context canceled before obtaining replication position from %s: %s", alias, err))
+						log.Warn("context canceled before obtaining replication position", slog.String("tablet", alias), slog.Any("error", err))
 					case context.DeadlineExceeded:
-						log.Warn(fmt.Sprintf("context deadline exceeded before obtaining replication position from %s: %s", alias, err))
+						log.Warn("context deadline exceeded before obtaining replication position", slog.String("tablet", alias), slog.Any("error", err))
 					default:
 						// The RPC was not timed out or canceled. We treat this
 						// as a fatal error for the overall request.
@@ -4522,7 +4562,10 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		log.Error(fmt.Sprintf("StartReplication: failed to read tablet record for %v: %v", alias, err))
+		log.Error("StartReplication: failed to read tablet record",
+			slog.String("tablet", alias),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
@@ -4556,14 +4599,17 @@ func (s *VtctldServer) StartReplication(ctx context.Context, req *vtctldatapb.St
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
 	if err = s.tmc.StartReplication(ctx, tablet.Tablet, policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tablet.Tablet)); err != nil {
-		log.Error(fmt.Sprintf("StartReplication: failed to start replication on %v: %v", alias, err))
+		log.Error("StartReplication: failed to start replication",
+			slog.String("tablet", alias),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
@@ -4587,12 +4633,18 @@ func (s *VtctldServer) StopReplication(ctx context.Context, req *vtctldatapb.Sto
 
 	tablet, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
-		log.Error(fmt.Sprintf("StopReplication: failed to read tablet record for %v: %v", alias, err))
+		log.Error("StopReplication: failed to read tablet record",
+			slog.String("tablet", alias),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
 	if err := s.tmc.StopReplication(ctx, tablet.Tablet); err != nil {
-		log.Error(fmt.Sprintf("StopReplication: failed to stop replication on %v: %v", alias, err))
+		log.Error("StopReplication: failed to stop replication",
+			slog.String("tablet", alias),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
@@ -4615,13 +4667,20 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 
 	tablet, err := s.ts.GetTablet(ctx, req.Tablet)
 	if err != nil {
-		log.Warn(fmt.Sprintf("TabletExternallyReparented: failed to read tablet record for %v: %v", topoproto.TabletAliasString(req.Tablet), err))
+		log.Warn("TabletExternallyReparented: failed to read tablet record",
+			slog.String("tablet", topoproto.TabletAliasString(req.Tablet)),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
 	shard, err := s.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		log.Warn(fmt.Sprintf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err))
+		log.Warn("TabletExternallyReparented: failed to read global shard record",
+			slog.String("keyspace", tablet.Keyspace),
+			slog.String("shard", tablet.Shard),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
@@ -4638,7 +4697,7 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 		return resp, nil
 	}
 
-	log.Info(fmt.Sprintf("TabletExternallyReparented: executing tablet type change %v -> PRIMARY on %v", tablet.Type, topoproto.TabletAliasString(req.Tablet)))
+	log.Info("TabletExternallyReparented: executing tablet type change to PRIMARY", slog.String("tablet_type", tablet.Type.String()), slog.String("tablet", topoproto.TabletAliasString(req.Tablet)))
 	ev := &events.Reparent{
 		ShardInfo:  *shard,
 		NewPrimary: tablet.CloneVT(),
@@ -4661,14 +4720,17 @@ func (s *VtctldServer) TabletExternallyReparented(ctx context.Context, req *vtct
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return nil, err
 	}
 
 	if err = s.tmc.ChangeType(ctx, tablet.Tablet, topodatapb.TabletType_PRIMARY, policy.SemiSyncAckers(durability, tablet.Tablet) > 0); err != nil {
-		log.Warn(fmt.Sprintf("ChangeType(%v, PRIMARY): %v", topoproto.TabletAliasString(req.Tablet), err))
+		log.Warn("ChangeType to PRIMARY failed",
+			slog.String("tablet", topoproto.TabletAliasString(req.Tablet)),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil, err
 	}
 
@@ -4847,7 +4909,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 							return
 						}
 
-						log.Info(fmt.Sprintf("tablet %v is valid", key))
+						log.Info("tablet is valid", slog.String("tablet", key))
 					}(alias)
 				}
 			}
@@ -4983,7 +5045,7 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 		return nil, fmt.Errorf("no primary tablet in shard %s/%s", req.Keyspace, shards[0])
 	}
 	referenceAlias := si.PrimaryAlias
-	log.Info("Gathering permissions for reference primary " + topoproto.TabletAliasString(referenceAlias))
+	log.Info("Gathering permissions for reference primary", slog.String("primary_tablet", topoproto.TabletAliasString(referenceAlias)))
 	pres, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
 		TabletAlias: si.PrimaryAlias,
 	})
@@ -5004,7 +5066,7 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 				if topoproto.TabletAliasEqual(alias, si.PrimaryAlias) {
 					continue
 				}
-				log.Info("Gathering permissions for " + topoproto.TabletAliasString(alias))
+				log.Info("Gathering permissions", slog.String("tablet", topoproto.TabletAliasString(alias)))
 				presp, err := s.GetPermissions(ctx, &vtctldatapb.GetPermissionsRequest{
 					TabletAlias: alias,
 				})
@@ -5012,8 +5074,9 @@ func (s *VtctldServer) ValidatePermissionsKeyspace(ctx context.Context, req *vtc
 					return err
 				}
 
-				log.Info(fmt.Sprintf("Diffing permissions between %s and %s", topoproto.TabletAliasString(referenceAlias),
-					topoproto.TabletAliasString(alias)))
+				log.Info("Diffing permissions",
+					slog.String("primary_tablet", topoproto.TabletAliasString(referenceAlias)),
+					slog.String("tablet", topoproto.TabletAliasString(alias)))
 				er := &concurrency.AllErrorRecorder{}
 				tmutils.DiffPermissions(topoproto.TabletAliasString(referenceAlias), referencePermissions,
 					topoproto.TabletAliasString(alias), presp.Permissions, er)
@@ -5277,7 +5340,7 @@ func (s *VtctldServer) ValidateShard(ctx context.Context, req *vtctldatapb.Valid
 				return
 			}
 
-			log.Info(fmt.Sprintf("tablet %v is valid", topoproto.TabletAliasString(alias)))
+			log.Info("tablet is valid", slog.String("tablet", topoproto.TabletAliasString(alias)))
 		}(alias)
 	}
 
@@ -5495,7 +5558,7 @@ func (s *VtctldServer) ValidateVersionShard(ctx context.Context, req *vtctldatap
 		return nil, err
 	}
 
-	log.Info(fmt.Sprintf("Gathering version for primary %v", topoproto.TabletAliasString(shard.PrimaryAlias)))
+	log.Info("Gathering version for primary", slog.String("primary_tablet", topoproto.TabletAliasString(shard.PrimaryAlias)))
 	primaryVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
 		TabletAlias: shard.PrimaryAlias,
 	})
@@ -5912,7 +5975,7 @@ func GetVersionFunc() func(string) (string, error) {
 // helper method to asynchronously get and diff a version
 func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	log.Info(fmt.Sprintf("Gathering version for %v", topoproto.TabletAliasString(alias)))
+	log.Info("Gathering version", slog.String("tablet", topoproto.TabletAliasString(alias)))
 	replicaVersion, err := s.GetVersion(ctx, &vtctldatapb.GetVersionRequest{
 		TabletAlias: alias,
 	})
@@ -5988,4 +6051,229 @@ func (s *VtctldServer) GetKeyspaceRoutingRules(ctx context.Context, req *vtctlda
 	return &vtctldatapb.GetKeyspaceRoutingRulesResponse{
 		KeyspaceRoutingRules: rules,
 	}, nil
+}
+
+func validateQueryThrottlerConfigRequest(req *vtctldatapb.UpdateQueryThrottlerConfigRequest) error {
+	if req.GetKeyspace() == "" {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace is required")
+	}
+
+	if req.GetQueryThrottlerConfig() == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query_throttler_config is required")
+	}
+
+	return validateQueryThrottlerConfig(req.GetQueryThrottlerConfig())
+}
+
+func validateQueryThrottlerConfig(cfg *querythrottler.Config) error {
+	if !cfg.GetEnabled() {
+		return nil
+	}
+
+	switch cfg.GetStrategy() {
+	case querythrottler.ThrottlingStrategy_TABLET_THROTTLER:
+		return validateTabletThrottlerStrategyConfig(cfg)
+
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "strategy must be TABLET_THROTTLER when enabled is true")
+	}
+}
+
+func validateTabletThrottlerStrategyConfig(cfg *querythrottler.Config) error {
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_strategy_config is required when strategy is TABLET_THROTTLER")
+	}
+
+	if len(tsc.GetTabletRules()) == 0 {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "tablet_rules cannot be empty when strategy is TABLET_THROTTLER")
+	}
+
+	// seenBareMetrics maps a bare metric name ("lag") to the first rule key that produced
+	// it, across the whole config, so scope collisions are caught globally.
+	seenBareMetrics := make(map[string]string)
+	for tabletType, stmtRuleSet := range tsc.GetTabletRules() {
+		// Only accept serving tablet types, spelled the way the runtime reports them.
+		if !base.IsQueryThrottlerTabletType(tabletType) {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported tablet type %q; must be one of PRIMARY, REPLICA, RDONLY, EXPERIMENTAL", tabletType)
+		}
+		if len(stmtRuleSet.GetStatementRules()) == 0 {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "statement_rules cannot be empty (tablet_type=%s)", tabletType)
+		}
+		for stmtType, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			// Reject statement types that the query throttler never evaluates, such as BEGIN and
+			// SAVEPOINT, and those it must not reject: MIGRATION, SET and UNLOCK_TABLES. See
+			// base.IsQueryThrottlerStatementType.
+			if !base.IsQueryThrottlerStatementType(stmtType) {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported statement type %q (tablet_type=%s)", stmtType, tabletType)
+			}
+			if len(metricRuleSet.GetMetricRules()) == 0 {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "metric_rules cannot be empty (tablet_type=%s, statement=%s)", tabletType, stmtType)
+			}
+			for metricName, rule := range metricRuleSet.GetMetricRules() {
+				_, mName, err := base.DisaggregateMetricName(metricName)
+				if err != nil {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"unknown metric name %q (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
+				// The custom metric reads from a custom_query this config cannot supply, so
+				// it always reads zero and never breaches. Reject until that is wired up.
+				if mName == base.CustomMetricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"custom metric is not supported by the query throttler (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
+				}
+				// "default", "self" and "shard" name the throttler's default metric, a v20-compatible alias that
+				// reads lag here. A rule spelled this way would report its rejections as metric=default, so a lag
+				// rule must name lag.
+				if mName == base.DefaultMetricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"metric %q names the throttler's default metric; name the metric, such as lag or shard/lag (tablet_type=%s, statement=%s)", metricName, tabletType, stmtType)
+				}
+				// Two different keys for the same bare metric ("self/lag" and "shard/lag")
+				// collapse into one CheckResult entry, so one of them silently stops
+				// matching. Repeating the same exact key across statements is fine.
+				bare := mName.String()
+				if prevKey, ok := seenBareMetrics[bare]; ok && prevKey != metricName {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"metric %q is configured under multiple scopes; only one scope of a metric may be configured across the query throttler config", bare)
+				}
+				seenBareMetrics[bare] = metricName
+				if len(rule.GetThresholds()) == 0 {
+					return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+						"thresholds cannot be empty (tablet_type=%s, statement=%s, metric=%s)", tabletType, stmtType, metricName)
+				}
+				// Thresholds are matched by the highest breached 'above', so two thresholds
+				// with the same 'above' leave one of them unreachable.
+				seenAbove := make(map[float64]int)
+				for i, t := range rule.GetThresholds() {
+					// NaN compares false against everything and infinities leave no reachable
+					// boundary, so either would make the threshold silently unusable.
+					if math.IsNaN(t.GetAbove()) || math.IsInf(t.GetAbove(), 0) {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'above' must be a finite number, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					if t.GetAbove() < 0 {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'above' must be >= 0, got %v (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					if j, ok := seenAbove[t.GetAbove()]; ok {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] and threshold[%d] have the same 'above' %v (tablet_type=%s, statement=%s, metric=%s)",
+							j, i, t.GetAbove(), tabletType, stmtType, metricName)
+					}
+					seenAbove[t.GetAbove()] = i
+
+					if t.GetThrottle() < 0 || t.GetThrottle() > 100 {
+						return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+							"threshold[%d] 'throttle' must be between 0 and 100, got %d (tablet_type=%s, statement=%s, metric=%s)",
+							i, t.GetThrottle(), tabletType, stmtType, metricName)
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+// sanitizeQueryThrottlerConfig normalizes a Config in-place. For the
+// TABLET_THROTTLER strategy it sorts every threshold slice ascending by Above
+// so that the binary search in GetThrottleDecision works correctly.
+func sanitizeQueryThrottlerConfig(cfg *querythrottler.Config) {
+	if cfg == nil {
+		return
+	}
+
+	if cfg.GetStrategy() != querythrottler.ThrottlingStrategy_TABLET_THROTTLER {
+		return
+	}
+
+	tsc := cfg.GetTabletStrategyConfig()
+	if tsc == nil {
+		return
+	}
+
+	for _, stmtRuleSet := range tsc.GetTabletRules() {
+		for _, metricRuleSet := range stmtRuleSet.GetStatementRules() {
+			for _, rule := range metricRuleSet.GetMetricRules() {
+				ts := rule.GetThresholds()
+				if len(ts) > 1 {
+					sort.Slice(ts, func(i, j int) bool {
+						return ts[i].GetAbove() < ts[j].GetAbove()
+					})
+				}
+			}
+		}
+	}
+}
+
+func (s *VtctldServer) UpdateQueryThrottlerConfig(ctx context.Context, req *vtctldatapb.UpdateQueryThrottlerConfigRequest) (resp *vtctldatapb.UpdateQueryThrottlerConfigResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.UpdateQueryThrottlerConfig")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	if err := validateQueryThrottlerConfigRequest(req); err != nil {
+		return nil, err
+	}
+
+	sanitizeQueryThrottlerConfig(req.GetQueryThrottlerConfig())
+
+	span.Annotate("keyspace", req.GetKeyspace())
+	span.Annotate("strategy", req.GetQueryThrottlerConfig().GetStrategy())
+
+	ctx, unlock, lockErr := s.ts.LockKeyspace(ctx, req.Keyspace, "UpdateQueryThrottlerConfig")
+	if lockErr != nil {
+		return nil, topoErrorf(lockErr, "failed to lock keyspace %s", req.Keyspace)
+	}
+	defer unlock(&err)
+
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
+	if err != nil {
+		return nil, topoErrorf(err, "failed to get keyspace %s", req.Keyspace)
+	}
+
+	update := func(_ *querythrottler.Config) *querythrottler.Config {
+		return req.GetQueryThrottlerConfig()
+	}
+
+	ki.QueryThrottlerConfig = update(ki.QueryThrottlerConfig)
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, topoErrorf(err, "failed to update keyspace %s", req.Keyspace)
+	}
+
+	_, err = s.ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, req.Keyspace, nil, update)
+	if err != nil {
+		// The Keyspace already holds the new config, and rewriting it is idempotent,
+		// so re-running the command is how to reach the cells that failed. Cells that
+		// fail make a PartialResult, which topoErrorf reports as UNAVAILABLE.
+		return nil, topoErrorf(err, "updated keyspace %s, but not all of its SrvKeyspaces; re-run the command to update the rest", req.Keyspace)
+	}
+
+	return &vtctldatapb.UpdateQueryThrottlerConfigResponse{}, nil
+}
+
+// topoErrorf adds context to a topo error and gives it a vtrpc code. Topo errors carry
+// no vtrpc code of their own, so callers would otherwise see UNKNOWN.
+func topoErrorf(err error, format string, args ...any) error {
+	code := vterrors.Code(err)
+	if code == vtrpcpb.Code_UNKNOWN {
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			code = vtrpcpb.Code_NOT_FOUND
+		case topo.IsErrType(err, topo.BadVersion):
+			code = vtrpcpb.Code_ABORTED
+		case topo.IsErrType(err, topo.Timeout):
+			code = vtrpcpb.Code_DEADLINE_EXCEEDED
+		case topo.IsErrType(err, topo.Interrupted):
+			code = vtrpcpb.Code_CANCELED
+		default:
+			code = vtrpcpb.Code_UNAVAILABLE
+		}
+	}
+	return vterrors.Errorf(code, "%s: %v", fmt.Sprintf(format, args...), err)
 }

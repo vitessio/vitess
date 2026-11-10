@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -92,7 +93,7 @@ func init() {
 func getTabletsWatchedByCellStats() map[string]int64 {
 	tabletCountsByCell, err := inst.ReadTabletCountsByCell()
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to read tablet counts by cell: %+v", err))
+		log.Error("Failed to read tablet counts by cell", slog.Any("error", err))
 	}
 	return tabletCountsByCell
 }
@@ -102,7 +103,7 @@ func getTabletsWatchedByShardStats() map[string]int64 {
 	tabletsWatchedByShard := make(map[string]int64)
 	statsByKS, err := inst.ReadKeyspaceShardStats()
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to read tablet counts by shard: %+v", err))
+		log.Error("Failed to read tablet counts by shard", slog.Any("error", err))
 	}
 	for _, s := range statsByKS {
 		tabletsWatchedByShard[s.Keyspace+"."+s.Shard] = s.TabletCount
@@ -115,7 +116,7 @@ func getEmergencyReparentShardDisabledStats() map[string]int64 {
 	disabledShards := make(map[string]int64)
 	statsByKS, err := inst.ReadKeyspaceShardStats()
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to read tablet counts by shard: %+v", err))
+		log.Error("Failed to read tablet counts by shard", slog.Any("error", err))
 	}
 	for _, s := range statsByKS {
 		if s.DisableEmergencyReparent {
@@ -152,7 +153,7 @@ func validateCellsNoRecovery(ctx context.Context) error {
 	}
 	knownCells, err := ts.GetKnownCells(ctx)
 	if err != nil {
-		log.Warn(fmt.Sprintf("failed to get known cells while validating --cells-no-recovery, skipping validation: %v", err))
+		log.Warn("failed to get known cells while validating --cells-no-recovery, skipping validation", slog.Any("error", err))
 		return nil
 	}
 	knownCellSet := make(map[string]struct{}, len(knownCells))
@@ -181,7 +182,7 @@ func initializeShardsToWatch() error {
 			// Validate keyspace/shard parses.
 			k, s, err := topoproto.ParseKeyspaceShard(ks)
 			if err != nil {
-				log.Error(fmt.Sprintf("Could not parse keyspace/shard %q: %+v", ks, err))
+				log.Error("Could not parse keyspace/shard", slog.String("keyspace_shard", ks), slog.Any("error", err))
 				continue
 			}
 			if !key.IsValidKeyRange(s) {
@@ -237,12 +238,12 @@ func OpenTabletDiscovery() <-chan time.Time {
 	tmc = inst.InitializeTMC()
 	// Clear existing cache and perform a new refresh.
 	if _, err := db.ExecVTOrc("DELETE FROM vitess_tablet"); err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to clear vitess_tablet", slog.Any("error", err))
 	}
 	// Parse --clusters-to-watch into a filter.
 	err := initializeShardsToWatch()
 	if err != nil {
-		log.Error(fmt.Sprintf("Error parsing --clusters-to-watch: %v", err))
+		log.Error("Error parsing --clusters-to-watch", slog.Any("error", err))
 		os.Exit(1)
 	}
 	// We refresh all information from the topo once before we start the ticks to do
@@ -254,11 +255,11 @@ func OpenTabletDiscovery() <-chan time.Time {
 	// cell; exit if the topo is reachable and the cell is absent. If the
 	// topo is unreachable, validation is skipped with a warning.
 	if err := validateCellsNoRecovery(ctx); err != nil {
-		log.Error(err.Error())
+		log.Error("--cells-no-recovery validation failed, shutting down", slog.Any("error", err))
 		os.Exit(1)
 	}
 	if err := refreshAllInformation(ctx); err != nil {
-		log.Error(fmt.Sprintf("failed to initialize topo information: %+v", err))
+		log.Error("failed to initialize topo information", slog.Any("error", err))
 	}
 	return time.Tick(config.GetTopoInformationRefreshDuration())
 }
@@ -277,7 +278,7 @@ func getAllTablets(ctx context.Context, cells []string) (tabletsByCell map[strin
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
-				log.Error(fmt.Sprintf("Failed to load tablets from cell %s: %+v", cell, err))
+				log.Error("Failed to load tablets from cell", slog.String("cell", cell), slog.Any("error", err))
 				failedCells = append(failedCells, cell)
 			} else {
 				tabletsByCell[cell] = tablets
@@ -315,7 +316,7 @@ func refreshTabletsUsing(ctx context.Context, loader func(*topodatapb.TabletAlia
 		return nil
 	}
 	if len(failedCells) > 0 {
-		log.Error("Got partial topo result. Failed cells: " + strings.Join(failedCells, ", "))
+		log.Error("Got partial topo result", slog.Any("failed_cells", failedCells))
 	}
 
 	// Update each cell that provided a response. This ensures only cells that provided a
@@ -354,7 +355,7 @@ func forceRefreshAllTabletsInShard(ctx context.Context, keyspace, shard string, 
 // refreshTabletInfoOfShard only refreshes the tablet records from the topo-server for all the tablets
 // of the given keyspace-shard.
 func refreshTabletInfoOfShard(ctx context.Context, keyspace, shard string) {
-	log.Info(fmt.Sprintf("refresh of tablet records of shard - %v/%v", keyspace, shard))
+	log.Info("refresh of tablet records of shard", slog.String("keyspace", keyspace), slog.String("shard", shard))
 	refreshTabletsInKeyspaceShard(ctx, keyspace, shard, func(*topodatapb.TabletAlias) {
 		// No-op
 		// We only want to refresh the tablet information for the given shard
@@ -390,7 +391,7 @@ func refreshReachableTabletInfoOfShard(ctx context.Context, keyspace, shard stri
 func refreshTabletsInKeyspaceShard(ctx context.Context, keyspace, shard string, loader func(*topodatapb.TabletAlias), forceRefresh bool, tabletsToIgnore []*topodatapb.TabletAlias) {
 	tablets, err := getShardTabletsByCell(ctx, keyspace, shard, nil)
 	if err != nil {
-		log.Error(fmt.Sprintf("Error fetching tablets for keyspace/shard %v/%v: %v", keyspace, shard, err))
+		log.Error("Error fetching tablets for keyspace/shard", slog.String("keyspace", keyspace), slog.String("shard", shard), slog.Any("error", err))
 		return
 	}
 	query := "SELECT alias FROM vitess_tablet WHERE keyspace = ? AND shard = ?"
@@ -416,14 +417,14 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 		latestInstances[tabletAliasString] = true
 		old, err := inst.ReadTablet(tablet.Alias)
 		if err != nil && err != inst.ErrTabletAliasNil {
-			log.Error(err.Error())
+			log.Error("Failed to read tablet", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 			continue
 		}
 		if !forceRefresh && proto.Equal(tablet, old) {
 			continue
 		}
 		if err := inst.SaveTablet(tablet); err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to save tablet", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 			continue
 		}
 		wg.Go(func() {
@@ -434,7 +435,7 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 			}
 			loader(tablet.Alias)
 		})
-		log.Info(fmt.Sprintf("Discovered: %v", tablet))
+		log.Info("Discovered tablet", inst.TabletLogAttrs(tablet)...)
 	}
 	wg.Wait()
 
@@ -464,14 +465,14 @@ func refreshTablets(tablets []*topo.TabletInfo, query string, args []any, loader
 		return nil
 	})
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read tablets to forget", slog.Any("error", err))
 	}
 	for _, tabletAlias := range toForget {
 		if keepDeletedGroupVoter(tabletAlias) {
 			continue
 		}
 		if err := inst.ForgetInstance(tabletAlias); err != nil {
-			log.Error(err.Error())
+			log.Error("Failed to forget instance", slog.String("tablet", topoproto.TabletAliasString(tabletAlias)), slog.Any("error", err))
 		}
 		if err := inst.UnmarkDeletedGroupVoter(tabletAlias); err != nil {
 			log.Error(err.Error())

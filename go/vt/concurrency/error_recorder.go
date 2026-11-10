@@ -18,10 +18,12 @@ package concurrency
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // ErrorRecorder offers a way to record errors during complex
@@ -54,7 +56,7 @@ func (fer *FirstErrorRecorder) RecordError(err error) {
 	if fer.errorCount == 1 {
 		fer.firstError = err
 	} else {
-		log.Error(fmt.Sprintf("FirstErrorRecorder: error[%v]: %v", fer.errorCount, err))
+		log.Error("FirstErrorRecorder: error", slog.Int("error_count", fer.errorCount), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 	fer.mu.Unlock()
 }

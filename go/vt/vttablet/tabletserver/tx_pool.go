@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -181,7 +180,18 @@ func (tp *TxPool) transactionKiller() {
 		// connection's state (txComplete clears the transaction properties,
 		// which feed the timer selection).
 		elapsedTimeout := conn.effectiveTimeout()
-		log.Warn(fmt.Sprintf("killing transaction (exceeded timeout: %v): %s", elapsedTimeout, conn.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())))
+		if conn.IsInTransaction() {
+			log.Warn("killing transaction (exceeded timeout)",
+				slog.Duration("timeout", elapsedTimeout),
+				slog.Int64("transaction_id", conn.ConnID),
+				slog.String("transaction", conn.txProps.String(tp.env.Config().SanitizeLogMessages, tp.env.Environment().Parser())),
+			)
+		} else {
+			log.Warn("killing transaction (exceeded timeout)",
+				slog.Duration("timeout", elapsedTimeout),
+				slog.Int64("reserved_id", conn.ConnID),
+			)
+		}
 		if conn.usesTempTableIdleTimeout() {
 			tp.tempTableIdleKills.Add(1)
 		}
@@ -387,7 +397,7 @@ func (tp *TxPool) RollbackAndRelease(ctx context.Context, txConn *StatefulConnec
 	defer txConn.Release(tx.TxRollback)
 	rollbackError := tp.Rollback(ctx, txConn)
 	if rollbackError != nil {
-		log.Error(fmt.Sprintf("tried to rollback, but failed with: %v", rollbackError.Error()))
+		log.Error("tried to rollback, but failed", slog.Any("error", rollbackError), slog.String("error_code", vterrors.Code(rollbackError).String()))
 	}
 }
 
