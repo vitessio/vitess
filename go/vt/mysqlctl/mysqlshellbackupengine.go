@@ -633,10 +633,14 @@ func mysqlShellCommandString(cmd *exec.Cmd) string {
 //   - the password in a connection string ([scheme://]user:password@host)
 //     given to --uri or --ssh, or as an argument of its own.
 //
-// The value of another short option that takes one, such as -h or -e, is
-// kept as given. -C, -S and -i take an optional value, and mysqlsh takes the
-// next argument as it, but that argument is masked like any other, as it may
-// be meant as a connection string.
+// The value another short option takes is the rest of its group or, for one
+// like -h or -e, the next argument; a next-argument value runs through
+// maskURIPassword, so it is masked when it is a connection string and kept
+// when it is a plain value like a host. This also masks a connection string
+// written after the deprecated -mc option: mysqlsh takes -mc itself without a
+// value, so the connection string is a separate argument. -C, -S and -i are
+// not treated as taking the next argument, so a connection string after one of
+// them is masked as a standalone argument instead.
 func maskMySQLShellPasswords(args []string) []string {
 	optionName := func(option string) string {
 		name := strings.ToLower(strings.TrimPrefix(option, "--"))
@@ -688,6 +692,7 @@ func maskMySQLShellPasswords(args []string) []string {
 				masked[i] = "****"
 			case j+1 == len(arg) && isValue(i+1) && !strings.ContainsRune("CSi", rune(arg[j])):
 				i++
+				masked[i] = maskURIPassword(args[i])
 			}
 		default:
 			masked[i] = maskURIPassword(arg)
@@ -697,12 +702,15 @@ func maskMySQLShellPasswords(args []string) []string {
 }
 
 // maskURIPassword replaces the password in a connection string of the form
-// [scheme://][user[:password]@]host... with "****". Like mysqlsh, it takes the
-// user information to end at the first "@", if no "/" comes before it, and only
-// a "://" (or ":/") that comes before that "@" to end an optional scheme. A
-// ":/" after the "@", such as in a host, path or query parameter, is left
-// alone, so a schemeless string like root:secret@host/db?ssl-ca=file:/x still
-// has its password masked.
+// [scheme://][user[:password]@]host... with "****". It takes the user
+// information to end at the first "@", if no "/" comes before it, and only a
+// "://" (or ":/") that comes before that "@" to end an optional scheme.
+//
+// mysqlsh's own parser (Uri_parser::preprocess) instead takes the first ":/"
+// anywhere as the end of the scheme, so it rejects a schemeless string with a
+// ":/" after the "@", such as root:secret@host/db?ssl-ca=file:/x (it reads
+// root:secret@host/db?ssl-ca=file as the scheme and fails). Masking that string
+// is still right, since the password in it is real.
 func maskURIPassword(uri string) string {
 	at := strings.Index(uri, "@")
 	if at < 0 {
