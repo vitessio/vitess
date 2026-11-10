@@ -416,31 +416,31 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos replication.Position, incl
 }
 
 // ReloadAtDDL reloads the schema at pos, the position of a DDL that the caller has read from the
-// binlog, once MySQL has committed that DDL, whose GTID is ddl. MySQL sends a transaction's binlog
-// events to the binlog dump threads once the binlog is synced, before the transaction commits, and
-// with semi-sync AFTER_SYNC the commit then waits for a replica's acknowledgement. A reload in that
-// window doesn't see the DDL, yet records pos as reloaded, and the schema tracker then saves the
-// schema from before the DDL as the DDL's version.
+// binlog, once MySQL has committed that DDL, whose GTID is ddlGTID. MySQL sends a transaction's
+// binlog events to the binlog dump threads once the binlog is synced, before the transaction
+// commits, and with semi-sync AFTER_SYNC the commit then waits for a replica's acknowledgement. A
+// reload in that window doesn't see the DDL, yet records pos as reloaded, and the schema tracker
+// then saves the schema from before the DDL as the DDL's version.
 //
 // It waits only for a MySQL GTID, which @@gtid_executed includes once its transaction has
 // committed. The file position and MariaDB waits follow a replica's SQL thread, which doesn't
 // advance on a primary, so a DDL with any other kind of GTID is reloaded at right away.
 func (se *Engine) ReloadAtDDL(
-	ctx context.Context, pos replication.Position, ddl replication.GTID,
+	ctx context.Context, pos replication.Position, ddlGTID replication.GTID,
 ) error {
-	if err := se.waitForDDLCommit(ctx, pos, ddl); err != nil {
+	if err := se.waitForDDLCommit(ctx, pos, ddlGTID); err != nil {
 		return err
 	}
 	return se.ReloadAt(ctx, pos)
 }
 
-// waitForDDLCommit waits until MySQL has committed the DDL whose GTID is ddl, for up to the
+// waitForDDLCommit waits until MySQL has committed the DDL whose GTID is ddlGTID, for up to the
 // reload timeout. It waits only for the DDL's own GTID: the rest of pos can include GTIDs that
 // this server will never execute, such as errant ones in the position a stream started from.
 func (se *Engine) waitForDDLCommit(
-	ctx context.Context, pos replication.Position, ddl replication.GTID,
+	ctx context.Context, pos replication.Position, ddlGTID replication.GTID,
 ) error {
-	mysqlGTID, ok := ddl.(replication.Mysql56GTID)
+	mysqlGTID, ok := ddlGTID.(replication.Mysql56GTID)
 	if !ok {
 		return nil
 	}
