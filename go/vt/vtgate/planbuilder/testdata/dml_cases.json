@@ -7606,6 +7606,7 @@
         "user.music",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   }
 ]

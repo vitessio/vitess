@@ -116,14 +116,13 @@ func owesReferenceRows(joinType sqlparser.JoinType, preserved *Route) bool {
 // DML sent to the shards as it is, rather than something that reads it. Nothing returns the
 // preserved rows then. When only the other side is written, an unmatched preserved row has no row
 // to write; a write to the reference table itself is decided by each shard on its own, as on main.
-// A target
-// among these routes is what says the DML writes through this join rather than reading it from
+// A target among these routes is what says the DML writes through this join rather than reading it from
 // further down, where an outer join in a subquery does have its rows read. A DML that is known to
 // read its rows first, through a SELECT, has no row source. findDMLAboveRoute can still turn a DML
 // into one that reads its rows after the joins are planned, and that SELECT keeps the exemption.
 func isDirectDMLRowSource(ctx *plancontext.PlanningContext, routes ...*Route) bool {
 	targets := ctx.SemTable.DMLTargets
-	if targets.IsEmpty() || ctx.DMLReadsItsRows {
+	if ctx.DMLReadsItsRows {
 		return false
 	}
 
@@ -313,6 +312,7 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 	}
 	if owed && !canCarryReferenceRows(r) {
 		debugNoRewrite("apply join merge blocked: the reference rows an outer join preserves cannot be read through %s routing", r.OpCode().String())
+		ctx.RefusedReferenceMerge = true
 		return nil
 	}
 

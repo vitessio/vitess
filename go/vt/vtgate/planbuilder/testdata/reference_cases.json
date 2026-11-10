@@ -1410,5 +1410,316 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "a reference table preserved by an outer join is read through its copy in the other keyspace",
+    "query": "select r.col from source_of_ref r left join user u on u.col = r.col",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from source_of_ref r left join user u on u.col = r.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from ref_with_source as r where 1 != 1",
+            "Query": "select r.col from ref_with_source as r"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u where 1 != 1",
+            "Query": "select 1 from `user` as u where u.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a reference table preserved by an outer join in a union is read through its copy in the other keyspace",
+    "query": "select r.col from source_of_ref r left join user u on u.col = r.col union all select col from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select r.col from source_of_ref r left join user u on u.col = r.col union all select col from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "r_col": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref_with_source as r where 1 != 1",
+                "Query": "select r.col from ref_with_source as r"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` as u where 1 != 1",
+                "Query": "select 1 from `user` as u where u.col = :r_col"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a reference table joined after a refused merge is read through its copy in the other keyspace",
+    "query": "select a.col, b.col, c.col from source_of_ref a left join user_extra b on a.col = b.col left join source_of_ref c on b.col = c.col",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select a.col, b.col, c.col from source_of_ref a left join user_extra b on a.col = b.col left join source_of_ref c on b.col = c.col",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0,L:1,R:0",
+        "JoinVars": {
+          "b_col": 1
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "LeftJoin",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "a_col": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select a.col from ref_with_source as a where 1 != 1",
+                "Query": "select a.col from ref_with_source as a"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select b.col from user_extra as b where 1 != 1",
+                "Query": "select b.col from user_extra as b where b.col = :a_col"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select c.col from ref_with_source as c where 1 != 1",
+            "Query": "select c.col from ref_with_source as c where c.col = :b_col /* INT16 */"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref_with_source",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery routed by a column of the outer query is not merged into a reference route",
+    "query": "select a.col from ref a where exists (select 1 from user x where x.id = a.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where exists (select 1 from user x where x.id = a.col)",
+      "Instructions": {
+        "OperatorType": "SemiJoin",
+        "JoinVars": {
+          "a_col": 0
+        },
+        "Inputs": [
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a.col from ref as a where 1 != 1",
+            "Query": "select a.col from ref as a"
+          },
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as x where 1 != 1",
+            "Query": "select 1 from `user` as x where x.id = :a_col limit 1",
+            "Values": [
+              ":a_col"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery routed by a column of the outer query is not merged into a preserved reference route",
+    "query": "select a.col from ref a left join user b on a.col = b.col where exists (select 1 from user x where x.id = a.col)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a left join user b on a.col = b.col where exists (select 1 from user x where x.id = a.col)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "a_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 0
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select a.col from ref as a where 1 != 1",
+                "Query": "select a.col from ref as a"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` as x where 1 != 1",
+                "Query": "select 1 from `user` as x where x.id = :a_col limit 1",
+                "Values": [
+                  ":a_col"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as b where 1 != 1",
+            "Query": "select 1 from `user` as b where b.col = :a_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery routed by a literal is merged into a reference route",
+    "query": "select a.col from ref a where a.col in (select x.id from user x where x.id = 5)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col in (select x.id from user x where x.id = 5)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.col from ref as a where 1 != 1",
+        "Query": "select a.col from ref as a where a.col in (select x.id from `user` as x where x.id = 5)",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]

@@ -52,6 +52,12 @@ type PlanningContext struct {
 	// statement is then part of that SELECT, and its rows are read like those of any other query.
 	DMLReadsItsRows bool
 
+	// RefusedReferenceMerge is set once a join merge was refused because the reference rows an outer
+	// join preserves cannot be read through the merged routing. The joins that stay ApplyJoins after
+	// that read a reference table through its copy in the other side's keyspace, as they would
+	// have when the merge went through.
+	RefusedReferenceMerge bool
+
 	// MergedSubqueries tracks subqueries that have been merged into routes,
 	// keyed by their arg name.
 	MergedSubqueries map[string]*sqlparser.Subquery
@@ -396,7 +402,6 @@ func (ctx *PlanningContext) UseMirror() *PlanningContext {
 		PlannerVersion:    ctx.PlannerVersion,
 		ReservedArguments: map[sqlparser.Expr]string{},
 		VerifyAllFKs:      ctx.VerifyAllFKs,
-		DMLReadsItsRows:   ctx.DMLReadsItsRows,
 		MergedSubqueries:  ctx.MergedSubqueries,
 		RowSubqueryArgs:   ctx.RowSubqueryArgs,
 		CurrentPhase:      ctx.CurrentPhase,

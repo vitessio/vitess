@@ -337,3 +337,183 @@ func TestPreservedRowsOfARecursiveTermSurviveIntoAMergedCTE(t *testing.T) {
 	require.IsType(t, &engine.SemiJoin{}, primitive,
 		"merging the CTE into the single shard of `user` would drop the rows the term preserved")
 }
+
+func planReferenceOuterJoinWithoutCrossKeyspaceReads(t *testing.T, query string) (engine.Primitive, error) {
+	t.Helper()
+
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	for _, ks := range vschema.Keyspaces {
+		ks.PreventCrossKeyspaceReads = true
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	require.NoError(t, err)
+
+	plan, err := TestBuilder(query, vw, vw.CurrentDb())
+	if err != nil {
+		return nil, err
+	}
+	return plan.Instructions, nil
+}
+
+// The join that is not merged reads a reference table through its copy in the keyspace of the
+// other side, as the merged join does. Reading it through its source would be a cross-keyspace
+// join that the setting is there to stop.
+func TestReferenceRowsAreReadThroughTheCopyInTheOtherKeyspace(t *testing.T) {
+	for _, query := range []string{
+		"select r.col from source_of_ref r left join `user` u on u.col = r.col",
+		"select r.col from source_of_ref r left join `user` u on u.col = r.col where r.foo = 1",
+		"select r.col from source_of_ref r left join `user` u on u.col = r.col union all select col from `user`",
+	} {
+		t.Run(query, func(t *testing.T) {
+			primitive, err := planReferenceOuterJoinWithoutCrossKeyspaceReads(t, query)
+			require.NoError(t, err)
+
+			if concat, ok := primitive.(*engine.Concatenate); ok {
+				primitive = concat.Sources[0]
+			}
+			join, ok := primitive.(*engine.Join)
+			require.True(t, ok, "the preserved rows are expected to be read apart from `user`, got %T", primitive)
+			left, ok := join.Left.(*engine.Route)
+			require.True(t, ok, "expected the preserved side to be a route, got %T", join.Left)
+			require.Equal(t, engine.Reference, left.Opcode)
+			require.Equal(t, "user", left.Keyspace.Name)
+			require.Contains(t, left.Query, "from ref_with_source")
+		})
+	}
+}
+
+// A table without a copy in the other keyspace is still a cross-keyspace join.
+func TestReferenceOuterJoinOfATableWithoutACopyStillFailsWithoutCrossKeyspaceReads(t *testing.T) {
+	_, err := planReferenceOuterJoinWithoutCrossKeyspaceReads(t,
+		"select m.col from unsharded m left join `user` u on u.col = m.col")
+	require.ErrorContains(t, err, "cross-keyspace JOIN")
+}
+
+// A join that is planned after a refused merge reads a reference table through its copy in the
+// keyspace of the join it follows, or the cross-keyspace check that counts on that copy is lying.
+func TestJoinsAfterARefusedMergeReadReferenceTablesThroughTheirCopy(t *testing.T) {
+	primitive, err := planReferenceOuterJoinWithoutCrossKeyspaceReads(t,
+		"select a.col, b.col, c.col from source_of_ref a left join user_extra b on a.col = b.col left join source_of_ref c on b.col = c.col")
+	require.NoError(t, err)
+
+	var visit func(engine.Primitive)
+	visit = func(p engine.Primitive) {
+		if route, ok := p.(*engine.Route); ok {
+			require.Equal(t, "user", route.Keyspace.Name, "route %q reads from another keyspace", route.Query)
+		}
+		inputs, _ := p.Inputs()
+		for _, input := range inputs {
+			visit(input)
+		}
+	}
+	visit(primitive)
+}
+
+// The inner route of a subquery that is routed by a value of the outer query cannot become the
+// routing of the outer route: once the two are merged, nothing binds that value.
+func TestASubqueryRoutedByAnOuterColumnIsNotMergedIntoTheReferenceRoute(t *testing.T) {
+	for _, query := range []string{
+		"select a.col from ref a where exists (select 1 from `user` x where x.id = a.col)",
+		"select a.col from ref a left join `user` b on a.col = b.col where exists (select 1 from `user` x where x.id = a.col)",
+	} {
+		t.Run(query, func(t *testing.T) {
+			primitive := planReferenceOuterJoin(t, query)
+
+			if join, ok := primitive.(*engine.Join); ok {
+				primitive = join.Left
+			}
+			sj, ok := primitive.(*engine.SemiJoin)
+			require.True(t, ok, "the subquery is expected to stay apart from the reference route, got %T", primitive)
+			probe, ok := sj.Right.(*engine.Route)
+			require.True(t, ok, "expected the probe to be a route, got %T", sj.Right)
+			require.Equal(t, engine.EqualUnique, probe.Opcode)
+		})
+	}
+}
+
+// A value that does not come from the outer query still routes the merged route.
+func TestASubqueryRoutedByALiteralIsStillMergedIntoTheReferenceRoute(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select a.col from ref a where a.col in (select x.id from `user` x where x.id = 5)")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the subquery is expected to be merged into the reference route, got %T", primitive)
+	require.Equal(t, engine.EqualUnique, route.Opcode)
+}
+
+// What the recursive term preserved is owed even when the seed preserved nothing: the CTE route
+// keeps the flag, so the IN subquery on `user` cannot route it to one shard.
+func TestPreservedRowsOfARecursiveTermAreOwedBySeedsThatPreservedNothing(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"with recursive c as (select col from ref union all select r1.col from ref r1 left join ref r2 on r1.col = r2.col join c on c.col = r1.col where r1.col < 5) select col from c where col in (select u.col from `user` u where u.id = 5)")
+
+	sq, ok := primitive.(*engine.UncorrelatedSubquery)
+	require.True(t, ok, "the IN subquery on `user` is expected to stay apart from the CTE route, got %T", primitive)
+	outer, ok := sq.Outer.(*engine.Route)
+	require.True(t, ok, "expected the outer side to be a route, got %T", sq.Outer)
+	require.Equal(t, engine.Reference, outer.Opcode)
+}
+
+// A query without a refused merge is planned as on main, where a join that does not merge reads a
+// reference table through its source.
+func TestJoinsWithoutARefusedMergeStillReadTheSource(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select a.col from `user` a right join music b on a.col = b.col left join source_of_ref c on b.col = c.col")
+
+	join, ok := primitive.(*engine.Join)
+	require.True(t, ok, "expected a join, got %T", primitive)
+	right, ok := join.Right.(*engine.Route)
+	require.True(t, ok, "expected the reference side to be a route, got %T", join.Right)
+	require.Equal(t, "main", right.Keyspace.Name)
+}
+
+// The write target of a DML is never swapped for a copy of it, or the statement would write to a
+// table that is not the one it names.
+func TestAReferenceTargetIsNotSwappedForItsCopy(t *testing.T) {
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	id := sqlparser.Columns{sqlparser.NewIdentifierCI("id")}
+	vschema.Keyspaces["user"].Tables["user"].PrimaryKey = id
+	vschema.Keyspaces["main"].Tables["source_of_ref"].PrimaryKey = id
+	for _, ks := range vschema.Keyspaces {
+		ks.PreventCrossKeyspaceReads = true
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	require.NoError(t, err)
+
+	_, err = TestBuilder("update ref r left join `user` u on r.col = u.col left join source_of_ref c on c.col = u.col set c.foo = 1 limit 5", vw, vw.CurrentDb())
+	require.ErrorContains(t, err, "cross-keyspace JOIN")
+}
+
+// A reference table next to a join that spans two keyspaces has no copy to be read through.
+func TestAJoinSpanningTwoKeyspacesIsNotAskedForACopy(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select r.col from ref r left join `user` u on r.col = u.col left join unsharded m on m.col = u.col left join source_of_ref c on c.col = m.col")
+
+	var routes []*engine.Route
+	var visit func(engine.Primitive)
+	visit = func(p engine.Primitive) {
+		if route, ok := p.(*engine.Route); ok {
+			routes = append(routes, route)
+		}
+		inputs, _ := p.Inputs()
+		for _, input := range inputs {
+			visit(input)
+		}
+	}
+	visit(primitive)
+
+	last := routes[len(routes)-1]
+	require.Equal(t, "main", last.Keyspace.Name)
+	require.Contains(t, last.Query, "source_of_ref")
+}
+
+// A subquery that is not a top level predicate cannot route the result, so it is judged by the
+// routing of the outer side. The merge keeps the reference route, as it does on main.
+func TestANonTopLevelSubqueryKeepsTheReferenceRoute(t *testing.T) {
+	primitive := planReferenceOuterJoin(t,
+		"select r1.col from ref r1 left join ref r2 on r1.col = r2.col where r1.col = 1 or exists (select 1 from `user` u where u.id = 5)")
+
+	route, ok := primitive.(*engine.Route)
+	require.True(t, ok, "the subquery is expected to stay inside the reference route, got %T", primitive)
+	require.Equal(t, engine.Reference, route.Opcode)
+}

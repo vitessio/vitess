@@ -684,7 +684,7 @@ func (s *subqueryRouteMerger) mergeShardedRouting(
 
 func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, outer *Route, r Routing, conditions ...engine.Condition) *Route {
 	// A subquery that is not a top level predicate cannot be used for routing, so the merged route
-	// keeps the outer routing. Either way this is asked before the rewrites below run.
+	// keeps the outer routing.
 	routing := r
 	if !s.subq.TopLevel {
 		routing = outer.Routing
@@ -821,6 +821,10 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 	// inner is guaranteed to hit a single shard
 	case inRoute.IsSingleShard() &&
 		(outer == dual || (outer == anyShard && sameKeyspace)):
+		if routedByOuterColumns(m.subq, inRouting) {
+			debugNoRewrite("subquery merge blocked: the inner route is routed by a bind variable that only the outer query provides")
+			return nil
+		}
 		return m.merge(ctx, inRoute, outRoute, inRouting)
 
 	case outer == none && sameKeyspace:
@@ -837,6 +841,33 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 	default:
 		return nil
 	}
+}
+
+// routedByOuterColumns reports whether the routing of a subquery is decided by a value that comes
+// from the outer query, such as `x.id = :a_col`. The merged route would be routed by a bind
+// variable that nothing binds once the two queries are one.
+func routedByOuterColumns(subq *SubQuery, routing Routing) bool {
+	sr, ok := routing.(*ShardedRouting)
+	if !ok || sr.Selected == nil {
+		return false
+	}
+	var found bool
+	for _, expr := range sr.Selected.ValueExprs {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			arg, ok := node.(*sqlparser.Argument)
+			if !ok {
+				return true, nil
+			}
+			for _, jc := range subq.JoinColumns {
+				if slices.ContainsFunc(jc.LHSExprs, func(bve BindVarExpr) bool { return bve.Name == arg.Name }) {
+					found = true
+					return false, io.EOF
+				}
+			}
+			return true, nil
+		}, expr)
+	}
+	return found
 }
 
 func mergedWith(inner *Route, outer *Route) []*Route {

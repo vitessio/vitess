@@ -302,6 +302,9 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 		return newPlan, Rewrote("merge routes into single operator")
 	}
 
+	if ctx.RefusedReferenceMerge {
+		lhs, rhs = useAlternatesInTheOtherKeyspace(ctx, lhs, rhs)
+	}
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "JOIN")
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
@@ -328,6 +331,33 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 	}
 
 	return join, Rewrote("logical join to applyJoin ")
+}
+
+// useAlternatesInTheOtherKeyspace swaps a reference table for its copy in the keyspace that the
+// other operand reads from. checkCrossKeyspaceOp lets such a join through because of that copy, so
+// a join that stays an ApplyJoin has to read it there too, as a join that merges does.
+func useAlternatesInTheOtherKeyspace(ctx *plancontext.PlanningContext, lhs, rhs Operator) (Operator, Operator) {
+	lhs = alternateIn(ctx, lhs, rhs)
+	return lhs, alternateIn(ctx, rhs, lhs)
+}
+
+func alternateIn(ctx *plancontext.PlanningContext, op, other Operator) Operator {
+	route, ok := op.(*Route)
+	if !ok {
+		return op
+	}
+	routing, ok := route.Routing.(*AnyShardRouting)
+	if !ok || TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) {
+		return op
+	}
+	keyspaces := operatorKeyspaces(other)
+	if len(keyspaces) != 1 || keyspaces[0] == routing.Keyspace() {
+		return op
+	}
+	if alternate := routing.AlternateInKeyspace(keyspaces[0]); alternate != nil {
+		return alternate
+	}
+	return op
 }
 
 // checkCrossKeyspaceOp checks if the given operators would create a cross-keyspace operation
