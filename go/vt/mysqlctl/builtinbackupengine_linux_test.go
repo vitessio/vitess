@@ -434,7 +434,12 @@ func TestCheckDirectRestore(t *testing.T) {
 				requireFallocate(t, root)
 			}
 			// The directories don't exist yet, as on a tablet that is restored for the first time.
-			cnf := &Mycnf{DataDir: path.Join(root, "data"), InnodbDataHomeDir: path.Join(root, "innodb")}
+			cnf := &Mycnf{
+				DataDir:           path.Join(root, "data"),
+				InnodbDataHomeDir: path.Join(root, "innodb"),
+				BinLogPath:        path.Join(root, "binlogs", "vt-bin"),
+			}
+			binlogDir := path.Join(root, "binlogs")
 
 			var directOpens atomic.Int32
 			oldOpenFile, oldFallocate := openFile, fallocate
@@ -452,17 +457,19 @@ func TestCheckDirectRestore(t *testing.T) {
 				fallocate = func(*os.File, int64) error { return tt.fallocateErr }
 			}
 
-			// Two chunked files under the data directory, one under the InnoDB data directory, and a
-			// file that isn't chunked, so isn't restored with O_DIRECT.
+			// Two chunked files under the data directory, one under the InnoDB data directory, a file
+			// that isn't chunked, so isn't restored with O_DIRECT, and a chunked binlog, which a full
+			// backup that includes binlogs stores after the data files.
 			fes := []FileEntry{
 				{Base: backupData, Name: "vt_test/t1.ibd", Chunks: computeFileChunks(0, fileSize, tt.chunkSize)},
 				{Base: backupData, Name: "vt_test/t2.ibd", Chunks: computeFileChunks(1, fileSize, tt.chunkSize)},
 				{Base: backupInnodbDataHomeDir, Name: "ibdata1", Chunks: computeFileChunks(2, fileSize, tt.chunkSize)},
 				{Base: backupInnodbLogGroupHomeDir, Name: "ib_logfile0"},
+				{Base: backupBinlogStripped, Name: "binlog.000001", Chunks: computeFileChunks(4, fileSize, tt.chunkSize)},
 			}
 			err := checkDirectRestore(cnf, fes)
 
-			for _, dir := range []string{cnf.DataDir, cnf.InnodbDataHomeDir} {
+			for _, dir := range []string{cnf.DataDir, cnf.InnodbDataHomeDir, binlogDir} {
 				entries, _ := os.ReadDir(dir)
 				assert.Empty(t, entries, "no scratch file may be left in %v", dir)
 			}
@@ -473,9 +480,10 @@ func TestCheckDirectRestore(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.EqualValues(t, 2, directOpens.Load(), "each root directory must be probed once")
+			assert.EqualValues(t, 3, directOpens.Load(), "each root directory must be probed once")
 			assert.DirExists(t, cnf.DataDir)
 			assert.DirExists(t, cnf.InnodbDataHomeDir)
+			assert.DirExists(t, binlogDir)
 			assert.NoDirExists(t, path.Join(cnf.DataDir, "vt_test"), "only the root directories may be created")
 		})
 	}
@@ -483,7 +491,7 @@ func TestCheckDirectRestore(t *testing.T) {
 
 // TestBackupRestoreWithManyChunksDirect runs the backup and restore of TestBackupRestoreWithManyChunks
 // through ExecuteBackup and ExecuteRestore with --builtinbackup-restore-write-mode=direct, and checks
-// that every chunk is written with O_DIRECT.
+// that every chunk is written with O_DIRECT, into a file preallocated to its full size.
 func TestBackupRestoreWithManyChunksDirect(t *testing.T) {
 	backupRoot := t.TempDir()
 	requireDirectIO(t, backupRoot)
@@ -492,8 +500,8 @@ func TestBackupRestoreWithManyChunksDirect(t *testing.T) {
 
 	// Only the restore opens files through openFile in this test: the destinations of the chunks.
 	var directOpens, bufferedOpens atomic.Int32
-	oldOpenFile := openFile
-	t.Cleanup(func() { openFile = oldOpenFile })
+	oldOpenFile, oldFallocate := openFile, fallocate
+	t.Cleanup(func() { openFile, fallocate = oldOpenFile, oldFallocate })
 	openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
 		if flag&unix.O_DIRECT != 0 {
 			directOpens.Add(1)
@@ -502,11 +510,18 @@ func TestBackupRestoreWithManyChunksDirect(t *testing.T) {
 		}
 		return oldOpenFile(name, flag, perm)
 	}
+	// Records the sizes that files are preallocated to.
+	var preallocatedSizes []int64
+	fallocate = func(f *os.File, size int64) error {
+		preallocatedSizes = append(preallocatedSizes, size)
+		return oldFallocate(f, size)
+	}
 
 	backupRestoreWithManyChunks(t, backupRoot)
 
 	assert.Zero(t, bufferedOpens.Load(), "no chunk may be written without O_DIRECT")
 	assert.GreaterOrEqual(t, directOpens.Load(), int32(256), "each of the 256 chunks must be written with O_DIRECT")
+	assert.Contains(t, preallocatedSizes, int64(16*1024*1024), "the 16MiB chunked file must be preallocated to its full size")
 }
 
 // TestExecuteRestoreDirectChecksBeforeRemovingData checks that a restore that can't be done in
