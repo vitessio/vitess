@@ -33,7 +33,7 @@ limitations under the License.
 // Keys that can hold data include:
 //
 //   - error
-//   - query, filter and expression
+//   - query, filter, expression and result
 //   - last_pk, row, values, event, transaction, message and panic
 package logcheck
 

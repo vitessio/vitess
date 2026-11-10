@@ -118,3 +118,12 @@ func (wr *Wrangler) Logger() logutil.Logger {
 func (wr *Wrangler) SQLParser() *sqlparser.Parser {
 	return wr.env.Parser()
 }
+
+// nonNilList returns list, or an empty list if list is nil, so that a log
+// attribute holding it is [] in JSON rather than null.
+func nonNilList(list []string) []string {
+	if list == nil {
+		return []string{}
+	}
+	return list
+}
