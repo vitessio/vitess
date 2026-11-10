@@ -125,3 +125,14 @@ func Get(strategy string, cfg grpcbackoff.Config) Strategy {
 		panic(fmt.Sprintf("unknown backoff strategy: %s", strategy))
 	}
 }
+
+// Validate returns an error if Get does not support the specified strategy
+// name.
+func Validate(strategy string) error {
+	switch strings.ToLower(strategy) {
+	case "", "exponential", "linear", "none":
+		return nil
+	default:
+		return fmt.Errorf("unknown backoff strategy %s; must be one of exponential, linear, none", strategy)
+	}
+}

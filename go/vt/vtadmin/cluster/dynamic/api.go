@@ -12,6 +12,6 @@ import (
 // It is implemented by vtadmin.API.
 type API interface {
 	vtadminpb.VTAdminServer
-	WithCluster(c *cluster.Cluster, id string) API
+	WithCluster(c *cluster.Cluster, id string) (API, error)
 	Handler() http.Handler
 }
