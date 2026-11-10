@@ -108,6 +108,16 @@ func pushAggregationThroughSubquery(
 			}
 			pushedAggr.addColumnWithoutPushing(ctx, aeWrap(colName), true)
 		}
+		// A filter that doesn't merge ends up above the join, and then reads these columns from the sides below it.
+		if _, isJoin := src.Outer.(*ApplyJoin); isJoin && !subQuery.IsArgument {
+			for _, col := range outsideSubqueryColumns(subQuery.Original) {
+				if slices.IndexFunc(pushedAggr.Columns, func(ae *sqlparser.AliasedExpr) bool {
+					return ctx.SemTable.EqualsExpr(ae.Expr, col)
+				}) < 0 {
+					pushedAggr.addColumnWithoutPushing(ctx, aeWrap(col), true)
+				}
+			}
+		}
 	}
 
 	src.Outer = pushedAggr

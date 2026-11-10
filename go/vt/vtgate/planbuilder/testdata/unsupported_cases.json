@@ -593,5 +593,15 @@
     "comment": "two IN subqueries that can't be merged in one predicate are refused, since both would share one argument",
     "query": "select a.id from user a where a.foo in (select col from user_extra) or a.id in (select user_id from user_extra ue where ue.col = a.col)",
     "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "An IN and a NOT IN subquery with the same text can't share one argument, so they are refused",
+    "query": "select id from user where col in (select col from user_extra) or foo not in (select col from user_extra)",
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "Two subqueries that differ only in the aggregate are still refused",
+    "query": "select id from user where col = (select max(col) from user_extra) or foo = (select min(col) from user_extra)",
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
   }
 ]

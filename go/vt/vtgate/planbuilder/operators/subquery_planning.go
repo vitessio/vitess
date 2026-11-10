@@ -228,11 +228,14 @@ func rewriteMergedSubqueryExpr(ctx *plancontext.PlanningContext, se SubQueryExpr
 	return expr, rewritten
 }
 
-func outsideSubqueryDeps(ctx *plancontext.PlanningContext, expr sqlparser.Expr) semantics.TableSet {
+func outsideSubqueryDeps(ctx *plancontext.PlanningContext, expr sqlparser.Expr, withSiblings bool) semantics.TableSet {
 	deps := semantics.EmptyTableSet()
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
 		case *sqlparser.Subquery:
+			if withSiblings {
+				deps = deps.Merge(ctx.SemTable.RecursiveDeps(node).Remove(findTablesContained(ctx, node.Select)))
+			}
 			return false, nil
 		case *sqlparser.ColName:
 			deps = deps.Merge(ctx.SemTable.RecursiveDeps(node))
@@ -240,6 +243,20 @@ func outsideSubqueryDeps(ctx *plancontext.PlanningContext, expr sqlparser.Expr) 
 		return true, nil
 	}, expr)
 	return deps
+}
+
+// outsideSubqueryColumns returns the columns expr reads outside its subqueries.
+func outsideSubqueryColumns(expr sqlparser.Expr) (cols []*sqlparser.ColName) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.Subquery:
+			return false, nil
+		case *sqlparser.ColName:
+			cols = append(cols, node)
+		}
+		return true, nil
+	}, expr)
+	return cols
 }
 
 // tryPushSubQueryInJoin attempts to push down a SubQuery into an ApplyJoin
@@ -293,9 +310,9 @@ func tryPushSubQueryInJoin(
 	// as possible, so that we can potentially merge them together
 	// TODO: we need to check dependencies and break apart all expressions in the subquery, not just the merge predicates
 	// The predicate that gets restored once the subquery is settled needs every table it
-	// mentions outside its subqueries, or it lands on a route that cannot see them. The
-	// subqueries' own correlation is already covered by the merge predicates.
-	deps := outsideSubqueryDeps(ctx, inner.Original)
+	// mentions outside its subqueries, or it lands on a route that cannot see them. For a
+	// filter that includes the tables its sibling subqueries read from the outer query.
+	deps := outsideSubqueryDeps(ctx, inner.Original, !inner.IsArgument)
 	for _, predicate := range inner.GetMergePredicates() {
 		deps = deps.Merge(ctx.SemTable.RecursiveDeps(predicate))
 	}

@@ -240,18 +240,59 @@ func (sq *SubQuery) addLimit() {
 	sq.Subquery = newLimit(sq.Subquery, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("1")}, true)
 }
 
-// countSubqueries reports how many subqueries a predicate holds at its own level, without
-// counting the ones nested inside them. A SubQuery carries a
-// single has-values argument, so a predicate with more than one cannot be rebuilt from it.
-func countSubqueries(expr sqlparser.Expr) (count int) {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if _, ok := node.(*sqlparser.Subquery); ok {
-			count++
-			return false, nil
+// hasOtherSubquery reports whether the predicate holds, at its own level, a subquery that is not a repeat of this
+// one in the same position. The argument of this subquery stands in for every subquery in the predicate, which is
+// only right for repeats (#21638).
+func (sq *SubQuery) hasOtherSubquery() (other bool) {
+	_ = sqlparser.Rewrite(sq.Original, func(cursor *sqlparser.Cursor) bool {
+		subq, ok := cursor.Node().(*sqlparser.Subquery)
+		if !ok {
+			return !other
 		}
-		return true, nil
-	}, expr)
-	return count
+		if !sqlparser.Equals.Expr(subq, sq.originalSubquery) || argumentKind(cursor.Parent(), subq) != sq.argumentKind() {
+			other = true
+		}
+		return false
+	}, nil)
+	return other
+}
+
+type subqueryArgKind int
+
+const (
+	valueArg subqueryArgKind = iota
+	inArg
+	notInArg
+	existsArg
+)
+
+func (sq *SubQuery) argumentKind() subqueryArgKind {
+	switch {
+	case sq.FilterType.NeedsExistsArg():
+		return existsArg
+	case sq.FilterType == opcode.PulloutIn:
+		return inArg
+	case sq.FilterType == opcode.PulloutNotIn:
+		return notInArg
+	}
+	return valueArg
+}
+
+func argumentKind(parent sqlparser.SQLNode, subq *sqlparser.Subquery) subqueryArgKind {
+	switch parent := parent.(type) {
+	case *sqlparser.ExistsExpr:
+		return existsArg
+	case *sqlparser.ComparisonExpr:
+		if parent.Right == sqlparser.Expr(subq) {
+			switch parent.Operator {
+			case sqlparser.InOp:
+				return inArg
+			case sqlparser.NotInOp:
+				return notInArg
+			}
+		}
+	}
+	return valueArg
 }
 
 func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operator) Operator {
@@ -273,11 +314,14 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 	}
 
 	// With several subqueries in one predicate, this subquery's argument would stand in for all of them (#21638).
-	if countSubqueries(sq.Original) > 1 {
+	if sq.hasOtherSubquery() {
 		panic(subqueryAmongOthersErr)
 	}
 
 	hasValuesArg := func() string {
+		if sq.HasValuesName != "" {
+			return sq.HasValuesName
+		}
 		s := ctx.ReservedVars.ReserveVariable(string(sqlparser.HasValueSubQueryBaseName))
 		sq.HasValuesName = s
 		return s

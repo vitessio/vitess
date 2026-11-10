@@ -6670,7 +6670,9 @@
                         "OperatorType": "Projection",
                         "Expressions": [
                           "count(*) * count(*) as count(*)",
-                          ":2 as col"
+                          ":2 as col",
+                          ":3 as foo",
+                          ":4 as foo"
                         ],
                         "Inputs": [
                           {
@@ -6680,10 +6682,10 @@
                               {
                                 "OperatorType": "Join",
                                 "Variant": "Join",
-                                "JoinColumnIndexes": "L:0,R:0,R:1,L:2,R:2",
+                                "JoinColumnIndexes": "L:0,R:0,R:1,L:1,R:2",
                                 "JoinVars": {
-                                  "u_col": 1,
-                                  "u_foo": 2
+                                  "u_col": 2,
+                                  "u_foo": 1
                                 },
                                 "Inputs": [
                                   {
@@ -6693,8 +6695,8 @@
                                       "Name": "user",
                                       "Sharded": true
                                     },
-                                    "FieldQuery": "select count(*), u.col, u.foo from `user` as u where 1 != 1 group by u.col, u.foo",
-                                    "Query": "select count(*), u.col, u.foo from `user` as u group by u.col, u.foo"
+                                    "FieldQuery": "select count(*), u.foo, u.col from `user` as u where 1 != 1 group by u.foo, u.col",
+                                    "Query": "select count(*), u.foo, u.col from `user` as u group by u.foo, u.col"
                                   },
                                   {
                                     "OperatorType": "Route",
@@ -6950,6 +6952,579 @@
         "user.music",
         "user.ref",
         "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A sibling subquery correlated with a table of another route keeps that table in the dependencies of the filter, so the predicate lands on the route that has it",
+    "query": "select a.id from user a straight_join music b on a.col = b.col straight_join user_extra c on b.foo = c.col where (select max(col) from ref) = 3 or exists (select 1 from ref r2 where r2.col = c.col)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select a.id from user a straight_join music b on a.col = b.col straight_join user_extra c on b.foo = c.col where (select max(col) from ref) = 3 or exists (select 1 from ref r2 where r2.col = c.col)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "b_foo": 1
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0,R:0",
+            "JoinVars": {
+              "a_col": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select a.id, a.col from `user` as a where 1 != 1",
+                "Query": "select a.id, a.col from `user` as a"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select b.foo from music as b where 1 != 1",
+                "Query": "select b.foo from music as b where b.col = :a_col /* INT16 */"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from user_extra as c where 1 != 1",
+            "Query": "select 1 from user_extra as c where c.col = :b_foo and ((select max(col) from ref) = 3 or exists (select 1 from ref as r2 where r2.col = c.col))"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "count(*) over a filter above a join groups the left side by the columns the filter reads, also when another subquery is pushed into the left side",
+    "query": "select count(*) from user a join music b on a.col = b.col where (b.foo = 1 or a.foo in (select col from user_extra)) and (select max(col) from user_extra) = 3",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user a join music b on a.col = b.col where (b.foo = 1 or a.foo in (select col from user_extra)) and (select max(col) from user_extra) = 3",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from user_extra where 1 != 1",
+                "Query": "select col from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "count(*) * count(*) as count(*)",
+                  ":2 as foo",
+                  ":3 as foo"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Filter",
+                    "Predicate": "b.foo = 1 or :__sq_has_values and a.foo in ::__sq1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,L:1",
+                        "JoinVars": {
+                          "a_col": 2
+                        },
+                        "Inputs": [
+                          {
+                            "OperatorType": "UncorrelatedSubquery",
+                            "Variant": "PulloutValue",
+                            "PulloutVars": [
+                              "__sq2"
+                            ],
+                            "Inputs": [
+                              {
+                                "InputName": "SubQuery",
+                                "OperatorType": "Aggregate",
+                                "Variant": "Scalar",
+                                "Aggregates": "max(0) AS max(col)",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "user",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select max(col) from user_extra where 1 != 1",
+                                    "Query": "select max(col) from user_extra"
+                                  }
+                                ]
+                              },
+                              {
+                                "InputName": "Outer",
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select count(*), a.foo, a.col from `user` as a where 1 != 1 group by a.foo, a.col",
+                                "Query": "select count(*), a.foo, a.col from `user` as a where :__sq2 = 3 group by a.foo, a.col"
+                              }
+                            ]
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), b.foo from music as b where 1 != 1 group by b.foo",
+                            "Query": "select count(*), b.foo from music as b where b.col = :a_col /* INT16 */ group by b.foo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Identical subqueries in one predicate share one argument and plan as before, OR'd comparisons",
+    "query": "select id from user where col = (select max(col) from user_extra) or foo = (select max(col) from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where col = (select max(col) from user_extra) or foo = (select max(col) from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "max(0) AS max(col)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(col) from user_extra where 1 != 1",
+                "Query": "select max(col) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where col = :__sq1 or foo = :__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Identical subqueries in one predicate share one argument and plan as before, in an arithmetic expression",
+    "query": "select id from user where (select max(col) from user_extra) + (select max(col) from user_extra) = 3",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where (select max(col) from user_extra) + (select max(col) from user_extra) = 3",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "max(0) AS max(col)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(col) from user_extra where 1 != 1",
+                "Query": "select max(col) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where :__sq1 + :__sq1 = 3"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Identical subqueries in one predicate share one argument and plan as before, in BETWEEN",
+    "query": "select id from user where col between (select max(col) from user_extra) and (select max(col) from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where col between (select max(col) from user_extra) and (select max(col) from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "max(0) AS max(col)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(col) from user_extra where 1 != 1",
+                "Query": "select max(col) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where col between :__sq1 and :__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Identical subqueries in one predicate share one argument and plan as before, in a function call",
+    "query": "select id from user where col = greatest((select max(col) from user_extra), (select max(col) from user_extra))",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where col = greatest((select max(col) from user_extra), (select max(col) from user_extra))",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "max(0) AS max(col)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(col) from user_extra where 1 != 1",
+                "Query": "select max(col) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where col = greatest(:__sq1, :__sq1)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Identical subqueries in one predicate share one argument and plan as before, OR'd EXISTS keeps both sides of the OR",
+    "query": "select id from user where not exists (select 1 from user_extra) or exists (select 1 from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where not exists (select 1 from user_extra) or exists (select 1 from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutExists",
+        "PulloutVars": [
+          "__sq_has_values"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Limit",
+            "Count": "1",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra where 1 != 1",
+                "Query": "select 1 from user_extra limit 1"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where not :__sq_has_values or :__sq_has_values"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Identical subqueries in one predicate share one argument and plan as before, OR'd IN subqueries share the has-values argument",
+    "query": "select id from user where col in (select col from user_extra) or foo in (select col from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where col in (select col from user_extra) or foo in (select col from user_extra)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from user_extra where 1 != 1",
+            "Query": "select col from user_extra"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where :__sq_has_values and col in ::__sq1 or :__sq_has_values and foo in ::__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "count(*) over a straight_join with an IN subquery groups the left side by every column the join feeds to the right side or the filter reads",
+    "query": "select count(*) from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * count(*) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "JoinVars": {
+                  "u_col": 1,
+                  "u_foo": 2
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "UncorrelatedSubquery",
+                    "Variant": "PulloutIn",
+                    "PulloutVars": [
+                      "__sq_has_values",
+                      "__sq1"
+                    ],
+                    "Inputs": [
+                      {
+                        "InputName": "SubQuery",
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select col from user_extra where 1 != 1",
+                        "Query": "select col from user_extra"
+                      },
+                      {
+                        "InputName": "Outer",
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(*), u.col, u.foo from `user` as u where 1 != 1 group by u.col, u.foo",
+                        "Query": "select count(*), u.col, u.foo from `user` as u where :__sq_has_values and u.foo in ::__sq1 group by u.col, u.foo"
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from music as m where 1 != 1 group by .0",
+                    "Query": "select count(*) from music as m where m.col = :u_col /* INT16 */ group by .0"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
       ]
     },
     "skip_e2e": true
