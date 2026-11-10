@@ -380,7 +380,7 @@ func pushAggregationThroughApplyJoin(ctx *plancontext.PlanningContext, rootAggr 
 
 	splitGroupingToLeftAndRight(ctx, rootAggr, lhs, rhs, join.JoinColumns)
 
-	// We need to add any columns coming from the lhs of the join to the group by on that side
+	// We need to add any columns coming from the lhs of the join, in its predicates or fed to the rhs, to the group by on that side
 	// If we don't, the LHS will not be able to return the column, and it can't be used to send down to the RHS
 	addColumnsFromLHSInJoinPredicates(ctx, join, lhs)
 
@@ -468,27 +468,30 @@ func createJoinPusher(rootAggr *Aggregator, operator Operator) *joinPusher {
 }
 
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *ApplyJoin, lhs *joinPusher) {
+	var bves []BindVarExpr
 	for _, pred := range join.JoinPredicates.columns {
-		for _, bve := range pred.LHSExprs {
-			idx, found := canReuseColumn(ctx, lhs.pushed.Columns, bve.Expr, extractExpr)
-			if !found {
-				idx = len(lhs.pushed.Columns)
-				lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(bve.Expr))
-			}
-			_, found = canReuseColumn(ctx, lhs.pushed.Grouping, bve.Expr, func(by GroupBy) sqlparser.Expr {
-				return by.Inner
-			})
-
-			if found {
-				continue
-			}
-
-			lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
-				Inner:     bve.Expr,
-				ColOffset: idx,
-				WSOffset:  -1,
-			})
+		bves = append(bves, pred.LHSExprs...)
+	}
+	bves = append(bves, join.ExtraLHSVars...)
+	for _, bve := range bves {
+		idx, found := canReuseColumn(ctx, lhs.pushed.Columns, bve.Expr, extractExpr)
+		if !found {
+			idx = len(lhs.pushed.Columns)
+			lhs.pushed.Columns = append(lhs.pushed.Columns, aeWrap(bve.Expr))
 		}
+		_, found = canReuseColumn(ctx, lhs.pushed.Grouping, bve.Expr, func(by GroupBy) sqlparser.Expr {
+			return by.Inner
+		})
+
+		if found {
+			continue
+		}
+
+		lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
+			Inner:     bve.Expr,
+			ColOffset: idx,
+			WSOffset:  -1,
+		})
 	}
 }
 

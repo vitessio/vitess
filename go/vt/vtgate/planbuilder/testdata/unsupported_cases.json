@@ -542,26 +542,56 @@
   {
     "comment": "EXISTS beside another subquery that can't be merged in one predicate is refused, since only the first subquery would run",
     "query": "select id from user where id = 5 or exists (select 1 from user_extra ue where ue.col = 1) or exists (select 1 from music m where m.col = 2)",
-    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
   },
   {
     "comment": "NOT EXISTS beside another subquery that can't be merged in one predicate is refused",
     "query": "select id from user where id = 5 or not exists (select 1 from user_extra ue where ue.col = 1) or exists (select 1 from music m where m.col = 2)",
-    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
   },
   {
     "comment": "a DELETE with EXISTS beside another subquery that can't be merged in one predicate is refused",
     "query": "delete from user where id = 5 or exists (select 1 from user_extra ue where ue.col = 1) or exists (select 1 from music m where m.col = 2)",
-    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
   },
   {
     "comment": "EXISTS beside an IN subquery that can't be merged in one predicate is refused",
     "query": "select id from user where exists (select 1 from user_extra ue where ue.col = 1) or col in (select col from music)",
-    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
   },
   {
     "comment": "an UPDATE with EXISTS beside an IN subquery that can't be merged in one predicate is refused",
     "query": "update user set name = 'x' where exists (select 1 from user_extra ue where ue.col = 1) or col in (select col from music)",
-    "plan": "VT12001: unsupported: EXISTS with an unmergable subquery in a predicate with other subqueries"
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "a correlated EXISTS under an OR over a join with a derived table is refused, since the rest of the predicate would be lost",
+    "query": "select u.id from (select id, col, foo from user) u join music m on u.col = m.col where m.foo = 1 or exists (select 1 from user_extra ue where ue.user_id = u.id)",
+    "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
+  },
+  {
+    "comment": "a correlated EXISTS under an OR over a join with a CTE is refused",
+    "query": "with t as (select id, col, foo from user) select t.id from t join music m on t.col = m.col where m.foo = 1 or exists (select 1 from user_extra ue where ue.user_id = t.id)",
+    "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
+  },
+  {
+    "comment": "an INSERT ... SELECT with a correlated EXISTS under an OR over a join with a derived table is refused",
+    "query": "insert into user_extra(user_id, col) select u.id, u.col from (select id, col from user) u join music m on u.col = m.col where m.foo = 1 or exists (select 1 from user_extra ue where ue.user_id = u.id)",
+    "plan": "VT12001: unsupported: unmergable subquery can not be inside complex expression"
+  },
+  {
+    "comment": "two value subqueries that can't be merged in one predicate over a join are refused, since both would share one argument",
+    "query": "select u.id from user u join music m on u.col = m.col where (select max(col) from user_extra) = u.foo or (select max(col) from user_extra ue where ue.user_id = 5) = m.foo",
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "an IN subquery beside a value subquery that can't be merged in one predicate is refused",
+    "query": "select id from user where col in (select col from music) or col = (select max(col) from user_extra)",
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
+  },
+  {
+    "comment": "two IN subqueries that can't be merged in one predicate are refused, since both would share one argument",
+    "query": "select a.id from user a where a.foo in (select col from user_extra) or a.id in (select user_id from user_extra ue where ue.col = a.col)",
+    "plan": "VT12001: unsupported: unmergable subquery in a predicate with other subqueries"
   }
 ]

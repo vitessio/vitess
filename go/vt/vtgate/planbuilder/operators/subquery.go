@@ -232,7 +232,7 @@ var (
 	subqueryNotAtTopErr   = vterrors.VT12001("unmergable subquery can not be inside complex expression")
 
 	rowSubqueryAmongOthersErr = vterrors.VT12001("row comparison with an unmergable subquery in a predicate with other subqueries")
-	existsAmongOthersErr      = vterrors.VT12001("EXISTS with an unmergable subquery in a predicate with other subqueries")
+	subqueryAmongOthersErr    = vterrors.VT12001("unmergable subquery in a predicate with other subqueries")
 )
 
 func (sq *SubQuery) addLimit() {
@@ -259,6 +259,9 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		if sq.FilterType != opcode.PulloutExists {
 			panic(correlatedSubqueryErr)
 		}
+		if !sq.TopLevel {
+			panic(subqueryNotAtTopErr)
+		}
 		sq.addLimit()
 		return outer
 	}
@@ -269,10 +272,9 @@ func (sq *SubQuery) settleFilter(ctx *plancontext.PlanningContext, outer Operato
 		panic(rowSubqueryAmongOthersErr)
 	}
 
-	// With several subqueries in one predicate there is no single has-values argument to rebuild it from, and the
-	// bare argument would stand in for all of them (#21638).
-	if sq.FilterType.NeedsExistsArg() && countSubqueries(sq.Original) > 1 {
-		panic(existsAmongOthersErr)
+	// With several subqueries in one predicate, this subquery's argument would stand in for all of them (#21638).
+	if countSubqueries(sq.Original) > 1 {
+		panic(subqueryAmongOthersErr)
 	}
 
 	hasValuesArg := func() string {

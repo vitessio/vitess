@@ -396,7 +396,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		return nil, nil
 	}
 
-	if !inner.TopLevel && !inner.IsArgument {
+	if !inner.TopLevel {
 		newOp.Source = newFilter(newOp.Source, newExpr)
 	}
 	outer.RHS = newOp
@@ -425,17 +425,15 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 // instead of the column names
 func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) (sqlparser.Expr, int) {
 	outerID := TableID(outer.LHS)
-	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, nil, func(col *sqlparser.ColName) bool {
+	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
 		return ctx.SemTable.RecursiveDeps(col) == outerID
 	})
 	// Only a successful merge needs the variables that the second pass adds. Otherwise the left
 	// side would select columns that nothing groups on, so the caller truncates ExtraLHSVars to
 	// the length returned here.
 	exactVars := len(outer.ExtraLHSVars)
-	// Outside the subqueries, any column the LHS solves is fed from it, even when the LHS
-	// spans several tables. Inside them, only an exact match is: a sibling subquery that
-	// already merged into the LHS adds its own tables to outerID.
-	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, dontEnterSubqueries, func(col *sqlparser.ColName) bool {
+	// Any column the LHS solves is fed from it, even when the LHS spans several tables.
+	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
 		deps := ctx.SemTable.RecursiveDeps(col)
 		return deps.NotEmpty() && deps.IsSolvedBy(outerID)
 	})
@@ -446,10 +444,9 @@ func rewriteColumnsFedFromLHS(
 	ctx *plancontext.PlanningContext,
 	expression sqlparser.Expr,
 	outer *ApplyJoin,
-	pre func(node, parent sqlparser.SQLNode) bool,
 	fedFromLHS func(*sqlparser.ColName) bool,
 ) sqlparser.Expr {
-	result := sqlparser.CopyOnRewrite(expression, pre, func(cursor *sqlparser.CopyOnWriteCursor) {
+	result := sqlparser.CopyOnRewrite(expression, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok || !fedFromLHS(col) {
 			// we are only interested in columns that are coming from the LHS of the join

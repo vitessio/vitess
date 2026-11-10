@@ -6737,5 +6737,221 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A column of a multi-table left side inside a subquery merged into the right side of a join is fed from the left, next to the rest of the predicate",
+    "query": "select 1 from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.col = m.col where u.foo = 1 or exists (select 1 from user_extra ue2 where ue2.user_id = m.user_id and ue2.col = u.col)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select 1 from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.col = m.col where u.foo = 1 or exists (select 1 from user_extra ue2 where ue2.user_id = m.user_id and ue2.col = u.col)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1,
+          "u_foo": 2
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1, u.col, u.foo from `user` as u, user_extra as ue where 1 != 1",
+            "Query": "select 1, u.col, u.foo from `user` as u, user_extra as ue where u.id = ue.user_id"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ and (:u_foo = 1 or exists (select 1 from user_extra as ue2 where ue2.user_id = m.user_id and ue2.col = :u_col /* INT16 */))"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A column of a multi-table left side inside a subquery on a reference table merged into the right side of a join is fed from the left",
+    "query": "select u.id from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.col = m.col where u.foo = 1 or exists (select 1 from ref r where r.col = u.col)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.col = m.col where u.foo = 1 or exists (select 1 from ref r where r.col = u.col)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "u_col": 1,
+          "u_foo": 2
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select u.id, u.col, u.foo from `user` as u, user_extra as ue where 1 != 1",
+            "Query": "select u.id, u.col, u.foo from `user` as u, user_extra as ue where u.id = ue.user_id"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from music as m where 1 != 1",
+            "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ and (:u_foo = 1 or exists (select 1 from ref as r where r.col = :u_col /* INT16 */))"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "count(*) over a join groups the left side by a column that a subquery merged into the right side reads",
+    "query": "select count(*) from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.col = m.col where u.foo = 1 or exists (select 1 from ref r where r.col = m.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.col = m.col where u.foo = 1 or exists (select 1 from ref r where r.col = m.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * count(*) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "JoinVars": {
+                  "u_col": 1,
+                  "u_foo": 2
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*), u.col, u.foo from `user` as u, user_extra as ue where 1 != 1 group by u.col, u.foo",
+                    "Query": "select count(*), u.col, u.foo from `user` as u, user_extra as ue where u.id = ue.user_id group by u.col, u.foo"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from music as m where 1 != 1 group by .0",
+                    "Query": "select count(*) from music as m where m.col = :u_col /* INT16 */ and (:u_foo = 1 or exists (select 1 from ref as r where r.col = m.col)) group by .0"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "count(*) over a single-route left side groups it by a column that a subquery merged into the right side reads",
+    "query": "select count(*) from user u join music m on u.col = m.col where u.foo = 1 or exists (select 1 from ref r where r.col = m.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*) from user u join music m on u.col = m.col where u.foo = 1 or exists (select 1 from ref r where r.col = m.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_star(0) AS count(*)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "count(*) * count(*) as count(*)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0",
+                "JoinVars": {
+                  "u_col": 1,
+                  "u_foo": 2
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*), u.col, u.foo from `user` as u where 1 != 1 group by u.col, u.foo",
+                    "Query": "select count(*), u.col, u.foo from `user` as u group by u.col, u.foo"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(*) from music as m where 1 != 1 group by .0",
+                    "Query": "select count(*) from music as m where m.col = :u_col /* INT16 */ and (:u_foo = 1 or exists (select 1 from ref as r where r.col = m.col)) group by .0"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
