@@ -85,6 +85,7 @@ func TestMain(m *testing.M) {
 		// Override the default cluster ID to include an underscore to
 		// exercise the gRPC name resolver handling of non-RFC3986 schemes.
 		clusterInstance.VtadminProcess.ClusterID = "local_test"
+		clusterInstance.VtadminProcess.ExtraArgs = append(clusterInstance.VtadminProcess.ExtraArgs, "--enable-dynamic-clusters")
 		err = clusterInstance.VtadminProcess.Setup()
 		if err != nil {
 			return 1
