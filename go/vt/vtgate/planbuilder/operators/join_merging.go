@@ -286,13 +286,13 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 	return &Route{
 		unaryOperator:             newUnaryOp(aj),
 		MergedWith:                []*Route{op2},
-		ContainsSpecialUnionInput: containsSpecialInputAfterJoin(ctx, jm.joinType, op1, op2, r),
+		ContainsSpecialUnionInput: containsSpecialInputAfterJoin(jm.joinType, op1, op2, r),
 		Routing:                   r,
 		Conditions:                conditions,
 	}
 }
 
-func containsSpecialInputAfterJoin(ctx *plancontext.PlanningContext, joinType sqlparser.JoinType, lhs, rhs *Route, routing Routing) bool {
+func containsSpecialInputAfterJoin(joinType sqlparser.JoinType, lhs, rhs *Route, routing Routing) bool {
 	lhsSpecial := routeContainsSpecialUnionInput(lhs)
 	rhsSpecial := routeContainsSpecialUnionInput(rhs)
 	if !lhsSpecial && !rhsSpecial {
@@ -302,8 +302,8 @@ func containsSpecialInputAfterJoin(ctx *plancontext.PlanningContext, joinType sq
 		return true
 	}
 
-	lhsSharded := isOrdinaryShardedRoute(ctx, lhs)
-	rhsSharded := isOrdinaryShardedRoute(ctx, rhs)
+	lhsSharded := isOrdinaryShardedRoute(lhs)
+	rhsSharded := isOrdinaryShardedRoute(rhs)
 	if joinType.IsInner() && (lhsSharded || rhsSharded) {
 		return false
 	}
@@ -313,8 +313,8 @@ func containsSpecialInputAfterJoin(ctx *plancontext.PlanningContext, joinType sq
 	return true
 }
 
-func isOrdinaryShardedRoute(ctx *plancontext.PlanningContext, route *Route) bool {
-	if route == nil || routeContainsSpecialUnionInput(route) || hasGlobalAggregate(ctx, route.Source) {
+func isOrdinaryShardedRoute(route *Route) bool {
+	if route == nil || routeContainsSpecialUnionInput(route) {
 		return false
 	}
 	_, ok := route.Routing.(*ShardedRouting)

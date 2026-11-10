@@ -144,26 +144,26 @@ from (
 	})
 }
 
-func TestUnionAllWildcardOrdering(t *testing.T) {
+func TestUnionAllOrderedLimitPushdown(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
-	mcmp.Exec("insert into t1(id1, id2, gbname) values (1, 1, 'z'), (2, 2, 'a')")
+	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2), (20, 20), (21, 21), (22, 22), (23, 23), (24, 24), (25, 25)")
+	mcmp.Exec("insert into t2(id3, id4) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10)")
+
 	mcmp.AssertMatches(
-		"select * from t1 union all select * from t1 order by gbname",
-		`[[INT64(2) INT64(2) VARBINARY("a")] [INT64(2) INT64(2) VARBINARY("a")] [INT64(1) INT64(1) VARBINARY("z")] [INT64(1) INT64(1) VARBINARY("z")]]`,
+		"select id1 as id from t1 union all select id3 from t2 order by id limit 3",
+		"[[INT64(1)] [INT64(2)] [INT64(3)]]",
 	)
 	mcmp.AssertMatches(
-		"select t.marker as x from (select *, id1 as marker from t1 union all select *, id1 as marker from t1) t order by t.marker",
-		`[[INT64(1)] [INT64(1)] [INT64(2)] [INT64(2)]]`,
-	)
-	mcmp.AssertMatches(
-		"select id1 as x from t1 union all select 0 as y from dual order by x limit 1",
-		`[[INT64(0)]]`,
+		"select id1 as id from t1 union all select id3 from t2 order by id desc limit 3",
+		"[[INT64(25)] [INT64(24)] [INT64(23)]]",
 	)
 }
 
 func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	mcmp, closer := start(t)
 	defer closer()
 
@@ -184,8 +184,16 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 		"[[INT64(100)] [INT64(1)] [INT64(1)] [INT64(2)]]",
 	)
 	mcmp.AssertMatchesNoOrder(
+		"select id1 from t1 where id1 = 1 union all select id from ref union all select id1 from t1",
+		"[[INT64(1)] [INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
 		"select 200 from dual union all select id1 from t1 where id1 = 1 union all select id1 from t1",
 		"[[INT64(200)] [INT64(1)] [INT64(1)] [INT64(2)]]",
+	)
+	mcmp.AssertMatchesNoOrder(
+		"select 1 from dual where exists (select 1 from t1 where id1 = 1) union all select id1 from t1",
+		"[[INT64(1)] [INT64(1)] [INT64(2)]]",
 	)
 	mcmp.AssertMatchesNoOrder(
 		"select r.id from ref r left join t1 u on u.id1 = r.id",

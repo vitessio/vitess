@@ -21,9 +21,7 @@ import (
 	"maps"
 	"slices"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -43,9 +41,9 @@ type (
 		// Routes that have been merged into this one.
 		MergedWith []*Route
 
-		// ContainsSpecialUnionInput is set when the route includes a reference,
-		// dual, or global aggregate input that can return the same rows on every
-		// shard. UNION ALL must not widen such a route to multiple shards.
+		// ContainsSpecialUnionInput is set when the route includes a reference
+		// or dual input that can return the same rows on every shard. UNION ALL
+		// must not widen such a route to multiple shards.
 		ContainsSpecialUnionInput bool
 
 		Routing Routing
@@ -63,9 +61,7 @@ type (
 	}
 
 	RouteOrdering struct {
-		AST                    sqlparser.Expr
-		ColumnName             string
-		WeightStringColumnName string
+		AST sqlparser.Expr
 		// Offset and WOffset will contain the offset to the column (and the weightstring column). -1 if it's missing
 		Offset, WOffset int
 		Direction       sqlparser.OrderDirection
@@ -799,17 +795,9 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			continue
 		}
 		offset := -1
-		columnName := ""
-		weightStringColumnName := ""
 		if hasUnionOperator(r.Source) {
 			if knownOffset, found := knownOutputOffset(ctx, r.Source, order.SimplifiedExpr); found {
 				offset = knownOffset
-			} else if col, ok := order.SimplifiedExpr.(*sqlparser.ColName); ok && hasUnresolvedUnionStar(r.Source) {
-				columnName = col.Name.String()
-				typ, found := ctx.TypeForExpr(order.SimplifiedExpr)
-				if found && sqltypes.IsText(typ.Type()) && typ.Collation() != collations.Unknown && ctx.NeedsWeightString(order.SimplifiedExpr) {
-					weightStringColumnName, _ = addRuntimeWeightStringColumn(r.Source, col)
-				}
 			} else {
 				offset = r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 			}
@@ -818,14 +806,12 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		}
 
 		o := RouteOrdering{
-			AST:                    order.Inner.Expr,
-			ColumnName:             columnName,
-			WeightStringColumnName: weightStringColumnName,
-			Offset:                 offset,
-			WOffset:                -1,
-			Direction:              order.Inner.Direction,
+			AST:       order.Inner.Expr,
+			Offset:    offset,
+			WOffset:   -1,
+			Direction: order.Inner.Direction,
 		}
-		if columnName == "" && ctx.NeedsWeightString(order.SimplifiedExpr) {
+		if ctx.NeedsWeightString(order.SimplifiedExpr) {
 			ws := weightStringFor(order.SimplifiedExpr)
 			offset := r.AddColumn(ctx, true, false, aeWrap(ws))
 			o.WOffset = offset

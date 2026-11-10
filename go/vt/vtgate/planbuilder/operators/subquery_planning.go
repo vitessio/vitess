@@ -766,7 +766,7 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 
 	// we can merge dual-outer subqueries only if the
 	// inner is guaranteed to hit a single shard
-	case inRoute.IsSingleShard() && len(joinPredicates) == 0 &&
+	case inRoute.IsSingleShard() && !routeUsesSubqueryJoinArgument(inRoute, m.subq) &&
 		(outer == dual || (outer == anyShard && sameKeyspace)):
 		return m.merge(ctx, inRoute, outRoute, inRouting)
 
@@ -784,6 +784,41 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 	default:
 		return nil
 	}
+}
+
+func routeUsesSubqueryJoinArgument(route *Route, subquery *SubQuery) bool {
+	routing, ok := route.Routing.(*ShardedRouting)
+	if !ok || routing.Selected == nil || subquery == nil {
+		return false
+	}
+
+	joinArguments := make(map[string]struct{})
+	for _, joinColumn := range subquery.JoinColumns {
+		for _, expression := range joinColumn.LHSExprs {
+			joinArguments[expression.Name] = struct{}{}
+		}
+	}
+	if len(joinArguments) == 0 {
+		return false
+	}
+
+	for _, value := range routing.VindexExpressions() {
+		usesJoinArgument := false
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			argument, ok := node.(*sqlparser.Argument)
+			if ok {
+				if _, found := joinArguments[argument.Name]; found {
+					usesJoinArgument = true
+					return false, io.EOF
+				}
+			}
+			return true, nil
+		}, value)
+		if usesJoinArgument {
+			return true
+		}
+	}
+	return false
 }
 
 func mergedWith(inner *Route, outer *Route) []*Route {

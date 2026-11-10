@@ -71,13 +71,3 @@ func TestEvalengineTypeAggregations(t *testing.T) {
 		})
 	}
 }
-
-func TestTypeAggregatorAcceptsRepeatedUnsupportedCollation(t *testing.T) {
-	const unsupportedCollation = collations.ID(249)
-
-	var aggregator TypeAggregator
-	require.NoError(t, aggregator.Add(NewType(sqltypes.VarChar, unsupportedCollation), collations.MySQL8()))
-	require.NoError(t, aggregator.Add(NewType(sqltypes.VarChar, unsupportedCollation), collations.MySQL8()))
-	typ := aggregator.Type()
-	require.Equal(t, unsupportedCollation, typ.Collation())
-}

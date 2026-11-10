@@ -259,7 +259,7 @@ func TestUpperLimitAcrossUnion(t *testing.T) {
 		order := []OrderBy{{SimplifiedExpr: sqlparser.NewColName("id")}}
 		op := &Ordering{unaryOperator: newUnaryOp(&Union{}), Order: order}
 		limit := newLimit(op, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, false)
-		result, rewrite := setUpperLimit(limit)
+		result, rewrite := setUpperLimit(nil, limit)
 		assert.Same(t, limit, result)
 		assert.Equal(t, NoRewrite, rewrite)
 		assert.False(t, limit.Pushed)
@@ -267,7 +267,7 @@ func TestUpperLimitAcrossUnion(t *testing.T) {
 
 	t.Run("outer DISTINCT over UNION ALL keeps all arm rows", func(t *testing.T) {
 		limit := newLimit(newDistinct(&Union{}, nil, true), &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, true)
-		result, rewrite := setUpperLimit(limit)
+		result, rewrite := setUpperLimit(nil, limit)
 		assert.Same(t, limit, result)
 		assert.Equal(t, NoRewrite, rewrite)
 		assert.False(t, limit.Pushed)
@@ -275,7 +275,7 @@ func TestUpperLimitAcrossUnion(t *testing.T) {
 
 	t.Run("UNION DISTINCT keeps all arm rows", func(t *testing.T) {
 		limit := newLimit(&Union{distinct: true}, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, false)
-		result, rewrite := setUpperLimit(limit)
+		result, rewrite := setUpperLimit(nil, limit)
 		assert.Same(t, limit, result)
 		assert.Equal(t, NoRewrite, rewrite)
 		assert.False(t, limit.Pushed)

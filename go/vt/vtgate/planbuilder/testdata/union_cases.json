@@ -1,47 +1,5 @@
 [
   {
-    "comment": "UNION ALL keeps reference rows when an aggregate join can return rows on every shard",
-    "query": "select r.id from ref r join (select count(*) as n from user where id = 1) a on 1 = 1 union all select id from user",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "select r.id from ref r join (select count(*) as n from user where id = 1) a on 1 = 1 union all select id from user",
-      "Instructions": {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select r.id from (select count(*) as n from `user` where 1 != 1) as a, ref as r where 1 != 1",
-            "Query": "select r.id from (select count(*) as n from `user` where id = 1) as a, ref as r where 1 = 1",
-            "Values": [
-              "1"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.ref",
-        "user.user"
-      ]
-    }
-  },
-  {
     "comment": "UNION ALL after an inner reference join can merge into a scatter route",
     "query": "select * from (select u.* from user u join ref r on u.id = r.id union all select * from user) as t",
     "plan": {
@@ -747,73 +705,6 @@
         "user.user"
       ]
     }
-  },
-  {
-    "comment": "UNION ALL keeps a global aggregate single-shard",
-    "query": "select count(*) from user where id = 1 union all select id from user",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "select count(*) from user where id = 1 union all select id from user",
-      "Instructions": {
-        "OperatorType": "Concatenate",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select count(*) from `user` where 1 != 1",
-            "Query": "select count(*) from `user` where id = 1",
-            "Values": [
-              "1"
-            ],
-            "Vindex": "user_index"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select id from `user` where 1 != 1",
-            "Query": "select id from `user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    },
-    "skip_e2e": true
-  },
-  {
-    "comment": "UNION ALL allows aggregate joins constrained by sharded rows",
-    "query": "select u.*, u.id from user u join (select count(*) as n from ref) a on 1 = 1 where u.id = 1 union all select *, id from user order by id",
-    "plan": {
-      "Type": "Scatter",
-      "QueryType": "SELECT",
-      "Original": "select u.*, u.id from user u join (select count(*) as n from ref) a on 1 = 1 where u.id = 1 union all select *, id from user order by id",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select u.*, u.id from (select count(*) as n from ref where 1 != 1) as a, `user` as u where 1 != 1 union all select *, id from `user` where 1 != 1",
-        "OrderBy": "id ASC",
-        "Query": "select u.*, u.id from (select count(*) as n from ref) as a, `user` as u where u.id = 1 and 1 = 1 union all select *, id from `user` order by id asc"
-      },
-      "TablesUsed": [
-        "user.ref",
-        "user.user"
-      ]
-    },
-    "skip_e2e": true
   },
   {
     "comment": "union of information_schema with normal table",
@@ -3463,12 +3354,12 @@
     "skip_e2e": true
   },
   {
-    "comment": "ordered UNION ALL applies the upper limit after ordering",
-    "query": "select id from user union all select id from unsharded order by id limit 5",
+    "comment": "ordered UNION ALL pushes a typed order and upper limit into each arm",
+    "query": "select cast(id as signed) as id from user union all select cast(id as signed) as id from unsharded order by id limit 5",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select id from user union all select id from unsharded order by id limit 5",
+      "Original": "select cast(id as signed) as id from user union all select cast(id as signed) as id from unsharded order by id limit 5",
       "Instructions": {
         "OperatorType": "Limit",
         "Count": "5",
@@ -3489,9 +3380,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select id, id, weight_string(id) from `user` where 1 != 1",
-                    "OrderBy": "(1|2) ASC",
-                    "Query": "select id, id, weight_string(id) from `user` order by id asc limit :__upper_limit"
+                    "FieldQuery": "select cast(id as signed) as id, weight_string(cast(id as signed)) from `user` where 1 != 1",
+                    "OrderBy": "(0|1) ASC",
+                    "Query": "select cast(id as signed) as id, weight_string(cast(id as signed)) from `user` order by cast(id as signed) asc limit :__upper_limit"
                   },
                   {
                     "OperatorType": "Route",
@@ -3500,8 +3391,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select id from unsharded where 1 != 1",
-                    "Query": "select id from unsharded order by id asc limit :__upper_limit"
+                    "FieldQuery": "select cast(id as signed) as id from unsharded where 1 != 1",
+                    "Query": "select cast(id as signed) as id from unsharded order by cast(id as signed) asc limit :__upper_limit"
                   }
                 ]
               }
@@ -3580,7 +3471,7 @@
     "skip_e2e": true
   },
   {
-    "comment": "UNION sort defers unknown collation resolution to result fields",
+    "comment": "UNION sort does not infer unknown collation from result fields",
     "query": "select 'All' as name from unsharded union all select name from user order by name",
     "plan": {
       "Type": "Complex",
@@ -3620,6 +3511,79 @@
       },
       "TablesUsed": [
         "main.unsharded",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "qualified ORDER BY resolves the projected expression instead of a matching alias",
+    "query": "select t.col as id, t.id as col from (select col, id from user union all select col, id from user) t order by t.id",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select t.col as id, t.id as col from (select col, id from user union all select col, id from user) t order by t.id",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select t.col as id, t.id as col, weight_string(t.id) from (select col, id from `user` where 1 != 1 union all select col, id from `user` where 1 != 1) as t where 1 != 1",
+        "OrderBy": "(1|2) ASC",
+        "Query": "select t.col as id, t.id as col, weight_string(t.id) from (select col, id from `user` union all select col, id from `user`) as t order by t.id asc",
+        "ResultColumns": 2
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "mixed UNION ALL and UNION with ORDER BY and LIMIT plans successfully",
+    "query": "select cast(id as signed) as id from ref union all select cast(id as signed) from user union select cast(id as signed) from music order by id limit 5",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select cast(id as signed) as id from ref union all select cast(id as signed) from user union select cast(id as signed) from music order by id limit 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "1 ASC",
+            "ResultColumns": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:2)",
+                  "(1:3)"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id, id from (select cast(id as signed) as id from ref where 1 != 1 union select cast(id as signed) from `user` where 1 != 1 union select cast(id as signed) from music where 1 != 1) as dt(c0) where 1 != 1) as dt(c0, c1) where 1 != 1",
+                    "Query": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id, id from (select cast(id as signed) as id from ref union select cast(id as signed) from `user` union select cast(id as signed) from music) as dt(c0) limit :__upper_limit) as dt(c0, c1)"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
         "user.user"
       ]
     },

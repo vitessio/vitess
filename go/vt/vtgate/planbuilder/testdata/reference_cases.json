@@ -2,7 +2,6 @@
   {
     "comment": "UNION ALL does not widen a single-shard route containing a reference arm",
     "query": "select id from ref union all select id from user where id = 1 union all select id from user",
-    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
@@ -40,12 +39,12 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "UNION ALL does not widen a single-shard route containing a cross-keyspace reference arm",
     "query": "select id from source_of_ref union all select id from user where id = 1 union all select id from user",
-    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
@@ -83,7 +82,8 @@
         "user.ref_with_source",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "UNION ALL returns reference rows once",
@@ -1129,6 +1129,34 @@
     "skip_e2e": true
   },
   {
+    "comment": "correlated EXISTS can use a constant single-shard vindex route",
+    "query": "select id from ref r where exists (select 1 from user u where u.id = 5 and u.col = r.col)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select id from ref r where exists (select 1 from user u where u.id = 5 and u.col = r.col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from ref as r where 1 != 1",
+        "Query": "select id from ref as r where exists (select 1 from `user` as u where u.id = 5 and u.col = r.col)",
+        "Values": [
+          "5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "reference UNION ALL with a lookup arm preserves reference rows on a miss",
     "query": "select id from ref union all select id from music where id = 1",
     "plan": {
@@ -1176,6 +1204,147 @@
       "TablesUsed": [
         "user.music",
         "user.ref"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "reference provenance survives a CTE before UNION ALL",
+    "query": "with r as (select id from ref) select id from r union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with r as (select id from ref) select id from r union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from (select id from ref where 1 != 1) as r where 1 != 1",
+            "Query": "select id from (select id from ref) as r"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "reference provenance survives a derived table before UNION ALL",
+    "query": "select id from (select id from ref) r union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from ref) r union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from (select id from ref where 1 != 1) as r where 1 != 1",
+            "Query": "select id from (select id from ref) as r"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "reference provenance survives a correlated EXISTS before UNION ALL",
+    "query": "select id from ref r where exists (select 1 from user u where u.id = r.id) union all select id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from ref r where exists (select 1 from user u where u.id = r.id) union all select id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "r_id": 0
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select id from ref as r where 1 != 1",
+                "Query": "select id from ref as r"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from `user` as u where 1 != 1",
+                "Query": "select 1 from `user` as u where u.id = :r_id limit 1",
+                "Values": [
+                  ":r_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
       ]
     },
     "skip_e2e": true

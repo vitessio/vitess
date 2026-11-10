@@ -174,8 +174,6 @@ type (
 		// ColumnName is used to resolve an order column at runtime when the
 		// projection includes a wildcard and its offset is not known at plan time.
 		ColumnName string
-		// WeightStringColumnName identifies a runtime-resolved shard weight string.
-		WeightStringColumnName string
 		// WeightStringCol is the weight_string column that will be used for sorting.
 		// It is set to -1 if such a column is not added to the query
 		WeightStringCol int
@@ -203,8 +201,6 @@ func (obp *OrderByParams) String() string {
 	}
 	if obp.WeightStringCol != -1 && obp.WeightStringCol != obp.Col {
 		val = fmt.Sprintf("(%s|%d)", val, obp.WeightStringCol)
-	} else if obp.WeightStringColumnName != "" {
-		val = fmt.Sprintf("(%s|%s)", val, obp.WeightStringColumnName)
 	}
 	if obp.Desc {
 		val += " DESC"
@@ -232,30 +228,12 @@ func (obp *OrderByParams) ResolveColumnName(fields []*querypb.Field) error {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not resolve ORDER BY column %q in result fields", obp.ColumnName)
 		}
 	}
-	if obp.WeightStringCol < 0 && obp.WeightStringColumnName != "" {
-		for idx, field := range fields {
-			if strings.EqualFold(field.Name, obp.WeightStringColumnName) {
-				obp.WeightStringCol = idx
-				break
-			}
-		}
-		if obp.WeightStringCol < 0 {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not resolve ORDER BY weight string column %q in result fields", obp.WeightStringColumnName)
-		}
-	}
 	return nil
 }
 
 func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 	v1 := r1[obp.Col]
 	v2 := r2[obp.Col]
-	if obp.WeightStringColumnName != "" && obp.WeightStringCol >= 0 {
-		cmp := compareWeightStrings(r1[obp.WeightStringCol], r2[obp.WeightStringCol])
-		if obp.Desc {
-			return -cmp
-		}
-		return cmp
-	}
 	cmp := v1.TinyWeightCmp(v2)
 
 	if cmp == 0 {
@@ -280,19 +258,6 @@ func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {
 		cmp = -cmp
 	}
 	return cmp
-}
-
-func compareWeightStrings(v1, v2 sqltypes.Value) int {
-	if v1.IsNull() {
-		if v2.IsNull() {
-			return 0
-		}
-		return -1
-	}
-	if v2.IsNull() {
-		return 1
-	}
-	return bytes.Compare(v1.Raw(), v2.Raw())
 }
 
 func (cmp Comparison) tinyWeighters(fields []*querypb.Field) []tinyWeighter {

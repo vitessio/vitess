@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 // mergeUnionInputInAnyOrder merges sources the sources of the union in any order
@@ -112,8 +111,7 @@ func mergeUnionInputs(
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
 	lhsInput, rhsInput := operatorsToRoutes(lhs, rhs)
-	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput) ||
-		routeContainsGlobalAggregate(ctx, lhsInput) || routeContainsGlobalAggregate(ctx, rhsInput)
+	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput)
 
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
@@ -134,8 +132,8 @@ func mergeUnionInputs(
 		return nil, nil
 	}
 
-	// A UNION ALL route containing a reference, dual, or global aggregate input
-	// may be merged while single-shard, but must not later widen to multi-shard.
+	// A UNION ALL route containing a reference or dual input may be merged while
+	// single-shard, but must not later widen to multi-shard.
 	if !distinct && containsSpecialInput &&
 		((a == sharded && !isSingleShardRouting(routingA)) || (b == sharded && !isSingleShardRouting(routingB))) {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
@@ -187,37 +185,6 @@ func routeContainsSpecialUnionInput(route *Route) bool {
 	return false
 }
 
-func routeContainsGlobalAggregate(ctx *plancontext.PlanningContext, route *Route) bool {
-	return route != nil && hasGlobalAggregate(ctx, route.Source)
-}
-
-func hasUnresolvedUnionStar(op Operator) bool {
-	switch op := op.(type) {
-	case *Union:
-		return slices.ContainsFunc(op.unionColumns, func(expr sqlparser.SelectExpr) bool {
-			_, isStar := expr.(*sqlparser.StarExpr)
-			return isStar
-		})
-	case *Filter:
-		return hasUnresolvedUnionStar(op.Source)
-	case *Distinct:
-		return hasUnresolvedUnionStar(op.Source)
-	case *Limit:
-		return hasUnresolvedUnionStar(op.Source)
-	case *Ordering:
-		return hasUnresolvedUnionStar(op.Source)
-	case *LockAndComment:
-		return hasUnresolvedUnionStar(op.Source)
-	case *Horizon:
-		return queryHasStarProjection(op.Query)
-	case *Projection:
-		_, hasStar := op.Columns.(StarProjections)
-		return hasStar
-	default:
-		return slices.ContainsFunc(op.Inputs(), hasUnresolvedUnionStar)
-	}
-}
-
 func hasUnionOperator(op Operator) bool {
 	if op == nil {
 		return false
@@ -241,7 +208,7 @@ func knownOutputOffset(ctx *plancontext.PlanningContext, op Operator, expr sqlpa
 			if sqlparser.Equals.Expr(expr, selectExpr.Expr) || ctx.SemTable.EqualsExprWithDeps(expr, selectExpr.Expr) {
 				return offset, true
 			}
-			if col, isColumn := expr.(*sqlparser.ColName); isColumn && col.Name.EqualString(selectExpr.ColumnName()) {
+			if col, isColumn := expr.(*sqlparser.ColName); isColumn && col.Qualifier.IsEmpty() && col.Name.EqualString(selectExpr.ColumnName()) {
 				return offset, true
 			}
 		}
@@ -285,203 +252,10 @@ func queryOutputSelectExprs(query sqlparser.TableStatement) ([]sqlparser.SelectE
 	}
 }
 
-func queryHasStarProjection(query sqlparser.TableStatement) bool {
-	switch query := query.(type) {
-	case *sqlparser.Select:
-		if query.SelectExprs == nil {
-			return false
-		}
-		return slices.ContainsFunc(query.SelectExprs.Exprs, func(expr sqlparser.SelectExpr) bool {
-			_, isStar := expr.(*sqlparser.StarExpr)
-			return isStar
-		})
-	case *sqlparser.Union:
-		return queryHasStarProjection(query.Left)
-	default:
-		return false
-	}
-}
-
-func addRuntimeWeightStringColumn(op Operator, expr *sqlparser.ColName) (string, bool) {
-	switch op := op.(type) {
-	case *Union:
-		return op.addRuntimeWeightStringColumn(expr)
-	case *Filter:
-		return addRuntimeWeightStringColumn(op.Source, expr)
-	case *Distinct:
-		return addRuntimeWeightStringColumn(op.Source, expr)
-	case *Limit:
-		return addRuntimeWeightStringColumn(op.Source, expr)
-	case *Ordering:
-		return addRuntimeWeightStringColumn(op.Source, expr)
-	case *LockAndComment:
-		return addRuntimeWeightStringColumn(op.Source, expr)
-	default:
-		return "", false
-	}
-}
-
 func markSpecialUnionInput(op Operator, contains bool) {
 	if route, ok := op.(*Route); ok && contains {
 		route.ContainsSpecialUnionInput = true
 	}
-}
-
-func hasGlobalAggregate(ctx *plancontext.PlanningContext, op Operator) bool {
-	return classifyUnionInput(ctx, op).globalAggregate
-}
-
-type unionInputProperties struct {
-	globalAggregate     bool
-	ordinaryShardedRows bool
-}
-
-func classifyUnionInput(ctx *plancontext.PlanningContext, op Operator) unionInputProperties {
-	if op == nil {
-		return unionInputProperties{}
-	}
-	if agg, ok := op.(*Aggregator); ok && len(agg.Grouping) == 0 && len(agg.Aggregations) > 0 {
-		return unionInputProperties{globalAggregate: true}
-	}
-	switch op := op.(type) {
-	case *Route:
-		props := classifyUnionInput(ctx, op.Source)
-		_, sharded := op.Routing.(*ShardedRouting)
-		props.ordinaryShardedRows = sharded && !routeContainsSpecialUnionInput(op) && !props.globalAggregate
-		return props
-	case *Horizon:
-		return classifyUnionQuery(ctx, op.Query)
-	case *Join:
-		return combineUnionInputProperties(op.JoinType, classifyUnionInput(ctx, op.LHS), classifyUnionInput(ctx, op.RHS))
-	case *ApplyJoin:
-		return combineUnionInputProperties(op.JoinType, classifyUnionInput(ctx, op.LHS), classifyUnionInput(ctx, op.RHS))
-	}
-
-	var props unionInputProperties
-	for _, input := range op.Inputs() {
-		child := classifyUnionInput(ctx, input)
-		props.globalAggregate = props.globalAggregate || child.globalAggregate
-		props.ordinaryShardedRows = props.ordinaryShardedRows || child.ordinaryShardedRows
-	}
-	if props.globalAggregate {
-		props.ordinaryShardedRows = false
-	}
-	return props
-}
-
-func combineUnionInputProperties(joinType sqlparser.JoinType, lhs, rhs unionInputProperties) unionInputProperties {
-	props := unionInputProperties{
-		globalAggregate: hasGlobalAggregateAcrossJoin(joinType, lhs.globalAggregate, rhs.globalAggregate, lhs.ordinaryShardedRows, rhs.ordinaryShardedRows),
-	}
-	if !props.globalAggregate {
-		if joinType.IsInner() {
-			props.ordinaryShardedRows = lhs.ordinaryShardedRows || rhs.ordinaryShardedRows
-		} else if joinType == sqlparser.LeftJoinType || joinType == sqlparser.NaturalLeftJoinType {
-			props.ordinaryShardedRows = lhs.ordinaryShardedRows
-		}
-	}
-	return props
-}
-
-func classifyUnionQuery(ctx *plancontext.PlanningContext, query sqlparser.SQLNode) unionInputProperties {
-	switch query := query.(type) {
-	case *sqlparser.Select:
-		if query.GroupBy == nil && (ctx.ContainsAggr(query.SelectExprs) || ctx.ContainsAggr(query.Having)) {
-			return unionInputProperties{globalAggregate: true}
-		}
-		if query.With != nil {
-			for _, cte := range query.With.CTEs {
-				if classifyUnionQuery(ctx, cte.Subquery).globalAggregate {
-					return unionInputProperties{globalAggregate: true}
-				}
-			}
-		}
-		for _, expression := range []sqlparser.SQLNode{query.SelectExprs, query.Where, query.Having, query.GroupBy, query.OrderBy} {
-			if hasGlobalAggregateSubquery(ctx, expression) {
-				return unionInputProperties{globalAggregate: true}
-			}
-		}
-		return classifyUnionTableExprs(ctx, query.From)
-	case *sqlparser.Union:
-		if query.With != nil {
-			for _, cte := range query.With.CTEs {
-				if classifyUnionQuery(ctx, cte.Subquery).globalAggregate {
-					return unionInputProperties{globalAggregate: true}
-				}
-			}
-		}
-		if hasGlobalAggregateSubquery(ctx, query.OrderBy) || hasGlobalAggregateSubquery(ctx, query.Limit) {
-			return unionInputProperties{globalAggregate: true}
-		}
-		lhs := classifyUnionQuery(ctx, query.Left)
-		rhs := classifyUnionQuery(ctx, query.Right)
-		props := unionInputProperties{globalAggregate: lhs.globalAggregate || rhs.globalAggregate}
-		if !props.globalAggregate {
-			props.ordinaryShardedRows = lhs.ordinaryShardedRows || rhs.ordinaryShardedRows
-		}
-		return props
-	default:
-		return unionInputProperties{}
-	}
-}
-
-func hasGlobalAggregateSubquery(ctx *plancontext.PlanningContext, node sqlparser.SQLNode) bool {
-	if node == nil {
-		return false
-	}
-	found := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		if subquery, ok := node.(*sqlparser.Subquery); ok {
-			found = classifyUnionQuery(ctx, subquery.Select).globalAggregate
-			return false, nil
-		}
-		return !found, nil
-	}, node)
-	return found
-}
-
-func classifyUnionTableExprs(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) unionInputProperties {
-	var props unionInputProperties
-	for _, expr := range exprs {
-		props = combineUnionInputProperties(sqlparser.NormalJoinType, props, classifyUnionTableExpr(ctx, expr))
-	}
-	return props
-}
-
-func classifyUnionTableExpr(ctx *plancontext.PlanningContext, expr sqlparser.TableExpr) unionInputProperties {
-	switch expr := expr.(type) {
-	case *sqlparser.AliasedTableExpr:
-		if derived, ok := expr.Expr.(*sqlparser.DerivedTable); ok {
-			return classifyUnionQuery(ctx, derived.Select)
-		}
-		tableSet := ctx.SemTable.TableSetFor(expr)
-		if tableSet.NumberOfTables() != 1 {
-			return unionInputProperties{}
-		}
-		tableInfo, err := ctx.SemTable.TableInfoFor(tableSet)
-		if err != nil {
-			return unionInputProperties{}
-		}
-		table := tableInfo.GetVindexTable()
-		if table != nil && table.Keyspace != nil && table.Keyspace.Sharded && table.Type != vindexes.TypeReference {
-			return unionInputProperties{ordinaryShardedRows: true}
-		}
-	case *sqlparser.JoinTableExpr:
-		return combineUnionInputProperties(expr.Join, classifyUnionTableExpr(ctx, expr.LeftExpr), classifyUnionTableExpr(ctx, expr.RightExpr))
-	case *sqlparser.ParenTableExpr:
-		return classifyUnionTableExprs(ctx, expr.Exprs)
-	}
-	return unionInputProperties{}
-}
-
-func hasGlobalAggregateAcrossJoin(joinType sqlparser.JoinType, lhsAggregate, rhsAggregate, lhsShardedRows, rhsShardedRows bool) bool {
-	if joinType.IsInner() {
-		return (lhsAggregate && !rhsShardedRows) || (rhsAggregate && !lhsShardedRows)
-	}
-	if joinType == sqlparser.LeftJoinType || joinType == sqlparser.NaturalLeftJoinType {
-		return lhsAggregate || (rhsAggregate && !lhsShardedRows)
-	}
-	return lhsAggregate || rhsAggregate
 }
 
 // tryMergeNoneUnion merges a union pairing in which at least one side has a

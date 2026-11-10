@@ -21,10 +21,13 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -362,7 +365,7 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 		in.Source = src.Source
 		return in, Rewrote("merged two limits")
 	}
-	return setUpperLimit(in)
+	return setUpperLimit(ctx, in)
 }
 
 func mergeLimits(l1, l2 *sqlparser.Limit) *sqlparser.Limit {
@@ -556,7 +559,7 @@ func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src
 	}
 
 	if sqlparser.IsDMLStatement(ctx.Statement) {
-		return setUpperLimit(in)
+		return setUpperLimit(ctx, in)
 	}
 
 	// this limit has already been pushed down, nothing to do here
@@ -575,7 +578,7 @@ func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src
 	return in, Rewrote("pushed limit under route")
 }
 
-func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
+func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *ApplyResult) {
 	if in.Pushed {
 		debugNoRewrite("limit push blocked: upper limit already set")
 		return in, NoRewrite
@@ -584,7 +587,7 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		debugNoRewrite("limit push blocked: distinct union needs all arm rows")
 		return in, NoRewrite
 	}
-	orderToPush, safe := findOrderingInSourceChain(in.Source)
+	orderToPush, safe := findOrderingInSourceChain(ctx, in.Source)
 	if !safe {
 		debugNoRewrite("limit push blocked: UNION requires all rows or ordering mapped to each arm")
 		return in, NoRewrite
@@ -608,8 +611,8 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		case *Route:
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
 			src := op.Source
-			if len(orderToPush) > 0 {
-				src = newOrdering(src, orderToPush)
+			if order, ok := orderToPush[op]; ok && len(order) > 0 {
+				src = newOrdering(src, order)
 			}
 			op.Source = newLimit(src, ast, false)
 			result = result.Merge(Rewrote("push upper limit under route"))
@@ -627,7 +630,7 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 // into a route with the limit. A limit cannot safely cross an ordered UNION
 // unless the ordering expression is mapped to every arm. The boolean is false
 // when UNION semantics require all arm rows or that per-arm mapping.
-func findOrderingInSourceChain(op Operator) ([]OrderBy, bool) {
+func findOrderingInSourceChain(ctx *plancontext.PlanningContext, op Operator) (map[*Route][]OrderBy, bool) {
 	var order []OrderBy
 	window := false
 	for {
@@ -638,22 +641,124 @@ func findOrderingInSourceChain(op Operator) ([]OrderBy, bool) {
 		case *Window:
 			window = true
 		case *Union:
-			return nil, len(order) == 0 && !src.distinct
+			return mapUnionArmOrdering(ctx, src, order)
 		case *Route:
 			if window {
-				return order, true
+				return map[*Route][]OrderBy{src: order}, true
 			}
-			return nil, true
+			return map[*Route][]OrderBy{src: nil}, true
 		}
 		inputs := op.Inputs()
 		if len(inputs) != 1 {
 			if window {
-				return order, true
+				return nil, true
 			}
 			return nil, true
 		}
 		op = inputs[0]
 	}
+}
+
+func mapUnionArmOrdering(ctx *plancontext.PlanningContext, union *Union, order []OrderBy) (map[*Route][]OrderBy, bool) {
+	if union.distinct {
+		return nil, false
+	}
+	if len(order) == 0 {
+		return nil, true
+	}
+	if ctx == nil {
+		return nil, false
+	}
+
+	outputOffsets := make([]int, len(order))
+	for i, by := range order {
+		offset, ok := knownOutputOffset(ctx, union, by.SimplifiedExpr)
+		if !ok {
+			return nil, false
+		}
+		outputOffsets[i] = offset
+	}
+
+	routes := make(map[*Route][]OrderBy)
+	var commonTypes []string
+	for sourceIdx, source := range union.Sources {
+		columns := source.GetColumns(ctx)
+		armOrder := make([]OrderBy, len(order))
+		for i, offset := range outputOffsets {
+			if offset >= len(columns) {
+				return nil, false
+			}
+			expr := columns[offset].Expr
+			typ, found := ctx.TypeForExpr(expr)
+			typeKey := ""
+			if found && typ.Type() != sqltypes.Unknown && (!sqltypes.IsText(typ.Type()) || typ.Collation() != collations.Unknown) {
+				typeKey = fmt.Sprintf("%d:%d", typ.Type(), typ.Collation())
+			} else if typeKey, found = knownNumericCastType(expr); !found {
+				return nil, false
+			}
+			if sourceIdx == 0 {
+				commonTypes = append(commonTypes, typeKey)
+			} else if commonTypes[i] != typeKey {
+				return nil, false
+			}
+			armOrder[i] = order[i]
+			armOrder[i].Inner = sqlparser.Clone(order[i].Inner)
+			armOrder[i].Inner.Expr = sqlparser.Clone(expr)
+			armOrder[i].SimplifiedExpr = sqlparser.Clone(expr)
+		}
+		armRoutes := routesForUnionArm(source)
+		if len(armRoutes) != 1 {
+			return nil, false
+		}
+		routes[armRoutes[0]] = armOrder
+	}
+	return routes, true
+}
+
+func knownNumericCastType(expr sqlparser.Expr) (string, bool) {
+	var castType *sqlparser.ConvertType
+	switch expr := expr.(type) {
+	case *sqlparser.CastExpr:
+		castType = expr.Type
+	case *sqlparser.ConvertExpr:
+		castType = expr.Type
+	default:
+		return "", false
+	}
+	if castType == nil {
+		return "", false
+	}
+	typeName := strings.ToLower(castType.Type)
+	switch typeName {
+	case "signed", "signed integer", "unsigned", "unsigned integer", "decimal", "numeric", "float", "double", "real", "integer", "int":
+		length, scale := "", ""
+		if castType.Length != nil {
+			length = strconv.Itoa(*castType.Length)
+		}
+		if castType.Scale != nil {
+			scale = strconv.Itoa(*castType.Scale)
+		}
+		return fmt.Sprintf("cast:%s:%s:%s", typeName, length, scale), true
+	default:
+		return "", false
+	}
+}
+
+func routesForUnionArm(op Operator) []*Route {
+	if route, ok := op.(*Route); ok {
+		return []*Route{route}
+	}
+	if _, ok := op.(*Join); ok {
+		return nil
+	}
+	if _, ok := op.(*ApplyJoin); ok {
+		return nil
+	}
+	var routes []*Route
+	for _, input := range op.Inputs() {
+		routes = append(routes, routesForUnionArm(input)...)
+	}
+	return routes
 }
 
 func hasDistinctUnion(op Operator) bool {

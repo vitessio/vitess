@@ -119,37 +119,6 @@ func TestMergeSortResolvesOrderColumnFromFields(t *testing.T) {
 	require.Equal(t, []string{"1", "2", "3", "4"}, got)
 }
 
-func TestMergeSortResolvesWeightStringColumnFromFields(t *testing.T) {
-	fields := []*querypb.Field{
-		{Name: "name", Type: querypb.Type_VARCHAR, Charset: 249},
-		{Name: "__vtgate_orderby_weight_string_1", Type: querypb.Type_VARBINARY, Charset: uint32(collations.CollationBinaryID)},
-	}
-	prims := []StreamExecutor{
-		&shardResult{results: sqltypes.MakeTestStreamingResults(fields, "b|b", "d|d")},
-		&shardResult{results: sqltypes.MakeTestStreamingResults(fields, "a|a", "c|c")},
-	}
-	ms := &MergeSort{
-		Primitives: prims,
-		OrderBy: evalengine.Comparison{{
-			Col:                    -1,
-			ColumnName:             "name",
-			WeightStringCol:        -1,
-			WeightStringColumnName: "__vtgate_orderby_weight_string_1",
-			CollationEnv:           collations.MySQL8(),
-		}},
-	}
-
-	var got []string
-	err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
-		for _, row := range qr.Rows {
-			got = append(got, row[0].ToString())
-		}
-		return nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, []string{"a", "b", "c", "d"}, got)
-}
-
 func TestMergeSortWeightString(t *testing.T) {
 	idColFields := sqltypes.MakeTestFields("id|col", "varbinary|varchar")
 	shardResults := []*shardResult{{
