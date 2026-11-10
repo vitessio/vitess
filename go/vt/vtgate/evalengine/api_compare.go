@@ -22,7 +22,6 @@ import (
 	"math/bits"
 	"slices"
 	"strconv"
-	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/colldata"
@@ -171,9 +170,6 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationEnv *collations.Environment
 type (
 	OrderByParams struct {
 		Col int
-		// ColumnName is used to resolve an order column at runtime when the
-		// projection includes a wildcard and its offset is not known at plan time.
-		ColumnName string
 		// WeightStringCol is the weight_string column that will be used for sorting.
 		// It is set to -1 if such a column is not added to the query
 		WeightStringCol int
@@ -196,9 +192,6 @@ type (
 // String returns a string. Used for plan descriptions
 func (obp *OrderByParams) String() string {
 	val := strconv.Itoa(obp.Col)
-	if obp.Col < 0 && obp.ColumnName != "" {
-		val = obp.ColumnName
-	}
 	if obp.WeightStringCol != -1 && obp.WeightStringCol != obp.Col {
 		val = fmt.Sprintf("(%s|%d)", val, obp.WeightStringCol)
 	}
@@ -212,23 +205,6 @@ func (obp *OrderByParams) String() string {
 		val += " COLLATE " + obp.CollationEnv.LookupName(obp.Type.Collation())
 	}
 	return val
-}
-
-// ResolveColumnName maps a runtime field name to the order column offset.
-func (obp *OrderByParams) ResolveColumnName(fields []*querypb.Field) error {
-	if obp.Col < 0 && obp.ColumnName != "" {
-		for idx, field := range fields {
-			if strings.EqualFold(field.Name, obp.ColumnName) {
-				obp.Col = idx
-				obp.Type = NewType(field.Type, collations.ID(field.Charset))
-				break
-			}
-		}
-		if obp.Col < 0 {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "could not resolve ORDER BY column %q in result fields", obp.ColumnName)
-		}
-	}
-	return nil
 }
 
 func (obp *OrderByParams) Compare(r1, r2 []sqltypes.Value) int {

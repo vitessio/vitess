@@ -138,6 +138,35 @@ func (s *planTestSuite) TestReferenceUnionLookupMissUsesFallbackRoute() {
 	s.Require().True(lookup.SendTo.NoRoutesSpecialHandling)
 }
 
+func (s *planTestSuite) TestReferenceLeftJoinUnionKeepsReferenceInputSeparate() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("select id from (select r.id from ref r left join user u on 1 = 1 union all select id from music) as t", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	concatenate, ok := plan.Instructions.(*engine.Concatenate)
+	s.Require().True(ok, "reference-preserving LEFT JOIN must remain a separate UNION ALL input")
+	s.Require().Len(concatenate.Sources, 2)
+	_, ok = concatenate.Sources[0].(*engine.Join)
+	s.Require().True(ok, "LEFT JOIN input must not be merged into the scatter route")
+}
+
+func (s *planTestSuite) TestReferenceUnionProvenanceSurvivesMergedCTE() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("with cte as (select id from ref union all select id from user where id = 1) select id from cte union all select id from music", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	_, ok := plan.Instructions.(*engine.Concatenate)
+	s.Require().True(ok, "merged CTE with reference provenance must not widen a later UNION ALL to scatter")
+}
+
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
 func (s *planTestSuite) TestForeignKeyPlanning() {
 	env := vtenv.NewTestEnv()

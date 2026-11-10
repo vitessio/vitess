@@ -172,6 +172,22 @@ func TestUnionAllOrderedLimitPushdown(t *testing.T) {
 		"select cast(id1 as signed) as id from t1 union all select cast(0 as signed) from dual order by id limit 5",
 		"[[INT64(0)] [INT64(1)] [INT64(2)] [INT64(20)] [INT64(21)]]",
 	)
+	mcmp.AssertMatches(
+		"select id1 as id from t1 union all select id3 from t2 union select id1 from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+	)
+
+	// Mixed UNION ALL and UNION must remain executable with or without ORDER BY.
+	for _, query := range []string{
+		"select id1 as id from t1 union all select id3 from t2 union select id1 from t1 limit 5",
+		"select id1 as id from t1 union all select id3 from t2 union select id1 from t1 order by id limit 5",
+	} {
+		result := utils.Exec(t, mcmp.VtConn, query)
+		assert.Len(t, result.Rows, 5)
+	}
+
+	// UNION's result collation is resolved from all arms before the final sort.
+	mcmp.Exec("select convert(_utf8mb4'z' using utf8mb4) union all select convert(_latin1'a' using latin1) order by 1 limit 1")
 }
 
 func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
@@ -193,6 +209,10 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 	)
 	mcmp.AssertMatches(
 		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 union select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
+	)
+	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id limit 5",
 		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
 	)
 	mcmp.AssertMatchesNoOrder(
@@ -218,6 +238,19 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 	mcmp.AssertMatchesNoOrder(
 		"select r.id from ref r left join t1 u on u.id1 = r.id union all select id1 from t1",
 		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
+
+	// The reference arm has more rows than the LIMIT, and its local first rows
+	// are not the first rows of the complete UNION result.
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (101), (102), (103), (104), (105), (106)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (101), (102), (103), (104), (105), (106)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	mcmp.Exec("insert into t1(id1, id2) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)")
+	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
 	)
 }
 

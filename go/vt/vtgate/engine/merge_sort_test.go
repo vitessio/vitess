@@ -93,32 +93,6 @@ func TestMergeSortNormal(t *testing.T) {
 	utils.MustMatch(t, wantResults, results)
 }
 
-func TestMergeSortResolvesOrderColumnFromFields(t *testing.T) {
-	fields := sqltypes.MakeTestFields("id", "int64")
-	prims := []StreamExecutor{
-		&shardResult{results: sqltypes.MakeTestStreamingResults(fields, "2", "4")},
-		&shardResult{results: sqltypes.MakeTestStreamingResults(fields, "1", "3")},
-	}
-	ms := &MergeSort{
-		Primitives: prims,
-		OrderBy: evalengine.Comparison{{
-			Col:             -1,
-			ColumnName:      "ID",
-			WeightStringCol: -1,
-		}},
-	}
-
-	var got []string
-	err := ms.TryStreamExecute(context.Background(), &noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
-		for _, row := range qr.Rows {
-			got = append(got, row[0].ToString())
-		}
-		return nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, []string{"1", "2", "3", "4"}, got)
-}
-
 func TestMergeSortWeightString(t *testing.T) {
 	idColFields := sqltypes.MakeTestFields("id|col", "varbinary|varchar")
 	shardResults := []*shardResult{{

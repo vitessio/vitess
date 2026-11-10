@@ -90,7 +90,9 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		o.Offset = append(o.Offset, offset)
 
 		typ, found := ctx.TypeForExpr(order.SimplifiedExpr)
-		if hasUnionOperator(o.Source) && (!found || typ.Type() == sqltypes.Unknown || typ.Collation() == collations.Unknown) {
+		// A weight string cannot be appended below a mixed DISTINCT UNION when
+		// the output type is unknown. The runtime sorter resolves it from fields.
+		if hasDistinctUnion(o.Source) && (!found || typ.Type() == sqltypes.Unknown || typ.Collation() == collations.Unknown) {
 			weightStrings = append(weightStrings, nil)
 			continue
 		}
