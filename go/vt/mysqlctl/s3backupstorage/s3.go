@@ -32,6 +32,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"os"
@@ -506,7 +507,7 @@ func (s3ServerSideEncryption *S3ServerSideEncryption) init() error {
 		sseCustomerKeyFile := after
 		base64CodedKey, err := os.ReadFile(sseCustomerKeyFile)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("Error reading the S3 SSE-C customer key file", slog.Any("error", err))
 			return err
 		}
 
@@ -553,7 +554,7 @@ func newS3BackupStorage() *S3BackupStorage {
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
-	log.Info(fmt.Sprintf("ListBackups: [s3] dir: %v, bucket: %v", dir, bucket))
+	log.Info("ListBackups: [s3]", slog.String("dir", dir), slog.String("bucket", bucket))
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -565,7 +566,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 	} else {
 		searchPrefix = objName(dir, "")
 	}
-	log.Info("objName: " + searchPrefix)
+	log.Info("objName", slog.String("search_prefix", searchPrefix))
 
 	query := &s3.ListObjectsV2Input{
 		Bucket:    &bucket,
@@ -609,7 +610,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 
 // StartBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
-	log.Info(fmt.Sprintf("StartBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket))
+	log.Info("StartBackup: [s3]", slog.String("dir", dir), slog.String("backup_name", name), slog.String("bucket", bucket))
 	c, err := bs.client()
 	if err != nil {
 		return nil, err
@@ -626,7 +627,7 @@ func (bs *S3BackupStorage) StartBackup(ctx context.Context, dir, name string) (b
 
 // RemoveBackup is part of the backupstorage.BackupStorage interface.
 func (bs *S3BackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	log.Info(fmt.Sprintf("RemoveBackup: [s3] dir: %v, name: %v, bucket: %v", dir, name, bucket))
+	log.Info("RemoveBackup: [s3]", slog.String("dir", dir), slog.String("backup_name", name), slog.String("bucket", bucket))
 
 	c, err := bs.client()
 	if err != nil {
