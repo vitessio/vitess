@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
@@ -99,7 +100,7 @@ func (c *terminalClient) BinlogDumpGTID(ctx context.Context, req *vtgatepb.Binlo
 
 func (c *terminalClient) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error("Uncaught panic", slog.Any("panic", x), slog.String("stack", string(tb.Stack(4))))
 		*err = fmt.Errorf("uncaught panic: %v", x)
 	}
 }
