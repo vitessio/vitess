@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,6 +31,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -447,6 +450,68 @@ func TestTxSerializerPending(t *testing.T) {
 	txs := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TxSerializerTest"))
 	got, want := txs.Pending("t1 where1"), 0
 	assert.Equalf(t, want, got, "there should be no pending transaction: got = %v, want = %v", got, want)
+}
+
+func TestTxSerializerDryRunLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	cfg := tabletenv.NewDefaultConfig()
+	cfg.HotRowProtection.Mode = tabletenv.Dryrun
+	cfg.HotRowProtection.MaxQueueSize = 1
+	cfg.HotRowProtection.MaxGlobalQueueSize = 3
+	cfg.HotRowProtection.MaxConcurrency = 1
+	cfg.SanitizeLogMessages = true
+	txs := New(tabletenv.NewEnv(vtenv.NewTestEnv(), cfg, "TxSerializerTest"))
+
+	wait := func(key, table string) DoneFunc {
+		done, _, err := txs.Wait(t.Context(), key, table)
+		require.NoError(t, err)
+		return done
+	}
+	// The first transaction for a row range is never checked against the
+	// global queue, so these take the global queue past its limit.
+	others := []DoneFunc{wait("t2 where1", "t2"), wait("t3 where1", "t3"), wait("t4 where1", "t4")}
+	const key = "t1 where c1='secret'"
+	done1 := wait(key, "t1")
+	done2 := wait(key, "t1")
+	// Unthrottle the next queue exceeded record.
+	txs.logQueueExceededDryRun = logutil.NewThrottledLogger("HotRowProtection QueueExceeded DryRun", 5*time.Second)
+	done3 := wait(key, "t1")
+	done2()
+	done3()
+	done4 := wait(key, "t1")
+	done1()
+	done4()
+	for _, done := range others {
+		done()
+	}
+	assert.NotContains(t, logs.String(), "secret")
+
+	var queueExceeded [][]any
+	for _, record := range logs.Records(t) {
+		if record["msg"] == "Would have rejected BeginExecute RPC because there are too many queued transactions for the same row (table + WHERE clause)" {
+			assert.Equal(t, "HotRowProtection QueueExceeded DryRun", record["logger"])
+			assert.Equal(t, "t1", record["table"])
+			assert.Equal(t, "t1 ... [REDACTED]", record["row_range"])
+			queueExceeded = append(queueExceeded, []any{record["queue_size"], record["max_queue_size"]})
+		}
+	}
+	assert.Equal(t, [][]any{{1.0, 1.0}, {2.0, 1.0}}, queueExceeded)
+
+	record := logs.Record(t, "Would have rejected BeginExecute RPC because there are too many queued transactions")
+	assert.Equal(t, "HotRowProtection GlobalQueueExceeded DryRun", record["logger"])
+	assert.EqualValues(t, 4, record["global_queue_size"])
+	assert.EqualValues(t, 3, record["max_global_queue_size"])
+
+	record = logs.Record(t, "Would have queued BeginExecute RPC for row (range) because another transaction to the same range is already in progress.")
+	assert.Equal(t, "HotRowProtection Waits DryRun", record["logger"])
+	assert.Equal(t, "t1", record["table"])
+	assert.Equal(t, "t1 ... [REDACTED]", record["row_range"])
+
+	record = logs.Record(t, "simultaneous transactions for the same row range would have been queued.")
+	assert.Equal(t, "HotRowProtection DryRun", record["logger"])
+	assert.EqualValues(t, 3, record["simultaneous_transactions"])
+	assert.EqualValues(t, 4, record["total_transactions"])
+	assert.Equal(t, "t1 ... [REDACTED]", record["row_range"])
 }
 
 func BenchmarkTxSerializer_NoHotRow(b *testing.B) {

@@ -161,7 +161,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	ct.workflowType = int32(wfType)
 	log.Info("creating controller", ct.logAttrs(
 		slog.String("cell", cell),
-		slog.String("tablet_types", tabletTypesStr),
+		slog.String("tablet_types_setting", tabletTypesStr),
 	)...)
 
 	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), workflowConfig.MaxTimeToRetryError)
@@ -192,7 +192,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 			slog.String("keyspace", ct.source.Keyspace),
 			slog.String("shard", ct.source.Shard),
 			slog.String("cell", cell),
-			slog.String("tablet_types", tabletTypesStr),
+			slog.String("tablet_types_setting", tabletTypesStr),
 		)...)
 		cells := strings.Split(cell, ",")
 

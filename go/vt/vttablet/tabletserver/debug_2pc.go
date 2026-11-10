@@ -20,7 +20,7 @@ package tabletserver
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"strconv"
@@ -47,7 +47,7 @@ func commitPreparedDelayForTest(tsv *TabletServer) {
 	if tsv.sm.target.Shard == sh {
 		delay := readFileForTestSynchronization("VT_DELAY_COMMIT_TIME")
 		delVal, _ := strconv.Atoi(delay)
-		log.Info(fmt.Sprintf("Delaying commit for shard %v for %d seconds", sh, delVal))
+		log.Info("Delaying commit for shard", slog.String("shard", sh), slog.Int("delay_seconds", delVal))
 		time.Sleep(time.Duration(delVal) * time.Second)
 	}
 }

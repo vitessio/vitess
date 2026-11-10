@@ -55,6 +55,24 @@ func TestClusterFromString(t *testing.T) {
 			expectedID: "dynamic_cluster",
 		},
 		{
+			name: "true id",
+			s: `{
+				"id": true,
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"vtctld.invalid:15000\", \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }"
+			}`,
+			expectedID: "true",
+		},
+		{
+			name: "false id",
+			s: `{
+				"id": false,
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"fqdn\": \"vtctld.invalid:15000\", \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }"
+			}`,
+			expectedID: "false",
+		},
+		{
 			name:      "empty id",
 			s:         `{"id": ""}`,
 			shouldErr: true,
@@ -75,6 +93,58 @@ func TestClusterFromString(t *testing.T) {
 			s:         `{`,
 			shouldErr: true,
 		},
+		{
+			name:       "null discovery config",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "null"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name:       "null vtgate",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtgates\": [null]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name:       "vtgate without host",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtgates\": [{}]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name:       "null vtctld",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [null]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name:       "vtctld without host",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{}]}"}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name: "unknown vtctld backoff strategy",
+			s: `{
+				"id": "dynamic_cluster",
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }",
+				"vtctld-backoff-strategy": "bogus"
+			}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
+		{
+			name: "unknown vtsql backoff strategy",
+			s: `{
+				"id": "dynamic_cluster",
+				"discovery": "dynamic",
+				"discovery-dynamic-discovery": "{\"vtctlds\": [ { \"host\": { \"hostname\": \"vtctld.invalid:15999\" } } ], \"vtgates\": [ { \"host\": {\"hostname\": \"vtgate.invalid:15991\" } } ] }",
+				"vtsql-backoff-strategy": "bogus"
+			}`,
+			expectedID: "dynamic_cluster",
+			shouldErr:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -91,6 +161,7 @@ func TestClusterFromString(t *testing.T) {
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Nil(t, c, "when err != nil, cluster must be nil")
+				assert.Equal(t, tt.expectedID, id)
 				return
 			}
 
@@ -98,7 +169,9 @@ func TestClusterFromString(t *testing.T) {
 			require.NotEmpty(t, id, "when err == nil, id must be non-empty")
 
 			assert.Equal(t, tt.expectedID, id)
-			assert.NotNil(t, c, "when err == nil, cluster should not be nil")
+			require.NotNil(t, c, "when err == nil, cluster should not be nil")
+			t.Cleanup(func() { _ = c.Close() })
+			assert.Equal(t, id, c.ID, "the cluster's ID must match the id it is registered under")
 		})
 	}
 }
@@ -107,8 +180,8 @@ type fakeAPI struct {
 	vtadminpb.UnimplementedVTAdminServer
 }
 
-func (api *fakeAPI) WithCluster(c *cluster.Cluster, id string) API { return api }
-func (api *fakeAPI) Handler() http.Handler                         { return nil }
+func (api *fakeAPI) WithCluster(c *cluster.Cluster, id string) (API, error) { return api, nil }
+func (api *fakeAPI) Handler() http.Handler                                  { return nil }
 
 func TestUnaryServerInterceptorLogs(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)

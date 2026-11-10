@@ -17,6 +17,7 @@ limitations under the License.
 package txlimiter
 
 import (
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -117,12 +118,12 @@ func (txl *Impl) Get(immediate *querypb.VTGateCallerID, effective *vtrpcpb.Calle
 	}
 
 	if txl.dryRun {
-		log.Info("TxLimiter: DRY RUN: user over limit: " + key)
+		log.Info("TxLimiter: DRY RUN: user over limit", slog.String("user_key", key))
 		txl.rejectionsDryRun.Add(key, 1)
 		return true
 	}
 
-	log.Info("TxLimiter: Over limit, rejecting transaction request for user: " + key)
+	log.Info("TxLimiter: Over limit, rejecting transaction request for user", slog.String("user_key", key))
 	txl.rejections.Add(key, 1)
 	return false
 }

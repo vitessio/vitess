@@ -59,6 +59,7 @@ merge_go_files() (
 # Lint only changed packages. Packages in nested Go modules
 # are skipped: golangci-lint can only typecheck belonging
 # to the module it runs in, and CI doesn't lint them either.
+# Neither does it lint testdata, which ./go/... leaves out.
 staged_files=$(staged_go_files)
 if [ -z "$staged_files" ]; then
   echo "No staged .go files, skipping lint."
@@ -69,6 +70,12 @@ changed_pkgs=$(echo "$staged_files" \
   | while IFS= read -r file; do dirname -- "$file"; done \
   | sort -u \
   | while read -r dir; do
+      case "/$dir/" in
+        */testdata/*)
+          echo "skipping $dir (testdata)" >&2
+          continue
+          ;;
+      esac
       mod_dir=$dir
       while [ "$mod_dir" != "." ] && [ ! -f "$mod_dir/go.mod" ]; do
         mod_dir=$(dirname "$mod_dir")
