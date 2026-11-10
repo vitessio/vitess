@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"reflect"
 	"slices"
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/viperutil/internal/log"
 	"vitess.io/vitess/go/viperutil/internal/registry"
 	"vitess.io/vitess/go/viperutil/internal/value"
+	vtlog "vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -88,6 +90,7 @@ var (
 func init() {
 	wd, err := os.Getwd()
 	if err != nil {
+		vtlog.Warn("failed to get working directory, not appending to default config-paths", slog.Any("error", err))
 		log.WARN("failed to get working directory (err=%v), not appending to default config-paths", err)
 		return
 	}
@@ -165,15 +168,18 @@ func LoadConfig() (context.CancelFunc, error) {
 	if err != nil {
 		if isConfigFileNotFoundError(err) {
 			msg := "Failed to read in config %s: %s"
-			switch configFileNotFoundHandling.Get() {
+			switch handling := configFileNotFoundHandling.Get(); handling {
 			case WarnOnConfigFileNotFound:
 				fallthrough // ignore the error
 			case IgnoreConfigFileNotFound:
 				return func() {}, nil
-			case ErrorOnConfigFileNotFound:
-				log.ERROR(msg, registry.Static.ConfigFileUsed(), err.Error())
-			case ExitOnConfigFileNotFound:
-				log.CRITICAL(msg, registry.Static.ConfigFileUsed(), err.Error())
+			case ErrorOnConfigFileNotFound, ExitOnConfigFileNotFound:
+				logConfigFileNotFound(err)
+				if handling == ExitOnConfigFileNotFound {
+					log.CRITICAL(msg, registry.Static.ConfigFileUsed(), err.Error())
+				} else {
+					log.ERROR(msg, registry.Static.ConfigFileUsed(), err.Error())
+				}
 			}
 		}
 	}
@@ -183,6 +189,16 @@ func LoadConfig() (context.CancelFunc, error) {
 	}
 
 	return registry.Dynamic.Watch(context.Background(), registry.Static, configPersistenceMinInterval.Get())
+}
+
+// logConfigFileNotFound logs that the config file wasn't found. When the config
+// is looked up by name in the config paths, there is no file name to log.
+func logConfigFileNotFound(err error) {
+	attrs := []slog.Attr{slog.Any("error", err)}
+	if path := registry.Static.ConfigFileUsed(); path != "" {
+		attrs = append(attrs, slog.String("path", path))
+	}
+	vtlog.Error("Failed to read in config", attrs...)
 }
 
 // isConfigFileNotFoundError checks if the error is caused because the file wasn't found.
@@ -242,7 +258,8 @@ func getHandlingValue(v *viper.Viper) func(key string) ConfigFileNotFoundHandlin
 	return func(key string) (h ConfigFileNotFoundHandling) {
 		if err := v.UnmarshalKey(key, &h, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(decodeHandlingValue))); err != nil {
 			h = IgnoreConfigFileNotFound
-			log.WARN("failed to unmarshal %s: %s; defaulting to %s", err.Error(), key, err.Error(), h.String())
+			vtlog.Warn("failed to unmarshal config_key; defaulting to default_value", slog.String("config_key", key), slog.Any("error", err), slog.String("default_value", h.String()))
+			log.WARN("failed to unmarshal %s: %s; defaulting to %s", key, err.Error(), h.String())
 		}
 
 		return h
