@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -125,7 +126,11 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	}
 
 	// Configure the command.
-	log.Info(fmt.Sprintf("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " ")))
+	args := hook.Parameters
+	if args == nil {
+		args = []string{}
+	}
+	log.Info("hook: executing hook", slog.String("path", vthook), slog.Any("args", args))
 	cmd := exec.CommandContext(ctx, vthook, hook.Parameters...)
 	if len(hook.ExtraEnv) > 0 {
 		cmd.Env = os.Environ()
@@ -185,11 +190,18 @@ func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result 
 	if !complete {
 		warning := fmt.Sprintf("the output is incomplete: the hook's children kept it open for more than %v after the hook ended", waitDelay)
 		result.Stderr += "WARNING: " + warning + "\n"
-		log.Warn(fmt.Sprintf("hook %v: %v", hook.Name, warning))
+		log.Warn("hook: the output is incomplete: the hook's children kept it open for more than the wait delay after the hook ended", slog.String("hook", hook.Name), slog.Duration("wait_delay", waitDelay))
 	}
 
 	defer func() {
-		log.Info(fmt.Sprintf("hook: result is %v", result.String()))
+		attrs := []slog.Attr{slog.Int("exit_status", result.ExitStatus), slog.String("hook_status", statusText(result.ExitStatus))}
+		if result.Stdout != "" {
+			attrs = append(attrs, slog.String("stdout", result.Stdout))
+		}
+		if result.Stderr != "" {
+			attrs = append(attrs, slog.String("stderr", result.Stderr))
+		}
+		log.Info("hook: result", attrs...)
 	}()
 
 	if err == nil {
@@ -328,9 +340,9 @@ func (hook *Hook) ExecuteOptionalContext(ctx context.Context) error {
 func (hook *Hook) optionalError(hr *HookResult) error {
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
-		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))
+		log.Info("hook doesn't exist", slog.String("hook", hook.Name))
 	case HOOK_VTROOT_ERROR:
-		log.Info(fmt.Sprintf("VTROOT not set, so %v hook doesn't exist", hook.Name))
+		log.Info("VTROOT not set, so hook doesn't exist", slog.String("hook", hook.Name))
 	case HOOK_SUCCESS:
 		// nothing to do here
 	default:
@@ -417,25 +429,31 @@ func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, err
 	}, HOOK_SUCCESS, nil
 }
 
+// statusText returns an exit status as HookResult.String renders it: the name
+// of a HOOK_* status that has one, and exit(N) for any other status, including
+// the exit status of the hook itself.
+func statusText(status int) string {
+	switch status {
+	case HOOK_SUCCESS:
+		return "HOOK_SUCCESS"
+	case HOOK_DOES_NOT_EXIST:
+		return "HOOK_DOES_NOT_EXIST"
+	case HOOK_STAT_FAILED:
+		return "HOOK_STAT_FAILED"
+	case HOOK_CANNOT_GET_EXIT_STATUS:
+		return "HOOK_CANNOT_GET_EXIT_STATUS"
+	case HOOK_INVALID_NAME:
+		return "HOOK_INVALID_NAME"
+	case HOOK_VTROOT_ERROR:
+		return "HOOK_VTROOT_ERROR"
+	default:
+		return fmt.Sprintf("exit(%v)", status)
+	}
+}
+
 // String returns a printable version of the HookResult
 func (hr *HookResult) String() string {
-	result := "result: "
-	switch hr.ExitStatus {
-	case HOOK_SUCCESS:
-		result += "HOOK_SUCCESS"
-	case HOOK_DOES_NOT_EXIST:
-		result += "HOOK_DOES_NOT_EXIST"
-	case HOOK_STAT_FAILED:
-		result += "HOOK_STAT_FAILED"
-	case HOOK_CANNOT_GET_EXIT_STATUS:
-		result += "HOOK_CANNOT_GET_EXIT_STATUS"
-	case HOOK_INVALID_NAME:
-		result += "HOOK_INVALID_NAME"
-	case HOOK_VTROOT_ERROR:
-		result += "HOOK_VTROOT_ERROR"
-	default:
-		result += fmt.Sprintf("exit(%v)", hr.ExitStatus)
-	}
+	result := "result: " + statusText(hr.ExitStatus)
 	if hr.Stdout != "" {
 		result += "\nstdout:\n" + hr.Stdout
 	}

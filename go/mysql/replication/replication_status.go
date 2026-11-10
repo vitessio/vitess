@@ -19,6 +19,7 @@ package replication
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"vitess.io/vitess/go/vt/log"
@@ -361,27 +362,30 @@ func ParseReplicationStatus(fields map[string]string, replica bool) ReplicationS
 	executedPosStr := fields[execSourceLogPosField]
 	file := fields[relaySourceLogFileField]
 	if file != "" && executedPosStr != "" {
-		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, executedPosStr))
+		filePos := fmt.Sprintf("%s:%s", file, executedPosStr)
+		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(filePos)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, executedPosStr, err))
+			log.Warn("Error parsing GTID set", slog.String("file_position", filePos), slog.Any("error", err))
 		}
 	}
 
 	readPosStr := fields[readSourceLogPosField]
 	file = fields[sourceLogFileField]
 	if file != "" && readPosStr != "" {
-		status.RelayLogSourceBinlogEquivalentPosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, readPosStr))
+		filePos := fmt.Sprintf("%s:%s", file, readPosStr)
+		status.RelayLogSourceBinlogEquivalentPosition.GTIDSet, err = ParseFilePosGTIDSet(filePos)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, readPosStr, err))
+			log.Warn("Error parsing GTID set", slog.String("file_position", filePos), slog.Any("error", err))
 		}
 	}
 
 	relayPosStr := fields["Relay_Log_Pos"]
 	file = fields["Relay_Log_File"]
 	if file != "" && relayPosStr != "" {
-		status.RelayLogFilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, relayPosStr))
+		filePos := fmt.Sprintf("%s:%s", file, relayPosStr)
+		status.RelayLogFilePosition.GTIDSet, err = ParseFilePosGTIDSet(filePos)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, relayPosStr, err))
+			log.Warn("Error parsing GTID set", slog.String("file_position", filePos), slog.Any("error", err))
 		}
 	}
 	return status
