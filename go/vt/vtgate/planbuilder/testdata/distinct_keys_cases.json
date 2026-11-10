@@ -1,0 +1,526 @@
+[
+  {
+    "comment": "A distinct aggregation of a primary key that is not a vindex of a sharded table is refused, since the key is only unique within a shard",
+    "query": "select count(distinct ue.id) from music m left join user_extra ue on ue.col = m.col where ue.foo in (select col from user)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Same for a unique key that is not a vindex",
+    "query": "select count(distinct ue.foo) from music m left join user_extra ue on ue.col = m.col where ue.bar in (select col from user)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Same when the subquery is correlated with the table",
+    "query": "select count(distinct ue.id) from user_extra ue where exists (select 1 from music m where m.col = ue.col)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "The first column of a composite primary key is not unique",
+    "query": "select count(distinct u.id) from unsharded_a u where exists (select 1 from user_extra ue where ue.col = u.col)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of the primary key of an unsharded table can be grouped by other columns of its table",
+    "query": "select count(distinct u.id) from music m left join unsharded u on u.col = m.col where u.bar in (select col from user)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.id) from music m left join unsharded u on u.col = m.col where u.bar in (select col from user)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user`"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Filter",
+                "Predicate": ":__sq_has_values and u.bar in ::__sq1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "Aggregates": "count_distinct(0|3) AS count(distinct u.id)",
+                    "GroupBy": "(1|2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(1|2) ASC, (0|3) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "LeftJoin",
+                            "JoinColumnIndexes": "R:0,R:1,R:2,R:3",
+                            "JoinVars": {
+                              "m_col": 0
+                            },
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select m.col from music as m where 1 != 1",
+                                "Query": "select m.col from music as m"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Unsharded",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": false
+                                },
+                                "FieldQuery": "select u.id, u.bar, weight_string(u.bar), weight_string(u.id) from unsharded as u where 1 != 1",
+                                "Query": "select u.id, u.bar, weight_string(u.bar), weight_string(u.id) from unsharded as u where u.col = :m_col"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.music",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of a single-column unique key of an unsharded table can be grouped by other columns of its table",
+    "query": "select count(distinct u.foo) from music m left join unsharded u on u.col = m.col where u.bar in (select col from user)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.foo) from music m left join unsharded u on u.col = m.col where u.bar in (select col from user)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.foo)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user`"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Filter",
+                "Predicate": ":__sq_has_values and u.bar in ::__sq1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "Aggregates": "count_distinct(0|3) AS count(distinct u.foo)",
+                    "GroupBy": "(1|2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(1|2) ASC, (0|3) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "LeftJoin",
+                            "JoinColumnIndexes": "R:0,R:1,R:2,R:3",
+                            "JoinVars": {
+                              "m_col": 0
+                            },
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select m.col from music as m where 1 != 1",
+                                "Query": "select m.col from music as m"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Unsharded",
+                                "Keyspace": {
+                                  "Name": "main",
+                                  "Sharded": false
+                                },
+                                "FieldQuery": "select u.foo, u.bar, weight_string(u.bar), weight_string(u.foo) from unsharded as u where 1 != 1",
+                                "Query": "select u.foo, u.bar, weight_string(u.bar), weight_string(u.foo) from unsharded as u where u.col = :m_col"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.music",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A column that is only the first column of a composite unique key is not unique",
+    "query": "select count(distinct u.col) from music m left join unsharded u on u.col = m.col where u.bar in (select col from user)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A column that is in no key is not unique",
+    "query": "select count(distinct u.baz) from music m left join unsharded u on u.col = m.col where u.bar in (select col from user)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of the primary key of an unsharded table can be grouped by the columns a correlated EXISTS needs",
+    "query": "select count(distinct u.id) from unsharded u where exists (select 1 from user_extra ue where ue.col = u.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.id) from unsharded u where exists (select 1 from user_extra ue where ue.col = u.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select count(distinct u.id), u.col from unsharded as u where 1 != 1 group by u.col",
+                "Query": "select count(distinct u.id), u.col from unsharded as u group by u.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of a column in no key of an unsharded table is refused",
+    "query": "select count(distinct u.baz) from unsharded u where exists (select 1 from user_extra ue where ue.col = u.col)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of the primary key of a reference table can be grouped by the columns a correlated EXISTS needs",
+    "query": "select count(distinct r.id) from ref r where exists (select 1 from music m where m.col = r.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct r.id) from ref r where exists (select 1 from music m where m.col = r.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct r.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "r_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct r.id), r.col from ref as r where 1 != 1 group by r.col",
+                "Query": "select count(distinct r.id), r.col from ref as r group by r.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music as m where 1 != 1",
+                    "Query": "select 1 from music as m where m.col = :r_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of a column in no key of a reference table is refused",
+    "query": "select count(distinct r.baz) from ref r where exists (select 1 from music m where m.col = r.col)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of the primary key of a pinned table can be grouped by the columns a correlated EXISTS needs, since a pinned table is on one shard",
+    "query": "select count(distinct p.id) from pin_test p where exists (select 1 from user_extra ue where ue.col = p.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct p.id) from pin_test p where exists (select 1 from user_extra ue where ue.col = p.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct p.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "p_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct p.id), p.col from pin_test as p where 1 != 1 group by p.col",
+                "Query": "select count(distinct p.id), p.col from pin_test as p group by p.col",
+                "Values": [
+                  "'�'"
+                ],
+                "Vindex": "binary"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :p_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.pin_test",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of the primary key of a pinned table can be grouped by the columns an IN filter above a join reads",
+    "query": "select count(distinct p.id) from music m left join pin_test p on p.col = m.col where p.foo in (select col from user)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct p.id) from music m left join pin_test p on p.col = m.col where p.foo in (select col from user)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct p.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user`"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Filter",
+                "Predicate": ":__sq_has_values and p.foo in ::__sq1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Aggregate",
+                    "Variant": "Ordered",
+                    "Aggregates": "count_distinct(0|3) AS count(distinct p.id)",
+                    "GroupBy": "(1|2)",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(1|2) ASC, (0|3) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "LeftJoin",
+                            "JoinColumnIndexes": "R:0,R:1,R:2,R:3",
+                            "JoinVars": {
+                              "m_col": 0
+                            },
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select m.col from music as m where 1 != 1",
+                                "Query": "select m.col from music as m"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select p.id, p.foo, weight_string(p.foo), weight_string(p.id) from pin_test as p where 1 != 1",
+                                "Query": "select p.id, p.foo, weight_string(p.foo), weight_string(p.id) from pin_test as p where p.col = :m_col",
+                                "Values": [
+                                  "'�'"
+                                ],
+                                "Vindex": "binary"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.pin_test",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of a unique key that is only a non-unique lookup vindex is refused, since the key can repeat across shards",
+    "query": "select count(distinct u.name) from user u where exists (select 1 from music m where m.col = u.col)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  }
+]

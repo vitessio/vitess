@@ -25,6 +25,8 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func errDistinctAggrWithMultiExpr(f sqlparser.AggrFunc) {
@@ -96,26 +98,24 @@ func pushAggregationThroughSubquery(
 	src *SubQueryContainer,
 ) (Operator, *ApplyResult) {
 	pushedAggr := rootAggr.SplitAggregatorBelowOperators(ctx, []Operator{src.Outer})
+	addGrouping := func(col *sqlparser.ColName, byVindex bool) {
+		if slices.IndexFunc(pushedAggr.Columns, func(ae *sqlparser.AliasedExpr) bool {
+			return ctx.SemTable.EqualsExpr(ae.Expr, col)
+		}) >= 0 {
+			// we already have the column, no need to push it again
+			return
+		}
+		checkGroupingKeepsDistinct(ctx, rootAggr, col, byVindex)
+		pushedAggr.addColumnWithoutPushing(ctx, aeWrap(col), true)
+	}
 	for _, subQuery := range src.Inner {
-		lhsCols := subQuery.OuterExpressionsNeeded(ctx, src.Outer)
-		for _, colName := range lhsCols {
-			findColName := func(ae *sqlparser.AliasedExpr) bool {
-				return ctx.SemTable.EqualsExpr(ae.Expr, colName)
-			}
-			if slices.IndexFunc(pushedAggr.Columns, findColName) >= 0 {
-				// we already have the column, no need to push it again
-				continue
-			}
-			pushedAggr.addColumnWithoutPushing(ctx, aeWrap(colName), true)
+		for _, colName := range subQuery.OuterExpressionsNeeded(ctx, src.Outer) {
+			addGrouping(colName, true)
 		}
 		// A filter that doesn't merge ends up above the join, and then reads these columns from the sides below it.
 		if _, isJoin := src.Outer.(*ApplyJoin); isJoin && !subQuery.IsArgument {
 			for _, col := range outsideSubqueryColumns(subQuery.Original) {
-				if slices.IndexFunc(pushedAggr.Columns, func(ae *sqlparser.AliasedExpr) bool {
-					return ctx.SemTable.EqualsExpr(ae.Expr, col)
-				}) < 0 {
-					pushedAggr.addColumnWithoutPushing(ctx, aeWrap(col), true)
-				}
+				addGrouping(col, false)
 			}
 		}
 	}
@@ -135,6 +135,30 @@ func pushAggregationThroughSubquery(
 	rootAggr.aggregateTheAggregates()
 
 	return rootAggr, Rewrote("push Aggregation under subquery")
+}
+
+// checkGroupingKeepsDistinct refuses to group by col when the aggregator has a distinct aggregation. Partial results are
+// summed per group, which is only right when no value of the distinct argument is in two groups. That holds when col is
+// already a grouping of the query, is one of the arguments, or is on the table of an argument that is a single-column
+// primary or unique key that is unique across shards: in an unsharded keyspace, on a reference table, or with a unique
+// vindex. byVindex also accepts an argument with a unique vindex, which is what the columns the subquery needs from the
+// outer side were already grouped by before this check existed.
+func checkGroupingKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Aggregator, col sqlparser.Expr, byVindex bool) {
+	if slices.ContainsFunc(aggregator.Grouping, func(gb GroupBy) bool { return ctx.SemTable.EqualsExpr(gb.Inner, col) }) {
+		return
+	}
+	for _, aggr := range aggregator.Aggregations {
+		if !aggr.Distinct {
+			continue
+		}
+		keepsDistinct := slices.ContainsFunc(aggr.Func.GetArgs(), func(arg sqlparser.Expr) bool {
+			return ctx.SemTable.EqualsExpr(arg, col) ||
+				(byVindex && exprHasUniqueVindex(ctx, arg) || exprIsUniqueKey(ctx, arg)) && ctx.SemTable.RecursiveDeps(arg) == ctx.SemTable.RecursiveDeps(col)
+		})
+		if !keepsDistinct {
+			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
+		}
+	}
 }
 
 func (a *Aggregator) aggregateTheAggregates() {
@@ -482,8 +506,9 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 	for _, pred := range join.JoinPredicates.columns {
 		bves = append(bves, pred.LHSExprs...)
 	}
+	extraFrom := len(bves)
 	bves = append(bves, join.ExtraLHSVars...)
-	for _, bve := range bves {
+	for i, bve := range bves {
 		idx, found := canReuseColumn(ctx, lhs.pushed.Columns, bve.Expr, extractExpr)
 		if !found {
 			idx = len(lhs.pushed.Columns)
@@ -495,6 +520,9 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 
 		if found {
 			continue
+		}
+		if i >= extraFrom {
+			checkGroupingKeepsDistinct(ctx, lhs.orig, bve.Expr, false)
 		}
 
 		lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
@@ -665,4 +693,38 @@ func splitAvgAggregations(ctx *plancontext.PlanningContext, aggr *Aggregator) (O
 	aggr.Aggregations = append(aggr.Aggregations, aggregations...)
 
 	return proj, Rewrote("split avg aggregation")
+}
+
+func exprIsUniqueKey(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool {
+	col, isCol := expr.(*sqlparser.ColName)
+	if !isCol {
+		return false
+	}
+	ti, err := ctx.SemTable.TableInfoFor(ctx.SemTable.DirectDeps(expr))
+	if err != nil {
+		return false
+	}
+	if _, isReal := ti.(*semantics.RealTable); !isReal {
+		return false
+	}
+	vt := ti.GetVindexTable()
+	if vt == nil {
+		return false
+	}
+	if vt.Keyspace != nil && vt.Keyspace.Sharded && vt.Pinned == nil && vt.Type != vindexes.TypeReference && !exprHasUniqueVindex(ctx, expr) {
+		// MySQL enforces a primary or unique key per shard, so the same value can be in two shards.
+		return false
+	}
+	if len(vt.PrimaryKey) == 1 && vt.PrimaryKey[0].Equal(col.Name) {
+		return true
+	}
+	for _, uk := range vt.UniqueKeys {
+		if len(uk) != 1 {
+			continue
+		}
+		if c, ok := uk[0].(*sqlparser.ColName); ok && c.Name.Equal(col.Name) {
+			return true
+		}
+	}
+	return false
 }

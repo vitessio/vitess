@@ -7528,5 +7528,862 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation is kept above the join when the filter only reads a grouping column",
+    "query": "select a.col, count(distinct b.foo) from user a join music b on a.col = b.col where a.col = 1 or exists (select 1 from user_extra) group by a.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select a.col, count(distinct b.foo) from user a join music b on a.col = b.col where a.col = 1 or exists (select 1 from user_extra) group by a.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "count_distinct(1|2) AS count(distinct b.foo)",
+        "GroupBy": "0",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "0 ASC, (1|2) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "L:0,R:0,R:1",
+                "JoinVars": {
+                  "a_col": 0
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "UncorrelatedSubquery",
+                    "Variant": "PulloutExists",
+                    "PulloutVars": [
+                      "__sq_has_values"
+                    ],
+                    "Inputs": [
+                      {
+                        "InputName": "SubQuery",
+                        "OperatorType": "Limit",
+                        "Count": "1",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select 1 from user_extra where 1 != 1",
+                            "Query": "select 1 from user_extra limit 1"
+                          }
+                        ]
+                      },
+                      {
+                        "InputName": "Outer",
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select a.col from `user` as a where 1 != 1",
+                        "Query": "select a.col from `user` as a where a.col = 1 or :__sq_has_values"
+                      }
+                    ]
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select b.foo, weight_string(b.foo) from music as b where 1 != 1",
+                    "Query": "select b.foo, weight_string(b.foo) from music as b where b.col = :a_col /* INT16 */"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A value subquery in an aggregated expression doesn't add the columns around it to the grouping again",
+    "query": "select count(*), b.foo + (select max(col) from user_extra) from user a join music b on a.col = b.col group by b.foo",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(*), b.foo + (select max(col) from user_extra) from user a join music b on a.col = b.col group by b.foo",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_star(0) AS count(*), any_value(1) AS b.foo + (select max(col) from user_extra)",
+        "GroupBy": "(2|3)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutValue",
+            "PulloutVars": [
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Aggregate",
+                "Variant": "Scalar",
+                "Aggregates": "max(0) AS max(col)",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select max(col) from user_extra where 1 != 1",
+                    "Query": "select max(col) from user_extra"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "count(*) * count(*) as count(*)",
+                  ":2 as b.foo + (select max(col) from user_extra)",
+                  ":3 as foo",
+                  ":4 as weight_string(b.foo)"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Sort",
+                    "Variant": "Memory",
+                    "OrderBy": "(3|4) ASC",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "L:0,R:0,R:1,R:2,R:3",
+                        "JoinVars": {
+                          "a_col": 1
+                        },
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), a.col from `user` as a where 1 != 1 group by a.col",
+                            "Query": "select count(*), a.col from `user` as a group by a.col"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(*), b.foo + :__sq1 /* INT16 */, b.foo, weight_string(b.foo) from music as b where 1 != 1 group by b.foo, weight_string(b.foo)",
+                            "Query": "select count(*), b.foo + :__sq1 /* INT16 */, b.foo, weight_string(b.foo) from music as b where b.col = :a_col /* INT16 */ group by b.foo, weight_string(b.foo)"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "An argument subquery on the left of IN is the same kind as a value subquery on the other side, so they share one argument",
+    "query": "select id from user where foo = (select max(col) from user_extra) or (select max(col) from user_extra) in (foo)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user where foo = (select max(col) from user_extra) or (select max(col) from user_extra) in (foo)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "max(0) AS max(col)",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select max(col) from user_extra where 1 != 1",
+                "Query": "select max(col) from user_extra"
+              }
+            ]
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id from `user` where 1 != 1",
+            "Query": "select id from `user` where foo = :__sq1 or :__sq1 in (foo)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation can be grouped by its own argument, since no value is then in two groups",
+    "query": "select count(distinct a.col) from unsharded a where exists (select 1 from user_extra ue where ue.col = a.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.col) from unsharded a where exists (select 1 from user_extra ue where ue.col = a.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.col)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select count(distinct a.col), a.col from unsharded as a where 1 != 1 group by a.col",
+                "Query": "select count(distinct a.col), a.col from unsharded as a group by a.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :a_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation can be grouped by a subquery column that is already in the GROUP BY",
+    "query": "select count(distinct a.id) from user a where exists (select 1 from user_extra ue where ue.col = a.col) group by a.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id) from user a where exists (select 1 from user_extra ue where ue.col = a.col) group by a.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id)",
+        "GroupBy": "1",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct a.id), a.col from `user` as a where 1 != 1 group by a.col",
+                "OrderBy": "1 ASC",
+                "Query": "select count(distinct a.id), a.col from `user` as a group by a.col order by a.col asc"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :a_col /* INT16 */ limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "sum(distinct) over a reference table is grouped the same way",
+    "query": "select sum(distinct a.foo) from ref a where exists (select 1 from user_extra ue where ue.col = a.col) group by a.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select sum(distinct a.foo) from ref a where exists (select 1 from user_extra ue where ue.col = a.col) group by a.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_sum_distinct(0) AS sum(distinct a.foo)",
+        "GroupBy": "(1|2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(distinct a.foo), a.col, weight_string(a.col) from ref as a where 1 != 1 group by a.col, weight_string(a.col)",
+                "Query": "select sum(distinct a.foo), a.col, weight_string(a.col) from ref as a group by a.col, weight_string(a.col) order by a.col asc"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :a_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation with several arguments can be grouped by one of them",
+    "query": "select count(distinct a.id, a.col) from unsharded a where exists (select 1 from user_extra ue where ue.col = a.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id, a.col) from unsharded a where exists (select 1 from user_extra ue where ue.col = a.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id, a.col)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select count(distinct a.id, a.col), a.col from unsharded as a where 1 != 1 group by a.col",
+                "Query": "select count(distinct a.id, a.col), a.col from unsharded as a group by a.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :a_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of a primary key can be grouped by another column of its table",
+    "query": "select count(distinct a.id) from user a where exists (select 1 from user_extra ue where ue.col = a.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id) from user a where exists (select 1 from user_extra ue where ue.col = a.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct a.id), a.col from `user` as a where 1 != 1 group by a.col",
+                "Query": "select count(distinct a.id), a.col from `user` as a group by a.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :a_col /* INT16 */ limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation pushed below a join with no subquery is unchanged",
+    "query": "select count(distinct b.id) from user a join music b on a.col = b.col where b.foo = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct b.id) from user a join music b on a.col = b.col where b.foo = 1",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct b.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "a_col": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select a.col from `user` as a where 1 != 1 group by a.col",
+                "Query": "select a.col from `user` as a group by a.col"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct b.id) from music as b where 1 != 1 group by .0",
+                "Query": "select count(distinct b.id) from music as b where b.foo = 1 and b.col = :a_col /* INT16 */ group by .0"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of a primary key is grouped by the columns the filter above the join reads",
+    "query": "select count(distinct a.id) from user a straight_join music b on a.col = b.col where a.foo = 1 or exists (select 1 from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id) from user a straight_join music b on a.col = b.col where a.foo = 1 or exists (select 1 from user_extra)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "a_col": 1,
+              "a_foo": 2
+            },
+            "Inputs": [
+              {
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutExists",
+                "PulloutVars": [
+                  "__sq_has_values"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Limit",
+                    "Count": "1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from user_extra where 1 != 1",
+                        "Query": "select 1 from user_extra limit 1"
+                      }
+                    ]
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(distinct a.id), a.col, a.foo from `user` as a where 1 != 1 group by a.col, a.foo",
+                    "Query": "select count(distinct a.id), a.col, a.foo from `user` as a where a.foo = 1 or :__sq_has_values group by a.col, a.foo"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from music as b where 1 != 1 group by .0",
+                "Query": "select 1 from music as b where b.col = :a_col /* INT16 */ group by .0"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation can be grouped by a subquery column already in the GROUP BY when its argument is not a unique key",
+    "query": "select count(distinct a.foo) from user a where exists (select 1 from user_extra ue where ue.col = a.col) group by a.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.foo) from user a where exists (select 1 from user_extra ue where ue.col = a.col) group by a.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.foo)",
+        "GroupBy": "1",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select a.foo, a.col from `user` as a where 1 != 1 group by a.col, a.foo",
+                "OrderBy": "1 ASC",
+                "Query": "select a.foo, a.col from `user` as a group by a.col, a.foo order by a.col asc"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :a_col /* INT16 */ limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of a primary key can be grouped by the columns an IN filter above a join reads",
+    "query": "select count(distinct u.id) from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.id) from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "u_col": 1,
+              "u_foo": 2
+            },
+            "Inputs": [
+              {
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutIn",
+                "PulloutVars": [
+                  "__sq_has_values",
+                  "__sq1"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col from user_extra where 1 != 1",
+                    "Query": "select col from user_extra"
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(distinct u.id), u.col, u.foo from `user` as u where 1 != 1 group by u.col, u.foo",
+                    "Query": "select count(distinct u.id), u.col, u.foo from `user` as u where :__sq_has_values and u.foo in ::__sq1 group by u.col, u.foo"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from music as m where 1 != 1 group by .0",
+                "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ group by .0"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation of a hash vindex column is grouped by the columns a correlated EXISTS needs, which is right only when each user_id is on one col value of music, as on main (known limitation)",
+    "query": "select count(distinct m.user_id) from music m where exists (select 1 from user_extra ue where ue.col = m.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct m.user_id) from music m where exists (select 1 from user_extra ue where ue.col = m.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct m.user_id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "m_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct m.user_id), m.col from music as m where 1 != 1 group by m.col",
+                "Query": "select count(distinct m.user_id), m.col from music as m group by m.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :m_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]

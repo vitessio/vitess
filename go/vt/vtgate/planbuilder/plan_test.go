@@ -257,6 +257,19 @@ func (s *planTestSuite) addPKs(vschema *vindexes.VSchema, ks string, tbls []stri
 	}
 }
 
+// addDistinctKeys gives a sharded table a primary key and a unique key that are not vindexes, an unsharded table
+// single-column and composite keys, and a reference table a single-column key, to tell apart the keys that are unique
+// across shards from those that are not.
+func (s *planTestSuite) addDistinctKeys(vschema *vindexes.VSchema) {
+	s.addPKs(vschema, "user", []string{"user_extra", "ref", "pin_test"})
+	s.addPKs(vschema, "main", []string{"unsharded"})
+	s.addPKsProvided(vschema, "main", []string{"unsharded_a"}, []string{"id", "bar"})
+	s.Require().NoError(vschema.AddUniqueKey("user", "user_extra", []sqlparser.Expr{sqlparser.NewColName("foo")}))
+	s.Require().NoError(vschema.AddUniqueKey("user", "user", []sqlparser.Expr{sqlparser.NewColName("name")}))
+	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("foo")}))
+	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("col"), sqlparser.NewColName("bar")}))
+}
+
 func (s *planTestSuite) addPKsProvided(vschema *vindexes.VSchema, ks string, tbls []string, pks []string) {
 	for _, tbl := range tbls {
 		s.Require().NoError(vschema.AddPrimaryKey(ks, tbl, pks))
@@ -296,6 +309,17 @@ func (s *planTestSuite) TestViews() {
 	vw.EnableViews = true
 
 	s.testFile("view_cases.json", vw, false)
+}
+
+func (s *planTestSuite) TestDistinctAggregationKeys() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+
+	s.addDistinctKeys(vschema)
+
+	s.testFile("distinct_keys_cases.json", vw, false)
 }
 
 func (s *planTestSuite) TestOne() {
