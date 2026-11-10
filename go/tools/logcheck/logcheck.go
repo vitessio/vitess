@@ -40,7 +40,8 @@ limitations under the License.
 //     journal, task_result, transaction, message, packet, stage and panic
 //   - exec_cmd, args, process_name, stdout, stderr and error_log
 //   - settings, azblob_message, cached_value, migration_context,
-//     action_arg, workflow_params, workflow_details and vdiff_options
+//     action_arg, workflow_params, workflow_details, vdiff_options,
+//     stats_value, old_column, new_column, old_columns and new_columns
 package logcheck
 
 import (
