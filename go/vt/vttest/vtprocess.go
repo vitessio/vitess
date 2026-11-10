@@ -195,7 +195,7 @@ func (vtp *VtProcess) WaitStart() (err error) {
 func redactPasswordArgs(args []string) []string {
 	isPassword := func(option string) bool {
 		name := strings.TrimLeft(option, "-")
-		return name != option && strings.HasSuffix(name, "password")
+		return name != option && !strings.Contains(name, "=") && strings.HasSuffix(name, "password")
 	}
 	redacted := make([]string, len(args))
 	for i, arg := range args {

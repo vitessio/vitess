@@ -80,7 +80,7 @@ func TestStartupLogsKeepCredentialsOut(t *testing.T) {
 		Binary:      path.Join(t.TempDir(), "no-such-vtcombo"),
 		Port:        1,
 		BindAddress: "localhost",
-		ExtraArgs:   []string{"--db-app-user", "vt_app", "--db-app-password", "args-secret", "--db-dba-password=args-secret", "--db-dba-user", "vt_dba", "--db_repl_password", "args-secret", "--db-allprivs-password=args-secret", "--db-filtered-password=", "--grpc-auth-static-password-file", "/etc/auth.json"},
+		ExtraArgs:   []string{"--db-app-user", "vt_app", "--db-app-password", "args-secret", "--db-dba-password=args-secret-password", "--db-dba-user", "vt_dba", "--db_repl_password", "args-secret", "--db-allprivs-password=args-secret", "--db-filtered-password=", "--grpc-auth-static-password-file", "/etc/auth.json"},
 	}
 	require.Error(t, vtp.WaitStart())
 	record = logs.Record(t, "Starting Vitess process")
