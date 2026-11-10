@@ -19,6 +19,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -92,7 +93,11 @@ func runLegacyCommand(ctx context.Context, args []string) error {
 
 		errStr := strings.ReplaceAll(err.Error(), "remote error: ", "")
 		fmt.Printf("%s Error: %s\n", flag.Arg(0), errStr)
-		log.Error(fmt.Sprint(err))
+		attrs := []slog.Attr{slog.Any("error", err)}
+		if len(args) > 0 {
+			attrs = append(attrs, slog.String("action", args[0]))
+		}
+		log.Error("action failed", attrs...)
 	}
 
 	return err

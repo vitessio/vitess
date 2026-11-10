@@ -18,6 +18,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/logic"
@@ -61,9 +63,9 @@ func run(cmd *cobra.Command, args []string) {
 	config.MarkConfigurationLoaded()
 
 	// Log final config values to debug if something goes wrong.
-	log.Info(fmt.Sprintf("Running with Configuration - %v", debug.AllSettings()))
+	log.Info("Running with Configuration", slog.String("config", fmt.Sprint(debug.AllSettings())))
 	if err := server.StartVTOrcDiscovery(); err != nil {
-		log.Error(fmt.Sprintf("Failed to start vtorc: %+v", err))
+		log.Error("Failed to start vtorc", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		os.Exit(1)
 	}
 
