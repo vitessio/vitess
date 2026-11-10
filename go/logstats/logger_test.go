@@ -438,6 +438,8 @@ func TestBindVariablesNumbers(t *testing.T) {
 		{querypb.Type_FLOAT64, "1.e2"},
 		{querypb.Type_FLOAT64, "0.e2"},
 		{querypb.Type_FLOAT64, "000e2"},
+		{querypb.Type_FLOAT64, "000"},
+		{querypb.Type_FLOAT64, "e2"},
 		{querypb.Type_FLOAT64, " \t+.12345678901234567890e+002\t "},
 		{querypb.Type_FLOAT64, "-001.2345678901234567890"},
 		{querypb.Type_FLOAT64, "."},
@@ -632,7 +634,6 @@ func BenchmarkNumericBindVariables(b *testing.B) {
 		} {
 			b.Run(format+"/"+tc.name, func(b *testing.B) {
 				bindVars := map[string]*querypb.BindVariable{"v": {Type: tc.typ, Value: []byte(tc.value)}}
-				require.NoError(b, sqltypes.ValidateBindVariables(bindVars))
 				emit := func(w io.Writer) error {
 					log := NewLogger()
 					log.Init(format == "json")

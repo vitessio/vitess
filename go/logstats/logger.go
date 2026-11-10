@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tidwall/gjson"
-
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -243,110 +241,60 @@ func appendJSONNumber(dst, value []byte) []byte {
 	if len(number) > 0 && (number[0] <= ' ' || number[len(number)-1] <= ' ') {
 		number = bytes.Trim(number, " \t\r\n")
 	}
-	if len(number) > 0 && (number[0] == '-' || number[0] >= '0' && number[0] <= '9') && gjson.ValidBytes(number) {
-		return append(dst, number...)
-	}
-	var ok bool
-	dst, ok = appendNormalisedJSONNumber(dst, number)
-	if ok {
-		return dst
-	}
-	return appendJSONQuote(dst, hack.String(value))
-}
-
-func appendNormalisedJSONNumber(dst, number []byte) ([]byte, bool) {
-	start := len(dst)
-	if len(number) > 0 {
-		switch number[0] {
-		case '-':
-			dst = append(dst, '-')
-			number = number[1:]
-		case '+':
-			number = number[1:]
-		}
-	}
-	if len(number) == 0 {
-		return dst[:start], false
-	}
-	beforeZeros := len(number)
-	number = bytes.TrimLeft(number, "0")
-	if len(number) == 0 {
-		return append(dst, '0'), true
+	if !sqltypes.IsNumericLiteral(number, true) {
+		return appendJSONQuote(dst, hack.String(value))
 	}
 	switch number[0] {
-	case '.':
-		// A leading decimal point needs an original digit, not just an inserted zero.
-		if beforeZeros == len(number) && (len(number) == 1 || number[1] < '0' || number[1] > '9') {
-			return dst[:start], false
-		}
-		dst = append(dst, '0')
-	case 'e', 'E':
-		if beforeZeros == len(number) {
-			return dst[:start], false
-		}
-		dst = append(dst, '0')
-	default:
-		if number[0] < '1' || number[0] > '9' {
-			return dst[:start], false
-		}
+	case '-':
+		dst = append(dst, '-')
+		number = number[1:]
+	case '+':
+		number = number[1:]
 	}
-	point := bytes.IndexByte(number, '.')
-	if point >= 0 && (point+1 == len(number) || number[point+1] == 'e' || number[point+1] == 'E') {
+	// JSON allows a leading zero only before a point, an exponent or the end.
+	for len(number) > 1 && number[0] == '0' && number[1] >= '0' && number[1] <= '9' {
+		number = number[1:]
+	}
+	if number[0] == '.' {
+		dst = append(dst, '0')
+	}
+	// JSON also needs a digit after the point.
+	if point := bytes.IndexByte(number, '.'); point >= 0 && (point+1 == len(number) || number[point+1] == 'e' || number[point+1] == 'E') {
 		dst = append(dst, number[:point+1]...)
 		dst = append(dst, '0')
-		dst = append(dst, number[point+1:]...)
-	} else {
-		dst = append(dst, number...)
+		return append(dst, number[point+1:]...)
 	}
-	if gjson.ValidBytes(dst[start:]) {
-		return dst, true
-	}
-	return dst[:start], false
+	return append(dst, number...)
 }
 
 func appendQuote(dst []byte, s string, json bool) []byte {
-	return appendQuoteDispatch(dst, s, json, strconv.AppendQuote, appendJSONQuote)
-}
-
-// Passing the quote functions keeps the dispatch and stdlib text path inlineable.
-func appendQuoteDispatch(dst []byte, s string, json bool, quoteText, quoteJSON func([]byte, string) []byte) []byte {
 	if json {
-		return quoteJSON(dst, s)
+		return appendJSONQuote(dst, s)
 	}
-	return quoteText(dst, s)
+	return strconv.AppendQuote(dst, s)
 }
 
 // appendJSONQuote preserves the log format while using the JSON string encoder.
 func appendJSONQuote(dst []byte, s string) []byte {
-	if strings.Contains(s, "\u2028") || strings.Contains(s, "\u2029") {
-		return appendJSONQuoteWithOptions(dst, s)
-	}
+	start := len(dst)
 	// AppendQuote replaces invalid UTF-8 even when it returns an error.
 	dst, _ = jsontext.AppendQuote(dst, s)
-	return dst
-}
-
-type jsonQuoteEncoder struct {
-	buf bytes.Buffer
-	enc jsontext.Encoder
-}
-
-var jsonQuoteEncoderPool = sync.Pool{New: func() any {
-	return &jsonQuoteEncoder{}
-}}
-
-func appendJSONQuoteWithOptions(dst []byte, s string) []byte {
-	// Handle separator escaping and UTF-8 replacement in one pass without an error allocation.
-	quote := jsonQuoteEncoderPool.Get().(*jsonQuoteEncoder)
-	quote.buf = *bytes.NewBuffer(dst)
-	quote.enc.Reset(&quote.buf, jsontext.AllowInvalidUTF8(true), jsontext.EscapeForJS(true))
-	_ = quote.enc.WriteToken(jsontext.String(s))
-	dst = quote.buf.Bytes()
-	dst = dst[:len(dst)-1] // The streaming encoder appends a record-ending newline.
-	// Do not retain the caller's buffer in the pool.
-	quote.buf = bytes.Buffer{}
-	quote.enc.Reset(&quote.buf)
-	jsonQuoteEncoderPool.Put(quote)
+	if !strings.Contains(s, "\u2028") && !strings.Contains(s, "\u2029") {
+		return dst
+	}
+	// U+2028 and U+2029 are valid in JSON strings, but pre-ES2019 JavaScript and
+	// some line splitters treat them as line breaks, so keep them escaped. The
+	// quoted string is valid UTF-8, so 0xE2 here is always a lead byte.
+	for i := start; i+2 < len(dst); i++ {
+		if dst[i] == 0xe2 && dst[i+1] == 0x80 && (dst[i+2] == 0xa8 || dst[i+2] == 0xa9) {
+			last := byte('8')
+			if dst[i+2] == 0xa9 {
+				last = '9'
+			}
+			dst = slices.Replace(dst, i, i+3, '\\', 'u', '2', '0', '2', last)
+			i += 5
+		}
+	}
 	return dst
 }
 
