@@ -633,14 +633,10 @@ func mysqlShellCommandString(cmd *exec.Cmd) string {
 //   - the password in a connection string ([scheme://]user:password@host)
 //     given to --uri or --ssh, or as an argument of its own.
 //
-// The value another short option takes is the rest of its group or, for one
-// like -h or -e, the next argument; a next-argument value runs through
-// maskURIPassword, so it is masked when it is a connection string and kept
-// when it is a plain value like a host. This also masks a connection string
-// written after the deprecated -mc option: mysqlsh takes -mc itself without a
-// value, so the connection string is a separate argument. -C, -S and -i are
-// not treated as taking the next argument, so a connection string after one of
-// them is masked as a standalone argument instead.
+// Any other argument, including the value that follows an option like --uri,
+// -h or -e, runs through maskURIPassword, so it is masked when it is a
+// connection string and kept when it is a plain value like a host. Only the
+// values of --execute, --file, --pyc and --pym are kept verbatim.
 func maskMySQLShellPasswords(args []string) []string {
 	optionName := func(option string) string {
 		name := strings.ToLower(strings.TrimPrefix(option, "--"))
@@ -670,9 +666,6 @@ func maskMySQLShellPasswords(args []string) []string {
 			case "uri", "ssh":
 				if hasValue {
 					masked[i] = option + "=" + maskURIPassword(value)
-				} else if isValue(i + 1) {
-					i++
-					masked[i] = maskURIPassword(args[i])
 				}
 			case "execute", "pyc", "file", "pym":
 				if !hasValue && isValue(i+1) {
@@ -690,9 +683,6 @@ func maskMySQLShellPasswords(args []string) []string {
 			case arg[j] == 'p' && isValue(i+1):
 				i++
 				masked[i] = "****"
-			case j+1 == len(arg) && isValue(i+1) && !strings.ContainsRune("CSi", rune(arg[j])):
-				i++
-				masked[i] = maskURIPassword(args[i])
 			}
 		default:
 			masked[i] = maskURIPassword(arg)
