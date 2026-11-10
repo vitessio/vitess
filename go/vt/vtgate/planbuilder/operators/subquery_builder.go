@@ -76,6 +76,9 @@ func (sqb *SubQueryBuilder) handleSubquery(
 		return nil
 	}
 	argName := ctx.ReservedVars.ReserveSubQuery()
+	// The tables of a subquery nested in this one are in the total of the outer query, but they are not
+	// outer to it: a column of its own would be sent as a bind variable that nothing binds.
+	outerID = outerID.Remove(findTablesContained(ctx, subq.Select))
 	sqInner := createSubqueryOp(ctx, parentExpr, expr, subq, outerID, argName, path)
 	sqb.Inner = append(sqb.Inner, sqInner)
 

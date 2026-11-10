@@ -807,15 +807,28 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 		return nil
 	}
 
-	if inCopy := sameNameCopy(ctx, inRoute, outRoute); inCopy != nil {
-		inRoute = inCopy
+	// The copy replaces the inner route's SQL, which would drop the subqueries nested in it.
+	if _, whole := m.subq.Subquery.(*Route); whole {
+		if inCopy := sameNameCopy(ctx, inRoute, outRoute); inCopy != nil {
+			inRoute = inCopy
+		}
 	}
 	// A merged subquery is rewritten from the SQL of the inner route, which an alternate does not
 	// have when the inner route has more than its table. A sharded outer route keeps its own text.
 	_, innerSharded := inRoute.Routing.(*ShardedRouting)
 	_, outerSharded := outRoute.Routing.(*ShardedRouting)
+	// Otherwise the merged route keeps the SQL of the outer route, so it can only move to the inner
+	// route's keyspace through a copy that has the names of every table that SQL reads.
+	if !innerSharded && !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
+		if outCopy := sameNameCopy(ctx, outRoute, inRoute); outCopy != nil && readsOnlyItsTables(ctx, outRoute) {
+			// A copy in an unsharded keyspace reads each preserved row once.
+			outCopy.PreservesReferenceRows = outCopy.PreservesReferenceRows && canCarryReferenceRows(outCopy.Routing)
+			outRoute = outCopy
+		}
+	}
+	outerText := outRoute
 	inRoute, outRoute, inRouting, outRouting, sameKeyspace := routesOrAlternates(ctx, inRoute, outRoute, func(r *Route) bool {
-		return innerSharded || outerSharded || readsWhatItsAlternatesRead(r.Source)
+		return innerSharded || outerSharded || (r != outerText && readsWhatItsAlternatesRead(r.Source))
 	})
 	inner, outer := getRoutingType(inRouting), getRoutingType(outRouting)
 
@@ -947,15 +960,15 @@ func scatterOf(sr *ShardedRouting) *ShardedRouting {
 	return &ShardedRouting{keyspace: sr.keyspace, RouteOpCode: engine.Scatter}
 }
 
-// sameNameCopy reads an inner reference route through its copy in the outer route's keyspace when
-// the copy has the same table names, so that the inner route's own SQL, select list included, reads
-// the copy there.
-func sameNameCopy(ctx *plancontext.PlanningContext, inner, outer *Route) *Route {
-	routing, ok := inner.Routing.(*AnyShardRouting)
+// sameNameCopy reads a reference route through its copy in the keyspace of another route when the
+// copy has the same table names, so that the route's own SQL, select list included, reads the copy
+// there.
+func sameNameCopy(ctx *plancontext.PlanningContext, route, other *Route) *Route {
+	routing, ok := route.Routing.(*AnyShardRouting)
 	if !ok {
 		return nil
 	}
-	keyspace := outer.Routing.Keyspace()
+	keyspace := other.Routing.Keyspace()
 	if keyspace == nil {
 		return nil
 	}
@@ -963,13 +976,36 @@ func sameNameCopy(ctx *plancontext.PlanningContext, inner, outer *Route) *Route 
 	if alternate == nil {
 		return nil
 	}
-	names := tableNames(inner.Source)
+	names := tableNames(route.Source)
 	if !slices.Equal(names, tableNames(alternate.Source)) {
 		return nil
 	}
-	onTheCopy := *inner
+	onTheCopy := *route
 	onTheCopy.Routing = alternate.Routing
 	return &onTheCopy
+}
+
+// readsOnlyItsTables reports whether the SQL of a route names no table but those of its operators,
+// which a subquery merged into it as an expression would.
+func readsOnlyItsTables(ctx *plancontext.PlanningContext, route *Route) bool {
+	stmt, _, err := ToSQL(ctx, route.Source)
+	if err != nil {
+		return false
+	}
+	own := tableNames(route.Source)
+	only := true
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		ate, ok := node.(*sqlparser.AliasedTableExpr)
+		if !ok {
+			return true, nil
+		}
+		if tn, ok := ate.Expr.(sqlparser.TableName); ok && !slices.Contains(own, tn.Name.String()) {
+			only = false
+			return false, io.EOF
+		}
+		return true, nil
+	}, stmt)
+	return only
 }
 
 func tableNames(op Operator) []string {

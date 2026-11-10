@@ -1103,7 +1103,6 @@
   {
     "comment": "Multi-table update whose only target is the sharded side still merges the reference outer join",
     "query": "update ref r left join `user` u on r.col = u.col set u.foo = 4",
-    "skip_e2e": true,
     "plan": {
       "Type": "Scatter",
       "QueryType": "UPDATE",
@@ -1121,12 +1120,12 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "Multi-table delete whose only target is the sharded side still merges the reference outer join",
     "query": "delete u from ref r left join `user` u on r.col = u.col",
-    "skip_e2e": true,
     "plan": {
       "Type": "Scatter",
       "QueryType": "DELETE",
@@ -1147,12 +1146,12 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "A reference outer join a DML reads rather than writes through is still not merged",
     "query": "update music set foo = 4 where user_id in (select r.col from ref r left join `user` u on r.col = u.col)",
-    "skip_e2e": true,
     "plan": {
       "Type": "Complex",
       "QueryType": "UPDATE",
@@ -1217,7 +1216,8 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a paginated reference outer join pushes the limit and offset to both sides",
@@ -2208,7 +2208,7 @@
     "skip_e2e": true
   },
   {
-    "comment": "a subquery of an unsharded table is merged into the reference route that reads the table from the source of its copy",
+    "comment": "a subquery of an unsharded table is a semi join of the reference table read in its own keyspace, where main sends the name of the copy to the source keyspace",
     "query": "select a.col from ref_with_source a left join user b on a.col = b.col where exists (select 1 from unsharded x where x.col = a.col)",
     "plan": {
       "Type": "Join",
@@ -2223,14 +2223,34 @@
         },
         "Inputs": [
           {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 0
             },
-            "FieldQuery": "select a.col from ref_with_source as a where 1 != 1",
-            "Query": "select a.col from ref_with_source as a where exists (select 1 from unsharded as x where x.col = a.col)"
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select a.col from ref_with_source as a where 1 != 1",
+                "Query": "select a.col from ref_with_source as a"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded as x where 1 != 1",
+                "Query": "select 1 from unsharded as x where x.col = :a_col limit 1"
+              }
+            ]
           },
           {
             "OperatorType": "Route",
@@ -2245,12 +2265,903 @@
         ]
       },
       "TablesUsed": [
-        "main.source_of_ref",
         "main.unsharded",
         "user.ref_with_source",
         "user.user"
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "a subquery nested in a subquery of a reference table keeps its predicate when the copy of the table is read",
+    "query": "select r.col from global_ref r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a where a.col in (select x.col from ref x))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a where a.col in (select x.col from ref x))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+            "Query": "select r.col from global_ref as r where r.col in (select a.col from global_ref as a where a.col in (select x.col from ref as x))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as o where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :r_col) as o",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a scalar subquery nested in a subquery of a reference table keeps its predicate when the copy of the table is read",
+    "query": "select r.col from global_ref r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a where a.col = (select max(x.col) from ref x))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a where a.col = (select max(x.col) from ref x))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+            "Query": "select r.col from global_ref as r where r.col in (select a.col from global_ref as a where a.col = (select max(x.col) from ref as x))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as o where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :r_col) as o",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery of a table with another name in its source keyspace nested in a subquery of a reference table keeps its predicate",
+    "query": "select r.col from global_ref r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a where a.col in (select x.col from ref_with_source x))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a where a.col in (select x.col from ref_with_source x))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+            "Query": "select r.col from global_ref as r where r.col in (select a.col from global_ref as a where a.col in (select x.col from ref_with_source as x))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as o where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :r_col) as o",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery nested in an exists of a reference table keeps its predicate when the copy of the table is read",
+    "query": "select r.col from global_ref r left join (select * from user where id = 1) o on o.col = r.col where exists (select 1 from main.global_ref a where a.col = r.col and a.col in (select x.col from ref x))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join (select * from user where id = 1) o on o.col = r.col where exists (select 1 from main.global_ref a where a.col = r.col and a.col in (select x.col from ref x))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+            "Query": "select r.col from global_ref as r where exists (select 1 from global_ref as a where a.col = r.col and a.col in (select x.col from ref as x))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as o where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :r_col) as o",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a correlated exists nested in an extracted in subquery of a reference table keeps its correlation",
+    "query": "select r.col from global_ref r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where exists (select 1 from ref x where x.col = a.col))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where exists (select 1 from ref x where x.col = a.col))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+            "Query": "select r.col from global_ref as r where r.col in (select a.col from global_ref as a where exists (select 1 from ref as x where x.col = a.col))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as o where 1 != 1",
+            "Query": "select 1 from `user` as o where o.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a correlated exists nested in an exists of a reference table keeps both correlations",
+    "query": "select r.col from global_ref r left join user o on o.col = r.col where exists (select 1 from global_ref a where a.col = r.col and exists (select 1 from ref_with_source x where x.col = a.col and x.foo = r.col))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join user o on o.col = r.col where exists (select 1 from global_ref a where a.col = r.col and exists (select 1 from ref_with_source x where x.col = a.col and x.foo = r.col))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+            "Query": "select r.col from global_ref as r where exists (select 1 from global_ref as a where a.col = r.col and exists (select 1 from ref_with_source as x where x.col = a.col and x.foo = r.col))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as o where 1 != 1",
+            "Query": "select 1 from `user` as o where o.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a correlated exists nested in an in nested in an in subquery of a reference table binds the column of the outer route",
+    "query": "select r.col from global_ref r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where a.col in (select x.col from ref x where exists (select 1 from source_of_ref s where s.col = x.col)))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where a.col in (select x.col from ref x where exists (select 1 from source_of_ref s where s.col = x.col)))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values1",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutIn",
+                "PulloutVars": [
+                  "__sq_has_values",
+                  "__sq2"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "SemiJoin",
+                    "JoinVars": {
+                      "x_col": 0
+                    },
+                    "Inputs": [
+                      {
+                        "InputName": "Outer",
+                        "OperatorType": "Route",
+                        "Variant": "Reference",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select x.col from ref as x where 1 != 1",
+                        "Query": "select x.col from ref as x"
+                      },
+                      {
+                        "InputName": "SubQuery",
+                        "OperatorType": "Route",
+                        "Variant": "Unsharded",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select 1 from source_of_ref as s where 1 != 1",
+                        "Query": "select 1 from source_of_ref as s where s.col = :x_col limit 1"
+                      }
+                    ]
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select a.col from global_ref as a where 1 != 1",
+                    "Query": "select a.col from global_ref as a where :__sq_has_values and a.col in ::__sq2"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+                "Query": "select r.col from global_ref as r where :__sq_has_values1 and r.col in ::__sq1"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as o where 1 != 1",
+            "Query": "select 1 from `user` as o where o.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "main.source_of_ref",
+        "user.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a correlated exists nested in a subquery that reads another keyspace than its own is sent with the outer column bound",
+    "query": "select r.col from source_of_ref r left join (select * from `user` where id = 1) o on o.col = r.col where r.col in (select a.col from unsharded a where exists (select 1 from ref_with_source x where x.col = a.col))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from source_of_ref r left join (select * from `user` where id = 1) o on o.col = r.col where r.col in (select a.col from unsharded a where exists (select 1 from ref_with_source x where x.col = a.col))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "SemiJoin",
+                "JoinVars": {
+                  "a_col": 0
+                },
+                "Inputs": [
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select a.col from unsharded as a where 1 != 1",
+                    "Query": "select a.col from unsharded as a"
+                  },
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from ref_with_source as x where 1 != 1",
+                    "Query": "select 1 from ref_with_source as x where x.col = :a_col limit 1"
+                  }
+                ]
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref_with_source as r where 1 != 1",
+                "Query": "select r.col from ref_with_source as r where :__sq_has_values and r.col in ::__sq1"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as o where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :r_col) as o",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a correlated not exists nested in an extracted in subquery of a reference table keeps its correlation",
+    "query": "select r.col from global_ref r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where not exists (select 1 from ref x where x.col = a.col))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where not exists (select 1 from ref x where x.col = a.col))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+            "Query": "select r.col from global_ref as r where r.col in (select a.col from global_ref as a where not exists (select 1 from ref as x where x.col = a.col))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as o where 1 != 1",
+            "Query": "select 1 from `user` as o where o.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery nested in an or inside a subquery of a reference table with a limit is merged into the single reference route",
+    "query": "select r.col from global_ref r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where a.foo = 1 or a.col in (select x.col from ref x) limit 1)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from global_ref r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where a.foo = 1 or a.col in (select x.col from ref x) limit 1)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from global_ref as r where 1 != 1",
+            "Query": "select r.col from global_ref as r where r.col in (select a.col from global_ref as a where a.foo = 1 or a.col in (select x.col from ref as x) limit 1)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as o where 1 != 1",
+            "Query": "select 1 from `user` as o where o.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a subquery of an unsharded table is pulled out of a reference table that is read in its own keyspace, where main sends the name of the copy to the source keyspace",
+    "query": "select r.col from ref_with_source r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from unsharded a)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from ref_with_source r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from unsharded a)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select a.col from unsharded as a where 1 != 1",
+                "Query": "select a.col from unsharded as a"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref_with_source as r where 1 != 1",
+                "Query": "select r.col from ref_with_source as r where :__sq_has_values and r.col in ::__sq1"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as o where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :r_col) as o",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a reference table with a copy in another keyspace is not sent to the keyspace of a pulled out subquery next to a merged one",
+    "query": "select r.col from user.ambiguous_ref_with_source r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select x.col from ref_with_source x) and r.col in (select a.col from unsharded a)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from user.ambiguous_ref_with_source r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select x.col from ref_with_source x) and r.col in (select a.col from unsharded a)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq2"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select a.col from unsharded as a where 1 != 1",
+                "Query": "select a.col from unsharded as a"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ambiguous_ref_with_source as r where 1 != 1",
+                "Query": "select r.col from ambiguous_ref_with_source as r where r.col in (select x.col from ref_with_source as x) and :__sq_has_values and r.col in ::__sq2"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as o where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :r_col) as o",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.ambiguous_ref_with_source",
+        "user.ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "an exists in an or inside a subquery of a reference table is pulled out of an unsharded outer route and keeps the exists in the reference route",
+    "query": "select r.col from unsharded r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where a.foo = 1 or exists (select 1 from ref x where x.col = a.col))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from unsharded r left join user o on o.col = r.col where r.col in (select a.col from global_ref a where a.foo = 1 or exists (select 1 from ref x where x.col = a.col))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select a.col from global_ref as a where 1 != 1",
+                "Query": "select a.col from global_ref as a where a.foo = 1 or exists (select 1 from ref as x where x.col = a.col)"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select r.col from unsharded as r where 1 != 1",
+                "Query": "select r.col from unsharded as r where :__sq_has_values and r.col in ::__sq1"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as o where 1 != 1",
+            "Query": "select 1 from `user` as o where o.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "main.unsharded",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "an exists in an or inside a subquery of a reference table is merged into the route of a preserved reference table",
+    "query": "select r.col from ref r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a where a.foo = 1 or exists (select 1 from ref x where x.col = a.col))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from ref r left join (select * from user where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a where a.foo = 1 or exists (select 1 from ref x where x.col = a.col))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col from ref as r where 1 != 1",
+            "Query": "select r.col from ref as r where r.col in (select a.col from global_ref as a where a.foo = 1 or exists (select 1 from ref as x where x.col = a.col))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from (select * from `user` where 1 != 1) as o where 1 != 1",
+            "Query": "select 1 from (select * from `user` where id = 1 and col = :r_col) as o",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a reference outer join read through its copy in the keyspace of an unsharded subquery merges the subquery there, since that keyspace reads the preserved rows once",
+    "query": "select r.col from user.ambiguous_ref_with_source r left join user.ambiguous_ref_with_source r2 on r2.col = r.col left join `user` u on u.col = r.col where r.col in (select s.col from unsharded s)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from user.ambiguous_ref_with_source r left join user.ambiguous_ref_with_source r2 on r2.col = r.col left join `user` u on u.col = r.col where r.col in (select s.col from unsharded s)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select r.col from ambiguous_ref_with_source as r left join ambiguous_ref_with_source as r2 on r2.col = r.col where 1 != 1",
+            "Query": "select r.col from ambiguous_ref_with_source as r left join ambiguous_ref_with_source as r2 on r2.col = r.col where r.col in (select s.col from unsharded as s)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u where 1 != 1",
+            "Query": "select 1 from `user` as u where u.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.ambiguous_ref_with_source",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
+

@@ -698,3 +698,58 @@ func TestASubqueryOverAJoinOfCopiesOfAReferenceTableIsReadWithoutCrossKeyspaceRe
 		require.Equal(t, "user", q.keyspace, "route %q reads from another keyspace", q.query)
 	}
 }
+
+// A merged subquery is rewritten from the SQL of the route that holds it. Reading that route
+// through its copy replaces the SQL, so a subquery nested in it has to keep its own predicate.
+func TestASubqueryNestedInASubqueryOfAReferenceTableKeepsItsPredicate(t *testing.T) {
+	const outer = "select r.col from global_ref r left join (select * from `user` where id = 1) o on o.col = r.col where "
+	for _, predicate := range []string{
+		"r.col in (select a.col from global_ref a where a.col in (select x.col from ref x))",
+		"r.col in (select a.col from global_ref a where exists (select 1 from ref x where x.col = a.col))",
+		"r.col in (select a.col from global_ref a where a.col = (select max(x.col) from ref x))",
+		"r.col in (select a.col from global_ref a where a.col in (select x.col from main.global_ref x))",
+		"r.col in (select a.col from global_ref a where a.col in (select x.col from ambiguous_ref_with_source x))",
+		"r.col in (select a.col from global_ref a where a.col in (select x.col from ref_with_source x))",
+		"exists (select 1 from main.global_ref a where a.col = r.col and a.col in (select x.col from ref x))",
+	} {
+		query := outer + predicate
+		t.Run(query, func(t *testing.T) {
+			planned := map[string]func() (engine.Primitive, error){
+				"setting off": func() (engine.Primitive, error) { return planReferenceOuterJoin(t, query), nil },
+				"setting on":  func() (engine.Primitive, error) { return planReferenceOuterJoinWithoutCrossKeyspaceReads(t, query) },
+			}
+			for name, plan := range planned {
+				primitive, err := plan()
+				require.NoError(t, err, name)
+				require.Contains(t, strings.Join(routeQueries(primitive), "\n"), " as x", "%s: the predicate of the nested subquery is gone", name)
+			}
+		})
+	}
+}
+
+// The select list of a subquery routed by an outer column only matters for the aggregates it has,
+// and a star has none.
+func TestAStarInASubqueryRoutedByAnOuterColumnIsAskedOnEveryShard(t *testing.T) {
+	route, ok := planReferenceOuterJoin(t,
+		"select a.col from ref a where a.col in (select * from `user` x where x.id = a.col)").(*engine.Route)
+	require.True(t, ok, "expected one route")
+	require.Equal(t, engine.Scatter, route.Opcode)
+}
+
+// A reference route is read through its copy only when every table of it has the same name there.
+// The copy of source_of_ref is ref_with_source, so a route that joins it to a table of the same
+// name is not read through the copy, whichever side the table is on.
+func TestASubqueryOverATableWithoutACopyOfTheSameNameIsNotReadThroughTheCopy(t *testing.T) {
+	for _, query := range []string{
+		"select r.col from ref r left join (select * from `user` where id = 1) o on o.col = r.col where r.col in (select a.col from global_ref a join source_of_ref b on b.col = a.col)",
+		"select r.col from ref r left join (select * from `user` where id = 1) o on o.col = r.col where r.col in (select a.col from source_of_ref b join global_ref a on b.col = a.col)",
+	} {
+		t.Run(query, func(t *testing.T) {
+			for _, q := range routeKeyspaces(planReferenceOuterJoin(t, query)) {
+				if q.keyspace == "user" {
+					require.NotContains(t, q.query, "source_of_ref", "the keyspace has no table of that name")
+				}
+			}
+		})
+	}
+}
