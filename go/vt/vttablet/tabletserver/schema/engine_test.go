@@ -566,6 +566,17 @@ func TestOpenAndReload(t *testing.T) {
 	// A wait that times out is timed too.
 	assert.EqualValues(t, 2, ddlCommitWaits()-ddlCommitWaitsBefore)
 
+	// So is a wait that fails to connect, since its callers are held until it fails.
+	pos42, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-42")
+	require.NoError(t, err)
+	db.EnableConnFail()
+	err = se.ReloadAtDDL(t.Context(), pos42, replication.Mysql56GTID{Server: sid, Sequence: 42})
+	db.DisableConnFail()
+	require.ErrorContains(t, err,
+		"failed to connect to wait for the DDL with GTID 7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:42")
+	assert.Equal(t, pos3, se.reloadAtPos)
+	assert.EqualValues(t, 3, ddlCommitWaits()-ddlCommitWaitsBefore)
+
 	// A wait query that MySQL never answers ends when the reload timeout passes, which closes its
 	// connection, and a retry then waits afresh.
 	pos45, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-45")
@@ -643,9 +654,9 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, <-firstDone)
 	assert.EqualValues(t, 1, waitsDDL60.Load())
 	assert.Equal(t, pos6, se.reloadAtPos)
-	// The two vstreams shared one wait, so it was timed once: the waits for 30, 40, 45 (twice)
-	// and 60 make five.
-	assert.EqualValues(t, 5, ddlCommitWaits()-ddlCommitWaitsBefore)
+	// The two vstreams shared one wait, so it was timed once: the waits for 30, 40, 42, 45
+	// (twice) and 60 make six.
+	assert.EqualValues(t, 6, ddlCommitWaits()-ddlCommitWaitsBefore)
 	// None of them is counted as a schema reload.
 	assert.Zero(t, se.SchemaReloadTimings.Counts()["SchemaTest.DDLCommitWait"])
 }

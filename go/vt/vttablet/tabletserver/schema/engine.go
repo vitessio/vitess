@@ -480,6 +480,14 @@ func (se *Engine) waitForDDLCommit(
 // which ends when MySQL commits the DDL, the reload timeout passes or the connection fails, even
 // if every waiter has stopped waiting by then.
 func (se *Engine) waitForGTID(ctx context.Context, gtid replication.Mysql56GTID) error {
+	// Each wait is timed from before it connects, whatever its outcome, since its callers are
+	// held from then on. A DDL that is slow to commit, such as one held for a semi-sync
+	// acknowledgement, and a connection that is slow or fails, then show in the metrics. It is
+	// one sample per shared wait, not per vstream: a vstream that joins partway through, or whose
+	// context ends first, is held for less. It goes in the Waits timings with the tablet's other
+	// waits, since the totals of the SchemaReload timings count only reloads.
+	start := time.Now()
+	defer se.env.Stats().WaitTimings.Record("DDLCommitWait", start)
 	ctx, cancel := context.WithTimeout(ctx, se.reloadTimeout)
 	defer cancel()
 	conn, err := se.cp.Connect(ctx)
@@ -493,13 +501,6 @@ func (se *Engine) waitForGTID(ctx context.Context, gtid replication.Mysql56GTID)
 	stop := context.AfterFunc(ctx, conn.Close)
 	defer stop()
 
-	start := time.Now()
-	// Each wait query is timed, whatever its outcome, so that DDLs that are slow to commit, such
-	// as ones held for a semi-sync acknowledgement, show in the metrics and not only in the log
-	// below. It is one sample per shared wait, not per vstream: a vstream that joins partway
-	// through, or whose context ends first, is held for less. It goes in the Waits timings with
-	// the tablet's other waits, since the totals of the SchemaReload timings count only reloads.
-	defer se.env.Stats().WaitTimings.Record("DDLCommitWait", start)
 	ddlPos := replication.Position{GTIDSet: gtid.GTIDSet()}
 	if err := conn.WaitUntilPosition(ctx, ddlPos); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
