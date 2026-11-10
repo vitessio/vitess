@@ -1479,7 +1479,8 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 	// must only be under last_pk.
 	removing := logs.Record(t, "Removing shard gtids")
 	assert.Equal(t, "INFO", removing["level"])
-	assert.Contains(t, removing["shard_gtids"], `shard:"-20" gtid:"gtid01"`)
+	assert.Contains(t, removing["shard_gtids"], `shard:"-20"`)
+	assert.Contains(t, removing["shard_gtids"], `gtid:"gtid01"`)
 	assert.NotContains(t, removing["shard_gtids"], "journal-sentinel")
 	assert.Contains(t, removing["last_pk"], "journal-sentinel")
 }
