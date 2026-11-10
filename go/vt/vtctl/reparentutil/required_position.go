@@ -61,13 +61,13 @@ func validateRequiredPositionShard(required replication.Position, isGTIDBased bo
 // checkRequiredPosition returns a FAILED_PRECONDITION error if no candidate has
 // received required. The error names the candidates as noun and lists the most
 // advanced received positions. A zero required position disables the check.
-func checkRequiredPosition(required replication.Position, candidates map[string]*RelayLogPositions, noun string) error {
+func checkRequiredPosition(required replication.Position, candidates []*ersCandidate, noun string) error {
 	if required.IsZero() {
 		return nil
 	}
 
-	for _, positions := range candidates {
-		if positions.Combined.AtLeast(required) {
+	for _, candidate := range candidates {
+		if candidate.positions.Combined.AtLeast(required) {
 			return nil
 		}
 	}
@@ -83,13 +83,13 @@ func checkRequiredPosition(required replication.Position, candidates map[string]
 // mostAdvancedReceivedPositions returns every Combined position that no other
 // candidate exceeds, as alias=position, sorted. Divergent histories have more
 // than one.
-func mostAdvancedReceivedPositions(candidates map[string]*RelayLogPositions) []string {
+func mostAdvancedReceivedPositions(candidates []*ersCandidate) []string {
 	var best []string
-	for alias, positions := range candidates {
-		position := positions.Combined
+	for _, candidate := range candidates {
+		position := candidate.positions.Combined
 		dominated := false
-		for _, otherPositions := range candidates {
-			other := otherPositions.Combined
+		for _, otherCandidate := range candidates {
+			other := otherCandidate.positions.Combined
 			if other.AtLeast(position) && !position.AtLeast(other) {
 				dominated = true
 				break
@@ -97,7 +97,7 @@ func mostAdvancedReceivedPositions(candidates map[string]*RelayLogPositions) []s
 		}
 
 		if !dominated {
-			best = append(best, alias+"="+formatReceivedPosition(position))
+			best = append(best, candidate.alias()+"="+formatReceivedPosition(position))
 		}
 	}
 

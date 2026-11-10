@@ -109,10 +109,10 @@ func haveReciprocallyContainedPositions(a, b replication.Position) bool {
 	return a.AtLeast(b) && b.AtLeast(a) && !a.Equal(b)
 }
 
-func describeCombinedPositions(candidates map[string]*RelayLogPositions) string {
+func describeCombinedPositions(candidates []*ersCandidate) string {
 	parts := make([]string, 0, len(candidates))
-	for alias, pos := range candidates {
-		parts = append(parts, fmt.Sprintf("%s=%s", alias, pos.Combined.String()))
+	for _, candidate := range candidates {
+		parts = append(parts, fmt.Sprintf("%s=%s", candidate.alias(), candidate.positions.Combined.String()))
 	}
 	slices.Sort(parts)
 	return strings.Join(parts, ", ")
@@ -121,16 +121,16 @@ func describeCombinedPositions(candidates map[string]*RelayLogPositions) string 
 // hasUniformCombinedPosition returns true when every candidate has the same Combined position. On the
 // output of filterToMostAdvancedCombined a false result means the leading candidates have
 // incomparable positions, as the filter already removed anything dominated.
-func hasUniformCombinedPosition(candidates map[string]*RelayLogPositions) bool {
+func hasUniformCombinedPosition(candidates []*ersCandidate) bool {
 	var ref replication.Position
 	var set bool
-	for _, pos := range candidates {
+	for _, candidate := range candidates {
 		if !set {
-			ref = pos.Combined
+			ref = candidate.positions.Combined
 			set = true
 			continue
 		}
-		if !pos.Combined.Equal(ref) {
+		if !candidate.positions.Combined.Equal(ref) {
 			return false
 		}
 	}
@@ -140,40 +140,40 @@ func hasUniformCombinedPosition(candidates map[string]*RelayLogPositions) bool {
 // filterToMostAdvancedCombined returns the candidates that no other candidate dominates on
 // the Combined position. GTID positions are partially ordered, so each candidate is
 // compared against all of the others; two incomparable leaders don't dominate each other
-// and both must be kept, which hasUniformCombinedPosition relies on. The returned map shares the
-// caller's RelayLogPositions structs.
-func filterToMostAdvancedCombined(candidates map[string]*RelayLogPositions, logger logutil.Logger) map[string]*RelayLogPositions {
+// and both must be kept, which hasUniformCombinedPosition relies on. The returned slice shares the
+// caller's candidates.
+func filterToMostAdvancedCombined(candidates []*ersCandidate, logger logutil.Logger) []*ersCandidate {
 	if len(candidates) == 0 {
 		return candidates
 	}
 
-	result := make(map[string]*RelayLogPositions, len(candidates))
-	for alias, pos := range candidates {
+	result := make([]*ersCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
 		var dominated bool
-		for otherAlias, otherPos := range candidates {
-			if otherAlias == alias {
+		for _, otherCandidate := range candidates {
+			if otherCandidate == candidate {
 				continue
 			}
-			if hasDominantPosition(otherPos.Combined, pos.Combined) {
+			if hasDominantPosition(otherCandidate.positions.Combined, candidate.positions.Combined) {
 				dominated = true
 				break
 			}
 		}
 		if !dominated {
-			result[alias] = pos
+			result = append(result, candidate)
 		}
 	}
 
 	if len(result) < len(candidates) {
 		excluded := make([]string, 0, len(candidates)-len(result))
 		kept := make([]string, 0, len(result))
-		for alias := range candidates {
-			if _, ok := result[alias]; !ok {
-				excluded = append(excluded, alias)
+		for _, candidate := range candidates {
+			if !slices.Contains(result, candidate) {
+				excluded = append(excluded, candidate.alias())
 			}
 		}
-		for alias := range result {
-			kept = append(kept, alias)
+		for _, candidate := range result {
+			kept = append(kept, candidate.alias())
 		}
 		slices.Sort(excluded)
 		slices.Sort(kept)
@@ -254,11 +254,11 @@ func FindPositionsOfAllCandidates(
 	// flavor-agnostic, so skip it rather than treating it as non-GTID. A typed but
 	// empty set (e.g. "MySQL56/" with no transactions) still identifies the flavor
 	// and is counted.
-	for _, pos := range primaryPositions {
-		if pos.GTIDSet == nil {
+	for _, position := range primaryPositions {
+		if position.GTIDSet == nil {
 			continue
 		}
-		if hasMysql56GTIDSet(pos) {
+		if hasMysql56GTIDSet(position) {
 			isGTIDBased = true
 		} else {
 			isNonGTIDBased = true
@@ -268,7 +268,6 @@ func FindPositionsOfAllCandidates(
 	if isGTIDBased && emptyRelayPosErrorRecorder.HasErrors() {
 		return nil, false, emptyRelayPosErrorRecorder.Error()
 	}
-
 	if isGTIDBased && isNonGTIDBased {
 		return nil, false, vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "encountered mix of GTID-based and non GTID-based relay logs")
 	}
@@ -277,7 +276,6 @@ func FindPositionsOfAllCandidates(
 	for alias, status := range replicationStatusMap {
 		if !isGTIDBased {
 			positionMap[alias] = &RelayLogPositions{Combined: status.Position}
-
 			continue
 		}
 		positionMap[alias] = &RelayLogPositions{
@@ -285,7 +283,6 @@ func FindPositionsOfAllCandidates(
 			Executed: status.Position,
 		}
 	}
-
 	for alias, executedPosition := range primaryPositions {
 		// A demoted/former primary applies no relay log, so its executed position
 		// is authoritative. For GTID-based shards, initialize Executed as well as
@@ -304,6 +301,42 @@ func FindPositionsOfAllCandidates(
 	}
 
 	return positionMap, isGTIDBased, nil
+}
+
+// buildERSCandidates returns the promotion candidates and the positions of every
+// reachable tablet, keyed by alias. The positions include tablets that can't be
+// promoted, and are shared with the candidates.
+func buildERSCandidates(snapshot *replicationSnapshot, tabletMap map[string]*topo.TabletInfo) ([]*ersCandidate, map[string]*RelayLogPositions, bool, error) {
+	positionMap, isGTIDBased, err := FindPositionsOfAllCandidates(snapshot.statusMap, snapshot.primaryStatusMap)
+	if err != nil {
+		return nil, nil, false, err
+	}
+
+	candidates := make([]*ersCandidate, 0, len(positionMap))
+	for alias, positions := range positionMap {
+		candidateInfo, ok := tabletMap[alias]
+		if !ok {
+			return nil, nil, false, vterrors.Errorf(vtrpc.Code_INTERNAL, "candidate %v not found in the tablet map; this an impossible situation", alias)
+		}
+		if topoproto.IsTypeInList(candidateInfo.Type, []topodatapb.TabletType{topodatapb.TabletType_BACKUP, topodatapb.TabletType_RESTORE, topodatapb.TabletType_DRAINED}) {
+			continue
+		}
+
+		candidate := &ersCandidate{
+			info:         candidateInfo,
+			positions:    positions,
+			stopStatus:   snapshot.statusMap[alias],
+			takingBackup: snapshot.tabletsBackupState[alias],
+			mysqlFlavor:  mysqlctl.FlavorUnknown,
+		}
+		if isGTIDBased {
+			candidate.mysqlVersion, candidate.hasMySQLVersion = snapshot.mysqlVersions[alias]
+			candidate.mysqlFlavor = snapshot.mysqlFlavors[alias]
+		}
+		candidates = append(candidates, candidate)
+	}
+
+	return candidates, positionMap, isGTIDBased, nil
 }
 
 // ReplicaWasRunning returns true if a StopReplicationStatus indicates that the
