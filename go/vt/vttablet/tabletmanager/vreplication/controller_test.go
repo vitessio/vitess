@@ -850,7 +850,7 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			setStateRecord, errorTextRecord := runControllerSetStateError(t, rowValue, tc.saveErr)
+			setMessageRecord, setStateRecord, errorTextRecord := runControllerSetStateError(t, rowValue, tc.saveErr)
 
 			for _, record := range []map[string]any{setStateRecord, errorTextRecord} {
 				assert.Equal(t, "ERROR", record["level"])
@@ -864,8 +864,16 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 			assert.NotContains(t, errorTextRecord["error"], tc.wantInErr)
 			assert.Equal(t, "UNKNOWN", errorTextRecord["error_code"])
 
-			// The save-failure record reports the real save failure, never the
-			// MySQL error (1062) it quotes.
+			// The message-save failure, logged as a string by the vreplicator,
+			// reports its own deadlock (1213) through the text parse, never the
+			// 1062 its query quotes.
+			assert.Equal(t, "ERROR", setMessageRecord["level"])
+			assert.EqualValues(t, 1, setMessageRecord["stream_id"])
+			assert.Contains(t, setMessageRecord["error"], "Deadlock")
+			assert.EqualValues(t, sqlerror.ERLockDeadlock, setMessageRecord["mysql_errno"])
+
+			// The state-save failure record reports the real save failure, never
+			// the MySQL error (1062) it quotes.
 			assert.Contains(t, setStateRecord["error"], tc.wantInErr)
 			assert.NotEqualValues(t, sqlerror.ERDupEntry, setStateRecord["mysql_errno"])
 			if tc.wantErrno == 0 {
@@ -878,10 +886,11 @@ func TestControllerSetStateErrorLogs(t *testing.T) {
 }
 
 // runControllerSetStateError drives a stream to an unrecoverable copy-phase
-// error (a duplicate key carrying rowValue) and makes the terminal-error save
-// fail with saveErr. It returns the "unable to setState()" and "could not set
-// error text" log records.
-func runControllerSetStateError(t *testing.T, rowValue string, saveErr error) (setStateRecord, errorTextRecord map[string]any) {
+// error (a duplicate key carrying rowValue), makes the message save that records
+// it fail with a deadlock, and makes the terminal-error save fail with saveErr.
+// It returns the "Failed to set error state", "unable to setState()", and
+// "could not set error text" log records.
+func runControllerSetStateError(t *testing.T, rowValue string, saveErr error) (setMessageRecord, setStateRecord, errorTextRecord map[string]any) {
 	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	t.Cleanup(func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay })
 	vttablet.DefaultVReplicationConfig.RetryDelay = time.Hour
@@ -902,7 +911,9 @@ func runControllerSetStateError(t *testing.T, rowValue string, saveErr error) (s
 	logs := logtest.Capture(t, slog.LevelInfo)
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
+	// Only the "Picked source tablet" message must succeed. The message save that
+	// records the copy failure is made to fail below, to cover vr.setMessage.
+	dbClient.AddInvariant("update _vt.vreplication set message='Picked source tablet", testDMLResponse)
 	dbClient.AddInvariant("update _vt.vreplication set state='Running'", testDMLResponse)
 	dbClient.AddInvariant("select pos", testSettingsResponse)
 	dbClient.AddInvariant("set @@session.", testDMLResponse)
@@ -910,7 +921,13 @@ func runControllerSetStateError(t *testing.T, rowValue string, saveErr error) (s
 	dbClient.AddInvariant("select rows_copied", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"))
 	copyStateErr := sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '"+rowValue+"' for key 'val'")
 	copyStateErr.Query = "insert into t1(id, val) values (5, '" + rowValue + "')"
+	// Replicate's setMessage, saving the copy failure's text, fails with its own
+	// MySQL error. The save query quotes the copy failure's 1062, so the record
+	// must report this deadlock (1213), not the quoted number.
+	msgSaveErr := sqlerror.NewSQLError(sqlerror.ERLockDeadlock, sqlerror.SSLockDeadlock, "Deadlock found when trying to get lock")
+	msgSaveErr.Query = "update _vt.vreplication set message=left('error', 1000) where id=1"
 	dbClient.ExpectRequestRE("from _vt.copy_state", nil, copyStateErr)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message=", nil, msgSaveErr)
 	dbClient.ExpectRequestRE("update _vt.vreplication set state='Error'", nil, saveErr)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -923,10 +940,11 @@ func runControllerSetStateError(t *testing.T, rowValue string, saveErr error) (s
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	require.NoError(t, err)
 
+	setMessageRecord = logs.Wait(t, "Failed to set error state")
 	setStateRecord = logs.Wait(t, "INTERNAL: unable to setState() in controller")
 	errorTextRecord = logs.Wait(t, "INTERNAL: could not set error text")
 	ct.Stop(true)
-	return setStateRecord, errorTextRecord
+	return setMessageRecord, setStateRecord, errorTextRecord
 }
 
 // TestTerminalVReplicationError tests the terminal error messages: the

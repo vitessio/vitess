@@ -199,13 +199,27 @@ func TestApplyEventsFail(t *testing.T) {
 
 // TestApplyEventsLogsSettingsErrors checks the records logged when the player
 // can't write its state or read its settings, before the workflow name is
-// known.
+// known. When the settings read fails with a MySQL error, the player saves that
+// error's text as the stream's message, so the save query quotes the settings
+// error's own "(errno N) ... during query:" marker. When that save then fails
+// with a different MySQL error, the "Error writing stop state" record must
+// report the real save failure's mysql_errno (1205), never the 1062 it quotes.
 func TestApplyEventsLogsSettingsErrors(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
+
+	// The settings read fails with a MySQL error carrying its own query, as
+	// mysql.Conn produces it, so its text ends in a "(errno 1062) ... during
+	// query:" marker that the saved message then quotes.
+	settingsErr := sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "settings failed")
+	settingsErr.Query = "select pos, stop_pos from _vt.vreplication where id=1"
+	// The save of that message fails with a different MySQL error.
+	stopStateErr := sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded")
+	stopStateErr.Query = "update _vt.vreplication set state='Error', message=left('settings failed', 1000) where id=1"
+
 	dbClient := NewMockDBClient(t)
 	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", nil, errors.New("running state failed"))
-	dbClient.ExpectRequest(TestGetWorkflowQueryId1, nil, errors.New("settings failed"))
-	dbClient.ExpectRequestRE("update _vt.vreplication set state='Error', message='.*settings failed.*' where id=1", nil, errors.New("stop state failed"))
+	dbClient.ExpectRequest(TestGetWorkflowQueryId1, nil, settingsErr)
+	dbClient.ExpectRequestRE("update _vt.vreplication set state='Error', message='.*settings failed.*' where id=1", nil, stopStateErr)
 
 	stats := NewStats()
 	defer stats.Stop()
@@ -218,7 +232,6 @@ func TestApplyEventsLogsSettingsErrors(t *testing.T) {
 	for msg, wantErr := range map[string]string{
 		"Error writing Running state":             "running state failed",
 		"Error reading the VReplication settings": "settings failed",
-		"Error writing stop state":                "stop state failed",
 	} {
 		record := logs.Record(t, msg)
 		assert.EqualValues(t, 1, record["stream_id"], msg)
@@ -226,6 +239,16 @@ func TestApplyEventsLogsSettingsErrors(t *testing.T) {
 		assert.Contains(t, record["error"], wantErr, msg)
 		assert.NotContains(t, record, "error_code", msg)
 	}
+
+	// The stop-state save failed with a lock wait timeout while saving a message
+	// that quotes the settings error's 1062. Its record must report the real
+	// failure's number (1205), never the 1062 its text quotes.
+	stopState := logs.Record(t, "Error writing stop state")
+	assert.EqualValues(t, 1, stopState["stream_id"])
+	assert.NotContains(t, stopState, "workflow")
+	assert.Contains(t, stopState["error"], "Lock wait timeout")
+	assert.NotContains(t, stopState, "error_code")
+	assert.EqualValues(t, sqlerror.ERLockWaitTimeout, stopState["mysql_errno"])
 }
 
 // TestApplyEventsLogsSourceErrors checks the records logged when the player
