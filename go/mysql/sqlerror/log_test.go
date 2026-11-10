@@ -143,12 +143,25 @@ func TestParseErrnoLarge(t *testing.T) {
 	quoted := strings.Repeat("'"+fakeMarker+"' ", 1<<20/40) + dupEntry + " (errno 1062) (sqlstate 23000)"
 	broken := strings.Repeat("(errno 1062) ", 1<<20/13)
 	start := time.Now()
-	errno, ok := parseErrno(quoted)
-	assert.True(t, ok)
-	assert.Equal(t, ERDupEntry, errno)
+	_, ok := parseErrno(quoted)
+	assert.False(t, ok)
 	_, ok = parseErrno(broken)
 	assert.False(t, ok)
 	assert.Less(t, time.Since(start), 60*time.Second)
+}
+
+// TestParseErrnoMarkerCap checks that parseErrno gives up after maxErrnoMarkers
+// markers, rather than reading a number that sits behind more quoted markers.
+func TestParseErrnoMarkerCap(t *testing.T) {
+	real := dupEntry + " (errno 1062) (sqlstate 23000)"
+	quoted := func(n int) string { return strings.Repeat("'"+fakeMarker+"' ", n) }
+
+	errno, ok := parseErrno(quoted(maxErrnoMarkers-1) + real)
+	assert.True(t, ok)
+	assert.Equal(t, ERDupEntry, errno)
+
+	_, ok = parseErrno(quoted(maxErrnoMarkers) + real)
+	assert.False(t, ok)
 }
 
 func TestLogMySQLError(t *testing.T) {

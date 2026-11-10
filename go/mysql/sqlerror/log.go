@@ -80,6 +80,10 @@ func mysqlErrno(v slog.Value) (ErrorCode, bool) {
 // leads back to itself can't hang the logging call or overflow the stack.
 const maxChainErrors = 100
 
+// maxErrnoMarkers bounds the "(errno " markers parseErrno checks, so that
+// logging a very long error text costs a bounded amount.
+const maxErrnoMarkers = 100
+
 // findSQLError returns the first *SQLError in err's chain, following both
 // Unwrap and vterrors' Cause, and visiting at most *budget errors.
 func findSQLError(err error, budget *int) *SQLError {
@@ -114,8 +118,10 @@ func findSQLError(err error, budget *int) *SQLError {
 // NewSQLErrorFromError reads. It stops at the first marker followed by what
 // Vitess puts after a MySQL error; a marker followed by anything else is
 // quoted text, such as an earlier error in a failed query, and is skipped.
+// It gives up after maxErrnoMarkers markers, so a very long error costs a
+// bounded amount and an error with more quoted markers than that gets no number.
 func parseErrno(text string) (ErrorCode, bool) {
-	for {
+	for range maxErrnoMarkers {
 		i := strings.Index(text, "(errno ")
 		if i < 0 {
 			return 0, false
@@ -132,6 +138,7 @@ func parseErrno(text string) (ErrorCode, bool) {
 		}
 		text = text[loc[1]:]
 	}
+	return 0, false
 }
 
 // endsMySQLError reports whether rest, the text after an errno and sqlstate
