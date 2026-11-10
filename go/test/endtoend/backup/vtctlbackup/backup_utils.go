@@ -503,6 +503,9 @@ func startShard(t *testing.T) {
 		newVttabletProcess(tablet)
 	}
 	t.Cleanup(func() { stopShard(t, tablets) })
+	// Cleanups run in reverse order, so this one runs first, while the data
+	// still exists. Its assertions can end it early, but not the teardown.
+	t.Cleanup(func() { checkShard(t, tablets) })
 
 	require.NoError(t, startMySQLs(primary, replica1, replica2))
 	setupErrs := make([]error, 2)
@@ -529,20 +532,21 @@ func startShard(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// stopShard keeps the tablets' logs if the test failed, checks that none of
-// the tablets' data directories has files with global permissions, stops the
-// tablets in parallel, deletes their data and their topo records, and removes
-// all backups. It keeps going after an error and reports all errors at the
-// end.
-func stopShard(t *testing.T, tablets []*cluster.Vttablet) {
-	// Before the data directories, and the mysqld logs in them, are deleted.
+// checkShard keeps the tablets' logs if the test failed and checks that none
+// of the tablets' data directories has files with global permissions.
+func checkShard(t *testing.T, tablets []*cluster.Vttablet) {
 	if t.Failed() {
 		keepTabletLogs(t, tablets)
 	}
 	for _, tablet := range tablets {
 		tablet.VttabletProcess.ConfirmDataDirHasNoGlobalPerms(t)
 	}
+}
 
+// stopShard stops the tablets in parallel, deletes their data and their topo
+// records, and removes all backups. It keeps going after an error and reports
+// all errors at the end.
+func stopShard(t *testing.T, tablets []*cluster.Vttablet) {
 	// The data is deleted right after, so the tablets stop in parallel.
 	errs := make([]error, len(tablets))
 	var wg sync.WaitGroup
