@@ -534,15 +534,23 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, err)
 	waitDDL30 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:30', 1)"
 	db.AddQuery(waitDDL30, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"))
+	// Each wait is timed under the DDLCommitWait type. The timings are process-wide, so they keep
+	// the samples of earlier tests and runs; count from here.
+	ddlCommitWaits := func() int64 {
+		return se.SchemaReloadTimings.Counts()["SchemaTest.DDLCommitWait"]
+	}
+	ddlCommitWaitsBefore := ddlCommitWaits()
 	err = se.ReloadAtDDL(t.Context(), pos3, replication.Mysql56GTID{Server: sid, Sequence: 30})
 	require.NoError(t, err)
 	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL30))
 	assert.Equal(t, pos3, se.reloadAtPos)
+	assert.EqualValues(t, 1, ddlCommitWaits()-ddlCommitWaitsBefore)
 
 	// The engine has already reloaded at pos3, so it doesn't wait again.
 	err = se.ReloadAtDDL(t.Context(), pos3, replication.Mysql56GTID{Server: sid, Sequence: 30})
 	require.NoError(t, err)
 	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL30))
+	assert.EqualValues(t, 1, ddlCommitWaits()-ddlCommitWaitsBefore)
 
 	// A DDL that MySQL doesn't commit within the reload timeout fails the reload, rather than
 	// loading a schema without it.
@@ -555,6 +563,8 @@ func TestOpenAndReload(t *testing.T) {
 	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	assert.Equal(t, 1, db.GetQueryCalledNum(waitDDL40))
 	assert.Equal(t, pos3, se.reloadAtPos)
+	// A wait that times out is timed too.
+	assert.EqualValues(t, 2, ddlCommitWaits()-ddlCommitWaitsBefore)
 
 	// A wait query that MySQL never answers ends when the reload timeout passes, which closes its
 	// connection, and a retry then waits afresh.
@@ -633,6 +643,9 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, <-firstDone)
 	assert.EqualValues(t, 1, waitsDDL60.Load())
 	assert.Equal(t, pos6, se.reloadAtPos)
+	// The two vstreams shared one wait, so it was timed once: the waits for 30, 40, 45 (twice)
+	// and 60 make five.
+	assert.EqualValues(t, 5, ddlCommitWaits()-ddlCommitWaitsBefore)
 }
 
 // TestUserTableNamedDual verifies that a real user table named `dual` is

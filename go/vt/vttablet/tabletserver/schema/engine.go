@@ -494,6 +494,11 @@ func (se *Engine) waitForGTID(ctx context.Context, gtid replication.Mysql56GTID)
 	defer stop()
 
 	start := time.Now()
+	// Each wait query is timed, whatever its outcome, so that DDLs that are slow to commit, such
+	// as ones held for a semi-sync acknowledgement, show in the metrics and not only in the log
+	// below. It is one sample per shared wait, not per vstream: a vstream that joins partway
+	// through, or whose context ends first, is held for less.
+	defer se.SchemaReloadTimings.Record("DDLCommitWait", start)
 	ddlPos := replication.Position{GTIDSet: gtid.GTIDSet()}
 	if err := conn.WaitUntilPosition(ctx, ddlPos); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
