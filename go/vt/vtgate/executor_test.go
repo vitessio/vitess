@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/srvtopo/fakesrvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -144,11 +145,18 @@ func TestPlanKey(t *testing.T) {
 }
 
 func TestExecutorResultsExceeded(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
 	executor, _, _, sbclookup, ctx := createExecutorEnv(t)
 
 	save := warnMemoryRows
 	warnMemoryRows = 3
 	defer func() { warnMemoryRows = save }()
+
+	// The logger is throttled and shared by the whole package, so use a fresh
+	// one to make sure the warning is emitted here.
+	savedLogger := exceedMemoryRowsLogger
+	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", time.Minute)
+	t.Cleanup(func() { exceedMemoryRowsLogger = savedLogger })
 
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
@@ -162,9 +170,24 @@ func TestExecutorResultsExceeded(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, initial, warnings.Counts()["ResultsExceeded"], "warnings count")
 
-	_, err = executorExecSession(ctx, executor, session, "select * from main1", nil)
+	const msg = "query exceeds warning threshold of max memory rows"
+	_, err = executorExecSession(ctx, executor, session, "select * from main1 where name = 'rows-sentinel'", nil)
 	require.NoError(t, err)
 	assert.Equal(t, initial+1, warnings.Counts()["ResultsExceeded"], "warnings count")
+	record := logs.Record(t, msg)
+	assert.Equal(t, "WARN", record["level"])
+	assert.Contains(t, record["query"], "main1")
+	assert.NotContains(t, logs.String(), "rows-sentinel")
+
+	logs.Reset()
+	exceedMemoryRowsLogger = logutil.NewThrottledLogger("ExceedMemoryRows", time.Minute)
+	sbclookup.SetResults([]*sqltypes.Result{result2})
+	err = executor.StreamExecute(ctx, nil, "TestExecutorResultsExceeded", session, "select * from main1 where name = 'rows-sentinel'", nil, false, func(*sqltypes.Result) error { return nil })
+	require.NoError(t, err)
+	record = logs.Record(t, msg)
+	assert.Equal(t, "WARN", record["level"])
+	assert.Contains(t, record["query"], "main1")
+	assert.NotContains(t, logs.String(), "rows-sentinel")
 }
 
 func TestExecutorMaxMemoryRowsExceeded(t *testing.T) {
