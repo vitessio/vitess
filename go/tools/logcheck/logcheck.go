@@ -32,13 +32,15 @@ limitations under the License.
 //
 // Keys that can hold data include:
 //
-//   - error
-//   - query, queries, schema_diff, filter, expression, schema, request, result and
+//   - error, reason, grpc_message and lock_contents
+//   - query, queries, schema_diff, alter, where, select_table, filter,
+//     expression, schema, vschema, fields, field_event, request, result and
 //     throttler_config
 //   - last_pk, row, row_range, values, next_value, last_value, event,
-//     transaction, message, packet, stage, stderr and panic
+//     journal, task_result, transaction, message, packet, stage and panic
 //   - exec_cmd, args, process_name, stdout, stderr and error_log
-//   - settings and azblob_message
+//   - settings, azblob_message, cached_value, migration_context,
+//     action_arg, workflow_params, workflow_details and vdiff_options
 package logcheck
 
 import (
