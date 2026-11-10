@@ -34,10 +34,12 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // TestRowStreamerQuery validates that the correct force index hint and order by is added to the rowstreamer query.
@@ -1096,15 +1098,33 @@ func TestRowStreamerMemoryBoundsFlag(t *testing.T) {
 	}
 }
 
-// TestStreamRowsRejectsUnknownOverride checks that an override the source does not know fails the stream
-// with an error that names the key, instead of a nil streamer and a panic.
-func TestStreamRowsRejectsUnknownOverride(t *testing.T) {
+// TestStreamsRejectUnknownOverride checks that an override the source does not know fails every stream
+// kind with an INVALID_ARGUMENT error that names the key, instead of a nil streamer and a panic: the copy
+// (StreamRows, StreamTables) and the running phase (Stream, from "current" and from a position).
+func TestStreamsRejectUnknownOverride(t *testing.T) {
 	options := &binlogdatapb.VStreamOptions{ConfigOverrides: map[string]string{"no-such-override": "1"}}
-	err := engine.StreamRows(t.Context(), "select * from t1", nil, func(*binlogdatapb.VStreamRowsResponse) error {
-		return nil
-	}, options)
-	require.ErrorContains(t, err, "no-such-override")
+	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "/.*/"}}}
 
-	err = engine.StreamTables(t.Context(), func(*binlogdatapb.VStreamTablesResponse) error { return nil }, options)
-	require.ErrorContains(t, err, "no-such-override")
+	streams := map[string]func() error{
+		"StreamRows": func() error {
+			return engine.StreamRows(t.Context(), "select * from t1", nil, func(*binlogdatapb.VStreamRowsResponse) error { return nil }, options)
+		},
+		"StreamTables": func() error {
+			return engine.StreamTables(t.Context(), func(*binlogdatapb.VStreamTablesResponse) error { return nil }, options)
+		},
+		"Stream from current": func() error {
+			return engine.Stream(t.Context(), "current", nil, filter, "", func([]*binlogdatapb.VEvent) error { return nil }, options)
+		},
+		"Stream from a position": func() error {
+			return engine.Stream(t.Context(), primaryPosition(t), nil, filter, "", func([]*binlogdatapb.VEvent) error { return nil }, options)
+		},
+	}
+
+	for name, stream := range streams {
+		t.Run(name, func(t *testing.T) {
+			err := stream()
+			require.ErrorContains(t, err, "no-such-override")
+			assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+		})
+	}
 }
