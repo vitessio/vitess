@@ -99,8 +99,10 @@ type vstreamer struct {
 	// eventGTID is the formatted GTID of the current transaction, or empty
 	// outside one. It is set by setEventGTID and stamped on each VEvent.
 	eventGTID string
-	// gtid is the GTID of the last GTID event, which for a DDL is the DDL's own.
-	// setEventGTID sets it together with eventGTID.
+	// gtid is the GTID of the last GTID event. For a DDL, it is the DDL's own GTID, which
+	// parseEvent passes to ReloadAtDDL. It is nil before the first GTID event, and from
+	// each binlog file boundary (a rotate, stop, format description or previous-GTIDs event)
+	// until the next GTID event. setEventGTID sets and clears it together with eventGTID.
 	gtid replication.GTID
 
 	phase   string
