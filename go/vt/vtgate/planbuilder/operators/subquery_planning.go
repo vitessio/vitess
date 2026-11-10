@@ -880,7 +880,7 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 // variable that nothing binds once the two queries are one.
 func routedByOuterColumns(subq *SubQuery, routing Routing) bool {
 	sr, ok := routing.(*ShardedRouting)
-	if !ok {
+	if !ok || sr.Selected == nil {
 		return false
 	}
 	var found bool

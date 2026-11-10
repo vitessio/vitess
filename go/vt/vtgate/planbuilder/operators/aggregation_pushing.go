@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func errDistinctAggrWithMultiExpr(f sqlparser.AggrFunc) {
@@ -95,6 +96,9 @@ func pushAggregationThroughSubquery(
 	rootAggr *Aggregator,
 	src *SubQueryContainer,
 ) (Operator, *ApplyResult) {
+	for _, subQuery := range src.Inner {
+		refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx, rootAggr, src, subQuery)
+	}
 	pushedAggr := rootAggr.SplitAggregatorBelowOperators(ctx, []Operator{src.Outer})
 	for _, subQuery := range src.Inner {
 		lhsCols := subQuery.OuterExpressionsNeeded(ctx, src.Outer)
@@ -125,6 +129,53 @@ func pushAggregationThroughSubquery(
 	rootAggr.aggregateTheAggregates()
 
 	return rootAggr, Rewrote("push Aggregation under subquery")
+}
+
+// refuseDistinctOverReferenceRowsGroupedByOuterColumns refuses a distinct aggregation that would be pushed
+// under a reference route to be grouped by the outer columns its subquery is routed by, when its argument
+// does not use them: the distinct values would be counted once per group instead of once.
+func refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx *plancontext.PlanningContext, aggr *Aggregator, src *SubQueryContainer, subQuery *SubQuery) {
+	outer, ok := src.Outer.(*Route)
+	if !ok {
+		return
+	}
+	if _, ok := outer.Routing.(*AnyShardRouting); !ok {
+		return
+	}
+	inner, ok := subQuery.Subquery.(*Route)
+	if !ok || !routedByOuterColumns(subQuery, inner.Routing) {
+		return
+	}
+	lhsCols := slices.DeleteFunc(subQuery.OuterExpressionsNeeded(ctx, src.Outer), func(col *sqlparser.ColName) bool {
+		ti, err := ctx.SemTable.TableInfoForExpr(col)
+		if err != nil {
+			return true
+		}
+		vt := ti.GetVindexTable()
+		return vt.Type != vindexes.TypeReference && len(vt.ReferencedBy) == 0
+	})
+	for _, a := range aggr.Aggregations {
+		if !a.Distinct {
+			continue
+		}
+		args := a.Func.GetArgs()
+		usesGroup := func(col *sqlparser.ColName) bool {
+			return slices.ContainsFunc(args, func(arg sqlparser.Expr) bool {
+				found := false
+				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+					if e, ok := node.(sqlparser.Expr); ok && ctx.SemTable.EqualsExpr(e, col) {
+						found = true
+					}
+					return !found, nil
+				}, arg)
+				return found
+			})
+		}
+		if !slices.ContainsFunc(lhsCols, func(col *sqlparser.ColName) bool { return !usesGroup(col) }) {
+			continue
+		}
+		panic(vterrors.VT12001("distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"))
+	}
 }
 
 func (a *Aggregator) aggregateTheAggregates() {
