@@ -33,7 +33,7 @@ limitations under the License.
 // Keys that can hold data include:
 //
 //   - error, last_sql_error and last_io_error
-//   - query, queries, filter and expression
+//   - query, queries, filter, expression and result
 //   - last_pk, row, values, event, transaction, message and panic
 //   - args, exec_cmd, stdout and stderr
 //   - tablet_info and primary_tablet_info
