@@ -165,6 +165,10 @@ func LoadConfig(r io.Reader, configType string) (cfg *Config, id string, err err
 		return nil, id, err
 	}
 
+	// unmarshalMap decodes the id from tmp, where a boolean id decodes to "1"
+	// or "0" instead of "true" or "false".
+	cfg.ID = id
+
 	return cfg, id, nil
 }
 
