@@ -18,6 +18,7 @@ package cluster_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -38,11 +39,13 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
 	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
+	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -109,6 +112,32 @@ func TestNewClosesVTGateProxyWhenVtctldFails(t *testing.T) {
 			}, 30*time.Second, 100*time.Millisecond)
 		})
 	}
+
+	t.Run("vtgate dial error", func(t *testing.T) {
+		cfg := cluster.Config{
+			ID:            "c1",
+			Name:          "c1",
+			DiscoveryImpl: "dynamic",
+			DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+				"dynamic": {
+					"discovery": `{"vtctlds": [{"host": {"hostname": "vtctld.invalid:15999"}}], "vtgates": [{"host": {"hostname": "vtgate.invalid:15991"}}]}`,
+				},
+			},
+		}.WithVtSQLTestConfigOptions(vtsql.WithDialFunc(func(vitessdriver.Configuration) (*sql.DB, error) {
+			return nil, errors.New("vtgate dial failed")
+		}))
+
+		existingGoroutines := goleak.IgnoreCurrent()
+		for range 5 {
+			c, err := cfg.Cluster(t.Context())
+			require.Error(t, err)
+			assert.Nil(t, c)
+		}
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.NoError(c, goleak.Find(existingGoroutines))
+		}, 30*time.Second, 100*time.Millisecond)
+	})
 }
 
 func TestCreateKeyspace(t *testing.T) {

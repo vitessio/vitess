@@ -109,6 +109,12 @@ func TestDynamicClusterHeader(t *testing.T) {
 		}
 	})
 
+	t.Run("unknown backoff strategy", func(t *testing.T) {
+		spec := `{"id": "bogus_backoff", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtgates\":[{\"host\":{\"hostname\":\"localhost:1\"}}]}", "vtctld-backoff-strategy": "bogus"}`
+		_, err := client.GetClusters(withSpec(t, spec), &vtadminpb.GetClustersRequest{})
+		assert.Equal(t, codes.NotFound, status.Code(err), "%v", err)
+	})
+
 	t.Run("vtadmin is still running", func(t *testing.T) {
 		code, resp, err := vp.MakeAPICall("api/keyspaces")
 		require.NoError(t, err)

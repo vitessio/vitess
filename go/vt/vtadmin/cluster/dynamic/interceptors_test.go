@@ -34,9 +34,12 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
+	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/dynamic"
 	"vitess.io/vitess/go/vt/vtenv"
 
@@ -57,6 +60,14 @@ const (
 	// idOnlySpec has an id but cannot be built into a cluster.
 	idOnlySpec = `{"id": "dynamic_cluster"}`
 )
+
+const panickingDiscoveryImpl = "vtadmin.dynamic.panic"
+
+func init() {
+	discovery.Register(panickingDiscoveryImpl, func(*vtadminpb.Cluster, *pflag.FlagSet, []string) (discovery.Discovery, error) {
+		panic("discovery failed")
+	})
+}
 
 func newDynamicAPI(t *testing.T) *vtadmin.API {
 	t.Helper()
@@ -215,6 +226,21 @@ func TestUnaryServerInterceptorRecoversWithClusterPanic(t *testing.T) {
 
 	record := logs.Record(t, "panic in dynamic cluster interceptor")
 	assert.Equal(t, "WithCluster failed", record["panic"])
+}
+
+// Not parallel, because it captures the process-wide logger.
+func TestUnaryServerInterceptorRecoversDiscoveryPanic(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelError)
+	interceptor := dynamic.UnaryServerInterceptor(newDynamicAPI(t))
+	spec := `{"id": "panic_cluster", "discovery": "` + panickingDiscoveryImpl + `"}`
+
+	resp, err := interceptor(clusterContext(t.Context(), spec), &vtadminpb.GetClustersRequest{}, getClustersInfo(), staticHandler(t))
+	require.Error(t, err)
+	assert.Equal(t, codes.Internal, status.Code(err), "unexpected error: %v", err)
+	assert.Nil(t, resp)
+
+	record := logs.Record(t, "panic in dynamic cluster interceptor")
+	assert.Equal(t, "discovery failed", record["panic"])
 }
 
 // Not parallel, because it checks for leaked goroutines.
