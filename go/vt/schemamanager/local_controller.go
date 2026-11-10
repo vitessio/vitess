@@ -19,6 +19,7 @@ package schemamanager
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
@@ -88,7 +89,7 @@ func (controller *LocalController) Open(ctx context.Context) error {
 		dirpath := path.Join(controller.schemaChangeDir, fileinfo.Name())
 		schemaChanges, err := os.ReadDir(path.Join(dirpath, "input"))
 		if err != nil {
-			log.Warn("there is no input dir in " + dirpath)
+			log.Warn("there is no input dir", slog.String("dir", dirpath))
 			continue
 		}
 		// found a schema change
@@ -148,7 +149,7 @@ func (controller *LocalController) OnReadSuccess(ctx context.Context) error {
 
 // OnReadFail is no-op
 func (controller *LocalController) OnReadFail(ctx context.Context, err error) error {
-	log.Error(fmt.Sprintf("failed to read file: %s, error: %v", controller.sqlPath, err))
+	log.Error("failed to read file", slog.String("path", controller.sqlPath), slog.Any("error", err))
 	return nil
 }
 

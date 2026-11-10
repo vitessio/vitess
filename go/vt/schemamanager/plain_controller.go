@@ -19,10 +19,11 @@ package schemamanager
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // PlainController implements Controller interface.
@@ -75,7 +76,7 @@ func (controller *PlainController) OnReadSuccess(ctx context.Context) error {
 
 // OnReadFail is called when schemamanager fails to read all sql statements.
 func (controller *PlainController) OnReadFail(ctx context.Context, err error) error {
-	log.Error(fmt.Sprintf("Failed to read schema changes, error: %v\n", err))
+	log.Error("Failed to read schema changes", slog.Any("error", err))
 	return err
 }
 
@@ -87,14 +88,14 @@ func (controller *PlainController) OnValidationSuccess(ctx context.Context) erro
 
 // OnValidationFail is called when schemamanager fails to validate sql statements.
 func (controller *PlainController) OnValidationFail(ctx context.Context, err error) error {
-	log.Error(fmt.Sprintf("Failed to validate SQL statements, error: %v\n", err))
+	log.Error("Failed to validate SQL statements", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	return err
 }
 
 // OnExecutorComplete  is called when schemamanager finishes applying schema changes.
 func (controller *PlainController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	out, _ := json.MarshalIndent(result, "", "  ")
-	log.Info(fmt.Sprintf("Executor finished, result: %s\n", string(out)))
+	log.Info("Executor finished", slog.String("result", string(out)))
 	return nil
 }
 

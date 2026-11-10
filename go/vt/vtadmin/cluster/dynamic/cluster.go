@@ -44,7 +44,11 @@ import (
 //		// log error. if desired, lookup the existing cluster with ID: `id`
 //	}
 //	// Use `c` (or existing cluster with ID == `id`) based on the dynamic cluster
-//	api.WithCluster(c, id).DoAThing()
+//	dynamicAPI, err := api.WithCluster(c, id)
+//	if err != nil {
+//		// neither `c` nor an existing cluster with ID: `id` is available.
+//	}
+//	dynamicAPI.DoAThing()
 func ClusterFromString(ctx context.Context, s string) (c *cluster.Cluster, id string, err error) {
 	cfg, id, err := cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(s)), "json")
 	if err != nil {
