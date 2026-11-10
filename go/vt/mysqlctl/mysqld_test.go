@@ -542,7 +542,7 @@ func TestReadBinlogFilesTimestampsLogs(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.NotContains(t, logs.String(), "env-secret-sentinel")
-	running := logs.Record(t, "ApplyBinlogFile: running mysqlbinlog command")
+	running := logs.Record(t, "ReadBinlogFilesTimestamps: running mysqlbinlog command")
 	assert.Equal(t, path.Join(root, "bin", "mysqlbinlog")+" binlog.000001", running["exec_cmd"])
 }
 

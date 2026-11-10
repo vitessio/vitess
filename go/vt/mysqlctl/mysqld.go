@@ -2183,7 +2183,7 @@ func (mysqld *Mysqld) scanBinlogTimestamp(
 	mysqlbinlogCmd := exec.Command(mysqlbinlogName, args...)
 	mysqlbinlogCmd.Dir = mysqlbinlogDir
 	mysqlbinlogCmd.Env = mysqlbinlogEnv
-	log.Info("ApplyBinlogFile: running mysqlbinlog command", slog.String("exec_cmd", mysqlbinlogCmd.String()))
+	log.Info("ReadBinlogFilesTimestamps: running mysqlbinlog command", slog.String("exec_cmd", mysqlbinlogCmd.String()))
 	pipe, err := mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
 	if err != nil {
 		return firstMatchedTime, lastMatchedTime, err
