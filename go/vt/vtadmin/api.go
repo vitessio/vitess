@@ -368,16 +368,10 @@ func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) 
 
 			api.clusterCache.Set(id, c, cache.DefaultExpiration)
 		} else {
-<<<<<<< HEAD
 			log.Infof("API already has cluster with id %s, using that instead", id)
-||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
-			log.Info("API already has an equal cluster, using that instead", slog.String("cluster_id", id))
-=======
-			log.Info("API already has an equal cluster, using that instead", slog.String("cluster_id", id))
 			if err := c.Close(); err != nil {
-				log.Error("failed to close duplicate dynamic cluster; some connections and goroutines may linger", slog.String("cluster_id", id), slog.Any("error", err))
+				log.Errorf("failed to close duplicate dynamic cluster %s; some connections and goroutines may linger: %v", id, err)
 			}
->>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 		}
 	}
 
@@ -585,25 +579,10 @@ func (api *API) EjectDynamicCluster(key string, value any) {
 	}
 
 	// Maintain order of clusters when removing dynamic cluster
-<<<<<<< HEAD
-	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
-	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
-		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster index %d is out of range for clusters slice of %d length.", key, clusterIndex, len(api.clusters))
-||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
-	clusterIndex := stdsort.Search(len(api.clusters), func(i int) bool { return api.clusters[i].ID == key })
-	if clusterIndex >= len(api.clusters) || clusterIndex < 0 {
-		log.Error("Cannot remove cluster from api.clusters. Cluster index is out of range for clusters slice.",
-			slog.String("cluster_id", key),
-			slog.Int("cluster_index", clusterIndex),
-			slog.Int("cluster_count", len(api.clusters)))
-=======
 	clusterIndex := slices.IndexFunc(api.clusters, func(c *cluster.Cluster) bool { return c.ID == key })
 	if clusterIndex < 0 {
-		log.Error("Cannot remove cluster from api.clusters. Cluster not found.",
-			slog.String("cluster_id", key),
-			slog.Int("cluster_count", len(api.clusters)))
+		log.Errorf("Cannot remove cluster %s from api.clusters. Cluster not found among %d clusters.", key, len(api.clusters))
 		return
->>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 	}
 
 	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)

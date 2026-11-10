@@ -2,15 +2,7 @@ package dynamic
 
 import (
 	"context"
-<<<<<<< HEAD
-	"strings"
-||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
-	"log/slog"
-	"strings"
-=======
-	"log/slog"
 	"runtime/debug"
->>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -29,11 +21,6 @@ import (
 // its metadata. Otherwise, the interceptor is a no-op, and the original stream
 // handler is invoked.
 func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
-<<<<<<< HEAD
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
-	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-=======
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
 		streamHandler, ok := streamHandlersByFullMethod[info.FullMethod]
 		if !ok {
@@ -44,7 +31,6 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 
 		defer recoverPanic(info.FullMethod, &err)
 
->>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 		c, id, ok, err := clusterFromIncomingContextMetadata(ss.Context())
 		switch { // TODO: see if it's possible to de-duplicate this somehow. Unfortunately the callbacks have different signatures which might make it impossible.
 		case !ok:
@@ -75,11 +61,6 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 // metadata. Otherwise, the interceptor is a no-op, and the original method
 // handler is invoked.
 func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
-<<<<<<< HEAD
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-=======
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		method, ok := methodHandlersByFullMethod[info.FullMethod]
 		if !ok {
@@ -90,7 +71,6 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 
 		defer recoverPanic(info.FullMethod, &err)
 
->>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 		c, id, ok, err := clusterFromIncomingContextMetadata(ctx)
 		switch {
 		case !ok:
@@ -126,7 +106,7 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 // and does not run for those calls.
 func recoverPanic(fullMethod string, err *error) {
 	if p := recover(); p != nil {
-		log.Error("panic in dynamic cluster interceptor", slog.String("method", fullMethod), slog.Any("panic", p), slog.String("stack", string(debug.Stack())))
+		log.Errorf("panic in dynamic cluster interceptor: method=%s panic=%v stack=%s", fullMethod, p, debug.Stack())
 		*err = vterrors.ToGRPC(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "panic triggered: %v", p))
 	}
 }

@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
-	"log/slog"
 	"net/http"
 	"testing"
 	"time"
@@ -36,7 +35,6 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vtadmin"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery"
@@ -184,21 +182,13 @@ func (api *panickingAPI) GetClusters(ctx context.Context, req *vtadminpb.GetClus
 	panic("GetClusters failed")
 }
 
-// Not parallel, because it captures the process-wide logger.
 func TestUnaryServerInterceptorRecoversPanic(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelError)
 	interceptor := dynamic.UnaryServerInterceptor(&panickingAPI{})
 
 	resp, err := interceptor(clusterContext(t.Context(), validSpec), &vtadminpb.GetClustersRequest{}, getClustersInfo(), staticHandler(t))
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err), "unexpected error: %v", err)
 	assert.Nil(t, resp)
-
-	record := logs.Record(t, "panic in dynamic cluster interceptor")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "/vtadmin.VTAdmin/GetClusters", record["method"])
-	assert.Equal(t, "GetClusters failed", record["panic"])
-	assert.Contains(t, record["stack"], "(*panickingAPI).GetClusters")
 }
 
 // panickingWithClusterAPI is a dynamic API whose WithCluster panics.
@@ -214,23 +204,16 @@ func (api *panickingWithClusterAPI) WithCluster(c *cluster.Cluster, id string) (
 	panic("WithCluster failed")
 }
 
-// Not parallel, because it captures the process-wide logger.
 func TestUnaryServerInterceptorRecoversWithClusterPanic(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelError)
 	interceptor := dynamic.UnaryServerInterceptor(&panickingWithClusterAPI{})
 
 	resp, err := interceptor(clusterContext(t.Context(), validSpec), &vtadminpb.GetClustersRequest{}, getClustersInfo(), staticHandler(t))
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err), "unexpected error: %v", err)
 	assert.Nil(t, resp)
-
-	record := logs.Record(t, "panic in dynamic cluster interceptor")
-	assert.Equal(t, "WithCluster failed", record["panic"])
 }
 
-// Not parallel, because it captures the process-wide logger.
 func TestUnaryServerInterceptorRecoversDiscoveryPanic(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelError)
 	interceptor := dynamic.UnaryServerInterceptor(newDynamicAPI(t))
 	spec := `{"id": "panic_cluster", "discovery": "` + panickingDiscoveryImpl + `"}`
 
@@ -238,9 +221,6 @@ func TestUnaryServerInterceptorRecoversDiscoveryPanic(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, codes.Internal, status.Code(err), "unexpected error: %v", err)
 	assert.Nil(t, resp)
-
-	record := logs.Record(t, "panic in dynamic cluster interceptor")
-	assert.Equal(t, "discovery failed", record["panic"])
 }
 
 // Not parallel, because it checks for leaked goroutines.
