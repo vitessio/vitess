@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 
@@ -172,7 +173,7 @@ func (updateStream *UpdateStreamImpl) RegisterService() {
 
 func logError() {
 	if x := recover(); x != nil {
-		log.Error(fmt.Sprintf("%s at\n%s", x.(error).Error(), tb.Stack(4)))
+		log.Error("caught panic", slog.String("panic", x.(error).Error()), slog.String("stack", string(tb.Stack(4))))
 	}
 }
 
@@ -187,7 +188,7 @@ func (updateStream *UpdateStreamImpl) Enable() {
 
 	updateStream.state.Store(usEnabled)
 	updateStream.streams.Init()
-	log.Info("Enabling update stream, dbname: " + updateStream.cp.DBName())
+	log.Info("Enabling update stream", slog.String("db_name", updateStream.cp.DBName()))
 }
 
 // Disable will disallow any connection to the service
@@ -229,7 +230,7 @@ func (updateStream *UpdateStreamImpl) StreamKeyRange(ctx context.Context, positi
 
 	streamCount.Add("KeyRange", 1)
 	defer streamCount.Add("KeyRange", -1)
-	log.Info(fmt.Sprintf("ServeUpdateStream starting @ %#v", pos))
+	log.Info("ServeUpdateStream starting", slog.String("position", replication.EncodePosition(pos)))
 
 	// Calls cascade like this: binlog.Streamer->keyRangeFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
 	f := keyRangeFilterFunc(keyRange, func(trans *binlogdatapb.BinlogTransaction) error {
@@ -269,7 +270,7 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 
 	streamCount.Add("Tables", 1)
 	defer streamCount.Add("Tables", -1)
-	log.Info(fmt.Sprintf("ServeUpdateStream starting @ %#v", pos))
+	log.Info("ServeUpdateStream starting", slog.String("position", replication.EncodePosition(pos)))
 
 	// Calls cascade like this: binlog.Streamer->tablesFilterFunc->func(*binlogdatapb.BinlogTransaction)->callback
 	f := tablesFilterFunc(tables, func(trans *binlogdatapb.BinlogTransaction) error {
@@ -289,7 +290,7 @@ func (updateStream *UpdateStreamImpl) StreamTables(ctx context.Context, position
 // HandlePanic is part of the UpdateStream interface
 func (updateStream *UpdateStreamImpl) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error("Uncaught panic", slog.Any("panic", x), slog.String("stack", string(tb.Stack(4))))
 		*err = fmt.Errorf("uncaught panic: %v", x)
 	}
 }

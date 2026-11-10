@@ -19,7 +19,7 @@ limitations under the License.
 package servenv
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"runtime/debug"
@@ -56,7 +56,7 @@ func Init() {
 	}
 
 	// Add version tag to every info log
-	log.Info(AppVersion.String())
+	AppVersion.logInfo()
 	if inited {
 		log.Error("servenv.Init called second time")
 		os.Exit(1)
@@ -77,7 +77,7 @@ func Init() {
 	// the server.
 	fdLimit := &syscall.Rlimit{}
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
-		log.Error(fmt.Sprintf("max-open-fds failed: %v", err))
+		log.Error("max-open-fds failed", slog.Any("error", err))
 	}
 	fdl := stats.NewGauge("MaxFds", "File descriptor limit")
 	fdl.Set(int64(fdLimit.Cur))

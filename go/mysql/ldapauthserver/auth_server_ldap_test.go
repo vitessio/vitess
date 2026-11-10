@@ -19,10 +19,14 @@ package ldapauthserver
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ldap "gopkg.in/ldap.v2"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 type MockLdapClient struct{}
@@ -96,8 +100,13 @@ func TestFailedRefreshDoesNotFreezeFutureUpdates(t *testing.T) {
 	lud := &LdapUserData{asl: asl, groups: []string{"stalegroup"}, username: "testuser"}
 
 	// The first refresh fails at Connect, so the cached groups are left untouched.
+	logs := logtest.Capture(t, slog.LevelInfo)
 	lud.update()
 	require.Equal(t, []string{"stalegroup"}, lud.groups, "a failed refresh should not change cached groups")
+	record := logs.Record(t, "Error updating LDAP user data")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "simulated LDAP connect failure", record["error"])
+	assert.NotContains(t, logs.String(), asl.Password)
 
 	// The failed refresh must not leave updating latched: the next refresh has to run and succeed.
 	lud.update()

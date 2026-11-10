@@ -18,6 +18,7 @@ package binlog
 
 import (
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -40,7 +41,7 @@ func keyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 			case binlogdatapb.BinlogTransaction_Statement_BL_SET:
 				filtered = append(filtered, statement.Statement)
 			case binlogdatapb.BinlogTransaction_Statement_BL_DDL:
-				log.Warn(fmt.Sprintf("Not forwarding DDL: %s", statement.Statement.Sql))
+				log.Warn("Not forwarding DDL", slog.String("query", string(statement.Statement.Sql)))
 				continue
 			case binlogdatapb.BinlogTransaction_Statement_BL_INSERT,
 				binlogdatapb.BinlogTransaction_Statement_BL_UPDATE,
@@ -56,7 +57,7 @@ func keyRangeFilterFunc(keyrange *topodatapb.KeyRange, callback func(*binlogdata
 				matched = true
 			case binlogdatapb.BinlogTransaction_Statement_BL_UNRECOGNIZED:
 				updateStreamErrors.Add("KeyRangeStream", 1)
-				log.Error(fmt.Sprintf("Error parsing keyspace id: %s", statement.Statement.Sql))
+				log.Error("Error parsing keyspace id", slog.String("query", string(statement.Statement.Sql)))
 				continue
 			}
 		}

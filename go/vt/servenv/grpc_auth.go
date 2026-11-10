@@ -18,7 +18,7 @@ package servenv
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -65,7 +65,7 @@ var authPlugins = make(map[string]func() (Authenticator, error))
 // RegisterAuthPlugin registers an implementation of AuthServer.
 func RegisterAuthPlugin(name string, authPlugin func() (Authenticator, error)) {
 	if _, ok := authPlugins[name]; ok {
-		log.Error(fmt.Sprintf("AuthPlugin named %v already exists", name))
+		log.Error("AuthPlugin already exists", slog.String("auth_plugin", name))
 		os.Exit(1)
 	}
 	authPlugins[name] = authPlugin
@@ -75,7 +75,7 @@ func RegisterAuthPlugin(name string, authPlugin func() (Authenticator, error)) {
 func GetAuthenticator(name string) func() (Authenticator, error) {
 	authPlugin, ok := authPlugins[name]
 	if !ok {
-		log.Error(fmt.Sprintf("no AuthPlugin name %v registered", name))
+		log.Error("no AuthPlugin registered", slog.String("auth_plugin", name))
 		os.Exit(1)
 	}
 	return authPlugin
