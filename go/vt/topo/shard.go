@@ -733,6 +733,12 @@ func (ts *Server) GetTabletMapForShardWithCellTimeout(ctx context.Context, keysp
 // cells that did not answer within cellTimeout, sorted, so that the caller can tell a tablet whose
 // cell's topology server does not answer from a tablet that does not exist.
 func (ts *Server) GetTabletMapAndFailedCellsForShard(ctx context.Context, keyspace, shard string, cellTimeout time.Duration) (map[string]*TabletInfo, []string, error) {
+	// The shard record lives in the global topology server: read it on its own, so that a shard
+	// that does not exist is an error also when no cell is registered, and no read of a cell
+	// reaches it.
+	if _, err := ts.GetShard(ctx, keyspace, shard); err != nil {
+		return nil, nil, err
+	}
 	cells, err := ts.GetCellInfoNames(ctx)
 	if err != nil {
 		return nil, nil, err

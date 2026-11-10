@@ -657,7 +657,7 @@
       ],
       "Args": [
         "-timeout",
-        "40m"
+        "25m"
       ],
       "Command": [],
       "Manual": false,

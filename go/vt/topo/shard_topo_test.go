@@ -138,3 +138,26 @@ func TestGetTabletMapForShardWithCellTimeout(t *testing.T) {
 	_, err = ts.GetTabletMapForShardWithCellTimeout(readCtx, "ks", "-80", 100*time.Millisecond)
 	require.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
 }
+
+// TestGetTabletMapForShardWithCellTimeoutWithoutCells checks that a shard that does not exist is an
+// error also when no cell is registered, so that no cell's read checks the shard record.
+func TestGetTabletMapForShardWithCellTimeoutWithoutCells(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx)
+	t.Cleanup(ts.Close)
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
+
+	readCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	_, err := ts.GetTabletMapForShardWithCellTimeout(readCtx, "ks", "-80", 100*time.Millisecond)
+	require.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
+	_, _, err = ts.GetTabletMapAndFailedCellsForShard(readCtx, "ks", "-80", 100*time.Millisecond)
+	require.True(t, topo.IsErrType(err, topo.NoNode), "got %v", err)
+
+	// A shard that exists has no tablets without cells.
+	tablets, failed, err := ts.GetTabletMapAndFailedCellsForShard(readCtx, "ks", "0", 100*time.Millisecond)
+	require.NoError(t, err)
+	assert.Empty(t, tablets)
+	assert.Empty(t, failed)
+}
