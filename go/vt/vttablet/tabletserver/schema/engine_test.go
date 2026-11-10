@@ -534,10 +534,10 @@ func TestOpenAndReload(t *testing.T) {
 	require.NoError(t, err)
 	waitDDL30 := "SELECT WAIT_FOR_EXECUTED_GTID_SET('7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:30', 1)"
 	db.AddQuery(waitDDL30, sqltypes.MakeTestResult(sqltypes.MakeTestFields("wait", "int64"), "0"))
-	// Each wait is timed under the DDLCommitWait type. The timings are process-wide, so they keep
-	// the samples of earlier tests and runs; count from here.
+	// Each wait is timed under the DDLCommitWait type of the Waits timings. The timings are
+	// process-wide, so they keep the samples of earlier tests and runs; count from here.
 	ddlCommitWaits := func() int64 {
-		return se.SchemaReloadTimings.Counts()["SchemaTest.DDLCommitWait"]
+		return se.env.Stats().WaitTimings.Counts()["SchemaTest.DDLCommitWait"]
 	}
 	ddlCommitWaitsBefore := ddlCommitWaits()
 	err = se.ReloadAtDDL(t.Context(), pos3, replication.Mysql56GTID{Server: sid, Sequence: 30})
@@ -646,6 +646,8 @@ func TestOpenAndReload(t *testing.T) {
 	// The two vstreams shared one wait, so it was timed once: the waits for 30, 40, 45 (twice)
 	// and 60 make five.
 	assert.EqualValues(t, 5, ddlCommitWaits()-ddlCommitWaitsBefore)
+	// None of them is counted as a schema reload.
+	assert.Zero(t, se.SchemaReloadTimings.Counts()["SchemaTest.DDLCommitWait"])
 }
 
 // TestUserTableNamedDual verifies that a real user table named `dual` is
