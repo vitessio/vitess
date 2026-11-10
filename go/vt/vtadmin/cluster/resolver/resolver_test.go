@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -34,6 +35,7 @@ import (
 	grpcresolver "google.golang.org/grpc/resolver"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster/discovery/fakediscovery"
+	"vitess.io/vitess/go/vt/vtadmin/internal/backoff"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
@@ -58,6 +60,42 @@ func TestSanitizeScheme(t *testing.T) {
 	// schemes must start with a letter; if the cluster ID starts with a digit,
 	// we prepend an 'x' to make it valid.
 	assert.Equal(t, "x1cluster", sanitizeScheme("1cluster"))
+}
+
+func TestBackoffStrategyFlag(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		strategy  string
+		shouldErr bool
+	}{
+		{name: "empty", strategy: ""},
+		{name: "exponential", strategy: "exponential"},
+		{name: "mixed case", strategy: "Linear"},
+		{name: "none", strategy: "none"},
+		{name: "unknown", strategy: "bogus", shouldErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var opts Options
+			fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+			opts.InstallFlags(fs)
+
+			err := fs.Parse([]string{"--backoff-strategy=" + tt.strategy})
+			if tt.shouldErr {
+				assert.ErrorContains(t, err, "unknown backoff strategy bogus")
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.strategy, opts.BackoffStrategy)
+			assert.NotPanics(t, func() { backoff.Get(opts.BackoffStrategy, opts.BackoffConfig) })
+		})
+	}
 }
 
 func newMockClientConn(minExpectedCalls int) *mockClientConn {

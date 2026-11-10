@@ -18,6 +18,11 @@ package cluster_test
 
 import (
 	"context"
+<<<<<<< HEAD
+||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
+=======
+	"database/sql"
+>>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 	"errors"
 	"fmt"
 	"sort"
@@ -27,16 +32,28 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
+	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
+<<<<<<< HEAD
+||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
+	"vitess.io/vitess/go/vt/log/logtest"
+=======
+	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log/logtest"
+>>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 	vtadminerrors "vitess.io/vitess/go/vt/vtadmin/errors"
 	"vitess.io/vitess/go/vt/vtadmin/testutil"
+	vtadminvtctldclient "vitess.io/vitess/go/vt/vtadmin/vtctldclient"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
+	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -46,6 +63,90 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
+
+// Not parallel, because it checks for leaked goroutines.
+func TestNewClosesVTGateProxyWhenVtctldFails(t *testing.T) {
+	tests := []struct {
+		name      string
+		dial      func(ctx context.Context, addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error)
+		wantPanic bool
+	}{
+		{
+			name: "error",
+			dial: func(ctx context.Context, addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+				return nil, errors.New("vtctld dial failed")
+			},
+		},
+		{
+			name: "panic",
+			dial: func(ctx context.Context, addr string, ff grpcclient.FailFast, opts ...grpc.DialOption) (vtctldclient.VtctldClient, error) {
+				panic("vtctld dial failed")
+			},
+			wantPanic: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := cluster.Config{
+				ID:            "c1",
+				Name:          "c1",
+				DiscoveryImpl: "dynamic",
+				DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+					"dynamic": {
+						"discovery": `{"vtctlds": [{"host": {"hostname": "vtctld.invalid:15999"}}], "vtgates": [{"host": {"hostname": "vtgate.invalid:15991"}}]}`,
+					},
+				},
+			}.WithVtctldTestConfigOptions(vtadminvtctldclient.WithDialFunc(tt.dial))
+
+			existingGoroutines := goleak.IgnoreCurrent()
+			for range 5 {
+				func() {
+					defer func() {
+						p := recover()
+						assert.Equal(t, tt.wantPanic, p != nil, "unexpected panic: %v", p)
+					}()
+
+					c, err := cfg.Cluster(t.Context())
+					require.Error(t, err)
+					assert.Nil(t, c)
+				}()
+			}
+
+			// The closed vtgate proxies' DNS lookups end only when DNS
+			// answers, which can take longer than goleak.VerifyNone retries.
+			assert.EventuallyWithT(t, func(c *assert.CollectT) {
+				assert.NoError(c, goleak.Find(existingGoroutines))
+			}, 30*time.Second, 100*time.Millisecond)
+		})
+	}
+
+	t.Run("vtgate dial error", func(t *testing.T) {
+		cfg := cluster.Config{
+			ID:            "c1",
+			Name:          "c1",
+			DiscoveryImpl: "dynamic",
+			DiscoveryFlagsByImpl: cluster.FlagsByImpl{
+				"dynamic": {
+					"discovery": `{"vtctlds": [{"host": {"hostname": "vtctld.invalid:15999"}}], "vtgates": [{"host": {"hostname": "vtgate.invalid:15991"}}]}`,
+				},
+			},
+		}.WithVtSQLTestConfigOptions(vtsql.WithDialFunc(func(vitessdriver.Configuration) (*sql.DB, error) {
+			return nil, errors.New("vtgate dial failed")
+		}))
+
+		existingGoroutines := goleak.IgnoreCurrent()
+		for range 5 {
+			c, err := cfg.Cluster(t.Context())
+			require.Error(t, err)
+			assert.Nil(t, c)
+		}
+
+		assert.EventuallyWithT(t, func(c *assert.CollectT) {
+			assert.NoError(c, goleak.Find(existingGoroutines))
+		}, 30*time.Second, 100*time.Millisecond)
+	})
+}
 
 func TestCreateKeyspace(t *testing.T) {
 	defer utils.EnsureNoLeaks(t)

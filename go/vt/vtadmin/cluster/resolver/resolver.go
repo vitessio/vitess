@@ -107,6 +107,27 @@ func (bp *BalancerPolicy) String() string { return string(*bp) }
 // Type is part of the pflag.Value interface.
 func (*BalancerPolicy) Type() string { return "resolver.BalancerPolicy" }
 
+// backoffStrategy is the flag value for Options.BackoffStrategy. It rejects a
+// strategy that backoff.Get doesn't support, because Get panics in a gRPC
+// goroutine when a resolver is built, where the panic can't be recovered.
+type backoffStrategy string
+
+// Set is part of the pflag.Value interface.
+func (bs *backoffStrategy) Set(s string) error {
+	if err := backoff.Validate(s); err != nil {
+		return err
+	}
+
+	*bs = backoffStrategy(s)
+	return nil
+}
+
+// String is part of the pflag.Value interface.
+func (bs *backoffStrategy) String() string { return string(*bs) }
+
+// Type is part of the pflag.Value interface.
+func (*backoffStrategy) Type() string { return "string" }
+
 // Options defines the configuration options that can produce a resolver.Builder.
 //
 // A builder may be produced directly from an Options struct, but the intended
@@ -211,7 +232,7 @@ func (opts *Options) InstallFlags(fs *pflag.FlagSet) {
 			"Useful to avoid spamming the backing discovery service if multiple ResolveNow calls are made in rapid succession "+
 			"(Note that the interval for failed discovery resolutions are governed by the backoff strategy and configuration, not this flag).")
 
-	fs.StringVar(&opts.BackoffStrategy, "backoff-strategy", "",
+	fs.Var((*backoffStrategy)(&opts.BackoffStrategy), "backoff-strategy",
 		"Backoff strategy to use when backing off of failed discovery resolutions. "+
 			`Permitted values are "exponential", "linear", and "none", and the empty string defaults to "exponential".`)
 	fs.DurationVar(&opts.BackoffConfig.BaseDelay, "backoff-base-delay", defaultBackoffConfig.BaseDelay,
