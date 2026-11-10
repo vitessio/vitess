@@ -279,23 +279,55 @@ func appendJSONQuote(dst []byte, s string) []byte {
 	start := len(dst)
 	// AppendQuote replaces invalid UTF-8 even when it returns an error.
 	dst, _ = jsontext.AppendQuote(dst, s)
-	if !strings.Contains(s, "\u2028") && !strings.Contains(s, "\u2029") {
+	// U+2028 and U+2029 are valid in JSON strings, but pre-ES2019 JavaScript and
+	// some line splitters treat them as line breaks, so keep them escaped.
+	first := nextLineSeparator(dst[start:])
+	if first < 0 {
 		return dst
 	}
-	// U+2028 and U+2029 are valid in JSON strings, but pre-ES2019 JavaScript and
-	// some line splitters treat them as line breaks, so keep them escaped. The
-	// quoted string is valid UTF-8, so 0xE2 here is always a lead byte.
-	for i := start; i+2 < len(dst); i++ {
-		if dst[i] == 0xe2 && dst[i+1] == 0x80 && (dst[i+2] == 0xa8 || dst[i+2] == 0xa9) {
-			last := byte('8')
-			if dst[i+2] == 0xa9 {
-				last = '9'
-			}
-			dst = slices.Replace(dst, i, i+3, '\\', 'u', '2', '0', '2', last)
-			i += 5
+	first += start
+	n := 1
+	for q := dst[first+3:]; ; n++ {
+		i := nextLineSeparator(q)
+		if i < 0 {
+			break
+		}
+		q = q[i+3:]
+	}
+	// Shift everything from the first separator right by the 3 bytes each escape
+	// adds, then copy it back while escaping, so every byte moves at most twice.
+	end := len(dst)
+	dst = slices.Grow(dst, 3*n)[:end+3*n]
+	copy(dst[first+3*n:], dst[first:end])
+	w, r := first, first+3*n
+	for ; n > 0; n-- {
+		i := nextLineSeparator(dst[r:])
+		w += copy(dst[w:], dst[r:r+i])
+		// Read the separator before the escape overwrites it.
+		last := byte('8')
+		if dst[r+i+2] == 0xa9 {
+			last = '9'
+		}
+		w += copy(dst[w:], `\u202`)
+		dst[w] = last
+		w, r = w+1, r+i+3
+	}
+	// Once every escape is written, w has caught up with r, so the rest is in place.
+	return dst
+}
+
+// nextLineSeparator returns the index of the first U+2028 or U+2029 in b, or -1.
+func nextLineSeparator(b []byte) int {
+	for off := 0; ; off++ {
+		i := bytes.IndexByte(b[off:], 0xe2)
+		if i < 0 || off+i+2 >= len(b) {
+			return -1
+		}
+		off += i
+		if b[off+1] == 0x80 && (b[off+2] == 0xa8 || b[off+2] == 0xa9) {
+			return off
 		}
 	}
-	return dst
 }
 
 var loggerPool = sync.Pool{New: func() any {
