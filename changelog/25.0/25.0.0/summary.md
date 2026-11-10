@@ -406,7 +406,7 @@ The row streams behind VReplication copies and VDiffs (`VStreamRows`, `VStreamTa
 
 This is controlled by the new `vttablet` flag `--vstream-memory-bounds`, on by default. `--vstream-memory-bounds=false` restores the previous behavior. On the source side it can also be set per workflow with `Workflow update --config-overrides vstream-memory-bounds=false`; a workflow that benefited from packets above 16 times the base can instead raise `vstream-packet-size` the same way. A workflow's config overrides are sent to every tablet it streams from and to, and a tablet rejects a key it does not know, so set `vstream-memory-bounds` only once every source and target tablet runs a release that has it.
 
-The `VStreamTables` client, which the atomic copy uses, now forwards the workflow's config overrides to the source; it dropped them before. An atomic copy's overrides for the source side (packet sizes, net timeouts, the copy phase duration) apply from this release.
+The `VStreamTables` client, which the atomic copy uses, now forwards the workflow's config overrides to the source; it dropped them before. An atomic copy's overrides for the source side (packet sizes and net timeouts) apply from this release.
 
 See [#20954](https://github.com/vitessio/vitess/issues/20954) for details.
 
