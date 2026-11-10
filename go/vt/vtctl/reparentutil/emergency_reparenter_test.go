@@ -5115,8 +5115,8 @@ func TestERSDivergentTabletsDoNotCountAsSemiSyncAckers(t *testing.T) {
 			logger := logutil.NewMemoryLogger()
 			erp := NewEmergencyReparenter(ts, tmc, logger)
 			err = erp.reparentShardLocked(lockCtx, ev, "testkeyspace", "-", opts)
-			assert.Contains(t, logger.String(), "zone1-0000000101 has GTIDs that the intermediate source zone1-0000000100 lacks")
-			assert.NotContains(t, logger.String(), "zone1-0000000102 has GTIDs")
+			assert.Contains(t, logger.String(), "doesn't count as a semi-sync acker tablet=zone1-0000000101 intermediate_source=zone1-0000000100")
+			assert.NotContains(t, logger.String(), "doesn't count as a semi-sync acker tablet=zone1-0000000102")
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 			} else {
