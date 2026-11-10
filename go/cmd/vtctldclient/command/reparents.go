@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -31,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
-	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
@@ -204,34 +204,10 @@ func commandInitShardPrimary(cmd *cobra.Command, args []string) error {
 	}
 
 	for _, event := range resp.Events {
-		log.Info("InitShardPrimary event", initShardPrimaryEventAttrs(keyspace, shard, event)...)
+		log.Info("InitShardPrimary event", slices.Concat([]slog.Attr{slog.String("keyspace", keyspace), slog.String("shard", shard)}, logutil.EventAttrs(event))...)
 	}
 
 	return err
-}
-
-// initShardPrimaryEventAttrs returns an event's fields as attributes. The level
-// is always logged; the time, file, line and text are left out when unset, as
-// the event's proto text leaves them out.
-func initShardPrimaryEventAttrs(keyspace, shard string, event *logutilpb.Event) []slog.Attr {
-	attrs := []slog.Attr{
-		slog.String("keyspace", keyspace),
-		slog.String("shard", shard),
-		slog.String("event_level", event.Level.String()),
-	}
-	if event.Time != nil {
-		attrs = append(attrs, slog.Time("event_time", protoutil.TimeFromProto(event.Time)))
-	}
-	if event.File != "" {
-		attrs = append(attrs, slog.String("event_file", event.File))
-	}
-	if event.Line != 0 {
-		attrs = append(attrs, slog.Int64("event_line", event.Line))
-	}
-	if event.Value != "" {
-		attrs = append(attrs, slog.String("message", event.Value))
-	}
-	return attrs
 }
 
 var plannedReparentShardOptions = struct {

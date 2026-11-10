@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -44,14 +45,14 @@ import (
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/proto/logutil"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 
@@ -671,8 +672,8 @@ func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
 	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
 	args := []string{"ApplyVSchema", "--sql", migration, keyspace}
 	fmt.Printf("Applying vschema %v", args)
-	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
-		log.Info("ApplyVSchema event", eventAttrs(keyspace, e)...)
+	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutilpb.Event) {
+		log.Info("ApplyVSchema event", slices.Concat([]slog.Attr{slog.String("keyspace", keyspace)}, logutil.EventAttrs(e))...)
 	})
 
 	return err
@@ -683,34 +684,11 @@ func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
 	args := []string{"ReloadSchemaKeyspace", "--include_primary=true", keyspace}
 	log.Info("Reloading keyspace schema", slog.String("keyspace", keyspace))
 
-	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
-		log.Info("ReloadSchemaKeyspace event", eventAttrs(keyspace, e)...)
+	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutilpb.Event) {
+		log.Info("ReloadSchemaKeyspace event", slices.Concat([]slog.Attr{slog.String("keyspace", keyspace)}, logutil.EventAttrs(e))...)
 	})
 
 	return err
-}
-
-// eventAttrs returns a vtctl event's fields as attributes. The level is always
-// logged; the time, file, line and text are left out when unset, as the
-// event's proto text leaves them out.
-func eventAttrs(keyspace string, event *logutil.Event) []slog.Attr {
-	attrs := []slog.Attr{
-		slog.String("keyspace", keyspace),
-		slog.String("event_level", event.Level.String()),
-	}
-	if event.Time != nil {
-		attrs = append(attrs, slog.Time("event_time", protoutil.TimeFromProto(event.Time)))
-	}
-	if event.File != "" {
-		attrs = append(attrs, slog.String("event_file", event.File))
-	}
-	if event.Line != 0 {
-		attrs = append(attrs, slog.Int64("event_line", event.Line))
-	}
-	if event.Value != "" {
-		attrs = append(attrs, slog.String("message", event.Value))
-	}
-	return attrs
 }
 
 // logMySQLErrorLog logs the end of mysqld's error log. When mysqld exits during
