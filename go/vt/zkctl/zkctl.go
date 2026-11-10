@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -171,7 +172,7 @@ func (zkd *Zkd) Init() error {
 	log.Info("zkd.Init")
 	for _, path := range zkd.config.DirectoryList() {
 		if err := os.MkdirAll(path, 0o775); err != nil {
-			log.Error(fmt.Sprintf("%v", err))
+			log.Error("zkd.Init: failed creating directories", slog.Any("error", err))
 			return err
 		}
 		// FIXME(msolomon) validate permissions?
@@ -182,18 +183,18 @@ func (zkd *Zkd) Init() error {
 		err = os.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0o664)
 	}
 	if err != nil {
-		log.Error(fmt.Sprintf("failed creating %v: %v", zkd.config.ConfigFile(), err))
+		log.Error("failed creating config file", slog.String("path", zkd.config.ConfigFile()), slog.Any("error", err))
 		return err
 	}
 
 	err = zkd.config.WriteMyid()
 	if err != nil {
-		log.Error(fmt.Sprintf("failed creating %v: %v", zkd.config.MyidFile(), err))
+		log.Error("failed creating myid file", slog.String("path", zkd.config.MyidFile()), slog.Any("error", err))
 		return err
 	}
 
 	if err = zkd.Start(); err != nil {
-		log.Error(fmt.Sprintf("failed starting, check %v", zkd.config.LogDir()))
+		log.Error("failed starting, check the log dir", slog.String("dir", zkd.config.LogDir()))
 		return err
 	}
 
@@ -232,12 +233,12 @@ func (zkd *Zkd) Init() error {
 func (zkd *Zkd) Teardown() error {
 	log.Info("zkctl.Teardown")
 	if err := zkd.Shutdown(); err != nil {
-		log.Warn(fmt.Sprintf("failed zookeeper shutdown: %v", err.Error()))
+		log.Warn("failed zookeeper shutdown", slog.Any("error", err))
 	}
 	var removalErr error
 	for _, dir := range zkd.config.DirectoryList() {
 		if err := os.RemoveAll(dir); err != nil {
-			log.Error(fmt.Sprintf("failed removing %v: %v", dir, err.Error()))
+			log.Error("failed removing directory", slog.String("dir", dir), slog.Any("error", err))
 			removalErr = err
 		}
 	}

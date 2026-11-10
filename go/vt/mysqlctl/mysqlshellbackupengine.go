@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -334,7 +335,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 
 	err = cleanupMySQL(ctx, params, shouldDeleteUsers)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("error cleaning MySQL", slog.Any("error", err))
 		// time.Sleep(time.Minute * 2)
 		return nil, vterrors.Wrap(err, "error cleaning MySQL")
 	}

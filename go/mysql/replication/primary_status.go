@@ -18,6 +18,7 @@ package replication
 
 import (
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -63,9 +64,10 @@ func ParsePrimaryStatus(fields map[string]string) PrimaryStatus {
 	file := fields["File"]
 	if file != "" && fileExecPosStr != "" {
 		var err error
-		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(fmt.Sprintf("%s:%s", file, fileExecPosStr))
+		filePos := fmt.Sprintf("%s:%s", file, fileExecPosStr)
+		status.FilePosition.GTIDSet, err = ParseFilePosGTIDSet(filePos)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Error parsing GTID set %s:%s: %v", file, fileExecPosStr, err))
+			log.Warn("Error parsing GTID set", slog.String("file_position", filePos), slog.Any("error", err))
 		}
 	}
 

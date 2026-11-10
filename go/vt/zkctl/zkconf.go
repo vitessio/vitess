@@ -25,6 +25,7 @@ package zkctl
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"strconv"
@@ -183,7 +184,7 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 		zkConfig.Servers = append(zkConfig.Servers, zkServer)
 	}
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
-	log.Info(fmt.Sprintf("Fully qualified machine hostname was detected as: %v", hostname))
+	log.Info("Fully qualified machine hostname was detected", slog.String("hostname", hostname))
 	for _, zkServer := range zkConfig.Servers {
 		if (myID > 0 && myID == zkServer.ServerId) || (myID == 0 && zkServer.Hostname == hostname) {
 			zkConfig.ServerId = zkServer.ServerId

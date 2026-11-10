@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"sort"
 	"strings"
@@ -314,7 +315,7 @@ func GetColumnsList(dbName, tableName string, exec func(string, int, bool) (*sql
 	}
 	if qr == nil || len(qr.Rows) == 0 {
 		err := &EmptyColumnsErr{dbName: dbName, tableName: tableName, query: query}
-		log.Error(err.Error())
+		log.Error("unable to get columns for table", slog.String("db_name", dbName), slog.String("table", tableName), slog.String("query", query))
 		return "", err
 	}
 	selectColumns := ""
@@ -504,7 +505,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		schemaDiffs := tmutils.DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				log.Warn(fmt.Sprintf("BeforeSchema differs: %v", msg))
+				log.Warn("BeforeSchema differs", slog.String("schema_diff", msg))
 			}
 
 			// let's see if the schema was already applied
@@ -565,7 +566,7 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 		schemaDiffs := tmutils.DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				log.Warn(fmt.Sprintf("AfterSchema differs: %v", msg))
+				log.Warn("AfterSchema differs", slog.String("schema_diff", msg))
 			}
 			if change.Force {
 				log.Warn("AfterSchema differs, not reporting error")
