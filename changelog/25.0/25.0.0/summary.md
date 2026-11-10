@@ -399,11 +399,14 @@ At the end of each copy cycle of a workflow or Online DDL migration, the target 
 - Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
 
 See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
+
 #### <a id="vreplication-vstream-memory-bounds"/>Bounded memory for VStreamRows streams</a>
 
 The row streams behind VReplication copies and VDiffs (`VStreamRows`, `VStreamTables`) reuse one set of rows across packets on both the source and the receiving tablet. Each reused row only ever grew to the largest value it had held, so a long stream retained the sum of those high-water marks until it ended, and its dynamically sized packets had no upper bound. Both ends now drop the reused rows when they retain more than about four times the live packet, and dynamic packet sizing stops growing at 16 times `--vstream-packet-size`.
 
-This is controlled by the new `vttablet` flag `--vstream-memory-bounds`, on by default. `--vstream-memory-bounds=false` restores the previous behavior. On the source side it can also be set per workflow with `Workflow update --config-overrides vstream-memory-bounds=false`; a workflow that benefited from packets above 16 times the base can instead raise `vstream-packet-size` the same way.
+This is controlled by the new `vttablet` flag `--vstream-memory-bounds`, on by default. `--vstream-memory-bounds=false` restores the previous behavior. On the source side it can also be set per workflow with `Workflow update --config-overrides vstream-memory-bounds=false`; a workflow that benefited from packets above 16 times the base can instead raise `vstream-packet-size` the same way. A workflow's config overrides are sent to every tablet it streams from and to, and a tablet rejects a key it does not know, so set `vstream-memory-bounds` only once every source and target tablet runs a release that has it.
+
+The `VStreamTables` client, which the atomic copy uses, now forwards the workflow's config overrides to the source; it dropped them before. An atomic copy's overrides for the source side (packet sizes, net timeouts, the copy phase duration) apply from this release.
 
 See [#20954](https://github.com/vitessio/vitess/issues/20954) for details.
 

@@ -870,6 +870,7 @@ func TestStreamRowsReusesRowPool(t *testing.T) {
 			options.ConfigOverrides = map[string]string{
 				"vstream-dynamic-packet-size": "false",
 				"vstream-packet-size":         strconv.Itoa(tc.packetSize),
+				"vstream-memory-bounds":       "true", // not the flag's default: the backports ship it off
 			}
 
 			type seen struct {
@@ -944,6 +945,7 @@ func TestStreamRowsDropsDensePoolForLargeRows(t *testing.T) {
 	options.ConfigOverrides = map[string]string{
 		"vstream-dynamic-packet-size": "false",
 		"vstream-packet-size":         strconv.Itoa(packetSize),
+		"vstream-memory-bounds":       "true", // not the flag's default: the backports ship it off
 	}
 
 	type seen struct {

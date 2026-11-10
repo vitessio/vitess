@@ -30,6 +30,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -71,7 +73,7 @@ func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.En
 ) (*tableStreamer, error) {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		return nil, vterrors.Wrap(err, "invalid VStream options")
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid VStream options: %v", err)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &tableStreamer{
