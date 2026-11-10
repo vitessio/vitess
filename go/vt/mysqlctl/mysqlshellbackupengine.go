@@ -698,25 +698,32 @@ func maskMySQLShellPasswords(args []string) []string {
 
 // maskURIPassword replaces the password in a connection string of the form
 // [scheme://][user[:password]@]host... with "****". Like mysqlsh, it takes the
-// user information to end at the first "@", if no "/" comes before it.
+// user information to end at the first "@", if no "/" comes before it, and only
+// a "://" (or ":/") that comes before that "@" to end an optional scheme. A
+// ":/" after the "@", such as in a host, path or query parameter, is left
+// alone, so a schemeless string like root:secret@host/db?ssl-ca=file:/x still
+// has its password masked.
 func maskURIPassword(uri string) string {
+	at := strings.Index(uri, "@")
+	if at < 0 {
+		return uri
+	}
 	start := 0
-	if i := strings.Index(uri, ":/"); i > 0 {
+	if i := strings.Index(uri[:at], ":/"); i > 0 {
 		start = i + len(":/")
 		if strings.HasPrefix(uri[start:], "/") {
 			start++
 		}
 	}
-	rest := uri[start:]
-	at := strings.Index(rest, "@")
-	if at < 0 || strings.Contains(rest[:at], "/") {
+	userinfo := uri[start:at]
+	if strings.Contains(userinfo, "/") {
 		return uri
 	}
-	user, _, hasPassword := strings.Cut(rest[:at], ":")
+	user, _, hasPassword := strings.Cut(userinfo, ":")
 	if !hasPassword {
 		return uri
 	}
-	return uri[:start] + user + ":****" + rest[at:]
+	return uri[:start] + user + ":****" + uri[at:]
 }
 
 func cleanupMySQL(ctx context.Context, params RestoreParams, shouldDeleteUsers bool) error {

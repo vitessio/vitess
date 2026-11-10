@@ -525,11 +525,13 @@ func TestMySQLShellLogsMaskPasswords(t *testing.T) {
 		"--password={pw} --password {pw} -p{pw} -p {pw} -Ep{pw} --password1={pw} --password2 {pw} --password3={pw} "+
 		"--dbpassword={pw} --dbPassword={pw} --db-password={pw} --loose-password={pw} "+
 		"--uri=root:{pw}@localhost --uri root:{pw}@localhost mysql://root:{pw}@localhost:3306 --ssh=me:{pw}@bastion "+
+		"--uri=root:{pw}@host/db?ssl-ca=file:/x "+
 		"-C root:{pw}@localhost -S root:{pw}@localhost -i root:{pw}@localhost", "{pw}", secret)
 	wantArgs := "--defaults-file=/dev/null --js -h localhost -uroot --user root " +
 		"--password=**** --password **** -p**** -p **** -Ep**** --password1=**** --password2 **** --password3=**** " +
 		"--dbpassword=**** --dbPassword=**** --db-password=**** --loose-password=**** " +
 		"--uri=root:****@localhost --uri root:****@localhost mysql://root:****@localhost:3306 --ssh=me:****@bastion " +
+		"--uri=root:****@host/db?ssl-ca=file:/x " +
 		"-C root:****@localhost -S root:****@localhost -i root:****@localhost -e util."
 
 	newMysqld := func(t *testing.T) *FakeMysqlDaemon {
@@ -602,4 +604,38 @@ func TestMySQLShellLogsMaskPasswords(t *testing.T) {
 		assertMasked(t, logs, stream, path.Join(bin, "mysqlsh"))
 		assertRanUnmasked(t, argsFile)
 	})
+}
+
+// TestMaskURIPassword probes maskURIPassword across the connection-string
+// shapes mysqlsh accepts, since a wrong parse logs a password in clear.
+func TestMaskURIPassword(t *testing.T) {
+	cases := []struct {
+		name string
+		uri  string
+		want string
+	}{
+		{"no scheme", "root:secret@localhost", "root:****@localhost"},
+		{"with scheme", "mysql://root:secret@localhost:3306", "mysql://root:****@localhost:3306"},
+		{"ssh user info", "me:secret@bastion", "me:****@bastion"},
+		// mysqlsh takes a ":/" before the first "@" as the end of a scheme, but
+		// one after it belongs to the host, path or query, so the password must
+		// still be masked when a later ":/" appears, as in an ssl-ca path.
+		{"colon-slash after host", "root:secret@host/db?ssl-ca=file:/x", "root:****@host/db?ssl-ca=file:/x"},
+		{"colon-slash after host with scheme", "mysql://root:secret@host/db?ssl-ca=file:/x", "mysql://root:****@host/db?ssl-ca=file:/x"},
+		{"percent-encoded at in password", "root:p%40ss@host", "root:****@host"},
+		{"colon in password", "user:pa:ss@host", "user:****@host"},
+		{"colon-run password", "user:::@host", "user:****@host"},
+		{"IPv6 host", "root:secret@[::1]:3306", "root:****@[::1]:3306"},
+		{"IPv6 host with scheme", "mysql://root:secret@[fe80::1]:3306", "mysql://root:****@[fe80::1]:3306"},
+		{"no password", "root@localhost", "root@localhost"},
+		{"no at sign", "localhost:3306", "localhost:3306"},
+		{"empty", "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := maskURIPassword(tc.uri)
+			assert.Equal(t, tc.want, got)
+			assert.NotContains(t, got, "secret")
+		})
+	}
 }
