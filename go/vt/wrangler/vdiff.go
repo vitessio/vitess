@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -176,7 +178,13 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	filteredReplicationWaitTime time.Duration, format string, maxRows int64, tables string, debug, onlyPks bool,
 	maxExtraRowsToCompare int,
 ) (map[string]*DiffReport, error) {
-	log.Info(fmt.Sprintf("Starting VDiff for %s.%s, sourceCell %s, targetCell %s, tabletTypes %s, timeout %s", targetKeyspace, workflowName, sourceCell, targetCell, tabletTypesStr, filteredReplicationWaitTime.String()))
+	log.Info("Starting VDiff",
+		slog.String("keyspace", targetKeyspace),
+		slog.String("workflow", workflowName),
+		slog.String("source_cell", sourceCell),
+		slog.String("target_cell", targetCell),
+		slog.String("tablet_types_setting", tabletTypesStr),
+		slog.Duration("timeout", filteredReplicationWaitTime))
 	// Assign defaults to sourceCell and targetCell if not specified.
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
@@ -263,7 +271,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	defer func() {
 		// We use a new context as we want to reset the state even
 		// when the parent context has timed out or been canceled.
-		log.Info(fmt.Sprintf("Restarting the %q VReplication workflow on target tablets in keyspace %q", df.workflow, df.targetKeyspace))
+		log.Info("Restarting the VReplication workflow on target tablets in keyspace", slog.String("workflow", df.workflow), slog.String("keyspace", df.targetKeyspace))
 		restartCtx, restartCancel := context.WithTimeout(context.Background(), DefaultActionTimeout)
 		defer restartCancel()
 		if err := df.restartTargets(restartCtx); err != nil {
@@ -415,12 +423,16 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 }
 
 func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *tableDiffer, filteredReplicationWaitTime time.Duration) error {
-	log.Info("Starting vdiff for table " + table)
+	log.Info("Starting vdiff for table", slog.String("workflow", df.workflow), slog.String("table", table))
 
-	log.Info("Locking target keyspace " + df.targetKeyspace)
+	log.Info("Locking target keyspace", slog.String("workflow", df.workflow), slog.String("keyspace", df.targetKeyspace))
 	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, df.targetKeyspace, "vdiff")
 	if lockErr != nil {
-		log.Error(fmt.Sprintf("LockKeyspace failed: %v", lockErr))
+		log.Error("LockKeyspace failed",
+			slog.String("workflow", df.workflow),
+			slog.String("keyspace", df.targetKeyspace),
+			slog.Any("error", lockErr),
+			slog.String("error_code", vterrors.Code(lockErr).String()))
 		wr.Logger().Errorf("LockKeyspace %s failed: %v", df.targetKeyspace)
 		return lockErr
 	}
@@ -429,7 +441,11 @@ func (df *vdiff) diffTable(ctx context.Context, wr *Wrangler, table string, td *
 	defer func() {
 		unlock(&err)
 		if err != nil {
-			log.Error(fmt.Sprintf("UnlockKeyspace %s failed: %v", df.targetKeyspace, lockErr))
+			log.Error("UnlockKeyspace failed",
+				slog.String("workflow", df.workflow),
+				slog.String("keyspace", df.targetKeyspace),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}()
 
@@ -482,7 +498,10 @@ func (df *vdiff) buildVDiffPlan(filter *binlogdatapb.Filter, schm *tabletmanager
 		}
 	}
 	if len(tablesToInclude) > 0 && len(tablesToInclude) != len(df.differs) {
-		log.Error(fmt.Sprintf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs))
+		log.Error("one or more tables provided are not present in the workflow",
+			slog.String("workflow", df.workflow),
+			slog.Any("tables", tablesToInclude),
+			slog.Any("matched_tables", nonNilList(slices.Sorted(maps.Keys(df.differs)))))
 		return fmt.Errorf("one or more tables provided are not present in the workflow: %v, %+v", tablesToInclude, df.differs)
 	}
 	return nil
@@ -507,7 +526,10 @@ func findPKs(env *vtenv.Environment, table *tabletmanagerdatapb.TableDefinition,
 			case *sqlparser.FuncExpr: // eg. weight_string()
 				// no-op
 			default:
-				log.Warn(fmt.Sprintf("Not considering column %v for PK, type %v not handled", selExpr, ct))
+				log.Warn("Not considering column for PK, type not handled",
+					slog.String("table", table.Name),
+					slog.String("expression", sqlparser.String(selExpr)),
+					slog.String("type", fmt.Sprintf("%T", ct)))
 			}
 			if strings.EqualFold(pk, colname) {
 				td.compareCols[i].isPK = true
@@ -602,7 +624,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExp
 	if df.sourceTimeZone == "" {
 		return targetSelectExprs
 	}
-	log.Info("source time zone specified: " + df.sourceTimeZone)
+	log.Info("source time zone specified", slog.String("workflow", df.workflow), slog.String("source_time_zone", df.sourceTimeZone))
 	var newSelectExprs []sqlparser.SelectExpr
 	var modified bool
 	for _, expr := range targetSelectExprs {
@@ -618,7 +640,7 @@ func (df *vdiff) adjustForSourceTimeZone(targetSelectExprs []sqlparser.SelectExp
 						colAs,
 						sqlparser.NewStrLiteral(df.targetTimeZone),
 						sqlparser.NewStrLiteral(df.sourceTimeZone))
-					log.Info(fmt.Sprintf("converting datetime column %s using convert_tz()", colName))
+					log.Info("converting datetime column using convert_tz()", slog.String("workflow", df.workflow), slog.String("column", colName))
 					newSelectExprs = append(newSelectExprs, &sqlparser.AliasedExpr{Expr: convertTZFuncExpr, As: colAs.Name})
 					converted = true
 					modified = true
@@ -928,9 +950,15 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 		if participant.position.IsZero() {
 			return fmt.Errorf("workflow %s.%s: stream has not started on tablet %s", df.targetKeyspace, df.workflow, participant.primary.Alias.String())
 		}
-		log.Info(fmt.Sprintf("WaitForPosition: tablet %s should reach position %s", participant.tablet.Alias.String(), replication.EncodePosition(participant.position)))
+		log.Info("WaitForPosition: tablet should reach position",
+			slog.String("workflow", df.workflow),
+			slog.String("tablet", topoproto.TabletAliasString(participant.tablet.Alias)),
+			slog.String("position", replication.EncodePosition(participant.position)))
 		if err := df.ts.TabletManagerClient().WaitForPosition(waitCtx, participant.tablet, replication.EncodePosition(participant.position)); err != nil {
-			log.Error(fmt.Sprintf("WaitForPosition error: %s", err))
+			log.Error("WaitForPosition error",
+				slog.String("workflow", df.workflow),
+				slog.String("tablet", topoproto.TabletAliasString(participant.tablet.Alias)),
+				slog.Any("error", err))
 			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
 		participant.result = make(chan *sqltypes.Result, 1)
@@ -1041,7 +1069,10 @@ func (df *vdiff) restartTargets(ctx context.Context) error {
 	return df.forAll(df.targets, func(shard string, target *shardStreamer) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
 			encodeString(target.primary.DbName()), encodeString(df.ts.WorkflowName()))
-		log.Info(fmt.Sprintf("Restarting the %q VReplication workflow on %q using %q", df.ts.WorkflowName(), target.primary.Alias, query))
+		log.Info("Restarting the VReplication workflow",
+			slog.String("workflow", df.ts.WorkflowName()),
+			slog.String("tablet", topoproto.TabletAliasString(target.primary.Alias)),
+			slog.String("query", query))
 		var err error
 		// Let's retry a few times if we get a retryable error.
 		for i := 1; i <= 3; i++ {
@@ -1049,7 +1080,12 @@ func (df *vdiff) restartTargets(ctx context.Context) error {
 			if err == nil || !sqlerror.IsEphemeralError(err) {
 				break
 			}
-			log.Warn(fmt.Sprintf("Encountered the following error while restarting the %q VReplication workflow on %q, will retry (attempt #%d): %v", df.ts.WorkflowName(), target.primary.Alias, i, err))
+			log.Warn("Encountered an error while restarting the VReplication workflow, will retry",
+				slog.String("workflow", df.ts.WorkflowName()),
+				slog.String("tablet", topoproto.TabletAliasString(target.primary.Alias)),
+				slog.Int("attempt", i),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 		}
 		return err
 	})
@@ -1144,29 +1180,6 @@ func (sm *shardStreamer) StreamExecute(_ context.Context, _ engine.VCursor, _ ma
 	return sm.err
 }
 
-// humanInt formats large integers to a value easier to the eye: 100000=100k 1e12=1b 234000000=234m ...
-func humanInt(n int64) string {
-	var val float64
-	var unit string
-	switch true {
-	case n < 1000:
-		val = float64(n)
-	case n < 1e6:
-		val = float64(n) / 1000
-		unit = "k"
-	case n < 1e9:
-		val = float64(n) / 1e6
-		unit = "m"
-	default:
-		val = float64(n) / 1e9
-		unit = "b"
-	}
-	s := fmt.Sprintf("%0.3f", val)
-	s = strings.ReplaceAll(s, ".000", "")
-
-	return fmt.Sprintf("%s%s", s, unit)
-}
-
 // -----------------------------------------------------------------
 // tableDiffer
 
@@ -1180,7 +1193,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 	advanceTarget := true
 	for {
 		if dr.ProcessedRows%1e7 == 0 { // log progress every 10 million rows
-			log.Info(fmt.Sprintf("VDiff progress:: table %s: %s rows", td.targetTable, humanInt(int64(dr.ProcessedRows))))
+			log.Info("VDiff progress", slog.String("table", td.targetTable), slog.Int64("processed_rows", int64(dr.ProcessedRows)))
 		}
 		*rowsToCompare--
 		if *rowsToCompare < 0 {

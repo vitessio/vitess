@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"sort"
 	"strings"
@@ -263,7 +264,7 @@ func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (
 				allErrors.RecordError(err)
 			} else {
 				if qr == nil {
-					log.Info(fmt.Sprintf("Callback returned nil result for tablet %s-%d", primary.Alias.Cell, primary.Alias.Uid))
+					log.Info("Callback returned nil result for tablet", slog.String("workflow", vx.workflow), slog.String("tablet", topoproto.TabletAliasString(primary.Alias)))
 					return // no result
 				}
 				mu.Lock()
