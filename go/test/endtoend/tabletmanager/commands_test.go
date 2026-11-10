@@ -161,7 +161,7 @@ func TestTabletCommands(t *testing.T) {
 
 	t.Run("DemotePrimary serving state across refresh and recovery", func(t *testing.T) {
 		t.Cleanup(func() {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			_ = tmClient.UndoDemotePrimary(cleanupCtx, getTablet(primaryTablet.GrpcPort), false)
 			_ = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
