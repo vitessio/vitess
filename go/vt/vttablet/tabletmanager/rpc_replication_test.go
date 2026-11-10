@@ -860,6 +860,106 @@ func TestDemotePrimaryBackgroundKeyspaceRebuildRace(t *testing.T) {
 	assert.True(t, tm.QueryServiceControl.IsServing())
 }
 
+type fakeQueryServiceControlDemoteRace struct {
+	tabletserver.Controller
+	mu                 sync.Mutex
+	setServingTypeHook func(tabletType topodatapb.TabletType, ptsTimestamp time.Time, serving bool, reason string) error
+}
+
+func (f *fakeQueryServiceControlDemoteRace) SetServingType(tabletType topodatapb.TabletType, ptsTimestamp time.Time, serving bool, reason string) error {
+	f.mu.Lock()
+	hook := f.setServingTypeHook
+	f.mu.Unlock()
+	if hook != nil {
+		if err := hook(tabletType, ptsTimestamp, serving, reason); err != nil {
+			return err
+		}
+	}
+	return f.Controller.SetServingType(tabletType, ptsTimestamp, serving, reason)
+}
+
+// TestDemotePrimaryRefreshDuringSetServingTypeRace tests that SetPrimaryDemoted(true)
+// is set before SetServingType(false) stops query service. A refresh that arrives while
+// SetServingType(false) is draining in-flight transactions must see isPrimaryDemoted=true
+// and not bring query service back.
+func TestDemotePrimaryRefreshDuringSetServingTypeRace(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	// Make the tablet a primary.
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SemiSyncReplicaEnabled = true
+	fakeDb.SemiSyncPrimaryEnabled = true
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = false
+
+	servingTypeBlocked := make(chan struct{})
+	unblockServingType := make(chan struct{})
+	fakeQSC := &fakeQueryServiceControlDemoteRace{
+		Controller: tm.QueryServiceControl,
+		setServingTypeHook: func(tabletType topodatapb.TabletType, ptsTimestamp time.Time, serving bool, reason string) error {
+			if !serving && reason == "demotion in progress" {
+				close(servingTypeBlocked)
+				select {
+				case <-unblockServingType:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+			}
+			return nil
+		},
+	}
+	tm.QueryServiceControl = fakeQSC
+
+	// Tablet starts serving as PRIMARY.
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	// Start DemotePrimary in a background goroutine.
+	var demotePrimaryFinished atomic.Bool
+	go func() {
+		_, err := tm.demotePrimary(ctx, false /* revertPartialFailure */, true /* force */)
+		assert.NoError(t, err)
+		demotePrimaryFinished.Store(true)
+	}()
+
+	// Wait until SetServingType(false) is entered by DemotePrimary.
+	select {
+	case <-servingTypeBlocked:
+	case <-time.After(30 * time.Second):
+		t.Fatal("timed out waiting for SetServingType to be called")
+	}
+
+	// Flag must already be set BEFORE query service stop completes.
+	require.True(t, tm.tmState.IsPrimaryDemoted())
+	require.False(t, demotePrimaryFinished.Load())
+
+	// RefreshFromTopoInfo runs while demotion's SetServingType(false) is blocked.
+	srvKeyspace, err := tm.TopoServer.GetSrvKeyspace(ctx, tm.tabletAlias.Cell, "ks")
+	require.NoError(t, err)
+	err = tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
+	require.NoError(t, err)
+
+	// Query service must remain off when the refresh returns.
+	assert.False(t, tm.QueryServiceControl.IsServing(), "query service must remain off when refresh returns while demotion is blocked in SetServingType")
+	assert.True(t, tm.tmState.IsPrimaryDemoted())
+
+	// Unblock SetServingType so DemotePrimary completes.
+	close(unblockServingType)
+	require.Eventually(t, func() bool {
+		return demotePrimaryFinished.Load()
+	}, 30*time.Second, 50*time.Millisecond)
+
+	// After DemotePrimary completes, query service remains disabled.
+	assert.False(t, tm.QueryServiceControl.IsServing())
+	assert.True(t, tm.tmState.IsPrimaryDemoted())
+}
+
 // TestDemotePrimaryPartialFailureRevertClearsDemoted tests that when DemotePrimary
 // fails and reverts partial failure, query service is restored and isPrimaryDemoted is cleared.
 func TestDemotePrimaryPartialFailureRevertClearsDemoted(t *testing.T) {
