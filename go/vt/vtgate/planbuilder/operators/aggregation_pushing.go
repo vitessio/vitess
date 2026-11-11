@@ -120,8 +120,12 @@ func pushAggregationThroughSubquery(
 		}
 		// A filter that doesn't merge ends up above the join, and then reads these columns from the sides below it.
 		if _, isJoin := src.Outer.(*ApplyJoin); isJoin && !subQuery.IsArgument {
+			before := len(pushedAggr.Columns)
 			for _, col := range outsideSubqueryColumns(subQuery.Original) {
 				addGrouping(col, true)
+			}
+			if len(pushedAggr.Columns) > before && rootAggr.ResultColumns == 0 {
+				rootAggr.ResultColumns = len(rootAggr.Columns)
 			}
 		}
 	}
@@ -152,7 +156,7 @@ func checkGroupingKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Ag
 			continue
 		}
 		args := aggr.Func.GetArgs()
-		if !isDetermined(ctx, append(groupingExprs(aggregator.Grouping), args...), args, col) {
+		if !isDetermined(ctx, aggregator.QP.Select, append(groupingExprs(aggregator.Grouping), args...), args, col) {
 			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
 		}
 	}
@@ -194,12 +198,12 @@ func checkJoinKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Aggreg
 			other, otherKeys = join.RHS, rhsKeys
 			seeds := append(slices.Clone(grouping), args...)
 			splits = slices.ContainsFunc(lhsKeys, func(key sqlparser.Expr) bool {
-				return !isDetermined(ctx, seeds, args, key)
+				return !isDetermined(ctx, aggregator.QP.Select, seeds, args, key)
 			})
 		default:
 			continue
 		}
-		if splits || !returnsEachGroupOnce(ctx, other, append(grouping, otherKeys...)) {
+		if splits || !returnsEachGroupOnce(ctx, aggregator.QP.Select, other, append(grouping, otherKeys...)) {
 			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
 		}
 	}
@@ -207,9 +211,9 @@ func checkJoinKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Aggreg
 
 // returnsEachGroupOnce says if no group of op, where it groups by the exprs, comes from several shards. That holds when
 // every route that isn't a single shard has the value of a unique vindex column fixed by the exprs.
-func returnsEachGroupOnce(ctx *plancontext.PlanningContext, op Operator, exprs []sqlparser.Expr) bool {
+func returnsEachGroupOnce(ctx *plancontext.PlanningContext, sel *sqlparser.Select, op Operator, exprs []sqlparser.Expr) bool {
 	var candidates []sqlparser.Expr
-	for _, eq := range joinEqualities(ctx, nil) {
+	for _, eq := range joinEqualities(ctx, sel, nil) {
 		candidates = append(candidates, eq.cmp.Left, eq.cmp.Right)
 	}
 	candidates = append(candidates, exprs...)
@@ -222,7 +226,7 @@ func returnsEachGroupOnce(ctx *plancontext.PlanningContext, op Operator, exprs [
 		routeID := TableID(route)
 		if !slices.ContainsFunc(candidates, func(expr sqlparser.Expr) bool {
 			return ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(routeID) && exprHasUniqueVindex(ctx, expr) &&
-				isDetermined(ctx, exprs, nil, expr)
+				isDetermined(ctx, sel, exprs, nil, expr)
 		}) {
 			once = false
 		}
@@ -575,11 +579,12 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 	// main selects the columns fed to the right side by a subquery without grouping on them, which MySQL rejects with
 	// ERROR 1055 unless the grouping determines them. Grouping on them, or leaving out those of a failed merge, would
 	// instead count a distinct aggregation anywhere in the query once for every row that a join repeats it for.
-	distinct := hasDistinctAggregation(ctx.Statement)
+	sel := lhs.orig.QP.Select
+	distinct := hasDistinctAggregation(sel)
 	fixed := columnsFixedBelow(ctx, join.LHS)
 	refuseUngrouped := func(expr sqlparser.Expr) {
 		seeds := append(groupingExprs(lhs.pushed.Grouping), fixed...)
-		if distinct && !isDetermined(ctx, seeds, nil, expr) {
+		if distinct && !isDetermined(ctx, sel, seeds, nil, expr) {
 			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
 		}
 	}
@@ -618,10 +623,10 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 	}
 }
 
-// isDetermined says if the values of the seeds fix the value of expr in every row of the query where no column of
+// isDetermined says if the values of the seeds fix the value of expr in every row of the SELECT where no column of
 // nonNull is NULL. A row is fixed by a unique key, or by all the columns of a composite one, and the equalities of the
 // query pass fixed values on to other columns.
-func isDetermined(ctx *plancontext.PlanningContext, seeds, nonNull []sqlparser.Expr, expr sqlparser.Expr) bool {
+func isDetermined(ctx *plancontext.PlanningContext, sel *sqlparser.Select, seeds, nonNull []sqlparser.Expr, expr sqlparser.Expr) bool {
 	var cols []*sqlparser.ColName
 	var rows semantics.TableSet
 	isKnown := func(col *sqlparser.ColName) bool {
@@ -648,7 +653,7 @@ func isDetermined(ctx *plancontext.PlanningContext, seeds, nonNull []sqlparser.E
 			learn(col)
 		}
 	}
-	equalities := joinEqualities(ctx, nonNull)
+	equalities := joinEqualities(ctx, sel, nonNull)
 	for grown := true; grown; {
 		grown = false
 		for _, eq := range equalities {
@@ -762,13 +767,12 @@ type equality struct {
 }
 
 // joinEqualities returns the equalities that every row of the query's FROM and WHERE clauses where no column of nonNull
-// is NULL fulfils: the conjuncts of the WHERE clause and of the ON clauses of the top level SELECT. The ON clause of a
+// is NULL fulfils: the conjuncts of the WHERE clause and of the ON clauses of the SELECT. The ON clause of a
 // left join holds only in the rows where its right side matched, which a column on that side that can't be NULL shows.
 // Without one, whether a row matched depends only on the left side's columns in the ON clause, so the ON clause fixes
 // the right side once those columns are known.
-func joinEqualities(ctx *plancontext.PlanningContext, nonNull []sqlparser.Expr) (equalities []equality) {
-	sel, isSelect := ctx.Statement.(*sqlparser.Select)
-	if !isSelect {
+func joinEqualities(ctx *plancontext.PlanningContext, sel *sqlparser.Select, nonNull []sqlparser.Expr) (equalities []equality) {
+	if sel == nil {
 		return nil
 	}
 	nonNull = append(slices.Clone(nonNull), columnsNeverNull(sel)...)
@@ -895,15 +899,18 @@ func isColumnOf(ctx *plancontext.PlanningContext, expr sqlparser.Expr, tables se
 	return isCol && deps.NotEmpty() && deps.IsSolvedBy(tables)
 }
 
-// hasDistinctAggregation says if the statement has a distinct aggregation, also in HAVING or on the other side of a
-// join, where a pushed aggregator doesn't see it.
-func hasDistinctAggregation(stmt sqlparser.Statement) (found bool) {
+// hasDistinctAggregation says if root has a distinct aggregation of its own, also in HAVING or on the other side of a
+// join, where a pushed aggregator doesn't see it. The aggregations of the SELECTs inside root belong to those.
+func hasDistinctAggregation(root sqlparser.SQLNode) (found bool) {
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, isStmt := node.(sqlparser.TableStatement); isStmt && node != root {
+			return false, nil
+		}
 		if aggr, isAggr := node.(sqlparser.AggrFunc); isAggr && sqlparser.IsDistinct(aggr) {
 			found = true
 		}
 		return !found, nil
-	}, stmt)
+	}, root)
 	return found
 }
 

@@ -41,6 +41,7 @@ type (
 	QueryProjection struct {
 		// If you change the contents here, please update the toString() method
 		SelectExprs  []SelectExpr
+		Select       *sqlparser.Select // The SELECT that the projection belongs to, nil for a UNION
 		HasAggr      bool
 		HasWindow    bool
 		Distinct     bool
@@ -162,6 +163,7 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 func createQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) *QueryProjection {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
+		Select:   sel,
 	}
 
 	qp.addSelectExpressions(ctx, sel)
