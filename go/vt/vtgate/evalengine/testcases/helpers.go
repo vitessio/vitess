@@ -37,6 +37,10 @@ type (
 		Run     Runner
 		Schema  []*querypb.Field
 		Compare *Comparison
+		// Strict opts the case in to strict checking: every query is also checked
+		// nested inside each of the StrictConsumers, and the tests apply their strict
+		// checks to it (see TestCompilerReference and TestMySQL).
+		Strict bool
 	}
 )
 
@@ -44,6 +48,36 @@ func (tc TestCase) Name() string {
 	ptr := reflect.ValueOf(tc.Run).Pointer()
 	name := runtime.FuncForPC(ptr).Name()
 	return name[strings.LastIndexByte(name, '.')+1:]
+}
+
+// StrictConsumers are the expressions that every query of a Strict case is also
+// checked nested inside of, with %[1]s standing for the query. They cover the
+// arithmetic, comparison, string, control-flow and JSON consumers of a value.
+//
+// JSON_ARRAY is not one of them yet: the compiled JSON_ARRAY panics for any
+// argument that is NULL at run time, so CAST(... AS JSON) covers the JSON
+// conversion until that is fixed.
+var StrictConsumers = []string{
+	"(%[1]s) + 0",
+	"(%[1]s) = (%[1]s)",
+	"concat(%[1]s)",
+	"case when true then %[1]s end",
+	"cast(%[1]s as json)",
+}
+
+// Queries runs the case and yields each of its queries. For a Strict case it also
+// yields each query nested inside every one of the StrictConsumers.
+func (tc TestCase) Queries(yield Query) {
+	if !tc.Strict {
+		tc.Run(yield)
+		return
+	}
+	tc.Run(func(query string, row []sqltypes.Value, skipCollationCheck bool) {
+		yield(query, row, skipCollationCheck)
+		for _, consumer := range StrictConsumers {
+			yield(fmt.Sprintf(consumer, query), row, skipCollationCheck)
+		}
+	})
 }
 
 func perm(a []string, f func([]string)) {
@@ -152,6 +186,9 @@ func (bugs) MakeTimeValidHours(input string) bool {
 type Comparison struct {
 	Decimals  uint32
 	LooseTime bool
+	// Strict disables the leniency of the comparison: floats are not rounded
+	// to Decimals before they are compared.
+	Strict bool
 }
 
 func (cmp *Comparison) closeDatetime(a, b time.Time, diff time.Duration) bool {
@@ -165,7 +202,7 @@ func (cmp *Comparison) closeDatetime(a, b time.Time, diff time.Duration) bool {
 func (cmp *Comparison) closeFloat(a, b float64) bool {
 	const tolerance = 1e-14
 
-	if cmp.Decimals > 0 {
+	if cmp.Decimals > 0 && !cmp.Strict {
 		ratio := math.Pow(10, float64(cmp.Decimals))
 		a = math.Round(a*ratio) / ratio
 		b = math.Round(b*ratio) / ratio

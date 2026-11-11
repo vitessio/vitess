@@ -427,3 +427,24 @@ var inputIntervals = []string{
 	"second_microsecond",
 	"year_month",
 }
+
+// coalesceInput is an argument for COALESCE and the type class it belongs to.
+type coalesceInput struct {
+	expr  string
+	class string
+}
+
+// inputCoalesce has one value of each type class that COALESCE aggregates.
+var inputCoalesce = []coalesceInput{
+	{"NULL", "null"},
+	{"-1", "int"},
+	{"18446744073709551615", "int"},
+	{"1.5", "decimal"},
+	{"2.5e0", "float"},
+	{"'abc'", "string"},
+	{"_binary'xyz'", "binary"},
+	{"date'2020-01-02'", "temporal"},
+	{"timestamp'2021-02-03 04:05:06.789'", "temporal"},
+	{"time'10:11:12'", "temporal"},
+	{`cast('{"a": 1}' as json)`, "json"},
+}

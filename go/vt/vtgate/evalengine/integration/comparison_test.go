@@ -282,9 +282,18 @@ func TestMySQL(t *testing.T) {
 				Username: "vt_dba",
 			})
 			env := evalengine.NewExpressionEnv(ctx, nil, &vcursor{env: venv})
-			tc.Run(func(query string, row []sqltypes.Value, skipCollationCheck bool) {
+			cmp := tc.Compare
+			if tc.Strict {
+				strict := testcases.Comparison{Strict: true}
+				if cmp != nil {
+					strict = *cmp
+					strict.Strict = true
+				}
+				cmp = &strict
+			}
+			tc.Queries(func(query string, row []sqltypes.Value, skipCollationCheck bool) {
 				env.Row = row
-				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, tc.Compare, skipCollationCheck)
+				compareRemoteExprEnv(t, collationEnv, env, conn, query, tc.Schema, cmp, skipCollationCheck)
 			})
 		})
 	}

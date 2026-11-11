@@ -31,6 +31,7 @@ import (
 type (
 	builtinCoalesce struct {
 		CallExpr
+		collate collations.ID
 	}
 
 	multiComparisonFunc func(env *ExpressionEnv, args []eval, cmp, prec int) (eval, error)
@@ -47,17 +48,31 @@ var (
 	_ IR = (*builtinMultiComparison)(nil)
 )
 
+// COALESCE returns its first non-NULL argument converted to the type aggregated
+// from all its arguments, like CASE does for its results. All the arguments are
+// evaluated, even past the first non-NULL one, because the interpreter aggregates
+// the type from the values that the arguments return.
 func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
-	args, err := b.args(env)
-	if err != nil {
-		return nil, err
-	}
-	for _, arg := range args {
-		if arg != nil {
-			return arg, nil
+	var (
+		ta     typeAggregation
+		ca     collationAggregation
+		result eval
+	)
+	for _, arg := range b.Arguments {
+		e, err := arg.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		ta.addEval(e)
+		if err := ca.add(evalCollation(e), env.collationEnv); err != nil {
+			return nil, err
+		}
+		if result == nil {
+			result = e
 		}
 	}
-	return nil, nil
+	tt := ta.result()
+	return evalCoerce(result, tt, ta.size, ta.scale, ca.resultFor(tt, b.collate).Collation, env.now, env.sqlmode.AllowZeroDate())
 }
 
 func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
@@ -66,6 +81,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		ca collationAggregation
 	)
 
+	// The result is NULL only if all the arguments are.
 	f := flagNullable
 	for _, arg := range b.Arguments {
 		tt, err := arg.compile(c)
@@ -81,20 +97,14 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	args := len(b.Arguments)
-	c.asm.adjustStack(-(args - 1))
-	c.asm.emit(func(env *ExpressionEnv) int {
-		for sp := env.vm.sp - args; sp < env.vm.sp; sp++ {
-			if env.vm.stack[sp] != nil {
-				env.vm.stack[env.vm.sp-args] = env.vm.stack[sp]
-				break
-			}
-		}
-		env.vm.sp -= args - 1
-		return 1
-	}, "COALESCE (SP-%d) ... (SP-1)", args)
-
-	return ctype{Type: ta.result(), Flag: f, Col: ca.result()}, nil
+	tt := ta.result()
+	ct := ctype{Type: tt, Flag: f, Col: ca.resultFor(tt, b.collate), Size: ta.size, Scale: ta.scale}
+	if ta.empty() {
+		// all the arguments are NULL literals
+		ct.Type = sqltypes.Null
+	}
+	c.asm.Coalesce(len(b.Arguments), ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
+	return ct, nil
 }
 
 func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiComparisonFunc {

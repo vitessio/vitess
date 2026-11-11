@@ -41,6 +41,8 @@ var Cases = []TestCase{
 	{Run: CaseExprWithPredicate},
 	{Run: CaseExprWithValue},
 	{Run: If},
+	{Run: FnCoalesce, Strict: true},
+	{Run: FnIfNull, Strict: true},
 	{Run: Base64},
 	{Run: Conversion},
 	{Run: LargeDecimals},
@@ -843,6 +845,105 @@ func CaseExprWithValue(yield Query) {
 			yield(fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1), nil, false)
 		}
 	}
+}
+
+// FnCoalesce runs COALESCE over every single argument and every pair of arguments
+// of inputCoalesce, and over every triple of its non-temporal, non-JSON arguments,
+// so that NULL is in every position.
+func FnCoalesce(yield Query) {
+	for n := 1; n <= 3; n++ {
+		inputs := inputCoalesce
+		if n == 3 {
+			inputs = inputCoalesce[:7]
+		}
+		coalesceArgs(inputs, n, nil, func(args []coalesceInput) {
+			first, rest := coalesceClasses(args)
+			switch {
+			case !coalesceSupported(first, rest):
+			case first == "float" && (rest["string"] || rest["binary"] || rest["temporal"]):
+				// MySQL converts a number in a string result of COALESCE (unlike
+				// IFNULL and IF) to an opaque JSON value in CAST(... AS JSON).
+			case first == "string" && rest["binary"]:
+				// MySQL fails to convert a character string in a binary result of
+				// COALESCE (unlike IFNULL and IF) in CAST(... AS JSON).
+			default:
+				yield(coalesceCall("COALESCE", args), nil, false)
+			}
+		})
+	}
+}
+
+// FnIfNull runs IFNULL over every pair of arguments of inputCoalesce.
+func FnIfNull(yield Query) {
+	coalesceArgs(inputCoalesce, 2, nil, func(args []coalesceInput) {
+		first, rest := coalesceClasses(args)
+		switch {
+		case !coalesceSupported(first, rest):
+		case first != "" && first != "string" && first != "binary" && rest["binary"]:
+			// MySQL converts a non-string in a binary result of IFNULL (unlike
+			// COALESCE) to an opaque JSON value in CAST(... AS JSON).
+		default:
+			yield(coalesceCall("IFNULL", args), nil, false)
+		}
+	})
+}
+
+func coalesceArgs(inputs []coalesceInput, n int, args []coalesceInput, yield func([]coalesceInput)) {
+	if n == 0 {
+		yield(args)
+		return
+	}
+	for _, input := range inputs {
+		coalesceArgs(inputs, n-1, append(args, input), yield)
+	}
+}
+
+func coalesceCall(fn string, args []coalesceInput) string {
+	exprs := make([]string, len(args))
+	for i, arg := range args {
+		exprs[i] = arg.expr
+	}
+	return fmt.Sprintf("%s(%s)", fn, strings.Join(exprs, ", "))
+}
+
+// coalesceClasses returns the class of the first argument that is not NULL,
+// and the classes of the arguments after it that are not NULL.
+func coalesceClasses(args []coalesceInput) (first string, rest map[string]bool) {
+	rest = map[string]bool{}
+	for _, arg := range args {
+		switch {
+		case arg.class == "null":
+		case first == "":
+			first = arg.class
+		default:
+			rest[arg.class] = true
+		}
+	}
+	return first, rest
+}
+
+// coalesceSupported leaves out the combinations of argument classes for which
+// COALESCE and IFNULL are known to differ from MySQL. IF and CASE convert their
+// result the same way and differ from MySQL in the same way.
+func coalesceSupported(first string, rest map[string]bool) bool {
+	has := func(class string) bool { return first == class || rest[class] }
+	numeric := has("int") || has("decimal") || has("float")
+	switch {
+	case first == "temporal" && (len(rest) == 0 || len(rest) == 1 && rest["temporal"]):
+		// MySQL reports the collation of a temporal result as latin1_swedish_ci.
+		return false
+	case has("json") && (first != "json" || len(rest) > 1 || len(rest) == 1 && !rest["json"]):
+		// JSON mixed with another type gives a VARCHAR, MySQL a LONGTEXT.
+		return false
+	case first == "binary" && (numeric || has("temporal")):
+		// A binary string mixed with a non-string gives a VARCHAR in the binary
+		// collation, which CAST(... AS JSON) parses as JSON text, MySQL a VARBINARY.
+		return false
+	case first == "int" && rest["decimal"]:
+		// An integer converted to DECIMAL gets no scale.
+		return false
+	}
+	return true
 }
 
 func If(yield Query) {

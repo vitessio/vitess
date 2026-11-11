@@ -564,6 +564,26 @@ func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, size, s
 	}, "CASE [%d cases, else = %v]", cases, hasElse)
 }
 
+// Coalesce replaces its arguments with the first of them that is not NULL, converted
+// to the given type like CmpCase does.
+func (asm *assembler) Coalesce(args int, tt sqltypes.Type, size, scale int32, cc collations.TypedCollation, allowZeroDate bool) {
+	asm.adjustStack(-(args - 1))
+
+	asm.emit(func(env *ExpressionEnv) int {
+		base := env.vm.sp - args
+		var result eval
+		for sp := base; sp < env.vm.sp; sp++ {
+			if env.vm.stack[sp] != nil {
+				result = env.vm.stack[sp]
+				break
+			}
+		}
+		env.vm.stack[base], env.vm.err = evalCoerce(result, tt, size, scale, cc.Collation, env.now, allowZeroDate)
+		env.vm.sp = base + 1
+		return 1
+	}, "COALESCE (SP-%d) ... (SP-1)", args)
+}
+
 func (asm *assembler) CmpNum_dd() {
 	asm.adjustStack(-2)
 

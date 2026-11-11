@@ -324,9 +324,12 @@ func compareResult(local, remote Result, cmp *testcases.Comparison) error {
 	}
 
 	if remote.Error != nil {
-		for _, ke := range knownErrors {
-			if ke.MatchString(remote.Error.Error()) {
-				return nil
+		// A strict comparison does not accept a value where MySQL fails.
+		if !cmp.Strict {
+			for _, ke := range knownErrors {
+				if ke.MatchString(remote.Error.Error()) {
+					return nil
+				}
 			}
 		}
 		return fmt.Errorf("%v; mysql failed with: %w", local.Value, remote.Error)

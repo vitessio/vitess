@@ -123,15 +123,26 @@ func TestCompilerReference(t *testing.T) {
 
 	track := NewTracker()
 	venv := vtenv.NewTestEnv()
+	// Strict cases are also checked against MySQL 8.0, where some functions
+	// (e.g. YEAR) behave differently from the default test environment.
+	venv80, err := vtenv.New(vtenv.Options{MySQLServerVersion: "8.0.40"})
+	require.NoError(t, err)
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
 			env := evalengine.EmptyExpressionEnv(venv)
+			env80 := evalengine.EmptyExpressionEnv(venv80)
 
-			tc.Run(func(query string, row []sqltypes.Value, _ bool) {
+			tc.Queries(func(query string, row []sqltypes.Value, _ bool) {
 				env.Row = evalRow(t, venv, row)
 				total++
 				testCompilerCase(t, query, venv, tc.Schema, env)
+				if tc.Strict {
+					testStrictCompilerCase(t, query, venv, tc.Schema, env)
+					env80.Row = env.Row
+					testCompilerCase(t, query, venv80, tc.Schema, env80)
+					testStrictCompilerCase(t, query, venv80, tc.Schema, env80)
+				}
 				if !t.Failed() {
 					supported++
 				}
@@ -164,6 +175,70 @@ func evalRow(t *testing.T, venv *vtenv.Environment, row []sqltypes.Value) []sqlt
 	return out
 }
 
+// testStrictCompilerCase runs the checks that a Strict test case adds to the ones of
+// testCompilerCase: the constant-folded evaluation must equal the unfolded one, and
+// the declared type of the expression must match the value it returns. Further strict
+// checks belong here.
+func testStrictCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schema []*querypb.Field, env *evalengine.ExpressionEnv) {
+	stmt, err := venv.Parser().ParseExpr(query)
+	if err != nil {
+		return
+	}
+	translate := func(fold bool) (evalengine.Expr, error) {
+		fields := evalengine.FieldResolver(schema)
+		return evalengine.Translate(stmt, &evalengine.Config{
+			ResolveColumn:     fields.Column,
+			ResolveType:       fields.Type,
+			Collation:         collations.CollationUtf8mb4ID,
+			Environment:       venv,
+			NoConstantFolding: !fold,
+		})
+	}
+
+	converted, err := translate(false)
+	if err != nil {
+		// unsupported expressions are not checked, like in testCompilerCase
+		return
+	}
+	var res evalengine.EvalResult
+	var vmErr error
+	if !assert.NotPanics(t, func() { res, vmErr = env.Evaluate(converted) }) {
+		return
+	}
+
+	var folded evalengine.EvalResult
+	var foldErr error
+	if !assert.NotPanicsf(t, func() {
+		var expr evalengine.Expr
+		if expr, foldErr = translate(true); foldErr == nil {
+			folded, foldErr = env.Evaluate(expr)
+		}
+	}, "constant folding panicked:\nSQL: %s", query) {
+		return
+	}
+	switch {
+	case vmErr != nil || foldErr != nil:
+		assert.Equalf(t, fmt.Sprint(vmErr), fmt.Sprint(foldErr), "constant folding changed the error:\nSQL: %s", query)
+	default:
+		assert.Equalf(t, res.String(), folded.String(), "constant folding changed the result:\nSQL: %s", query)
+		assert.Equalf(t, res.Collation(), folded.Collation(), "constant folding changed the collation:\nSQL: %s", query)
+	}
+
+	if vmErr != nil {
+		return
+	}
+	typ, err := env.TypeOf(converted)
+	if !assert.NoErrorf(t, err, "no declared type:\nSQL: %s", query) {
+		return
+	}
+	value := res.Value(collations.CollationUtf8mb4ID)
+	if value.IsNull() {
+		assert.Truef(t, typ.Nullable(), "declared NOT NULL but returned NULL:\nSQL: %s", query)
+	} else {
+		assert.Equalf(t, typ.Type().String(), value.Type().String(), "declared type does not match the result %s:\nSQL: %s", value.String(), query)
+	}
+}
+
 func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schema []*querypb.Field, env *evalengine.ExpressionEnv) {
 	stmt, err := venv.Parser().ParseExpr(query)
 	if err != nil {
@@ -187,14 +262,18 @@ func testCompilerCase(t *testing.T, query string, venv *vtenv.Environment, schem
 
 	var expected evalengine.EvalResult
 	var evalErr error
-	assert.NotPanics(t, func() {
+	if !assert.NotPanics(t, func() {
 		expected, evalErr = env.EvaluateAST(converted)
-	})
+	}) {
+		return
+	}
 	var res evalengine.EvalResult
 	var vmErr error
-	assert.NotPanics(t, func() {
+	if !assert.NotPanicsf(t, func() {
 		res, vmErr = env.Evaluate(converted)
-	})
+	}, "compiler panicked:\nSQL: %s", query) {
+		return
+	}
 	switch {
 	case vmErr == nil && evalErr == nil:
 		eval := expected.String()
@@ -958,6 +1037,58 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `if(column0 > 0, column1, column2)`,
 			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewTime("10:11:12.345"), sqltypes.NewTime("01:02:03")},
 			result:     `TIME("10:11:12.345")`,
+		},
+		{
+			// COALESCE converts its result to the type aggregated from all its arguments.
+			expression: `coalesce(123, 'abc')`,
+			result:     `VARCHAR("123")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, false, 0, 0, nil),
+		},
+		{
+			expression: `coalesce(1.5, 2.5e0)`,
+			result:     `FLOAT64(1.5)`,
+		},
+		{
+			expression: `coalesce(NULL, NULL, 1.5, 'x')`,
+			result:     `VARCHAR("1.5")`,
+		},
+		{
+			expression: `coalesce(date'2020-01-02', timestamp'2021-02-03 04:05:06.789')`,
+			result:     `DATETIME("2020-01-02 00:00:00.000")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Datetime, collations.CollationBinaryID, false, 3, 0, nil),
+		},
+		{
+			expression: `coalesce(_latin1'a', 'b')`,
+			result:     `VARCHAR("a")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
+		{
+			// The consumers of COALESCE rely on its declared type.
+			expression: `coalesce(column0, 0) + 1`,
+			values:     []sqltypes.Value{sqltypes.NewUint64(5)},
+			result:     `DECIMAL(6)`,
+		},
+		{
+			expression: `coalesce(column0, 1.5) > 2`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(8)},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `concat(coalesce(column0, column1), 'x')`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(8), sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("8x")`,
+		},
+		{
+			expression: `coalesce(column0, column1) * 2`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(8), sqltypes.NewUint64(5)},
+			result:     `DECIMAL(16)`,
+		},
+		{
+			// IFNULL is NULL only if both its arguments are.
+			expression: `ifnull(column0, 1)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(8)},
+			result:     `INT64(8)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Int64, collations.CollationBinaryID, false, 0, 0, nil),
 		},
 	}
 
