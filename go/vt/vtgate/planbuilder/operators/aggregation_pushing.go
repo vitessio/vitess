@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"slices"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -662,7 +663,7 @@ func isDetermined(ctx *plancontext.PlanningContext, sel *sqlparser.Select, seeds
 			}
 			cmp := eq.cmp
 			for _, pair := range [][2]sqlparser.Expr{{cmp.Left, cmp.Right}, {cmp.Right, cmp.Left}} {
-				if to, isCol := pair[1].(*sqlparser.ColName); isCol && areKnown(pair[0]) && learn(to) {
+				if to, isCol := pair[1].(*sqlparser.ColName); isCol && areKnown(pair[0]) && haveSameType(ctx, pair[0], to) && learn(to) {
 					grown = true
 				}
 			}
@@ -674,6 +675,21 @@ func isDetermined(ctx *plancontext.PlanningContext, sel *sqlparser.Select, seeds
 		}
 	}
 	return areKnown(expr)
+}
+
+// haveSameType says if MySQL compares a and b as values of one type. When the types differ, it converts them, and
+// values that are different in one type can be equal in the other, like '1' and '01' as numbers. An unknown type counts
+// as different.
+func haveSameType(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
+	typeA, knownA := ctx.TypeForExpr(a)
+	typeB, knownB := ctx.TypeForExpr(b)
+	if !knownA || !knownB {
+		return false
+	}
+	if sqltypes.IsIntegral(typeA.Type()) && sqltypes.IsIntegral(typeB.Type()) {
+		return true
+	}
+	return typeA.Type() == typeB.Type() && typeA.Collation() == typeB.Collation()
 }
 
 // columnsFixedBelow returns the columns that have one value for every row of op: the ones that a filter compares to an

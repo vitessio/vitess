@@ -788,5 +788,11 @@
     "query": "select u.nk, count(distinct u.baz) from music m left join unsharded u on u.col = m.col where u.bar in (select col from user) group by u.nk",
     "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
+  },
+  {
+    "comment": "A string column of a unique key isn't fixed by the number it equals, since MySQL compares both as numbers and '1' and '01' are equal",
+    "query": "select count(distinct u.id) from user u straight_join unsharded x on x.foo = u.id where (x.bar = 1 or u.col in (select col from user_extra))",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
   }
 ]

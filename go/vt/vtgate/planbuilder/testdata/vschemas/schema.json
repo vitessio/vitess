@@ -241,6 +241,10 @@
           },
           "columns": [
             {
+              "name": "id",
+              "type": "INT64"
+            },
+            {
               "name": "col",
               "type": "INT16"
             },
