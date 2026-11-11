@@ -22,6 +22,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
@@ -35,6 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 
+	"vitess.io/vitess/go/acl/acltest"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
@@ -2154,4 +2157,35 @@ func TestGetHealthyTabletStatsDuringHealthUpdates(t *testing.T) {
 	cancel()
 	wg.Wait()
 	assert.Zero(t, empty.Load(), "a reader saw an empty healthy list")
+}
+
+// TestHealthCheckServeHTTP checks that /debug/gateway requires the DEBUGGING
+// role: it is served without a restrictive policy and under read-only, and
+// refused under deny-all.
+func TestHealthCheckServeHTTP(t *testing.T) {
+	hc := &HealthCheckImpl{
+		healthData: make(map[KeyspaceShardTabletType]map[tabletAliasString]*TabletHealth),
+	}
+
+	tests := []struct {
+		mode     acltest.Mode
+		wantCode int
+	}{
+		{acltest.AllowAll, http.StatusOK},
+		{acltest.ReadOnly, http.StatusOK},
+		{acltest.DenyAll, http.StatusForbidden},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mode.String(), func(t *testing.T) {
+			acltest.SetMode(t, tt.mode)
+
+			rec := httptest.NewRecorder()
+			hc.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/debug/gateway", nil))
+
+			assert.Equal(t, tt.wantCode, rec.Code)
+			if tt.wantCode == http.StatusOK {
+				assert.Equal(t, "application/json; charset=utf-8", rec.Header().Get("Content-Type"))
+			}
+		})
+	}
 }

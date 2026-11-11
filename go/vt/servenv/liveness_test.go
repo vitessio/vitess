@@ -23,19 +23,29 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl/acltest"
 	"vitess.io/vitess/go/vt/servenv/testutils"
 )
 
+// TestLivenessHandler checks that /debug/liveness answers 200 under every
+// security policy, because liveness probes call it without credentials.
 func TestLivenessHandler(t *testing.T) {
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/debug/liveness")
-	require.NoError(t, err)
-	defer resp.Body.Close()
+	for _, mode := range []acltest.Mode{acltest.AllowAll, acltest.ReadOnly, acltest.DenyAll} {
+		t.Run(mode.String(), func(t *testing.T) {
+			acltest.SetMode(t, mode)
 
-	// Make sure we can read the body, even though it's empty.
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	t.Logf("body: %q", body)
+			resp, err := http.Get(server.URL + "/debug/liveness")
+			require.NoError(t, err)
+			defer resp.Body.Close()
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+
+			// Make sure we can read the body, even though it's empty.
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			t.Logf("body: %q", body)
+		})
+	}
 }
