@@ -63,7 +63,7 @@ func commandUnzip(cmd *cobra.Command, args []string) error {
 		if dstPath != "/" {
 			zkPath = path.Join(dstPath, zkPath)
 		}
-		_, err = zk2topo.CreateRecursive(cmd.Context(), fs.Conn, zkPath, data, 0, zk.WorldACL(zk.PermAll), 10)
+		_, err = zk2topo.CreateRecursive(cmd.Context(), fs.Conn, zkPath, data, 0, zk2topo.ACL(zk.PermAll), 10)
 		if err != nil && err != zk.ErrNodeExists {
 			return fmt.Errorf("unzip: zk create failed: %v", err)
 		}

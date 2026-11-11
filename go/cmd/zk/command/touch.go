@@ -74,9 +74,9 @@ func commandTouch(cmd *cobra.Command, args []string) error {
 	case touchArgs.TouchOnly:
 		return fmt.Errorf("touch: no such path %v", zkPath)
 	case touchArgs.CreateParents:
-		_, err = zk2topo.CreateRecursive(cmd.Context(), fs.Conn, zkPath, data, 0, zk.WorldACL(zk.PermAll), 10)
+		_, err = zk2topo.CreateRecursive(cmd.Context(), fs.Conn, zkPath, data, 0, zk2topo.ACL(zk.PermAll), 10)
 	default:
-		_, err = fs.Conn.Create(cmd.Context(), zkPath, data, 0, zk.WorldACL(zk.PermAll))
+		_, err = fs.Conn.Create(cmd.Context(), zkPath, data, 0, zk2topo.ACL(zk.PermAll))
 	}
 
 	if err != nil {

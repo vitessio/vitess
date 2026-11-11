@@ -112,7 +112,7 @@ func (fs *FS) WriteContext(ctx context.Context, path string, data []byte) (err e
 	if IsFile(path) {
 		_, err = fs.Conn.Set(ctx, path, data, -1)
 		if err == zk.ErrNoNode {
-			_, err = zk2topo.CreateRecursive(ctx, fs.Conn, path, data, 0, zk.WorldACL(zk.PermAll), 10)
+			_, err = zk2topo.CreateRecursive(ctx, fs.Conn, path, data, 0, zk2topo.ACL(zk.PermAll), 10)
 		}
 		return err
 	}
