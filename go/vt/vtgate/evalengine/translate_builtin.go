@@ -61,11 +61,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 	case "isnull":
 		return builtinIsNullRewrite(args)
 	case "ifnull":
-		return builtinIfNullRewrite(args)
+		return builtinIfNullRewrite(args, ast.cfg.Collation)
 	case "nullif":
-		return builtinNullIfRewrite(args)
+		return builtinNullIfRewrite(args, ast.cfg.Collation)
 	case "if":
-		return builtinIfRewrite(args)
+		return builtinIfRewrite(args, ast.cfg.Collation)
 	case "coalesce":
 		if len(args) == 0 {
 			return nil, argError(method)
@@ -1164,7 +1164,7 @@ func builtinIsNullRewrite(args []IR) (IR, error) {
 	}, nil
 }
 
-func builtinIfNullRewrite(args []IR) (IR, error) {
+func builtinIfNullRewrite(args []IR, collate collations.ID) (IR, error) {
 	if len(args) != 2 {
 		return nil, argError("IFNULL")
 	}
@@ -1179,11 +1179,12 @@ func builtinIfNullRewrite(args []IR) (IR, error) {
 			},
 			then: args[1],
 		}},
-		Else: args[0],
+		Else:    args[0],
+		collate: collate,
 	}, nil
 }
 
-func builtinNullIfRewrite(args []IR) (IR, error) {
+func builtinNullIfRewrite(args []IR, collate collations.ID) (IR, error) {
 	if len(args) != 2 {
 		return nil, argError("NULLIF")
 	}
@@ -1196,11 +1197,12 @@ func builtinNullIfRewrite(args []IR) (IR, error) {
 			},
 			then: NullExpr,
 		}},
-		Else: args[0],
+		Else:    args[0],
+		collate: collate,
 	}, nil
 }
 
-func builtinIfRewrite(args []IR) (IR, error) {
+func builtinIfRewrite(args []IR, collate collations.ID) (IR, error) {
 	if len(args) != 3 {
 		return nil, argError("IF")
 	}
@@ -1215,6 +1217,7 @@ func builtinIfRewrite(args []IR) (IR, error) {
 			},
 			then: args[1],
 		}},
-		Else: args[2],
+		Else:    args[2],
+		collate: collate,
 	}, nil
 }

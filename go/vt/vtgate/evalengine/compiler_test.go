@@ -930,6 +930,35 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `TRIM(TRAILING '0' FROM '1.500')`,
 			result:     `VARCHAR("1.5")`,
 		},
+		{
+			// A CASE without ELSE returns NULL when no WHEN matches, so it is nullable.
+			expression: `case when false then 0 when null then 1 when 1=2 then 255 end`,
+			result:     `NULL`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Int64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			// Numbers and temporal values aggregate into a character string in the connection collation.
+			expression: `if(true, 1, date'2020-01-02')`,
+			result:     `VARCHAR("1")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
+		{
+			expression: `if(column0 > 0, column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(8), sqltypes.NewDate("2023-05-06")},
+			result:     `VARCHAR("8")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
+		{
+			// The columns are declared without a precision; the converted value keeps its own.
+			expression: `if(column0 > 0, column1, column2)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewDatetime("2021-02-03 04:05:06.789"), sqltypes.NewDate("2023-05-06")},
+			result:     `DATETIME("2021-02-03 04:05:06.789")`,
+		},
+		{
+			expression: `if(column0 > 0, column1, column2)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewTime("10:11:12.345"), sqltypes.NewTime("01:02:03")},
+			result:     `TIME("10:11:12.345")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

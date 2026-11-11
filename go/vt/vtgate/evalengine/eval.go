@@ -206,12 +206,24 @@ func evalCoerce(e eval, typ sqltypes.Type, size, scale int32, col collations.ID,
 	case sqltypes.Date:
 		return evalToDate(e, now, allowZero), nil
 	case sqltypes.Datetime, sqltypes.Timestamp:
-		return evalToDateTime(e, int(size), now, allowZero), nil
+		return evalToDateTime(e, coercePrecision(e, size), now, allowZero), nil
 	case sqltypes.Time:
-		return evalToTime(e, int(size)), nil
+		return evalToTime(e, coercePrecision(e, size)), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String())
 	}
+}
+
+// coercePrecision returns the fractional seconds precision for converting e to a
+// temporal type with the given declared precision. The declared precision is the
+// maximum of the aggregated types, so a temporal value with a higher precision
+// means it was not known (e.g. a column declared without one); keep the value's
+// own precision instead of rounding it away.
+func coercePrecision(e eval, size int32) int {
+	if t, ok := e.(*evalTemporal); ok {
+		return int(max(size, int32(t.prec)))
+	}
+	return int(size)
 }
 
 func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID, values *EnumSetValues, sqlmode SQLMode) (eval, error) {

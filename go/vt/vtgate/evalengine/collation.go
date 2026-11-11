@@ -127,3 +127,14 @@ func (ca *collationAggregation) add(tc collations.TypedCollation, env *collation
 func (ca *collationAggregation) result() collations.TypedCollation {
 	return ca.cur
 }
+
+// resultFor returns the aggregated collation for a result of type typ. Numbers
+// and temporal values have no character set of their own: when only such
+// arguments are aggregated into a character string, the result takes the
+// connection collation.
+func (ca *collationAggregation) resultFor(typ sqltypes.Type, connection collations.ID) collations.TypedCollation {
+	if ca.cur.Coercibility == collations.CoerceNumeric && sqltypes.IsText(typ) && connection != collations.Unknown {
+		return typedCoercionCollation(typ, connection)
+	}
+	return ca.cur
+}

@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -62,8 +63,9 @@ type (
 	}
 
 	CaseExpr struct {
-		cases []WhenThen
-		Else  IR
+		cases   []WhenThen
+		Else    IR
+		collate collations.ID
 	}
 )
 
@@ -633,7 +635,8 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	return evalCoerce(result, ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
+	tt := ta.result()
+	return evalCoerce(result, tt, ta.size, ta.scale, ca.resultFor(tt, c.collate).Collation, env.now, env.sqlmode.AllowZeroDate())
 }
 
 func (c *CaseExpr) constant() bool {
@@ -711,10 +714,12 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	var f typeFlag
-	if ta.nullable {
+	// Without an ELSE branch, a CASE that matches no WHEN returns NULL.
+	if ta.nullable || cs.Else == nil {
 		f |= flagNullable
 	}
-	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
+	tt := ta.result()
+	ct := ctype{Type: tt, Flag: f, Col: ca.resultFor(tt, cs.collate), Scale: ta.scale, Size: ta.size}
 	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }
