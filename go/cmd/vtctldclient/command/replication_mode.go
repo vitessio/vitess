@@ -53,7 +53,7 @@ version that knows the shard's own policy before a migration starts.
 Every step checks the current state first, so the command can be run again after a failure. With
 --dry-run, the command prints the plan without changing anything.`,
 	Example: `MigrateReplicationMode --durability-policy group_replication_cross_cell --dry-run commerce
-MigrateReplicationMode --durability-policy group_replication commerce/-80
+MigrateReplicationMode --durability-policy group_replication_cross_cell commerce/-80
 MigrateReplicationMode --durability-policy semi_sync commerce`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.ExactArgs(1),

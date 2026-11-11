@@ -1428,9 +1428,8 @@ message MigrateReplicationModeRequest {
   // keyspace is converted.
   string shard = 2;
   // DurabilityPolicy is the target durability policy. A group replication policy
-  // (group_replication, group_replication_cross_cell) converts the shards from
-  // asynchronous replication to MySQL Group Replication; any other policy converts
-  // them back.
+  // (group_replication_cross_cell) converts the shards from asynchronous
+  // replication to MySQL Group Replication; any other policy converts them back.
   string durability_policy = 3;
   // DryRun, when set, returns the plan without changing anything.
   bool dry_run = 4;

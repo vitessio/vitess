@@ -9636,9 +9636,8 @@ type MigrateReplicationModeRequest struct {
 	// keyspace is converted.
 	Shard string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
 	// DurabilityPolicy is the target durability policy. A group replication policy
-	// (group_replication, group_replication_cross_cell) converts the shards from
-	// asynchronous replication to MySQL Group Replication; any other policy converts
-	// them back.
+	// (group_replication_cross_cell) converts the shards from asynchronous
+	// replication to MySQL Group Replication; any other policy converts them back.
 	DurabilityPolicy string `protobuf:"bytes,3,opt,name=durability_policy,json=durabilityPolicy,proto3" json:"durability_policy,omitempty"`
 	// DryRun, when set, returns the plan without changing anything.
 	DryRun bool `protobuf:"varint,4,opt,name=dry_run,json=dryRun,proto3" json:"dry_run,omitempty"`
