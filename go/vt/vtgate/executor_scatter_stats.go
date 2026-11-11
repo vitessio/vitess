@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/safehtml/template"
 
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/logz"
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -81,7 +82,12 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 
 	// Now we'll go over all scatter queries we've found and produce result items for each
 	resultItems := make([]*statsResultItem, len(plans))
+	redact := streamlog.GetQueryLogConfig().RedactDebugUIQueries
 	for i, plan := range plans {
+		query := plan.Original
+		if redact {
+			query = "[REDACTED]"
+		}
 		execCount := atomic.LoadUint64(&plan.ExecCount)
 		execTime := time.Duration(atomic.LoadUint64(&plan.ExecTime))
 
@@ -91,7 +97,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 		}
 
 		resultItems[i] = &statsResultItem{
-			Query:                  plan.Original,
+			Query:                  query,
 			AvgTimePerQuery:        time.Duration(avgTimePerQuery),
 			PercentTimeOfReads:     100 * float64(execTime) / float64(readOnlyTime),
 			PercentTimeOfScatters:  100 * float64(execTime) / float64(scatterExecTime),

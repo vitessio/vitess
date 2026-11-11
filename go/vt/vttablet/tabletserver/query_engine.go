@@ -826,6 +826,11 @@ func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, reques
 
 	response.Header().Set("Content-Type", "text/plain")
 	qe.ForEachPlan(func(plan *TabletPlan) bool {
+		if qe.redactUIQuery {
+			// The plan's FullQuery, WhereClause and FullStmt all carry the statement.
+			fmt.Fprintf(response, "[REDACTED]\nPlanID: %v\nTable: %v\n\n", plan.PlanID, plan.TableName())
+			return true
+		}
 		fmt.Fprintf(response, "%#v\n", qe.env.Environment().Parser().TruncateForUI(plan.Original))
 		if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
 			response.Write([]byte(err.Error()))
@@ -846,7 +851,10 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 	var qstats []perQueryStats
 	qe.ForEachPlan(func(plan *TabletPlan) bool {
 		var pqstats perQueryStats
-		pqstats.Query = unicoded(qe.env.Environment().Parser().TruncateForUI(plan.Original))
+		pqstats.Query = "[REDACTED]"
+		if !qe.redactUIQuery {
+			pqstats.Query = unicoded(qe.env.Environment().Parser().TruncateForUI(plan.Original))
+		}
 		pqstats.Table = plan.TableName().String()
 		pqstats.Plan = plan.PlanID
 		pqstats.QueryCount, pqstats.Time, pqstats.MysqlTime, pqstats.RowsAffected, pqstats.RowsReturned, pqstats.ErrorCount = plan.Stats()

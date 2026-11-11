@@ -157,9 +157,12 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 			return true
 		}
 		Value := &queryzRow{
-			Query: logz.Wrappable(qe.env.Environment().Parser().TruncateForUI(plan.Original)),
+			Query: "[REDACTED]",
 			Table: plan.TableName().String(),
 			Plan:  plan.PlanID,
+		}
+		if !qe.redactUIQuery {
+			Value.Query = logz.Wrappable(qe.env.Environment().Parser().TruncateForUI(plan.Original))
 		}
 		Value.Count, Value.tm, Value.mysqlTime, Value.RowsAffected, Value.RowsReturned, Value.Errors = plan.Stats()
 		var timepq time.Duration

@@ -74,7 +74,7 @@ var (
 			<td>{{.MysqlResponseTime.Seconds}}</td>
 			<td>{{.WaitingForConnection.Seconds}}</td>
 			<td>{{.PlanType}}</td>
-			<td>{{.OriginalSQL | .Parser.TruncateForUI | unquote | cssWrappable}}</td>
+			<td>{{if .Config.RedactDebugUIQueries}}[REDACTED]{{else}}{{.OriginalSQL | .Parser.TruncateForUI | unquote | cssWrappable}}{{end}}</td>
 			<td>{{.NumberOfQueries}}</td>
 			<td>{{.FmtQuerySources}}</td>
 			<td>{{.RowsAffected}}</td>

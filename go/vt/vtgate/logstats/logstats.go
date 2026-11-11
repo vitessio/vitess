@@ -118,12 +118,20 @@ func (stats *LogStats) ContextHTML() safehtml.HTML {
 	return callinfo.HTMLFromContext(stats.Ctx)
 }
 
-// ErrorStr returns the error string or ""
+// ErrorStr returns the error string or "". Errors can embed the statement, so
+// the string is redacted when RedactDebugUIQueries is set.
 func (stats *LogStats) ErrorStr() string {
-	if stats.Error != nil {
-		return stats.Error.Error()
+	return redactableErrorStr(stats.Error, stats.Config.RedactDebugUIQueries)
+}
+
+func redactableErrorStr(err error, redact bool) string {
+	if err == nil {
+		return ""
 	}
-	return ""
+	if redact {
+		return "[REDACTED]"
+	}
+	return err.Error()
 }
 
 // RemoteAddrUsername returns some parts of CallInfo if set
@@ -150,10 +158,7 @@ func (stats *LogStats) routingIndexesUsedStrings() []string {
 
 // MirorTargetErrorStr returns the mirror target error string or ""
 func (stats *LogStats) MirrorTargetErrorStr() string {
-	if stats.MirrorTargetError != nil {
-		return stats.MirrorTargetError.Error()
-	}
-	return ""
+	return redactableErrorStr(stats.MirrorTargetError, stats.Config.RedactDebugUIQueries)
 }
 
 // Logf formats the log record to the given writer, either as
@@ -194,7 +199,11 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Key("StmtType")
 	log.StringUnquoted(stats.StmtType)
 	log.Key("SQL")
-	log.String(stats.SQL)
+	if stats.Config.RedactDebugUIQueries {
+		log.Redacted()
+	} else {
+		log.String(stats.SQL)
+	}
 	log.Key("BindVars")
 	if stats.Config.RedactDebugUIQueries {
 		log.Redacted()

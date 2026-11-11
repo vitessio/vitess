@@ -22,6 +22,7 @@ import (
 	"html"
 	"log/slog"
 	"net/http"
+	"slices"
 
 	"github.com/google/safehtml/template"
 
@@ -160,6 +161,13 @@ func twopczHandler(txe *DTExecutor, w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if txe.qe.redactUIQuery {
+		for _, ptx := range slices.Concat(prepared, failed) {
+			for i := range ptx.Queries {
+				ptx.Queries[i] = "[REDACTED]"
+			}
+		}
 	}
 	format := r.FormValue("format")
 	if format == "json" {

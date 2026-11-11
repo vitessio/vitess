@@ -25,6 +25,7 @@ import (
 	"github.com/google/safehtml/template"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -142,9 +143,11 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
+	redact := streamlog.GetQueryLogConfig().RedactDebugUIQueries
 	e.ForEachPlan(func(plan *engine.Plan) bool {
-		Value := &queryzRow{
-			Query: logz.Wrappable(e.env.Parser().TruncateForUI(plan.Original)),
+		Value := &queryzRow{Query: "[REDACTED]"}
+		if !redact {
+			Value.Query = logz.Wrappable(e.env.Parser().TruncateForUI(plan.Original))
 		}
 		Value.Count, Value.tm, Value.ShardQueries, Value.RowsAffected, Value.RowsReturned, Value.Errors = plan.Stats()
 		var timepq time.Duration

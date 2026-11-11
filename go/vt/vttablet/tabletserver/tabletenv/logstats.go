@@ -160,12 +160,16 @@ func (stats *LogStats) ContextHTML() safehtml.HTML {
 	return callinfo.HTMLFromContext(stats.Ctx)
 }
 
-// ErrorStr returns the error string or ""
+// ErrorStr returns the error string or "". Errors carry the statement, so the
+// string is redacted when RedactDebugUIQueries is set.
 func (stats *LogStats) ErrorStr() string {
-	if stats.Error != nil {
-		return stats.Error.Error()
+	if stats.Error == nil {
+		return ""
 	}
-	return ""
+	if stats.Config.RedactDebugUIQueries {
+		return "[REDACTED]"
+	}
+	return stats.Error.Error()
 }
 
 // CallInfo returns some parts of CallInfo if set
@@ -210,7 +214,11 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 	log.Key("PlanType")
 	log.StringUnquoted(stats.PlanType)
 	log.Key("OriginalSQL")
-	log.String(stats.OriginalSQL)
+	if stats.Config.RedactDebugUIQueries {
+		log.Redacted()
+	} else {
+		log.String(stats.OriginalSQL)
+	}
 	log.Key("BindVars")
 	if stats.Config.RedactDebugUIQueries {
 		log.Redacted()

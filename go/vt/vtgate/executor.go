@@ -1565,6 +1565,11 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 
 	switch request.URL.Path {
 	case pathQueryPlans:
+		// Plans embed the statement in both their key and their instructions.
+		if streamlog.GetQueryLogConfig().RedactDebugUIQueries {
+			_, _ = response.Write([]byte("/debug/query_plans has been redacted for your protection\n"))
+			return
+		}
 		returnAsJSON(response, e.debugCacheEntries())
 	case pathVSchema:
 		returnAsJSON(response, e.VSchema())

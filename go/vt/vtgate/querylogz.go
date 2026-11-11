@@ -75,7 +75,7 @@ var (
 			<td>{{.ExecuteTime.Seconds}}</td>
 			<td>{{.CommitTime.Seconds}}</td>
 			<td>{{.StmtType}}</td>
-			<td>{{.SQL | .Parser.TruncateForUI | unquote | cssWrappable}}</td>
+			<td>{{if .Config.RedactDebugUIQueries}}[REDACTED]{{else}}{{.SQL | .Parser.TruncateForUI | unquote | cssWrappable}}{{end}}</td>
 			<td>{{.ShardQueries}}</td>
 			<td>{{.RowsAffected}}</td>
 			<td>{{.SlowQuery}}</td>
