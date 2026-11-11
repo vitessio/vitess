@@ -215,7 +215,8 @@ func TestInitializeReplicationDoesNotReviveReceiverDuringReparent(t *testing.T) 
 }
 
 // slowLockFactory serves a memorytopo whose TryLock takes delay before it
-// starts, as a remote topology server's round trips do.
+// starts, as a remote topology server's round trips do. An attempt whose
+// context expires first fails with topo.Timeout, as etcd's does.
 type slowLockFactory struct {
 	*memorytopo.Factory
 	delay time.Duration
@@ -237,6 +238,9 @@ type slowLockConn struct {
 func (c *slowLockConn) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
 	select {
 	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, topo.NewError(topo.Timeout, dirPath)
+		}
 		return nil, ctx.Err()
 	case <-time.After(c.delay):
 	}
@@ -256,6 +260,26 @@ func TestInitializeReplicationTakesFreeShardLockFromSlowTopo(t *testing.T) {
 	_, err = tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
 	require.NoError(t, err)
 	assert.True(t, md.Replicating)
+	require.NoError(t, md.CheckSuperQueryList())
+}
+
+// TestInitializeReplicationFailsWhenItsContextExpiresWhileLocking checks that
+// an acquisition that times out because the caller's context expired fails
+// initialization instead of deferring it as an unavailable lock.
+func TestInitializeReplicationFailsWhenItsContextExpiresWhileLocking(t *testing.T) {
+	_, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
+	ts, err := topo.NewWithFactory(&slowLockFactory{Factory: factory, delay: 30 * time.Second}, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	tm, md := newReplicationInitializationTMWithServer(t, ts, 1)
+	md.ExpectedExecuteSuperQueryList = nil
+
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	_, err = tm.initializeReplication(ctx, topodatapb.TabletType_REPLICA)
+	require.ErrorContains(t, err, "cannot initialize replication for ks/0")
+	_, unavailable := errors.AsType[*shardLockUnavailableError](err)
+	assert.False(t, unavailable, "an expired context must not defer initialization")
 	require.NoError(t, md.CheckSuperQueryList())
 }
 
@@ -404,6 +428,7 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 		deferred           bool
 	}{
 		{name: "acquisition timeout", deferred: true},
+		{name: "topology timeout", lockErr: topo.NewError(topo.Timeout, "ks/0"), deferred: true},
 		{name: "backend error", lockErr: errors.New("topology authorization denied")},
 		{name: "parent context canceled", cancelWhileLocking: true},
 	} {
@@ -915,12 +940,15 @@ func TestBackupOfRunningDeferredReplica(t *testing.T) {
 	for _, tc := range []struct {
 		name             string
 		source           string
+		port             int32
 		statusErr        error
 		hang, connecting bool
 		semiSync         bool
 	}{
 		{name: "from the shard primary", source: "old-primary", semiSync: true},
 		{name: "from another source", source: "stale-primary"},
+		// Tablets on one host differ only by port.
+		{name: "from another port on the shard primary's host", source: "old-primary", port: 3307},
 		{name: "retrying another source", source: "stale-primary", connecting: true},
 		{name: "status unreadable", source: "stale-primary", statusErr: errors.New("status read failed")},
 		{name: "status read hangs", source: "old-primary", hang: true},
@@ -928,6 +956,9 @@ func TestBackupOfRunningDeferredReplica(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tm, md, qsc, id := newReplicatingPendingTM(t)
 			md.CurrentSourceHost = tc.source
+			if tc.port != 0 {
+				md.CurrentSourcePort = tc.port
+			}
 			tm.Cnf = &mysqlctl.Mycnf{}
 			md.DB().SetNeverFail(true)
 			md.ExpectedExecuteSuperQueryList = nil
@@ -1397,6 +1428,13 @@ func TestDeferredReplicaIsNotAdmittedWithoutReplicationFromShardPrimary(t *testi
 		name: "replicating from another source",
 		setup: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon, ts *topo.Server) {
 			md.CurrentSourceHost = "stale-primary"
+		},
+		err: "not from the shard primary",
+	}, {
+		// Tablets on one host differ only by port.
+		name: "replicating from another port on the shard primary's host",
+		setup: func(t *testing.T, tm *TabletManager, md *mysqlctl.FakeMysqlDaemon, ts *topo.Server) {
+			md.CurrentSourcePort = 3307
 		},
 		err: "not from the shard primary",
 	}, {
