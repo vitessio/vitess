@@ -78,7 +78,6 @@ func TestExpressionEnvTypeOf(t *testing.T) {
 				env:       vtenv.NewTestEnv(),
 				mu:        sync.Mutex{},
 				collation: 255,
-				typed:     nil,
 				needTypes: []typedIR{sumCol, countCol},
 				ir: &ArithmeticExpr{
 					Op:    &opArithDiv{},

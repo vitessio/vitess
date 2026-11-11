@@ -506,7 +506,7 @@ func (cached *UntypedExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(80)
 	}
 	// field env *vitess.io/vitess/go/vt/vtenv.Environment
 	size += cached.env.CachedSize(true)
@@ -521,13 +521,6 @@ func (cached *UntypedExpr) CachedSize(alloc bool) int64 {
 			if cc, ok := elem.(cachedObject); ok {
 				size += cc.CachedSize(true)
 			}
-		}
-	}
-	// field typed []*vitess.io/vitess/go/vt/vtgate/evalengine.typedExpr
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.typed)) * int64(8))
-		for _, elem := range cached.typed {
-			size += elem.CachedSize(true)
 		}
 	}
 	return size
@@ -2346,24 +2339,4 @@ func (cached *evalYear) CachedSize(alloc bool) int64 {
 
 func (cached *frame) CachedSize(alloc bool) int64 {
 	return int64(0)
-}
-
-func (cached *typedExpr) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(64)
-	}
-	// field types []vitess.io/vitess/go/vt/vtgate/evalengine.ctype
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.types)) * int64(32))
-		for _, elem := range cached.types {
-			size += elem.CachedSize(false)
-		}
-	}
-	// field compiled *vitess.io/vitess/go/vt/vtgate/evalengine.CompiledExpr
-	size += cached.compiled.CachedSize(true)
-	return size
 }

@@ -70,6 +70,9 @@ type assembler struct {
 		cur int
 		max int
 	}
+	// discard drops the emitted instructions, for a compilation that only wants
+	// the resulting type.
+	discard bool
 }
 
 func (asm *assembler) jumpFrom() *jump {
@@ -100,6 +103,9 @@ func (asm *assembler) adjustStack(offset int) {
 func (asm *assembler) emit(f frame, instruction string, args ...any) {
 	if asm.log != nil {
 		asm.log.Instruction(instruction, args...)
+	}
+	if asm.discard {
+		return
 	}
 	asm.ins = append(asm.ins, f)
 }
@@ -536,36 +542,48 @@ func (asm *assembler) Cmp_ne_n() {
 	}, "CMPFLAG NE [NULL]")
 }
 
-func (asm *assembler) CmpCase(cases int, hasElse bool, tt sqltypes.Type, size, scale int32, cc collations.TypedCollation, allowZeroDate bool) {
-	elseOffset := 0
-	if hasElse {
-		elseOffset = 1
-	}
+// caseResult is the type a CASE converts the value of the branch it takes to. It is
+// the aggregate of the types of all the branches, so it is only known once all of
+// them have been compiled, after the instructions that read it have been emitted.
+type caseResult struct {
+	tt            sqltypes.Type
+	size, scale   int32
+	col           collations.ID
+	allowZeroDate bool
+}
 
-	stackDepth := 2*cases + elseOffset
-	asm.adjustStack(-(stackDepth - 1))
+// CaseWhen pops the condition of a WHEN and jumps to next unless it is true.
+func (asm *assembler) CaseWhen(next *jump) {
+	asm.adjustStack(-1)
 
 	asm.emit(func(env *ExpressionEnv) int {
-		end := env.vm.sp - elseOffset
-		for sp := env.vm.sp - stackDepth; sp < end; sp += 2 {
-			if env.vm.stack[sp] != nil && env.vm.stack[sp].(*evalInt64).i != 0 {
-				env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[sp+1], tt, size, scale, cc.Collation, env.now, allowZeroDate)
-				goto done
-			}
+		env.vm.sp--
+		when := env.vm.stack[env.vm.sp]
+		if when == nil || when.(*evalInt64).i == 0 {
+			return next.offset()
 		}
-		if elseOffset != 0 {
-			env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], tt, size, scale, cc.Collation, env.now, allowZeroDate)
-		} else {
-			env.vm.stack[env.vm.sp-stackDepth] = nil
-		}
-	done:
-		env.vm.sp -= stackDepth - 1
 		return 1
-	}, "CASE [%d cases, else = %v]", cases, hasElse)
+	}, "CASE WHEN (SP-1)")
+}
+
+// CaseResult converts the value of the CASE branch that was taken to the type of
+// the CASE, then jumps to end if it is not nil.
+func (asm *assembler) CaseResult(res *caseResult, end *jump) {
+	if end == nil {
+		asm.emit(func(env *ExpressionEnv) int {
+			env.vm.stack[env.vm.sp-1], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], res.tt, res.size, res.scale, res.col, env.now, res.allowZeroDate)
+			return 1
+		}, "CASE RESULT (SP-1)")
+		return
+	}
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp-1], env.vm.err = evalCoerce(env.vm.stack[env.vm.sp-1], res.tt, res.size, res.scale, res.col, env.now, res.allowZeroDate)
+		return end.offset()
+	}, "CASE RESULT (SP-1), JUMP")
 }
 
 // Coalesce replaces its arguments with the first of them that is not NULL, converted
-// to the given type like CmpCase does.
+// to the given type like CaseResult does.
 func (asm *assembler) Coalesce(args int, tt sqltypes.Type, size, scale int32, cc collations.TypedCollation, allowZeroDate bool) {
 	asm.adjustStack(-(args - 1))
 

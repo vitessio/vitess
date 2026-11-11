@@ -342,6 +342,17 @@ func CaseExprWithPredicate(yield Query) {
 			), nil, false)
 		})
 	})
+
+	// MySQL evaluates the conditions up to the first true one and only the branch
+	// that is taken: the overflows in the others do not happen.
+	for _, q := range []string{
+		"case when false then 9223372036854775807 + 1 when true then 2 else 9223372036854775807 + 1 end",
+		"case when true then 2 when 9223372036854775807 + 1 then 3 end",
+		"case 1 when 1 then 'a' when 9223372036854775807 + 1 then 'b' end",
+		"case 2 when 1 then 9223372036854775807 + 1 when 2 then 'b' else 1.5 end",
+	} {
+		yield(q, nil, false)
+	}
 }
 
 func FnCeil(yield Query) {
@@ -957,6 +968,17 @@ func If(yield Query) {
 				yield(fmt.Sprintf("if(%s, %s, %s)", cmpbase, val1, val2), nil, false)
 			}
 		}
+	}
+
+	// MySQL only evaluates the branch that is taken: the overflow in the other
+	// one does not happen, but its type still counts for the type of the result.
+	for _, q := range []string{
+		"if(true, 1, 9223372036854775807 + 1)",
+		"if(false, 9223372036854775807 + 1, 1)",
+		"if(true, 1, 18446744073709551615 * 2)",
+		"if(true, if(false, 9223372036854775807 + 1, 2), 3)",
+	} {
+		yield(q, nil, false)
 	}
 }
 

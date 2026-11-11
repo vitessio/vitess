@@ -297,6 +297,11 @@ func TestCompilerSingle(t *testing.T) {
 		collation  collations.ID
 		typeWanted evalengine.Type
 		err        string
+		// untyped leaves the columns without a static type, so that they are
+		// typed from the values of the row.
+		untyped bool
+		// fold enables constant folding.
+		fold bool
 	}{
 		{
 			expression: "1 + column0",
@@ -1120,6 +1125,53 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `DECIMAL(-9223372036854775808)`,
 			typeWanted: evalengine.NewTypeEx(sqltypes.Decimal, collations.CollationBinaryID, true, 0, 0, nil),
 		},
+		{
+			// IF does not evaluate the branch that is not taken, so its overflow does not happen.
+			expression: `if(column0 = 5, 1, column1 - 1)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewInt64(math.MinInt64)},
+			result:     `INT64(1)`,
+		},
+		{
+			// A simple CASE stops comparing at the first WHEN that matches.
+			expression: `case column0 when 5 then 1 when column1 - 1 then 2 end`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewInt64(math.MinInt64)},
+			result:     `INT64(1)`,
+		},
+		{
+			// The branch that is not taken is not evaluated, but its BIGINT UNSIGNED type
+			// still makes the result a DECIMAL.
+			expression: `if(column0 = 5, 1, column1 * 2)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewUint64(math.MaxUint64)},
+			result:     `DECIMAL(1)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Decimal, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `if(column0 = 5, 1, column1 * 2)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewUint64(math.MaxUint64)},
+			result:     `DECIMAL(1)`,
+			untyped:    true,
+		},
+		{
+			// The VARCHAR type of the ELSE, which is not evaluated, makes the result a VARCHAR.
+			expression: `case when column0 = 5 then 1 else cast(-column1 as char) end`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewInt64(math.MinInt64)},
+			result:     `VARCHAR("1")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
+		{
+			expression: `case when column0 = 5 then 1 else cast(-column1 as char) end`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewInt64(math.MinInt64)},
+			result:     `VARCHAR("1")`,
+			collation:  collations.CollationUtf8mb4ID,
+			untyped:    true,
+		},
+		{
+			// A constant branch that fails to fold only fails when it is taken.
+			expression: `if(column0 = 5, 1, 9223372036854775807 + 1)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5)},
+			result:     `INT64(1)`,
+			fold:       true,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -1135,7 +1187,10 @@ func TestCompilerSingle(t *testing.T) {
 				ResolveType:       fields.Type,
 				Collation:         collations.CollationUtf8mb4ID,
 				Environment:       venv,
-				NoConstantFolding: true,
+				NoConstantFolding: !tc.fold,
+			}
+			if tc.untyped {
+				cfg.ResolveType = nil
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)
@@ -1386,6 +1441,20 @@ func TestLastInsertID(t *testing.T) {
 		}, {
 			expression: `last_insert_id(null)`,
 			result:     0,
+		}, {
+			// Only the branch that is taken is evaluated.
+			expression: `if(true, last_insert_id(41), last_insert_id(42))`,
+			result:     41,
+		}, {
+			expression: `if(true, 1, last_insert_id(41))`,
+			missing:    true,
+		}, {
+			expression: `case when 1 = 2 then last_insert_id(41) else 1 end`,
+			missing:    true,
+		}, {
+			// A simple CASE does not evaluate the WHEN values after the first match.
+			expression: `case 1 when 1 then 1 when last_insert_id(41) then 2 end`,
+			missing:    true,
 		},
 	}
 

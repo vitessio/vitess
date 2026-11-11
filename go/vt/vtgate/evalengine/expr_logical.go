@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 type (
@@ -587,56 +588,121 @@ func (is *IsExpr) compile(c *compiler) (ctype, error) {
 }
 
 func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
-	var ta typeAggregation
-	var ca collationAggregation
-	var result eval
-	matched := false
-
-	// From what we can tell, MySQL actually evaluates all the branches
-	// of a CASE expression, even after a truthy match. I.e. the CASE
-	// operator does _not_ short-circuit.
-
-	for _, whenThen := range c.cases {
+	// Like MySQL, evaluate the WHEN conditions in order up to the first true one,
+	// then only the THEN of that condition, or the ELSE if no condition is true.
+	// The other conditions and branches are not evaluated: their errors and side
+	// effects do not happen.
+	taken := len(c.cases)
+	for i, whenThen := range c.cases {
 		when, err := whenThen.when.eval(env)
 		if err != nil {
 			return nil, err
 		}
-		truthy := evalIsTruthy(when) == boolTrue
-
-		then, err := whenThen.then.eval(env)
-		if err != nil {
-			return nil, err
-		}
-		ta.addEval(then)
-		if err := ca.add(evalCollation(then), env.collationEnv); err != nil {
-			return nil, err
-		}
-
-		if !matched && truthy {
-			result = then
-			matched = true
-		}
-	}
-	if c.Else != nil {
-		e, err := c.Else.eval(env)
-		if err != nil {
-			return nil, err
-		}
-		ta.addEval(e)
-		if err := ca.add(evalCollation(e), env.collationEnv); err != nil {
-			return nil, err
-		}
-		if !matched {
-			result = e
-			matched = true
+		if evalIsTruthy(when) == boolTrue {
+			taken = i
+			break
 		}
 	}
 
-	if !matched {
+	var result eval
+	var err error
+	switch {
+	case taken < len(c.cases):
+		result, err = c.cases[taken].then.eval(env)
+	case c.Else != nil:
+		result, err = c.Else.eval(env)
+	default:
 		return nil, nil
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	// The type of the result is the aggregate of the types of all the branches,
+	// whichever one is taken. The taken branch contributes the type of its value,
+	// the others their declared type. A branch whose type cannot be known without
+	// evaluating it contributes nothing.
+	var ta typeAggregation
+	var ca collationAggregation
+	var declared []caseBranchType
+	branches := c.branches()
+	if branches > 1 {
+		declared = c.declaredTypes(env)
+	}
+	for i := range branches {
+		if i == taken {
+			ta.addEval(result)
+			if err := ca.add(evalCollation(result), env.collationEnv); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		d := declared[i]
+		if !d.ok {
+			continue
+		}
+		f := d.ct.Flag
+		if d.ct.Type == sqltypes.Null {
+			// A NULL makes the result nullable, as when it is evaluated.
+			f |= flagNullable
+		}
+		ta.add(d.ct.Type, f, d.ct.Size, d.ct.Scale)
+		if err := ca.add(d.ct.Col, env.collationEnv); err != nil {
+			return nil, err
+		}
+	}
+
 	tt := ta.result()
 	return evalCoerce(result, tt, ta.size, ta.scale, ca.resultFor(tt, c.collate).Collation, env.now, env.sqlmode.AllowZeroDate())
+}
+
+// caseBranchType is the declared type of a branch of a CASE, if it is known.
+type caseBranchType struct {
+	ct ctype
+	ok bool
+}
+
+// branches returns the number of THEN and ELSE branches.
+func (c *CaseExpr) branches() int {
+	if c.Else != nil {
+		return len(c.cases) + 1
+	}
+	return len(c.cases)
+}
+
+// declaredTypes returns the declared type of every THEN branch, then of the ELSE,
+// for the types of the current row and bind variables, without evaluating them.
+// Inside an UntypedExpr they are computed once per set of input types.
+func (c *CaseExpr) declaredTypes(env *ExpressionEnv) []caseBranchType {
+	if u := env.untyped; u != nil {
+		if typed, err := u.loadTypedExpression(env); err == nil {
+			if types, ok := typed.caseTypes.Load(c); ok {
+				return types.([]caseBranchType)
+			}
+			types := c.compileTypes(env, u.env)
+			typed.caseTypes.Store(c, types)
+			return types
+		}
+	}
+	if env.vc == nil {
+		return make([]caseBranchType, c.branches())
+	}
+	return c.compileTypes(env, env.vc.Environment())
+}
+
+func (c *CaseExpr) compileTypes(env *ExpressionEnv, venv *vtenv.Environment) []caseBranchType {
+	types := make([]caseBranchType, 0, c.branches())
+	add := func(expr IR) {
+		ct, err := declaredType(env, venv, c.collate, expr)
+		types = append(types, caseBranchType{ct: ct, ok: err == nil})
+	}
+	for _, whenThen := range c.cases {
+		add(whenThen.then)
+	}
+	if c.Else != nil {
+		add(c.Else)
+	}
+	return types
 }
 
 func (c *CaseExpr) constant() bool {
@@ -658,27 +724,34 @@ func (c *CaseExpr) constant() bool {
 }
 
 func (c *CaseExpr) simplify(env *ExpressionEnv) error {
-	var err error
+	// A condition or branch is only evaluated when it is needed, so one that fails
+	// to fold is kept as it is: it fails when it is evaluated, as in MySQL.
+	simplify := func(e IR) IR {
+		if simplified, err := simplifyExpr(env, e); err == nil {
+			return simplified
+		}
+		return e
+	}
 	for i := range c.cases {
 		whenThen := &c.cases[i]
-		whenThen.when, err = simplifyExpr(env, whenThen.when)
-		if err != nil {
-			return err
-		}
-		whenThen.then, err = simplifyExpr(env, whenThen.then)
-		if err != nil {
-			return err
-		}
+		whenThen.when = simplify(whenThen.when)
+		whenThen.then = simplify(whenThen.then)
 	}
 	if c.Else != nil {
-		c.Else, err = simplifyExpr(env, c.Else)
+		c.Else = simplify(c.Else)
 	}
-	return err
+	return nil
 }
 
 func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	var ca collationAggregation
 	var ta typeAggregation
+
+	// Like MySQL, only run the code of the conditions up to the first true one, and
+	// of the branch that is taken. The type the taken branch converts its value to
+	// is filled in once all the branches have been compiled.
+	res := &caseResult{allowZeroDate: c.sqlmode.AllowZeroDate()}
+	var end []*jump
 
 	for _, wt := range cs.cases {
 		when, err := wt.when.compile(c)
@@ -689,6 +762,8 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		if err := c.compileCheckTrue(when, 1); err != nil {
 			return ctype{}, err
 		}
+		next := c.asm.jumpFrom()
+		c.asm.CaseWhen(next)
 
 		then, err := wt.then.compile(c)
 		if err != nil {
@@ -699,6 +774,15 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		if err := ca.add(then.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
+
+		j := c.asm.jumpFrom()
+		c.asm.CaseResult(res, j)
+		end = append(end, j)
+
+		// When the condition is not true, the code continues here, without the
+		// value of the THEN on the stack.
+		c.asm.jumpDestination(next)
+		c.asm.adjustStack(-1)
 	}
 
 	if cs.Else != nil {
@@ -711,7 +795,11 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		if err := ca.add(els.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
+		c.asm.CaseResult(res, nil)
+	} else {
+		c.asm.PushNull()
 	}
+	c.asm.jumpDestination(end...)
 
 	var f typeFlag
 	// Without an ELSE branch, a CASE that matches no WHEN returns NULL.
@@ -720,7 +808,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	}
 	tt := ta.result()
 	ct := ctype{Type: tt, Flag: f, Col: ca.resultFor(tt, cs.collate), Scale: ta.scale, Size: ta.size}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
+	res.tt, res.size, res.scale, res.col = ct.Type, ct.Size, ct.Scale, ct.Col.Collation
 	return ct, nil
 }
 

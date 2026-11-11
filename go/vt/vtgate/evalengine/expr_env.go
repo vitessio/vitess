@@ -54,6 +54,8 @@ type (
 		user         *querypb.VTGateCallerID
 		sqlmode      SQLMode
 		collationEnv *collations.Environment
+		// untyped is the UntypedExpr being evaluated, if any.
+		untyped *UntypedExpr
 	}
 )
 

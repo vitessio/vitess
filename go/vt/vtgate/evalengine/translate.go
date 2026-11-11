@@ -20,6 +20,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -621,6 +622,9 @@ type typedExpr struct {
 	types    []ctype
 	compiled *CompiledExpr
 	err      error
+	// caseTypes caches, for each *CaseExpr in the expression, the declared types
+	// of its branches with this set of types ([]caseBranchType).
+	caseTypes sync.Map
 }
 
 func (typed *typedExpr) compile(env *vtenv.Environment, expr IR, collation collations.ID, sqlmode SQLMode) (*CompiledExpr, error) {
@@ -655,9 +659,11 @@ type UntypedExpr struct {
 	// the node in this slice.
 	needTypes []typedIR
 
+	// mu serializes the additions to typed
 	mu sync.Mutex
-	// typed contains the lazily compiled versions of ir for every type set
-	typed []*typedExpr
+	// typed contains the lazily compiled versions of ir for every type set.
+	// The slice it points to is never modified.
+	typed atomic.Pointer[[]*typedExpr]
 }
 
 var _ Expr = (*UntypedExpr)(nil)
@@ -667,11 +673,23 @@ func (u *UntypedExpr) IR() IR {
 }
 
 func (u *UntypedExpr) eval(env *ExpressionEnv) (eval, error) {
-	return u.ir.eval(env)
+	// Let the nodes find the typed version of this expression for the types
+	// of the current row and bind variables, see CaseExpr.declaredTypes.
+	prev := env.untyped
+	env.untyped = u
+	e, err := u.ir.eval(env)
+	env.untyped = prev
+	return e, err
 }
 
 func (u *UntypedExpr) loadTypedExpression(env *ExpressionEnv) (*typedExpr, error) {
-	dynamicTypes := make([]ctype, 0, len(u.needTypes))
+	// The lookup runs for every row that CaseExpr.eval needs declared types for:
+	// keep the types of a few inputs on the stack.
+	var buf [4]ctype
+	dynamicTypes := buf[:0]
+	if len(u.needTypes) > len(buf) {
+		dynamicTypes = make([]ctype, 0, len(u.needTypes))
+	}
 	for _, expr := range u.needTypes {
 		typ, err := expr.typeof(env)
 		if err != nil {
@@ -680,19 +698,43 @@ func (u *UntypedExpr) loadTypedExpression(env *ExpressionEnv) (*typedExpr, error
 		dynamicTypes = append(dynamicTypes, typ)
 	}
 
+	// Evaluating a row only reads the typed versions, so concurrent evaluations
+	// of the same expression must not contend on a lock.
+	if typed := u.findTyped(dynamicTypes); typed != nil {
+		return typed, nil
+	}
+
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	for _, typed := range u.typed {
-		if slices.EqualFunc(typed.types, dynamicTypes, func(a, b ctype) bool {
+	if typed := u.findTyped(dynamicTypes); typed != nil {
+		return typed, nil
+	}
+	typed := &typedExpr{types: slices.Clone(dynamicTypes)}
+	var all []*typedExpr
+	if cur := u.typed.Load(); cur != nil {
+		all = slices.Clone(*cur)
+	}
+	all = append(all, typed)
+	u.typed.Store(&all)
+	return typed, nil
+}
+
+// findTyped returns the typed version of the expression for the given set of
+// types, if there is one.
+func (u *UntypedExpr) findTyped(types []ctype) *typedExpr {
+	cur := u.typed.Load()
+	if cur == nil {
+		return nil
+	}
+	for _, typed := range *cur {
+		if slices.EqualFunc(typed.types, types, func(a, b ctype) bool {
 			return a.equal(b)
 		}) {
-			return typed, nil
+			return typed
 		}
 	}
-	typed := &typedExpr{types: dynamicTypes}
-	u.typed = append(u.typed, typed)
-	return typed, nil
+	return nil
 }
 
 func (u *UntypedExpr) Compile(env *ExpressionEnv) (*CompiledExpr, error) {

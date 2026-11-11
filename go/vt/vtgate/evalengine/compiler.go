@@ -39,6 +39,23 @@ type compiler struct {
 	asm          assembler
 	sqlmode      SQLMode
 	env          *vtenv.Environment
+	// dynamicEnv, when dynamicTypes is not set, gives the columns and bind variables
+	// that have no static type the type of their current value.
+	dynamicEnv *ExpressionEnv
+}
+
+// declaredType returns the type that expr has when it is compiled for the current
+// row and bind variables of env, without evaluating expr. The generated code is
+// discarded.
+func declaredType(env *ExpressionEnv, venv *vtenv.Environment, collation collations.ID, expr IR) (ctype, error) {
+	c := compiler{
+		collation:  collation,
+		sqlmode:    env.sqlmode,
+		env:        venv,
+		dynamicEnv: env,
+	}
+	c.asm.discard = true
+	return expr.compile(&c)
 }
 
 type CompilerLog interface {
