@@ -666,12 +666,13 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 	)
 
 	wasPrimaryDemoted := tm.tmState.IsPrimaryDemoted()
+	stoppedServing := false
 	if wasPrimary {
 		tm.tmState.SetPrimaryDemoted(true)
 		defer func() {
 			if finalErr != nil && revertPartialFailure {
 				tm.tmState.SetPrimaryDemoted(wasPrimaryDemoted)
-				if wasServing {
+				if wasServing && stoppedServing {
 					log.Info("reverting query service to serving")
 					if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), true, ""); err != nil {
 						log.Warn("SetServingType(serving=true) failed during revert", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
@@ -693,9 +694,10 @@ func (tm *TabletManager) demotePrimaryLocked(ctx context.Context, revertPartialF
 		// considered successful. If we are already not serving, this will be
 		// idempotent.
 		log.Info("DemotePrimary disabling query service")
-		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "demotion in progress"); err != nil {
+		if err := tm.QueryServiceControl.SetServingType(tablet.Type, protoutil.TimeFromProto(tablet.PrimaryTermStartTime).UTC(), false, "primary demoted"); err != nil {
 			return nil, vterrors.Wrap(err, "SetServingType(serving=false) failed")
 		}
+		stoppedServing = true
 	}
 
 	log.Info("checking semi-sync status")

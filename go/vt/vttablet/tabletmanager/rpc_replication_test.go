@@ -899,17 +899,24 @@ func TestDemotePrimaryRefreshDuringSetServingTypeRace(t *testing.T) {
 	fakeDb.SuperReadOnly.Store(false)
 	fakeDb.ReadOnly = false
 
+	var blockOnce sync.Once
 	servingTypeBlocked := make(chan struct{})
 	unblockServingType := make(chan struct{})
 	fakeQSC := &fakeQueryServiceControlDemoteRace{
 		Controller: tm.QueryServiceControl,
 		setServingTypeHook: func(tabletType topodatapb.TabletType, ptsTimestamp time.Time, serving bool, reason string) error {
-			if !serving && reason == "demotion in progress" {
-				close(servingTypeBlocked)
-				select {
-				case <-unblockServingType:
-				case <-ctx.Done():
-					return ctx.Err()
+			if !serving && reason == "primary demoted" {
+				var triggered bool
+				blockOnce.Do(func() {
+					triggered = true
+					close(servingTypeBlocked)
+				})
+				if triggered {
+					select {
+					case <-unblockServingType:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
 				}
 			}
 			return nil
@@ -996,6 +1003,52 @@ func TestDemotePrimaryPartialFailureRevertClearsDemoted(t *testing.T) {
 	err = tm.tmState.RefreshFromTopoInfo(ctx, nil, srvKeyspace)
 	require.NoError(t, err)
 	assert.True(t, tm.QueryServiceControl.IsServing())
+}
+
+// TestDemotePrimaryFailedStopDoesNotRevertServing tests that when SetServingType(false)
+// fails during demotePrimary, the partial failure revert does not attempt to restore serving
+// via SetServingType(true), matching the behavior prior to the defer registration.
+func TestDemotePrimaryFailedStopDoesNotRevertServing(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	ts := memorytopo.NewServer(ctx, "cell1")
+	tm := newTestTM(t, ts, 1, "ks", "0", nil)
+
+	err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY, false)
+	require.NoError(t, err)
+
+	fakeDb := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
+	fakeDb.DB().SetNeverFail(true)
+	fakeDb.SemiSyncReplicaEnabled = true
+	fakeDb.SemiSyncPrimaryEnabled = true
+	fakeDb.SuperReadOnly.Store(false)
+	fakeDb.ReadOnly = false
+
+	var servingTrueAttempted atomic.Bool
+	stopErr := errors.New("simulated failure stopping query service")
+	fakeQSC := &fakeQueryServiceControlDemoteRace{
+		Controller: tm.QueryServiceControl,
+		setServingTypeHook: func(tabletType topodatapb.TabletType, ptsTimestamp time.Time, serving bool, reason string) error {
+			if !serving {
+				return stopErr
+			}
+			servingTrueAttempted.Store(true)
+			return nil
+		},
+	}
+	tm.QueryServiceControl = fakeQSC
+
+	require.True(t, tm.QueryServiceControl.IsServing())
+
+	_, err = tm.demotePrimary(ctx, true /* revertPartialFailure */, false /* force */)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "simulated failure stopping query service")
+
+	// SetServingType(true) should NOT have been invoked during revert because
+	// SetServingType(false) never succeeded.
+	assert.False(t, servingTrueAttempted.Load(), "SetServingType(serving=true) must not be called during revert if SetServingType(serving=false) failed")
+	// isPrimaryDemoted should be restored to its initial state (false).
+	assert.False(t, tm.tmState.IsPrimaryDemoted())
 }
 
 // TestDemotePrimaryChangeTypeClearsDemoted tests that changing tablet type (e.g. to REPLICA

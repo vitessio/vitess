@@ -407,7 +407,7 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 		return "primary tablet with filtered replication on"
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isPrimaryDemoted {
-		return "primary demotion in progress"
+		return "primary demoted"
 	}
 	return ""
 }
