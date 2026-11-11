@@ -20,14 +20,23 @@ import (
 	"fmt"
 	"net/http"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
 )
 
 func init() {
 	OnInit(func() {
-		HTTPHandleFunc("/debug/flushlogs", func(w http.ResponseWriter, r *http.Request) {
-			logutil.Flush()
-			fmt.Fprint(w, "flushed")
-		})
+		HTTPHandleFunc("/debug/flushlogs", flushLogsHandler)
 	})
+}
+
+// flushLogsHandler flushes buffered logs. It requires the ADMIN role because
+// it changes process state.
+func flushLogsHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	logutil.Flush()
+	fmt.Fprint(w, "flushed")
 }

@@ -576,9 +576,17 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 }
 
 func (vtg *VTGate) registerDebugBalancerHandler() {
-	servenv.HTTPHandleFunc("/debug/balancer", func(w http.ResponseWriter, r *http.Request) {
-		vtg.Gateway().DebugBalancerHandler(w, r)
-	})
+	servenv.HTTPHandleFunc("/debug/balancer", vtg.debugBalancerHandler)
+}
+
+// debugBalancerHandler renders the tablet balancer state. It requires the
+// DEBUGGING role because the output exposes tablet routing details.
+func (vtg *VTGate) debugBalancerHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	vtg.Gateway().DebugBalancerHandler(w, r)
 }
 
 // IsHealthy returns nil if server is healthy.

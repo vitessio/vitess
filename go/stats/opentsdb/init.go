@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"sort"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -58,19 +59,7 @@ func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 
 	stats.RegisterPushBackend("opentsdb", b)
 
-	servenv.HTTPHandleFunc("/debug/opentsdb", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		collector := b.collector()
-		collector.collectAll()
-		data := collector.data
-		sort.Sort(byMetric(data))
-
-		if b, err := json.MarshalIndent(data, "", "  "); err != nil {
-			w.Write([]byte(err.Error()))
-		} else {
-			w.Write(b)
-		}
-	})
+	servenv.HTTPHandleFunc("/debug/opentsdb", b.debugHandler)
 
 	return b, nil
 }
@@ -102,4 +91,24 @@ func newBackend(prefix string) (*backend, error) {
 		commonTags: stats.ParseCommonTags(stats.CommonTags),
 		writer:     w,
 	}, nil
+}
+
+// debugHandler renders the metrics that would be pushed to OpenTSDB. It
+// requires the DEBUGGING role because the output exposes every exported stat.
+func (b *backend) debugHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	collector := b.collector()
+	collector.collectAll()
+	data := collector.data
+	sort.Sort(byMetric(data))
+
+	if b, err := json.MarshalIndent(data, "", "  "); err != nil {
+		w.Write([]byte(err.Error()))
+	} else {
+		w.Write(b)
+	}
 }
