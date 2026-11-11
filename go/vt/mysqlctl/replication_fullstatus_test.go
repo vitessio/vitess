@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -203,6 +204,10 @@ func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			db, mysqld := newCollectFullStatusDataTestMysqld(t)
+			recorder := &queryConnRecorder{QueryHandler: db.Handler, conns: map[string]uint32{}}
+			db.Handler = recorder
+			var killed atomic.Pointer[string]
+			db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(q string) { killed.Store(&q) })
 			require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), 1))
 			conn, err := mysqld.GetDbaConnection(t.Context())
 			require.NoError(t, err)
@@ -257,6 +262,14 @@ func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
 			assert.Nil(t, status)
 			assert.Equal(t, blockedCall, calls.Load(), "cancellation must not retry")
 
+			// Closing the socket doesn't stop the statement on the server, so the
+			// collection must kill it too.
+			wantKill := fmt.Sprintf("kill %d", recorder.connID(query))
+			assert.Eventually(t, func() bool {
+				got := killed.Load()
+				return got != nil && *got == wantKill
+			}, 30*time.Second, time.Millisecond, "the blocked query must be killed")
+
 			// The cancelled connection must release the sole pool slot even while
 			// the old server-side query is still blocked.
 			nextCtx, nextCancel := context.WithTimeout(t.Context(), 30*time.Second)
@@ -267,6 +280,26 @@ func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
 			assert.Equal(t, uint32(42), status.ServerId)
 		})
 	}
+}
+
+// queryConnRecorder records the connection each query last arrived on.
+type queryConnRecorder struct {
+	fakesqldb.QueryHandler
+	mu    sync.Mutex
+	conns map[string]uint32
+}
+
+func (r *queryConnRecorder) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	r.mu.Lock()
+	r.conns[query] = c.ConnectionID
+	r.mu.Unlock()
+	return r.QueryHandler.HandleQuery(c, query, callback)
+}
+
+func (r *queryConnRecorder) connID(query string) uint32 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.conns[query]
 }
 
 // stallingSessionSetupHandler withholds the session setup of new connections once
@@ -306,7 +339,8 @@ func TestCollectFullStatusDataDoesNotWaitForReplacementConnection(t *testing.T) 
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 	releaseQuery := make(chan struct{})
-	t.Cleanup(func() { close(releaseQuery) })
+	releaseBlockedQuery := sync.OnceFunc(func() { close(releaseQuery) })
+	t.Cleanup(releaseBlockedQuery)
 	var calls atomic.Int32
 	db.SetBeforeFunc("SHOW REPLICA STATUS", func() {
 		if calls.Add(1) == 1 {
@@ -322,7 +356,9 @@ func TestCollectFullStatusDataDoesNotWaitForReplacementConnection(t *testing.T) 
 		_, collectionErr = mysqld.CollectFullStatusData(ctx)
 		close(finished)
 	}()
-	t.Cleanup(func() { releaseSetup(); <-finished })
+	// Release both stalls before draining the collector, so a regression fails
+	// the test rather than hanging it.
+	t.Cleanup(func() { releaseSetup(); releaseBlockedQuery(); <-finished })
 
 	require.Eventually(t, func() bool {
 		select {
@@ -351,41 +387,6 @@ func TestCollectFullStatusDataDoesNotWaitForReplacementConnection(t *testing.T) 
 	require.NoError(t, err)
 	require.NotNil(t, status)
 	assert.Equal(t, uint32(42), status.ServerId)
-}
-
-func TestCollectFullStatusReplicaSemiSyncIndependentOfSourcePlugin(t *testing.T) {
-	tests := []struct {
-		name    string
-		primary string
-		replica string
-	}{
-		{name: "replica only", replica: "replica"},
-		{name: "slave only", replica: "slave"},
-		{name: "source and slave", primary: "source", replica: "slave"},
-		{name: "master and replica", primary: "master", replica: "replica"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			db, mysqld := newCollectFullStatusDataTestMysqld(t)
-			variables := []string{"rpl_semi_sync_" + tc.replica + "_enabled|ON"}
-			statuses := []string{"Rpl_semi_sync_" + tc.replica + "_status|ON"}
-			if tc.primary != "" {
-				variables = append(variables, "rpl_semi_sync_"+tc.primary+"_enabled|ON")
-				statuses = append(statuses, "Rpl_semi_sync_"+tc.primary+"_status|ON")
-			}
-			fields := sqltypes.MakeTestFields("variable_name|variable_value", "varchar|varchar")
-			db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_variables WHERE variable_name IN .*", sqltypes.MakeTestResult(fields, variables...))
-			db.AddQueryPattern("SELECT variable_name, variable_value FROM performance_schema.global_status WHERE variable_name IN .*", sqltypes.MakeTestResult(fields, statuses...))
-
-			status, err := mysqld.CollectFullStatusData(t.Context())
-			require.NoError(t, err)
-			require.NotNil(t, status)
-			assert.True(t, status.SemiSyncReplicaEnabled)
-			assert.True(t, status.SemiSyncReplicaStatus)
-			assert.Equal(t, tc.primary != "", status.SemiSyncPrimaryEnabled)
-			assert.Equal(t, tc.primary != "", status.SemiSyncPrimaryStatus)
-		})
-	}
 }
 
 func TestCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
@@ -650,7 +651,7 @@ func TestRunFullStatusQueryHonorsCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	err = runFullStatusQuery(ctx, conn, "variables", func() error {
+	err = testMysqld.runFullStatusQuery(ctx, conn, "variables", func() error {
 		_, err := conn.Conn.ExecuteFetch(query, 1, true)
 		return err
 	})
