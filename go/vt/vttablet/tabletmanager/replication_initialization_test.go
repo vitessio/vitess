@@ -1129,7 +1129,7 @@ func TestDeferredRestoreRecordsRestoredPosition(t *testing.T) {
 // configured, as a restore that deferred replication initialization leaves it.
 // Configured replication, including one that a point-in-time restore disabled,
 // must stay as it is, without the shard lock. A start that finds data runs the
-// restore hook, as on main.
+// restore hook, as on main, with the error if it fails.
 func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 	for _, tc := range []struct {
 		name          string
@@ -1176,7 +1176,11 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 				// As a restore that finds data does, it runs the restore hook.
 				hookEnv := readHookOutput(t, hookOutput)
 				assert.Contains(t, hookEnv, "TM_RESTORE_DATA_START_TS=")
-				assert.NotContains(t, hookEnv, "TM_RESTORE_DATA_ERROR=")
+				if tc.statusErr != nil {
+					assert.Contains(t, hookEnv, "TM_RESTORE_DATA_ERROR=cannot read the replication status")
+				} else {
+					assert.NotContains(t, hookEnv, "TM_RESTORE_DATA_ERROR=")
+				}
 			}
 			if tc.statusErr != nil {
 				// Replication may be configured.
@@ -1190,6 +1194,23 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 			assert.Equal(t, tc.notConfigured && tc.locked, tm.tmState.replicationInitPending())
 		})
 	}
+}
+
+// TestRestartAfterRestoreHookReportsInitializationError covers a restart with a
+// restore flag that finds data and no replication, and fails to initialize it:
+// the restore hook must receive that error.
+func TestRestartAfterRestoreHookReportsInitializationError(t *testing.T) {
+	tm, md, _, _ := newReplicationInitializationTM(t)
+	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
+	md.ReplicationStatusError = mysql.ErrNotReplica
+	md.ExpectedExecuteSuperQueryList = nil
+	tm.tmc = &failingPrimaryStatusClient{TabletManagerClient: tm.tmc, failing: &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}}
+	hookOutput := setupHookDir(t)
+
+	err := tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger())
+	require.ErrorContains(t, err, "primary status unavailable")
+	assert.Contains(t, readHookOutput(t, hookOutput), "TM_RESTORE_DATA_ERROR=failed to initialize replication")
+	require.NoError(t, md.CheckSuperQueryList())
 }
 
 // TestRestartAfterRestoreRejectsBadBackupTimestamp checks that a restart that

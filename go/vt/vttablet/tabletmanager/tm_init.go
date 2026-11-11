@@ -1222,7 +1222,7 @@ func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (con
 // as a restore that deferred replication initialization leaves it, and as a
 // former primary has it. Configured replication, including one that a
 // point-in-time restore disabled, is left alone.
-func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Logger) error {
+func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Logger) (retErr error) {
 	// Parse the flags before checking for data, so a bad value fails every
 	// start, as on main.
 	// Zero date will cause us to use the latest, which is the default
@@ -1253,9 +1253,10 @@ func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Lo
 			if err := tm.lock(ctx); err != nil {
 				return err
 			}
-			// A restore that finds data runs the hook after unlocking, with
-			// no restore error.
-			defer tm.invokeRestoreDoneHook(time.Now(), nil, "")
+			// As a restore does, run the hook after unlocking, with this
+			// branch's error.
+			startTime := time.Now()
+			defer func() { tm.invokeRestoreDoneHook(startTime, retErr, "") }()
 			defer tm.unlock()
 			// Without the status, replication may be configured: do not
 			// initialize.
