@@ -116,13 +116,13 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 	switch tt := typ.Type; {
 	case sqltypes.IsSigned(tt):
 		c.asm.PushColumn_i(column.Offset)
-		typ.Type = sqltypes.Int64
+		typ = typ.withSQL(tt)
 	case sqltypes.IsUnsigned(tt):
 		c.asm.PushColumn_u(column.Offset)
-		typ.Type = sqltypes.Uint64
+		typ = typ.withSQL(tt)
 	case sqltypes.IsFloat(tt):
 		c.asm.PushColumn_f(column.Offset)
-		typ.Type = sqltypes.Float64
+		typ = typ.withSQL(tt)
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushColumn_d(column.Offset)
 	case tt == sqltypes.Enum:

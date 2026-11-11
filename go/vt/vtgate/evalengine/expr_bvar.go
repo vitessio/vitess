@@ -127,13 +127,13 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 
 	switch tt := typ.Type; {
 	case sqltypes.IsSigned(tt):
-		typ.Type = sqltypes.Int64
+		typ = typ.withSQL(tt)
 		c.asm.PushBVar_i(bvar.Key)
 	case sqltypes.IsUnsigned(tt):
-		typ.Type = sqltypes.Uint64
+		typ = typ.withSQL(tt)
 		c.asm.PushBVar_u(bvar.Key)
 	case sqltypes.IsFloat(tt):
-		typ.Type = sqltypes.Float64
+		typ = typ.withSQL(tt)
 		c.asm.PushBVar_f(bvar.Key)
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushBVar_d(bvar.Key)

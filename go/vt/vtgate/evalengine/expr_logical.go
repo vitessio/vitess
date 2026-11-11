@@ -692,7 +692,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		ta.add(then.Type, then.Flag, then.Size, then.Scale)
+		ta.add(declared(wt.then, then).sqlType(), then.Flag, then.Size, then.Scale)
 		if err := ca.add(then.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
@@ -704,7 +704,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		ta.add(els.Type, els.Flag, els.Size, els.Scale)
+		ta.add(declared(cs.Else, els).sqlType(), els.Flag, els.Size, els.Scale)
 		if err := ca.add(els.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
@@ -714,7 +714,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	if ta.nullable {
 		f |= flagNullable
 	}
-	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
+	ct := ctype{Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}.withSQL(ta.result())
 	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }

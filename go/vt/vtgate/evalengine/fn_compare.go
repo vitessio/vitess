@@ -75,7 +75,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		if !tt.nullable() {
 			f = 0
 		}
-		ta.add(tt.Type, tt.Flag, tt.Size, tt.Scale)
+		ta.add(declared(arg, tt).sqlType(), tt.Flag, tt.Size, tt.Scale)
 		if err := ca.add(tt.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
@@ -94,7 +94,9 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		return 1
 	}, "COALESCE (SP-%d) ... (SP-1)", args)
 
-	return ctype{Type: ta.result(), Flag: f, Col: ca.result()}, nil
+	// NOTE: COALESCE does not convert the chosen argument to the aggregated
+	// type (pre-existing defect); the declared type is still the aggregate.
+	return ctype{Flag: f, Col: ca.result()}.withSQL(ta.result()), nil
 }
 
 func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiComparisonFunc {
@@ -643,17 +645,32 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		return ctype{Type: sqltypes.VarChar, Flag: f, Col: tc}, nil
 	}
 	if signed+unsigned == len(args) {
+		// the declared type is the aggregate of the operands' SQL types
+		var ta typeAggregation
+		for i, tt := range args {
+			ta.add(declared(call.Arguments[i], tt).sqlType(), tt.Flag, tt.Size, tt.Scale)
+		}
+		sqlT := ta.result()
 		if signed == len(args) {
 			c.asm.Fn_MULTICMP_i(len(args), call.cmp < 0)
 			c.asm.jumpDestination(jumps...)
-			return ctype{Type: sqltypes.Int64, Flag: f, Col: collationNumeric}, nil
+			return ctype{Flag: f, Col: collationNumeric}.withSQL(sqlT), nil
 		}
 		if unsigned == len(args) {
 			c.asm.Fn_MULTICMP_u(len(args), call.cmp < 0)
 			c.asm.jumpDestination(jumps...)
-			return ctype{Type: sqltypes.Uint64, Flag: f, Col: collationNumeric}, nil
+			return ctype{Flag: f, Col: collationNumeric}.withSQL(sqlT), nil
 		}
-		return call.compile_d(c, args, jumps)
+		ct, err := call.compile_d(c, args, jumps)
+		if err != nil || !sqltypes.IsIntegral(sqlT) {
+			return ct, err
+		}
+		// mixed signedness that MySQL aggregates to a signed integer type:
+		// the comparison ran on decimals, the result is an integer.
+		skip := c.compileNullCheck1(ct)
+		c.asm.Convert_xi(1)
+		c.asm.jumpDestination(skip)
+		return ctype{Flag: f, Col: collationNumeric}.withSQL(sqlT), nil
 	}
 	if binary > 0 || text > 0 {
 		if text > 0 {

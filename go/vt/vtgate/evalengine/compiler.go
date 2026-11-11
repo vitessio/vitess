@@ -55,11 +55,71 @@ type compiledCoercion struct {
 type EnumSetValues []string
 
 type ctype struct {
-	Type        sqltypes.Type
+	// Type is the representation of the value on the VM stack; instruction
+	// selection is based on it. All signed integers are Int64, all unsigned
+	// integers (and YEAR) are Uint64, all floats are Float64.
+	Type sqltypes.Type
+	// SQL is the declared SQL type of the expression when it differs from
+	// Type (e.g. INT8 for a TINYINT column whose representation is Int64).
+	// Zero means "same as Type". Only pass-through constructs keep it, see
+	// keepsSQLType.
+	SQL         sqltypes.Type
 	Flag        typeFlag
 	Size, Scale int32
 	Col         collations.TypedCollation
 	Values      *EnumSetValues
+}
+
+// sqlType returns the declared SQL type of this ctype.
+func (ct ctype) sqlType() sqltypes.Type {
+	if ct.SQL != 0 {
+		return ct.SQL
+	}
+	return ct.Type
+}
+
+// reprType returns the VM representation for a declared SQL type.
+func reprType(t sqltypes.Type) sqltypes.Type {
+	switch {
+	case sqltypes.IsSigned(t):
+		return sqltypes.Int64
+	case sqltypes.IsUnsigned(t): // includes YEAR
+		return sqltypes.Uint64
+	case sqltypes.IsFloat(t):
+		return sqltypes.Float64
+	}
+	return t
+}
+
+// withSQL returns a ctype whose representation is derived from the declared SQL type sql.
+func (ct ctype) withSQL(sql sqltypes.Type) ctype {
+	ct.Type = reprType(sql)
+	ct.SQL = 0
+	if ct.Type != sql {
+		ct.SQL = sql
+	}
+	return ct
+}
+
+// keepsSQLType reports whether the IR node passes the declared SQL type of its
+// operands through (MySQL: the column itself, IF/CASE/IFNULL/NULLIF/COALESCE,
+// GREATEST/LEAST). Every other node declares the type of its representation
+// (e.g. BIGINT for arithmetic on a TINYINT column).
+func keepsSQLType(expr IR) bool {
+	switch expr.(type) {
+	case *Column, *BindVariable, *CaseExpr, *builtinCoalesce, *builtinMultiComparison, *builtinYear:
+		return true
+	}
+	return false
+}
+
+// declared returns ct as the parent of expr sees it: with the SQL type
+// dropped unless expr is a pass-through construct.
+func declared(expr IR, ct ctype) ctype {
+	if ct.SQL != 0 && !keepsSQLType(expr) {
+		ct.SQL = 0
+	}
+	return ct
 }
 
 type Type struct {
@@ -183,6 +243,7 @@ func (t *Type) Equal(other *Type) bool {
 
 func (ct *ctype) equal(other ctype) bool {
 	return ct.Type == other.Type &&
+		ct.SQL == other.SQL &&
 		ct.Flag == other.Flag &&
 		ct.Size == other.Size &&
 		ct.Scale == other.Scale &&
@@ -220,7 +281,7 @@ func (c *compiler) compile(expr IR) (*CompiledExpr, error) {
 			"bad compilation: stack pointer at %d after compilation (expr: %s)",
 			c.asm.stack.cur, sql.String())
 	}
-	return &CompiledExpr{code: c.asm.ins, ir: expr, stack: c.asm.stack.max, typed: ct}, nil
+	return &CompiledExpr{code: c.asm.ins, ir: expr, stack: c.asm.stack.max, typed: declared(expr, ct)}, nil
 }
 
 func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type, preciseDatetime bool) ctype {

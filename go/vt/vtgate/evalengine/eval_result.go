@@ -244,6 +244,3 @@ func (er EvalResult) ToBooleanStrict() (bool, error) {
 	}
 	return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'%s' is not a boolean", er.v.ToRawBytes())
 }
-
-// sqlType returns the declared SQL type of this ctype (step 1: same as Type).
-func (ct *ctype) sqlType() sqltypes.Type { return ct.Type }
