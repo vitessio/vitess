@@ -1100,10 +1100,16 @@ func TestRowStreamerMemoryBoundsFlag(t *testing.T) {
 
 // TestStreamsRejectUnknownOverride checks that an override the source does not know fails every stream
 // kind with an INVALID_ARGUMENT error that names the key, instead of a nil streamer and a panic: the copy
-// (StreamRows, StreamTables) and the running phase (Stream, from "current" and from a position).
+// (StreamRows, StreamTables), the running phase (Stream, from "current" and from a position) and a copy
+// resumed from a position, which goes through the uvstreamer's catchup streamer.
 func TestStreamsRejectUnknownOverride(t *testing.T) {
+	execStatements(t, []string{"create table t1(id int, val varbinary(128), primary key(id))"})
+	defer execStatements(t, []string{"drop table t1"})
+	require.NoError(t, engine.se.Reload(t.Context()))
+
 	options := &binlogdatapb.VStreamOptions{ConfigOverrides: map[string]string{"no-such-override": "1"}}
 	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "/.*/"}}}
+	t1Filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: "select * from t1"}}}
 
 	streams := map[string]func() error{
 		"StreamRows": func() error {
@@ -1117,6 +1123,11 @@ func TestStreamsRejectUnknownOverride(t *testing.T) {
 		},
 		"Stream from a position": func() error {
 			return engine.Stream(t.Context(), primaryPosition(t), nil, filter, "", func([]*binlogdatapb.VEvent) error { return nil }, options)
+		},
+		"Stream resuming a copy": func() error {
+			// A copy in progress resumes with the tables' last PKs, so the uvstreamer runs its catchup vstreamer.
+			tablePKs := []*binlogdatapb.TableLastPK{{TableName: "t1"}}
+			return engine.Stream(t.Context(), primaryPosition(t), tablePKs, t1Filter, "", func([]*binlogdatapb.VEvent) error { return nil }, options)
 		},
 	}
 
