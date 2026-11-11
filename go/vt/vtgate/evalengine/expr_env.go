@@ -27,7 +27,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type VCursor interface {
@@ -87,12 +89,39 @@ func (env *ExpressionEnv) currentTimezone() *time.Location {
 	return env.vc.TimeZone()
 }
 
+// Evaluate evaluates expr for the current row and bind variables. The result
+// carries the declared type of the expression: compiled programs run in the
+// VM, untyped expressions are compiled for the current row's types (cached per
+// type set) and run in the VM, and bare columns, bind variables and literals
+// are evaluated directly and labelled with their declared type.
 func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
-	if p, ok := expr.(*CompiledExpr); ok {
+	switch expr := expr.(type) {
+	case *CompiledExpr:
+		return env.EvaluateVM(expr)
+	case *UntypedExpr:
+		if expr.noCompile {
+			return env.EvaluateAST(expr)
+		}
+		p, err := expr.Compile(env)
+		if err != nil {
+			if vterrors.Code(err) == vtrpcpb.Code_UNIMPLEMENTED {
+				// this IR (or one of its types) cannot be compiled: fall back
+				// to the interpreter, without a declared type
+				return env.EvaluateAST(expr)
+			}
+			return EvalResult{collationEnv: env.collationEnv}, err
+		}
 		return env.EvaluateVM(p)
 	}
 	e, err := expr.eval(env)
-	return EvalResult{v: e, collationEnv: env.collationEnv}, err
+	if err != nil {
+		return EvalResult{v: e, collationEnv: env.collationEnv}, err
+	}
+	ct, err := expr.typeof(env)
+	if err != nil {
+		return EvalResult{v: e, collationEnv: env.collationEnv}, nil
+	}
+	return env.typedResult(e, ct), nil
 }
 
 func (env *ExpressionEnv) EvaluateAST(expr Expr) (EvalResult, error) {
@@ -105,7 +134,7 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (Type, error) {
 	if err != nil {
 		return Type{}, err
 	}
-	return NewTypeEx(ty.Type, ty.Col.Collation, ty.Flag&flagNullable != 0, ty.Size, ty.Scale, ty.Values), nil
+	return NewTypeEx(ty.sqlType(), ty.Col.Collation, ty.Flag&flagNullable != 0, ty.Size, ty.Scale, ty.Values), nil
 }
 
 func (env *ExpressionEnv) SetTime(now time.Time) {

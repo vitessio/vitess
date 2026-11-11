@@ -608,6 +608,7 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 		ir:        expr,
 		collation: cfg.Collation,
 		needTypes: ast.untyped,
+		noCompile: cfg.NoCompilation,
 	}, nil
 }
 
@@ -654,6 +655,9 @@ type UntypedExpr struct {
 	// be statically typed. The dynamicTypeOffset field on each node is the offset of
 	// the node in this slice.
 	needTypes []typedIR
+	// noCompile is set when the caller asked for no compilation
+	// (Config.NoCompilation): Evaluate then uses the interpreter.
+	noCompile bool
 
 	mu sync.Mutex
 	// typed contains the lazily compiled versions of ir for every type set
