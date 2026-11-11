@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/safehtml/template"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logz"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -108,6 +109,11 @@ func init() {
 }
 
 func throttlerlogzHandler(w http.ResponseWriter, r *http.Request, m *managerImpl) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+
 	// Longest supported URL: /throttlerlogz/<name>
 	parts := strings.SplitN(r.URL.Path, "/", 3)
 
