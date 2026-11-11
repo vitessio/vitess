@@ -296,7 +296,9 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 // survives `recycleReadPacket`. Copying each value separately (as Vitess v24
 // and earlier did) would allocate once per column. It instead totals their lengths
 // and copies them into one exactly-sized backing buffer, keeping parsing to two
-// allocations regardless of column count.
+// allocations regardless of column count. The values share that buffer, so keeping
+// any one value keeps the whole row alive, as streamed rows already do with their
+// packet.
 // Returns a SQLError.
 func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Value, error) {
 	colNumber := len(fields)
@@ -351,7 +353,7 @@ func (c *Conn) parseRowCopy(data []byte, fields []*querypb.Field) ([]sqltypes.Va
 			n, pos = int(size), next
 		}
 		copy(buf[off:off+n], data[pos:pos+n])
-		// Cap each slice so `CachedSize` does not charge the full row buffer.
+		// Cap each slice so an append to one value can't overwrite the next.
 		row[i] = sqltypes.MakeTrusted(fields[i].Type, buf[off:off+n:off+n])
 		off += n
 		pos += n

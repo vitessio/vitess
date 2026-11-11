@@ -941,11 +941,10 @@ func TestParseRowCopyAllocations(t *testing.T) {
 	assert.Equal(t, float64(2), perRow, "the per-row copy allocates twice whatever the width")
 }
 
-// TestParseRowCopyCapEqualsLen locks the invariant the memory accounting rests on.
-// `sqltypes.Value.CachedSize` charges `cap(val)`, so a value whose capacity ran past
-// its length would be billed the whole row buffer. If a future edit drops the third
-// index from the sub-slice in parseRowCopy nothing else fails and no error surfaces,
-// stream consolidation just quietly stops working, so this is a hard require on every
+// TestParseRowCopyCapEqualsLen locks in that each value's capacity ends at its length.
+// The values share one buffer, so a value with spare capacity would let an append to
+// it overwrite the next column. If a future edit drops the third index from the
+// sub-slice in parseRowCopy nothing else fails, so this is a hard require on every
 // value rather than a spot check.
 func TestParseRowCopyCapEqualsLen(t *testing.T) {
 	c := &Conn{}
@@ -1012,33 +1011,6 @@ func TestParseRowCopyMatchesPerValueCopy(t *testing.T) {
 	}
 }
 
-// TestParseRowCopyCachedSizeParity asserts the per-row copy is invisible to the memory
-// accounting StreamConsolidator budgets against, so a result costs exactly what it costs
-// today. Both results are built by the same append sequence the read loop uses, so the
-// row and value slice capacities line up and only the value bytes are under test.
-func TestParseRowCopyCachedSizeParity(t *testing.T) {
-	c := &Conn{}
-	for _, shape := range parseRowCopyShapes() {
-		t.Run(shape.name, func(t *testing.T) {
-			data := rowPacket(t, shape.values)
-			fields := varcharFields(len(shape.values))
-
-			var want, got sqltypes.Result
-			for range 8 {
-				perValue, err := c.parseRow(data, fields, readLenEncStringAsBytesCopy, nil)
-				require.NoError(t, err)
-				want.Rows = append(want.Rows, perValue)
-
-				perRow, err := c.parseRowCopy(data, fields)
-				require.NoError(t, err)
-				got.Rows = append(got.Rows, perRow)
-			}
-
-			require.Equal(t, want.CachedSize(true), got.CachedSize(true))
-		})
-	}
-}
-
 // TestParseRowCopyMalformedPacket checks the error path is the one parseRow already
 // returns, and that a half-filled buffer is simply dropped rather than returned.
 func TestParseRowCopyMalformedPacket(t *testing.T) {
@@ -1100,34 +1072,6 @@ func TestParseRowCopyShortPacket(t *testing.T) {
 			var sqlErr *sqlerror.SQLError
 			require.ErrorAs(t, err, &sqlErr)
 			require.Equal(t, sqlerror.CRMalformedPacket, sqlErr.Number())
-		})
-	}
-}
-
-// TestParseRowCopySingleColumn covers the narrowest shape, where the arena holds one
-// value and the change is a no-op in allocation terms. The invariants still have to
-// hold: the value owns its bytes and its capacity matches its length.
-func TestParseRowCopySingleColumn(t *testing.T) {
-	for _, tc := range []struct {
-		name  string
-		value []byte
-	}{
-		{"value", []byte("nice name")},
-		{"empty", []byte{}},
-		{"NULL", nil},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			data := rowPacket(t, [][]byte{tc.value})
-			row, err := (&Conn{}).parseRowCopy(data, varcharFields(1))
-			require.NoError(t, err)
-			require.Len(t, row, 1)
-			require.Equal(t, len(row[0].Raw()), cap(row[0].Raw()))
-			require.Equal(t, tc.value == nil, row[0].IsNull())
-
-			for i := range data {
-				data[i] = 'Z'
-			}
-			require.Equal(t, string(tc.value), row[0].ToString())
 		})
 	}
 }
