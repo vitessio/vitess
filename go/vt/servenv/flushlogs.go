@@ -30,10 +30,11 @@ func init() {
 	})
 }
 
-// flushLogsHandler flushes buffered logs. It requires the ADMIN role because
-// it changes process state.
+// flushLogsHandler flushes buffered logs. Like the other debug toggles such as
+// /debug/blockprofilerate, it requires the DEBUGGING role, so the built-in
+// read-only policy keeps allowing it.
 func flushLogsHandler(w http.ResponseWriter, r *http.Request) {
-	if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
 	}

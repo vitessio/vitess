@@ -52,7 +52,7 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
-	// /debug/flushlogs requires the ADMIN role.
+	// /debug/flushlogs requires the DEBUGGING role.
 	url = fmt.Sprintf("http://localhost:%d/debug/flushlogs", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
@@ -114,7 +114,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
-	// /debug/flushlogs requires the ADMIN role.
+	// /debug/flushlogs requires the DEBUGGING role.
 	url = fmt.Sprintf("http://localhost:%d/debug/flushlogs", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
@@ -153,9 +153,9 @@ func TestReadOnlySecurityPolicy(t *testing.T) {
 	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
 	assertAllowedURLTest(t, url)
 
-	// /debug/flushlogs requires the ADMIN role.
+	// /debug/flushlogs requires the DEBUGGING role.
 	url = fmt.Sprintf("http://localhost:%d/debug/flushlogs", mTablet.HTTPPort)
-	assertNotAllowedURLTest(t, url)
+	assertAllowedURLTest(t, url)
 
 	// /debug/liveness is always allowed.
 	url = fmt.Sprintf("http://localhost:%d/debug/liveness", mTablet.HTTPPort)
