@@ -92,6 +92,7 @@ func TestMySQLErrno(t *testing.T) {
 		{"terse vttablet error", slog.StringValue("(errno 1062) (sqlstate 23000): Sql: \"insert\""), ERDupEntry},
 		{"quoted marker skipped", slog.StringValue("could not set state: update t set message='" + fakeMarker + "': " + sqlErr.Error()), ERDupEntry},
 		{"broken marker skipped", slog.StringValue("(errno ) " + dupEntry + " (errno 1062) (sqlstate 23000)"), ERDupEntry},
+		{"empty errno skipped", slog.StringValue("(errno ) (sqlstate 23000)\n" + sqlErr.Error()), ERDupEntry},
 		{"first of an aggregate", slog.AnyValue(vterrors.Aggregate([]error{NewSQLError(ERLockDeadlock, "40001", "Deadlock found"), NewSQLError(ERLockWaitTimeout, "HY000", "Lock wait timeout")})), ERLockDeadlock},
 		{"query after the marker not read", slog.StringValue("Incorrect integer value (errno 1366) (sqlstate HY000) during query: insert into t values ('" + fakeMarker + " during query: ')"), ERTruncatedWrongValueForField},
 		// User text can change the number, never add text: the first marker
@@ -142,11 +143,16 @@ func TestFindSQLErrorBudget(t *testing.T) {
 func TestParseErrnoLarge(t *testing.T) {
 	quoted := strings.Repeat("'"+fakeMarker+"' ", 1<<20/40) + dupEntry + " (errno 1062) (sqlstate 23000)"
 	broken := strings.Repeat("(errno 1062) ", 1<<20/13)
+	// A number too long for an ErrorCode is skipped, not read to its end.
+	digits := "(errno " + strings.Repeat("1", 1<<20) + ") (sqlstate 23000)\n" + dupEntry + " (errno 1062) (sqlstate 23000)"
 	start := time.Now()
 	_, ok := parseErrno(quoted)
 	assert.False(t, ok)
 	_, ok = parseErrno(broken)
 	assert.False(t, ok)
+	errno, ok := parseErrno(digits)
+	assert.True(t, ok)
+	assert.Equal(t, ERDupEntry, errno)
 	assert.Less(t, time.Since(start), 60*time.Second)
 }
 
@@ -169,7 +175,7 @@ func TestLogMySQLError(t *testing.T) {
 	log.Warn("insert failed", slog.Any("error", vterrors.Wrapf(dupEntryError(), "copying")), slog.Any("cause", NewSQLError(ERLockDeadlock, "40001", "Deadlock found")))
 	log.Error("request failed", slog.Any("error", vterrors.New(vtrpcpb.Code_UNAVAILABLE, "tablet is shutting down")), slog.String("error_code", vtrpcpb.Code_UNAVAILABLE.String()))
 	log.Error("spoofed", slog.String("error", "Duplicate entry '"+fakeMarker+"\n' for key 't.PRIMARY' (errno 1062) (sqlstate 23000)"))
-	log.Error("own number", slog.Any("error", dupEntryError()), slog.Int("mysql_errno", int(ERLockDeadlock)))
+	log.Error("own number", slog.Any("error", dupEntryError()), slog.Int("mysql_errno", int(ERLockDeadlock)), slog.String("table", "t"))
 	var nilErr *SQLError
 	log.Error("typed nil", slog.Any("error", nilErr))
 	log.Error("not a replica", slog.Any("error", NewSQLError(ERNotReplica, SSUnknownSQLState, "no replication status")))

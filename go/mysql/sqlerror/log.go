@@ -29,8 +29,10 @@ func init() {
 	log.SetErrorAttrs(addLogAttrs)
 }
 
-// errnoAt is errExtract anchored at the start of the text.
-var errnoAt = regexp.MustCompile("^" + errExtract.String())
+// errnoAt matches errExtract's marker at the start of the text, reading at most
+// five digits, the most an ErrorCode has, so that a long run of digits costs
+// little and an empty or overlong number is skipped like any other broken marker.
+var errnoAt = regexp.MustCompile(`^\(errno ([0-9]{1,5})\) \(sqlstate ([0-9a-zA-Z]{5})\)`)
 
 // addLogAttrs adds mysql_errno, the MySQL error number, to a record whose
 // error came from MySQL, unless the record already has a mysql_errno.
