@@ -42,7 +42,10 @@ func (zs *Server) NewLeaderParticipation(name, id string) (topo.LeaderParticipat
 
 	// Create the toplevel directory, OK if it exists already.
 	// We will create the parent directory as well, but not more.
-	if _, err := CreateRecursive(ctx, zs.conn, zkPath, nil, 0, zk.WorldACL(PermDirectory), 1); err != nil && err != zk.ErrNodeExists {
+	if err := zs.bindACL(ctx, zkPath, PermDirectory); err != nil && err != zk.ErrNoNode {
+		return nil, convertError(err, zkPath)
+	}
+	if _, err := CreateRecursive(ctx, zs.conn, zkPath, nil, 0, ACL(PermDirectory), 1); err != nil && err != zk.ErrNodeExists {
 		return nil, convertError(err, zkPath)
 	}
 
@@ -104,7 +107,7 @@ func (mp *zkLeaderParticipation) WaitForLeadership() (context.Context, error) {
 	}
 
 	// Create the current proposal.
-	proposal, err := mp.zs.conn.Create(ctx, zkPath+"/", mp.id, zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile))
+	proposal, err := mp.zs.conn.Create(ctx, zkPath+"/", mp.id, zk.FlagSequence|zk.FlagEphemeral, ACL(PermFile))
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "cannot create proposal file in %v", zkPath)
 	}

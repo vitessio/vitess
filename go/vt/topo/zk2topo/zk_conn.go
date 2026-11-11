@@ -84,6 +84,16 @@ func registerFlags(fs *pflag.FlagSet) {
 	utils.SetFlagStringVar(fs, &authFile, "topo-zk-auth-file", authFile, "auth to use when connecting to the zk topo server, file contents should be <scheme>:<auth>, e.g., digest:user:pass")
 }
 
+// ACL returns the ACL to create znodes with. When topo-zk-auth-file is set,
+// only the identities the session authenticated as get the permissions, and
+// ZooKeeper refuses the create if the session has none.
+func ACL(perms int32) []zk.ACL {
+	if authFile == "" {
+		return zk.WorldACL(perms)
+	}
+	return zk.AuthACL(perms)
+}
+
 // Time returns a time.Time from a ZK int64 milliseconds since Epoch time.
 func Time(i int64) time.Time {
 	return time.Unix(i/1000, i%1000*1000000)

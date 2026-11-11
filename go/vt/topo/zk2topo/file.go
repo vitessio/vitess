@@ -31,7 +31,10 @@ import (
 func (zs *Server) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
 	zkPath := path.Join(zs.root, filePath)
 
-	pathCreated, err := CreateRecursive(ctx, zs.conn, zkPath, contents, 0, zk.WorldACL(PermFile), -1)
+	if err := zs.bindACL(ctx, path.Dir(zkPath), PermDirectory); err != nil && err != zk.ErrNoNode {
+		return nil, convertError(err, zkPath)
+	}
+	pathCreated, err := CreateRecursive(ctx, zs.conn, zkPath, contents, 0, ACL(PermFile), -1)
 	if err != nil {
 		return nil, convertError(err, zkPath)
 	}
@@ -63,6 +66,12 @@ func (zs *Server) Update(ctx context.Context, filePath string, contents []byte, 
 		zkVersion = -1
 	}
 
+	// Bind the ACL before writing, so a session without credentials cannot
+	// replace the bytes we write.
+	err := zs.bindACL(ctx, zkPath, PermFile)
+	if err != nil && err != zk.ErrNoNode {
+		return nil, convertError(err, zkPath)
+	}
 	stat, err := zs.conn.Set(ctx, zkPath, contents, zkVersion)
 	if zkVersion == -1 && err == zk.ErrNoNode {
 		// In zookeeper, an unconditional set of a nonexisting

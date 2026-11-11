@@ -81,8 +81,13 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string, wait bool)
 	// sequential nodes, they are created as children, not siblings.
 	locksDir := path.Join(zs.root, dirPath, locksPath) + "/"
 
+	// A locks directory others can write to would let them delete our lock node.
+	if err := zs.bindACL(ctx, path.Dir(locksDir), PermDirectory); err != nil && err != zk.ErrNoNode {
+		return nil, convertError(err, locksDir)
+	}
+
 	// Create the lock path, creating the parents as needed.
-	nodePath, err := CreateRecursive(ctx, zs.conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, zk.WorldACL(PermFile), -1)
+	nodePath, err := CreateRecursive(ctx, zs.conn, locksDir, []byte(contents), zk.FlagSequence|zk.FlagEphemeral, ACL(PermFile), -1)
 	if err != nil {
 		return nil, convertError(err, locksDir)
 	}
