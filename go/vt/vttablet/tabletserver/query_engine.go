@@ -68,6 +68,11 @@ type TabletPlan struct {
 	// cannot be determined. It is nil when the tables are determined.
 	AuthorizedUndetermined *tableacl.ACLResult
 
+	// streaming and noRowsLimit record how the plan was built, so that the
+	// executor can build the same plan for a statement whose views it expanded.
+	streaming   bool
+	noRowsLimit bool
+
 	QueryCount   uint64
 	Time         uint64
 	MysqlTime    uint64
@@ -418,7 +423,7 @@ func (qe *QueryEngine) getPlan(curSchema *currentSchema, sql string, noRowsLimit
 	if err != nil {
 		return nil, err
 	}
-	plan := &TabletPlan{Plan: splan, Original: sql}
+	plan := &TabletPlan{Plan: splan, Original: sql, noRowsLimit: noRowsLimit}
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, []planbuilder.PlanType{plan.PlanID}, plan.TableNames()...)
 	plan.buildAuthorized()
 	if sqlparser.CachePlan(statement) {
@@ -463,7 +468,7 @@ func (qe *QueryEngine) getStreamPlan(curSchema *currentSchema, sql string) (*Tab
 		return nil, err
 	}
 
-	plan := &TabletPlan{Plan: splan, Original: sql}
+	plan := &TabletPlan{Plan: splan, Original: sql, streaming: true}
 	// Rules keyed on a statement's pre-v25 streaming plan type keep matching
 	// it here on the streaming path: the deprecated SelectStream name for
 	// SELECT, UNION, EXPLAIN, and SHOW, and OtherRead for ANALYZE (which

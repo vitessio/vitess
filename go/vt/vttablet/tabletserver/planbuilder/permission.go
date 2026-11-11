@@ -29,6 +29,15 @@ type (
 	Permission struct {
 		TableName string
 		Role      tableacl.Role
+		// expr is the table expression that named the table, when there is one.
+		expr *sqlparser.AliasedTableExpr
+	}
+
+	// TableRef is a table expression that names a table, with the role the
+	// statement needs on it.
+	TableRef struct {
+		Expr *sqlparser.AliasedTableExpr
+		Role tableacl.Role
 	}
 
 	// cteScope is the set of CTE names one query block brings into scope.
@@ -46,6 +55,29 @@ type (
 // if any, do not cover everything it touches; the executor fails closed on
 // such a statement under strict table ACL.
 func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, tablesUndetermined bool) {
+	permissions, tablesUndetermined = buildPermissions(stmt)
+	for i := range permissions {
+		permissions[i].expr = nil
+	}
+	return permissions, tablesUndetermined
+}
+
+// BuildTableRefs returns the table expressions of stmt that BuildPermissions
+// derives a permission from, so that the executor can resolve the ones that
+// name views. Tables named outside a table expression, such as a DDL's own
+// targets, are not included.
+func BuildTableRefs(stmt sqlparser.Statement) []TableRef {
+	permissions, _ := buildPermissions(stmt)
+	var refs []TableRef
+	for _, perm := range permissions {
+		if perm.expr != nil {
+			refs = append(refs, TableRef{Expr: perm.expr, Role: perm.Role})
+		}
+	}
+	return refs
+}
+
+func buildPermissions(stmt sqlparser.Statement) (permissions []Permission, tablesUndetermined bool) {
 	// All Statement types myst be covered here.
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
@@ -94,9 +126,9 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 		case *sqlparser.CreateView:
 			// A view reads nothing when it is defined, but it reads its
 			// source tables as the tablet's MySQL user every time it is
-			// queried, and the ACL then sees only the view's name. So the
-			// source is checked here, as MySQL requires SELECT on it to
-			// define the view.
+			// queried. So the source is checked here, as MySQL requires
+			// SELECT on it to define the view; under strict table ACL the
+			// executor also checks a query of the view against its body.
 			permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
 		case *sqlparser.AlterView:
 			permissions = buildSubqueryPermissions(ddl.Select, tableacl.READER, permissions)
@@ -138,7 +170,7 @@ func BuildPermissions(stmt sqlparser.Statement) (permissions []Permission, table
 		// uncorrelated subqueries while it optimizes, and the plan shows the
 		// outcome ("Impossible WHERE"), which answers a yes/no question about
 		// the data.
-		permissions, tablesUndetermined = BuildPermissions(node.Statement)
+		permissions, tablesUndetermined = buildPermissions(node.Statement)
 	case *sqlparser.Show:
 		// A SHOW forwards its WHERE clause to MySQL, which evaluates any
 		// subquery in it, so those reads are checked. The SHOW's own subject
@@ -384,7 +416,11 @@ func buildTableExprPermissions(node sqlparser.TableExpr, role tableacl.Role, cte
 		// because the buildSubQueryPermissions walker will catch them and extract
 		// the corresponding table names.
 		if tblName, ok := node.Expr.(sqlparser.TableName); ok {
+			n := len(permissions)
 			permissions = buildTableNamePermissions(tblName, role, ctes, permissions)
+			if len(permissions) > n {
+				permissions[n].expr = node
+			}
 		}
 	case *sqlparser.ParenTableExpr:
 		permissions = buildTableExprsPermissions(node.Exprs, role, ctes, permissions)

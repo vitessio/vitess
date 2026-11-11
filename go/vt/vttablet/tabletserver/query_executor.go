@@ -972,9 +972,12 @@ func (qre *QueryExecutor) checkPermissions() error {
 	// every table ("%"), except for CALL and LOAD DATA, which stay exempt-only
 	// (see checkUndeterminedTableAccess).
 	if qre.plan.TablesUndetermined {
-		return qre.checkUndeterminedTableAccess(callerID)
+		return qre.checkUndeterminedTableAccess(qre.plan.AuthorizedUndetermined, callerID)
 	}
 
+	if qre.tsv.qe.strictTableACL && !qre.tsv.qe.enableTableACLDryRun {
+		return qre.checkViewAccess(callerID)
+	}
 	return nil
 }
 
@@ -1018,8 +1021,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 // caller read. CALL and LOAD DATA are not covered even then, as they can act
 // beyond any table (see TabletPlan.buildAuthorized). Any other caller is
 // denied under strict table ACL.
-func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateCallerID) error {
-	authorized := qre.plan.AuthorizedUndetermined
+func (qre *QueryExecutor) checkUndeterminedTableAccess(authorized *tableacl.ACLResult, callerID *querypb.VTGateCallerID) error {
 	var aclState acl.ACLState
 	defer func() {
 		// There is no table to name; label the denial so operators can tell
