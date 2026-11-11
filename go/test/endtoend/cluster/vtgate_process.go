@@ -166,6 +166,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"--mysql-auth-server-impl", vtgate.MySQLAuthServerImpl,
 		"--bind-address", "127.0.0.1",
 		"--grpc-bind-address", "127.0.0.1",
+		"--security-policy", "read-only",
 	}
 
 	args = append(args, "--log-format", "text")

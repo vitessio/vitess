@@ -114,6 +114,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"--db-charset", vttablet.Charset,
 		"--bind-address", "127.0.0.1",
 		"--grpc-bind-address", "127.0.0.1",
+		"--security-policy", "read-only",
 	)
 
 	vttablet.proc.Args = append(vttablet.proc.Args, "--log-format", "text")

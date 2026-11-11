@@ -65,6 +65,7 @@ func (vtctld *VtctldProcess) Setup(extraArgs ...string) (err error) {
 		"--grpc-port", strconv.Itoa(vtctld.GrpcPort),
 		"--bind-address", "127.0.0.1",
 		"--grpc-bind-address", "127.0.0.1",
+		"--security-policy", "read-only",
 	)
 
 	vtctld.proc.Args = append(vtctld.proc.Args, "--log-format", "text")

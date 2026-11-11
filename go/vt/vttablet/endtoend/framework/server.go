@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -81,6 +82,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	}
 
 	// Start http service.
+	acl.AllowAllForTest()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return vterrors.Wrap(err, "could not start listener")

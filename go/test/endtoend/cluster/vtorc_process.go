@@ -130,6 +130,7 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--config-file":                orc.ConfigPath,
 		"--port":                       strconv.Itoa(orc.Port),
 		"--bind-address":               "127.0.0.1",
+		"--security-policy":            "allow-all",
 	}
 
 	flags["--log-format"] = "text"
