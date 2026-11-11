@@ -54,17 +54,17 @@ Flags:
       --consolidator-stream-total-size int                               Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator. (default 134217728)
       --consul-auth-static-file string                                   JSON File to read the topos/tokens from.
       --db-allprivs-password string                                      db allprivs password
-      --db-allprivs-use-ssl                                              Set this flag to false to make the allprivs connection to not use ssl (default true)
+      --db-allprivs-use-ssl                                              Set this flag to false to make the allprivs connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity. (default true)
       --db-allprivs-user string                                          db allprivs user userKey (default "vt_allprivs")
       --db-app-password string                                           db app password
-      --db-app-use-ssl                                                   Set this flag to false to make the app connection to not use ssl (default true)
+      --db-app-use-ssl                                                   Set this flag to false to make the app connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity. (default true)
       --db-app-user string                                               db app user userKey (default "vt_app")
       --db-appdebug-password string                                      db appdebug password
-      --db-appdebug-use-ssl                                              Set this flag to false to make the appdebug connection to not use ssl (default true)
+      --db-appdebug-use-ssl                                              Set this flag to false to make the appdebug connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity. (default true)
       --db-appdebug-user string                                          db appdebug user userKey (default "vt_appdebug")
       --db-charset string                                                Character set/collation used for this tablet. Make sure to configure this to a charset/collation supported by the lowest MySQL version in your environment. (default "utf8mb4")
       --db-clone-password string                                         db clone password
-      --db-clone-use-ssl                                                 Set this flag to false to make the clone connection to not use ssl (default true)
+      --db-clone-use-ssl                                                 Set this flag to false to make the clone connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity. (default true)
       --db-clone-user string                                             db clone user userKey (default "vt_clone")
       --db-conn-query-info                                               enable parsing and processing of QUERY_OK info fields
       --db-connect-timeout-ms int                                        connection timeout to mysqld in milliseconds (0 for no timeout)
@@ -80,20 +80,20 @@ Flags:
       --db-credentials-vault-tokenfile string                            Path to file containing Vault auth token; token can also be passed using VAULT_TOKEN environment variable
       --db-credentials-vault-ttl duration                                How long to cache DB credentials from the Vault server (default 30m0s)
       --db-dba-password string                                           db dba password
-      --db-dba-use-ssl                                                   Set this flag to false to make the dba connection to not use ssl (default true)
+      --db-dba-use-ssl                                                   Set this flag to false to make the dba connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity. (default true)
       --db-dba-user string                                               db dba user userKey (default "vt_dba")
       --db-erepl-password string                                         db erepl password
-      --db-erepl-use-ssl                                                 Set this flag to false to make the erepl connection to not use ssl (default true)
+      --db-erepl-use-ssl                                                 Set this flag to false to make the erepl connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity. (default true)
       --db-erepl-user string                                             db erepl user userKey (default "vt_erepl")
       --db-filtered-password string                                      db filtered password
-      --db-filtered-use-ssl                                              Set this flag to false to make the filtered connection to not use ssl (default true)
+      --db-filtered-use-ssl                                              Set this flag to false to make the filtered connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity. (default true)
       --db-filtered-user string                                          db filtered user userKey (default "vt_filtered")
       --db-flags uint                                                    Flag values as defined by MySQL.
       --db-flavor string                                                 Flavor overrid. Valid value is FilePos.
       --db-host string                                                   The host name for the tcp connection.
       --db-port int                                                      tcp port
       --db-repl-password string                                          db repl password
-      --db-repl-use-ssl                                                  Set this flag to false to make the repl connection to not use ssl (default true)
+      --db-repl-use-ssl                                                  Set this flag to false to make the repl connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity. (default true)
       --db-repl-user string                                              db repl user userKey (default "vt_repl")
       --db-server-name string                                            server name of the DB we are connecting to.
       --db-socket string                                                 The unix socket to connect on. If this is specified, host and port will not be used.

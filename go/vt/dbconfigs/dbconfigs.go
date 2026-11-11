@@ -166,7 +166,7 @@ func registerPerUserFlags(fs *pflag.FlagSet, userKey string, uc *UserConfig, cp 
 	utils.SetFlagStringVar(fs, &uc.Password, newPasswordFlag, "", "db "+userKey+" password")
 	// fs.StringVar(&uc.Password, newPasswordFlag, "", "db "+userKey+" password")
 
-	utils.SetFlagBoolVar(fs, &uc.UseSSL, "db-"+userKey+"-use-ssl", true, "Set this flag to false to make the "+userKey+" connection to not use ssl")
+	utils.SetFlagBoolVar(fs, &uc.UseSSL, "db-"+userKey+"-use-ssl", true, "Set this flag to false to make the "+userKey+" connection ignore the db-ssl-* flags. When true and db-ssl-mode is unset, a TCP connection uses verify_identity.")
 	// fs.BoolVar(&uc.UseSSL, "db_"+userKey+"_use_ssl", true, "Set this flag to false to make the "+userKey+" connection to not use ssl")
 }
 
@@ -453,6 +453,11 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *
 		cp.Pass = uc.Password
 		if uc.UseSSL {
 			cp.SslMode = dbcfgs.SslMode
+			if cp.SslMode == "" && cp.UnixSocket == "" {
+				// The MySQL client reads an unset mode as disabled, which would send
+				// this TCP session in the clear. A Unix socket stays local.
+				cp.SslMode = vttls.VerifyIdentity
+			}
 			cp.SslCa = dbcfgs.SslCa
 			cp.SslCaPath = dbcfgs.SslCaPath
 			cp.SslCert = dbcfgs.SslCert

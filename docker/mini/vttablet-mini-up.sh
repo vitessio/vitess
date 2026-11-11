@@ -57,6 +57,7 @@ vttablet \
  -grpc-port $grpc_port \
  -db-host $mysql_host \
  -db-port $mysql_port \
+ -db-ssl-mode preferred \
  -db-app-user $TOPOLOGY_USER \
  -db-app-password $TOPOLOGY_PASSWORD \
  -db-dba-user $TOPOLOGY_USER \

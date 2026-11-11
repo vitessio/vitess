@@ -30,6 +30,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -982,21 +983,15 @@ func (c *TabletConfig) verifyUnmanagedTabletConfig() error {
 
 // Test connectivity of external mysql
 func (c *TabletConfig) checkConnectionForExternalMysql() error {
-	params := mysql.ConnParams{
-		Host:       c.DB.Host,
-		Port:       c.DB.Port,
-		DbName:     c.DB.DBName,
-		Uname:      c.DB.App.User,
-		Pass:       c.DB.App.Password,
-		UnixSocket: c.DB.Socket,
-		SslMode:    c.DB.SslMode,
-		SslCa:      c.DB.SslCa,
-		SslCaPath:  c.DB.SslCaPath,
-		SslCert:    c.DB.SslCert,
-		SslKey:     c.DB.SslKey,
+	// Dial with the app parameters the tablet itself derives, TLS settings included.
+	db := c.DB.Clone()
+	db.InitWithSocket("", collations.MySQL8())
+	params, err := db.AppWithDB().MysqlParams()
+	if err != nil {
+		return err
 	}
 
-	conn, err := mysql.Connect(context.Background(), &params)
+	conn, err := mysql.Connect(context.Background(), params)
 	if err != nil {
 		return err
 	}

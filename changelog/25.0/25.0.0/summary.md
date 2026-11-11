@@ -22,6 +22,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
+        - [TCP connections to MySQL verify the server by default](#vttablet-use-ssl-tcp-verify-identity)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -303,6 +304,14 @@ MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` on
 **Migration**: before upgrading, replace a qualified `tbl.*` selected from a `JOIN ... USING` with an explicit column list wherever its columns or their order matter, since an explicit list returns the same columns before and after the upgrade.
 
 See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
+
+#### <a id="vttablet-use-ssl-tcp-verify-identity"/>TCP connections to MySQL verify the server by default</a>
+
+The `--db-<user>-use-ssl` flags default to true, but with `--db-ssl-mode` unset the MySQL client treated the mode as `disabled`, so a tablet that reached MySQL over TCP (`--db-host`, or `--db-host` with `useTcp`) sent its sessions unencrypted. A connection whose user has `use-ssl` set and that goes over TCP now uses `verify_identity` when `--db-ssl-mode` is unset: it requires TLS and verifies the server certificate against `--db-ssl-ca` (or the system roots) and `--db-server-name` (or the host). The unmanaged-tablet startup check dials with the same settings. Unix socket connections are unchanged.
+
+**Impact**: a tablet that connects to MySQL over TCP without TLS, or with a certificate it cannot verify, now fails to connect. The repl user's TCP settings also add `SOURCE_SSL = 1` to `CHANGE REPLICATION SOURCE`, as `--db-ssl-mode=verify_identity` already did.
+
+**Migration**: set `--db-ssl-ca` and `--db-server-name` so the MySQL certificate verifies, or set `--db-ssl-mode` explicitly (for example `preferred` or `disabled`), or set `--db-<user>-use-ssl=false` for a user that should ignore the `--db-ssl-*` flags.
 
 ### <a id="deprecations"/>Deprecations</a>
 
