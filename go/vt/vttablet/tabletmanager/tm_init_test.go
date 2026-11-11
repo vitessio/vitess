@@ -1363,4 +1363,13 @@ func TestValidateFlags(t *testing.T) {
 
 	demotePrimaryLockWaitTimeout = time.Second
 	require.NoError(t, validateFlags())
+
+	oldFullStatusTimeout := fullStatusQueryTimeout
+	t.Cleanup(func() { fullStatusQueryTimeout = oldFullStatusTimeout })
+	for _, timeout := range []time.Duration{0, -time.Second} {
+		fullStatusQueryTimeout = timeout
+		require.ErrorContains(t, validateFlags(), "--full-status-query-timeout must be positive")
+	}
+	fullStatusQueryTimeout = 5 * time.Second
+	require.NoError(t, validateFlags())
 }

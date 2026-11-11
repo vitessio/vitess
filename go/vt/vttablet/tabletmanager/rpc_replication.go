@@ -194,14 +194,18 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		// Keep the stack server-side and hand callers a coded error.
 		defer func() {
 			if x := recover(); x != nil {
-				log.Error(fmt.Sprintf("TabletManager.FullStatus on %v panic: %v\n%s", topoproto.TabletAliasString(tm.tabletAlias), x, tb.Stack(4)))
+				log.Error("TabletManager FullStatus collection panic",
+					slog.String("tablet", topoproto.TabletAliasString(tm.tabletAlias)),
+					slog.Any("panic", x),
+					slog.String("stack", string(tb.Stack(4))),
+				)
 				err = vterrors.Errorf(vtrpc.Code_INTERNAL, "FullStatus collection panicked: %v", x)
 			}
 		}()
 
 		// One caller timing out must not cancel the collection for the others.
 		// Bound the shared work even if all callers have left.
-		ctx, cancel := context.WithTimeout(tm.BatchCtx, topo.RemoteOperationTimeout)
+		ctx, cancel := context.WithTimeout(tm.BatchCtx, fullStatusQueryTimeout)
 		defer cancel()
 
 		status, err := tm.MysqlDaemon.CollectFullStatusData(ctx)
@@ -601,9 +605,21 @@ func registerDemotePrimaryFlags(fs *pflag.FlagSet) {
 		"Sets the session lock_wait_timeout when enabling super_read_only during a primary demotion. 0 leaves it unset and uses the default of the MySQL server.")
 }
 
+// fullStatusQueryTimeout bounds the MySQL queries of a FullStatus collection,
+// which concurrent FullStatus calls share. Each caller's own deadline still
+// applies.
+var fullStatusQueryTimeout = 15 * time.Second
+
+func registerFullStatusFlags(fs *pflag.FlagSet) {
+	utils.SetFlagDurationVar(fs, &fullStatusQueryTimeout, "full-status-query-timeout", fullStatusQueryTimeout,
+		"Timeout for the MySQL queries of a FullStatus collection, which concurrent FullStatus RPCs share. Each caller's own deadline still applies.")
+}
+
 func init() {
 	servenv.OnParseFor("vtcombo", registerDemotePrimaryFlags)
 	servenv.OnParseFor("vttablet", registerDemotePrimaryFlags)
+	servenv.OnParseFor("vtcombo", registerFullStatusFlags)
+	servenv.OnParseFor("vttablet", registerFullStatusFlags)
 }
 
 // DemotePrimary prepares a PRIMARY tablet to give up leadership to another tablet.

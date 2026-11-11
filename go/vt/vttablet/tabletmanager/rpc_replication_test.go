@@ -701,6 +701,12 @@ func TestFullStatusCancellationDoesNotCancelOtherCallers(t *testing.T) {
 }
 
 func TestFullStatusSharedCollectionLifetime(t *testing.T) {
+	// A value other than --remote-operation-timeout, so the timeout case shows
+	// which one bounds the collection.
+	oldTimeout := fullStatusQueryTimeout
+	fullStatusQueryTimeout = 3 * time.Second
+	t.Cleanup(func() { fullStatusQueryTimeout = oldTimeout })
+
 	for _, stop := range []string{"timeout", "shutdown"} {
 		t.Run(stop, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
@@ -736,7 +742,7 @@ func TestFullStatusSharedCollectionLifetime(t *testing.T) {
 				}
 				require.ErrorIs(t, <-finished, wantErr)
 				if stop == "timeout" {
-					assert.Equal(t, topo.RemoteOperationTimeout, time.Since(start))
+					assert.Equal(t, fullStatusQueryTimeout, time.Since(start))
 				}
 			})
 		})
