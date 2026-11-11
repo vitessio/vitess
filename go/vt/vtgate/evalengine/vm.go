@@ -87,12 +87,12 @@ func (env *ExpressionEnv) EvaluateVM(p *CompiledExpr) (EvalResult, error) {
 			goto err
 		}
 	}
-	return env.typedResult(env.vm.stack[env.vm.sp-1], p.typed), nil
+	return env.typedResult(env.vm.stack[env.vm.sp-1], &p.typed), nil
 
 err:
 	if env.vm.err == errDeoptimize {
 		e, err := p.ir.eval(env)
-		return env.typedResult(e, p.typed), err
+		return env.typedResult(e, &p.typed), err
 	}
 	return EvalResult{collationEnv: env.collationEnv}, env.vm.err
 }

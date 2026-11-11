@@ -121,7 +121,7 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{v: e, collationEnv: env.collationEnv}, nil
 	}
-	return env.typedResult(e, ct), nil
+	return env.typedResult(e, &ct), nil
 }
 
 func (env *ExpressionEnv) EvaluateAST(expr Expr) (EvalResult, error) {

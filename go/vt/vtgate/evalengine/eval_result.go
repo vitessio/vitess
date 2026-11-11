@@ -38,13 +38,13 @@ type EvalResult struct {
 	// typ is the declared (static) type of the expression that produced v.
 	// When typed is set, Value() produces the value AS this type, so that
 	// field metadata obtained through TypeOf and the value always agree.
-	typ   ctype
-	typed bool
-	env   *ExpressionEnv
+	// It is nil for results without a declared type (EvaluateAST).
+	typ *ctype
+	env *ExpressionEnv
 }
 
-func (env *ExpressionEnv) typedResult(e eval, ct ctype) EvalResult {
-	return EvalResult{v: e, collationEnv: env.collationEnv, typ: ct, typed: true, env: env}
+func (env *ExpressionEnv) typedResult(e eval, ct *ctype) EvalResult {
+	return EvalResult{v: e, collationEnv: env.collationEnv, typ: ct, env: env}
 }
 
 // Value allows for retrieval of the value we expose for public consumption.
@@ -52,7 +52,7 @@ func (env *ExpressionEnv) typedResult(e eval, ct ctype) EvalResult {
 // collation and what the client expects the result to be in.
 func (er EvalResult) Value(id collations.ID) sqltypes.Value {
 	e := er.v
-	if er.typed && e != nil {
+	if er.typ != nil && e != nil {
 		var v sqltypes.Value
 		var done bool
 		if e, v, done = er.declaredValue(); done {
@@ -85,7 +85,7 @@ func (er EvalResult) Value(id collations.ID) sqltypes.Value {
 // for every other type it returns the converted eval. Declared types the
 // engine cannot convert to (ENUM, SET, BIT, JSON, GEOMETRY, BLOB/TEXT, NULL,
 // ...) leave the value as it is.
-func (er EvalResult) declaredValue() (eval, sqltypes.Value, bool) {
+func (er *EvalResult) declaredValue() (eval, sqltypes.Value, bool) {
 	e := er.v
 	t := er.typ.sqlType()
 	switch {
@@ -170,7 +170,7 @@ func formatFloat32(f float64) []byte {
 
 func (er EvalResult) Collation() collations.ID {
 	e := er.v
-	if er.typed && e != nil {
+	if er.typ != nil && e != nil {
 		var done bool
 		if e, _, done = er.declaredValue(); done {
 			return collations.CollationBinaryID
