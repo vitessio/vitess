@@ -2,16 +2,9 @@ package dynamic
 
 import (
 	"context"
-<<<<<<< HEAD
 	"fmt"
-	"strings"
-||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
-	"log/slog"
-	"strings"
-=======
 	"log/slog"
 	"runtime/debug"
->>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"

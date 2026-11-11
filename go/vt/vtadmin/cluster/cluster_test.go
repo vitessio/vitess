@@ -18,11 +18,7 @@ package cluster_test
 
 import (
 	"context"
-<<<<<<< HEAD
-||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
-=======
 	"database/sql"
->>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 	"errors"
 	"fmt"
 	"sort"
@@ -39,13 +35,7 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
-<<<<<<< HEAD
-||||||| parent of 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
-	"vitess.io/vitess/go/vt/log/logtest"
-=======
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/log/logtest"
->>>>>>> 66f04a3127 (vtadmin: don't crash on gRPC calls with a cluster header (#21905))
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vitessdriver"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
