@@ -992,8 +992,7 @@ func sameNameCopy(ctx *plancontext.PlanningContext, route, other *Route) *Route 
 	return &onTheCopy
 }
 
-// readsOnlyItsTables reports whether the SQL of a route names no table but those of its operators,
-// which a subquery merged into it as an expression would.
+// hasLimit reports whether the SQL of a route contains a LIMIT.
 func hasLimit(ctx *plancontext.PlanningContext, route *Route) bool {
 	stmt, _, err := ToSQL(ctx, route.Source)
 	if err != nil {
@@ -1010,6 +1009,8 @@ func hasLimit(ctx *plancontext.PlanningContext, route *Route) bool {
 	return found
 }
 
+// readsOnlyItsTables reports whether the SQL of a route names no table but those of its operators,
+// which a subquery merged into it as an expression would.
 func readsOnlyItsTables(ctx *plancontext.PlanningContext, route *Route) bool {
 	stmt, _, err := ToSQL(ctx, route.Source)
 	if err != nil {
