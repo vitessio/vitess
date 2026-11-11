@@ -1083,3 +1083,47 @@ func TestPrimaryAnnouncesNotServingBeforeResuming(t *testing.T) {
 	}
 	assert.True(t, sm.IsServing())
 }
+
+// TestPrimaryAnnouncesNotServingBeforeResumingAfterRetry checks that a PRIMARY whose first attempt
+// to serve again failed announces that it does not serve right before the retry that serves: a
+// buffering that started while the first attempt failed ends only after a not-serving health check
+// that follows its start (see announceNotServingBeforeResuming).
+func TestPrimaryAnnouncesNotServingBeforeResumingAfterRetry(t *testing.T) {
+	saved := transitionRetryInterval
+	t.Cleanup(func() { transitionRetryInterval = saved })
+	transitionRetryInterval = 10 * time.Millisecond
+
+	sm := newTestStateManager()
+	t.Cleanup(sm.StopService)
+	require.NoError(t, sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, ""))
+	require.NoError(t, sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateNotServing, "paused"))
+	ch, _ := sm.hs.register()
+
+	// The first attempt to serve again fails, and the retries start. Hold the transition semaphore
+	// meanwhile, so that no retry runs before the health checks so far are drained: a buffering
+	// that starts now has seen none of them. The periodic health checks, which the transitions
+	// also trigger, are stopped, so that the retry's are the only ones left.
+	sm.se.(*testSchemaEngine).failMySQL = true
+	require.Error(t, sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, ""))
+	require.NoError(t, sm.transitioning.Acquire(t.Context(), 1))
+	sm.hcticks.Stop()
+	for len(ch) > 0 {
+		<-ch
+	}
+	sm.transitioning.Release(1)
+
+	select {
+	case shr := <-ch:
+		assert.False(t, shr.Serving, "the retry announces that the primary does not serve before it serves again")
+		assert.Equal(t, testNow.Unix(), shr.PrimaryTermStartTimestamp)
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the retry did not announce that the primary does not serve before it serves again")
+	}
+	// The retries read transitionRetryInterval until they stop: wait for that before it is restored.
+	assert.Eventually(t, func() bool {
+		sm.mu.Lock()
+		defer sm.mu.Unlock()
+		return !sm.retrying
+	}, 30*time.Second, 10*time.Millisecond)
+	assert.True(t, sm.IsServing())
+}

@@ -242,16 +242,15 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, ptsTime
 		slog.Time("primary_term_start_time", ptsTimestamp),
 	)
 	if sm.mustTransition(tabletType, ptsTimestamp, state, reason) {
-		if tabletType == topodatapb.TabletType_PRIMARY && state == StateServing {
-			sm.announceNotServingBeforeResuming()
-		}
 		return sm.execTransition(tabletType, state)
 	}
 	return nil
 }
 
 // announceNotServingBeforeResuming broadcasts once more that a PRIMARY which does not serve does
-// not serve, right before it serves again. The caller holds the transition semaphore.
+// not serve, right before it serves again. The caller holds the transition semaphore. Every attempt
+// to serve as PRIMARY makes it (execTransition), also the retries of a failed one: a buffering
+// that started while an attempt failed waits for the announcement of the attempt that succeeds.
 //
 // vtgate ends the buffering of a shard when its primary serves again, but a buffering that started
 // after vtgate saw the primary stop serving (a request found no serving primary) waits for a
@@ -294,6 +293,9 @@ func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, ptsTime
 func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state servingState) error {
 	defer sm.transitioning.Release(1)
 
+	if tabletType == topodatapb.TabletType_PRIMARY && state == StateServing {
+		sm.announceNotServingBeforeResuming()
+	}
 	var err error
 	switch state {
 	case StateServing:
