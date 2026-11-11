@@ -21,9 +21,14 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
@@ -66,4 +71,55 @@ func TestDBDDLSerializesCreateAndDrop(t *testing.T) {
 	}
 	workers.Wait()
 	assert.False(t, overlapping.Load(), "database lifecycle callbacks ran concurrently")
+}
+
+// TestDBDDLDropSkipsCallbackWhenContextDone verifies that cancelled and expired
+// requests cannot start tablet shutdown, and that a subsequent DROP can proceed.
+func TestDBDDLDropSkipsCallbackWhenContextDone(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		context  func(context.Context) (context.Context, context.CancelFunc)
+		wantErr  error
+		wantCode vtrpcpb.Code
+	}{
+		{
+			name: "cancelled",
+			context: func(parent context.Context) (context.Context, context.CancelFunc) {
+				ctx, cancel := context.WithCancel(parent)
+				cancel()
+				return ctx, cancel
+			},
+			wantErr:  context.Canceled,
+			wantCode: vtrpcpb.Code_CANCELED,
+		},
+		{
+			name: "deadline exceeded",
+			context: func(parent context.Context) (context.Context, context.CancelFunc) {
+				return context.WithDeadline(parent, time.Unix(0, 0))
+			},
+			wantErr:  context.DeadlineExceeded,
+			wantCode: vtrpcpb.Code_DEADLINE_EXCEEDED,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			oldDrop := globalDropDb
+			t.Cleanup(func() { globalDropDb = oldDrop })
+			calls := 0
+			globalDropDb = func(context.Context, string) error {
+				calls++
+				return nil
+			}
+			ctx, cancel := tc.context(t.Context())
+			t.Cleanup(cancel)
+			plugin := &DBDDL{}
+
+			err := plugin.DropDatabase(ctx, "example")
+			require.ErrorIs(t, vterrors.UnwrapAll(err), tc.wantErr)
+			assert.Equal(t, tc.wantCode, vterrors.Code(err))
+			assert.Zero(t, calls, "a cancelled DROP must not start tablet shutdown")
+
+			require.NoError(t, plugin.DropDatabase(t.Context(), "example"))
+			assert.Equal(t, 1, calls, "a subsequent DROP with a live context must proceed")
+		})
+	}
 }

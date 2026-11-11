@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
@@ -53,6 +54,10 @@ func (plugin *DBDDL) CreateDatabase(ctx context.Context, name string) error {
 func (plugin *DBDDL) DropDatabase(ctx context.Context, name string) error {
 	plugin.mu.Lock()
 	defer plugin.mu.Unlock()
+	// A request can expire while queued; do not start tablet shutdown in that case.
+	if err := ctx.Err(); err != nil {
+		return vterrors.Wrapf(err, "cannot drop database %s", name)
+	}
 	return globalDropDb(ctx, name)
 }
 
