@@ -152,8 +152,22 @@ func (a *Aggregator) checkOffset(offset int) {
 	}
 }
 
+// listSourceColumns adds the columns that the source produces and we don't list, so that a column we add gets the same
+// offset in both.
+func (a *Aggregator) listSourceColumns(ctx *plancontext.PlanningContext) {
+	columns := a.Source.GetColumns(ctx)
+	if len(columns) <= len(a.Columns) {
+		return
+	}
+	if a.ResultColumns == 0 && a.Truncate {
+		a.ResultColumns = len(a.Columns)
+	}
+	a.Columns = append(a.Columns, columns[len(a.Columns):]...)
+}
+
 func (a *Aggregator) AddColumn(ctx *plancontext.PlanningContext, reuse bool, groupBy bool, ae *sqlparser.AliasedExpr) (offset int) {
 	a.planOffsets(ctx)
+	a.listSourceColumns(ctx)
 
 	defer func() {
 		a.checkOffset(offset)

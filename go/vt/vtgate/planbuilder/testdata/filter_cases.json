@@ -9742,5 +9742,119 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A derived table with avg, a join and a subquery filter that doesn't merge",
+    "query": "select t.id from (select a.id, avg(a.col) from user a join user_extra b on a.col = b.col where b.foo not in (select col from user_extra) group by a.id) as t",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select t.id from (select a.id, avg(a.col) from user a join user_extra b on a.col = b.col where b.foo not in (select col from user_extra) group by a.id) as t",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              ":0 as id",
+              "sum(a.col) / count(a.col) as avg(a.col)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS avg(a.col), sum_count(2) AS count(a.col), any_value(5) AS sum(col), any_value(6) AS count(col)",
+                "GroupBy": "(0|4)",
+                "ResultColumns": 7,
+                "Inputs": [
+                  {
+                    "OperatorType": "UncorrelatedSubquery",
+                    "Variant": "PulloutNotIn",
+                    "PulloutVars": [
+                      "__sq_has_values",
+                      "__sq1"
+                    ],
+                    "Inputs": [
+                      {
+                        "InputName": "SubQuery",
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select col from user_extra where 1 != 1",
+                        "Query": "select col from user_extra"
+                      },
+                      {
+                        "InputName": "Outer",
+                        "OperatorType": "Projection",
+                        "Expressions": [
+                          ":3 as id",
+                          "sum(a.col) * count(*) as avg(a.col)",
+                          "count(a.col) * count(*) as count(a.col)",
+                          ":4 as foo",
+                          ":5 as weight_string(a.id)",
+                          ":6 as sum(col)",
+                          ":7 as count(col)"
+                        ],
+                        "Inputs": [
+                          {
+                            "OperatorType": "Filter",
+                            "Predicate": "not :__sq_has_values or b.foo not in ::__sq1",
+                            "Inputs": [
+                              {
+                                "OperatorType": "Join",
+                                "Variant": "Join",
+                                "JoinColumnIndexes": "L:0,R:0,L:1,L:2,R:1,L:4,L:5,L:6",
+                                "JoinVars": {
+                                  "a_col": 3
+                                },
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "user",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select sum(a.col), count(a.col), a.id, a.col, weight_string(a.id), sum(col), count(col) from `user` as a where 1 != 1 group by a.id, a.col, weight_string(a.id)",
+                                    "OrderBy": "(2|4) ASC",
+                                    "Query": "select sum(a.col), count(a.col), a.id, a.col, weight_string(a.id), sum(col), count(col) from `user` as a group by a.id, a.col, weight_string(a.id) order by a.id asc"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "Scatter",
+                                    "Keyspace": {
+                                      "Name": "user",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select count(*), b.foo from user_extra as b where 1 != 1 group by b.foo",
+                                    "Query": "select count(*), b.foo from user_extra as b where b.col = :a_col /* INT16 */ group by b.foo"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
