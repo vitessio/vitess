@@ -579,7 +579,7 @@ func createJoinPusher(rootAggr *Aggregator, operator Operator) *joinPusher {
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *ApplyJoin, lhs *joinPusher) {
 	// main selects the columns fed to the right side by a subquery without grouping on them, which MySQL rejects with
 	// ERROR 1055 unless the grouping determines them. Grouping on them, or leaving out those of a failed merge, would
-	// instead count a distinct aggregation anywhere in the query once for every row that a join repeats it for.
+	// instead count a distinct aggregation of the SELECT once for every row that a join repeats it for.
 	sel := lhs.orig.QP.Select
 	distinct := hasDistinctAggregation(sel)
 	fixed := columnsFixedBelow(ctx, join.LHS)
