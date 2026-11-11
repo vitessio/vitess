@@ -18,10 +18,7 @@ package mysql
 
 import (
 	"context"
-	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/pem"
 	"net"
 	"strconv"
 	"time"
@@ -727,27 +724,10 @@ func (c *Conn) handleAuthMoreDataPacket(data byte, params *ConnParams) error {
 		return c.handleAuthResponse(params)
 	case CachingSha2FullAuth:
 		// User credentials are not cached, we have to exchange full password.
-		if c.Capabilities&CapabilityClientSSL > 0 || params.UnixSocket != "" {
-			// If we are using an SSL connection or Unix socket, write clear text password
-			if err := c.writeClearTextPassword(params); err != nil {
-				return err
-			}
-		} else {
-			// If we are not using an SSL connection or Unix socket, we have to fetch a public key
-			// from the server to encrypt password
-			pub, err := c.requestPublicKey()
-			if err != nil {
-				return err
-			}
-			// Encrypt password with public key
-			enc, err := EncryptPasswordWithPublicKey(c.salt, []byte(params.Pass), pub)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error encrypting password with public key: %v", err)
-			}
-			// Write encrypted password
-			if err := c.writeScrambledPassword(enc); err != nil {
-				return err
-			}
+		// A public key requested from the server would come from a peer we have
+		// not authenticated, so only TLS or a Unix socket can carry the password.
+		if err := c.writeClearTextPassword(params); err != nil {
+			return err
 		}
 		// Next packet should either be an OKPacket or ErrPacket
 		return c.handleAuthResponse(params)
@@ -771,37 +751,14 @@ func parseAuthSwitchRequest(data []byte) (AuthMethodDescription, []byte, error) 
 	return AuthMethodDescription(pluginName), salt, nil
 }
 
-// requestPublicKey requests a public key from the server
-func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
-	// get public key from server
-	data, pos := c.startEphemeralPacketWithHeader(1)
-	data[pos] = 0x02
-	if err := c.writeEphemeralPacket(); err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error sending public key request packet: %v", err)
-	}
-
-	response, err := c.readPacket()
-	if err != nil {
-		return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
-	}
-
-	// Server should respond with a AuthMoreDataPacket containing the public key
-	if response[0] != AuthMoreDataPacket {
-		return nil, ParseErrorPacket(response)
-	}
-
-	block, _ := pem.Decode(response[1:])
-	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to parse public key from server: %v", err)
-	}
-
-	return pub.(*rsa.PublicKey), nil
-}
-
 // writeClearTextPassword writes the clear text password.
+// It refuses unless the connection uses TLS or a Unix socket, since on plain
+// TCP any peer can ask for it.
 // Returns a SQLError.
 func (c *Conn) writeClearTextPassword(params *ConnParams) error {
+	if c.Capabilities&CapabilityClientSSL == 0 && params.UnixSocket == "" {
+		return sqlerror.NewSQLErrorf(sqlerror.CRServerHandshakeErr, sqlerror.SSUnknownSQLState, "server asked for the clear text password, which requires a TLS or Unix socket connection")
+	}
 	length := len(params.Pass) + 1
 	data, pos := c.startEphemeralPacketWithHeader(length)
 	pos = writeNullString(data, pos, params.Pass)

@@ -66,22 +66,11 @@ func TestClearTextClientAuth(t *testing.T) {
 	_, err = Connect(ctx, params)
 	require.ErrorContains(t, err, "Cannot use clear text authentication over non-SSL connections")
 
-	// Change server side to allow clear text without auth.
+	// Even when the server allows clear text without TLS, the client must not
+	// send the password over plain TCP.
 	l.AllowClearTextWithoutTLS.Store(true)
-	conn, err := Connect(ctx, params)
-	require.NoError(t, err, "unexpected connection error: %v", err)
-
-	defer conn.Close()
-
-	assert.Equal(t, collations.ID(collations.CollationUtf8mb4ID), conn.CharacterSet)
-	// Run a 'select rows' command with results.
-	result, err := conn.ExecuteFetch("select rows", 10000, true)
-	require.NoError(t, err, "ExecuteFetch failed: %v", err)
-
-	utils.MustMatch(t, result, selectRowsResult)
-
-	// Send a ComQuit to avoid the error message on the server side.
-	conn.writeComQuit()
+	_, err = Connect(ctx, params)
+	require.ErrorContains(t, err, "requires a TLS or Unix socket connection")
 }
 
 // TestSSLConnection creates a server with TLS support, a client that
