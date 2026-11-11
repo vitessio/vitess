@@ -108,6 +108,9 @@ func pushAggregationThroughSubquery(
 		}
 		if checkDistinct {
 			checkGroupingKeepsDistinct(ctx, rootAggr, col)
+			if join, isJoin := src.Outer.(*ApplyJoin); isJoin {
+				checkJoinKeepsDistinct(ctx, rootAggr, join)
+			}
 		}
 		pushedAggr.addColumnWithoutPushing(ctx, aeWrap(col), true)
 	}
@@ -153,6 +156,79 @@ func checkGroupingKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Ag
 			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
 		}
 	}
+}
+
+// checkJoinKeepsDistinct refuses a distinct aggregation that is pushed to one side of the join, when the join repeats
+// its partial results: the other side returns a group from several shards, or the join columns that the left side
+// groups by split the values of the argument between groups. A distinct aggregation that can't be pushed stays above
+// the join.
+func checkJoinKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Aggregator, join *ApplyJoin) {
+	if canPush, _ := checkIfWeCanPush(ctx, aggregator); !canPush {
+		return
+	}
+	var lhsKeys, rhsKeys []sqlparser.Expr
+	for _, pred := range join.JoinPredicates.columns {
+		for _, bve := range pred.LHSExprs {
+			lhsKeys = append(lhsKeys, bve.Expr)
+		}
+		for _, col := range outsideSubqueryColumns(pred.Original) {
+			if ctx.SemTable.RecursiveDeps(col).IsSolvedBy(TableID(join.RHS)) {
+				rhsKeys = append(rhsKeys, col)
+			}
+		}
+	}
+	for _, aggr := range aggregator.Aggregations {
+		if !aggr.Distinct {
+			continue
+		}
+		args := aggr.Func.GetArgs()
+		deps := ctx.SemTable.RecursiveDeps(args[0])
+		grouping := groupingExprs(aggregator.Grouping)
+		var other Operator
+		var otherKeys []sqlparser.Expr
+		splits := false
+		switch {
+		case deps.IsSolvedBy(TableID(join.RHS)):
+			other, otherKeys = join.LHS, lhsKeys
+		case deps.IsSolvedBy(TableID(join.LHS)):
+			other, otherKeys = join.RHS, rhsKeys
+			seeds := append(slices.Clone(grouping), args...)
+			splits = slices.ContainsFunc(lhsKeys, func(key sqlparser.Expr) bool {
+				return !isDetermined(ctx, seeds, args, key)
+			})
+		default:
+			continue
+		}
+		if splits || !returnsEachGroupOnce(ctx, other, append(grouping, otherKeys...)) {
+			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
+		}
+	}
+}
+
+// returnsEachGroupOnce says if no group of op, where it groups by the exprs, comes from several shards. That holds when
+// every route that isn't a single shard has the value of a unique vindex column fixed by the exprs.
+func returnsEachGroupOnce(ctx *plancontext.PlanningContext, op Operator, exprs []sqlparser.Expr) bool {
+	var candidates []sqlparser.Expr
+	for _, eq := range joinEqualities(ctx, nil) {
+		candidates = append(candidates, eq.cmp.Left, eq.cmp.Right)
+	}
+	candidates = append(candidates, exprs...)
+	once := true
+	_ = Visit(op, func(op Operator) error {
+		route, isRoute := op.(*Route)
+		if !isRoute || route.IsSingleShard() {
+			return nil
+		}
+		routeID := TableID(route)
+		if !slices.ContainsFunc(candidates, func(expr sqlparser.Expr) bool {
+			return ctx.SemTable.RecursiveDeps(expr).IsSolvedBy(routeID) && exprHasUniqueVindex(ctx, expr) &&
+				isDetermined(ctx, exprs, nil, expr)
+		}) {
+			once = false
+		}
+		return nil
+	})
+	return once
 }
 
 func (a *Aggregator) aggregateTheAggregates() {
@@ -528,6 +604,7 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 		}
 		if i >= extraFrom {
 			refuseUngrouped(bve.Expr)
+			checkJoinKeepsDistinct(ctx, lhs.orig, join)
 		}
 
 		lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
@@ -596,7 +673,7 @@ func isDetermined(ctx *plancontext.PlanningContext, seeds, nonNull []sqlparser.E
 
 // columnsFixedBelow returns the columns that have one value for every row of op: the ones that a filter compares to an
 // argument, and the ones that the subqueries on op, or the joins in it, group by when the aggregation is pushed under
-// them.
+// them. A join inside a route is one query, so it groups by nothing.
 func columnsFixedBelow(ctx *plancontext.PlanningContext, op Operator) (cols []sqlparser.Expr) {
 	if container, isContainer := op.(*SubQueryContainer); isContainer {
 		for _, subQuery := range container.Inner {
@@ -605,37 +682,43 @@ func columnsFixedBelow(ctx *plancontext.PlanningContext, op Operator) (cols []sq
 			}
 		}
 	}
-	_ = Visit(op, func(op Operator) error {
-		if join, isJoin := op.(*ApplyJoin); isJoin {
-			for _, pred := range join.JoinPredicates.columns {
-				for _, bve := range pred.LHSExprs {
+	var collect func(op Operator, inRoute bool)
+	collect = func(op Operator, inRoute bool) {
+		switch op := op.(type) {
+		case *ApplyJoin:
+			if !inRoute {
+				for _, pred := range op.JoinPredicates.columns {
+					for _, bve := range pred.LHSExprs {
+						cols = append(cols, bve.Expr)
+					}
+				}
+				for _, bve := range op.ExtraLHSVars {
 					cols = append(cols, bve.Expr)
 				}
 			}
-			for _, bve := range join.ExtraLHSVars {
-				cols = append(cols, bve.Expr)
-			}
-		}
-		filter, isFilter := op.(*Filter)
-		if !isFilter {
-			return nil
-		}
-		for _, pred := range filter.Predicates {
-			if jp, isJoinPredicate := pred.(*predicates.JoinPredicate); isJoinPredicate {
-				pred = jp.Current()
-			}
-			cmp, isCmp := pred.(*sqlparser.ComparisonExpr)
-			if !isCmp || cmp.Operator != sqlparser.EqualOp {
-				continue
-			}
-			for _, pair := range [][2]sqlparser.Expr{{cmp.Left, cmp.Right}, {cmp.Right, cmp.Left}} {
-				if _, isArg := pair[1].(*sqlparser.Argument); isArg {
-					cols = append(cols, pair[0])
+		case *Route:
+			inRoute = true
+		case *Filter:
+			for _, pred := range op.Predicates {
+				if jp, isJoinPredicate := pred.(*predicates.JoinPredicate); isJoinPredicate {
+					pred = jp.Current()
+				}
+				cmp, isCmp := pred.(*sqlparser.ComparisonExpr)
+				if !isCmp || cmp.Operator != sqlparser.EqualOp {
+					continue
+				}
+				for _, pair := range [][2]sqlparser.Expr{{cmp.Left, cmp.Right}, {cmp.Right, cmp.Left}} {
+					if _, isArg := pair[1].(*sqlparser.Argument); isArg {
+						cols = append(cols, pair[0])
+					}
 				}
 			}
 		}
-		return nil
-	})
+		for _, input := range op.Inputs() {
+			collect(input, inRoute)
+		}
+	}
+	collect(op, false)
 	return cols
 }
 

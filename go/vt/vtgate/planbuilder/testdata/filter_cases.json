@@ -9119,247 +9119,39 @@
     "skip_e2e": true
   },
   {
-    "comment": "An inner join on the right side of a left join keeps it from being NULL, so the left join's ON clause holds and the distinct aggregation plans as on main",
+    "comment": "The left side is a scatter that returns each a.col from several shards, so the distinct aggregation that main pushes to the right side is counted once for each of them, and it is refused",
     "query": "select a.col, count(distinct b.id) from music a left join user c on a.col = c.id and a.foo = c.foo join music b on c.id = b.user_id where (a.foo = 1 or b.foo in (select col from user_extra)) group by a.col",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "select a.col, count(distinct b.id) from music a left join user c on a.col = c.id and a.foo = c.foo join music b on c.id = b.user_id where (a.foo = 1 or b.foo in (select col from user_extra)) group by a.col",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Ordered",
-        "Aggregates": "sum_count_distinct(1) AS count(distinct b.id)",
-        "GroupBy": "(0|4)",
-        "ResultColumns": 2,
-        "Inputs": [
-          {
-            "OperatorType": "UncorrelatedSubquery",
-            "Variant": "PulloutIn",
-            "PulloutVars": [
-              "__sq_has_values",
-              "__sq1"
-            ],
-            "Inputs": [
-              {
-                "InputName": "SubQuery",
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select col from user_extra where 1 != 1",
-                "Query": "select col from user_extra"
-              },
-              {
-                "InputName": "Outer",
-                "OperatorType": "SimpleProjection",
-                "Columns": "1,0,2,3,4",
-                "Inputs": [
-                  {
-                    "OperatorType": "Filter",
-                    "Predicate": "a.foo = 1 or :__sq_has_values and b.foo in ::__sq1",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Join",
-                        "Variant": "Join",
-                        "JoinColumnIndexes": "R:0,L:0,L:1,R:1,L:3",
-                        "JoinVars": {
-                          "c_id": 2
-                        },
-                        "Inputs": [
-                          {
-                            "OperatorType": "Join",
-                            "Variant": "LeftJoin",
-                            "JoinColumnIndexes": "L:0,L:1,R:0,L:2",
-                            "JoinVars": {
-                              "a_col": 0,
-                              "a_foo": 1
-                            },
-                            "Inputs": [
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "Scatter",
-                                "Keyspace": {
-                                  "Name": "user",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select a.col, a.foo, weight_string(a.col) from music as a where 1 != 1 group by a.col, a.foo, weight_string(a.col)",
-                                "OrderBy": "(0|2) ASC",
-                                "Query": "select a.col, a.foo, weight_string(a.col) from music as a group by a.col, a.foo, weight_string(a.col) order by a.col asc"
-                              },
-                              {
-                                "OperatorType": "Route",
-                                "Variant": "EqualUnique",
-                                "Keyspace": {
-                                  "Name": "user",
-                                  "Sharded": true
-                                },
-                                "FieldQuery": "select c.id from `user` as c where 1 != 1 group by c.id",
-                                "Query": "select c.id from `user` as c where c.foo = :a_foo and c.id = :a_col group by c.id",
-                                "Values": [
-                                  ":a_col"
-                                ],
-                                "Vindex": "user_index"
-                              }
-                            ]
-                          },
-                          {
-                            "OperatorType": "Route",
-                            "Variant": "EqualUnique",
-                            "Keyspace": {
-                              "Name": "user",
-                              "Sharded": true
-                            },
-                            "FieldQuery": "select count(distinct b.id), b.foo from music as b where 1 != 1 group by b.foo",
-                            "Query": "select count(distinct b.id), b.foo from music as b where b.user_id = :c_id group by b.foo",
-                            "Values": [
-                              ":c_id"
-                            ],
-                            "Vindex": "user_index"
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.music",
-        "user.user",
-        "user.user_extra"
-      ]
-    },
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
   },
   {
-    "comment": "The columns that a join on the left side feeds to its own right side are grouped below it, so grouping by them splits no group and the distinct aggregation plans as on main",
+    "comment": "The left side is a scatter that returns each a.col and a.foo from several shards, so the distinct aggregation that main pushes to the right side is counted once for each of them, and it is refused",
     "query": "select count(distinct c.id) from user a left join music c on a.col = c.id and a.foo = c.foo join music b on a.col = b.col where exists (select 1 from user_extra ue9 where ue9.user_id = b.id and ue9.col = a.foo)",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "select count(distinct c.id) from user a left join music c on a.col = c.id and a.foo = c.foo join music b on a.col = b.col where exists (select 1 from user_extra ue9 where ue9.user_id = b.id and ue9.col = a.foo)",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count_distinct(0) AS count(distinct c.id)",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "a_col": 1,
-              "a_foo": 2
-            },
-            "Inputs": [
-              {
-                "OperatorType": "Join",
-                "Variant": "LeftJoin",
-                "JoinColumnIndexes": "R:0,L:0,L:1",
-                "JoinVars": {
-                  "a_col": 0,
-                  "a_foo": 1
-                },
-                "Inputs": [
-                  {
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select a.col, a.foo from `user` as a where 1 != 1 group by a.col, a.foo",
-                    "Query": "select a.col, a.foo from `user` as a group by a.col, a.foo"
-                  },
-                  {
-                    "OperatorType": "VindexLookup",
-                    "Variant": "EqualUnique",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "Values": [
-                      ":a_col"
-                    ],
-                    "Vindex": "music_user_map",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "IN",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
-                        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
-                        "Values": [
-                          "::name"
-                        ],
-                        "Vindex": "user_index"
-                      },
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "ByDestination",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select count(distinct c.id) from music as c where 1 != 1 group by .0",
-                        "Query": "select count(distinct c.id) from music as c where c.foo = :a_foo and c.id = :a_col /* INT16 */ group by .0"
-                      }
-                    ]
-                  }
-                ]
-              },
-              {
-                "OperatorType": "SemiJoin",
-                "JoinVars": {
-                  "b_id": 0
-                },
-                "Inputs": [
-                  {
-                    "InputName": "Outer",
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select b.id from music as b where 1 != 1 group by b.id",
-                    "Query": "select b.id from music as b where b.col = :a_col /* INT16 */ group by b.id"
-                  },
-                  {
-                    "InputName": "SubQuery",
-                    "OperatorType": "Route",
-                    "Variant": "EqualUnique",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select 1 from user_extra as ue9 where 1 != 1",
-                    "Query": "select 1 from user_extra as ue9 where ue9.user_id = :b_id and ue9.col = :a_foo limit 1",
-                    "Values": [
-                      ":b_id"
-                    ],
-                    "Vindex": "user_index"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.music",
-        "user.user",
-        "user.user_extra"
-      ]
-    },
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation pushed to the right side of a join is refused when the left side is a scatter that returns each group from several shards, which repeats the count (main sends b.foo to the user route, ERROR 1054)",
+    "query": "select a.foo, count(distinct b.id) from user a left join music b on a.col = b.col where (b.foo = 1 or a.foo in (select col from user_extra)) group by a.foo",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A column that a subquery on the right side reads from the left side is refused for a distinct aggregation when the left side is a scatter that returns each group from several shards (main selects it without grouping, ERROR 1055)",
+    "query": "select count(distinct b.id) from user a join unsharded c on a.col = c.id and a.foo = a.col join music b on c.foo = b.id where exists (select 1 from user_extra ue9 where ue9.user_id = b.id and ue9.col = a.foo)",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation on the left side of a join is refused when the join column it groups by splits the values of the argument between groups, which the join counts once for each (main sends b.foo to the user route, ERROR 1054)",
+    "query": "select b.foo, count(distinct a.id) from user a join music c on a.id = c.user_id join user b on c.col = b.id where (b.foo = 1 or a.foo in (select col from user_extra)) group by b.foo",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "The join columns of a join that is merged into the left route aren't grouped, so they don't fix the column that a subquery feeds to the right side, and the distinct aggregation is refused (main selects it without grouping, ERROR 1055)",
+    "query": "select c.col, count(distinct a.id) from user a join music c on a.id = c.user_id join user b on c.col = b.id where exists (select 1 from user_extra ue9 where ue9.user_id = a.id and ue9.col = b.foo) group by c.col",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
   }
 ]
