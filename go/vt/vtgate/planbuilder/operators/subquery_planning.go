@@ -809,7 +809,7 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 
 	// The copy replaces the inner route's SQL, which would drop the subqueries nested in it.
 	if _, whole := m.subq.Subquery.(*Route); whole {
-		if inCopy := sameNameCopy(ctx, inRoute, outRoute); inCopy != nil {
+		if inCopy := sameNameCopy(ctx, inRoute, outRoute); inCopy != nil && readsOnlyItsTables(ctx, inRoute) {
 			inRoute = inCopy
 		}
 	}
@@ -927,20 +927,26 @@ func answeredOnlyWhereItsRowsLive(subq *SubQuery) bool {
 	if slices.ContainsFunc(sel.OrderBy, func(o *sqlparser.Order) bool { return sqlparser.ContainsAggregation(o.Expr) }) {
 		return false
 	}
+	// A select list that mixes an aggregate with another column returns a row over no rows, and
+	// the other column is not NULL there.
+	var aggregates, others int
 	for _, col := range sel.GetColumns() {
 		ae, ok := col.(*sqlparser.AliasedExpr)
 		if !ok {
+			others++
 			continue
 		}
 		switch ae.Expr.(type) {
 		case *sqlparser.Max, *sqlparser.Min, *sqlparser.Sum, *sqlparser.Avg:
+			aggregates++
 			continue
 		}
 		if sqlparser.ContainsAggregation(ae.Expr) {
 			return false
 		}
+		others++
 	}
-	return true
+	return aggregates == 0 || others == 0
 }
 
 func innerJoinsOfTables(te sqlparser.TableExpr) bool {

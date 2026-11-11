@@ -4514,7 +4514,7 @@
         "Query": "select u.col from `user` as u where u.id in (select r.id from global_ref as r join (with recursive c as (select 1 as x from dual union all select x + 1 from c where x < 3) select x from c) as d)"
       },
       "TablesUsed": [
-        "main.global_ref",
+        "user.global_ref",
         "user.user"
       ]
     }
@@ -4533,5 +4533,395 @@
     "comment": "a distinct aggregation over a derived table that reads an unsharded table and the source of a reference table is refused",
     "query": "select count(distinct a.col) from (select id, col from unsharded union all select id, col from main.source_of_ref) a where exists (select 1 from user_extra ue where ue.user_id = a.id)",
     "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
+  },
+  {
+    "comment": "a recursive term over a reference table left joined with a sharded table by a column of the reference table is a left join of the reference route and a one-shard probe",
+    "query": "with recursive c as (select col from ref where col = 1 union all select r.col + 1 from c join ref r on r.col = c.col left join user u on u.id = r.col where r.col < 5) select col from c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref where col = 1 union all select r.col + 1 from c join ref r on r.col = c.col left join user u on u.id = r.col where r.col < 5) select col from c",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "c_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from ref where 1 != 1",
+            "Query": "select col from ref where col = 1"
+          },
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "r.col + 1 as r.col + 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:0",
+                "JoinVars": {
+                  "r_col": 0
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select r.col from ref as r where 1 != 1",
+                    "Query": "select r.col from ref as r where r.col = :c_col and r.col < 5"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from `user` as u where 1 != 1",
+                    "Query": "select 1 from `user` as u where u.id = :r_col",
+                    "Values": [
+                      ":r_col"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a recursive term seeded from a sharded table, over a reference table left joined with a sharded table by a column of the reference table, probes one shard",
+    "query": "with recursive c as (select col from user where id = 1 union all select r.col + 1 from c join ref r on r.col = c.col left join user u on u.id = r.col where r.col < 5) select col from c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from user where id = 1 union all select r.col + 1 from c join ref r on r.col = c.col left join user u on u.id = r.col where r.col < 5) select col from c",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "c_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from `user` where 1 != 1",
+            "Query": "select col from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "r.col + 1 as r.col + 1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:0",
+                "JoinVars": {
+                  "r_col": 0
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select r.col from ref as r where 1 != 1",
+                    "Query": "select r.col from ref as r where r.col = :c_col and r.col < 5"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from `user` as u where 1 != 1",
+                    "Query": "select 1 from `user` as u where u.id = :r_col",
+                    "Values": [
+                      ":r_col"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a recursive term written with a comma join, over a reference table left joined with a sharded table by a column of the reference table, probes one shard",
+    "query": "with recursive c as (select col from ref where col = 1 union all select r.col + 1 from ref r left join user u on u.id = r.col, c where r.col = c.col and r.col < 5) select col from c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref where col = 1 union all select r.col + 1 from ref r left join user u on u.id = r.col, c where r.col = c.col and r.col < 5) select col from c",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {},
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from ref where 1 != 1",
+            "Query": "select col from ref where col = 1"
+          },
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "r_col": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Projection",
+                "Expressions": [
+                  "r.col + 1 as r.col + 1",
+                  ":0 as col"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "LeftJoin",
+                    "JoinColumnIndexes": "L:0",
+                    "JoinVars": {
+                      "r_col": 0
+                    },
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Reference",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select r.col from ref as r where 1 != 1",
+                        "Query": "select r.col from ref as r where r.col < 5"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1 from `user` as u where 1 != 1",
+                        "Query": "select 1 from `user` as u where u.id = :r_col",
+                        "Values": [
+                          ":r_col"
+                        ],
+                        "Vindex": "user_index"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from dual where 1 != 1",
+                "Query": "select 1 from dual where c.col = :r_col"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a subquery with a max next to a constant is refused over a reference table, as it returns a row on a shard without rows",
+    "query": "select a.col from ref a where (a.col, a.id) != (select max(x.col), 0 from user x where x.id = a.col)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery with a constant next to a max is refused over a reference table, as it returns a row on a shard without rows",
+    "query": "select a.col from ref a where (a.id, a.col) < (select 5, max(x.col) from user x where x.id = a.col)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a subquery with a max next to a constant is refused over a reference table left joined with a sharded table",
+    "query": "select a.col from ref a left join user u on u.col = a.col where (a.col, a.id) != (select max(x.col), 0 from user x where x.id = a.col)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "a nested subquery over a reference table next to a left joined sharded table is a pull-out",
+    "query": "select r.col from ref r left join user u on u.col = r.col where r.col in (select a.col from global_ref a where a.col in (select x.col from unsharded x))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from ref r left join user u on u.col = r.col where r.col in (select a.col from global_ref a where a.col in (select x.col from unsharded x))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select a.col from global_ref as a where 1 != 1",
+                "Query": "select a.col from global_ref as a where a.col in (select x.col from unsharded as x)"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref as r where 1 != 1",
+                "Query": "select r.col from ref as r where :__sq_has_values and r.col in ::__sq1"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u where 1 != 1",
+            "Query": "select 1 from `user` as u where u.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "main.unsharded",
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a nested exists subquery over a reference table next to a left joined sharded table is a pull-out",
+    "query": "select r.col from ref r left join user u on u.col = r.col where exists (select 1 from global_ref a where exists (select 1 from unsharded x where x.col = a.col))",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "select r.col from ref r left join user u on u.col = r.col where exists (select 1 from global_ref a where exists (select 1 from unsharded x where x.col = a.col))",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "r_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutExists",
+            "PulloutVars": [
+              "__sq_has_values"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from global_ref as a where 1 != 1",
+                "Query": "select 1 from global_ref as a where exists (select 1 from unsharded as x where x.col = a.col) limit 1"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref as r where 1 != 1",
+                "Query": "select r.col from ref as r where :__sq_has_values"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u where 1 != 1",
+            "Query": "select 1 from `user` as u where u.col = :r_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "main.unsharded",
+        "user.ref",
+        "user.user"
+      ]
+    }
   }
 ]

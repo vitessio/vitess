@@ -174,6 +174,13 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 		}
 	}()
 
+	// The routing of a retry that pushed `u.id = :r_col` can be a single shard that the restored
+	// predicate no longer selects. The reset works on a clone because the right side shares the routing.
+	if r.PreservesReferenceRows && !canCarryReferenceRows(r.Routing) && !routesToOneShard(r.Routing.Clone().resetRoutingLogic(ctx)) {
+		debugNoRewrite("apply join merge blocked: the reference rows an outer join preserves cannot be read through the routing left after the predicates are restored")
+		return in, NoRewrite
+	}
+
 	// After merging joins, routing logic may have changed. Re-evaluate routing decisions.
 	// Example scenario:
 	// Before merge: routing based on predicates like ':lhs_col = rhs.col'.
