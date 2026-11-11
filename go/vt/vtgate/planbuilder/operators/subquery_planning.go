@@ -1011,7 +1011,7 @@ func readsOnlyItsTables(ctx *plancontext.PlanningContext, route *Route) bool {
 func tableNames(op Operator) []string {
 	var names []string
 	_ = Visit(op, func(op Operator) error {
-		if t, ok := op.(*Table); ok {
+		if t, ok := op.(*Table); ok && t.VTable != nil {
 			names = append(names, t.VTable.Name.String())
 		}
 		return nil

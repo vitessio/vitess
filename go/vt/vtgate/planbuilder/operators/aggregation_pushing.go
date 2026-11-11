@@ -132,8 +132,9 @@ func pushAggregationThroughSubquery(
 }
 
 // refuseDistinctOverReferenceRowsGroupedByOuterColumns refuses a distinct aggregation that would be pushed
-// under a reference route to be grouped by the outer columns its subquery is routed by, when its argument
-// does not use them: the distinct values would be counted once per group instead of once.
+// under a reference route to be grouped by the outer columns its subquery is routed by, unless the query
+// groups by them or the aggregation has each of them as an argument of its own: the distinct values would
+// be counted once per group instead of once. A column without a known table counts as a reference column.
 func refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx *plancontext.PlanningContext, aggr *Aggregator, src *SubQueryContainer, subQuery *SubQuery) {
 	outer, ok := src.Outer.(*Route)
 	if !ok {
@@ -147,31 +148,25 @@ func refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx *plancontext.Plann
 		return
 	}
 	lhsCols := slices.DeleteFunc(subQuery.OuterExpressionsNeeded(ctx, src.Outer), func(col *sqlparser.ColName) bool {
+		if slices.ContainsFunc(aggr.Grouping, func(gb GroupBy) bool { return ctx.SemTable.EqualsExpr(gb.Inner, col) }) {
+			return true
+		}
 		ti, err := ctx.SemTable.TableInfoForExpr(col)
 		if err != nil {
 			return true
 		}
 		vt := ti.GetVindexTable()
-		return vt.Type != vindexes.TypeReference && len(vt.ReferencedBy) == 0
+		return vt != nil && vt.Type != vindexes.TypeReference && len(vt.ReferencedBy) == 0
 	})
 	for _, a := range aggr.Aggregations {
 		if !a.Distinct {
 			continue
 		}
 		args := a.Func.GetArgs()
-		usesGroup := func(col *sqlparser.ColName) bool {
-			return slices.ContainsFunc(args, func(arg sqlparser.Expr) bool {
-				found := false
-				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-					if e, ok := node.(sqlparser.Expr); ok && ctx.SemTable.EqualsExpr(e, col) {
-						found = true
-					}
-					return !found, nil
-				}, arg)
-				return found
-			})
+		isArgument := func(col *sqlparser.ColName) bool {
+			return slices.ContainsFunc(args, func(arg sqlparser.Expr) bool { return ctx.SemTable.EqualsExpr(arg, col) })
 		}
-		if !slices.ContainsFunc(lhsCols, func(col *sqlparser.ColName) bool { return !usesGroup(col) }) {
+		if !slices.ContainsFunc(lhsCols, func(col *sqlparser.ColName) bool { return !isArgument(col) }) {
 			continue
 		}
 		panic(vterrors.VT12001("distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"))
@@ -368,6 +363,9 @@ func exprHasVindex(ctx *plancontext.PlanningContext, expr sqlparser.Expr, hasToB
 		return false
 	}
 	vschemaTable := tableInfo.GetVindexTable()
+	if vschemaTable == nil {
+		return false
+	}
 	for _, vindex := range vschemaTable.ColumnVindexes {
 		// TODO: Support composite vindexes (multicol, etc).
 		if len(vindex.Columns) > 1 || hasToBeUnique && !vindex.IsUnique() {
