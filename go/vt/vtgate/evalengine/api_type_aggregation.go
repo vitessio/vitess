@@ -210,6 +210,9 @@ func (ta *typeAggregation) result() sqltypes.Type {
 				The exception is unsigned BIGINT combined with any signed integer type. The result is DECIMAL with sufficient precision and scale 0.
 		If all types are BIT, the result is BIT. Otherwise, BIT arguments are treated similar to BIGINT.
 		If all types are YEAR, the result is YEAR. Otherwise, YEAR arguments are treated similar to INT.
+			(The manual is incomplete here: measured on MySQL 8.4, a YEAR mixed with
+			integers is signed INT only if a signed integer is present; with unsigned
+			integers only it is unsigned, and the result is the widest of them.)
 		If all types are character string (CHAR or VARCHAR), the result is VARCHAR with maximum length determined by the longest character length of the operands.
 		If all types are character or binary string, the result is VARBINARY.
 		SET and ENUM are treated similar to VARCHAR; the result is VARCHAR.
@@ -232,6 +235,10 @@ func (ta *typeAggregation) result() sqltypes.Type {
 
 	if ta.year == ta.total {
 		return sqltypes.Year
+	} else if ta.year > 0 && ta.signed == 0 && ta.unsigned > 0 {
+		// Measured on MySQL 8.4: YEAR is the narrowest unsigned integer, so mixed
+		// with unsigned integers only it is unsigned and does not widen them.
+		ta.unsigned += ta.year
 	} else if ta.year > 0 {
 		ta.signed += ta.year
 		if sqltypes.Int32 > ta.signedMax {

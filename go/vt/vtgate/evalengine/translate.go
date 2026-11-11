@@ -64,19 +64,19 @@ func (ast *astCompiler) translateComparisonExpr2(op sqlparser.ComparisonExprOper
 
 	switch op {
 	case sqlparser.EqualOp:
-		return &ComparisonExpr{binaryExpr, compareEQ{}}, nil
+		return &ComparisonExpr{BinaryExpr: binaryExpr, Op: compareEQ{}}, nil
 	case sqlparser.NotEqualOp:
-		return &ComparisonExpr{binaryExpr, compareNE{}}, nil
+		return &ComparisonExpr{BinaryExpr: binaryExpr, Op: compareNE{}}, nil
 	case sqlparser.LessThanOp:
-		return &ComparisonExpr{binaryExpr, compareLT{}}, nil
+		return &ComparisonExpr{BinaryExpr: binaryExpr, Op: compareLT{}}, nil
 	case sqlparser.LessEqualOp:
-		return &ComparisonExpr{binaryExpr, compareLE{}}, nil
+		return &ComparisonExpr{BinaryExpr: binaryExpr, Op: compareLE{}}, nil
 	case sqlparser.GreaterThanOp:
-		return &ComparisonExpr{binaryExpr, compareGT{}}, nil
+		return &ComparisonExpr{BinaryExpr: binaryExpr, Op: compareGT{}}, nil
 	case sqlparser.GreaterEqualOp:
-		return &ComparisonExpr{binaryExpr, compareGE{}}, nil
+		return &ComparisonExpr{BinaryExpr: binaryExpr, Op: compareGE{}}, nil
 	case sqlparser.NullSafeEqualOp:
-		return &ComparisonExpr{binaryExpr, compareNullSafeEQ{}}, nil
+		return &ComparisonExpr{BinaryExpr: binaryExpr, Op: compareNullSafeEQ{}}, nil
 	case sqlparser.LikeOp:
 		return &LikeExpr{BinaryExpr: binaryExpr}, nil
 	case sqlparser.NotLikeOp:
@@ -485,14 +485,23 @@ func (ast *astCompiler) translateBetweenExpr(node *sqlparser.BetweenExpr) (IR, e
 		Right:    node.To,
 	}
 
+	var expr sqlparser.Expr = sqlparser.AndExpressions(from, to)
 	if !node.IsBetween {
 		// x NOT BETWEEN a AND b  => x < a OR x > b
 		from.Operator = sqlparser.LessThanOp
 		to.Operator = sqlparser.GreaterThanOp
-		return ast.translateExpr(&sqlparser.OrExpr{Left: from, Right: to})
+		expr = &sqlparser.OrExpr{Left: from, Right: to}
 	}
 
-	return ast.translateExpr(sqlparser.AndExpressions(from, to))
+	ir, err := ast.translateExpr(expr)
+	if logical, ok := ir.(*LogicalExpr); ok {
+		for _, side := range []IR{logical.Left, logical.Right} {
+			if cmp, ok := side.(*ComparisonExpr); ok {
+				cmp.between = true
+			}
+		}
+	}
+	return ir, err
 }
 
 func translateExprNotSupported(e sqlparser.Expr) error {

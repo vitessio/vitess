@@ -36,6 +36,9 @@ type (
 	ComparisonExpr struct {
 		BinaryExpr
 		Op ComparisonOp
+		// between marks the comparisons that implement BETWEEN, which compares a
+		// YEAR with a DATE, DATETIME or TIMESTAMP as numbers, like MySQL does.
+		between bool
 	}
 
 	LikeExpr struct {
@@ -233,6 +236,10 @@ func evalCompare(left, right eval, collationEnv *collations.Environment) (comp i
 	switch {
 	case compareAsDates(lt, rt):
 		return compareDates(left.(*evalTemporal), right.(*evalTemporal)), nil
+	case lt == sqltypes.Year && sqltypes.IsDate(rt):
+		return compareYearAndDate(left.(*evalUint64), right.(*evalTemporal)), nil
+	case sqltypes.IsDate(lt) && rt == sqltypes.Year:
+		return -compareYearAndDate(right.(*evalUint64), left.(*evalTemporal)), nil
 	case compareAsEnums(lt, rt):
 		return compareEnums(left.(*evalEnum), right.(*evalEnum)), nil
 	case compareAsSets(lt, rt):
@@ -316,6 +323,9 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 	if _, ok := c.Op.(compareNullSafeEQ); !ok && right == nil {
 		return nil, nil
 	}
+	if c.between {
+		left, right = evalWithoutYear(left), evalWithoutYear(right)
+	}
 	cmp, err := c.Op.compare(env.collationEnv, left, right)
 	if err != nil {
 		return nil, err
@@ -393,6 +403,8 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 	switch {
 	case compareAsDates(lt.Type, rt.Type):
 		c.asm.CmpDates()
+	case !expr.between && (lt.isYear() && sqltypes.IsDate(rt.Type) || sqltypes.IsDate(lt.Type) && rt.isYear()):
+		c.asm.CmpYearDate(lt.isYear())
 	case compareAsStrings(lt.Type, rt.Type):
 		if err := c.compareAsStrings(lt, rt); err != nil {
 			return ctype{}, err

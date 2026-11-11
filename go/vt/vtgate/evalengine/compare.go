@@ -125,6 +125,18 @@ func compareDates(l, r *evalTemporal) int {
 	return l.dt.Compare(r.dt)
 }
 
+// compareYearAndDate compares a YEAR with a DATE, DATETIME or TIMESTAMP the way
+// MySQL does: as temporal values, with the year standing for YYYY-00-00 00:00:00.
+func compareYearAndDate(year *evalUint64, d *evalTemporal) int {
+	if c := cmp.Compare(int(year.u), d.dt.Date.Year()); c != 0 {
+		return c
+	}
+	if d.dt.Date.Month() == 0 && d.dt.Date.Day() == 0 && d.dt.Time.IsZero() {
+		return 0
+	}
+	return -1
+}
+
 func compareEnums(l, r *evalEnum) int {
 	if l.value == -1 || r.value == -1 {
 		// If the values are equal normally the strings

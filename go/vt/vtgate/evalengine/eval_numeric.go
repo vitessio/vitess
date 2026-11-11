@@ -475,6 +475,14 @@ func (e *evalUint64) toUint64() *evalUint64 {
 	return e
 }
 
+// evalWithoutYear returns e as a plain UINT64 if it has the YEAR type.
+func evalWithoutYear(e eval) eval {
+	if u, ok := e.(*evalUint64); ok {
+		return u.withoutYear()
+	}
+	return e
+}
+
 // withoutYear returns e as a plain UINT64 if it has the YEAR type.
 func (e *evalUint64) withoutYear() *evalUint64 {
 	if e.year {

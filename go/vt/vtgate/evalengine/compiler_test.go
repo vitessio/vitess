@@ -1172,6 +1172,62 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(1)`,
 			fold:       true,
 		},
+		// On MySQL 8.1+, a YEAR compared with a DATE, DATETIME or TIMESTAMP is the
+		// datetime YYYY-00-00 00:00:00, in either operand order and in rows.
+		{
+			expression: `YEAR('2023-05-06') > DATE'0001-01-01'`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `YEAR('2023-05-06') <= DATE'0001-01-01'`,
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `DATE'0001-01-01' < YEAR('2023-05-06')`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `YEAR(column0) < column1`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2023-05-06"), sqltypes.NewDatetime("2021-02-03 04:05:06")},
+			result:     `INT64(0)`,
+		},
+		{
+			expression: `LEAST(YEAR('2023-05-06'), YEAR('2020-01-01')) > DATE'0001-01-01'`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `(YEAR('2023-05-06'), 1) > (DATE'0001-01-01', 0)`,
+			result:     `INT64(1)`,
+		},
+		// Mixed with other integers, a YEAR is signed if any of them is, and
+		// unsigned otherwise.
+		{
+			expression: `IF(column0 > 1, YEAR(column1), column2)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(8), sqltypes.NewDate("2023-05-06"), sqltypes.NewUint64(5)},
+			result:     `UINT64(2023)`,
+		},
+		{
+			expression: `CASE WHEN column0 > 100 THEN YEAR(column1) WHEN column0 > 1 THEN column2 ELSE YEAR(column1) END`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(8), sqltypes.NewDate("2023-05-06"), sqltypes.NewUint64(5)},
+			result:     `UINT64(5)`,
+		},
+		{
+			expression: `IFNULL(YEAR('2023-05-06'), 18446744073709551615)`,
+			result:     `UINT64(2023)`,
+		},
+		{
+			expression: `GREATEST(YEAR('2023-05-06'), 1)`,
+			result:     `INT64(2023)`,
+		},
+		{
+			expression: `LEAST(YEAR('2023-05-06'), -1)`,
+			result:     `INT64(-1)`,
+		},
+		{
+			expression: `GREATEST(YEAR(column0), YEAR(column1), column2) + 1`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2023-05-06"), sqltypes.NewDatetime("2021-02-03 04:05:06"), sqltypes.NewInt32(8)},
+			result:     `INT64(2024)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

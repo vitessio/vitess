@@ -2579,6 +2579,29 @@ func FnYear(yield Query) {
 	for _, d := range inputConversions {
 		yield(fmt.Sprintf("YEAR(%s)", d), nil, false)
 	}
+
+	// On MySQL 8.1+, the YEAR type changes how the result is compared with
+	// temporal values and aggregated with other integers.
+	for _, d := range []string{"'2023-05-06'", "'0069-01-01'", "NULL"} {
+		for _, t := range []string{"DATE'2023-01-01'", "DATE'0001-01-01'", "TIMESTAMP'2023-01-01 00:00:00'", "TIMESTAMP'2022-12-31 23:59:59'"} {
+			for _, op := range []string{"<", ">=", "=", "<=>"} {
+				yield(fmt.Sprintf("YEAR(%s) %s %s", d, op, t), nil, false)
+			}
+			yield(fmt.Sprintf("%s > YEAR(%s)", t, d), nil, false)
+		}
+		yield(fmt.Sprintf("(YEAR(%s), 1) > (DATE'0001-01-01', 0)", d), nil, false)
+		yield(fmt.Sprintf("YEAR(%s) BETWEEN DATE'2022-01-01' AND DATE'2024-01-01'", d), nil, false)
+		for _, i := range []string{"-1", "1", "18446744073709551615"} {
+			// Not for NULL with BIGINT UNSIGNED: the interpreter and the compiler
+			// aggregate a NULL integer branch differently, as they do for
+			// IF(DAY(NULL) > 1, DAY(NULL), 18446744073709551615).
+			if d != "NULL" || i != "18446744073709551615" {
+				yield(fmt.Sprintf("IF(YEAR(%s) > 2000, YEAR(%s), %s)", d, d, i), nil, false)
+			}
+			yield(fmt.Sprintf("GREATEST(YEAR(%s), %s)", d, i), nil, false)
+			yield(fmt.Sprintf("LEAST(YEAR(%s), %s)", d, i), nil, false)
+		}
+	}
 }
 
 func FnYearWeek(yield Query) {

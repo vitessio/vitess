@@ -121,6 +121,7 @@ func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiCom
 		date      int
 		time      int
 		json      int
+		years     int
 	)
 
 	/*
@@ -144,6 +145,9 @@ func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiCom
 			integersI++
 		case *evalUint64:
 			integersU++
+			if arg.year {
+				years++
+			}
 		case *evalFloat:
 			floats++
 			call.prec = datetime2.DefaultPrecision
@@ -242,6 +246,9 @@ func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiCom
 		}
 		if integersU == len(args) {
 			return compareAllInteger_u
+		}
+		if integersI+years == len(args) {
+			return compareAllInteger_yi
 		}
 		return compareAllDecimal
 	}
@@ -367,6 +374,17 @@ func compareAllInteger_u(_ *ExpressionEnv, args []eval, cmp, _ int) (eval, error
 		return x.withoutYear(), nil
 	}
 	return x, nil
+}
+
+// compareAllInteger_yi compares YEARs mixed with signed integers: the result is
+// a signed integer.
+func compareAllInteger_yi(env *ExpressionEnv, args []eval, cmp, prec int) (eval, error) {
+	for i, arg := range args {
+		if u, ok := arg.(*evalUint64); ok {
+			args[i] = newEvalInt64(int64(u.u))
+		}
+	}
+	return compareAllInteger_i(env, args, cmp, prec)
 }
 
 func compareAllInteger_i(_ *ExpressionEnv, args []eval, cmp, _ int) (eval, error) {
@@ -680,6 +698,17 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 			c.asm.Fn_MULTICMP_u(len(args), call.cmp < 0)
 			c.asm.jumpDestination(jumps...)
 			return ctype{Type: sqltypes.Uint64, Flag: f, Col: collationNumeric}, nil
+		}
+		if signed+years == len(args) {
+			// a YEAR mixed with signed integers only is a signed integer
+			for i, tt := range args {
+				if tt.isYear() {
+					c.asm.Convert_ui(len(args) - i)
+				}
+			}
+			c.asm.Fn_MULTICMP_i(len(args), call.cmp < 0)
+			c.asm.jumpDestination(jumps...)
+			return ctype{Type: sqltypes.Int64, Flag: f, Col: collationNumeric}, nil
 		}
 		return call.compile_d(c, args, jumps)
 	}

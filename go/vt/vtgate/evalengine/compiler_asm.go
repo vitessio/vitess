@@ -825,6 +825,21 @@ func (asm *assembler) CmpDates() {
 	}, "CMP DATE(SP-2), DATE(SP-1)")
 }
 
+func (asm *assembler) CmpYearDate(yearLeft bool) {
+	asm.adjustStack(-2)
+
+	asm.emit(func(env *ExpressionEnv) int {
+		l, r := env.vm.stack[env.vm.sp-2], env.vm.stack[env.vm.sp-1]
+		env.vm.sp -= 2
+		if yearLeft {
+			env.vm.flags.cmp = compareYearAndDate(l.(*evalUint64), r.(*evalTemporal))
+		} else {
+			env.vm.flags.cmp = -compareYearAndDate(r.(*evalUint64), l.(*evalTemporal))
+		}
+		return 1
+	}, "CMP YEAR/DATE(SP-2), YEAR/DATE(SP-1)")
+}
+
 func (asm *assembler) Collate(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalBytes)

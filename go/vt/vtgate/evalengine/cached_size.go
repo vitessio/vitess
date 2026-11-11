@@ -205,7 +205,7 @@ func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
 	size += cached.BinaryExpr.CachedSize(false)
