@@ -115,11 +115,6 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 func resolveUnknownOrderTypes(orderBy evalengine.Comparison, fields []*querypb.Field) {
 	for i := range orderBy {
 		order := &orderBy[i]
-		if order.WeightStringCol >= 0 {
-			// Keep the planner's type unknown so Compare can fall back to the
-			// weight string when the actual column collation is unavailable.
-			continue
-		}
 		if order.Col < 0 || order.Col >= len(fields) {
 			continue
 		}

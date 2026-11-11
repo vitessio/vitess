@@ -206,6 +206,28 @@ func TestRebindHiddenUnionWeightStringThroughDerivedOutput(t *testing.T) {
 	assert.Equal(t, "dt", column.Qualifier.Name.String())
 }
 
+func TestRebindUserColumnNamedLikeDerivedUnionOutput(t *testing.T) {
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	source := []*sqlparser.AliasedExpr{{Expr: sqlparser.NewColNameWithQualifier("col", sqlparser.NewTableName("dt"))}}
+	hidden := &sqlparser.AliasedExpr{Expr: &sqlparser.WeightStringFuncExpr{
+		Expr: sqlparser.NewColNameWithQualifier("col", sqlparser.NewTableName("dt")),
+	}}
+
+	rebound, ok := rebindDerivedUnionColumn(ctx, source, hidden)
+	assert.True(t, ok)
+	weightString, ok := rebound.(*sqlparser.WeightStringFuncExpr)
+	assert.True(t, ok)
+	column, ok := weightString.Expr.(*sqlparser.ColName)
+	assert.True(t, ok)
+	assert.Equal(t, "c0", column.Name.String())
+	assert.Equal(t, "dt", column.Qualifier.Name.String())
+
+	generated := &sqlparser.AliasedExpr{Expr: sqlparser.NewColNameWithQualifier("c0", sqlparser.NewTableName("dt"))}
+	rebound, ok = rebindDerivedUnionColumn(ctx, source, generated)
+	assert.True(t, ok)
+	assert.True(t, sqlparser.Equals.Expr(generated.Expr, rebound))
+}
+
 func TestHasDistinctBeforeRoute(t *testing.T) {
 	routeLocalDistinct := &Route{unaryOperator: newUnaryOp(&Union{distinct: true})}
 	assert.False(t, hasDistinctBeforeRoute(routeLocalDistinct), "MySQL applies a route-local UNION DISTINCT before its LIMIT")

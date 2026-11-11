@@ -379,7 +379,7 @@ func TestMemorySortResolvesUnknownCollationPerExecution(t *testing.T) {
 	assert.Equal(t, collations.Unknown, ms.OrderBy[0].Type.Collation())
 }
 
-func TestMemorySortDoesNotResolveUnknownCollationWhenWeightStringIsAvailable(t *testing.T) {
+func TestMemorySortResolvesUnknownCollationWhenWeightStringIsAvailable(t *testing.T) {
 	connectionCollation, ok := collations.MySQL8().LookupID("utf8mb4_0900_ai_ci")
 	require.True(t, ok)
 	fields := []*querypb.Field{
@@ -399,7 +399,30 @@ func TestMemorySortDoesNotResolveUnknownCollationWhenWeightStringIsAvailable(t *
 
 	result, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 	require.NoError(t, err)
-	utils.MustMatch(t, sqltypes.MakeTestResult(fields, "B|B", "a|a"), result)
+	utils.MustMatch(t, sqltypes.MakeTestResult(fields, "a|a", "B|B"), result)
+}
+
+func TestMemorySortUsesCombinedCollationInsteadOfArmWeightStrings(t *testing.T) {
+	collationID, ok := collations.MySQL8().LookupID("utf8mb4_0900_ai_ci")
+	require.True(t, ok)
+	fields := []*querypb.Field{
+		{Name: "name", Type: querypb.Type_VARCHAR, Charset: uint32(collationID)},
+		{Name: "weight", Type: querypb.Type_VARBINARY, Charset: collations.CollationBinaryID},
+	}
+	fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "é|é", "z|z")}}
+	ms := &MemorySort{
+		OrderBy: []evalengine.OrderByParams{{
+			Col:             0,
+			WeightStringCol: 1,
+			Type:            evalengine.NewType(sqltypes.Unknown, collations.Unknown),
+			CollationEnv:    collations.MySQL8(),
+		}},
+		Input: fp,
+	}
+
+	result, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	utils.MustMatch(t, sqltypes.MakeTestResult(fields, "é|é", "z|z"), result)
 }
 
 func TestMemorySortFallsBackToWeightStringForUnsupportedCollation(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/slice"
@@ -804,8 +805,12 @@ func unionOutputColumnCount(op Operator) (int, bool) {
 }
 
 func findDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []*sqlparser.AliasedExpr, col *sqlparser.AliasedExpr) int {
+	expr := col.Expr
+	if weightString, ok := expr.(*sqlparser.WeightStringFuncExpr); ok {
+		expr = weightString.Expr
+	}
 	for i, source := range sourceColumns {
-		if sqlparser.Equals.Expr(source.Expr, col.Expr) || ctx.SemTable.EqualsExprWithDeps(source.Expr, col.Expr) {
+		if sqlparser.Equals.Expr(source.Expr, expr) || ctx.SemTable.EqualsExprWithDeps(source.Expr, expr) {
 			return i
 		}
 	}
@@ -837,11 +842,11 @@ func findDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []*s
 }
 
 func rebindDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []*sqlparser.AliasedExpr, col *sqlparser.AliasedExpr) (sqlparser.Expr, bool) {
-	if refersToDerivedUnionOutput(col.Expr) {
-		return sqlparser.Clone(col.Expr), true
-	}
 	offset := findDerivedUnionColumn(ctx, sourceColumns, col)
 	if offset < 0 {
+		if refersToDerivedUnionOutput(col.Expr, len(sourceColumns)) {
+			return sqlparser.Clone(col.Expr), true
+		}
 		return nil, false
 	}
 	derivedCol := sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", offset), sqlparser.NewTableName("dt"))
@@ -853,7 +858,7 @@ func rebindDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []
 	return derivedCol, true
 }
 
-func refersToDerivedUnionOutput(expr sqlparser.Expr) bool {
+func refersToDerivedUnionOutput(expr sqlparser.Expr, outputColumnCount int) bool {
 	var column *sqlparser.ColName
 	switch expr := expr.(type) {
 	case *sqlparser.ColName:
@@ -865,7 +870,11 @@ func refersToDerivedUnionOutput(expr sqlparser.Expr) bool {
 		return false
 	}
 	name := column.Name.String()
-	return len(name) > 1 && name[0] == 'c'
+	if len(name) < 2 || name[0] != 'c' {
+		return false
+	}
+	index, err := strconv.Atoi(name[1:])
+	return err == nil && index >= 0 && index < outputColumnCount
 }
 
 func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
