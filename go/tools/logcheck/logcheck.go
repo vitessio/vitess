@@ -32,18 +32,19 @@ limitations under the License.
 //
 // Keys that can hold data include:
 //
-//   - error, reason, grpc_message, lock_contents, last_sql_error,
-//     last_io_error and partial_refresh_details
+//   - error, cause, parked_error, reason, grpc_message, lock_contents,
+//     last_sql_error, last_io_error and partial_refresh_details
 //   - query, queries, schema_diff, alter, where, select_table, filter,
 //     expression, schema, vschema, fields, field_event, request, result and
 //     throttler_config
 //   - last_pk, row, row_range, values, next_value, last_value, event,
 //     journal, task_result, transaction, message, packet, stage and panic
 //   - exec_cmd, args, process_name, stdout, stderr and error_log
-//   - settings, azblob_message, cached_value, migration_context,
+//   - config, settings, azblob_message, cached_value, migration_context,
 //     action_arg, workflow_params, workflow_details, vdiff_options,
 //     stats_value, old_column, new_column, old_columns and new_columns
 //   - tablet_info, primary_tablet_info and tablet_record
+//   - user and mysql_user
 package logcheck
 
 import (
