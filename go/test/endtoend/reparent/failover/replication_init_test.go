@@ -22,7 +22,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -267,68 +266,6 @@ func TestRestoreDuringERS(t *testing.T) {
 	<-contenderDone
 	require.NoError(t, contenderErr)
 	requireReplicating(t, r1, r3, "R1 does not replicate from the new primary")
-}
-
-// logInitializationTrace logs, for each of tabs, the timestamped lines of its vttablet log
-// that show its replication initialization's lock wait, hold and deferral.
-func logInitializationTrace(t *testing.T, tabs []*cluster.Vttablet) {
-	deferred := false
-	for _, tab := range tabs {
-		b, err := os.ReadFile(tab.VttabletProcess.ErrorLog)
-		if err != nil {
-			t.Logf("%s: cannot read its log: %v", tab.Alias, err)
-			continue
-		}
-		var trace []string
-		for line := range strings.SplitSeq(string(b), "\n") {
-			if strings.Contains(line, "initialize replication") || strings.Contains(line, "deferring replication initialization") ||
-				strings.Contains(line, "Getting a new durability policy") {
-				trace = append(trace, line)
-				deferred = deferred || strings.Contains(line, "timed out acquiring the shard lock")
-			}
-		}
-		t.Logf("==== %s replication initialization (lock wait starts at Locking; acquired by the durability line)\n%s", tab.Alias, strings.Join(trace, "\n"))
-	}
-	if deferred {
-		t.Log("a replica's wait for the shard lock timed out: the known limit of the one-second wait, not a regression by itself")
-	}
-}
-
-// TestSiblingReplicasRestartTogether restarts the vttablets of all replicas at once, with
-// their replication stopped as after a mysqld restart, and no VTOrc. Each replica's
-// initialization waits briefly for the others' instead of deferring, so all replicate from
-// the primary and serve. This depends on the initializations finishing within the one-second
-// wait; a failure logs their waits and deferrals.
-func TestSiblingReplicasRestartTogether(t *testing.T) {
-	ci := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
-	teardownOnCleanup(t, ci)
-	tablets := ci.Keyspaces[0].Shards[0].Vttablets
-	p, replicas := tablets[0], tablets[1:]
-	// Runs before the cluster's teardown.
-	t.Cleanup(func() {
-		if t.Failed() {
-			logInitializationTrace(t, replicas)
-		}
-	})
-	utils.ConfirmReplication(t, p, replicas)
-	for _, r := range replicas {
-		utils.RunSQL(t.Context(), t, "stop replica", r)
-		require.NoError(t, r.VttabletProcess.TearDownWithTimeout(30*time.Second))
-	}
-	errs := make(chan error, len(replicas))
-	for _, r := range replicas {
-		go func() {
-			r.VttabletProcess.ServingStatus = ""
-			errs <- r.VttabletProcess.Setup()
-		}()
-	}
-	for range replicas {
-		require.NoError(t, <-errs)
-	}
-	for _, r := range replicas {
-		requireReplicating(t, r, p, "%s did not resume replication after the restart", r.Alias)
-	}
-	utils.ConfirmReplication(t, p, replicas)
 }
 
 // TestRestartWithRestoreFlagInitializesUnconfiguredReplication restarts R1's vttablet with

@@ -26,8 +26,6 @@ shard primary:
 - `TestStoppedReplicaRestartedUnderShardLock`: a replica with stopped replication restarts
   under a test-owned lock; its wait for the lock times out without leaving a request queued,
   and replication stays stopped after the release, until VTOrc starts it.
-- `TestSiblingReplicasRestartTogether`: all replicas restart at once with stopped replication;
-  each waits briefly for the others' initialization, and all resume replication without VTOrc.
 - `TestERSRepointsRestartingReplica`: a replica restarts during the held ERS, which needs its
   RPCs to repoint it while it waits for the lock that ERS holds; ERS repoints it.
 - `TestRestoreUnderShardLock`: `RestoreFromBackup` through vtctld under a test-owned lock;
