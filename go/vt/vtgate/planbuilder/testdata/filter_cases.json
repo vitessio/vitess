@@ -9681,5 +9681,66 @@
     "query": "select count(distinct a.foo) from (music b join music c on b.id = c.id) right join user a on a.col = b.col and a.foo = b.foo where (a.foo = 1 or b.foo in (select col from user_extra))",
     "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
+  },
+  {
+    "comment": "A subquery fed by the wider match of a join that repeats rows plans a distinct aggregation in VTGate over the joined rows",
+    "query": "select count(distinct m.foo) from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.col = m.col where exists (select 1 from user_extra ue2 where ue2.user_id = m.user_id and ue2.col = u.foo)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct m.foo) from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.col = m.col where exists (select 1 from user_extra ue2 where ue2.user_id = m.user_id and ue2.col = u.foo)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_distinct(0|1) AS count(distinct m.foo)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|1) ASC",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinColumnIndexes": "R:0,R:1",
+                "JoinVars": {
+                  "u_col": 0,
+                  "u_foo": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col, u.foo from `user` as u, user_extra as ue where 1 != 1",
+                    "Query": "select u.col, u.foo from `user` as u, user_extra as ue where u.id = ue.user_id"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select m.foo, weight_string(m.foo) from music as m where 1 != 1",
+                    "Query": "select m.foo, weight_string(m.foo) from music as m where m.col = :u_col /* INT16 */ and exists (select 1 from user_extra as ue2 where ue2.user_id = m.user_id and ue2.col = :u_foo)"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
