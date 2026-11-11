@@ -16,7 +16,11 @@ limitations under the License.
 
 package evalengine
 
-import "vitess.io/vitess/go/mysql/collations/colldata"
+import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/sqltypes"
+)
 
 func (expr *Literal) constant() bool {
 	return true
@@ -138,7 +142,27 @@ func simplifyExpr(env *ExpressionEnv, e IR) (IR, error) {
 		if err != nil {
 			return nil, err
 		}
-		return evalToIR(simplified), nil
+		lit := evalToIR(simplified)
+		if l, ok := lit.(*Literal); ok && l.inner != nil {
+			// a folded literal's type comes from its value, which the
+			// interpreter computed without declared types. For pass-through
+			// constructs, convert the value to the declared representation and
+			// keep the declared SQL type (e.g. YEAR).
+			if ct, ok := foldedType(env, e); ok && sqltypes.IsNumber(ct.Type) {
+				if l.inner.SQLType() != ct.Type {
+					v, err := evalCoerce(l.inner, ct.Type, ct.Size, ct.Scale, collations.CollationBinaryID, env.now, env.sqlmode.AllowZeroDate())
+					if err != nil {
+						return nil, err
+					}
+					l = &Literal{inner: v}
+				}
+				if ct.SQL != 0 {
+					return &declaredLiteral{Literal: *l, sql: ct.SQL}, nil
+				}
+				return l, nil
+			}
+		}
+		return lit, nil
 	}
 	if err := e.simplify(env); err != nil {
 		return nil, err
@@ -163,4 +187,36 @@ func evalToIR(simplified eval) IR {
 		j.Resolve()
 	}
 	return &Literal{inner: simplified}
+}
+
+// foldedSQLType returns the declared type of a constant pass-through expression.
+func foldedType(env *ExpressionEnv, e IR) (ctype, bool) {
+	if !keepsSQLType(e) {
+		return ctype{}, false
+	}
+	comp := compiler{env: env.vc.Environment(), collation: env.collationEnv.DefaultConnectionCharset(), sqlmode: env.sqlmode}
+	ct, err := e.compile(&comp)
+	if err != nil {
+		return ctype{}, false
+	}
+	return declared(e, ct), true
+}
+
+// declaredLiteral is a folded constant that keeps the declared SQL type of the
+// expression it replaced (e.g. YEAR for YEAR('2023-05-06')).
+type declaredLiteral struct {
+	Literal
+	sql sqltypes.Type
+}
+
+func (l *declaredLiteral) IR() IR { return l }
+
+func (l *declaredLiteral) typeof(env *ExpressionEnv) (ctype, error) {
+	ct, err := l.Literal.typeof(env)
+	return ct.withSQL(l.sql), err
+}
+
+func (l *declaredLiteral) compile(c *compiler) (ctype, error) {
+	ct, err := l.Literal.compile(c)
+	return ct.withSQL(l.sql), err
 }

@@ -107,7 +107,7 @@ func (ct ctype) withSQL(sql sqltypes.Type) ctype {
 // (e.g. BIGINT for arithmetic on a TINYINT column).
 func keepsSQLType(expr IR) bool {
 	switch expr.(type) {
-	case *Column, *BindVariable, *CaseExpr, *builtinCoalesce, *builtinMultiComparison, *builtinYear:
+	case *Column, *BindVariable, *CaseExpr, *builtinCoalesce, *builtinMultiComparison, *builtinYear, *declaredLiteral:
 		return true
 	}
 	return false

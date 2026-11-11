@@ -231,6 +231,11 @@ func (ta *typeAggregation) result() sqltypes.Type {
 
 	if ta.year == ta.total {
 		return sqltypes.Year
+	} else if ta.year > 0 && ta.signed+ta.unsigned+ta.year == ta.total {
+		// Verified against MySQL 8.0 and 8.4: YEAR mixed only with integer
+		// types takes the type of the other integers (IF(1, year, tinyint)
+		// is TINYINT, IF(1, year, int unsigned) is INT UNSIGNED).
+		ta.total -= ta.year
 	} else if ta.year > 0 {
 		ta.signed += ta.year
 		if sqltypes.Int32 > ta.signedMax {

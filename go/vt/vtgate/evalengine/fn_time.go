@@ -1894,7 +1894,8 @@ func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	if yearType(env.currentVersion()) {
-		return newEvalYear(int64(d.dt.Date.Year())), nil
+		// YEAR is an unsigned integer; the YEAR SQL type is static metadata
+		return newEvalUint64(uint64(d.dt.Date.Year())), nil
 	}
 	return newEvalInt64(int64(d.dt.Date.Year())), nil
 }
@@ -1913,9 +1914,14 @@ func (call *builtinYear) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xD(1, true)
 	}
 
-	c.asm.Fn_YEAR(yearType(c.env.MySQLVersion()))
+	yt := yearType(c.env.MySQLVersion())
+	c.asm.Fn_YEAR(yt)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	ct := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}
+	if yt {
+		ct = ct.withSQL(sqltypes.Year)
+	}
+	return ct, nil
 }
 
 func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
