@@ -31,7 +31,16 @@ source build.env >/dev/null
 # Our own binaries first; ETCD_DIR may contain other (older) Vitess binaries.
 export PATH="$VTROOT/bin:$VT_MYSQL_ROOT/bin:${ETCD_DIR:-/home/user/vtlab/bin}:/usr/local/go/bin:/usr/local/bin:$PATH"
 
-CG=/sys/fs/cgroup/unified/chaos
+# The cgroup v2 hierarchy: /sys/fs/cgroup/unified with the hybrid v1/v2 layout, /sys/fs/cgroup on
+# a host that only runs v2 (netfault.go picks it the same way).
+if [ -f /sys/fs/cgroup/unified/cgroup.controllers ]; then
+  CG=/sys/fs/cgroup/unified/chaos
+elif [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+  CG=/sys/fs/cgroup/chaos
+else
+  echo "chaos: no cgroup v2 hierarchy under /sys/fs/cgroup/unified or /sys/fs/cgroup" >&2
+  exit 1
+fi
 RESULTS=${CHAOS_RESULTS_DIR:-/home/$RUN_USER/chaos-results}
 BIN=${CHAOS_TEST_BIN:-/home/$RUN_USER/e2e-bins/chaos.test}
 

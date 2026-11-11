@@ -126,6 +126,12 @@ type Chaos struct {
 func NewChaos(t *testing.T, name string, opts Options) *Chaos {
 	ok, cg := inHarnessCgroup()
 	if !ok {
+		// chaos_run.sh sets CHAOS_E2E and moves the test into the harness cgroup: under it, a
+		// cgroup that does not match (for example one made under the wrong mount point) fails
+		// the scenario instead of skipping it.
+		if os.Getenv("CHAOS_E2E") != "" {
+			t.Fatalf("chaos harness must run inside cgroup /%s/%s under %s (currently %q)", cgroupRelRoot, harnessGroup, cgroupV2Mount, cg)
+		}
 		t.Skipf("chaos harness must run inside cgroup /%s/%s (currently %q); use the chaos_run.sh wrapper", cgroupRelRoot, harnessGroup, cg)
 	}
 	c := &Chaos{t: t, realBins: map[string]string{}, Log: NewEventLog(name)}
