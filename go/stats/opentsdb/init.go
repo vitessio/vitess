@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"sort"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -58,7 +59,7 @@ func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 
 	stats.RegisterPushBackend("opentsdb", b)
 
-	servenv.HTTPHandleFunc("/debug/opentsdb", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/opentsdb", acl.Protect(acl.MONITORING, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		collector := b.collector()
 		collector.collectAll()
@@ -70,7 +71,7 @@ func InitWithoutServenv(prefix string) (stats.PushBackend, error) {
 		} else {
 			w.Write(b)
 		}
-	})
+	}))
 
 	return b, nil
 }

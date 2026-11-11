@@ -20,14 +20,15 @@ import (
 	"fmt"
 	"net/http"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
 )
 
 func init() {
 	OnInit(func() {
-		HTTPHandleFunc("/debug/flushlogs", func(w http.ResponseWriter, r *http.Request) {
+		HTTPHandleFunc("/debug/flushlogs", acl.Protect(acl.DEBUGGING, func(w http.ResponseWriter, r *http.Request) {
 			logutil.Flush()
 			fmt.Fprint(w, "flushed")
-		})
+		}))
 	})
 }

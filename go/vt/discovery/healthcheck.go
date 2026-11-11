@@ -52,6 +52,7 @@ import (
 	"github.com/google/safehtml/template/uncheckedconversions"
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
@@ -413,7 +414,7 @@ func NewHealthCheck(
 
 	hc.topoWatchers = topoWatchers
 	healthcheckOnce.Do(func() {
-		servenv.HTTPHandle("/debug/gateway", hc)
+		servenv.HTTPHandleFunc("/debug/gateway", acl.Protect(acl.DEBUGGING, hc.ServeHTTP))
 	})
 
 	// start the topo watches here

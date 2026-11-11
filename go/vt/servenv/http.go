@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/servenv/internal/mux"
 )
 
@@ -50,9 +51,9 @@ func HTTPRegisterProfile() {
 		return
 	}
 
-	HTTPHandleFunc("/debug/pprof/", pprof.Index)
-	HTTPHandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	HTTPHandleFunc("/debug/pprof/profile", pprof.Profile)
-	HTTPHandleFunc("/debug/pprof/symbol", pprof.Symbol)
-	HTTPHandleFunc("/debug/pprof/trace", pprof.Trace)
+	HTTPHandleFunc("/debug/pprof/", acl.Protect(acl.DEBUGGING, pprof.Index))
+	HTTPHandleFunc("/debug/pprof/cmdline", acl.Protect(acl.DEBUGGING, pprof.Cmdline))
+	HTTPHandleFunc("/debug/pprof/profile", acl.Protect(acl.DEBUGGING, pprof.Profile))
+	HTTPHandleFunc("/debug/pprof/symbol", acl.Protect(acl.DEBUGGING, pprof.Symbol))
+	HTTPHandleFunc("/debug/pprof/trace", acl.Protect(acl.DEBUGGING, pprof.Trace))
 }

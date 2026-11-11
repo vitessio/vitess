@@ -29,6 +29,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -75,7 +76,7 @@ func Init(namespace string) {
 	goInfoExt.WithLabelValues(runtime.Compiler, runtime.GOARCH, runtime.GOOS).Set(1)
 	prometheus.MustRegister(goInfoExt)
 
-	servenv.HTTPHandle("/metrics", promhttp.Handler())
+	servenv.HTTPHandleFunc("/metrics", acl.Protect(acl.MONITORING, promhttp.Handler().ServeHTTP))
 	be.namespace = namespace
 	stats.Register(be.publishPrometheusMetric)
 }

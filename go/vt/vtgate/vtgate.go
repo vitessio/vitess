@@ -576,9 +576,9 @@ func (vtg *VTGate) registerDebugHealthHandler() {
 }
 
 func (vtg *VTGate) registerDebugBalancerHandler() {
-	servenv.HTTPHandleFunc("/debug/balancer", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/debug/balancer", acl.Protect(acl.DEBUGGING, func(w http.ResponseWriter, r *http.Request) {
 		vtg.Gateway().DebugBalancerHandler(w, r)
-	})
+	}))
 }
 
 // IsHealthy returns nil if server is healthy.

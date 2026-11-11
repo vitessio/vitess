@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/acl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -251,7 +252,7 @@ func (tsv *TabletServer) AddStatusPart() {
 		return status
 	})
 
-	tsv.exporter.HandleFunc("/debug/status_details", func(w http.ResponseWriter, r *http.Request) {
+	tsv.exporter.HandleFunc("/debug/status_details", acl.Protect(acl.DEBUGGING, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		details := tsv.sm.AppendDetails(nil)
 		details = tsv.hs.AppendDetails(details)
@@ -263,7 +264,7 @@ func (tsv *TabletServer) AddStatusPart() {
 		buf := bytes.NewBuffer(nil)
 		json.HTMLEscape(buf, b)
 		w.Write(buf.Bytes())
-	})
+	}))
 }
 
 var (

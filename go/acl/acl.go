@@ -119,3 +119,15 @@ func SendError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusForbidden)
 	fmt.Fprintf(w, "Access denied: %v\n", err)
 }
+
+// Protect returns a handler that runs h only for requests
+// the current security policy grants role.
+func Protect(role string, h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := CheckAccessHTTP(r, role); err != nil {
+			SendError(w, err)
+			return
+		}
+		h(w, r)
+	}
+}

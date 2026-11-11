@@ -24,6 +24,7 @@ import (
 
 	"github.com/google/safehtml/template"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -52,9 +53,9 @@ var (
 )
 
 func init() {
-	servenv.HTTPHandleFunc("/throttlerz/", func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc("/throttlerz/", acl.Protect(acl.DEBUGGING, func(w http.ResponseWriter, r *http.Request) {
 		throttlerzHandler(w, r, GlobalManager)
-	})
+	}))
 }
 
 func throttlerzHandler(w http.ResponseWriter, r *http.Request, m *managerImpl) {

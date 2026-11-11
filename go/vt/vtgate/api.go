@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strings"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -42,7 +43,7 @@ func httpErrorf(w http.ResponseWriter, r *http.Request, format string, args ...a
 }
 
 func handleAPI(apiPath string, handlerFunc func(w http.ResponseWriter, r *http.Request) error) {
-	servenv.HTTPHandleFunc(apiPrefix+apiPath, func(w http.ResponseWriter, r *http.Request) {
+	servenv.HTTPHandleFunc(apiPrefix+apiPath, acl.Protect(acl.DEBUGGING, func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if x := recover(); x != nil {
 				httpErrorf(w, r, "uncaught panic: %v", x)
@@ -51,7 +52,7 @@ func handleAPI(apiPath string, handlerFunc func(w http.ResponseWriter, r *http.R
 		if err := handlerFunc(w, r); err != nil {
 			httpErrorf(w, r, "%v", err)
 		}
-	})
+	}))
 }
 
 func handleCollection(collection string, getFunc func(*http.Request) (any, error)) {
