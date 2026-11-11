@@ -1594,6 +1594,13 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 		log.Warn("cannot start replication during initialization: primary in shard record still points to this tablet.")
 		return "", nil
 	}
+	// Fence a former primary before anything that can fail, as a deferral
+	// does: the fence releases a commit waiting for acknowledgements, which
+	// the errant GTID checks below then see, and with source-side semi-sync
+	// on, the applier's commit can itself wait until the fence disables it.
+	if _, err := tm.fenceFormerPrimary(ctx); err != nil {
+		return "", err
+	}
 	currentPrimary, err := tm.TopoServer.GetTablet(ctx, si.PrimaryAlias)
 	if err != nil {
 		return "", vterrors.Wrapf(err, "cannot read primary tablet %v", si.PrimaryAlias)
@@ -1608,10 +1615,6 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 	// Set primary and start replication.
 	if currentPrimary.MysqlHostname == "" {
 		log.Warn("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
-		// A former primary still stops accepting writes.
-		if _, err := tm.fenceFormerPrimary(ctx); err != nil {
-			return "", err
-		}
 		return "", nil
 	}
 
@@ -1619,14 +1622,8 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 		return "", err
 	}
 
-	// Check again once nothing else can commit: the fence waits for a
-	// former primary's commits, and STOP REPLICA for the applier's
-	// transaction in progress. Fence first, because with source-side
-	// semi-sync on, the applier's commit can itself wait for
-	// acknowledgements until the fence disables it.
-	if _, err := tm.fenceFormerPrimary(ctx); err != nil {
-		return "", err
-	}
+	// Check again once nothing else can commit: STOP REPLICA waits for the
+	// applier's transaction in progress.
 	if err := tm.MysqlDaemon.StopReplication(ctx, tm.hookExtraEnv()); err != nil {
 		return "", vterrors.Wrap(err, "failed to stop replication")
 	}

@@ -672,8 +672,8 @@ func TestFormerPrimaryIsFencedBeforeReplicating(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tm, md := newFormerPrimaryTM(t, tc.commitGTID)
 			if tc.commitGTID != "" {
-				// The final check fails after the fence and the stop.
-				md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+				// The first check, after the fence, fails.
+				md.ExpectedExecuteSuperQueryList = nil
 			}
 
 			_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
@@ -681,11 +681,48 @@ func TestFormerPrimaryIsFencedBeforeReplicating(t *testing.T) {
 			assert.False(t, md.SemiSyncPrimaryEnabled)
 			require.NoError(t, md.CheckSuperQueryList())
 			if tc.commitGTID != "" {
-				require.ErrorContains(t, err, "Errant GTID detected", "a commit released after the first check must be validated")
+				require.ErrorContains(t, err, "Errant GTID detected", "a commit that the fence releases must be validated")
 				return
 			}
 			require.NoError(t, err)
 			assert.True(t, md.Replicating)
+		})
+	}
+}
+
+// TestFormerPrimaryIsFencedWhenInitializationFails covers a former primary
+// whose initialization fails before replicating: it must still release the
+// waiting commit and reject writes, as a deferral does, and leave replication
+// unchanged.
+func TestFormerPrimaryIsFencedWhenInitializationFails(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(*TabletManager, *blockedCommitDaemon)
+		err   string
+	}{
+		{
+			name: "primary does not answer",
+			setup: func(tm *TabletManager, _ *blockedCommitDaemon) {
+				tm.tmc = &failingPrimaryStatusClient{TabletManagerClient: tm.tmc, failing: &topodatapb.TabletAlias{Cell: "cell1", Uid: 2}}
+			},
+			err: "primary status unavailable",
+		},
+		{
+			name:  "errant GTID already visible",
+			setup: func(_ *TabletManager, d *blockedCommitDaemon) { d.SetPrimaryPositionLocked(d.committed) },
+			err:   "Errant GTID detected",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tm, md := newFormerPrimaryTM(t, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
+			md.ExpectedExecuteSuperQueryList = nil
+			tc.setup(tm, md)
+
+			_, err := tm.initializeReplication(t.Context(), topodatapb.TabletType_REPLICA)
+			require.ErrorContains(t, err, tc.err)
+			assert.False(t, md.SemiSyncPrimaryEnabled, "the waiting commit must be released")
+			assert.True(t, md.SuperReadOnly.Load(), "a former primary must not accept writes")
+			require.NoError(t, md.CheckSuperQueryList(), "replication must not change")
 		})
 	}
 }
@@ -702,8 +739,9 @@ func TestFailedFenceIsRepeatedByTheNextAttempt(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tm, md := newFormerPrimaryTM(t, ",8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1")
-			// Only the second attempt, whose fence succeeds, stops replication.
-			md.ExpectedExecuteSuperQueryList = []string{"STOP REPLICA"}
+			// Neither attempt changes replication: the second one's fence
+			// succeeds and its first check finds the released commit.
+			md.ExpectedExecuteSuperQueryList = nil
 			tc.setup(md)
 
 			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
