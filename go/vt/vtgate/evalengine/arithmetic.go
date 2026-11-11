@@ -564,16 +564,14 @@ func mathIntDiv_iu(v1 *evalInt64, v2 *evalUint64) (eval, error) {
 
 func mathIntDiv_iu0(v1 int64, v2 uint64) (uint64, error) {
 	if v1 < 0 {
-		if v2 >= math.MaxInt64 {
-			// We know here that v2 is always so large the result
-			// must be 0.
+		// The quotient is <= 0, so it only fits in BIGINT UNSIGNED when it
+		// truncates to 0, which happens exactly when |v1| < v2. Any larger
+		// magnitude yields a negative result that is out of range.
+		// uint64(-v1) is |v1| even when v1 == math.MinInt64.
+		if uint64(-v1) < v2 {
 			return 0, nil
 		}
-		result := v1 / int64(v2)
-		if result < 0 {
-			return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "DIV")
-		}
-		return uint64(result), nil
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "DIV")
 	}
 	return uint64(v1) / v2, nil
 }
@@ -588,17 +586,14 @@ func mathIntDiv_ui(v1 *evalUint64, v2 *evalInt64) (eval, error) {
 
 func mathIntDiv_ui0(v1 uint64, v2 int64) (uint64, error) {
 	if v2 < 0 {
-		if v1 >= math.MaxInt64 {
-			// We know that v1 is always large here and with v2, the result
-			// must be at least -1 so we can't store this in the available range.
-			return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "DIV")
+		// The quotient is <= 0, so it only fits in BIGINT UNSIGNED when it
+		// truncates to 0, which happens exactly when v1 < |v2|. Any larger
+		// magnitude yields a negative result that is out of range.
+		// uint64(-v2) is |v2| even when v2 == math.MinInt64.
+		if v1 < uint64(-v2) {
+			return 0, nil
 		}
-		// Safe to cast since we know it fits in int64 when we get here.
-		result := int64(v1) / v2
-		if result < 0 {
-			return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "DIV")
-		}
-		return uint64(result), nil
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "DIV")
 	}
 	return v1 / uint64(v2), nil
 }
