@@ -387,6 +387,9 @@ func (tw *timedWriter) Write(p []byte) (nbytes int, err error) {
 }
 
 func TestMain(m *testing.M) {
+	if os.Getenv("MYSQLSH_STUB") == "1" {
+		os.Exit(mysqlShellStubMain())
+	}
 	hack.DisableProtoBufRandomness()
 	code := m.Run()
 

@@ -25,6 +25,8 @@ import (
 	"log/slog"
 	"os"
 	"path"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -639,4 +641,286 @@ func TestMaskURIPassword(t *testing.T) {
 			assert.NotContains(t, got, "secret")
 		})
 	}
+}
+
+// shellLoadDecision is how MySQL Shell 8.0.43 util.loadDump treats the URL
+// Vitess passes it. A non-empty s3BucketName, osBucketName, or azureContainerName
+// selects that container and refuses a URL that has a scheme; any other string
+// is the object prefix, used literally. With no container option, an empty
+// scheme or file:// is a local directory. loadUsers runs that dump's account SQL.
+type shellLoadDecision struct {
+	prefix  string
+	local   bool
+	users   bool
+	refused bool
+}
+
+func shellLoadDecisionFromArgs(args []string) (shellLoadDecision, error) {
+	var execute string
+	for i, arg := range args {
+		if arg == "-e" && i+1 < len(args) {
+			execute = args[i+1]
+		}
+	}
+	location, options, err := parseLoadDump(execute)
+	if err != nil {
+		return shellLoadDecision{}, err
+	}
+	return decideShellLoad(location, options), nil
+}
+
+func parseLoadDump(execute string) (string, map[string]any, error) {
+	const prefix = "util.loadDump("
+	if !strings.HasPrefix(execute, prefix) || !strings.HasSuffix(execute, ")") {
+		return "", nil, fmt.Errorf("not a util.loadDump call: %q", execute)
+	}
+	body := execute[len(prefix) : len(execute)-1]
+	if len(body) == 0 || body[0] != '"' {
+		return "", nil, fmt.Errorf("loadDump location is not a quoted string: %q", body)
+	}
+	end := 1
+	for end < len(body) {
+		if body[end] == '\\' {
+			end += 2
+			continue
+		}
+		if body[end] == '"' {
+			break
+		}
+		end++
+	}
+	if end >= len(body) {
+		return "", nil, fmt.Errorf("unterminated loadDump location: %q", body)
+	}
+	location, err := strconv.Unquote(body[:end+1])
+	if err != nil {
+		return "", nil, err
+	}
+	rest := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(body[end+1:]), ","))
+	var options map[string]any
+	if err := json.Unmarshal([]byte(rest), &options); err != nil {
+		return "", nil, err
+	}
+	return location, options, nil
+}
+
+// mysqlShellStubMain is the mysqlsh stand-in. The test binary is re-executed
+// with MYSQLSH_STUB=1 so the exit status follows decideShellLoad.
+func mysqlShellStubMain() int {
+	if argsFile := os.Getenv("MYSQLSH_ARGS_FILE"); argsFile != "" {
+		_ = os.WriteFile(argsFile, []byte(strings.Join(os.Args[1:], "\n")+"\n"), 0o600)
+	}
+	decision, err := shellLoadDecisionFromArgs(os.Args[1:])
+	if err != nil || decision.refused {
+		return 1
+	}
+	return 0
+}
+
+func decideShellLoad(location string, options map[string]any) shellLoadDecision {
+	bucket := false
+	for _, key := range []string{"s3BucketName", "osBucketName", "azureContainerName"} {
+		if value, ok := options[key].(string); ok && value != "" {
+			bucket = true
+		}
+	}
+	users, _ := options["loadUsers"].(bool)
+	scheme := ""
+	if i := strings.Index(location, "://"); i > 0 {
+		scheme = location[:i]
+	}
+	if bucket {
+		if scheme != "" {
+			return shellLoadDecision{refused: true}
+		}
+		return shellLoadDecision{prefix: location, users: users}
+	}
+	if scheme == "" || strings.EqualFold(scheme, "file") {
+		return shellLoadDecision{prefix: location, local: true, users: users}
+	}
+	return shellLoadDecision{refused: true}
+}
+
+// TestMySQLShellRestoreManifestLocation checks that an object-storage restore
+// refuses a MANIFEST BackupLocation that is not under --mysql-shell-backup-location
+// before it creates the restore state file, issues cleanup SQL, or starts mysqlsh.
+// A location under that root is the one mysqlsh loads, including when a later
+// read of the same MANIFEST returns a different location. Load options come from
+// --mysql-shell-load-flags, not from the manifest Params field.
+func TestMySQLShellRestoreManifestLocation(t *testing.T) {
+	const backupRoot = "vitess/shell-backups"
+	const allowedLocation = backupRoot + "/ks/backup-1"
+	// Params is stored in the manifest and must not affect the load.
+	const manifestParams = `{"loadUsers":false,"s3BucketName":"attacker-bucket","updateGtidSet":"off","skipBinlog":false,"progressFile":"/tmp/mysqlsh-progress"}`
+
+	originalFlags, originalLocation, originalLoadFlags := mysqlShellFlags, mysqlShellBackupLocation, mysqlShellLoadFlags
+	t.Cleanup(func() {
+		mysqlShellFlags, mysqlShellBackupLocation, mysqlShellLoadFlags = originalFlags, originalLocation, originalLoadFlags
+	})
+	mysqlShellFlags = "--defaults-file=/dev/null --js -h localhost"
+	mysqlShellBackupLocation = backupRoot
+
+	loadFlags := func(option, container string) string {
+		return fmt.Sprintf(`{"threads":4,"loadUsers":true,"updateGtidSet":"replace","skipBinlog":true,"progressFile":"","%s":%q}`, option, container)
+	}
+
+	type observation struct {
+		err           error
+		argv          []string
+		fetches       []string
+		executed      int
+		stateExists   bool
+		sentinel      string
+		manifestReads int
+	}
+
+	run := func(t *testing.T, flags, first, second string) observation {
+		t.Helper()
+		mysqlShellLoadFlags = flags
+
+		bin := t.TempDir()
+		argsFile := filepath.Join(t.TempDir(), "mysqlsh-args")
+		testBin, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		generateTestFile(t, filepath.Join(bin, "mysqlsh"), fmt.Sprintf("#!/bin/bash\nexport MYSQLSH_STUB=1\nexport MYSQLSH_ARGS_FILE=%q\nexec %q \"$@\"\n", argsFile, testBin))
+		t.Setenv("PATH", bin)
+
+		tabletDir := t.TempDir()
+		sentinel := filepath.Join(tabletDir, "sentinel")
+		require.NoError(t, os.WriteFile(sentinel, []byte("keep"), 0o600))
+		stateFile := filepath.Join(tabletDir, RestoreState)
+
+		var fetched []string
+		fakedb := fakesqldb.New(t)
+		t.Cleanup(fakedb.Close)
+		mysqld := NewFakeMysqlDaemon(fakedb)
+		t.Cleanup(mysqld.Close)
+		mysqld.FetchSuperQueryCallback = func(query string) (*sqltypes.Result, error) {
+			fetched = append(fetched, query)
+			switch query {
+			case "SHOW DATABASES":
+				return &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewVarChar("vt_app")}}}, nil
+			case "SELECT user()":
+				return &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewVarChar("vitess@localhost")}}}, nil
+			case "SELECT user, host FROM mysql.user":
+				return &sqltypes.Result{Rows: [][]sqltypes.Value{
+					{sqltypes.NewVarChar("vitess"), sqltypes.NewVarChar("localhost")},
+					{sqltypes.NewVarChar("app"), sqltypes.NewVarChar("%")},
+				}}, nil
+			default:
+				return nil, fmt.Errorf("unexpected query: %s", query)
+			}
+		}
+		mysqld.ExpectedExecuteSuperQueryList = []string{
+			"DROP DATABASE IF EXISTS `vt_app`",
+			"DROP USER 'app'@'%'",
+			"FAKE RESET ALL REPLICATION",
+			"SET GLOBAL LOCAL_INFILE=1",
+			"SET GLOBAL LOCAL_INFILE=0",
+		}
+
+		reads := 0
+		handle := &FakeBackupHandle{ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			reads++
+			location := first
+			if reads > 1 {
+				location = second
+			}
+			raw, err := json.Marshal(MySQLShellBackupManifest{
+				BackupManifest: BackupManifest{BackupMethod: mysqlShellBackupEngineName},
+				BackupLocation: location,
+				Params:         manifestParams,
+			})
+			if err != nil {
+				return nil, err
+			}
+			return io.NopCloser(bytes.NewReader(raw)), nil
+		}}
+
+		_, err = (&MySQLShellBackupEngine{}).ExecuteRestore(t.Context(), RestoreParams{
+			Cnf:    &Mycnf{DataDir: filepath.Join(tabletDir, "data")},
+			Logger: logutil.NewMemoryLogger(),
+			Mysqld: mysqld,
+		}, handle)
+
+		argvText, readErr := os.ReadFile(argsFile)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			t.Fatal(readErr)
+		}
+		var argv []string
+		if readErr == nil {
+			argv = strings.Split(strings.TrimSuffix(string(argvText), "\n"), "\n")
+		}
+		_, statErr := os.Stat(stateFile)
+		sentinelText, sentinelErr := os.ReadFile(sentinel)
+		require.NoError(t, sentinelErr)
+		return observation{
+			err:           err,
+			argv:          argv,
+			fetches:       fetched,
+			executed:      mysqld.ExpectedExecuteSuperQueryCurrent,
+			stateExists:   statErr == nil,
+			sentinel:      string(sentinelText),
+			manifestReads: len(handle.ReadFileCalls),
+		}
+	}
+
+	outside := []struct {
+		name     string
+		option   string
+		location string
+	}{
+		{name: "s3 foreign prefix", option: "s3BucketName", location: "attacker/dump"},
+		{name: "s3 absolute path", option: "s3BucketName", location: "/tmp/attacker-mysqlsh-dump"},
+		{name: "s3 scheme url", option: "s3BucketName", location: "https://attacker.example/dump"},
+		{name: "s3 prefix boundary", option: "s3BucketName", location: backupRoot + "-evil/dump"},
+		{name: "s3 dotdot", option: "s3BucketName", location: backupRoot + "/../../attacker/dump"},
+		{name: "oci foreign prefix", option: "osBucketName", location: "attacker/dump"},
+		{name: "azure foreign prefix", option: "azureContainerName", location: "attacker/dump"},
+	}
+	for _, tc := range outside {
+		t.Run(tc.name, func(t *testing.T) {
+			got := run(t, loadFlags(tc.option, "vitess-bucket"), tc.location, "attacker/second-read")
+			if len(got.argv) > 0 {
+				decision, decErr := shellLoadDecisionFromArgs(got.argv)
+				require.NoError(t, decErr)
+				t.Errorf("mysqlsh was started for manifest location %q: prefix=%q local=%v users=%v refused=%v", tc.location, decision.prefix, decision.local, decision.users, decision.refused)
+			}
+			assert.Error(t, got.err)
+			assert.Empty(t, got.argv)
+			assert.False(t, got.stateExists, "restore state file was created")
+			assert.Empty(t, got.fetches, "cleanup queries: %q", got.fetches)
+			assert.Zero(t, got.executed)
+			assert.Equal(t, "keep", got.sentinel)
+			assert.Equal(t, 1, got.manifestReads)
+		})
+	}
+
+	t.Run("allowed prefix", func(t *testing.T) {
+		const second = "attacker/second-read"
+		flags := loadFlags("s3BucketName", "vitess-bucket")
+		got := run(t, flags, allowedLocation, second)
+		require.NoError(t, got.err)
+		require.Equal(t, 1, got.manifestReads)
+		decision, err := shellLoadDecisionFromArgs(got.argv)
+		require.NoError(t, err)
+		assert.Equal(t, allowedLocation, decision.prefix)
+		assert.True(t, decision.users)
+		assert.False(t, decision.local)
+		assert.False(t, decision.refused)
+		execute := ""
+		for i, arg := range got.argv {
+			if arg == "-e" && i+1 < len(got.argv) {
+				execute = got.argv[i+1]
+			}
+		}
+		assert.NotContains(t, execute, second)
+		assert.NotContains(t, execute, "attacker-bucket")
+		assert.NotContains(t, execute, `"loadUsers":false`)
+		assert.Contains(t, execute, `"loadUsers":true`)
+		require.Equal(t, 5, got.executed)
+		require.Equal(t, "keep", got.sentinel)
+	})
 }
