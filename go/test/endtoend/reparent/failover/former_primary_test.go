@@ -161,3 +161,58 @@ func TestFormerPrimaryFenceFailureFailsStartup(t *testing.T) {
 	requireOutOfRotation(t, p, 2*time.Second, "the former primary serves under the shard lock")
 	l.release(t)
 }
+
+// TestFormerPrimaryFencedBeforeErrantGTIDCheck restarts a former primary's vttablet with the
+// shard lock available, an errant GTID already executed, and a commit X waiting for semi-sync
+// acknowledgements. The locked initialization must fence it before its errant GTID check fails
+// startup: X is released, and the vttablet exits with the tablet rejecting writes and
+// replication unchanged.
+func TestFormerPrimaryFencedBeforeErrantGTIDCheck(t *testing.T) {
+	ci := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	teardownOnCleanup(t, ci)
+	p, r1 := formerPrimary(t, ci)
+
+	// Adding to gtid_purged makes a GTID errant without a commit that waits for acknowledgements.
+	utils.RunSQL(t.Context(), t, "set global gtid_purged = '+aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1'", p)
+	before := utils.RunSQL(t.Context(), t, "select @@global.gtid_executed", p).Rows[0][0].ToString()
+	conn, err := utils.GetMySQLConn(t.Context(), p)
+	require.NoError(t, err)
+	t.Cleanup(conn.Close)
+	const x = 7778
+	xDone := make(chan error, 1)
+	go func() {
+		_, err := conn.ExecuteFetch(utils.GetInsertQuery(x), 0, false)
+		xDone <- err
+	}()
+	require.Eventually(t, func() bool {
+		qr := utils.RunSQL(t.Context(), t, "select count(*) from information_schema.processlist where state like '%semi-sync%'", p)
+		n, err := qr.Rows[0][0].ToInt()
+		return err == nil && n > 0
+	}, 30*time.Second, 100*time.Millisecond, "X does not wait for acknowledgements")
+
+	vp := p.VttabletProcess
+	vp.ServingStatus = ""
+	require.NoError(t, os.Rename(vp.ErrorLog, vp.ErrorLog+".gen0"))
+	require.NoError(t, vp.Setup())
+	select {
+	case <-vp.Exited():
+	case <-time.After(90 * time.Second):
+		require.FailNow(t, "the vttablet did not exit on its errant GTID")
+	}
+	select {
+	case err := <-xDone:
+		require.NoError(t, err, "X was not released")
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "X was not released")
+	}
+	stderr, err := os.ReadFile(vp.ErrorLog)
+	require.NoError(t, err)
+	assert.Contains(t, string(stderr), "Errant GTID detected")
+	superReadOnly, sourceSemiSync := fenceState(t, p)
+	assert.Equal(t, "1", superReadOnly, "the former primary accepts writes")
+	assert.Equal(t, "0", sourceSemiSync)
+	assert.Empty(t, receiverState(t, p), "replication changed")
+	xGTID := utils.RunSQL(t.Context(), t, fmt.Sprintf("select gtid_subtract(@@global.gtid_executed, '%s')", before), p).Rows[0][0].ToString()
+	require.NotEmpty(t, xGTID)
+	assert.False(t, hasGTIDs(t, r1, utils.RunSQL(t.Context(), t, "select @@global.gtid_executed", r1).Rows[0][0].ToString(), xGTID), "X reached the new primary")
+}
