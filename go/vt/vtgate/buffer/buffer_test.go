@@ -859,7 +859,8 @@ func TestBufferingLogs(t *testing.T) {
 			}
 			close(stopped)
 		}()
-		require.NoError(t, waitForRequestsInFlight(b, 1))
+		sb := b.getOrCreateBuffer(keyspace, shard)
+		require.Eventually(t, func() bool { return sb.testGetSize() == 1 }, 30*time.Second, time.Millisecond)
 		record := logs.Record(t, "Starting buffering (a failover was detected by the seen error)")
 		assert.Equal(t, "INFO", record["level"])
 		assert.Equal(t, failoverErr.Error(), record["error"])
@@ -868,6 +869,6 @@ func TestBufferingLogs(t *testing.T) {
 		now = now.Add(1 * time.Second)
 		fail(b, newPrimary, keyspace, shard, now)
 		require.NoError(t, <-stopped)
-		require.NoError(t, waitForState(b, stateIdle))
+		require.Eventually(t, func() bool { return sb.testGetState() == stateIdle }, 30*time.Second, time.Millisecond)
 	})
 }
