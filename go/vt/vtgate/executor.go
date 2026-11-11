@@ -882,12 +882,19 @@ func (e *Executor) CloseSession(ctx context.Context, safeSession *econtext.SafeS
 	return e.txConn.ReleaseAll(ctx, safeSession)
 }
 
-func (e *Executor) SetVitessMetadata(ctx context.Context, name, value string) error {
-	// TODO(kalfonso): move to its own acl check and consolidate into an acl component that can handle multiple operations (vschema, metadata)
+// authorizeVitessMetadata checks the immediate caller against vschema-ddl-authorized-users.
+// TODO(kalfonso): consolidate into an acl component that can handle multiple operations (vschema, metadata)
+func authorizeVitessMetadata(ctx context.Context) error {
 	user := callerid.ImmediateCallerIDFromContext(ctx)
-	allowed := vschemaacl.Authorized(user)
-	if !allowed {
+	if !vschemaacl.Authorized(user) {
 		return vterrors.NewErrorf(vtrpcpb.Code_PERMISSION_DENIED, vterrors.AccessDeniedError, "User '%s' not authorized to perform vitess metadata operations", user.GetUsername())
+	}
+	return nil
+}
+
+func (e *Executor) SetVitessMetadata(ctx context.Context, name, value string) error {
+	if err := authorizeVitessMetadata(ctx); err != nil {
+		return err
 	}
 
 	ts, err := e.serv.GetTopoServer()
@@ -902,6 +909,10 @@ func (e *Executor) SetVitessMetadata(ctx context.Context, name, value string) er
 }
 
 func (e *Executor) ShowVitessMetadata(ctx context.Context, filter *sqlparser.ShowFilter) (*sqltypes.Result, error) {
+	if err := authorizeVitessMetadata(ctx); err != nil {
+		return nil, err
+	}
+
 	ts, err := e.serv.GetTopoServer()
 	if err != nil {
 		return nil, err

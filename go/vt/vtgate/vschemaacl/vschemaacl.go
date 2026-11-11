@@ -43,8 +43,10 @@ func NewAuthorizedDDLUsers(users string) *authorizedDDLUsers {
 		allowAll = true
 	default:
 		for user := range strings.SplitSeq(users, ",") {
-			user = strings.TrimSpace(user)
-			acl[user] = struct{}{}
+			// An empty entry would match callers that have no username.
+			if user = strings.TrimSpace(user); user != "" {
+				acl[user] = struct{}{}
+			}
 		}
 	}
 
