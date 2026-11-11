@@ -96,6 +96,10 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 			weightStrings = append(weightStrings, nil)
 			continue
 		}
+		if unionOrderingOutputIsKnownNumericCast(ctx, o.Source, offset) {
+			weightStrings = append(weightStrings, nil)
+			continue
+		}
 		if !ctx.NeedsWeightString(order.SimplifiedExpr) {
 			weightStrings = append(weightStrings, nil)
 			continue
@@ -112,6 +116,23 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		o.WOffset = append(o.WOffset, offset)
 	}
 	return nil
+}
+
+func unionOrderingOutputIsKnownNumericCast(ctx *plancontext.PlanningContext, op Operator, offset int) bool {
+	union, ok := op.(*Union)
+	if !ok || len(union.Sources) == 0 {
+		return false
+	}
+	for _, source := range union.Sources {
+		columns := source.GetColumns(ctx)
+		if offset >= len(columns) {
+			return false
+		}
+		if _, known := knownNumericCastType(columns[offset].Expr); !known {
+			return false
+		}
+	}
+	return true
 }
 
 func (o *Ordering) ShortDescription() string {

@@ -3444,7 +3444,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select id from `user` where 1 != 1",
-                        "Query": "select id from `user`"
+                        "Query": "select id from `user` limit :__upper_limit"
                       },
                       {
                         "OperatorType": "Route",
@@ -3454,7 +3454,7 @@
                           "Sharded": false
                         },
                         "FieldQuery": "select id from unsharded where 1 != 1",
-                        "Query": "select id from unsharded"
+                        "Query": "select id from unsharded limit :__upper_limit"
                       }
                     ]
                   }
@@ -3481,7 +3481,8 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "0 ASC",
+        "OrderBy": "(0|1) ASC",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -3493,8 +3494,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select 'All' as `name` from unsharded where 1 != 1",
-                "Query": "select 'All' as `name` from unsharded"
+                "FieldQuery": "select dt.c0 as `name`, weight_string(dt.c0) from (select 'All' as `name` from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as `name`, weight_string(dt.c0) from (select 'All' as `name` from unsharded) as dt(c0)"
               },
               {
                 "OperatorType": "Route",
@@ -3503,8 +3504,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select `name` from `user` where 1 != 1",
-                "Query": "select `name` from `user`"
+                "FieldQuery": "select dt.c0 as `name`, weight_string(dt.c0) from (select `name` from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as `name`, weight_string(dt.c0) from (select `name` from `user`) as dt(c0)"
               }
             ]
           }
@@ -3573,8 +3574,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select dt.c0 as id, dt.c0 as id from (select cast(id as signed) as id from ref where 1 != 1 union select cast(id as signed) from `user` where 1 != 1 union select cast(id as signed) from music where 1 != 1) as dt(c0) where 1 != 1) as dt(c0, c1) where 1 != 1",
-                    "Query": "select dt.c0 as id, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select dt.c0 as id, dt.c0 as id from (select cast(id as signed) as id from ref union select cast(id as signed) from `user` union select cast(id as signed) from music) as dt(c0) limit :__upper_limit) as dt(c0, c1)"
+                    "FieldQuery": "select dt.c0 as id, id, weight_string(dt.c0), weight_string(id) from (select cast(id as signed) as id from ref where 1 != 1 union select cast(id as signed) from `user` where 1 != 1 union select cast(id as signed) from music where 1 != 1) as dt(c0) where 1 != 1",
+                    "Query": "select dt.c0 as id, id, weight_string(dt.c0), weight_string(id) from (select cast(id as signed) as id from ref union select cast(id as signed) from `user` union select cast(id as signed) from music) as dt(c0)"
                   }
                 ]
               }

@@ -138,6 +138,26 @@ func (s *planTestSuite) TestReferenceUnionLookupMissUsesFallbackRoute() {
 	s.Require().True(lookup.SendTo.NoRoutesSpecialHandling)
 }
 
+func (s *planTestSuite) TestMixedUnionAllAndDistinctLimitWithoutSchemaTracking() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	for _, tableName := range []string{"user", "music"} {
+		vschema.Keyspaces["user"].Tables[tableName].Columns = nil
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	for _, query := range []string{
+		"select id from user union all select id from music union select id from user",
+		"select id from user union all select id from music union select id from user limit 5",
+		"select id from user union all select id from music union select id from user order by id limit 5",
+	} {
+		_, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+	}
+}
+
 func (s *planTestSuite) TestReferenceLeftJoinUnionKeepsReferenceInputSeparate() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
@@ -145,13 +165,30 @@ func (s *planTestSuite) TestReferenceLeftJoinUnionKeepsReferenceInputSeparate() 
 	s.Require().NoError(err)
 	s.addPKs(vschema, "user", []string{"user", "music"})
 
-	plan, err := TestBuilder("select id from (select r.id from ref r left join user u on 1 = 1 union all select id from music) as t", vw, vw.CurrentDb())
+	plan, err := TestBuilder("select id from (select r.id from ref r left join user u on u.id = r.id union all select id from music) as t", vw, vw.CurrentDb())
 	s.Require().NoError(err)
 	concatenate, ok := plan.Instructions.(*engine.Concatenate)
 	s.Require().True(ok, "reference-preserving LEFT JOIN must remain a separate UNION ALL input")
 	s.Require().Len(concatenate.Sources, 2)
 	_, ok = concatenate.Sources[0].(*engine.Join)
 	s.Require().True(ok, "LEFT JOIN input must not be merged into the scatter route")
+}
+
+func (s *planTestSuite) TestMergedDualLeftJoinUnionInputStaysSingleShard() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+
+	plan, err := TestBuilder("select t.title from (select 'x' as title from dual) as t left join user u on u.id = 1 union all select 'y' from music", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	concatenate, ok := plan.Instructions.(*engine.Concatenate)
+	s.Require().True(ok, "merged dual LEFT JOIN input must not widen a later UNION ALL to scatter")
+	s.Require().Len(concatenate.Sources, 2)
+	first, ok := concatenate.Sources[0].(*engine.Route)
+	s.Require().True(ok)
+	s.Require().Equal(engine.EqualUnique, first.Opcode)
 }
 
 func (s *planTestSuite) TestReferenceUnionProvenanceSurvivesMergedCTE() {
@@ -161,10 +198,10 @@ func (s *planTestSuite) TestReferenceUnionProvenanceSurvivesMergedCTE() {
 	s.Require().NoError(err)
 	s.addPKs(vschema, "user", []string{"user", "music"})
 
-	plan, err := TestBuilder("with cte as (select id from ref union all select id from user where id = 1) select id from cte union all select id from music", vw, vw.CurrentDb())
+	plan, err := TestBuilder("with recursive cte as (select ue.id, ue.foo from user u join user_extra ue on u.id = ue.user_id union all select sr.id, sr.foo from cte join main.source_of_ref sr on sr.foo = cte.foo join main.rerouted_ref rr on rr.bar = sr.bar) select id from cte union all select id from music", vw, vw.CurrentDb())
 	s.Require().NoError(err)
 	_, ok := plan.Instructions.(*engine.Concatenate)
-	s.Require().True(ok, "merged CTE with reference provenance must not widen a later UNION ALL to scatter")
+	s.Require().True(ok, "merged recursive CTE with reference provenance must remain separate from a later scatter UNION ALL")
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.

@@ -37,7 +37,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 
 	switch {
 	// We clone the right hand side and try and push all the join predicates that are solved entirely by that side.
-	// If a dual or reference is on the left side, and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single-shard routing.
+	// If a dual is on the left side, and it is a left join (all right joins are changed to left joins), then we can only merge if the right side is a single-shard routing.
 	case a == dual:
 		newRouting := rhsRoute.Routing.Clone()
 
@@ -62,22 +62,6 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 	case a == anyShard && b == anyShard && sameKeyspace:
 		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), jm.predicates, jm.joinType)
 		return jm.merge(ctx, lhsRoute, rhsRoute, newrouting)
-	case a == anyShard && sameKeyspace:
-		newRouting := rhsRoute.Routing.Clone()
-
-		rhsID := TableID(rhsRoute)
-		for _, predicate := range jm.predicates {
-			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(rhsID) {
-				newRouting = UpdateRoutingLogic(ctx, predicate, newRouting)
-			}
-		}
-
-		if !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
-			debugNoRewrite("apply join merge blocked: reference routing with non-inner join type %s and multi-shard routing %s", jm.joinType.ToString(), newRouting.OpCode().String())
-			return nil
-		}
-		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting)
-
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case b == anyShard && sameKeyspace:
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)

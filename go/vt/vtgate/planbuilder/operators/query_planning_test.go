@@ -265,16 +265,19 @@ func TestUpperLimitAcrossUnion(t *testing.T) {
 		assert.False(t, limit.Pushed)
 	})
 
-	t.Run("outer DISTINCT over UNION ALL keeps all arm rows", func(t *testing.T) {
-		limit := newLimit(newDistinct(&Union{}, nil, true), &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, true)
+	t.Run("ordered outer DISTINCT over UNION ALL needs ordering pushed with limit", func(t *testing.T) {
+		distinct := newDistinct(&Union{}, nil, true)
+		ordering := &Ordering{unaryOperator: newUnaryOp(distinct), Order: []OrderBy{{SimplifiedExpr: sqlparser.NewColName("id")}}}
+		limit := newLimit(ordering, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, true)
 		result, rewrite := setUpperLimit(nil, limit)
 		assert.Same(t, limit, result)
 		assert.Equal(t, NoRewrite, rewrite)
 		assert.False(t, limit.Pushed)
 	})
 
-	t.Run("UNION DISTINCT keeps all arm rows", func(t *testing.T) {
-		limit := newLimit(&Union{distinct: true}, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, false)
+	t.Run("ordered UNION DISTINCT keeps all arm rows without mapped ordering", func(t *testing.T) {
+		ordering := &Ordering{unaryOperator: newUnaryOp(&Union{distinct: true}), Order: []OrderBy{{SimplifiedExpr: sqlparser.NewColName("id")}}}
+		limit := newLimit(ordering, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, false)
 		result, rewrite := setUpperLimit(nil, limit)
 		assert.Same(t, limit, result)
 		assert.Equal(t, NoRewrite, rewrite)

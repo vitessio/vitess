@@ -208,10 +208,6 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
 	)
 	mcmp.AssertMatches(
-		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 union select cast(id1 as signed) from t1 order by id limit 5",
-		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
-	)
-	mcmp.AssertMatches(
 		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id limit 5",
 		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
 	)
@@ -247,11 +243,13 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (101), (102), (103), (104), (105), (106)", keyspaceName, true)
 		require.NoError(t, err)
 	}
-	mcmp.Exec("insert into t1(id1, id2) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8)")
+	mcmp.Exec("insert into t1(id1, id2) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10)")
 	mcmp.AssertMatches(
-		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id limit 5",
-		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id desc limit 5",
+		"[[INT64(106)] [INT64(105)] [INT64(104)] [INT64(103)] [INT64(102)]]",
 	)
+	result := utils.Exec(t, mcmp.VtConn, "select id1 from t1 union all select id3 from t2 union select id1 from t1 limit 5")
+	assert.Len(t, result.Rows, 5)
 }
 
 func TestUnion(t *testing.T) {

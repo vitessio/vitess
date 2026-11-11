@@ -258,28 +258,37 @@
     "skip_e2e": true
   },
   {
-    "comment": "ambiguous unqualified reference table can merge with other opcodes left to right and vindex value is in the plan",
+    "comment": "ambiguous unqualified reference table stays separate from a single-shard derived route",
     "query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
     "plan": {
-      "Type": "Passthrough",
+      "Type": "Join",
       "QueryType": "SELECT",
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "EqualUnique",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select ambiguous_ref_with_source.col from (select aa from `user` where 1 != 1) as `user`, ambiguous_ref_with_source where 1 != 1",
-        "Query": "select ambiguous_ref_with_source.col from (select aa from `user` where `user`.id = 1) as `user`, ambiguous_ref_with_source",
-        "Values": [
-          "1"
-        ],
-        "Vindex": "user_index"
+        "OperatorType": "Join",
+        "Variant": "Join",
+        "JoinColumnIndexes": "L:0",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {"Name": "main", "Sharded": false},
+            "FieldQuery": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source where 1 != 1",
+            "Query": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {"Name": "user", "Sharded": true},
+            "FieldQuery": "select 1 from (select aa from `user` where 1 != 1) as `user` where 1 != 1",
+            "Query": "select 1 from (select aa from `user` where `user`.id = 1) as `user`",
+            "Values": ["1"],
+            "Vindex": "user_index"
+          }
+        ]
       },
       "TablesUsed": [
-        "user.ambiguous_ref_with_source",
+        "main.ambiguous_ref_with_source",
         "user.user"
       ]
     },
