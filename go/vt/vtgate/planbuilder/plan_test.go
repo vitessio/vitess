@@ -259,7 +259,7 @@ func (s *planTestSuite) addPKs(vschema *vindexes.VSchema, ks string, tbls []stri
 
 // addDistinctKeys gives a sharded table a primary key and a unique key that are not vindexes, an unsharded table
 // single-column and composite keys, and a reference table a single-column key, to tell apart the keys that are unique
-// across shards from those that are not.
+// across shards from those that are not. The unique keys are NOT NULL columns, except nk, which can be NULL.
 func (s *planTestSuite) addDistinctKeys(vschema *vindexes.VSchema) {
 	s.addPKs(vschema, "user", []string{"user_extra", "ref", "pin_test"})
 	s.addPKs(vschema, "main", []string{"unsharded"})
@@ -268,6 +268,18 @@ func (s *planTestSuite) addDistinctKeys(vschema *vindexes.VSchema) {
 	s.Require().NoError(vschema.AddUniqueKey("user", "user", []sqlparser.Expr{sqlparser.NewColName("name")}))
 	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("foo")}))
 	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("col"), sqlparser.NewColName("bar")}))
+	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("nk")}))
+	s.addColumns(vschema, "user", "user_extra", false, "foo")
+	s.addColumns(vschema, "user", "user", false, "name")
+	s.addColumns(vschema, "main", "unsharded", false, "foo", "col", "bar")
+	s.addColumns(vschema, "main", "unsharded", true, "nk")
+}
+
+func (s *planTestSuite) addColumns(vschema *vindexes.VSchema, ks, tbl string, nullable bool, cols ...string) {
+	table := vschema.Keyspaces[ks].Tables[tbl]
+	for _, col := range cols {
+		table.Columns = append(table.Columns, vindexes.Column{Name: sqlparser.NewIdentifierCI(col), Nullable: nullable})
+	}
 }
 
 func (s *planTestSuite) addPKsProvided(vschema *vindexes.VSchema, ks string, tbls []string, pks []string) {

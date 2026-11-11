@@ -84,18 +84,19 @@ func createStraightJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTa
 
 func createLeftOuterJoin(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, lhs, rhs Operator) Operator {
 	// first we switch sides, so we always deal with left outer joins
-	switch join.Join {
+	joinType := join.Join
+	switch joinType {
 	case sqlparser.RightJoinType:
 		lhs, rhs = rhs, lhs
-		join.Join = sqlparser.LeftJoinType
+		joinType = sqlparser.LeftJoinType
 	case sqlparser.NaturalRightJoinType:
 		lhs, rhs = rhs, lhs
-		join.Join = sqlparser.NaturalLeftJoinType
+		joinType = sqlparser.NaturalLeftJoinType
 	}
 
 	joinOp := &Join{
 		binaryOperator: newBinaryOp(lhs, rhs),
-		JoinType:       join.Join,
+		JoinType:       joinType,
 	}
 
 	// mark the RHS as outer tables so we know which columns are nullable

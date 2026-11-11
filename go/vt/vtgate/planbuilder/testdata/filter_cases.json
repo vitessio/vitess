@@ -9153,5 +9153,11 @@
     "query": "select c.col, count(distinct a.id) from user a join music c on a.id = c.user_id join user b on c.col = b.id where exists (select 1 from user_extra ue9 where ue9.user_id = a.id and ue9.col = b.foo) group by c.col",
     "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
+  },
+  {
+    "comment": "The preserved side of a right join isn't the one that its ON clause fills with NULLs, so the ON clause doesn't make a.foo equal to b.foo in every row",
+    "query": "select count(distinct a.foo) from music b right join user a on a.col = b.col and a.foo = b.foo where (a.foo = 1 or b.foo in (select col from user_extra))",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
   }
 ]

@@ -792,13 +792,14 @@ func joinEqualities(ctx *plancontext.PlanningContext, nonNull []sqlparser.Expr) 
 			switch {
 			case te.Join.IsInner():
 				add(te.Condition.On, nil)
-			case te.Join == sqlparser.LeftJoinType:
-				right := tablesIn(ctx, te.RightExpr)
+			case te.Join == sqlparser.LeftJoinType || te.Join == sqlparser.RightJoinType:
+				preserved, nullSupplying := outerJoinSides(te)
+				right := tablesIn(ctx, nullSupplying)
 				if slices.ContainsFunc(nonNull, func(expr sqlparser.Expr) bool { return isColumnOf(ctx, expr, right) }) {
 					add(te.Condition.On, nil)
 					return
 				}
-				left := tablesIn(ctx, te.LeftExpr)
+				left := tablesIn(ctx, preserved)
 				var leftCols []*sqlparser.ColName
 				for _, col := range outsideSubqueryColumns(te.Condition.On) {
 					if isColumnOf(ctx, col, left) {
@@ -838,10 +839,12 @@ func columnsNeverNull(sel *sqlparser.Select) (cols []sqlparser.Expr) {
 	collect = func(te sqlparser.TableExpr) {
 		switch te := te.(type) {
 		case *sqlparser.JoinTableExpr:
-			collect(te.LeftExpr)
 			if !te.Join.IsInner() {
+				preserved, _ := outerJoinSides(te)
+				collect(preserved)
 				return
 			}
+			collect(te.LeftExpr)
 			collect(te.RightExpr)
 			if te.Condition != nil && te.Condition.On != nil {
 				add(te.Condition.On)
@@ -856,6 +859,15 @@ func columnsNeverNull(sel *sqlparser.Select) (cols []sqlparser.Expr) {
 		collect(te)
 	}
 	return cols
+}
+
+// outerJoinSides returns the side of an outer join whose rows all show up in the result, and the one that is filled
+// with NULLs where nothing matches.
+func outerJoinSides(join *sqlparser.JoinTableExpr) (preserved, nullSupplying sqlparser.TableExpr) {
+	if join.Join == sqlparser.RightJoinType || join.Join == sqlparser.NaturalRightJoinType {
+		return join.RightExpr, join.LeftExpr
+	}
+	return join.LeftExpr, join.RightExpr
 }
 
 func equalitiesIn(cond sqlparser.Expr) (equalities []*sqlparser.ComparisonExpr) {
@@ -1083,7 +1095,8 @@ func realVindexTable(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *vin
 	return ti.GetVindexTable()
 }
 
-// uniqueKeys returns the columns of the primary key and of each unique key of the table.
+// uniqueKeys returns the columns of the primary key and of each unique key of the table. MySQL allows many rows with
+// NULL in a unique key, so a unique key counts only when all its columns are known to be NOT NULL.
 func uniqueKeys(vt *vindexes.BaseTable) (keys [][]sqlparser.IdentifierCI) {
 	if len(vt.PrimaryKey) > 0 {
 		keys = append(keys, vt.PrimaryKey)
@@ -1095,11 +1108,16 @@ func uniqueKeys(vt *vindexes.BaseTable) (keys [][]sqlparser.IdentifierCI) {
 				key = append(key, c.Name)
 			}
 		}
-		if len(key) == len(uk) {
+		if len(key) == len(uk) && !slices.ContainsFunc(key, func(name sqlparser.IdentifierCI) bool { return mayBeNull(vt, name) }) {
 			keys = append(keys, key)
 		}
 	}
 	return keys
+}
+
+func mayBeNull(vt *vindexes.BaseTable, name sqlparser.IdentifierCI) bool {
+	i := slices.IndexFunc(vt.Columns, func(col vindexes.Column) bool { return col.Name.Equal(name) })
+	return i < 0 || vt.Columns[i].Nullable
 }
 
 // keyIsUniqueAcrossShards says if a key made of cols has one row in the whole keyspace. MySQL enforces a primary or
