@@ -537,6 +537,7 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 		assert.Equal(t, "INFO", record["level"])
 		assert.Contains(t, record["exec_cmd"], binary+" "+wantArgs)
 		assert.NotContains(t, logs.String(), secret)
+		assert.Contains(t, stream.String(), binary+" "+wantArgs)
 		assert.NotContains(t, stream.String(), secret)
 	}
 

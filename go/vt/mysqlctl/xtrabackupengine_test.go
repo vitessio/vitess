@@ -295,6 +295,7 @@ func TestExtractFilesLogOmitsXbstreamFlags(t *testing.T) {
 	assert.Equal(t, path.Join(xtrabackupEnginePath, xbstream), r["command"])
 	assert.Equal(t, []any{"-C", tempDir, "-xv", "<--xbstream-restore-flags>"}, r["args"])
 	assert.NotContains(t, logs.String(), secret)
+	assert.Contains(t, stream.String(), "<--xbstream-restore-flags>")
 	for _, event := range stream.Events {
 		assert.NotContains(t, event.Value, secret)
 	}
