@@ -72,10 +72,15 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	var cancel context.CancelFunc
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
+	gotFields := wantfields
 	handles := make([]*streamHandle, len(ms.Primitives))
 	for i, input := range ms.Primitives {
-		getFields := wantfields && (i == 0 || ms.ScatterErrorsAsWarnings)
-		handles[i] = runOneStream(ctx, vcursor, input, bindVars, getFields, ms.FetchLastInsertID)
+		handles[i] = runOneStream(ctx, vcursor, input, bindVars, gotFields, ms.FetchLastInsertID)
+		if !ms.ScatterErrorsAsWarnings {
+			// we only need the fields from the first input, unless we allow ScatterErrorsAsWarnings.
+			// in that case, we need to ask all the inputs for fields - we don't know which will return anything.
+			gotFields = false
+		}
 	}
 
 	merge := &evalengine.Merger{Compare: ms.OrderBy}
@@ -85,10 +90,8 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		if err != nil {
 			return err
 		}
-		if wantfields {
-			if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
-				return err
-			}
+		if err := callback(&sqltypes.Result{Fields: fields}); err != nil {
+			return err
 		}
 	}
 

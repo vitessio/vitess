@@ -20,9 +20,7 @@ import (
 	"slices"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/slice"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -89,13 +87,6 @@ func (o *Ordering) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		offset := o.Source.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
 		o.Offset = append(o.Offset, offset)
 
-		typ, found := ctx.TypeForExpr(order.SimplifiedExpr)
-		// A weight string cannot be appended below a mixed DISTINCT UNION when
-		// the output type is unknown. The runtime sorter resolves it from fields.
-		if hasDistinctUnion(o.Source) && (!found || typ.Type() == sqltypes.Unknown || typ.Collation() == collations.Unknown) {
-			weightStrings = append(weightStrings, nil)
-			continue
-		}
 		if unionOrderingOutputIsKnownNumericCast(ctx, o.Source, offset) {
 			weightStrings = append(weightStrings, nil)
 			continue

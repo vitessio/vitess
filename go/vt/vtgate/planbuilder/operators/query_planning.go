@@ -588,8 +588,12 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 		debugNoRewrite("limit push blocked: UNION requires all rows or ordering mapped to each arm")
 		return in, NoRewrite
 	}
-	if hasDistinctUnion(in.Source) {
-		debugNoRewrite("limit push blocked: DISTINCT needs all input rows before deduplication")
+	hasOrderingToPush := false
+	for _, order := range orderToPush {
+		hasOrderingToPush = hasOrderingToPush || len(order) > 0
+	}
+	if hasDistinctBeforeRoute(in.Source) && !hasOrderingToPush {
+		debugNoRewrite("limit push blocked: VTGate DISTINCT needs all input rows before deduplication")
 		return in, NoRewrite
 	}
 	in.Pushed = true
@@ -662,16 +666,9 @@ func findOrderingInSourceChain(ctx *plancontext.PlanningContext, op Operator) (m
 }
 
 func mapUnionArmOrdering(ctx *plancontext.PlanningContext, union *Union, order []OrderBy) (map[*Route][]OrderBy, bool) {
-	if union.distinct {
-		return nil, false
-	}
 	if len(order) == 0 {
 		return nil, true
 	}
-	if ctx == nil {
-		return nil, false
-	}
-
 	outputOffsets := make([]int, len(order))
 	for i, by := range order {
 		offset, ok := knownOutputOffset(ctx, union, by.SimplifiedExpr)
@@ -763,18 +760,33 @@ func routesForUnionArm(op Operator) []*Route {
 	return routes
 }
 
-func hasDistinctUnion(op Operator) bool {
+// hasDistinctBeforeRoute reports whether a DISTINCT operator in VTGate must
+// see all rows before the limit. DISTINCT inside a Route is executed by MySQL
+// before its route-local limit and does not need to block that limit.
+func hasDistinctBeforeRoute(op Operator) bool {
 	switch op := op.(type) {
+	case *Route:
+		return false
 	case *Distinct:
-		if containsUnionAll(op.Source) {
-			return true
-		}
+		return containsUnionAll(op.Source) || hasDistinctUnionOutsideRoute(op.Source)
 	case *Union:
 		if op.distinct {
 			return true
 		}
 	}
-	return slices.ContainsFunc(op.Inputs(), hasDistinctUnion)
+	return slices.ContainsFunc(op.Inputs(), hasDistinctBeforeRoute)
+}
+
+func hasDistinctUnionOutsideRoute(op Operator) bool {
+	switch op := op.(type) {
+	case *Route:
+		return false
+	case *Union:
+		if op.distinct {
+			return true
+		}
+	}
+	return slices.ContainsFunc(op.Inputs(), hasDistinctUnionOutsideRoute)
 }
 
 func containsUnionAll(op Operator) bool {

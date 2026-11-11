@@ -201,7 +201,7 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
 		require.NoError(t, err)
 	}
-	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2)")
+	mcmp.Exec("insert into t1(id1, id2, name) values (1, 1, 'a'), (2, 2, 'A')")
 
 	mcmp.AssertMatchesNoOrder(
 		"select id from ref union all select id1 from t1",
@@ -238,6 +238,23 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 	mcmp.AssertMatchesNoOrder(
 		"select r.id from ref r left join t1 u on u.id1 = r.id union all select id1 from t1",
 		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
+	)
+
+	// UNION ALL keeps the reference and sharded inputs on separate routes, so
+	// VTGate sorts their rows. Keep real table inputs so MySQL's own sort does
+	// not hide an incorrect field-collation fallback in VTGate.
+	utils.Exec(t, mcmp.MySQLConn, "update ref set name = 'B' where id = 100")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("update ref set name = 'B' where id = 100", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	mcmp.AssertMatches(
+		"select name from ref union all select name from t1 order by name",
+		"[[VARBINARY(\"A\")] [VARBINARY(\"B\")] [VARBINARY(\"a\")]]",
+	)
+	mcmp.AssertMatches(
+		"select name from ref union select name from t1 order by name",
+		"[[VARBINARY(\"A\")] [VARBINARY(\"B\")] [VARBINARY(\"a\")]]",
 	)
 
 	// The reference arm has more rows than the LIMIT, and its local first rows

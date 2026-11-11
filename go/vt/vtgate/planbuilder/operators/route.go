@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/key"
@@ -723,7 +724,7 @@ func wrapInDerivedProjection(
 	rebindDerivedColumns := hasUnionOutputCount && derivedColumnCount < len(unionColumns)
 	if rebindDerivedColumns {
 		for _, col := range unionColumns[derivedColumnCount:] {
-			if findDerivedUnionColumn(ctx, unionColumns[:derivedColumnCount], col) < 0 {
+			if _, ok := rebindDerivedUnionColumn(ctx, unionColumns[:derivedColumnCount], col); !ok {
 				rebindDerivedColumns = false
 				break
 			}
@@ -750,11 +751,15 @@ func wrapInDerivedProjection(
 	tbl := sqlparser.NewTableName("dt")
 	if rebindDerivedColumns {
 		for i, col := range unionColumns {
-			sourceOffset := i
-			if sourceOffset >= derivedColumnCount {
-				sourceOffset = findDerivedUnionColumn(ctx, unionColumns[:derivedColumnCount], col)
+			if i < derivedColumnCount {
+				derivedProj.Columns.(AliasedProjections)[i].EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", i), tbl)
+				continue
 			}
-			derivedProj.Columns.(AliasedProjections)[i].EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", sourceOffset), tbl)
+			rebound, ok := rebindDerivedUnionColumn(ctx, unionColumns[:derivedColumnCount], col)
+			if !ok {
+				panic(vterrors.VT13001("failed to rebind hidden UNION column through derived table"))
+			}
+			derivedProj.Columns.(AliasedProjections)[i].EvalExpr = rebound
 		}
 	}
 
@@ -804,7 +809,63 @@ func findDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []*s
 			return i
 		}
 	}
-	return -1
+	name := ""
+	switch expr := col.Expr.(type) {
+	case *sqlparser.ColName:
+		if expr.Qualifier.IsEmpty() {
+			name = expr.Name.String()
+		}
+	case *sqlparser.WeightStringFuncExpr:
+		if source, ok := expr.Expr.(*sqlparser.ColName); ok && source.Qualifier.IsEmpty() {
+			name = source.Name.String()
+		}
+	}
+	if name == "" {
+		return -1
+	}
+	match := -1
+	for i, source := range sourceColumns {
+		if !strings.EqualFold(source.ColumnName(), name) {
+			continue
+		}
+		if match >= 0 {
+			return -1
+		}
+		match = i
+	}
+	return match
+}
+
+func rebindDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []*sqlparser.AliasedExpr, col *sqlparser.AliasedExpr) (sqlparser.Expr, bool) {
+	if refersToDerivedUnionOutput(col.Expr) {
+		return sqlparser.Clone(col.Expr), true
+	}
+	offset := findDerivedUnionColumn(ctx, sourceColumns, col)
+	if offset < 0 {
+		return nil, false
+	}
+	derivedCol := sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", offset), sqlparser.NewTableName("dt"))
+	if weightString, ok := col.Expr.(*sqlparser.WeightStringFuncExpr); ok {
+		copy := sqlparser.Clone(weightString)
+		copy.Expr = derivedCol
+		return copy, true
+	}
+	return derivedCol, true
+}
+
+func refersToDerivedUnionOutput(expr sqlparser.Expr) bool {
+	var column *sqlparser.ColName
+	switch expr := expr.(type) {
+	case *sqlparser.ColName:
+		column = expr
+	case *sqlparser.WeightStringFuncExpr:
+		column, _ = expr.Expr.(*sqlparser.ColName)
+	}
+	if column == nil || !strings.EqualFold(column.Qualifier.Name.String(), "dt") {
+		return false
+	}
+	name := column.Name.String()
+	return len(name) > 1 && name[0] == 'c'
 }
 
 func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {

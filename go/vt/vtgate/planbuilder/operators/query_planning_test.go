@@ -22,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func TestMergeOffsetExpressions(t *testing.T) {
@@ -182,6 +184,42 @@ func TestMergeLimitExpressions(t *testing.T) {
 			assert.Equal(t, tt.expectedFailed, failed, "failed")
 		})
 	}
+}
+
+func TestRebindHiddenUnionWeightStringThroughDerivedOutput(t *testing.T) {
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	source := []*sqlparser.AliasedExpr{{
+		Expr: sqlparser.NewIntLiteral("1"),
+		As:   sqlparser.NewIdentifierCI("id"),
+	}}
+	hidden := &sqlparser.AliasedExpr{Expr: &sqlparser.WeightStringFuncExpr{
+		Expr: sqlparser.NewColName("id"),
+	}}
+
+	rebound, ok := rebindDerivedUnionColumn(ctx, source, hidden)
+	assert.True(t, ok)
+	weightString, ok := rebound.(*sqlparser.WeightStringFuncExpr)
+	assert.True(t, ok)
+	column, ok := weightString.Expr.(*sqlparser.ColName)
+	assert.True(t, ok)
+	assert.Equal(t, "c0", column.Name.String())
+	assert.Equal(t, "dt", column.Qualifier.Name.String())
+}
+
+func TestHasDistinctBeforeRoute(t *testing.T) {
+	routeLocalDistinct := &Route{unaryOperator: newUnaryOp(&Union{distinct: true})}
+	assert.False(t, hasDistinctBeforeRoute(routeLocalDistinct), "MySQL applies a route-local UNION DISTINCT before its LIMIT")
+
+	vtgateDistinct := &Distinct{unaryOperator: newUnaryOp(&Union{
+		Sources: []Operator{&Route{}, &Route{}},
+	})}
+	assert.True(t, hasDistinctBeforeRoute(vtgateDistinct), "VTGate DISTINCT over UNION ALL must see all rows")
+
+	globalUnionDistinct := &Distinct{unaryOperator: newUnaryOp(&Union{
+		Sources:  []Operator{&Route{}, &Route{}},
+		distinct: true,
+	})}
+	assert.True(t, hasDistinctBeforeRoute(globalUnionDistinct), "VTGate UNION DISTINCT must see all rows")
 }
 
 func TestTryPushDistinctWithWindow(t *testing.T) {

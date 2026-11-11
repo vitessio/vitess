@@ -62,6 +62,22 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 	case a == anyShard && b == anyShard && sameKeyspace:
 		newrouting := mergeAnyShardRoutings(ctx, routingA.(*AnyShardRouting), routingB.(*AnyShardRouting), jm.predicates, jm.joinType)
 		return jm.merge(ctx, lhsRoute, rhsRoute, newrouting)
+	// A reference route on the left can be joined into the right route. For
+	// outer joins, only do this when the right route is single-shard so the
+	// preserved reference rows are not repeated by every shard.
+	case a == anyShard && sameKeyspace:
+		newRouting := rhsRoute.Routing.Clone()
+		rhsID := TableID(rhsRoute)
+		for _, predicate := range jm.predicates {
+			if ctx.SemTable.DirectDeps(predicate).IsSolvedBy(rhsID) {
+				newRouting = UpdateRoutingLogic(ctx, predicate, newRouting)
+			}
+		}
+		if !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
+			debugNoRewrite("apply join merge blocked: %s routing with non-inner join type %s and multi-shard routing %s", a.String(), jm.joinType.ToString(), newRouting.OpCode().String())
+			return nil
+		}
+		return jm.merge(ctx, lhsRoute, rhsRoute, newRouting)
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case b == anyShard && sameKeyspace:
 		return jm.merge(ctx, lhsRoute, rhsRoute, routingA)
@@ -193,7 +209,6 @@ func getRoutesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute 
 	if refA, ok := routingA.(*AnyShardRouting); ok &&
 		!TableID(lhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
 		if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
-			altARoute = withSpecialUnionInput(altARoute)
 			return altARoute, rhsRoute, altARoute.Routing, routingB, true
 		}
 	}
@@ -201,7 +216,6 @@ func getRoutesOrAlternates(ctx *plancontext.PlanningContext, lhsRoute, rhsRoute 
 	if refB, ok := routingB.(*AnyShardRouting); ok &&
 		!TableID(rhsRoute).IsOverlapping(ctx.SemTable.DMLTargets) {
 		if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
-			altBRoute = withSpecialUnionInput(altBRoute)
 			return lhsRoute, altBRoute, routingA, altBRoute.Routing, true
 		}
 	}
@@ -303,10 +317,4 @@ func isOrdinaryShardedRoute(route *Route) bool {
 	}
 	_, ok := route.Routing.(*ShardedRouting)
 	return ok
-}
-
-func withSpecialUnionInput(route *Route) *Route {
-	copy := *route
-	copy.ContainsSpecialUnionInput = true
-	return &copy
 }
