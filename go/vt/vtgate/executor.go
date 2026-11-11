@@ -967,7 +967,7 @@ func (e *Executor) ShowShards(ctx context.Context, filter *sqlparser.ShowFilter,
 
 		if filter.Filter != nil {
 			// TODO build a query planner I guess? lol that should be fun
-			log.Info("SHOW VITESS_SHARDS where clause. Ignoring this (for now).", slog.String("filter", sqlparser.String(filter.Filter)))
+			log.Info("SHOW VITESS_SHARDS where clause. Ignoring this (for now).")
 		}
 
 		return keyspaceFilters, shardFilters
@@ -1051,7 +1051,7 @@ func (e *Executor) ShowTablets(filter *sqlparser.ShowFilter) (*sqltypes.Result, 
 		}
 
 		if filter.Filter != nil {
-			log.Info("SHOW VITESS_TABLETS where clause. Ignoring this (for now).", slog.String("filter", sqlparser.String(filter.Filter)))
+			log.Info("SHOW VITESS_TABLETS where clause. Ignoring this (for now).")
 		}
 
 		return filters

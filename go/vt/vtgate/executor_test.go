@@ -3873,34 +3873,29 @@ func TestExecutorShowShards(t *testing.T) {
 	}
 }
 
-// TestExecutorShowIgnoredWhereClause checks that the ignored where clause is
-// logged as SQL under filter, not in the message.
+// TestExecutorShowIgnoredWhereClause checks that the ignored where clause of
+// SHOW VITESS_SHARDS and SHOW VITESS_TABLETS stays out of the log.
 func TestExecutorShowIgnoredWhereClause(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 	executor, _, _, _, ctx := createExecutorEnv(t)
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
 
 	for _, tc := range []struct {
-		query, msg, filter string
+		query, msg string
 	}{{
-		query:  "show vitess_shards where keyspace = 'where-sentinel'",
-		msg:    "SHOW VITESS_SHARDS where clause. Ignoring this (for now).",
-		filter: "keyspace = 'where-sentinel'",
+		query: "show vitess_shards where keyspace = 'where-sentinel'",
+		msg:   "SHOW VITESS_SHARDS where clause. Ignoring this (for now).",
 	}, {
-		query:  "show vitess_tablets where hostname = 'where-sentinel'",
-		msg:    "SHOW VITESS_TABLETS where clause. Ignoring this (for now).",
-		filter: "hostname = 'where-sentinel'",
+		query: "show vitess_tablets where hostname = 'where-sentinel'",
+		msg:   "SHOW VITESS_TABLETS where clause. Ignoring this (for now).",
 	}} {
 		_, err := executorExecSession(ctx, executor, session, tc.query, nil)
 		require.NoError(t, err, tc.query)
 		record := logs.Record(t, tc.msg)
 		assert.Equal(t, "INFO", record["level"])
-		assert.Equal(t, tc.filter, record["filter"])
 	}
 
-	for _, record := range logs.Records(t) {
-		assert.NotContains(t, record["msg"], "sentinel")
-	}
+	assert.NotContains(t, logs.String(), "sentinel")
 	assert.NotContains(t, logs.String(), "0x")
 }
 
