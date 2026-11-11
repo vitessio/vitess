@@ -401,7 +401,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		return nil, nil
 	}
 
-	newExpr, varsBefore, varsAfterExact := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
+	newExpr, varsBefore, varsAfterExact, fedByWiderMatch := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
 	sqm := &subqueryRouteMerger{
 		outer:    outerRoute,
 		original: newExpr,
@@ -416,6 +416,11 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		return nil, nil
 	}
 
+	// main sends the columns that only the wider match feeds to the right side as they are, and MySQL rejects them with
+	// ERROR 1054. A distinct aggregation pushed through this join could be counted once for every row it repeats.
+	if fedByWiderMatch && hasDistinctAggregation(ctx.Statement) {
+		panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
+	}
 	if !inner.TopLevel {
 		newOp.Source = newFilter(newOp.Source, newExpr)
 	}
@@ -443,23 +448,24 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 // rewriteOriginalPushedToRHS rewrites the original expression to use the argument names instead of the column names
 // this is necessary because we are pushing the subquery into the RHS of the join, and we need to use the argument names
 // instead of the column names
-func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) (sqlparser.Expr, int, int) {
+func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) (sqlparser.Expr, int, int, bool) {
 	outerID := TableID(outer.LHS)
 	// Only a successful merge needs the variables that either pass adds. Otherwise the left
 	// side would select columns that nothing groups on, so the caller truncates ExtraLHSVars to
 	// the length returned first. The second length is the one after the exact match, whose
-	// variables are the ones that main leaves on the left side.
+	// variables are the ones that main leaves on the left side. The last result says if the wider
+	// match fed any column.
 	varsBefore := len(outer.ExtraLHSVars)
 	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
 		return ctx.SemTable.RecursiveDeps(col) == outerID
 	})
 	varsAfterExact := len(outer.ExtraLHSVars)
 	// Any column the LHS solves is fed from it, even when the LHS spans several tables.
-	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
+	rewritten := rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
 		deps := ctx.SemTable.RecursiveDeps(col)
 		return deps.NotEmpty() && deps.IsSolvedBy(outerID)
 	})
-	return expression, varsBefore, varsAfterExact
+	return rewritten, varsBefore, varsAfterExact, rewritten != expression
 }
 
 func rewriteColumnsFedFromLHS(

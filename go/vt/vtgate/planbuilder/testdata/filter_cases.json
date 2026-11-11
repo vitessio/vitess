@@ -8105,82 +8105,9 @@
     "skip_e2e": true
   },
   {
-    "comment": "A distinct aggregation of a primary key is grouped by the columns the filter above the join reads",
+    "comment": "Same for a distinct aggregation of a primary key with the predicate restored beside an EXISTS",
     "query": "select count(distinct a.id) from user a straight_join music b on a.col = b.col where a.foo = 1 or exists (select 1 from user_extra)",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "select count(distinct a.id) from user a straight_join music b on a.col = b.col where a.foo = 1 or exists (select 1 from user_extra)",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id)",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "a_col": 1
-            },
-            "Inputs": [
-              {
-                "OperatorType": "UncorrelatedSubquery",
-                "Variant": "PulloutExists",
-                "PulloutVars": [
-                  "__sq_has_values"
-                ],
-                "Inputs": [
-                  {
-                    "InputName": "SubQuery",
-                    "OperatorType": "Limit",
-                    "Count": "1",
-                    "Inputs": [
-                      {
-                        "OperatorType": "Route",
-                        "Variant": "Scatter",
-                        "Keyspace": {
-                          "Name": "user",
-                          "Sharded": true
-                        },
-                        "FieldQuery": "select 1 from user_extra where 1 != 1",
-                        "Query": "select 1 from user_extra limit 1"
-                      }
-                    ]
-                  },
-                  {
-                    "InputName": "Outer",
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select count(distinct a.id), a.col from `user` as a where 1 != 1 group by a.col",
-                    "Query": "select count(distinct a.id), a.col from `user` as a where a.foo = 1 or :__sq_has_values group by a.col"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from music as b where 1 != 1 group by .0",
-                "Query": "select 1 from music as b where b.col = :a_col /* INT16 */ group by .0"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.music",
-        "user.user",
-        "user.user_extra"
-      ]
-    },
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
   },
   {
@@ -8244,77 +8171,9 @@
     "skip_e2e": true
   },
   {
-    "comment": "A distinct aggregation of a primary key can be grouped by the columns an IN filter above a join reads",
+    "comment": "A distinct aggregation of a primary key is refused when a failed merge leaves a column that main selects without grouping on it",
     "query": "select count(distinct u.id) from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra)",
-    "plan": {
-      "Type": "Complex",
-      "QueryType": "SELECT",
-      "Original": "select count(distinct u.id) from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra)",
-      "Instructions": {
-        "OperatorType": "Aggregate",
-        "Variant": "Scalar",
-        "Aggregates": "sum_count_distinct(0) AS count(distinct u.id)",
-        "Inputs": [
-          {
-            "OperatorType": "Join",
-            "Variant": "Join",
-            "JoinColumnIndexes": "L:0",
-            "JoinVars": {
-              "u_col": 1
-            },
-            "Inputs": [
-              {
-                "OperatorType": "UncorrelatedSubquery",
-                "Variant": "PulloutIn",
-                "PulloutVars": [
-                  "__sq_has_values",
-                  "__sq1"
-                ],
-                "Inputs": [
-                  {
-                    "InputName": "SubQuery",
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select col from user_extra where 1 != 1",
-                    "Query": "select col from user_extra"
-                  },
-                  {
-                    "InputName": "Outer",
-                    "OperatorType": "Route",
-                    "Variant": "Scatter",
-                    "Keyspace": {
-                      "Name": "user",
-                      "Sharded": true
-                    },
-                    "FieldQuery": "select count(distinct u.id), u.col from `user` as u where 1 != 1 group by u.col",
-                    "Query": "select count(distinct u.id), u.col from `user` as u where :__sq_has_values and u.foo in ::__sq1 group by u.col"
-                  }
-                ]
-              },
-              {
-                "OperatorType": "Route",
-                "Variant": "Scatter",
-                "Keyspace": {
-                  "Name": "user",
-                  "Sharded": true
-                },
-                "FieldQuery": "select 1 from music as m where 1 != 1 group by .0",
-                "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ group by .0"
-              }
-            ]
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.music",
-        "user.user",
-        "user.user_extra"
-      ]
-    },
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
   },
   {
@@ -8609,5 +8468,898 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "A failed merge into the right side leaves a column that main selects without grouping on it, so a distinct aggregation on the other side of a later join is refused instead of counting once per repeated row",
+    "query": "select c.col, count(distinct b.user_id) from user a join user_extra c on a.col = c.col straight_join user_extra b on a.col = b.col where a.foo in (select col from user_extra) group by c.col",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Same for a distinct aggregation that is only in HAVING",
+    "query": "select u.col from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra) group by u.col having count(distinct u.id) > 1",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Grouping by a column of a table joined on its unique key splits no group, so the distinct aggregation plans as on main",
+    "query": "select count(distinct a.id) from user a straight_join user b on a.col = b.id where b.foo in (select col from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id) from user a straight_join user b on a.col = b.id where b.foo in (select col from user_extra)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from user_extra where 1 != 1",
+                "Query": "select col from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Filter",
+                "Predicate": ":__sq_has_values and b.foo in ::__sq1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0",
+                    "JoinVars": {
+                      "a_col": 1
+                    },
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(distinct a.id), a.col from `user` as a where 1 != 1 group by a.col",
+                        "Query": "select count(distinct a.id), a.col from `user` as a group by a.col"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select b.foo from `user` as b where 1 != 1 group by b.foo",
+                        "Query": "select b.foo from `user` as b where b.id = :a_col /* INT16 */ group by b.foo",
+                        "Values": [
+                          ":a_col"
+                        ],
+                        "Vindex": "user_index"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Grouping the left side by a column of a merged subquery is fine when the left side is grouped by its unique key",
+    "query": "select count(distinct c.id) from user a join music c on a.id = c.user_id join music b on a.id = b.id where b.foo in (select ue9.col from user_extra ue9 where ue9.user_id = b.id)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct c.id) from user a join music c on a.id = c.user_id join music b on a.id = b.id where b.foo in (select ue9.col from user_extra ue9 where ue9.user_id = b.id)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct c.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "b_foo": 1,
+              "b_id": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select b.id, b.foo from music as b where 1 != 1 group by b.id, b.foo",
+                "Query": "select b.id, b.foo from music as b group by b.id, b.foo"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct c.id) from `user` as a, music as c where 1 != 1 group by .0",
+                "Query": "select count(distinct c.id) from `user` as a, music as c where a.id = :b_id and a.id = c.user_id and :b_foo in (select ue9.col from user_extra as ue9 where ue9.user_id = :b_id) group by .0",
+                "Values": [
+                  ":b_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Grouping by a column of the table that a unique key reaches from the counted key splits no group, so a distinct aggregation over a three-table join with a NOT IN filter plans as on main",
+    "query": "select a.col, count(distinct c.id) from `user` a join music c on a.id = c.user_id join music b on a.id = b.id where a.foo not in (select col from user_extra) group by a.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select a.col, count(distinct c.id) from `user` a join music c on a.id = c.user_id join music b on a.id = b.id where a.foo not in (select col from user_extra) group by a.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(1) AS count(distinct c.id)",
+        "GroupBy": "0",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutNotIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from user_extra where 1 != 1",
+                "Query": "select col from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "SimpleProjection",
+                "Columns": "1,0,2",
+                "Inputs": [
+                  {
+                    "OperatorType": "Filter",
+                    "Predicate": "not :__sq_has_values or a.foo not in ::__sq1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "1 ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "R:0,R:1,R:2",
+                            "JoinVars": {
+                              "b_id": 0
+                            },
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select b.id from music as b where 1 != 1 group by b.id",
+                                "Query": "select b.id from music as b group by b.id"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select count(distinct c.id), a.col, a.foo from `user` as a, music as c where 1 != 1 group by a.col, a.foo",
+                                "Query": "select count(distinct c.id), a.col, a.foo from `user` as a, music as c where a.id = :b_id and a.id = c.user_id group by a.col, a.foo",
+                                "Values": [
+                                  ":b_id"
+                                ],
+                                "Vindex": "user_index"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Grouping by a column of a table whose composite key is fixed by the grouping and the counted column splits no group",
+    "query": "select a.id, count(distinct b.user_id) from `user` a left join music c on a.id = c.user_id join user_extra b on a.id = b.id where b.foo not in (select col from user_extra) group by a.id",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select a.id, count(distinct b.user_id) from `user` a left join music c on a.id = c.user_id join user_extra b on a.id = b.id where b.foo not in (select col from user_extra) group by a.id",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(1) AS count(distinct b.user_id)",
+        "GroupBy": "(0|3)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutNotIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from user_extra where 1 != 1",
+                "Query": "select col from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "SimpleProjection",
+                "Columns": "1,0,2,3",
+                "Inputs": [
+                  {
+                    "OperatorType": "Filter",
+                    "Predicate": "not :__sq_has_values or b.foo not in ::__sq1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "R:0,L:0,R:1,L:1",
+                        "JoinVars": {
+                          "a_id": 0
+                        },
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select a.id, weight_string(a.id) from `user` as a left join music as c on a.id = c.user_id where 1 != 1 group by a.id, weight_string(a.id)",
+                            "OrderBy": "(0|1) ASC",
+                            "Query": "select a.id, weight_string(a.id) from `user` as a left join music as c on a.id = c.user_id group by a.id, weight_string(a.id) order by a.id asc"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(distinct b.user_id), b.foo from user_extra as b where 1 != 1 group by b.foo",
+                            "Query": "select count(distinct b.user_id), b.foo from user_extra as b where b.id = :a_id group by b.foo"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "A column that a filter below the join compares to an argument has one value for every row, so the distinct aggregation plans as on main",
+    "query": "select b.col, count(distinct b.id) from `user` a join unsharded c on a.col = c.col join music b on a.id = b.id where a.foo in (select ue9.col from user_extra ue9 where ue9.user_id = a.id) group by b.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select b.col, count(distinct b.id) from `user` a join unsharded c on a.col = c.col join music b on a.id = b.id where a.foo in (select ue9.col from user_extra ue9 where ue9.user_id = a.id) group by b.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(1) AS count(distinct b.id)",
+        "GroupBy": "(0|2)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:1,L:0,L:3",
+            "JoinVars": {
+              "b_id": 2
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct b.id), b.col, b.id, weight_string(b.col) from music as b where 1 != 1 group by b.col, b.id, weight_string(b.col)",
+                "OrderBy": "(1|3) ASC",
+                "Query": "select count(distinct b.id), b.col, b.id, weight_string(b.col) from music as b group by b.col, b.id, weight_string(b.col) order by b.col asc"
+              },
+              {
+                "OperatorType": "Join",
+                "Variant": "Join",
+                "JoinVars": {
+                  "a_col": 0
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select a.col from `user` as a where 1 != 1 group by a.col",
+                    "Query": "select a.col from `user` as a where a.id = :b_id and a.foo in (select ue9.col from user_extra as ue9 where ue9.user_id = a.id) group by a.col",
+                    "Values": [
+                      ":b_id"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Unsharded",
+                    "Keyspace": {
+                      "Name": "main",
+                      "Sharded": false
+                    },
+                    "FieldQuery": "select 1 from unsharded as c where 1 != 1 group by .0",
+                    "Query": "select 1 from unsharded as c where c.col = :a_col /* INT16 */ group by .0"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "The ON clause of a left join doesn't hold for the rows that it fills with NULLs, so it doesn't fix the right side's column for a distinct aggregation of a left side column",
+    "query": "select a.foo, count(distinct a.foo) from user a left join music b on a.col = b.col and a.foo = b.foo where (a.foo = 1 or b.foo in (select col from user_extra)) group by a.foo",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "The ON clause of a left join holds in the rows where a counted column of its right side isn't NULL, so the distinct aggregation plans as on main",
+    "query": "select b.col, count(distinct c.id) from user a left join music c on a.id = c.user_id straight_join music b on a.id = b.id where b.foo not in (select col from user_extra) group by b.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select b.col, count(distinct c.id) from user a left join music c on a.id = c.user_id straight_join music b on a.id = b.id where b.foo not in (select col from user_extra) group by b.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(1) AS count(distinct c.id)",
+        "GroupBy": "(0|3)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutNotIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from user_extra where 1 != 1",
+                "Query": "select col from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "SimpleProjection",
+                "Columns": "1,0,2,3",
+                "Inputs": [
+                  {
+                    "OperatorType": "Filter",
+                    "Predicate": "not :__sq_has_values or b.foo not in ::__sq1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "(1|3) ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "Join",
+                            "JoinColumnIndexes": "L:0,R:0,R:1,R:2",
+                            "JoinVars": {
+                              "a_id": 1
+                            },
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select count(distinct c.id), a.id from `user` as a left join music as c on a.id = c.user_id where 1 != 1 group by a.id",
+                                "Query": "select count(distinct c.id), a.id from `user` as a left join music as c on a.id = c.user_id group by a.id"
+                              },
+                              {
+                                "OperatorType": "VindexLookup",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "Values": [
+                                  ":a_id"
+                                ],
+                                "Vindex": "music_user_map",
+                                "Inputs": [
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "IN",
+                                    "Keyspace": {
+                                      "Name": "user",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                                    "Values": [
+                                      "::name"
+                                    ],
+                                    "Vindex": "user_index"
+                                  },
+                                  {
+                                    "OperatorType": "Route",
+                                    "Variant": "ByDestination",
+                                    "Keyspace": {
+                                      "Name": "user",
+                                      "Sharded": true
+                                    },
+                                    "FieldQuery": "select b.col, b.foo, weight_string(b.col) from music as b where 1 != 1 group by b.col, b.foo, weight_string(b.col)",
+                                    "Query": "select b.col, b.foo, weight_string(b.col) from music as b where b.id = :a_id group by b.col, b.foo, weight_string(b.col)"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "Once the left side's columns in a left join's ON clause are known, the clause fixes the right side, so the distinct aggregation plans as on main",
+    "query": "select b.col, count(distinct a.id) from music a left join user b on a.col = b.id and a.foo = b.foo where b.foo in (select col from user_extra) group by b.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select b.col, count(distinct a.id) from music a left join user b on a.col = b.id and a.foo = b.foo where b.foo in (select col from user_extra) group by b.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(1) AS count(distinct a.id)",
+        "GroupBy": "0",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from user_extra where 1 != 1",
+                "Query": "select col from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "SimpleProjection",
+                "Columns": "1,0,2",
+                "Inputs": [
+                  {
+                    "OperatorType": "Filter",
+                    "Predicate": ":__sq_has_values and b.foo in ::__sq1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Sort",
+                        "Variant": "Memory",
+                        "OrderBy": "1 ASC",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "LeftJoin",
+                            "JoinColumnIndexes": "L:0,R:0,R:1",
+                            "JoinVars": {
+                              "a_col": 1,
+                              "a_foo": 2
+                            },
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select count(distinct a.id), a.col, a.foo from music as a where 1 != 1 group by a.col, a.foo",
+                                "Query": "select count(distinct a.id), a.col, a.foo from music as a group by a.col, a.foo"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select b.col, b.foo from `user` as b where 1 != 1 group by b.col, b.foo",
+                                "Query": "select b.col, b.foo from `user` as b where b.foo = :a_foo and b.id = :a_col group by b.col, b.foo",
+                                "Values": [
+                                  ":a_col"
+                                ],
+                                "Vindex": "user_index"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "An inner join on the right side of a left join keeps it from being NULL, so the left join's ON clause holds and the distinct aggregation plans as on main",
+    "query": "select a.col, count(distinct b.id) from music a left join user c on a.col = c.id and a.foo = c.foo join music b on c.id = b.user_id where (a.foo = 1 or b.foo in (select col from user_extra)) group by a.col",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select a.col, count(distinct b.id) from music a left join user c on a.col = c.id and a.foo = c.foo join music b on c.id = b.user_id where (a.foo = 1 or b.foo in (select col from user_extra)) group by a.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Ordered",
+        "Aggregates": "sum_count_distinct(1) AS count(distinct b.id)",
+        "GroupBy": "(0|4)",
+        "ResultColumns": 2,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from user_extra where 1 != 1",
+                "Query": "select col from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "SimpleProjection",
+                "Columns": "1,0,2,3,4",
+                "Inputs": [
+                  {
+                    "OperatorType": "Filter",
+                    "Predicate": "a.foo = 1 or :__sq_has_values and b.foo in ::__sq1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "R:0,L:0,L:1,R:1,L:3",
+                        "JoinVars": {
+                          "c_id": 2
+                        },
+                        "Inputs": [
+                          {
+                            "OperatorType": "Join",
+                            "Variant": "LeftJoin",
+                            "JoinColumnIndexes": "L:0,L:1,R:0,L:2",
+                            "JoinVars": {
+                              "a_col": 0,
+                              "a_foo": 1
+                            },
+                            "Inputs": [
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "Scatter",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select a.col, a.foo, weight_string(a.col) from music as a where 1 != 1 group by a.col, a.foo, weight_string(a.col)",
+                                "OrderBy": "(0|2) ASC",
+                                "Query": "select a.col, a.foo, weight_string(a.col) from music as a group by a.col, a.foo, weight_string(a.col) order by a.col asc"
+                              },
+                              {
+                                "OperatorType": "Route",
+                                "Variant": "EqualUnique",
+                                "Keyspace": {
+                                  "Name": "user",
+                                  "Sharded": true
+                                },
+                                "FieldQuery": "select c.id from `user` as c where 1 != 1 group by c.id",
+                                "Query": "select c.id from `user` as c where c.foo = :a_foo and c.id = :a_col group by c.id",
+                                "Values": [
+                                  ":a_col"
+                                ],
+                                "Vindex": "user_index"
+                              }
+                            ]
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "EqualUnique",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select count(distinct b.id), b.foo from music as b where 1 != 1 group by b.foo",
+                            "Query": "select count(distinct b.id), b.foo from music as b where b.user_id = :c_id group by b.foo",
+                            "Values": [
+                              ":c_id"
+                            ],
+                            "Vindex": "user_index"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "The columns that a join on the left side feeds to its own right side are grouped below it, so grouping by them splits no group and the distinct aggregation plans as on main",
+    "query": "select count(distinct c.id) from user a left join music c on a.col = c.id and a.foo = c.foo join music b on a.col = b.col where exists (select 1 from user_extra ue9 where ue9.user_id = b.id and ue9.col = a.foo)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct c.id) from user a left join music c on a.col = c.id and a.foo = c.foo join music b on a.col = b.col where exists (select 1 from user_extra ue9 where ue9.user_id = b.id and ue9.col = a.foo)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct c.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "L:0",
+            "JoinVars": {
+              "a_col": 1,
+              "a_foo": 2
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "R:0,L:0,L:1",
+                "JoinVars": {
+                  "a_col": 0,
+                  "a_foo": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select a.col, a.foo from `user` as a where 1 != 1 group by a.col, a.foo",
+                    "Query": "select a.col, a.foo from `user` as a group by a.col, a.foo"
+                  },
+                  {
+                    "OperatorType": "VindexLookup",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "Values": [
+                      ":a_col"
+                    ],
+                    "Vindex": "music_user_map",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "IN",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                        "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                        "Values": [
+                          "::name"
+                        ],
+                        "Vindex": "user_index"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "ByDestination",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(distinct c.id) from music as c where 1 != 1 group by .0",
+                        "Query": "select count(distinct c.id) from music as c where c.foo = :a_foo and c.id = :a_col /* INT16 */ group by .0"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "OperatorType": "SemiJoin",
+                "JoinVars": {
+                  "b_id": 0
+                },
+                "Inputs": [
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select b.id from music as b where 1 != 1 group by b.id",
+                    "Query": "select b.id from music as b where b.col = :a_col /* INT16 */ group by b.id"
+                  },
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue9 where 1 != 1",
+                    "Query": "select 1 from user_extra as ue9 where ue9.user_id = :b_id and ue9.col = :a_foo limit 1",
+                    "Values": [
+                      ":b_id"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]

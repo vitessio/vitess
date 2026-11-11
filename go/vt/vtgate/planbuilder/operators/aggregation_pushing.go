@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -140,23 +141,15 @@ func pushAggregationThroughSubquery(
 }
 
 // checkGroupingKeepsDistinct refuses to group by col when the aggregator has a distinct aggregation. Partial results are
-// summed per group, which is only right when no value of the distinct argument is in two groups. That holds when col is
-// already a grouping of the query, is one of the arguments, or is on the table of an argument that is a single-column
-// primary or unique key that is unique across shards: in an unsharded keyspace, on a reference table, or with a unique
-// vindex.
+// summed per group, which is only right when no value of the distinct argument is in two groups. That holds when the
+// groupings and the argument determine col.
 func checkGroupingKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Aggregator, col sqlparser.Expr) {
-	if slices.ContainsFunc(aggregator.Grouping, func(gb GroupBy) bool { return ctx.SemTable.EqualsExpr(gb.Inner, col) }) {
-		return
-	}
 	for _, aggr := range aggregator.Aggregations {
 		if !aggr.Distinct {
 			continue
 		}
-		keepsDistinct := slices.ContainsFunc(aggr.Func.GetArgs(), func(arg sqlparser.Expr) bool {
-			return ctx.SemTable.EqualsExpr(arg, col) ||
-				exprIsUniqueKey(ctx, arg) && ctx.SemTable.RecursiveDeps(arg) == ctx.SemTable.RecursiveDeps(col)
-		})
-		if !keepsDistinct {
+		args := aggr.Func.GetArgs()
+		if !isDetermined(ctx, append(groupingExprs(aggregator.Grouping), args...), args, col) {
 			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
 		}
 	}
@@ -503,6 +496,17 @@ func createJoinPusher(rootAggr *Aggregator, operator Operator) *joinPusher {
 }
 
 func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *ApplyJoin, lhs *joinPusher) {
+	// main selects the columns fed to the right side by a subquery without grouping on them, which MySQL rejects with
+	// ERROR 1055 unless the grouping determines them. Grouping on them, or leaving out those of a failed merge, would
+	// instead count a distinct aggregation anywhere in the query once for every row that a join repeats it for.
+	distinct := hasDistinctAggregation(ctx.Statement)
+	fixed := columnsFixedBelow(ctx, join.LHS)
+	refuseUngrouped := func(expr sqlparser.Expr) {
+		seeds := append(groupingExprs(lhs.pushed.Grouping), fixed...)
+		if distinct && !isDetermined(ctx, seeds, nil, expr) {
+			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
+		}
+	}
 	var bves []BindVarExpr
 	for _, pred := range join.JoinPredicates.columns {
 		bves = append(bves, pred.LHSExprs...)
@@ -523,7 +527,7 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 			continue
 		}
 		if i >= extraFrom {
-			checkGroupingKeepsDistinct(ctx, lhs.orig, bve.Expr)
+			refuseUngrouped(bve.Expr)
 		}
 
 		lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
@@ -533,19 +537,279 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 		})
 	}
 	for _, expr := range join.UnmergedLHSExprs {
-		if !isGroupedOrDetermined(ctx, lhs.pushed.Grouping, expr) {
-			checkGroupingKeepsDistinct(ctx, lhs.orig, expr)
-		}
+		refuseUngrouped(expr)
 	}
 }
 
-// isGroupedOrDetermined says if expr is one of the groupings or is on the table of a grouping that is a unique key,
-// where every group is a single row.
-func isGroupedOrDetermined(ctx *plancontext.PlanningContext, grouping []GroupBy, expr sqlparser.Expr) bool {
-	return slices.ContainsFunc(grouping, func(gb GroupBy) bool {
-		return ctx.SemTable.EqualsExpr(gb.Inner, expr) ||
-			exprIsUniqueKey(ctx, gb.Inner) && ctx.SemTable.RecursiveDeps(gb.Inner) == ctx.SemTable.RecursiveDeps(expr)
+// isDetermined says if the values of the seeds fix the value of expr in every row of the query where no column of
+// nonNull is NULL. A row is fixed by a unique key, or by all the columns of a composite one, and the equalities of the
+// query pass fixed values on to other columns.
+func isDetermined(ctx *plancontext.PlanningContext, seeds, nonNull []sqlparser.Expr, expr sqlparser.Expr) bool {
+	var cols []*sqlparser.ColName
+	var rows semantics.TableSet
+	isKnown := func(col *sqlparser.ColName) bool {
+		deps := ctx.SemTable.RecursiveDeps(col)
+		return deps.NotEmpty() && deps.IsSolvedBy(rows) ||
+			slices.ContainsFunc(cols, func(known *sqlparser.ColName) bool { return ctx.SemTable.EqualsExpr(known, col) })
+	}
+	learn := func(col *sqlparser.ColName) bool {
+		if isKnown(col) {
+			return false
+		}
+		cols = append(cols, col)
+		if exprIsUniqueKey(ctx, col) {
+			rows = rows.Merge(ctx.SemTable.RecursiveDeps(col))
+		}
+		return true
+	}
+	areKnown := func(e sqlparser.Expr) bool {
+		exprCols := outsideSubqueryColumns(e)
+		return len(exprCols) > 0 && !slices.ContainsFunc(exprCols, func(col *sqlparser.ColName) bool { return !isKnown(col) })
+	}
+	for _, seed := range seeds {
+		if col, isCol := seed.(*sqlparser.ColName); isCol {
+			learn(col)
+		}
+	}
+	equalities := joinEqualities(ctx, nonNull)
+	for grown := true; grown; {
+		grown = false
+		for _, eq := range equalities {
+			if slices.ContainsFunc(eq.needs, func(col *sqlparser.ColName) bool { return !isKnown(col) }) {
+				continue
+			}
+			cmp := eq.cmp
+			for _, pair := range [][2]sqlparser.Expr{{cmp.Left, cmp.Right}, {cmp.Right, cmp.Left}} {
+				if to, isCol := pair[1].(*sqlparser.ColName); isCol && areKnown(pair[0]) && learn(to) {
+					grown = true
+				}
+			}
+		}
+		for _, col := range cols {
+			if deps := ctx.SemTable.RecursiveDeps(col); !deps.IsSolvedBy(rows) && compositeKeyIsKnown(ctx, col, cols) {
+				rows, grown = rows.Merge(deps), true
+			}
+		}
+	}
+	return areKnown(expr)
+}
+
+// columnsFixedBelow returns the columns that have one value for every row of op: the ones that a filter compares to an
+// argument, and the ones that the subqueries on op, or the joins in it, group by when the aggregation is pushed under
+// them.
+func columnsFixedBelow(ctx *plancontext.PlanningContext, op Operator) (cols []sqlparser.Expr) {
+	if container, isContainer := op.(*SubQueryContainer); isContainer {
+		for _, subQuery := range container.Inner {
+			for _, col := range subQuery.OuterExpressionsNeeded(ctx, container.Outer) {
+				cols = append(cols, col)
+			}
+		}
+	}
+	_ = Visit(op, func(op Operator) error {
+		if join, isJoin := op.(*ApplyJoin); isJoin {
+			for _, pred := range join.JoinPredicates.columns {
+				for _, bve := range pred.LHSExprs {
+					cols = append(cols, bve.Expr)
+				}
+			}
+			for _, bve := range join.ExtraLHSVars {
+				cols = append(cols, bve.Expr)
+			}
+		}
+		filter, isFilter := op.(*Filter)
+		if !isFilter {
+			return nil
+		}
+		for _, pred := range filter.Predicates {
+			if jp, isJoinPredicate := pred.(*predicates.JoinPredicate); isJoinPredicate {
+				pred = jp.Current()
+			}
+			cmp, isCmp := pred.(*sqlparser.ComparisonExpr)
+			if !isCmp || cmp.Operator != sqlparser.EqualOp {
+				continue
+			}
+			for _, pair := range [][2]sqlparser.Expr{{cmp.Left, cmp.Right}, {cmp.Right, cmp.Left}} {
+				if _, isArg := pair[1].(*sqlparser.Argument); isArg {
+					cols = append(cols, pair[0])
+				}
+			}
+		}
+		return nil
 	})
+	return cols
+}
+
+func groupingExprs(grouping []GroupBy) []sqlparser.Expr {
+	exprs := make([]sqlparser.Expr, 0, len(grouping))
+	for _, gb := range grouping {
+		exprs = append(exprs, gb.Inner)
+	}
+	return exprs
+}
+
+// compositeKeyIsKnown says if cols has every column of a key of the table of col, and the key is unique across shards.
+func compositeKeyIsKnown(ctx *plancontext.PlanningContext, col *sqlparser.ColName, cols []*sqlparser.ColName) bool {
+	table := ctx.SemTable.RecursiveDeps(col)
+	vt := realVindexTable(ctx, col)
+	if vt == nil {
+		return false
+	}
+	for _, key := range uniqueKeys(vt) {
+		var keyCols []sqlparser.Expr
+		for _, name := range key {
+			i := slices.IndexFunc(cols, func(known *sqlparser.ColName) bool {
+				return known.Name.Equal(name) && ctx.SemTable.RecursiveDeps(known) == table
+			})
+			if i < 0 {
+				break
+			}
+			keyCols = append(keyCols, cols[i])
+		}
+		if len(keyCols) == len(key) && keyIsUniqueAcrossShards(ctx, vt, keyCols) {
+			return true
+		}
+	}
+	return false
+}
+
+// equality is an equality of the query, which passes values on only once the columns in needs are known.
+type equality struct {
+	cmp   *sqlparser.ComparisonExpr
+	needs []*sqlparser.ColName
+}
+
+// joinEqualities returns the equalities that every row of the query's FROM and WHERE clauses where no column of nonNull
+// is NULL fulfils: the conjuncts of the WHERE clause and of the ON clauses of the top level SELECT. The ON clause of a
+// left join holds only in the rows where its right side matched, which a column on that side that can't be NULL shows.
+// Without one, whether a row matched depends only on the left side's columns in the ON clause, so the ON clause fixes
+// the right side once those columns are known.
+func joinEqualities(ctx *plancontext.PlanningContext, nonNull []sqlparser.Expr) (equalities []equality) {
+	sel, isSelect := ctx.Statement.(*sqlparser.Select)
+	if !isSelect {
+		return nil
+	}
+	nonNull = append(slices.Clone(nonNull), columnsNeverNull(sel)...)
+	add := func(cond sqlparser.Expr, needs []*sqlparser.ColName) {
+		for _, cmp := range equalitiesIn(cond) {
+			equalities = append(equalities, equality{cmp: cmp, needs: needs})
+		}
+	}
+	if sel.Where != nil {
+		add(sel.Where.Expr, nil)
+	}
+	var collect func(sqlparser.TableExpr)
+	collect = func(te sqlparser.TableExpr) {
+		switch te := te.(type) {
+		case *sqlparser.JoinTableExpr:
+			collect(te.LeftExpr)
+			collect(te.RightExpr)
+			if te.Condition == nil || te.Condition.On == nil {
+				return
+			}
+			switch {
+			case te.Join.IsInner():
+				add(te.Condition.On, nil)
+			case te.Join == sqlparser.LeftJoinType:
+				right := tablesIn(ctx, te.RightExpr)
+				if slices.ContainsFunc(nonNull, func(expr sqlparser.Expr) bool { return isColumnOf(ctx, expr, right) }) {
+					add(te.Condition.On, nil)
+					return
+				}
+				left := tablesIn(ctx, te.LeftExpr)
+				var leftCols []*sqlparser.ColName
+				for _, col := range outsideSubqueryColumns(te.Condition.On) {
+					if isColumnOf(ctx, col, left) {
+						leftCols = append(leftCols, col)
+					}
+				}
+				add(te.Condition.On, leftCols)
+			}
+		case *sqlparser.ParenTableExpr:
+			for _, inner := range te.Exprs {
+				collect(inner)
+			}
+		}
+	}
+	for _, te := range sel.From {
+		collect(te)
+	}
+	return equalities
+}
+
+// columnsNeverNull returns the columns of the equalities that every row of the query fulfils: those of the WHERE clause
+// and of the ON clauses of the inner joins that no outer join can fill with NULLs.
+func columnsNeverNull(sel *sqlparser.Select) (cols []sqlparser.Expr) {
+	add := func(cond sqlparser.Expr) {
+		for _, cmp := range equalitiesIn(cond) {
+			for _, side := range []sqlparser.Expr{cmp.Left, cmp.Right} {
+				if col, isCol := side.(*sqlparser.ColName); isCol {
+					cols = append(cols, col)
+				}
+			}
+		}
+	}
+	if sel.Where != nil {
+		add(sel.Where.Expr)
+	}
+	var collect func(sqlparser.TableExpr)
+	collect = func(te sqlparser.TableExpr) {
+		switch te := te.(type) {
+		case *sqlparser.JoinTableExpr:
+			collect(te.LeftExpr)
+			if !te.Join.IsInner() {
+				return
+			}
+			collect(te.RightExpr)
+			if te.Condition != nil && te.Condition.On != nil {
+				add(te.Condition.On)
+			}
+		case *sqlparser.ParenTableExpr:
+			for _, inner := range te.Exprs {
+				collect(inner)
+			}
+		}
+	}
+	for _, te := range sel.From {
+		collect(te)
+	}
+	return cols
+}
+
+func equalitiesIn(cond sqlparser.Expr) (equalities []*sqlparser.ComparisonExpr) {
+	for _, conjunct := range sqlparser.SplitAndExpression(nil, cond) {
+		if cmp, isCmp := conjunct.(*sqlparser.ComparisonExpr); isCmp && cmp.Operator == sqlparser.EqualOp {
+			equalities = append(equalities, cmp)
+		}
+	}
+	return equalities
+}
+
+func tablesIn(ctx *plancontext.PlanningContext, te sqlparser.TableExpr) (tables semantics.TableSet) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if ate, isAliased := node.(*sqlparser.AliasedTableExpr); isAliased {
+			tables = tables.Merge(ctx.SemTable.TableSetFor(ate))
+		}
+		return true, nil
+	}, te)
+	return tables
+}
+
+func isColumnOf(ctx *plancontext.PlanningContext, expr sqlparser.Expr, tables semantics.TableSet) bool {
+	_, isCol := expr.(*sqlparser.ColName)
+	deps := ctx.SemTable.RecursiveDeps(expr)
+	return isCol && deps.NotEmpty() && deps.IsSolvedBy(tables)
+}
+
+// hasDistinctAggregation says if the statement has a distinct aggregation, also in HAVING or on the other side of a
+// join, where a pushed aggregator doesn't see it.
+func hasDistinctAggregation(stmt sqlparser.Statement) (found bool) {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if aggr, isAggr := node.(sqlparser.AggrFunc); isAggr && sqlparser.IsDistinct(aggr) {
+			found = true
+		}
+		return !found, nil
+	}, stmt)
+	return found
 }
 
 func splitGroupingToLeftAndRight(
@@ -715,31 +979,51 @@ func exprIsUniqueKey(ctx *plancontext.PlanningContext, expr sqlparser.Expr) bool
 	if !isCol {
 		return false
 	}
-	ti, err := ctx.SemTable.TableInfoFor(ctx.SemTable.DirectDeps(expr))
-	if err != nil {
-		return false
-	}
-	if _, isReal := ti.(*semantics.RealTable); !isReal {
-		return false
-	}
-	vt := ti.GetVindexTable()
+	vt := realVindexTable(ctx, expr)
 	if vt == nil {
 		return false
 	}
-	if vt.Keyspace != nil && vt.Keyspace.Sharded && vt.Pinned == nil && vt.Type != vindexes.TypeReference && !exprHasUniqueVindex(ctx, expr) {
-		// MySQL enforces a primary or unique key per shard, so the same value can be in two shards.
-		return false
+	return slices.ContainsFunc(uniqueKeys(vt), func(key []sqlparser.IdentifierCI) bool {
+		return len(key) == 1 && key[0].Equal(col.Name)
+	}) && keyIsUniqueAcrossShards(ctx, vt, []sqlparser.Expr{expr})
+}
+
+// realVindexTable returns the vindex table of the real table that expr is a column of.
+func realVindexTable(ctx *plancontext.PlanningContext, expr sqlparser.Expr) *vindexes.BaseTable {
+	ti, err := ctx.SemTable.TableInfoFor(ctx.SemTable.DirectDeps(expr))
+	if err != nil {
+		return nil
 	}
-	if len(vt.PrimaryKey) == 1 && vt.PrimaryKey[0].Equal(col.Name) {
-		return true
+	if _, isReal := ti.(*semantics.RealTable); !isReal {
+		return nil
+	}
+	return ti.GetVindexTable()
+}
+
+// uniqueKeys returns the columns of the primary key and of each unique key of the table.
+func uniqueKeys(vt *vindexes.BaseTable) (keys [][]sqlparser.IdentifierCI) {
+	if len(vt.PrimaryKey) > 0 {
+		keys = append(keys, vt.PrimaryKey)
 	}
 	for _, uk := range vt.UniqueKeys {
-		if len(uk) != 1 {
-			continue
+		var key []sqlparser.IdentifierCI
+		for _, expr := range uk {
+			if c, isCol := expr.(*sqlparser.ColName); isCol {
+				key = append(key, c.Name)
+			}
 		}
-		if c, ok := uk[0].(*sqlparser.ColName); ok && c.Name.Equal(col.Name) {
-			return true
+		if len(key) == len(uk) {
+			keys = append(keys, key)
 		}
 	}
-	return false
+	return keys
+}
+
+// keyIsUniqueAcrossShards says if a key made of cols has one row in the whole keyspace. MySQL enforces a primary or
+// unique key per shard, so the same value can be in two shards unless a column has a unique vindex.
+func keyIsUniqueAcrossShards(ctx *plancontext.PlanningContext, vt *vindexes.BaseTable, cols []sqlparser.Expr) bool {
+	if vt.Keyspace == nil || !vt.Keyspace.Sharded || vt.Pinned != nil || vt.Type == vindexes.TypeReference {
+		return true
+	}
+	return slices.ContainsFunc(cols, func(col sqlparser.Expr) bool { return exprHasUniqueVindex(ctx, col) })
 }
