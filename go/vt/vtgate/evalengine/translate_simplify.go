@@ -148,18 +148,25 @@ func simplifyExpr(env *ExpressionEnv, e IR) (IR, error) {
 			// interpreter computed without declared types. For pass-through
 			// constructs, convert the value to the declared representation and
 			// keep the declared SQL type (e.g. YEAR).
-			if ct, ok := foldedType(env, e); ok && sqltypes.IsNumber(ct.Type) {
-				if l.inner.SQLType() != ct.Type {
-					v, err := evalCoerce(l.inner, ct.Type, ct.Size, ct.Scale, collations.CollationBinaryID, env.now, env.sqlmode.AllowZeroDate())
-					if err != nil {
-						return nil, err
+			if ct, ok := foldedType(env, e); ok {
+				if sqltypes.IsNumber(ct.Type) {
+					if l.inner.SQLType() != ct.Type {
+						v, err := evalCoerce(l.inner, ct.Type, ct.Size, ct.Scale, collations.CollationBinaryID, env.now, env.sqlmode.AllowZeroDate())
+						if err != nil {
+							return nil, err
+						}
+						l = &Literal{inner: v}
 					}
-					l = &Literal{inner: v}
+					if ct.SQL != 0 {
+						return &declaredLiteral{Literal: *l, sql: ct.SQL}, nil
+					}
+					return l, nil
 				}
-				if ct.SQL != 0 {
-					return &declaredLiteral{Literal: *l, sql: ct.SQL}, nil
+				// non-numeric declared types: the same conversion Value() applies
+				er := EvalResult{v: l.inner, typ: &ct, env: env}
+				if v, _, done := er.declaredValue(); !done && v != nil {
+					return evalToIR(v), nil
 				}
-				return l, nil
 			}
 		}
 		return lit, nil
