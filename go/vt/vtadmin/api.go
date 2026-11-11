@@ -251,7 +251,14 @@ func (api *API) Close() error {
 		rec concurrency.AllErrorRecorder
 	)
 
-	for _, c := range api.clusters {
+	clusters := slices.Clone(api.clusters)
+	if api.clusterCache != nil {
+		for _, item := range api.clusterCache.Items() {
+			clusters = append(clusters, item.Object.(*cluster.Cluster))
+		}
+	}
+
+	for _, c := range clusters {
 		wg.Add(1)
 		go func(c *cluster.Cluster) {
 			defer wg.Done()
@@ -284,13 +291,13 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if clusterCookie, err := r.Cookie("cluster"); err == nil {
 		urlDecoded, err := url.QueryUnescape(clusterCookie.Value)
 		if err == nil {
-			c, id, err := dynamic.ClusterFromString(r.Context(), urlDecoded)
+			cfg, id, err := dynamic.ConfigFromString(urlDecoded)
 			if id != "" {
 				if err != nil {
 					log.Warn("failed to extract valid cluster from cookie; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 				}
 
-				dynamicAPI, err = api.WithCluster(c, id)
+				dynamicAPI, err = api.WithCluster(r.Context(), id, cfg, urlDecoded)
 				if err != nil {
 					vtadminhttp.NewJSONResponse(nil, &errors.ErrInvalidCluster{Err: err}).Write(w)
 					return
@@ -304,94 +311,48 @@ func (api *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	dynamicAPI.Handler().ServeHTTP(w, r)
 }
 
-// WithCluster returns a dynamic API with the given cluster. If `c` is non-nil,
-// WithCluster takes ownership of it and selects the cluster registered under
-// the given id afterwards:
-//   - If no cluster is registered under the id, `c` is registered.
-//   - If a different cluster is registered under the id, that cluster is
-//     closed and replaced by `c`.
-//   - If an equal cluster is registered under the id, `c` is closed, so
-//     callers must not use `c` afterwards.
-//   - If `c` is the registered cluster itself, nothing changes.
+// WithCluster returns a dynamic API that serves only the cluster with the
+// given id.
 //
-// If the cluster is nil, then a cluster with the given id is retrieved from
-// the API and used in the dynamic API. If the cluster is nil and the API has
-// no cluster with the given id, WithCluster returns a NOT_FOUND error.
+// If id names a statically configured cluster, that cluster is used and cfg is
+// ignored, so a client spec can never replace or remove it. Otherwise, cfg is
+// built into a cluster that is cached under the exact spec it was parsed from,
+// so only requests carrying that same spec (and so the same credentials) use
+// it. A dynamic cluster is never added to the API's own clusters.
 //
-// Callers must ensure that:
-// 1. If c is non-nil, c.ID == id.
-// 2. id is non-empty.
-//
-// Note that using dynamic.ClusterFromString ensures both of these
-// preconditions.
-func (api *API) WithCluster(c *cluster.Cluster, id string) (dynamic.API, error) {
+// If cfg is nil and no static cluster has the given id, or cfg cannot be
+// built, WithCluster returns a NOT_FOUND error.
+func (api *API) WithCluster(ctx context.Context, id string, cfg *cluster.Config, spec string) (dynamic.API, error) {
 	api.clusterMu.Lock()
 	defer api.clusterMu.Unlock()
 
-	dynamicAPI := &API{
-		router:  api.router,
-		serv:    api.serv,
-		authz:   api.authz,
-		options: api.options,
-		env:     api.env,
-	}
-
-	// c may already be the cluster registered under id, which must not be
-	// closed or replaced.
-	if c != nil && c != api.clusterMap[id] {
-		existingCluster, exists := api.clusterMap[id]
-		shouldAddCluster := !exists
-		if exists {
-			isEqual, err := existingCluster.Equal(c)
-			if err != nil {
-				log.Error("Error checking for existing cluster equality with new cluster",
-					slog.String("existing_cluster_id", existingCluster.ID),
-					slog.String("cluster_id", id),
-					slog.Any("error", err))
-			}
-			shouldAddCluster = shouldAddCluster || !isEqual
-		}
-		if shouldAddCluster {
-			if existingCluster != nil {
-				if err := existingCluster.Close(); err != nil {
-					log.Error("failed to close cluster; some connections and goroutines may linger",
-						slog.String("existing_cluster_id", existingCluster.ID),
-						slog.String("cluster_id", id),
-						slog.Any("error", err))
-				}
-
-				idx := slices.IndexFunc(api.clusters, func(c *cluster.Cluster) bool {
-					return c.ID == existingCluster.ID
-				})
-				if idx >= 0 {
-					api.clusters = append(api.clusters[:idx], api.clusters[idx+1:]...)
-				}
-			}
-
-			api.clusterMap[id] = c
-			api.clusters = append(api.clusters, c)
-			sort.ClustersBy(func(c1, c2 *cluster.Cluster) bool {
-				return c1.ID < c2.ID
-			}).Sort(api.clusters)
-
-			api.clusterCache.Set(id, c, cache.DefaultExpiration)
+	c, ok := api.clusterMap[id]
+	if !ok && cfg != nil {
+		if cached, found := api.clusterCache.Get(spec); found {
+			c = cached.(*cluster.Cluster)
 		} else {
-			log.Info("API already has an equal cluster, using that instead", slog.String("cluster_id", id))
-			if err := c.Close(); err != nil {
-				log.Error("failed to close duplicate dynamic cluster; some connections and goroutines may linger", slog.String("cluster_id", id), slog.Any("error", err))
+			var err error
+			if c, err = cfg.Cluster(ctx); err != nil {
+				return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: no cluster with id %s: %v", errors.ErrUnsupportedCluster, id, err)
 			}
+
+			api.clusterCache.Set(spec, c, cache.DefaultExpiration)
 		}
 	}
 
-	selectedCluster := api.clusterMap[id]
-	if selectedCluster == nil {
+	if c == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s: no cluster with id %s", errors.ErrUnsupportedCluster, id)
 	}
 
-	dynamicAPI.clusters = []*cluster.Cluster{selectedCluster}
-	dynamicAPI.clusterMap = map[string]*cluster.Cluster{id: selectedCluster}
-
-	return dynamicAPI, nil
+	return &API{
+		clusters:   []*cluster.Cluster{c},
+		clusterMap: map[string]*cluster.Cluster{id: c},
+		router:     api.router,
+		serv:       api.serv,
+		authz:      api.authz,
+		options:    api.options,
+		env:        api.env,
+	}, nil
 }
 
 // rejectCrossSiteRequests refuses a state-changing request that a browser sent on
@@ -573,29 +534,17 @@ func (api *API) Handler() http.Handler {
 	return router
 }
 
-func (api *API) EjectDynamicCluster(key string, value any) {
-	api.clusterMu.Lock()
-	defer api.clusterMu.Unlock()
-
-	// Delete dynamic clusters from clusterMap when they are expired from clusterCache
-	c, ok := api.clusterMap[key]
-	if ok {
-		delete(api.clusterMap, key)
-		if err := c.Close(); err != nil {
-			log.Error("failed to close cluster; some connections and goroutines may linger", slog.String("cluster_id", key), slog.Any("error", err))
-		}
-	}
-
-	// Maintain order of clusters when removing dynamic cluster
-	clusterIndex := slices.IndexFunc(api.clusters, func(c *cluster.Cluster) bool { return c.ID == key })
-	if clusterIndex < 0 {
-		log.Error("Cannot remove cluster from api.clusters. Cluster not found.",
-			slog.String("cluster_id", key),
-			slog.Int("cluster_count", len(api.clusters)))
+// EjectDynamicCluster closes a dynamic cluster when it expires from the
+// dynamic cluster cache.
+func (api *API) EjectDynamicCluster(_ string, value any) {
+	c, ok := value.(*cluster.Cluster)
+	if !ok {
 		return
 	}
 
-	api.clusters = append(api.clusters[:clusterIndex], api.clusters[clusterIndex+1:]...)
+	if err := c.Close(); err != nil {
+		log.Error("failed to close cluster; some connections and goroutines may linger", slog.String("cluster_id", c.ID), slog.Any("error", err))
+	}
 }
 
 // ApplySchema is part of the vtadminpb.VTAdminServer interface.

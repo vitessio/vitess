@@ -51,7 +51,6 @@ import (
 	"vitess.io/vitess/go/vt/vtadmin/rbac"
 	vtadmintestutil "vitess.io/vitess/go/vt/vtadmin/testutil"
 	"vitess.io/vitess/go/vt/vtadmin/vtctldclient/fakevtctldclient"
-	"vitess.io/vitess/go/vt/vtadmin/vtsql"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
@@ -5724,74 +5723,16 @@ func TestServeHTTPDynamicClusterLogs(t *testing.T) {
 	assert.Equal(t, "WARN", record["level"])
 	assert.NotEmpty(t, record["error"])
 
-	serve(`{"id": "c1", "discovery": "no-such-impl", "vtsql-credentials-password": "` + secret + `"}`)
+	serve(`{"id": "c1", "vtsql-credentials-path-tmpl": "/nonexistent", "vtsql-credentials-password": "` + secret + `"}`)
 	record = logs.Record(t, "failed to extract valid cluster from cookie; attempting to use existing cluster")
 	assert.Equal(t, "WARN", record["level"])
 	assert.Equal(t, "c1", record["cluster_id"])
-	assert.Contains(t, record["error"], "no-such-impl")
+	assert.Contains(t, record["error"], "credentials-path-tmpl")
 
 	assert.NotContains(t, logs.String(), secret)
 	for _, cookie := range cookies {
 		assert.NotContains(t, logs.String(), cookie)
 	}
-}
-
-type closeErrDB struct{ vtsql.DB }
-
-func (db closeErrDB) Close() error {
-	_ = db.DB.Close()
-	return assert.AnError
-}
-
-func TestDynamicClusterReplaceLogs(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-
-	newCluster := func(id string, discoveryErr bool) *cluster.Cluster {
-		c := vtadmintestutil.BuildCluster(t, vtadmintestutil.TestClusterConfig{Cluster: &vtadminpb.Cluster{Id: id, Name: id}})
-		disco := fakediscovery.New()
-		disco.SetGatesError(discoveryErr)
-		c.Discovery = disco
-		c.DB = closeErrDB{c.DB}
-		return c
-	}
-	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
-	t.Cleanup(func() { _ = api.Close() })
-
-	// The cluster's ID differs from its id only so the test can tell
-	// existing_cluster_id and cluster_id apart; real callers pass matching ids.
-	_, err := api.WithCluster(newCluster("1", true), "true")
-	require.NoError(t, err)
-	_, err = api.WithCluster(newCluster("1", false), "true")
-	require.NoError(t, err)
-
-	record := logs.Record(t, "Error checking for existing cluster equality with new cluster")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "1", record["existing_cluster_id"])
-	assert.Equal(t, "true", record["cluster_id"])
-	assert.Equal(t, assert.AnError.Error(), record["error"])
-
-	record = logs.Record(t, "failed to close cluster; some connections and goroutines may linger")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "1", record["existing_cluster_id"])
-	assert.Equal(t, "true", record["cluster_id"])
-	assert.Contains(t, record["error"], assert.AnError.Error())
-
-	logs.Reset()
-	_, err = api.WithCluster(newCluster("c2", false), "c2")
-	require.NoError(t, err)
-	_, err = api.WithCluster(newCluster("c2", false), "c2")
-	require.NoError(t, err)
-	record = logs.Record(t, "failed to close duplicate dynamic cluster; some connections and goroutines may linger")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "c2", record["cluster_id"])
-	assert.Contains(t, record["error"], assert.AnError.Error())
-
-	logs.Reset()
-	api.EjectDynamicCluster("c2", nil)
-	record = logs.Record(t, "failed to close cluster; some connections and goroutines may linger")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "c2", record["cluster_id"])
-	assert.Contains(t, record["error"], assert.AnError.Error())
 }
 
 func TestServeHTTP(t *testing.T) {
@@ -5875,7 +5816,7 @@ func TestServeHTTP(t *testing.T) {
 			},
 		},
 		{
-			name:                  "dynamic clusters - cluster is updated when values change",
+			name:                  "dynamic clusters - spec does not replace a static cluster",
 			enableDynamicClusters: true,
 			cookie:                `{"id": "dynamiccluster1", "name": "dynamiccluster1", "discovery": "dynamic", "discovery-dynamic-discovery": "{\"vtctlds\": [{\"host\":{\"fqdn\": \"localhost:15001\", \"hostname\": \"localhost:15998\"}}], \"vtgates\": [{\"host\": {\"hostname\": \"localhost:15991\"}}]}"}`,
 			clusters: []*cluster.Cluster{
@@ -5890,9 +5831,9 @@ func TestServeHTTP(t *testing.T) {
 			testClusterVtctld: "dynamiccluster1",
 			expectedVtctlds: []*vtadminpb.Vtctld{
 				{
-					Hostname: "localhost:15998",
+					Hostname: "localhost:15999",
 					Cluster:  &vtadminpb.Cluster{Id: "dynamiccluster1", Name: "dynamiccluster1"},
-					FQDN:     "localhost:15001",
+					FQDN:     "localhost:15000",
 				},
 			},
 		},
@@ -6041,12 +5982,10 @@ func TestServeHTTPUnknownDynamicCluster(t *testing.T) {
 	assert.Contains(t, body.Error.Message, "no cluster with id dynamiccluster1")
 }
 
-// newUnresolvableCluster builds a cluster whose vtctld and vtgate hosts don't
-// resolve.
-func newUnresolvableCluster(t *testing.T, id string, vtctldHost string) *cluster.Cluster {
-	t.Helper()
-
-	c, err := cluster.Config{
+// unresolvableConfig returns a cluster config whose vtctld and vtgate hosts
+// don't resolve.
+func unresolvableConfig(id string, vtctldHost string) *cluster.Config {
+	return &cluster.Config{
 		ID:            id,
 		Name:          id,
 		DiscoveryImpl: "dynamic",
@@ -6055,7 +5994,15 @@ func newUnresolvableCluster(t *testing.T, id string, vtctldHost string) *cluster
 				"discovery": fmt.Sprintf(`{"vtctlds": [{"host": {"hostname": %q}}], "vtgates": [{"host": {"hostname": "vtgate.invalid:15991"}}]}`, vtctldHost),
 			},
 		},
-	}.Cluster(t.Context())
+	}
+}
+
+// newUnresolvableCluster builds a cluster whose vtctld and vtgate hosts don't
+// resolve.
+func newUnresolvableCluster(t *testing.T, id string, vtctldHost string) *cluster.Cluster {
+	t.Helper()
+
+	c, err := unresolvableConfig(id, vtctldHost).Cluster(t.Context())
 	require.NoError(t, err)
 
 	return c
@@ -6075,81 +6022,46 @@ func clusterIDs(t *testing.T, api *API) []string {
 	return ids
 }
 
-func TestWithClusterReplacesChangedCluster(t *testing.T) {
+func TestWithClusterKeepsStaticCluster(t *testing.T) {
 	t.Parallel()
 
+	static := newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999")
 	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{
-		newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999"),
+		static,
 		newUnresolvableCluster(t, "c2", "vtctld2.invalid:15999"),
 	}, Options{EnableDynamicClusters: true})
 	t.Cleanup(func() { _ = api.Close() })
 
-	_, err := api.WithCluster(newUnresolvableCluster(t, "c1", "vtctld3.invalid:15999"), "c1")
+	dynamicAPI, err := api.WithCluster(t.Context(), "c1", unresolvableConfig("c1", "vtctld3.invalid:15999"), "c1-spec")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"c1", "c2"}, clusterIDs(t, api))
-
-	_, err = api.WithCluster(newUnresolvableCluster(t, "c2", "vtctld4.invalid:15999"), "c2")
-	require.NoError(t, err)
+	assert.Same(t, static, dynamicAPI.(*API).clusterMap["c1"])
+	assert.Same(t, static, api.clusterMap["c1"])
 	assert.Equal(t, []string{"c1", "c2"}, clusterIDs(t, api))
 }
 
-func TestWithClusterSameClusterTwice(t *testing.T) {
+func TestWithClusterSameSpecTwice(t *testing.T) {
 	t.Parallel()
 
 	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
 	t.Cleanup(func() { _ = api.Close() })
 
-	c := newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999")
+	var clusters []*cluster.Cluster
 	for range 2 {
-		_, err := api.WithCluster(c, "c1")
+		dynamicAPI, err := api.WithCluster(t.Context(), "c1", unresolvableConfig("c1", "vtctld1.invalid:15999"), "c1-spec")
 		require.NoError(t, err)
+		clusters = append(clusters, dynamicAPI.(*API).clusterMap["c1"])
 	}
 
+	c := clusters[0]
 	type debuggable interface{ Debug() map[string]any }
-	assert.Equal(t, []string{"c1"}, clusterIDs(t, api))
-	assert.Equal(t, true, c.DB.(debuggable).Debug()["is_connected"], "the registered cluster's vtgate proxy must stay open")
-	assert.Equal(t, true, c.Vtctld.(debuggable).Debug()["is_connected"], "the registered cluster's vtctld proxy must stay open")
-}
+	assert.Same(t, c, clusters[1], "the same spec must reuse its cluster")
 
-func TestEjectDynamicCluster(t *testing.T) {
-	t.Parallel()
-
-	api := NewAPI(vtenv.NewTestEnv(), []*cluster.Cluster{
-		newUnresolvableCluster(t, "a", "vtctld-a.invalid:15999"),
-		newUnresolvableCluster(t, "b", "vtctld-b.invalid:15999"),
-		newUnresolvableCluster(t, "c", "vtctld-c.invalid:15999"),
-		newUnresolvableCluster(t, "d", "vtctld-d.invalid:15999"),
-	}, Options{EnableDynamicClusters: true})
-	t.Cleanup(func() { _ = api.Close() })
-
-	api.EjectDynamicCluster("a", nil)
-	assert.Equal(t, []string{"b", "c", "d"}, clusterIDs(t, api))
-
-	api.EjectDynamicCluster("unknown", nil)
-	assert.Equal(t, []string{"b", "c", "d"}, clusterIDs(t, api))
-}
-
-// Not parallel, because it captures the process-wide logger.
-func TestDynamicClusterLookupLogs(t *testing.T) {
-	logs := logtest.Capture(t, slog.LevelInfo)
-
-	api := NewAPI(vtenv.NewTestEnv(), nil, Options{EnableDynamicClusters: true})
-	t.Cleanup(func() { _ = api.Close() })
-
-	for range 2 {
-		_, err := api.WithCluster(newUnresolvableCluster(t, "c1", "vtctld1.invalid:15999"), "c1")
-		require.NoError(t, err)
-	}
-
-	record := logs.Record(t, "API already has an equal cluster, using that instead")
-	assert.Equal(t, "INFO", record["level"])
-	assert.Equal(t, "c1", record["cluster_id"])
-
-	api.EjectDynamicCluster("unknown", nil)
-	record = logs.Record(t, "Cannot remove cluster from api.clusters. Cluster not found.")
-	assert.Equal(t, "ERROR", record["level"])
-	assert.Equal(t, "unknown", record["cluster_id"])
-	assert.Equal(t, float64(1), record["cluster_count"])
+	other, err := api.WithCluster(t.Context(), "c1", unresolvableConfig("c1", "vtctld1.invalid:15999"), "c1-other-spec")
+	require.NoError(t, err)
+	assert.NotSame(t, c, other.(*API).clusterMap["c1"], "a different spec with the same id must not reuse another spec's cluster")
+	assert.Empty(t, clusterIDs(t, api), "a dynamic cluster must not be added to the API's clusters")
+	assert.Equal(t, true, c.DB.(debuggable).Debug()["is_connected"], "the cached cluster's vtgate proxy must stay open")
+	assert.Equal(t, true, c.Vtctld.(debuggable).Debug()["is_connected"], "the cached cluster's vtctld proxy must stay open")
 }
 
 func init() {

@@ -17,44 +17,83 @@ limitations under the License.
 package dynamic
 
 import (
-	"context"
 	"encoding/base64"
+	"errors"
+	"maps"
+	"slices"
 	"strings"
 
+	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
 )
 
-// ClusterFromString returns a cluster ID and possibly fully-usable Cluster
-// from a base64-encoded JSON spec.
+// ConfigFromString returns a cluster ID and possibly a cluster Config from a
+// base64-encoded JSON spec. It does not build the cluster, so it reads no
+// files and dials no addresses.
 //
 // If an error occurs decoding or unmarshalling the string, this function
-// returns, respectively, the empty string, a nil Cluster, and a non-nil error.
+// returns, respectively, a nil Config, the empty string, and a non-nil error.
 //
 // If the string can be decoded and unmarshalled, then the id will be non-empty,
-// but errors may still be returned from instantiating the cluster, for example
-// if the configuration in the JSON spec is invalid.
+// but the Config is nil and the error non-nil if the spec is invalid or sets an
+// option that a client may not set.
 //
 // Therefore, callers should handle the return values as follows:
 //
-//	c, id, err := dynamic.ClusterFromString(ctx, s)
+//	cfg, id, err := dynamic.ConfigFromString(s)
 //	if id == "" {
-//		// handle err, do not use `c`.
+//		// handle err, do not use `cfg`.
 //	}
 //	if err != nil {
-//		// log error. if desired, lookup the existing cluster with ID: `id`
+//		// log error. `cfg` is nil, so only an existing cluster with ID `id` can be used.
 //	}
-//	// Use `c` (or existing cluster with ID == `id`) based on the dynamic cluster
-//	dynamicAPI, err := api.WithCluster(c, id)
+//	dynamicAPI, err := api.WithCluster(ctx, id, cfg, s)
 //	if err != nil {
-//		// neither `c` nor an existing cluster with ID: `id` is available.
+//		// neither `cfg` nor an existing cluster with ID: `id` is available.
 //	}
 //	dynamicAPI.DoAThing()
-func ClusterFromString(ctx context.Context, s string) (c *cluster.Cluster, id string, err error) {
-	cfg, id, err := cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(s)), "json")
+func ConfigFromString(s string) (cfg *cluster.Config, id string, err error) {
+	cfg, id, err = cluster.LoadConfig(base64.NewDecoder(base64.StdEncoding, strings.NewReader(s)), "json")
 	if err != nil {
 		return nil, id, err
 	}
 
-	c, err = cfg.Cluster(ctx)
-	return c, id, err
+	if err := checkClientConfig(cfg); err != nil {
+		return nil, id, err
+	}
+
+	return cfg, id, nil
+}
+
+// checkClientConfig refuses a client-supplied spec that would make VTAdmin
+// read a local file or send its own credentials to the spec's addresses.
+func checkClientConfig(cfg *cluster.Config) error {
+	// Each flag is passed on as "--key=value", so a key containing "=" could
+	// set a flag whose name differs from the key checked below.
+	flagSets := append([]map[string]string{cfg.VtSQLFlags, cfg.VtctldFlags}, slices.Collect(maps.Values(cfg.DiscoveryFlagsByImpl))...)
+	for _, flags := range flagSets {
+		for key := range flags {
+			if strings.Contains(key, "=") {
+				return errors.New("a dynamic cluster spec cannot have a flag name containing '='")
+			}
+		}
+	}
+
+	if _, ok := cfg.VtSQLFlags["credentials-path-tmpl"]; ok {
+		return errors.New("a dynamic cluster spec cannot set vtsql-credentials-path-tmpl")
+	}
+
+	if _, ok := cfg.VtctldFlags["credentials-path-tmpl"]; ok {
+		return errors.New("a dynamic cluster spec cannot set vtctld-credentials-path-tmpl")
+	}
+
+	if cfg.DiscoveryImpl == "staticfile" {
+		return errors.New("a dynamic cluster spec cannot use staticfile discovery")
+	}
+
+	if grpcclient.StaticAuthConfigured() {
+		return errors.New("dynamic clusters cannot be used with --grpc-auth-static-client-creds")
+	}
+
+	return nil
 }

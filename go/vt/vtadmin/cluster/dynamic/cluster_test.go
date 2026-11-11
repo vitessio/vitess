@@ -35,7 +35,7 @@ import (
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
-func TestClusterFromString(t *testing.T) {
+func TestConfigFromString(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -44,6 +44,8 @@ func TestClusterFromString(t *testing.T) {
 		encoder    func(b []byte) string
 		expectedID string
 		shouldErr  bool
+		// refused is set when ConfigFromString itself must reject the spec.
+		refused bool
 	}{
 		{
 			name: "ok",
@@ -135,6 +137,30 @@ func TestClusterFromString(t *testing.T) {
 			shouldErr:  true,
 		},
 		{
+			name:       "vtsql credentials path",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "vtsql-credentials-path-tmpl": "/nonexistent"}`,
+			expectedID: "dynamic_cluster",
+			refused:    true,
+		},
+		{
+			name:       "vtctld credentials path",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "VTCTLD-Credentials-Path-Tmpl": "/nonexistent"}`,
+			expectedID: "dynamic_cluster",
+			refused:    true,
+		},
+		{
+			name:       "staticfile discovery",
+			s:          `{"id": "dynamic_cluster", "discovery": "staticfile", "discovery-staticfile-path": "/nonexistent"}`,
+			expectedID: "dynamic_cluster",
+			refused:    true,
+		},
+		{
+			name:       "flag name containing '='",
+			s:          `{"id": "dynamic_cluster", "discovery": "dynamic", "vtsql-credentials-path-tmpl={{/*": "*/}}/nonexistent"}`,
+			expectedID: "dynamic_cluster",
+			refused:    true,
+		},
+		{
 			name: "unknown vtsql backoff strategy",
 			s: `{
 				"id": "dynamic_cluster",
@@ -157,7 +183,19 @@ func TestClusterFromString(t *testing.T) {
 
 			enc := tt.encoder([]byte(tt.s))
 
-			c, id, err := ClusterFromString(t.Context(), enc)
+			// Errors from building the cluster count too, since a
+			// valid spec must be buildable.
+			var c *cluster.Cluster
+			cfg, id, err := ConfigFromString(enc)
+			if tt.refused {
+				require.Error(t, err)
+				assert.Nil(t, cfg)
+				assert.Equal(t, tt.expectedID, id)
+				return
+			}
+			if err == nil {
+				c, err = cfg.Cluster(t.Context())
+			}
 			if tt.shouldErr {
 				require.Error(t, err)
 				assert.Nil(t, c, "when err != nil, cluster must be nil")
@@ -180,8 +218,10 @@ type fakeAPI struct {
 	vtadminpb.UnimplementedVTAdminServer
 }
 
-func (api *fakeAPI) WithCluster(c *cluster.Cluster, id string) (API, error) { return api, nil }
-func (api *fakeAPI) Handler() http.Handler                                  { return nil }
+func (api *fakeAPI) WithCluster(context.Context, string, *cluster.Config, string) (API, error) {
+	return api, nil
+}
+func (api *fakeAPI) Handler() http.Handler { return nil }
 
 func TestUnaryServerInterceptorLogs(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
@@ -204,11 +244,11 @@ func TestUnaryServerInterceptorLogs(t *testing.T) {
 	assert.Equal(t, "WARN", record["level"])
 	assert.NotEmpty(t, record["error"])
 
-	call(`{"id": "dyn1", "discovery": "no-such-impl", "vtsql-credentials-password": "` + secret + `"}`)
+	call(`{"id": "dyn1", "vtsql-credentials-path-tmpl": "/nonexistent", "vtsql-credentials-password": "` + secret + `"}`)
 	record = logs.Record(t, "failed to extract valid cluster from incoming metadata; attempting to use existing cluster")
 	assert.Equal(t, "WARN", record["level"])
 	assert.Equal(t, "dyn1", record["cluster_id"])
-	assert.Contains(t, record["error"], "no-such-impl")
+	assert.Contains(t, record["error"], "credentials-path-tmpl")
 
 	assert.NotContains(t, logs.String(), secret)
 	for _, enc := range encoded {

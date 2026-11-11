@@ -17,6 +17,7 @@ limitations under the License.
 package dynamic
 
 import (
+	"context"
 	"net/http"
 
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -28,6 +29,10 @@ import (
 // It is implemented by vtadmin.API.
 type API interface {
 	vtadminpb.VTAdminServer
-	WithCluster(c *cluster.Cluster, id string) (API, error)
+	// WithCluster returns an API that serves only the cluster with the given
+	// id. If id names a statically configured cluster, that cluster is used
+	// and cfg is ignored. Otherwise, cfg (parsed from spec) is built into a
+	// cluster that only APIs returned for the same spec use.
+	WithCluster(ctx context.Context, id string, cfg *cluster.Config, spec string) (API, error)
 	Handler() http.Handler
 }

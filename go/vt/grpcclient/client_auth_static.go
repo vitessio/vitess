@@ -76,6 +76,14 @@ func AppendStaticAuth(opts []grpc.DialOption) ([]grpc.DialOption, error) {
 	return opts, nil
 }
 
+// StaticAuthConfigured reports whether --grpc-auth-static-client-creds is set,
+// in which case DialContext sends those credentials to every address it dials.
+func StaticAuthConfigured() bool {
+	clientCredsMu.Lock()
+	defer clientCredsMu.Unlock()
+	return credsFile != ""
+}
+
 // ResetStaticAuth resets the static auth credentials.
 func ResetStaticAuth() {
 	clientCredsMu.Lock()

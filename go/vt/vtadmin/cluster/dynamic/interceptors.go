@@ -48,7 +48,7 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 
 		defer recoverPanic(info.FullMethod, &err)
 
-		c, id, ok, err := clusterFromIncomingContextMetadata(ss.Context())
+		cfg, id, spec, ok, err := configFromIncomingContextMetadata(ss.Context())
 		switch { // TODO: see if it's possible to de-duplicate this somehow. Unfortunately the callbacks have different signatures which might make it impossible.
 		case !ok:
 			// No dynamic cluster metadata, proceed directly to handler.
@@ -64,7 +64,7 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 			log.Warn("failed to extract valid cluster from incoming metadata; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 		}
 
-		dynamicAPI, err := api.WithCluster(c, id)
+		dynamicAPI, err := api.WithCluster(ss.Context(), id, cfg, spec)
 		if err != nil {
 			return vterrors.ToGRPC(err)
 		}
@@ -88,7 +88,7 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 
 		defer recoverPanic(info.FullMethod, &err)
 
-		c, id, ok, err := clusterFromIncomingContextMetadata(ctx)
+		cfg, id, spec, ok, err := configFromIncomingContextMetadata(ctx)
 		switch {
 		case !ok:
 			// No dynamic cluster metadata, proceed directly to handler.
@@ -104,7 +104,7 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 			log.Warn("failed to extract valid cluster from incoming metadata; attempting to use existing cluster", slog.String("cluster_id", id), slog.Any("error", err))
 		}
 
-		dynamicAPI, err := api.WithCluster(c, id)
+		dynamicAPI, err := api.WithCluster(ctx, id, cfg, spec)
 		if err != nil {
 			return nil, vterrors.ToGRPC(err)
 		}
@@ -128,19 +128,19 @@ func recoverPanic(fullMethod string, err *error) {
 	}
 }
 
-func clusterFromIncomingContextMetadata(ctx context.Context) (*cluster.Cluster, string, bool, error) {
+func configFromIncomingContextMetadata(ctx context.Context) (*cluster.Config, string, string, bool, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, "", false, nil
+		return nil, "", "", false, nil
 	}
 
 	clusterMetadata := md.Get("cluster")
 	if len(clusterMetadata) != 1 {
-		return nil, "", false, nil
+		return nil, "", "", false, nil
 	}
 
-	c, id, err := ClusterFromString(ctx, clusterMetadata[0])
-	return c, id, true, err
+	cfg, id, err := ConfigFromString(clusterMetadata[0])
+	return cfg, id, clusterMetadata[0], true, err
 }
 
 // dec returns a function that merges the src proto.Message into dst.
