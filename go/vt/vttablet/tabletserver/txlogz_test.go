@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
@@ -77,16 +78,19 @@ func testHandler(req *http.Request, t *testing.T) {
 }
 
 func TestTxlogzHandler(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	req, _ := http.NewRequest("GET", "/txlogz?timeout=0&limit=10", nil)
 	testHandler(req, t)
 }
 
 func TestTxlogzHandlerWithNegativeTimeout(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	req, _ := http.NewRequest("GET", "/txlogz?timeout=-1&limit=10", nil)
 	testHandler(req, t)
 }
 
 func TestTxlogzHandlerWithLargeLimit(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	req, _ := http.NewRequest("GET", "/txlogz?timeout=0&limit=10000000", nil)
 	testHandler(req, t)
 }

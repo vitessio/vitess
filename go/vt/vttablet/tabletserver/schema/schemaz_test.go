@@ -26,9 +26,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/acl"
 )
 
 func TestSchemazHandler1(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 	tables := initialSchema()

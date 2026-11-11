@@ -23,16 +23,17 @@ limitations under the License.
 // own policy as a package that calls RegisterPolicy(), and compile it into all
 // Vitess binaries that you use.
 //
-// By default (when no security-policy is specified), everyone is allowed to do
-// anything.
+// By default (when no security-policy is specified), everyone is allowed to act
+// as MONITORING, and no one is allowed any other role.
 //
-// For convenience, there are two other built-in policies that also do NOT do
-// any authentication, but allow you to globally disable some roles entirely:
+// For convenience, there are other built-in policies that also do NOT do
+// any authentication, but allow you to globally enable or disable roles:
 //   - `deny-all` disallows all roles for everyone. Note that access is still
 //     allowed to endpoints that are considered "public" (no ACL check at all).
 //   - `read-only` allows anyone to act as DEBUGGING or MONITORING, but no one
 //     is allowed to act as ADMIN. It also disallows any other custom roles that
 //     are requested.
+//   - `allow-all` allows every role for everyone, without authentication.
 package acl
 
 import (
@@ -73,7 +74,7 @@ type Policy interface {
 }
 
 func RegisterFlags(fs *pflag.FlagSet) {
-	utils.SetFlagStringVar(fs, &securityPolicy, "security-policy", securityPolicy, "the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)")
+	utils.SetFlagStringVar(fs, &securityPolicy, "security-policy", securityPolicy, "the name of a registered security policy to use for controlling access to URLs - empty means only the monitoring role is allowed (built-in policies: deny-all, read-only, allow-all)")
 }
 
 // RegisterPolicy registers a security policy. This function must be called
@@ -90,8 +91,7 @@ func RegisterPolicy(name string, policy Policy) {
 
 func savePolicy() {
 	if securityPolicy == "" {
-		// Setting the policy to nil means Allow All from Anyone.
-		currentPolicy = nil
+		currentPolicy = monitoringOnlyPolicy{}
 		return
 	}
 	if policy, ok := policies[securityPolicy]; ok {
@@ -107,10 +107,16 @@ func savePolicy() {
 // the role.
 func CheckAccessHTTP(req *http.Request, role string) error {
 	once.Do(savePolicy)
-	if currentPolicy != nil {
-		return currentPolicy.CheckAccessHTTP(req, role)
-	}
-	return nil
+	return currentPolicy.CheckAccessHTTP(req, role)
+}
+
+// AllowAllForTest replaces the current policy with allow-all, for tests that
+// exercise ACL-protected handlers. Call the returned function to restore it.
+func AllowAllForTest() (restore func()) {
+	once.Do(savePolicy)
+	prev := currentPolicy
+	currentPolicy = allowAllPolicy{}
+	return func() { currentPolicy = prev }
 }
 
 // SendError is a convenience function that sends an ACL

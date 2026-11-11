@@ -189,7 +189,7 @@ Flags:
       --retry-count int                                                  retry count (default 2)
       --reuse-port                                                       Enable SO_REUSEPORT when binding sockets; available on Linux 3.9+ (default false)
       --schema-change-signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
-      --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means only the monitoring role is allowed (built-in policies: deny-all, read-only, allow-all)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --slow-query-threshold duration                                    Mark vtgate queries as slow when their total execution time meets or exceeds this duration. 0 disables slow-query detection.
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)

@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache/theine"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -577,6 +578,7 @@ func runConsolidatedQuery(t *testing.T, sql string) *QueryEngine {
 }
 
 func TestConsolidationsUIRedaction(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	request, _ := http.NewRequest("GET", "/debug/consolidations", nil)
 
 	sql := "select * from test_db_01 where col = 'secret'"

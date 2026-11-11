@@ -146,7 +146,7 @@ Flags:
       --logtostderr                              log to standard error instead of files
       --mysql-server-version string              MySQL server version to advertise. (default "8.4.6-Vitess")
       --purge-logs-interval duration             how often try to remove old logs (default 1h0m0s)
-      --security-policy string                   the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --security-policy string                   the name of a registered security policy to use for controlling access to URLs - empty means only the monitoring role is allowed (built-in policies: deny-all, read-only, allow-all)
       --server string                            server to use for the connection (required)
       --stderrthreshold severityFlag             logs at or above this threshold go to stderr (default 1)
       --tablet-manager-grpc-ca string            the server ca to use to validate servers when connecting

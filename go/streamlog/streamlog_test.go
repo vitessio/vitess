@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -53,6 +54,7 @@ func testLogf(w io.Writer, params url.Values, m any) error {
 }
 
 func TestHTTP(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	l, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
 	addr := l.Addr().String()

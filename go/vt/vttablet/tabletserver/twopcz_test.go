@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -33,6 +34,7 @@ import (
 // the reflected Action/dtid form values so a crafted request cannot inject markup
 // into the rendered response.
 func TestTwopczHandlerEscapesActionMessage(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	ctx := t.Context()
 	txe, _, db, closer := newTestTxExecutor(t, ctx)
 	defer closer()

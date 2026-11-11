@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -34,6 +35,7 @@ import (
 )
 
 func TestQuerylogzHandlerFormatting(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	logStats := logstats.NewLogStats(t.Context(), "Execute",
 		"select name, 'inject <script>alert();</script>' from test_table limit 1000", "suuid", nil, streamlog.NewQueryLogConfigForTest())

@@ -68,7 +68,7 @@ Flags:
       --replication-mode string                                     The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
       --schema string                                               The SQL table schema
       --schema-file string                                          Identifies the file that contains the SQL table schema
-      --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --security-policy string                                      the name of a registered security policy to use for controlling access to URLs - empty means only the monitoring role is allowed (built-in policies: deny-all, read-only, allow-all)
       --shards int                                                  Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
       --sql string                                                  A list of semicolon-delimited SQL commands to analyze
       --sql-file string                                             Identifies the file that contains the SQL commands to analyze

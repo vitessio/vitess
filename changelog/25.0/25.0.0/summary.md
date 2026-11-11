@@ -22,6 +22,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
+        - [An empty `--security-policy` allows only the monitoring role](#empty-security-policy-monitoring-only)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -303,6 +304,14 @@ MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` on
 **Migration**: before upgrading, replace a qualified `tbl.*` selected from a `JOIN ... USING` with an explicit column list wherever its columns or their order matter, since an explicit list returns the same columns before and after the upgrade.
 
 See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
+
+#### <a id="empty-security-policy-monitoring-only"/>An empty `--security-policy` allows only the monitoring role</a>
+
+When `--security-policy` is empty, which is the default, the HTTP access check used to allow every role. It now allows only the `monitoring` role and denies `debugging` and `admin`. A new built-in `allow-all` policy keeps the old behavior.
+
+**Impact**: without a configured policy, pages that require `debugging` or `admin` return `403 Forbidden`. These include `/debug/status`, `/debug/config`, `/debug/env`, `/debug/querylog`, `/debug/querylogz`, `/debug/queryz`, `/debug/query_plans`, `/debug/vschema`, `/debug/blockprofilerate`, `/debug/mutexprofilefraction`, the vttablet `/querylogz`, `/queryz`, `/livequeryz`, `/schemaz`, `/txlogz` and `/twopcz` pages, and the VTOrc `/api/disable-global-recoveries` and `/api/enable-global-recoveries` endpoints. `/debug/health`, `/debug/vars`, `/metrics`, `/debug/liveness` and the VTOrc read-only `/api/` endpoints are unaffected.
+
+**Migration**: register a policy that authenticates callers and set `--security-policy` to it. To keep the debugging pages without the `admin` actions, set `--security-policy=read-only`. To restore the previous behavior, set `--security-policy=allow-all`.
 
 ### <a id="deprecations"/>Deprecations</a>
 

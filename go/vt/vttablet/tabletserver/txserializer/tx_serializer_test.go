@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vtenv"
@@ -50,6 +51,7 @@ func resetVariables(txs *TxSerializer) {
 }
 
 func TestTxSerializer_NoHotRow(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.HotRowProtection.MaxQueueSize = 1
 	cfg.HotRowProtection.MaxGlobalQueueSize = 1
@@ -110,6 +112,7 @@ func TestKeySanitization(t *testing.T) {
 }
 
 func TestTxSerializer(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.HotRowProtection.MaxQueueSize = 2
 	cfg.HotRowProtection.MaxGlobalQueueSize = 3
@@ -169,6 +172,7 @@ func TestTxSerializer(t *testing.T) {
 }
 
 func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	// Allow up to 2 concurrent transactions per hot row.
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.HotRowProtection.MaxQueueSize = 3
@@ -279,6 +283,7 @@ func testHTTPHandler(txs *TxSerializer, count int, redacted bool) error {
 // tx1 and tx2 are allowed to run concurrently while tx3 and tx4 are queued.
 // tx3 will get canceled and tx4 will be unblocked once tx1 is done.
 func TestTxSerializerCancel(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.HotRowProtection.MaxQueueSize = 4
 	cfg.HotRowProtection.MaxGlobalQueueSize = 4
@@ -361,6 +366,7 @@ func TestTxSerializerCancel(t *testing.T) {
 // TestTxSerializerDryRun verifies that the dry-run mode does not serialize
 // the two concurrent transactions for the same key.
 func TestTxSerializerDryRun(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	cfg := tabletenv.NewDefaultConfig()
 	cfg.HotRowProtection.Mode = tabletenv.Dryrun
 	cfg.HotRowProtection.MaxQueueSize = 1

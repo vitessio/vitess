@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/servenv/testutils"
 )
 
@@ -45,6 +46,7 @@ func init() {
 }
 
 func TestStatus(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 
@@ -68,6 +70,7 @@ func TestStatus(t *testing.T) {
 }
 
 func TestNamedStatus(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	server := testutils.HTTPTestServer()
 	defer server.Close()
 

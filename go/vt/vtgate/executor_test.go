@@ -37,6 +37,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/srvtopo"
@@ -2038,6 +2039,7 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 }
 
 func TestDebugVSchema(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	executor, _, _, _, _ := createExecutorEnv(t)
 
 	resp := httptest.NewRecorder()

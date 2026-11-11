@@ -64,15 +64,11 @@ func TestSimplePolicy(t *testing.T) {
 }
 
 func TestEmptyPolicy(t *testing.T) {
-	currentPolicy = nil
-	err := CheckAccessHTTP(nil, ADMIN)
-	require.NoErrorf(t, err, "got %v, want no error", err)
-
-	err = CheckAccessHTTP(nil, DEBUGGING)
-	require.NoErrorf(t, err, "got %v, want no error", err)
-
-	err = CheckAccessHTTP(nil, MONITORING)
-	assert.NoErrorf(t, err, "got %v, want no error", err)
+	securityPolicy = ""
+	savePolicy()
+	assert.Error(t, CheckAccessHTTP(nil, ADMIN))
+	assert.Error(t, CheckAccessHTTP(nil, DEBUGGING))
+	assert.NoError(t, CheckAccessHTTP(nil, MONITORING))
 }
 
 func TestValidSecurityPolicy(t *testing.T) {

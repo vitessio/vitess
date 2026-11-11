@@ -62,7 +62,7 @@ Flags:
       --pprof strings                                                    enable profiling
       --pprof-http                                                       enable pprof http endpoints
       --purge-logs-interval duration                                     how often try to remove old logs (default 1h0m0s)
-      --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --security-policy string                                           the name of a registered security policy to use for controlling access to URLs - empty means only the monitoring role is allowed (built-in policies: deny-all, read-only, allow-all)
       --service-map strings                                              comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice
       --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
   -v, --version                                                          print binary version

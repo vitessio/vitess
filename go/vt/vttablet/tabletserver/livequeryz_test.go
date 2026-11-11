@@ -23,6 +23,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -53,6 +54,7 @@ func TestLiveQueryzHandlerHTTP(t *testing.T) {
 }
 
 func TestLiveQueryzHandlerHTTPFailedInvalidForm(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/livequeryz/", nil)
 
@@ -63,6 +65,7 @@ func TestLiveQueryzHandlerHTTPFailedInvalidForm(t *testing.T) {
 }
 
 func TestLiveQueryzHandlerTerminateConn(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/livequeryz//terminate?connID=1", nil)
 
@@ -76,6 +79,7 @@ func TestLiveQueryzHandlerTerminateConn(t *testing.T) {
 }
 
 func TestLiveQueryzHandlerTerminateFailedInvalidConnID(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/livequeryz//terminate?connID=invalid", nil)
 
@@ -86,6 +90,7 @@ func TestLiveQueryzHandlerTerminateFailedInvalidConnID(t *testing.T) {
 }
 
 func TestLiveQueryzHandlerTerminateFailedInvalidForm(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "/livequeryz//terminate?inva+lid=2", nil)
 

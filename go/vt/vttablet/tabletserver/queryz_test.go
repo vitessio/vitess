@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
@@ -35,6 +36,7 @@ import (
 )
 
 func TestQueryzHandler(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	resp := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/schemaz", nil)
 	qe := newTestQueryEngine(10*time.Second, true, &dbconfigs.DBConfigs{})

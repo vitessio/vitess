@@ -29,6 +29,7 @@ import (
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -36,6 +37,7 @@ import (
 )
 
 func TestQueryzHandler(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	executor, _, _, _, ctx := createExecutorEnv(t)
 
 	resp := httptest.NewRecorder()

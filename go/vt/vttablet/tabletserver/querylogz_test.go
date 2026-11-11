@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -35,6 +36,7 @@ import (
 )
 
 func TestQuerylogzHandler(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	req, _ := http.NewRequest("GET", "/querylogz?timeout=10&limit=1", nil)
 	logStats := tabletenv.NewLogStats(t.Context(), "Execute", streamlog.NewQueryLogConfigForTest())
 	logStats.PlanType = planbuilder.PlanSelect.String()

@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/stats"
 )
 
@@ -37,6 +38,7 @@ func TestURLPrefix(t *testing.T) {
 }
 
 func TestHandleFunc(t *testing.T) {
+	t.Cleanup(acl.AllowAllForTest())
 	// Listen on a random port
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
