@@ -283,12 +283,16 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, err
 	}
 
-	// Validate bm.BackupLocation from the MANIFEST. For local filesystem
-	// mode, use SafePathJoin to prevent path traversal. For object storage,
-	// trust the manifest location directly since SafePathJoin relies on
-	// OS-native path operations that don't understand cloud URIs.
+	// Validate bm.BackupLocation from the MANIFEST so that it stays under the
+	// backup root. For local filesystem mode, use SafePathJoin to prevent path
+	// traversal. Object storage prefixes are slash-separated keys that mysqlsh
+	// uses literally, so require the clean form that backupLocation writes.
 	var location string
 	if isObjectStoreFlags(mysqlShellLoadFlags) {
+		root := strings.TrimSuffix(path.Clean(mysqlShellBackupLocation), "/") + "/"
+		if mysqlShellBackupLocation == "" || bm.BackupLocation != path.Clean(bm.BackupLocation) || !strings.HasPrefix(bm.BackupLocation, root) {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "backup location %q in manifest is outside the backup root %q", bm.BackupLocation, mysqlShellBackupLocation)
+		}
 		location = bm.BackupLocation
 	} else {
 		relLocation, err := filepath.Rel(mysqlShellBackupLocation, bm.BackupLocation)
