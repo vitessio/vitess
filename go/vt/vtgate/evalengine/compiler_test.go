@@ -296,6 +296,7 @@ func TestCompilerSingle(t *testing.T) {
 		result     string
 		collation  collations.ID
 		typeWanted evalengine.Type
+		err        string
 	}{
 		{
 			expression: "1 + column0",
@@ -1090,6 +1091,35 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(8)`,
 			typeWanted: evalengine.NewTypeEx(sqltypes.Int64, collations.CollationBinaryID, false, 0, 0, nil),
 		},
+		{
+			// Negating a non-constant BIGINT stays a BIGINT, so the minimum overflows.
+			expression: `-column0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(math.MinInt64)},
+			err:        "BIGINT value is out of range in '-(-9223372036854775808)'",
+		},
+		{
+			// A non-constant BIGINT UNSIGNED above 2^63 does not fit a BIGINT when negated.
+			expression: `-column0`,
+			values:     []sqltypes.Value{sqltypes.NewUint64(math.MaxInt64 + 2)},
+			err:        "BIGINT value is out of range in '-(9223372036854775809)'",
+		},
+		{
+			expression: `-column0`,
+			values:     []sqltypes.Value{sqltypes.NewUint64(math.MaxUint64)},
+			err:        "BIGINT value is out of range in '-(18446744073709551615)'",
+		},
+		{
+			// A constant integer operand with the high bit set negates to a DECIMAL.
+			expression: `-(-5)`,
+			result:     `DECIMAL(5)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Decimal, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			// Only the literal 9223372036854775808 negates to the BIGINT minimum.
+			expression: `-cast(9223372036854775808 as unsigned)`,
+			result:     `DECIMAL(-9223372036854775808)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Decimal, collations.CollationBinaryID, true, 0, 0, nil),
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -1114,6 +1144,14 @@ func TestCompilerSingle(t *testing.T) {
 			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, tz))
 			env.SetTime(time.Date(2023, 10, 24, 12, 0, 0, 123456000, tz))
 			env.Row = tc.values
+
+			if tc.err != "" {
+				_, err := env.EvaluateAST(converted)
+				require.EqualError(t, err, tc.err)
+				_, err = env.Evaluate(converted)
+				require.EqualError(t, err, tc.err)
+				return
+			}
 
 			expected, err := env.EvaluateAST(converted)
 			require.NoError(t, err)

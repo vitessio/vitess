@@ -1389,6 +1389,18 @@ func NegateArithmetic(yield Query) {
 		yield("- "+rhs, nil, false)
 		yield("-"+rhs, nil, false)
 	}
+
+	// MySQL types the negation of a constant integer by the operand's value:
+	// a negative signed value or an unsigned value of at least 2^63 gives a DECIMAL.
+	constants := []string{
+		`-(-5)`, `- - -5`, `-(1-6)`, `-cast(-5 as signed)`, `-(-length('abc'))`,
+		`-if(true, -5, 0)`, `-coalesce(-5)`, `-sign(-5)`, `-(-9223372036854775807)`,
+		`-cast(9223372036854775808 as unsigned)`, `-(0+9223372036854775808)`, `-(1 << 63)`,
+	}
+
+	for _, expr := range constants {
+		yield(expr, nil, false)
+	}
 }
 
 func CollationOperations(yield Query) {
