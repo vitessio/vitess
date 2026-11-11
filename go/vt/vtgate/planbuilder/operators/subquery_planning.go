@@ -849,8 +849,9 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 		if routedByOuterColumns(m.subq, inRouting) {
 			// Every row of the subquery lives on the shard its outer value routes to, so a reference
 			// outer route can ask the question on every shard: only that shard answers it. A write
-			// to the reference table has to reach all of its copies, so it is not asked that way.
-			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(m.subq) {
+			// to the reference table has to reach all of its copies, so it is not asked that way. A
+			// LIMIT in the outer route may pick other rows on each shard.
+			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(m.subq) && !hasLimit(ctx, outRoute) {
 				m.onEveryShard = true
 				return m.merge(ctx, inRoute, outRoute, scatterOf(inRouting.(*ShardedRouting)))
 			}
@@ -993,6 +994,22 @@ func sameNameCopy(ctx *plancontext.PlanningContext, route, other *Route) *Route 
 
 // readsOnlyItsTables reports whether the SQL of a route names no table but those of its operators,
 // which a subquery merged into it as an expression would.
+func hasLimit(ctx *plancontext.PlanningContext, route *Route) bool {
+	stmt, _, err := ToSQL(ctx, route.Source)
+	if err != nil {
+		return true
+	}
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if _, ok := node.(*sqlparser.Limit); ok {
+			found = true
+			return false, io.EOF
+		}
+		return true, nil
+	}, stmt)
+	return found
+}
+
 func readsOnlyItsTables(ctx *plancontext.PlanningContext, route *Route) bool {
 	stmt, _, err := ToSQL(ctx, route.Source)
 	if err != nil {

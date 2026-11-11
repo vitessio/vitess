@@ -4923,5 +4923,17 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "a derived reference table that picks a row at random is not asked on every shard, as each shard may pick another row",
+    "query": "select a.id from (select id from ref order by rand() limit 1) a where a.id in (select x.id from user x where x.id = a.id)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
+  },
+  {
+    "comment": "a derived reference table with a limit is not asked on every shard, as each shard may pick another row",
+    "query": "select a.id from (select id from ref limit 1) a where a.id in (select x.id from user x where x.id = a.id)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   }
 ]

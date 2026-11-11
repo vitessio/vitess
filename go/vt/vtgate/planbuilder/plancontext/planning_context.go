@@ -58,6 +58,11 @@ type PlanningContext struct {
 	// the other side's keyspace, as it would have when the merge went through.
 	RefusedReferenceMerge semantics.TableSet
 
+	// DeclinedAlternateWaivers are the cross-keyspace checks of joins that were let through only
+	// because of the alternate of a reference route that a refused merge makes the planner decline.
+	// They run when a merge is refused, for a join that was planned before it.
+	DeclinedAlternateWaivers []func()
+
 	// RecursiveTermTables holds the tables read by the recursive term of a recursive CTE. MySQL
 	// runs a term once per iteration on whichever tablet the whole CTE is sent to.
 	RecursiveTermTables semantics.TableSet

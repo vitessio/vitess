@@ -236,8 +236,9 @@ func TestARecursiveTermOverAReferenceTableNextToOneShard(t *testing.T) {
 
 // TestARecursiveTermOverAReferenceTableProbingOneShardByItsColumn checks a recursive CTE whose term
 // probes delivery_failure with f.id = z.id, a column of the reference table. The probe goes to one
-// shard per row, so the zip_detail rows are read once. delivery_failure 1 and 2 do not exist, so the
-// left join never matches. The seed is zip_detail 1, the first pass yields 2, and the second adds nothing.
+// shard per row, so the zip_detail rows are read once. delivery_failure 1 and 2 exist, so the left
+// join matches each zip_detail row once and the term selects no column of f. The seed is zip_detail 1,
+// the first pass yields 2, and the second adds nothing.
 func TestARecursiveTermOverAReferenceTableProbingOneShardByItsColumn(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	conn, closer := start(t)

@@ -412,10 +412,36 @@ func checkCrossKeyspaceOp(ctx *plancontext.PlanningContext, lhs, rhs Operator, o
 // checkCrossKeyspacePair checks a single cross-keyspace pair and panics if denied,
 // unless an alternate route or the ALLOW_CROSS_KEYSPACE_READS directive allows it.
 func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator, lhsKs, rhsKs *vindexes.Keyspace, opType string) {
-	if hasAlternateInKeyspace(ctx, lhs, rhsKs) || hasAlternateInKeyspace(ctx, rhs, lhsKs) {
+	lhsAlt, rhsAlt := hasAlternateInKeyspace(ctx, lhs, rhsKs), hasAlternateInKeyspace(ctx, rhs, lhsKs)
+	if lhsAlt || rhsAlt {
+		if (lhsAlt && alternateIsUsable(lhs)) || (rhsAlt && alternateIsUsable(rhs)) {
+			return
+		}
+		// alternateIn declines these alternates once a merge is refused, so they do not authorize the join.
+		enforce := func() { enforceCrossKeyspaceReads(ctx, lhsKs, rhsKs, opType) }
+		if ctx.RefusedReferenceMerge.IsEmpty() {
+			ctx.DeclinedAlternateWaivers = append(ctx.DeclinedAlternateWaivers, enforce)
+			return
+		}
+		enforce()
 		return
 	}
+	enforceCrossKeyspaceReads(ctx, lhsKs, rhsKs, opType)
+}
 
+// alternateIsUsable reports whether alternateIn would read op through its alternate.
+func alternateIsUsable(op Operator) bool {
+	route, ok := op.(*Route)
+	if !ok {
+		return false
+	}
+	if _, any := route.Routing.(*AnyShardRouting); any {
+		return readsWhatItsAlternatesRead(route.Source)
+	}
+	return true
+}
+
+func enforceCrossKeyspaceReads(ctx *plancontext.PlanningContext, lhsKs, rhsKs *vindexes.Keyspace, opType string) {
 	if sqlparser.AllowCrossKeyspaceReadsDirective(ctx.Statement) {
 		return
 	}

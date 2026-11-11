@@ -321,6 +321,9 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 	if owed && !canCarryReferenceRows(r) && !(inTerm && routesToOneShard(r)) {
 		debugNoRewrite("apply join merge blocked: the reference rows an outer join preserves cannot be read through %s routing", r.OpCode().String())
 		ctx.RefusedReferenceMerge = ctx.RefusedReferenceMerge.Merge(TableID(op1)).Merge(TableID(op2))
+		for _, enforce := range ctx.DeclinedAlternateWaivers {
+			enforce()
+		}
 		return nil
 	}
 
