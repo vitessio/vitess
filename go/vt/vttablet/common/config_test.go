@@ -167,6 +167,28 @@ func TestNewVReplicationConfig(t *testing.T) {
 	}
 }
 
+// TestVStreamMemoryBoundsOverride pins the override's key in Map(): vtctldclient's ParseConfigOverrides
+// rejects any key that Map() does not list, so without it the documented
+// `Workflow update --config-overrides vstream-memory-bounds=false` fails in the client.
+func TestVStreamMemoryBoundsOverride(t *testing.T) {
+	InitVReplicationConfigDefaults()
+
+	cfg, err := NewVReplicationConfig(map[string]string{"vstream-memory-bounds": "false"})
+	require.NoError(t, err)
+	require.False(t, cfg.VStreamMemoryBounds)
+	require.True(t, cfg.VStreamMemoryBoundsOverride)
+	require.Equal(t, "false", cfg.Map()["vstream-memory-bounds"])
+
+	defaults := GetDefaultVReplicationConfig()
+	require.Equal(t, strconv.FormatBool(VStreamerMemoryBounds), defaults.Map()["vstream-memory-bounds"])
+	require.False(t, defaults.VStreamMemoryBoundsOverride)
+
+	t.Run("invalid value returns error", func(t *testing.T) {
+		_, err := NewVReplicationConfig(map[string]string{"vstream-memory-bounds": "maybe"})
+		require.ErrorContains(t, err, "vstream-memory-bounds")
+	})
+}
+
 func TestMaxRowJSONBytesOverride(t *testing.T) {
 	InitVReplicationConfigDefaults()
 	cfg, err := NewVReplicationConfig(map[string]string{"max-row-json-bytes": "1048576"})
