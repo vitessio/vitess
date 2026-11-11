@@ -268,13 +268,15 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 
 // TestExtractFilesLogOmitsXbstreamFlags checks that the xbstream command line
 // that a restore logs leaves out the operator's --xbstream-restore-flags, which
-// can hold an --encrypt-key, and keeps the arguments that Vitess adds.
+// can hold an --encrypt-key, and keeps the arguments that Vitess adds, and
+// that xbstream still gets the flags as given.
 func TestExtractFilesLogOmitsXbstreamFlags(t *testing.T) {
 	const secret = "encrypt_key_sentinel_5c1d"
 	oldEnginePath, oldFlags := xtrabackupEnginePath, xbstreamRestoreFlags
-	// No xbstream binary in the directory, so extractFiles fails right after
-	// logging the command.
+	// The fake xbstream records its arguments, one per line, and fails.
 	xtrabackupEnginePath = t.TempDir()
+	argsFile := path.Join(t.TempDir(), "args")
+	generateTestFile(t, path.Join(xtrabackupEnginePath, xbstream), "#!/bin/bash\nprintf '%s\\n' \"$@\" > '"+argsFile+"'\nexit 1")
 	xbstreamRestoreFlags = "--decrypt=AES256 --encrypt-key=" + secret + "1 -k " + secret + "2 -vk" + secret + "3"
 	t.Cleanup(func() { xtrabackupEnginePath, xbstreamRestoreFlags = oldEnginePath, oldFlags })
 
@@ -288,7 +290,11 @@ func TestExtractFilesLogOmitsXbstreamFlags(t *testing.T) {
 	tempDir := t.TempDir()
 	bm := xtraBackupManifest{SkipCompress: true, StreamMode: xbstream, FileName: "backup.xbstream"}
 	err := (&XtrabackupEngine{}).extractFiles(t.Context(), logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream), bh, bm, tempDir)
-	require.ErrorContains(t, err, "xbstream")
+	require.ErrorContains(t, err, "xbstream failed")
+
+	args, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, "-C\n"+tempDir+"\n-xv\n--decrypt=AES256\n--encrypt-key="+secret+"1\n-k\n"+secret+"2\n-vk"+secret+"3\n", string(args))
 
 	r := logs.Record(t, "Executing xbstream cmd")
 	assert.Equal(t, "INFO", r["level"])
