@@ -200,6 +200,40 @@ func TestReferenceRowsPreservedByAnOuterJoinComeBackOnce(t *testing.T) {
 		`[[INT64(1) INT64(1)] [INT64(2) INT64(2)]]`)
 }
 
+// TestASubqueryOverAShardedTableCorrelatedWithAReferenceTable checks that a reference row is kept
+// when a subquery over a sharded table is correlated with it by the sharded table's vindex column.
+// delivery_failure 1 and 2 have id = zip_detail_id = 1 and 2, so f.id = z.id holds for zip_detail 1
+// and 2 and both rows are returned, whether the subquery is an IN or an EXISTS.
+func TestASubqueryOverAShardedTableCorrelatedWithAReferenceTable(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	conn, closer := start(t)
+	defer closer()
+
+	utils.AssertMatches(t, conn,
+		"select z.id from "+shardedKeyspaceName+".zip_detail z where z.id <= 2 and z.id in (select f.zip_detail_id from "+shardedKeyspaceName+".delivery_failure f where f.id = z.id) order by z.id",
+		`[[INT64(1)] [INT64(2)]]`)
+	utils.AssertMatches(t, conn,
+		"select z.id from "+shardedKeyspaceName+".zip_detail z where z.id <= 2 and exists (select 1 from "+shardedKeyspaceName+".delivery_failure f where f.id = z.id) order by z.id",
+		`[[INT64(1)] [INT64(2)]]`)
+}
+
+// TestARecursiveTermOverAReferenceTableNextToOneShard checks a recursive CTE whose term keeps the
+// zip_detail rows next to the one shard of delivery_failure id = 3. vtgate sends the 3 as a bind
+// variable, so the term has to be merged for any single-shard routing, not only for a literal.
+// delivery_failure 3 points at zip_detail 3, so the left join never matches and each zip_detail row
+// is read once. The seed is zip_detail 1. In the first pass the CTE row 1 pairs with z.id = 1, which
+// passes z.id < 2, and yields 1 + 1 = 2. In the second pass the CTE row 2 pairs with z.id = 2, which
+// fails z.id < 2, so nothing is added. The result is 1 and 2.
+func TestARecursiveTermOverAReferenceTableNextToOneShard(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	conn, closer := start(t)
+	defer closer()
+
+	utils.AssertMatches(t, conn,
+		"with recursive c as (select id from "+shardedKeyspaceName+".zip_detail where id = 1 union all select z.id + 1 from "+shardedKeyspaceName+".zip_detail z left join (select id, zip_detail_id from "+shardedKeyspaceName+".delivery_failure where id = 3) f on f.zip_detail_id = z.id join c on c.id = z.id where z.id < 2) select id from c order by id",
+		`[[INT64(1)] [INT64(2)]]`)
+}
+
 // TestTheLimitOfAJoinedUpdateCapsTheRowsItWrites checks that the LIMIT of a multi-table UPDATE caps the
 // rows it writes, not only the rows on the right side of the join. It rolls back so the shared data stays.
 func TestTheLimitOfAJoinedUpdateCapsTheRowsItWrites(t *testing.T) {
