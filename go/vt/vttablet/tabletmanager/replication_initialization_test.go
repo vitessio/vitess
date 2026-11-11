@@ -1103,6 +1103,41 @@ func TestDeferredRestoreWaitsForReplicationPastRestoredPosition(t *testing.T) {
 	})
 }
 
+// TestReplicationInitDeferredGauge checks that the ReplicationInitDeferred
+// gauge reports a pending deferral, for operators without VTOrc to alert on,
+// until the deferral ends.
+func TestReplicationInitDeferredGauge(t *testing.T) {
+	t.Run("deferral and cancellation", func(t *testing.T) {
+		tm, md, ts, _ := newReplicationInitializationTM(t)
+		holdInitializationShardLock(t, ts)
+		md.ExpectedExecuteSuperQueryList = nil
+
+		_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA, nil)
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, statsReplicationInitDeferred.Get())
+
+		tm.tmState.cancelReplicationInit(t.Context())
+		assert.EqualValues(t, 0, statsReplicationInitDeferred.Get())
+	})
+	t.Run("admission", func(t *testing.T) {
+		tm, md, _, _ := newReplicatingPendingTM(t)
+		md.ExpectedExecuteSuperQueryList = nil
+		restored, err := replication.ParsePosition(gtidFlavor, gtidPosition)
+		require.NoError(t, err)
+		superseded := tm.tmState.deferReplicationInit(t.Context(), nil, &restored)
+		id := tm.tmState.deferReplicationInit(t.Context(), nil, &restored)
+
+		// Ending a superseded deferral leaves the gauge set.
+		assert.False(t, tm.tmState.endReplicationInit(t.Context(), superseded, false))
+		assert.EqualValues(t, 1, statsReplicationInitDeferred.Get())
+
+		ended, err := tm.admitDeferredReplicationInit(t.Context(), id)
+		require.NoError(t, err)
+		assert.True(t, ended)
+		assert.EqualValues(t, 0, statsReplicationInitDeferred.Get())
+	})
+}
+
 // TestDeferredRestoreRecordsRestoredPosition covers a restore whose replication
 // initialization defers: the deferral must record the restored position, which
 // the watcher then waits for replication to move past.

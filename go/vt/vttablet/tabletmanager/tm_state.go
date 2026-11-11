@@ -394,6 +394,11 @@ func (ts *tmState) cancelReplicationInit(ctx context.Context) {
 func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint64, err error) {
 	reason := ts.canServe(ts.tablet.Type)
 	ts.pendingReplicationInit = id
+	deferred := int64(0)
+	if id != 0 {
+		deferred = 1
+	}
+	statsReplicationInitDeferred.Set(deferred)
 	ts.replicationInitError = ""
 	if id != 0 && err != nil {
 		ts.replicationInitError = err.Error()

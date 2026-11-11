@@ -144,6 +144,11 @@ var (
 	statsKeyRangeEnd   = stats.NewString("TabletKeyRangeEnd")
 	statsAlias         = stats.NewString("TabletAlias")
 
+	// statsReplicationInitDeferred is 1 while a deferred replication
+	// initialization is pending. Non-primary types stay out of rotation until
+	// it ends; a promoted primary serves.
+	statsReplicationInitDeferred = stats.NewGauge("ReplicationInitDeferred", "Whether a deferred replication initialization is pending (1 = true / 0 = false)")
+
 	// The following variables can be changed to speed up tests.
 	mysqlPortRetryInterval       = 1 * time.Second
 	rebuildKeyspaceRetryInterval = 1 * time.Second
