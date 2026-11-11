@@ -98,6 +98,20 @@ func init() {
 	}
 }
 
+// DeniedBody returns the response body acl.SendError writes when the test
+// policy in mode m refuses a request. Tests compare against it to make sure a
+// refused handler writes nothing after the error.
+func DeniedBody(m Mode) string {
+	switch m {
+	case DenyAll:
+		return "Access denied: " + errDenyAll.Error() + "\n"
+	case ReadOnly:
+		return "Access denied: " + errReadOnly.Error() + "\n"
+	default:
+		return ""
+	}
+}
+
 // SetMode switches the test policy to m and restores the previous mode when
 // the test finishes.
 func SetMode(t testing.TB, m Mode) {

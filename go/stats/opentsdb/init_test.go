@@ -56,6 +56,9 @@ func TestDebugHandlerACL(t *testing.T) {
 			assert.Equal(t, tt.wantCode, rec.Code)
 			if tt.wantCode == http.StatusOK {
 				assert.Equal(t, "application/json; charset=utf-8", rec.Header().Get("Content-Type"))
+			} else {
+				// The handler must stop after the error and write nothing else.
+				assert.Equal(t, acltest.DeniedBody(tt.mode), rec.Body.String())
 			}
 		})
 	}

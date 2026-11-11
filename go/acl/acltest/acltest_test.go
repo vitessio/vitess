@@ -48,6 +48,9 @@ func TestSetMode(t *testing.T) {
 					assert.NoError(t, err, role)
 				} else {
 					assert.Error(t, err, role)
+					rec := httptest.NewRecorder()
+					acl.SendError(rec, err)
+					assert.Equal(t, DeniedBody(tt.mode), rec.Body.String(), role)
 				}
 			}
 		})

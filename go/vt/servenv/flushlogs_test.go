@@ -47,10 +47,11 @@ func TestFlushLogsHandler(t *testing.T) {
 			flushLogsHandler(rec, httptest.NewRequest(http.MethodGet, "/debug/flushlogs", nil))
 
 			assert.Equal(t, tt.wantCode, rec.Code)
-			if tt.wantBody != "" {
+			if tt.wantCode == http.StatusOK {
 				assert.Equal(t, tt.wantBody, rec.Body.String())
 			} else {
-				assert.NotContains(t, rec.Body.String(), "flushed")
+				// The handler must stop after the error and write nothing else.
+				assert.Equal(t, acltest.DeniedBody(tt.mode), rec.Body.String())
 			}
 		})
 	}

@@ -52,6 +52,14 @@ func TestFallbackSecurityPolicy(t *testing.T) {
 	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
+	// /debug/flushlogs requires the ADMIN role.
+	url = fmt.Sprintf("http://localhost:%d/debug/flushlogs", mTablet.HTTPPort)
+	assertNotAllowedURLTest(t, url)
+
+	// /debug/liveness is always allowed.
+	url = fmt.Sprintf("http://localhost:%d/debug/liveness", mTablet.HTTPPort)
+	assertAllowedURLTest(t, url)
+
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
@@ -106,6 +114,14 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
 	assertNotAllowedURLTest(t, url)
 
+	// /debug/flushlogs requires the ADMIN role.
+	url = fmt.Sprintf("http://localhost:%d/debug/flushlogs", mTablet.HTTPPort)
+	assertNotAllowedURLTest(t, url)
+
+	// /debug/liveness is always allowed.
+	url = fmt.Sprintf("http://localhost:%d/debug/liveness", mTablet.HTTPPort)
+	assertAllowedURLTest(t, url)
+
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
@@ -135,6 +151,14 @@ func TestReadOnlySecurityPolicy(t *testing.T) {
 
 	// It should deny DEBUGGING role.
 	url = fmt.Sprintf("http://localhost:%d/queryz", mTablet.HTTPPort)
+	assertAllowedURLTest(t, url)
+
+	// /debug/flushlogs requires the ADMIN role.
+	url = fmt.Sprintf("http://localhost:%d/debug/flushlogs", mTablet.HTTPPort)
+	assertNotAllowedURLTest(t, url)
+
+	// /debug/liveness is always allowed.
+	url = fmt.Sprintf("http://localhost:%d/debug/liveness", mTablet.HTTPPort)
 	assertAllowedURLTest(t, url)
 
 	// Reset the VtTabletExtraArgs
