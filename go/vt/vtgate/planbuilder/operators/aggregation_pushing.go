@@ -96,9 +96,7 @@ func pushAggregationThroughSubquery(
 	rootAggr *Aggregator,
 	src *SubQueryContainer,
 ) (Operator, *ApplyResult) {
-	for _, subQuery := range src.Inner {
-		refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx, rootAggr, src, subQuery)
-	}
+	refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx, rootAggr, src)
 	pushedAggr := rootAggr.SplitAggregatorBelowOperators(ctx, []Operator{src.Outer})
 	for _, subQuery := range src.Inner {
 		lhsCols := subQuery.OuterExpressionsNeeded(ctx, src.Outer)
@@ -132,10 +130,10 @@ func pushAggregationThroughSubquery(
 }
 
 // refuseDistinctOverReferenceRowsGroupedByOuterColumns refuses a distinct aggregation that would be pushed
-// under a reference route to be grouped by the outer columns its subquery is routed by, unless the query
-// groups by them or the aggregation has each of them as an argument of its own: the distinct values would
-// be counted once per group instead of once. A column without a known table counts as a reference column.
-func refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx *plancontext.PlanningContext, aggr *Aggregator, src *SubQueryContainer, subQuery *SubQuery) {
+// under a reference route with a subquery routed by an outer column, as the pushed aggregation is grouped
+// by the outer columns of every subquery, unless the query groups by them or the aggregation has each of
+// them as an argument of its own: the distinct values would be counted once per group instead of once.
+func refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx *plancontext.PlanningContext, aggr *Aggregator, src *SubQueryContainer) {
 	outer, ok := src.Outer.(*Route)
 	if !ok {
 		return
@@ -143,20 +141,21 @@ func refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx *plancontext.Plann
 	if _, ok := outer.Routing.(*AnyShardRouting); !ok {
 		return
 	}
-	inner, ok := subQuery.Subquery.(*Route)
-	if !ok || !routedByOuterColumns(subQuery, inner.Routing) {
+	if !slices.ContainsFunc(src.Inner, func(subQuery *SubQuery) bool {
+		inner, ok := subQuery.Subquery.(*Route)
+		return ok && routedByOuterColumns(subQuery, inner.Routing)
+	}) {
 		return
 	}
-	lhsCols := slices.DeleteFunc(subQuery.OuterExpressionsNeeded(ctx, src.Outer), func(col *sqlparser.ColName) bool {
+	var outerCols []*sqlparser.ColName
+	for _, subQuery := range src.Inner {
+		outerCols = append(outerCols, subQuery.OuterExpressionsNeeded(ctx, src.Outer)...)
+	}
+	lhsCols := slices.DeleteFunc(outerCols, func(col *sqlparser.ColName) bool {
 		if slices.ContainsFunc(aggr.Grouping, func(gb GroupBy) bool { return ctx.SemTable.EqualsExpr(gb.Inner, col) }) {
 			return true
 		}
-		ti, err := ctx.SemTable.TableInfoForExpr(col)
-		if err != nil {
-			return true
-		}
-		vt := ti.GetVindexTable()
-		return vt != nil && vt.Type != vindexes.TypeReference && len(vt.ReferencedBy) == 0
+		return readsOnlyTablesThatAreNotReferences(ctx, col)
 	})
 	for _, a := range aggr.Aggregations {
 		if !a.Distinct {
@@ -171,6 +170,26 @@ func refuseDistinctOverReferenceRowsGroupedByOuterColumns(ctx *plancontext.Plann
 		}
 		panic(vterrors.VT12001("distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"))
 	}
+}
+
+// readsOnlyTablesThatAreNotReferences reports whether a column comes, through any derived tables, only from
+// tables that are neither a reference table nor the source of one.
+func readsOnlyTablesThatAreNotReferences(ctx *plancontext.PlanningContext, col *sqlparser.ColName) bool {
+	deps := ctx.SemTable.RecursiveDeps(col)
+	if deps.IsEmpty() {
+		return false
+	}
+	for _, id := range deps.Constituents() {
+		ti, err := ctx.SemTable.TableInfoFor(id)
+		if err != nil {
+			return false
+		}
+		vt := ti.GetVindexTable()
+		if vt == nil || vt.Type == vindexes.TypeReference || len(vt.ReferencedBy) > 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func (a *Aggregator) aggregateTheAggregates() {

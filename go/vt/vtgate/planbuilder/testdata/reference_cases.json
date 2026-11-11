@@ -3683,5 +3683,408 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "a distinct aggregation over a reference table with one subquery routed by its column and another one correlated by a second column is refused, as the pushed aggregation is grouped by both",
+    "query": "select count(distinct a.id) from ref a where exists (select 1 from user_extra ue where ue.user_id = a.id) and exists (select 1 from user_extra ue2 where ue2.extra_id = a.col)",
+    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
+  },
+  {
+    "comment": "a distinct aggregation over a reference table with both correlated columns of its subqueries as arguments is pushed under the joins",
+    "query": "select count(distinct a.id, a.col) from ref a where exists (select 1 from user_extra ue where ue.user_id = a.id) and exists (select 1 from user_extra ue2 where ue2.extra_id = a.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id, a.col) from ref a where exists (select 1 from user_extra ue where ue.user_id = a.id) and exists (select 1 from user_extra ue2 where ue2.extra_id = a.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id, a.col)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_col": 2
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "SemiJoin",
+                "JoinVars": {
+                  "a_id": 1
+                },
+                "Inputs": [
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Reference",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(distinct a.id, a.col), a.id, a.col from ref as a where 1 != 1 group by a.id, a.col",
+                    "Query": "select count(distinct a.id, a.col), a.id, a.col from ref as a group by a.id, a.col"
+                  },
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.user_id = :a_id limit 1",
+                    "Values": [
+                      ":a_id"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue2 where 1 != 1",
+                    "Query": "select 1 from user_extra as ue2 where ue2.extra_id = :a_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "a distinct aggregation over a derived table of an unsharded table that is not a reference table is planned as in main",
+    "query": "select count(distinct a.id2) from (select id, id as id2 from unsharded) a where exists (select 1 from user_extra ue where ue.user_id = a.id)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id2) from (select id, id as id2 from unsharded) a where exists (select 1 from user_extra ue where ue.user_id = a.id)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_id": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select count(distinct a.id2), a.id from (select id, id as id2 from unsharded where 1 != 1) as a where 1 != 1 group by a.id",
+                "Query": "select count(distinct a.id2), a.id from (select id, id as id2 from unsharded) as a group by a.id"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                "Query": "select 1 from user_extra as ue where ue.user_id = :a_id limit 1",
+                "Values": [
+                  ":a_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "a distinct aggregation over a reference table with a subquery that is not routed by its column is planned as in main",
+    "query": "select count(distinct a.id2) from (select id, id as id2 from ref) a where exists (select 1 from user_extra ue where ue.col = a.id)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id2) from (select id, id as id2 from ref) a where exists (select 1 from user_extra ue where ue.col = a.id)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_id": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct a.id2), a.id from (select id, id as id2 from ref where 1 != 1) as a where 1 != 1 group by a.id",
+                "Query": "select count(distinct a.id2), a.id from (select id, id as id2 from ref) as a group by a.id"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :a_id limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "a distinct aggregation over a reference table with a subquery that is a join is planned as in main",
+    "query": "select count(distinct a.id2) from (select id, id as id2 from ref) a where exists (select 1 from user_extra ue join music m on m.col = ue.col where ue.user_id = a.id)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.id2) from (select id, id as id2 from ref) a where exists (select 1 from user_extra ue join music m on m.col = ue.col where ue.user_id = a.id)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.id2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_id": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct a.id2), a.id from (select id, id as id2 from ref where 1 != 1) as a where 1 != 1 group by a.id",
+                "Query": "select count(distinct a.id2), a.id from (select id, id as id2 from ref) as a group by a.id"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0",
+                    "JoinVars": {
+                      "ue_col": 1
+                    },
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "EqualUnique",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select 1, ue.col from user_extra as ue where 1 != 1",
+                        "Query": "select 1, ue.col from user_extra as ue where ue.user_id = :a_id",
+                        "Values": [
+                          ":a_id"
+                        ],
+                        "Vindex": "user_index"
+                      },
+                      {
+                        "OperatorType": "Limit",
+                        "Count": "1",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select 1 from music as m where 1 != 1",
+                            "Query": "select 1 from music as m where m.col = :ue_col /* INT16 */ limit 1"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "a distinct aggregation over a sharded route that reads a reference table is planned as in main",
+    "query": "select count(distinct d.c2) from (select a.col, a.col as c2 from `user` u join ref a on a.col = u.col) d where exists (select 1 from user_extra ue where ue.user_id = d.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct d.c2) from (select a.col, a.col as c2 from `user` u join ref a on a.col = u.col) d where exists (select 1 from user_extra ue where ue.user_id = d.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct d.c2)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "d_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select d.c2, d.col from (select a.col, a.col as c2 from `user` as u, ref as a where 1 != 1) as d where 1 != 1 group by d.col, d.c2",
+                "Query": "select d.c2, d.col from (select a.col, a.col as c2 from `user` as u, ref as a where a.col = u.col) as d group by d.col, d.c2"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                "Query": "select 1 from user_extra as ue where ue.user_id = :d_col limit 1",
+                "Values": [
+                  ":d_col"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "a subquery over a reference table joined with a select without a table is planned as in main",
+    "query": "select u.col from `user` u where u.id in (select r.id from global_ref r join (select 1 as x) d)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.col from `user` u where u.id in (select r.id from global_ref r join (select 1 as x) d)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.col from `user` as u where 1 != 1",
+        "Query": "select u.col from `user` as u where u.id in (select r.id from global_ref as r join (select 1 as x from dual) as d)"
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a subquery over a reference table joined with a recursive CTE is planned as in main",
+    "query": "select u.col from `user` u where u.id in (select r.id from global_ref r join (with recursive c as (select 1 as x union all select x + 1 from c where x < 3) select x from c) d)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.col from `user` u where u.id in (select r.id from global_ref r join (with recursive c as (select 1 as x union all select x + 1 from c where x < 3) select x from c) d)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.col from `user` as u where 1 != 1",
+        "Query": "select u.col from `user` as u where u.id in (select r.id from global_ref as r join (with recursive c as (select 1 as x from dual union all select x + 1 from c where x < 3) select x from c) as d)"
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a distinct aggregation over a reference table with a subquery routed by one column and another correlated by its argument is refused, as the pushed aggregation is grouped by both",
+    "query": "select count(distinct a.col) from ref a where exists (select 1 from user_extra ue where ue.user_id = a.id) and exists (select 1 from user_extra ue2 where ue2.extra_id = a.col)",
+    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
+  },
+  {
+    "comment": "a distinct aggregation over a reference table with a subquery routed by a column of a recursive CTE, which has no vindex table, is refused",
+    "query": "select count(distinct r.col) from ref r join (with recursive c as (select 1 as x union all select x + 1 from c where x < 3) select x from c) d where exists (select 1 from user_extra ue where ue.user_id = d.x)",
+    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
+  },
+  {
+    "comment": "a distinct aggregation over a derived table that reads an unsharded table and the source of a reference table is refused",
+    "query": "select count(distinct a.col) from (select id, col from unsharded union all select id, col from main.source_of_ref) a where exists (select 1 from user_extra ue where ue.user_id = a.id)",
+    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
   }
 ]
