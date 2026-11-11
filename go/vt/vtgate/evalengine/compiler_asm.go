@@ -3505,11 +3505,7 @@ func (asm *assembler) Neg_bit() {
 func (asm *assembler) Neg_i() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalInt64)
-		if arg.i == math.MinInt64 {
-			env.vm.err = errDeoptimize
-		} else {
-			arg.i = -arg.i
-		}
+		arg.i, env.vm.err = mathNeg_i(arg.i)
 		return 1
 	}, "NEG INT64(SP-1)")
 }
@@ -3517,11 +3513,9 @@ func (asm *assembler) Neg_i() {
 func (asm *assembler) Neg_u() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalUint64)
-		if arg.u > math.MaxInt64+1 {
-			env.vm.err = errDeoptimize
-		} else {
-			env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(-int64(arg.u))
-		}
+		var i int64
+		i, env.vm.err = mathNeg_u(arg.u)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(i)
 		return 1
 	}, "NEG UINT64(SP-1)")
 }

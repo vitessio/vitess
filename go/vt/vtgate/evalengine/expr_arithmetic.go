@@ -17,6 +17,9 @@ limitations under the License.
 package evalengine
 
 import (
+	"math"
+
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -498,7 +501,57 @@ func (n *NegateExpr) eval(env *ExpressionEnv) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
+	switch e := e.(type) {
+	case *evalInt64:
+		if e.bitLiteral {
+			break
+		}
+		if negateToDecimal(n.Inner, e) {
+			return newEvalDecimalWithPrec(decimal.NewFromInt(e.i).NegInPlace(), 0), nil
+		}
+		i, err := mathNeg_i(e.i)
+		if err != nil {
+			return nil, err
+		}
+		return newEvalInt64(i), nil
+	case *evalUint64:
+		if e.hexLiteral {
+			break
+		}
+		if negateToDecimal(n.Inner, e) {
+			return newEvalDecimalWithPrec(decimal.NewFromUint(e.u).NegInPlace(), 0), nil
+		}
+		i, err := mathNeg_u(e.u)
+		if err != nil {
+			return nil, err
+		}
+		return newEvalInt64(i), nil
+	}
 	return evalToNumeric(e, false).negate(), nil
+}
+
+// negateToDecimal reports whether negating the integer value e of inner yields
+// a DECIMAL. MySQL fixes the type of a negation while resolving types: for a
+// constant integer operand it looks at the value, and when its 64-bit pattern
+// has the high bit set (a negative signed value, or an unsigned value of at
+// least 2^63) the negation may not fit a BIGINT, so the result is DECIMAL.
+// The integer literal 9223372036854775808 is the exception, so that
+// -9223372036854775808 is the BIGINT minimum. A non-constant operand is always
+// negated as a BIGINT.
+func negateToDecimal(inner IR, e eval) bool {
+	switch e := e.(type) {
+	case *evalInt64:
+		return !e.bitLiteral && e.i < 0 && inner.constant()
+	case *evalUint64:
+		if e.hexLiteral || e.u <= math.MaxInt64 {
+			return false
+		}
+		if _, ok := inner.(*Literal); ok && e.u == math.MaxInt64+1 {
+			return false
+		}
+		return inner.constant()
+	}
+	return false
 }
 
 func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
@@ -508,6 +561,13 @@ func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(arg)
+	if c.negateConstantToDecimal(expr.Inner, arg) {
+		c.asm.Convert_xd(1, 0, 0)
+		c.asm.Neg_d()
+		c.asm.jumpDestination(skip)
+		return ctype{Type: sqltypes.Decimal, Flag: nullableFlags(arg.Flag), Col: collationNumeric}, nil
+	}
+
 	arg = c.compileToNumeric(arg, 1, sqltypes.Float64, false)
 	var neg sqltypes.Type
 
@@ -546,6 +606,26 @@ func (expr *NegateExpr) compile(c *compiler) (ctype, error) {
 		Scale: arg.Scale,
 		Col:   collationNumeric,
 	}, nil
+}
+
+// negateConstantToDecimal applies negateToDecimal at compile time: a constant
+// integer operand is evaluated once so the compiled program has the same type
+// as the interpreter and a folded constant. When that evaluation fails, the
+// program negates as a BIGINT and reports the error when it runs.
+func (c *compiler) negateConstantToDecimal(inner IR, arg ctype) bool {
+	switch {
+	case arg.Type == sqltypes.Int64 && arg.Flag&flagBit == 0:
+	case arg.Type == sqltypes.Uint64 && arg.Flag&flagHex == 0:
+	default:
+		return false
+	}
+	if !inner.constant() {
+		return false
+	}
+	env := EmptyExpressionEnv(c.env)
+	env.sqlmode = c.sqlmode
+	e, err := inner.eval(env)
+	return err == nil && negateToDecimal(inner, e)
 }
 
 func nullableFlags(flag typeFlag) typeFlag {

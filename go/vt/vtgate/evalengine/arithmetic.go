@@ -29,6 +29,28 @@ func dataOutOfRangeError[N1, N2 int64 | uint64 | float64](v1 N1, v2 N2, typ, sig
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1, sign, v2)
 }
 
+func negateOutOfRangeError[N int64 | uint64](v N) error {
+	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "BIGINT value is out of range in '-(%v)'", v)
+}
+
+// mathNeg_i negates a BIGINT. MySQL types the negation of a non-constant
+// integer as BIGINT, so negating the BIGINT minimum is out of range.
+func mathNeg_i(v int64) (int64, error) {
+	if v == math.MinInt64 {
+		return 0, negateOutOfRangeError(v)
+	}
+	return -v, nil
+}
+
+// mathNeg_u negates a BIGINT UNSIGNED into a BIGINT. 2^63 negates to the
+// BIGINT minimum; any larger value is out of range.
+func mathNeg_u(v uint64) (int64, error) {
+	if v > math.MaxInt64+1 {
+		return 0, negateOutOfRangeError(v)
+	}
+	return -int64(v), nil
+}
+
 func dataOutOfRangeErrorDecimal(v1 decimal.Decimal, v2 decimal.Decimal, typ, sign string) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "%s value is out of range in '(%v %s %v)'", typ, v1.String(), sign, v2.String())
 }
