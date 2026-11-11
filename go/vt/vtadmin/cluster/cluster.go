@@ -2547,9 +2547,21 @@ func (c *Cluster) ToggleTabletReplication(ctx context.Context, tablet *vtadminpb
 
 // Debug returns a map of debug information for a cluster.
 func (c *Cluster) Debug() map[string]any {
+	// Flag values can be credentials (e.g. vtsql-credentials-password, a
+	// discovery implementation's token), so none of them are exposed.
+	cfg := c.cfg
+	cfg.VtSQLFlags = sanitizeFlags(c.cfg.VtSQLFlags)
+	cfg.VtctldFlags = sanitizeFlags(c.cfg.VtctldFlags)
+	if c.cfg.DiscoveryFlagsByImpl != nil {
+		cfg.DiscoveryFlagsByImpl = make(FlagsByImpl, len(c.cfg.DiscoveryFlagsByImpl))
+		for impl, flags := range c.cfg.DiscoveryFlagsByImpl {
+			cfg.DiscoveryFlagsByImpl[impl] = sanitizeFlags(flags)
+		}
+	}
+
 	m := map[string]any{
 		"cluster": c.ToProto(),
-		"config":  c.cfg,
+		"config":  cfg,
 		"pools": map[string]json.RawMessage{
 			"backup_read_pool":        json.RawMessage(c.backupReadPool.StatsJSON()),
 			"schema_read_pool":        json.RawMessage(c.schemaReadPool.StatsJSON()),
@@ -2573,6 +2585,19 @@ func (c *Cluster) Debug() map[string]any {
 	}
 
 	return m
+}
+
+func sanitizeFlags(flags map[string]string) map[string]string {
+	if flags == nil {
+		return nil
+	}
+
+	sanitized := make(map[string]string, len(flags))
+	for name, val := range flags {
+		sanitized[name] = debug.SanitizeString(val)
+	}
+
+	return sanitized
 }
 
 // Equal compares the vtctld and vtgate addresses of the clusters for equality

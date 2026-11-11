@@ -185,18 +185,15 @@ func NewAPI(env *vtenv.Environment, clusters []*cluster.Cluster, opts Options) *
 	api.router = router
 	vtadminpb.RegisterVTAdminServer(api.serv.GRPCServer(), api)
 
+	var debugRouter *mux.Router
 	if !opts.HTTPOpts.DisableDebug {
-		// Due to the way net/http/pprof insists on registering its handlers, we
-		// have to put these on the root router, and not on the /debug prefixed
-		// subrouter, which would make way more sense, but alas. Additional
-		// debug routes should still go on the /debug subrouter, though.
-		serv.Router().HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-		serv.Router().HandleFunc("/debug/pprof/profile", pprof.Profile)
-		serv.Router().HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-		serv.Router().PathPrefix("/debug/pprof").HandlerFunc(pprof.Index)
-
+		// pprof.Cmdline is not served: the command line holds --cluster flag
+		// values, including credentials.
 		dapi := &debugAPI{api}
-		debugRouter := serv.Router().PathPrefix("/debug").Subrouter()
+		debugRouter = serv.Router().PathPrefix("/debug").Subrouter()
+		debugRouter.HandleFunc("/pprof/profile", pprof.Profile)
+		debugRouter.HandleFunc("/pprof/symbol", pprof.Symbol)
+		debugRouter.PathPrefix("/pprof").HandlerFunc(pprof.Index)
 		debugRouter.HandleFunc("/env", debug.Env)
 		debugRouter.HandleFunc("/cluster/{cluster_id}", debug.Cluster(dapi))
 		debugRouter.HandleFunc("/clusters", debug.Clusters(dapi))
@@ -205,7 +202,7 @@ func NewAPI(env *vtenv.Environment, clusters []*cluster.Cluster, opts Options) *
 	// Middlewares are executed in order of addition. Our ordering (all
 	// middlewares except the panic handler being optional) is:
 	//  1. Panic recovery (applied globally)
-	// 	2. CORS. CORS is a special case and is applied globally, the rest are applied only to the subrouter.
+	// 	2. CORS. CORS is a special case and is applied globally, the rest are applied only to the /api and /debug subrouters.
 	//	3. Compression
 	//	4. Tracing
 	//	5. Authentication
@@ -237,6 +234,9 @@ func NewAPI(env *vtenv.Environment, clusters []*cluster.Cluster, opts Options) *
 	}
 
 	router.Use(middlewares...)
+	if debugRouter != nil {
+		debugRouter.Use(middlewares...)
+	}
 
 	return api
 }

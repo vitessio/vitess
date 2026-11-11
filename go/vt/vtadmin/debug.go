@@ -16,7 +16,12 @@ limitations under the License.
 
 package vtadmin
 
-import "vitess.io/vitess/go/vt/vtadmin/cluster"
+import (
+	"context"
+
+	"vitess.io/vitess/go/vt/vtadmin/cluster"
+	"vitess.io/vitess/go/vt/vtadmin/rbac"
+)
 
 // debugAPI wraps a vtadmin API for use in the vtadmin/http/debug package
 // endpoints.
@@ -25,18 +30,29 @@ type debugAPI struct {
 }
 
 // Cluster is part of the debug.API interface.
-func (dapi *debugAPI) Cluster(id string) (*cluster.Cluster, bool) {
+func (dapi *debugAPI) Cluster(ctx context.Context, id string) (*cluster.Cluster, bool) {
 	dapi.api.clusterMu.Lock()
 	defer dapi.api.clusterMu.Unlock()
 
 	c, ok := dapi.api.clusterMap[id]
-	return c, ok
+	if !ok || !dapi.api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
+		return nil, false
+	}
+
+	return c, true
 }
 
 // Clusters is part of the debug.API interface.
-func (dapi *debugAPI) Clusters() []*cluster.Cluster {
+func (dapi *debugAPI) Clusters(ctx context.Context) []*cluster.Cluster {
 	dapi.api.clusterMu.Lock()
 	defer dapi.api.clusterMu.Unlock()
 
-	return dapi.api.clusters
+	clusters := make([]*cluster.Cluster, 0, len(dapi.api.clusters))
+	for _, c := range dapi.api.clusters {
+		if dapi.api.authz.IsAuthorized(ctx, c.ID, rbac.ClusterResource, rbac.GetAction) {
+			clusters = append(clusters, c)
+		}
+	}
+
+	return clusters
 }

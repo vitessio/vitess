@@ -30,6 +30,9 @@ import (
 var (
 	// SanitizeEnv is the set of environment variables to sanitize their values
 	// in the Env http handler.
+	//
+	// Deprecated: Env sanitizes every value. This is kept so that the
+	// --http-debug-sanitize-env flag is still accepted.
 	SanitizeEnv flagutil.StringSetFlag
 	// OmitEnv is the set of environment variables to omit entirely in the Env
 	// http handler.
@@ -39,9 +42,9 @@ var (
 // Env responds with a plaintext listing of key=value pairs of the environment
 // variables, sorted by key name.
 //
-// If a variable appears in OmitEnv, it is excluded entirely. If a variable
-// appears in SanitizeEnv, its value is replaced with a sanitized string,
-// including if there was no value set in the environment.
+// If a variable appears in OmitEnv, it is excluded entirely. Every other
+// variable's value is replaced with a sanitized string, since any of them may
+// hold a secret.
 func Env(w http.ResponseWriter, r *http.Request) {
 	vars := readEnv()
 
@@ -81,13 +84,9 @@ func readEnv() [][2]string {
 			continue
 		}
 
-		if SanitizeEnv.ToSet().Has(key) {
-			value = vtadmindebug.SanitizeString(value)
-		}
-
 		vars = append(vars, [2]string{
 			key,
-			value,
+			vtadmindebug.SanitizeString(value),
 		})
 	}
 

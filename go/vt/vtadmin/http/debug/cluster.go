@@ -35,9 +35,10 @@ func Cluster(api API) http.HandlerFunc {
 			return
 		}
 
-		c, ok := api.Cluster(id)
+		c, ok := api.Cluster(r.Context(), id)
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
+			return
 		}
 
 		data, err := json.Marshal(c.Debug())
@@ -55,7 +56,7 @@ func Cluster(api API) http.HandlerFunc {
 // Clusters returns an http.HandlerFunc for the /debug/clusters route.
 func Clusters(api API) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		clusters := api.Clusters()
+		clusters := api.Clusters(r.Context())
 		m := make(map[string]map[string]any, len(clusters))
 		for _, c := range clusters {
 			m[c.ID] = c.Debug()
