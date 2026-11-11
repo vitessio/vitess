@@ -35,6 +35,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -86,6 +87,8 @@ var (
 	maxFileCloseRetries = 20
 	openFile            = os.OpenFile
 	fallocate           = fallocateFile
+	// probeWriteAt writes the block that checkDirectIO writes with O_DIRECT.
+	probeWriteAt = (*os.File).WriteAt
 
 	// BuiltinBackupMysqldTimeout is how long ExecuteBackup should wait for response from mysqld.Shutdown.
 	// It can later be extended for other calls to mysqld during backup functions.
@@ -1642,8 +1645,9 @@ func checkChunksAligned(fe *FileEntry) error {
 	return nil
 }
 
-// checkDirectIO checks that the file at path can be opened with O_DIRECT.
-func checkDirectIO(path string) error {
+// checkDirectIO checks that the file at path can be opened with O_DIRECT, and written with it in
+// blocks of directIOAlignment, by writing one block at its start.
+func checkDirectIO(path string) (err error) {
 	f, err := openForDirectWrite(path)
 	if vterrors.Code(err) == vtrpcpb.Code_UNIMPLEMENTED {
 		return directModeErrorf("%v", err)
@@ -1651,7 +1655,20 @@ func checkDirectIO(path string) error {
 	if err != nil {
 		return err
 	}
-	return f.Close()
+	defer func() {
+		if closeErr := f.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	// A device whose logical blocks are larger than directIOAlignment rejects the write with EINVAL.
+	if _, err := probeWriteAt(f, alignedBuffer(directIOAlignment), 0); err != nil {
+		if errors.Is(err, syscall.EINVAL) {
+			return directModeErrorf("O_DIRECT writes of %d bytes are not supported: %v", directIOAlignment, err)
+		}
+		return err
+	}
+	return nil
 }
 
 // sizeChunkedDestination extends the destination of a chunked file to its final size. In direct

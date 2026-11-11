@@ -399,8 +399,11 @@ func TestCheckDirectRestore(t *testing.T) {
 		name          string
 		chunkSize     int64
 		rejectODirect bool
-		fallocateErr  error
-		expectErr     string
+		// rejectDirectWrite makes writes with O_DIRECT fail with EINVAL, as on a device whose logical
+		// blocks are larger than directIOAlignment.
+		rejectDirectWrite bool
+		fallocateErr      error
+		expectErr         string
 	}{
 		{
 			name:      "aligned chunks on a filesystem that supports O_DIRECT and fallocate",
@@ -418,6 +421,12 @@ func TestCheckDirectRestore(t *testing.T) {
 			expectErr:     "O_DIRECT is not supported",
 		},
 		{
+			name:              "O_DIRECT writes are rejected",
+			chunkSize:         1024 * 1024,
+			rejectDirectWrite: true,
+			expectErr:         "O_DIRECT writes of 4096 bytes are not supported",
+		},
+		{
 			name:         "fallocate is unsupported",
 			chunkSize:    1024 * 1024,
 			fallocateErr: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "fallocate is not supported"),
@@ -427,7 +436,7 @@ func TestCheckDirectRestore(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
-			if tt.expectErr == "" || tt.fallocateErr != nil {
+			if tt.expectErr == "" || tt.rejectDirectWrite || tt.fallocateErr != nil {
 				requireDirectIO(t, root)
 			}
 			if tt.expectErr == "" {
@@ -441,9 +450,9 @@ func TestCheckDirectRestore(t *testing.T) {
 			}
 			binlogDir := path.Join(root, "binlogs")
 
-			var directOpens atomic.Int32
-			oldOpenFile, oldFallocate := openFile, fallocate
-			t.Cleanup(func() { openFile, fallocate = oldOpenFile, oldFallocate })
+			var directOpens, probeWrites atomic.Int32
+			oldOpenFile, oldFallocate, oldProbeWriteAt := openFile, fallocate, probeWriteAt
+			t.Cleanup(func() { openFile, fallocate, probeWriteAt = oldOpenFile, oldFallocate, oldProbeWriteAt })
 			openFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
 				if flag&unix.O_DIRECT != 0 {
 					directOpens.Add(1)
@@ -452,6 +461,13 @@ func TestCheckDirectRestore(t *testing.T) {
 					}
 				}
 				return oldOpenFile(name, flag, perm)
+			}
+			probeWriteAt = func(f *os.File, b []byte, off int64) (int, error) {
+				probeWrites.Add(1)
+				if tt.rejectDirectWrite {
+					return 0, &os.PathError{Op: "write", Path: f.Name(), Err: syscall.EINVAL}
+				}
+				return oldProbeWriteAt(f, b, off)
 			}
 			if tt.fallocateErr != nil {
 				fallocate = func(*os.File, int64) error { return tt.fallocateErr }
@@ -481,6 +497,7 @@ func TestCheckDirectRestore(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.EqualValues(t, 3, directOpens.Load(), "each root directory must be probed once")
+			assert.EqualValues(t, 3, probeWrites.Load(), "each probe must write a block with O_DIRECT")
 			assert.DirExists(t, cnf.DataDir)
 			assert.DirExists(t, cnf.InnodbDataHomeDir)
 			assert.DirExists(t, binlogDir)
