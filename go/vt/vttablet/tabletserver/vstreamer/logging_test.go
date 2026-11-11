@@ -112,7 +112,7 @@ func TestVStreamerThrottledLog(t *testing.T) {
 	assert.Equal(t, engine.GetTabletInfo(), record["logger"])
 	assert.Equal(t, "wf1", record["workflow"])
 	// The test throttler client returns an empty check result for this app.
-	assert.Contains(t, record, "reason")
+	assert.Equal(t, "UNDEFINED", record["reason"])
 }
 
 // TestCopyLogs checks the attributes of the catchup and table copy logs of a

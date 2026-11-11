@@ -17,6 +17,8 @@ limitations under the License.
 package throttle
 
 import (
+	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,6 +64,56 @@ func TestCheckResultSummary(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.summary, func(t *testing.T) {
 			assert.Equal(t, tcase.summary, tcase.checkResult.Summary())
+		})
+	}
+}
+
+// TestCheckResultLogAttrs checks that reason is the response code name and
+// that the values Summary formats into its text are in their own attributes.
+func TestCheckResultLogAttrs(t *testing.T) {
+	err := errors.New("metric probe failed")
+	tcases := []struct {
+		name        string
+		checkResult *CheckResult
+		attrs       []slog.Attr
+	}{
+		{
+			name: "threshold exceeded",
+			checkResult: &CheckResult{
+				ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_THRESHOLD_EXCEEDED,
+				AppName:      "test",
+				MetricName:   "bugginess",
+				Threshold:    100,
+				Value:        200,
+				Scope:        "self",
+			},
+			attrs: []slog.Attr{
+				slog.String("reason", "THRESHOLD_EXCEEDED"),
+				slog.String("app", "test"),
+				slog.String("scope", "self"),
+				slog.String("metric_name", "bugginess"),
+				slog.Float64("metric_value", 200),
+				slog.Float64("threshold", 100),
+			},
+		},
+		{
+			name: "internal error",
+			checkResult: &CheckResult{
+				ResponseCode: tabletmanagerdatapb.CheckThrottlerResponseCode_INTERNAL_ERROR,
+				AppName:      "test",
+				Error:        err,
+			},
+			attrs: []slog.Attr{
+				slog.String("reason", "INTERNAL_ERROR"),
+				slog.String("app", "test"),
+				slog.Any("error", err),
+				slog.String("error_code", "UNKNOWN"),
+			},
+		},
+	}
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			assert.Equal(t, tcase.attrs, tcase.checkResult.LogAttrs())
 		})
 	}
 }
