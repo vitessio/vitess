@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -183,7 +185,11 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		if err != nil && err != ErrBinlogUnavailable {
 			err = fmt.Errorf("stream error @ (including the GTID we failed to process) %v: %v", stopPos, err)
 		}
-		log.Info(fmt.Sprintf("stream ended @ %v, err = %v", stopPos, err))
+		attrs := []slog.Attr{slog.String("position", replication.EncodePosition(stopPos))}
+		if err != nil {
+			attrs = append(attrs, slog.Any("error", err))
+		}
+		log.Info("stream ended", attrs...)
 	}()
 
 	if bls.conn, err = NewBinlogConnection(bls.cp); err != nil {
@@ -203,7 +209,9 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		if err != nil {
 			return fmt.Errorf("can't get charset to check binlog stream: %v", err)
 		}
-		log.Info(fmt.Sprintf("binlog stream client charset = %v, server charset = %v", bls.clientCharset, cs))
+		log.Info("binlog stream charsets",
+			slog.String("client_charset", fmt.Sprint(bls.clientCharset)),
+			slog.String("server_charset", fmt.Sprint(cs)))
 		if !proto.Equal(cs, bls.clientCharset) {
 			return fmt.Errorf("binlog stream client charset (%v) doesn't match server (%v)", bls.clientCharset, cs)
 		}
@@ -264,7 +272,9 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	begin := func() {
 		if statements != nil {
 			// If this happened, it would be a legitimate error.
-			log.Error(fmt.Sprintf("BEGIN in binlog stream while still in another transaction; dropping %d statements: %v", len(statements), statements))
+			log.Error("BEGIN in binlog stream while still in another transaction; dropping statements",
+				slog.Int("statement_count", len(statements)),
+				slog.String("transaction", fmt.Sprint(statements)))
 			binlogStreamerErrors.Add("ParseEvents", 1)
 		}
 		statements = make([]FullBinlogStatement, 0, 10)
@@ -615,7 +625,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warn(fmt.Sprintf("writeValuesAsSQL(%v) failed: %v", i, err))
+			log.Warn("writeValuesAsSQL failed", slog.Int("row_index", i), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 
@@ -625,7 +635,7 @@ func (bls *Streamer) appendInserts(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warn(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
+				log.Warn("resolver failed", slog.String("values", fmt.Sprint(keyspaceIDCell)), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}
 
@@ -651,14 +661,14 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeValuesAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warn(fmt.Sprintf("writeValuesAsSQL(%v) failed: %v", i, err))
+			log.Warn("writeValuesAsSQL failed", slog.Int("row_index", i), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 
 		sql.WriteString(" WHERE ")
 
 		if _, _, err := writeIdentifiersAsSQL(sql, tce, rows, i, false); err != nil {
-			log.Warn(fmt.Sprintf("writeIdentifiesAsSQL(%v) failed: %v", i, err))
+			log.Warn("writeIdentifiersAsSQL failed", slog.Int("row_index", i), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 
@@ -668,7 +678,7 @@ func (bls *Streamer) appendUpdates(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warn(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
+				log.Warn("resolver failed", slog.String("values", fmt.Sprint(keyspaceIDCell)), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}
 
@@ -694,7 +704,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 
 		keyspaceIDCell, pkValues, err := writeIdentifiersAsSQL(sql, tce, rows, i, tce.pkNames != nil)
 		if err != nil {
-			log.Warn(fmt.Sprintf("writeIdentifiesAsSQL(%v) failed: %v", i, err))
+			log.Warn("writeIdentifiersAsSQL failed", slog.Int("row_index", i), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 
@@ -704,7 +714,7 @@ func (bls *Streamer) appendDeletes(statements []FullBinlogStatement, tce *tableC
 			var err error
 			ksid, err = tce.resolver.keyspaceID(keyspaceIDCell)
 			if err != nil {
-				log.Warn(fmt.Sprintf("resolver(%v) failed: %v", keyspaceIDCell, err))
+				log.Warn("resolver failed", slog.String("values", fmt.Sprint(keyspaceIDCell)), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}
 

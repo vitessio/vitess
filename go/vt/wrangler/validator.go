@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/logutil"
 
@@ -35,7 +36,7 @@ func consumeValidationResults(logger logutil.Logger, results []string) (err erro
 			err = errors.New("some validation errors - see log")
 		}
 
-		logger.Error(errors.New(result))
+		logger.Error("validation failure", slog.String("error", result))
 	}
 
 	return err

@@ -32,9 +32,12 @@ limitations under the License.
 //
 // Keys that can hold data include:
 //
-//   - error
-//   - query, filter and expression
-//   - last_pk, row, values, event, transaction, message and panic
+//   - error, last_sql_error and last_io_error
+//   - query, queries, schema_diff, filter, expression and result
+//   - last_pk, row, values, event, transaction, message, packet and panic
+//   - exec_cmd, args, process_name, stdout, stderr and error_log
+//   - settings and azblob_message
+//   - tablet_info and primary_tablet_info
 package logcheck
 
 import (

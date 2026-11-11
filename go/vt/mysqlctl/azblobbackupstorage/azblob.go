@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"os"
 	"strings"
@@ -135,7 +136,7 @@ func azInternalCredentials() (string, string, error) {
 
 	var actKey string
 	if keyFile := accountKeyFile.Get(); keyFile != "" {
-		log.Info("Getting Azure Storage Account key from file: " + keyFile)
+		log.Info("Getting Azure Storage Account key from file", slog.String("path", keyFile))
 		dat, err := os.ReadFile(keyFile)
 		if err != nil {
 			return "", "", err
@@ -173,14 +174,14 @@ func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 			Log: func(level pipeline.LogLevel, message string) {
 				switch level {
 				case pipeline.LogFatal, pipeline.LogPanic:
-					log.Error(message)
+					log.Error("Azure Blob pipeline fatal error", slog.String("azblob_message", message))
 					os.Exit(1)
 				case pipeline.LogError:
-					log.Error(message)
+					log.Error("Azure Blob pipeline error", slog.String("azblob_message", message))
 				case pipeline.LogWarning:
-					log.Warn(message)
+					log.Warn("Azure Blob pipeline warning", slog.String("azblob_message", message))
 				case pipeline.LogInfo, pipeline.LogDebug:
-					log.Info(message)
+					log.Info("Azure Blob pipeline info", slog.String("azblob_message", message))
 				}
 			},
 			ShouldLog: func(level pipeline.LogLevel) bool {
@@ -332,7 +333,12 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 	return resp.Body(azblob.RetryReaderOptions{
 		MaxRetryRequests: defaultRetryCount,
 		NotifyFailedRead: func(failureCount int, lastError error, offset int64, count int64, willRetry bool) {
-			log.Warn(fmt.Sprintf("ReadFile: [azblob] container: %s, directory: %s, filename: %s, error: %v", containerName, objName(bh.dir, ""), filename, lastError))
+			log.Warn("ReadFile: [azblob] read failed",
+				slog.String("container", containerName.Get()),
+				slog.String("dir", objName(bh.dir, "")),
+				slog.String("file_name", filename),
+				slog.Any("error", lastError),
+			)
 		},
 		TreatEarlyCloseAsError: true,
 	}), nil
@@ -359,7 +365,7 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 		searchPrefix = objName(dir, "")
 	}
 
-	log.Info(fmt.Sprintf("ListBackups: [azblob] container: %s, directory: %v", containerName, searchPrefix))
+	log.Info("ListBackups: [azblob]", slog.String("container", containerName.Get()), slog.String("search_prefix", searchPrefix))
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
@@ -418,7 +424,7 @@ func (bs *AZBlobBackupStorage) StartBackup(ctx context.Context, dir, name string
 
 // RemoveBackup implements BackupStorage.
 func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	log.Info(fmt.Sprintf("ListBackups: [azblob] container: %s, directory: %s", containerName, objName(dir, "")))
+	log.Info("RemoveBackup: [azblob]", slog.String("container", containerName.Get()), slog.String("dir", objName(dir, "")))
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
@@ -459,7 +465,7 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 			return err
 		}
 
-		log.Info(fmt.Sprintf("Removing backup directory: %v", strings.TrimSuffix(searchPrefix, "/")))
+		log.Info("Removing backup directory", slog.String("dir", strings.TrimSuffix(searchPrefix, "/")))
 		_, err = containerURL.NewBlobURL(strings.TrimSuffix(searchPrefix, "/")).Delete(ctx, azblob.DeleteSnapshotsOptionNone, azblob.BlobAccessConditions{})
 		if err == nil {
 			break

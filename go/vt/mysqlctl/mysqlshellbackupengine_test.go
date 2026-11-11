@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -428,7 +430,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		}
 
 		// did we notice the lock was release and did we release it ours as well?
-		require.Contains(t, logger.String(), "global read lock released after",
+		require.Contains(t, logger.String(), "global read lock released duration=",
 			"failed to release the global lock after mysqlsh")
 	})
 
@@ -530,8 +532,11 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 		t.Cleanup(mysqld.Close)
 		return mysqld
 	}
-	assertLogged := func(t *testing.T, stream *logutil.MemoryLogger, binary string) {
-		assert.Contains(t, stream.String(), "running "+binary+" "+wantArgs)
+	assertLogged := func(t *testing.T, logs *logtest.Logs, stream *logutil.MemoryLogger, binary string) {
+		record := logs.Record(t, "running mysql shell")
+		assert.Equal(t, "INFO", record["level"])
+		assert.Contains(t, record["exec_cmd"], binary+" "+wantArgs)
+		assert.NotContains(t, logs.String(), secret)
 		assert.NotContains(t, stream.String(), secret)
 	}
 
@@ -552,6 +557,7 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 		mysqlShellBackupLocation = "logical"
 		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
 		argsFile := fakeMySQLShell(t, be.binaryName)
+		logs := logtest.Capture(t, slog.LevelInfo)
 		stream := logutil.NewMemoryLogger()
 
 		_, err := be.ExecuteBackup(t.Context(), BackupParams{
@@ -560,7 +566,7 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 			Mysqld:      newMysqld(t),
 		}, &FakeBackupHandle{Dir: t.TempDir(), NameV: t.Name()})
 		require.ErrorContains(t, err, "mysqlshell failed")
-		assertLogged(t, stream, be.binaryName)
+		assertLogged(t, logs, stream, be.binaryName)
 		assertRanWithFlags(t, argsFile)
 	})
 
@@ -575,6 +581,7 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 		mysqld := newMysqld(t)
 		mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{"SHOW DATABASES": {}}
 		mysqld.ExpectedExecuteSuperQueryList = []string{"FAKE RESET ALL REPLICATION", "SET GLOBAL LOCAL_INFILE=1"}
+		logs := logtest.Capture(t, slog.LevelInfo)
 		stream := logutil.NewMemoryLogger()
 
 		_, err = (&MySQLShellBackupEngine{}).ExecuteRestore(t.Context(), RestoreParams{
@@ -585,7 +592,7 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 			return io.NopCloser(bytes.NewReader(manifest)), nil
 		}})
 		require.ErrorContains(t, err, "mysqlshell failed")
-		assertLogged(t, stream, path.Join(bin, "mysqlsh"))
+		assertLogged(t, logs, stream, path.Join(bin, "mysqlsh"))
 		assertRanWithFlags(t, argsFile)
 	})
 }

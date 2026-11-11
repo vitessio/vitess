@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"crypto/subtle"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -103,7 +103,7 @@ func InitAuthServerStatic(mysqlAuthServerStaticFile, mysqlAuthServerStaticString
 func RegisterAuthServerStaticFromParams(file, jsonConfig string, reloadInterval time.Duration) {
 	authServerStatic := NewAuthServerStatic(file, jsonConfig, reloadInterval)
 	if len(authServerStatic.entries) <= 0 {
-		log.Error(fmt.Sprintf("Failed to populate entries from file: %v", file))
+		log.Error("Failed to populate entries from file", slog.String("path", file))
 		os.Exit(1)
 	}
 	RegisterAuthServer("static", authServerStatic)
@@ -263,7 +263,7 @@ func (a *AuthServerStatic) reload() {
 	if a.file != "" {
 		data, err := os.ReadFile(a.file)
 		if err != nil {
-			log.Error(fmt.Sprintf("Failed to read mysql_auth_server_static_file file: %v", err))
+			log.Error("Failed to read mysql_auth_server_static_file file", slog.Any("error", err))
 			return
 		}
 		jsonBytes = data
@@ -271,7 +271,7 @@ func (a *AuthServerStatic) reload() {
 
 	entries := make(map[string][]*AuthServerStaticEntry)
 	if err := ParseConfig(jsonBytes, &entries); err != nil {
-		log.Error(fmt.Sprintf("Error parsing auth server config: %v", err))
+		log.Error("Error parsing auth server config", slog.Any("error", err))
 		return
 	}
 

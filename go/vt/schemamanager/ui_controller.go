@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -103,7 +104,7 @@ func (controller *UIController) OnValidationFail(ctx context.Context, err error)
 func (controller *UIController) OnExecutorComplete(ctx context.Context, result *ExecuteResult) error {
 	data, err := json.Marshal(result)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to serialize ExecuteResult: %v", err))
+		log.Error("Failed to serialize ExecuteResult", slog.Any("error", err))
 		return err
 	}
 	fmt.Fprintf(controller.writer, "Executor succeeds: %s", string(data))

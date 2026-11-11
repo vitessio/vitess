@@ -22,10 +22,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -163,12 +165,12 @@ func (be *XtrabackupEngine) backupFileName() string {
 }
 
 func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalErr *error) {
-	logger.Infof("Closing backup file %v", fileName)
+	logger.Info("Closing backup file", slog.String("file_name", fileName))
 	if closeErr := wc.Close(); *finalErr == nil {
 		*finalErr = closeErr
 	} else if closeErr != nil {
 		// since we already have an error just log this
-		logger.Errorf("error closing file %v: %v", fileName, closeErr)
+		logger.Error("error closing file", slog.String("file_name", fileName), slog.Any("error", closeErr))
 	}
 }
 
@@ -216,7 +218,7 @@ func closeBackupFiles(ctx context.Context, cancel context.CancelFunc, timeout ti
 				// otherwise-successful, still-in-flight upload.
 				return
 			}
-			logger.Errorf("Timed out waiting for Close() on backup file to complete")
+			logger.Error("Timed out waiting for Close() on backup file to complete")
 			// Cancelling the Context that was originally passed to bh.AddFile()
 			// should hopefully cause Close() calls on the file that AddFile()
 			// returned to abort. If the underlying implementation doesn't
@@ -254,8 +256,18 @@ func closeBackupFiles(ctx context.Context, cancel context.CancelFunc, timeout ti
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
 // The function returns a BackupResult that indicates the usability of the backup, and an overall error.
 func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (BackupResult, error) {
-	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
-		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
+	attrs := []slog.Attr{
+		slog.Time("backup_time", params.BackupTime),
+		slog.String("keyspace", params.Keyspace),
+		slog.String("shard", params.Shard),
+		slog.String("tablet", params.TabletAlias),
+		slog.Int("concurrency", params.Concurrency),
+		slog.Bool("compress", backupStorageCompress),
+	}
+	if params.IncrementalFromPos != "" {
+		attrs = append(attrs, slog.String("incremental_from_pos", params.IncrementalFromPos))
+	}
+	params.Logger.Info("Executing Backup", attrs...)
 
 	return be.executeFullBackup(ctx, params, bh)
 }
@@ -300,10 +312,10 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	}
 
 	flavor := pos.GTIDSet.Flavor()
-	params.Logger.Infof("Detected MySQL flavor: %v", flavor)
+	params.Logger.Info("Detected MySQL flavor", slog.String("flavor", flavor))
 
 	backupFileName := be.backupFileName()
-	params.Logger.Infof("backup file name: %s", backupFileName)
+	params.Logger.Info("backup file name", slog.String("file_name", backupFileName))
 	numStripes := int(xtrabackupStripes)
 
 	// Perform backups in a separate function, so deferred calls to Close() are
@@ -311,7 +323,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	// do not write the MANIFEST unless all files were closed successfully,
 	// maintaining the contract that a MANIFEST file should only exist if the
 	// backup was created successfully.
-	params.Logger.Infof("Starting backup with %v stripe(s)", numStripes)
+	params.Logger.Info("Starting backup with stripes", slog.Int("stripe_count", numStripes))
 	replicationPosition, err := be.backupFiles(ctx, params, bh, backupFileName, numStripes, flavor)
 	if err != nil {
 		return BackupUnusable, err
@@ -323,7 +335,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 	}
 
 	// open the MANIFEST
-	params.Logger.Infof("Writing backup MANIFEST")
+	params.Logger.Info("Writing backup MANIFEST")
 	mwc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
@@ -375,7 +387,7 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 		return BackupUnusable, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 
-	params.Logger.Infof("Backup completed")
+	params.Logger.Info("Backup completed")
 	return BackupUsable, nil
 }
 
@@ -507,10 +519,10 @@ func (be *XtrabackupEngine) backupFiles(
 		scanner := bufio.NewScanner(backupErr)
 		for scanner.Scan() {
 			line := scanner.Text()
-			params.Logger.Infof("xtrabackup stderr: %s", line)
+			params.Logger.Info("command stderr", slog.String("command", xtrabackupBinaryName), slog.String("stderr", line))
 		}
 		if err := scanner.Err(); err != nil {
-			params.Logger.Errorf("error reading from xtrabackup stderr: %v", err)
+			params.Logger.Error("error reading from xtrabackup stderr", slog.Any("error", err))
 		}
 	}()
 
@@ -575,14 +587,14 @@ func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestorePa
 	}
 
 	// copy / extract files
-	params.Logger.Infof("Restore: Extracting files from %v", bm.FileName)
+	params.Logger.Info("Restore: Extracting files", slog.String("file_name", bm.FileName))
 
 	if err := be.restoreFromBackup(ctx, params.Cnf, bh, bm, params.Logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
 		return nil, err
 	}
 	// now find the replication position and return that
-	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
+	params.Logger.Info("Restore: returning replication position", slog.String("position", replication.EncodePosition(bm.Position)))
 	return &bm.BackupManifest, nil
 }
 
@@ -598,14 +610,14 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	defer func(dir string, l logutil.Logger) {
 		err := os.RemoveAll(dir)
 		if err != nil {
-			l.Errorf("error deleting tempDir(%v): %v", dir, err)
+			l.Error("error deleting tempDir", slog.String("dir", dir), slog.Any("error", err))
 		}
 	}(tempDir, logger)
 
 	// For optimization, we are replacing pargzip with pgzip, so newBuiltinDecompressor doesn't have to compare and print warning for every file
 	// since newBuiltinDecompressor is helper method and does not hold any state, it was hard to do it in that method itself.
 	if bm.CompressionEngine == PargzipCompressor {
-		logger.Warningf(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
+		logger.Warn(`engine "pargzip" doesn't support decompression, using "pgzip" instead`)
 		bm.CompressionEngine = PgzipCompressor
 		defer func() {
 			bm.CompressionEngine = PargzipCompressor
@@ -613,12 +625,12 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	}
 
 	if err := be.extractFiles(ctx, logger, bh, bm, tempDir); err != nil {
-		logger.Errorf("error extracting backup files: %v", err)
+		logger.Error("error extracting backup files", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 
 	// copy / extract files
-	logger.Infof("Restore: Preparing the extracted files")
+	logger.Info("Restore: Preparing the extracted files")
 	// prepare the backup
 	restoreProgram := path.Join(xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{
@@ -649,8 +661,8 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	// Read stdout/stderr in the background and send each line to the logger.
 	prepareWg := &sync.WaitGroup{}
 	prepareWg.Add(2)
-	go scanLinesToLogger("prepare stdout", prepareOut, logger, prepareWg.Done)
-	go scanLinesToLogger("prepare stderr", prepareErr, logger, prepareWg.Done)
+	go scanLinesToLogger("prepare", "stdout", prepareOut, logger, prepareWg.Done)
+	go scanLinesToLogger("prepare", "stderr", prepareErr, logger, prepareWg.Done)
 	prepareWg.Wait()
 
 	// Get exit status.
@@ -659,7 +671,7 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	}
 
 	// then move-back
-	logger.Infof("Restore: Move extracted and prepared files to final locations")
+	logger.Info("Restore: Move extracted and prepared files to final locations")
 
 	flagsToExec = []string{
 		"--defaults-file=" + cnf.Path,
@@ -682,8 +694,8 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	// Read stdout/stderr in the background and send each line to the logger.
 	movebackWg := &sync.WaitGroup{}
 	movebackWg.Add(2)
-	go scanLinesToLogger("move-back stdout", movebackOut, logger, movebackWg.Done)
-	go scanLinesToLogger("move-back stderr", movebackErr, logger, movebackWg.Done)
+	go scanLinesToLogger("move-back", "stdout", movebackOut, logger, movebackWg.Done)
+	go scanLinesToLogger("move-back", "stderr", movebackErr, logger, movebackWg.Done)
 	movebackWg.Wait()
 
 	// Get exit status.
@@ -709,7 +721,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		baseFileName = be.backupFileName()
 	}
 
-	logger.Infof("backup file name: %s", baseFileName)
+	logger.Info("backup file name", slog.String("file_name", baseFileName))
 	// Open the source files for reading.
 	srcFiles, err := readStripeFiles(ctx, bh, baseFileName, int(bm.NumStripes), logger)
 	if err != nil {
@@ -761,7 +773,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	defer func() {
 		for _, decompressor := range srcDecompressors {
 			if cerr := decompressor.Close(); cerr != nil {
-				logger.Errorf("failed to close decompressor: %v", cerr)
+				logger.Error("failed to close decompressor", slog.Any("error", cerr))
 			}
 		}
 	}()
@@ -774,7 +786,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// error if we can't find tar
 		flagsToExec := []string{"-C", tempDir, "-xiv"}
 		tarCmd := exec.CommandContext(ctx, "tar", flagsToExec...)
-		logger.Infof("Executing tar cmd with flags %v", flagsToExec)
+		logger.Info("Executing tar cmd", slog.Any("args", flagsToExec))
 		tarCmd.Stdin = reader
 		tarOut, err := tarCmd.StdoutPipe()
 		if err != nil {
@@ -791,8 +803,8 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Read stdout/stderr in the background and send each line to the logger.
 		tarWg := &sync.WaitGroup{}
 		tarWg.Add(2)
-		go scanLinesToLogger("tar stdout", tarOut, logger, tarWg.Done)
-		go scanLinesToLogger("tar stderr", tarErr, logger, tarWg.Done)
+		go scanLinesToLogger("tar", "stdout", tarOut, logger, tarWg.Done)
+		go scanLinesToLogger("tar", "stderr", tarErr, logger, tarWg.Done)
 		tarWg.Wait()
 
 		// Get exit status.
@@ -806,17 +818,17 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		flagsToExec := []string{"-C", tempDir, "-xv"}
 		// The operator's --xbstream-restore-flags can hold an --encrypt-key, so
 		// the log line shows a placeholder for them instead.
-		loggedFlags := fmt.Sprintf("-C %s -xv", tempDir)
+		loggedArgs := slices.Clone(flagsToExec)
 		if xbstreamRestoreFlags != "" {
 			restoreFlags, err := shlex.Split(xbstreamRestoreFlags)
 			if err != nil {
 				return vterrors.Wrap(err, "failed to parse --xbstream-restore-flags")
 			}
 			flagsToExec = append(flagsToExec, restoreFlags...)
-			loggedFlags += " <--xbstream-restore-flags>"
+			loggedArgs = append(loggedArgs, "<--xbstream-restore-flags>")
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
-		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, loggedFlags)
+		logger.Info("Executing xbstream cmd", slog.String("command", xbstreamProgram), slog.Any("args", loggedArgs))
 		xbstreamCmd.Stdin = reader
 		xbstreamOut, err := xbstreamCmd.StdoutPipe()
 		if err != nil {
@@ -833,8 +845,8 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// Read stdout/stderr in the background and send each line to the logger.
 		xbstreamWg := &sync.WaitGroup{}
 		xbstreamWg.Add(2)
-		go scanLinesToLogger("xbstream stdout", xbstreamOut, logger, xbstreamWg.Done)
-		go scanLinesToLogger("xbstream stderr", xbstreamErr, logger, xbstreamWg.Done)
+		go scanLinesToLogger("xbstream", "stdout", xbstreamOut, logger, xbstreamWg.Done)
+		go scanLinesToLogger("xbstream", "stderr", xbstreamErr, logger, xbstreamWg.Done)
 		xbstreamWg.Wait()
 
 		// Get exit status.
@@ -875,7 +887,7 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (repli
 	position = strings.ReplaceAll(position, " ", "")
 	position = strings.ReplaceAll(position, "\t", "")
 	position = strings.ReplaceAll(position, "\n", "")
-	logger.Infof("Found position: %v", position)
+	logger.Info("Found position", slog.String("gtid", position))
 	if position == "" {
 		return replication.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "empty replication position from xtrabackup")
 	}
@@ -914,13 +926,13 @@ func addStripeFiles(ctx context.Context, params BackupParams, backupHandle backu
 	files := []io.WriteCloser{}
 	for i := range numStripes {
 		filename := stripeFileName(baseFileName, i)
-		params.Logger.Infof("Opening backup stripe file %v", filename)
+		params.Logger.Info("Opening backup stripe file", slog.String("file_name", filename))
 		file, err := backupHandle.AddFile(ctx, filename, totalSize/int64(numStripes))
 		if err != nil {
 			// Close any files we already opened and clear them from the result.
 			for _, file := range files {
 				if err := file.Close(); err != nil {
-					params.Logger.Warningf("error closing backup stripe file: %v", err)
+					params.Logger.Warn("error closing backup stripe file", slog.Any("error", err))
 				}
 			}
 			return nil, err
@@ -945,7 +957,7 @@ func readStripeFiles(ctx context.Context, backupHandle backupstorage.BackupHandl
 			// Close any files we already opened and clear them from the result.
 			for _, file := range files {
 				if err := file.Close(); err != nil {
-					logger.Warningf("error closing backup stripe file: %v", err)
+					logger.Warn("error closing backup stripe file", slog.Any("error", err))
 				}
 			}
 			return nil, err
