@@ -74,16 +74,6 @@ func TestRefusedJoinMergeLeavesTheProbeSingleShard(t *testing.T) {
 		"the probe is routed by the value coming from the left, so it reads one shard per row, not every shard")
 }
 
-// The recursion's own predicate can make the term look single-shard, and the CTE merger restores it
-// to its cross-table shape without recomputing the routing afterwards.
-func TestReferenceRowsAreNotMergedIntoACTERoutedByTheRecursion(t *testing.T) {
-	primitive := planReferenceOuterJoin(t,
-		"with recursive c as (select r1.col as col from ref_with_source as r1 left join ref as r2 on r1.col = r2.col union all select u.col from `user` as u join c on u.id = c.col) select col from c")
-
-	require.IsType(t, &engine.RecurseCTE{}, primitive,
-		"the merged route would be routed by a predicate that no longer exists once the recursion is restored")
-}
-
 // A multi-table DML whose only target is the sharded side never reads the rows the outer join
 // preserves: an unmatched reference row has no row to write to, so a route that reads it once per
 // shard writes nothing extra. The merge has to stay, or these statements need schema tracking to

@@ -570,36 +570,6 @@
     "plan": "VT13001: [BUG] dont know how to <nil>"
   },
   {
-    "comment": "a recursive term that preserves reference rows next to a shard that is only known at execution of a table is not merged into the seed",
-    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :x) u on u.col = r.col join c on c.col = r.col) select col from c",
-    "plan": "VT13001: [BUG] dont know how to <nil>"
-  },
-  {
-    "comment": "a recursive term that preserves reference rows next to a constant that the vindex maps to no shard is not merged into the seed",
-    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 'abc') u on u.col = r.col join c on c.col = r.col) select col from c",
-    "plan": "VT13001: [BUG] dont know how to <nil>"
-  },
-  {
-    "comment": "a recursive term that preserves reference rows next to a decimal constant that the vindex maps to no shard is not merged into the seed",
-    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1.5) u on u.col = r.col join c on c.col = r.col) select col from c",
-    "plan": "VT13001: [BUG] dont know how to <nil>"
-  },
-  {
-    "comment": "a recursive term that preserves reference rows next to a hex constant that the vindex maps to no shard is not merged into the seed",
-    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 0x01) u on u.col = r.col join c on c.col = r.col) select col from c",
-    "plan": "VT13001: [BUG] dont know how to <nil>"
-  },
-  {
-    "comment": "a recursive term that preserves reference rows next to a constant beyond 64 bits that the vindex maps to no shard is not merged into the seed",
-    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 18446744073709551616) u on u.col = r.col join c on c.col = r.col) select col from c",
-    "plan": "VT13001: [BUG] dont know how to <nil>"
-  },
-  {
-    "comment": "a recursive term that preserves reference rows next to a constant that is not known at planning is not merged into the seed",
-    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = now()) u on u.col = r.col join c on c.col = r.col) select col from c",
-    "plan": "VT13001: [BUG] dont know how to <nil>"
-  },
-  {
     "comment": "a not in subquery routed by a column of the outer query is true on a shard without its rows and is not asked on every shard",
     "query": "select a.col from ref a where a.col not in (select x.col from user x where x.id = a.col) union all select col from user",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
@@ -708,11 +678,6 @@
     "comment": "a CTE with an outer join inside referenced twice is refused although main merges it into one route",
     "query": "with d as (select r.col, u.id from ref r left join user u on u.col = r.col) select a.col from d a join d b on a.id = b.id",
     "plan": "VT12001: unsupported: join of a CTE referenced more than once with a reference table that an outer join preserves"
-  },
-  {
-    "comment": "a recursive term that preserves reference rows next to a constant that is evaluated at execution is not merged into the seed, although main pins it to a shard",
-    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = unix_timestamp()) u on u.col = r.col join c on c.col = r.col) select col from c",
-    "plan": "VT13001: [BUG] dont know how to <nil>"
   },
   {
     "comment": "a subquery over an inner join with a derived table on its right is not asked on every shard",

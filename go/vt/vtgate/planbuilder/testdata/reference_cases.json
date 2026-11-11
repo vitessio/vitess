@@ -1963,6 +1963,386 @@
     "skip_e2e": true
   },
   {
+    "comment": "a recursive term next to a shard that is only known at execution of a table is merged into the seed as on main",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :x) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :x) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = :x) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          ":x"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to a constant that the vindex maps to no shard is merged into the seed as on main",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 'abc') u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 'abc') u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = 'abc') as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "'abc'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to a decimal constant that the vindex maps to no shard is merged into the seed as on main",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1.5) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 1.5) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = 1.5) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "1.5"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to a hex constant that the vindex maps to no shard is merged into the seed as on main",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 0x01) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 0x01) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = 0x01) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "_binary'\u0001'"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to a constant beyond 64 bits that the vindex maps to no shard is merged into the seed as on main",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 18446744073709551616) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = 18446744073709551616) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = 18446744073709551616) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "18446744073709551616"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to a constant that is not known at planning is merged into the seed as on main",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = now()) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = now()) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = now()) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "now()"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to a constant that is evaluated at execution is merged into the seed as on main",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = unix_timestamp()) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = unix_timestamp()) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = unix_timestamp()) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          "unix_timestamp()"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to one shard of a table routed by a bind variable is merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :id) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :id) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = :id) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          ":id"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term with a subquery routed by a bind variable keeps the recursion value bound next to one shard of a table",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :id) u on u.col = r.col join c on c.col = r.col where r.col in (select col from user where id = :id3)) select col from c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :id) u on u.col = r.col join c on c.col = r.col where r.col in (select col from user where id = :id3)) select col from c",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "c_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from ref where 1 != 1",
+            "Query": "select col from ref"
+          },
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user` where id = :id3",
+                "Values": [
+                  ":id3"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col where 1 != 1",
+                "Query": "select r.col from ref as r left join (select * from `user` where id = :id) as u on u.col = r.col where r.col = :c_col and :__sq_has_values and r.col in ::__sq1",
+                "Values": [
+                  ":id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term with a predicate is merged next to one shard of a table routed by a bind variable",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :id) u on u.col = r.col join c on c.col = r.col where r.col < 5) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from user where id = :id) u on u.col = r.col join c on c.col = r.col where r.col < 5) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from `user` where id = :id) as u on u.col = r.col, c where c.col = r.col and r.col < 5) select col from c",
+        "Values": [
+          ":id"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to one shard of a table routed by a bind variable is merged into a seed routed by the same bind variable",
+    "query": "with recursive c as (select col from user where id = :id union all select r.col from ref r left join (select * from user where id = :id) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from user where id = :id union all select r.col from ref r left join (select * from user where id = :id) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from `user` where 1 != 1 union all select r.col from ref as r left join (select * from `user` where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from `user` where id = :id union all select r.col from ref as r left join (select * from `user` where id = :id) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          ":id"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive term next to one shard of another table routed by a bind variable is merged into the seed",
+    "query": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from music where user_id = :id) u on u.col = r.col join c on c.col = r.col) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref union all select r.col from ref r left join (select * from music where user_id = :id) u on u.col = r.col join c on c.col = r.col) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select r.col from ref as r left join (select * from music where 1 != 1) as u on u.col = r.col, c where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref union all select r.col from ref as r left join (select * from music where user_id = :id) as u on u.col = r.col, c where c.col = r.col) select col from c",
+        "Values": [
+          ":id"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "an in subquery routed by a column of the outer query is asked on every shard of a reference outer route",
     "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col)",
     "plan": {

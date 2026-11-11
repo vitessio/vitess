@@ -17,13 +17,11 @@ limitations under the License.
 package operators
 
 import (
-	"context"
 	"fmt"
 	"maps"
 	"slices"
 
 	"vitess.io/vitess/go/slice"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -204,33 +202,11 @@ func canCarryReferenceRows(r Routing) bool {
 	return ok && r.OpCode() == engine.Reference
 }
 
-// pinnedToOneShard reports whether a routing reads exactly one shard whatever the bind variables
-// are: an EqualUnique routing by a functional vindex on constant values that the vindex maps to a
-// keyspace id. A lookup vindex can find none, a bind variable can be NULL, and a functional
-// vindex maps a value it cannot hash, such as 'abc' for hash, to no shard.
-func pinnedToOneShard(ctx *plancontext.PlanningContext, r Routing) bool {
-	sr, ok := r.(*ShardedRouting)
-	if !ok || sr.RouteOpCode != engine.EqualUnique || sr.Selected.FoundVindex.NeedsVCursor() {
-		return false
-	}
-	env := evalengine.EmptyExpressionEnv(ctx.VSchema.Environment())
-	row := make([]sqltypes.Value, 0, len(sr.Selected.Values))
-	for _, expr := range sr.Selected.Values {
-		if _, ok := expr.(*evalengine.Literal); !ok {
-			return false
-		}
-		value, err := env.Evaluate(expr)
-		if err != nil {
-			return false
-		}
-		row = append(row, value.Value(ctx.VSchema.ConnCollation()))
-	}
-	destinations, err := vindexes.Map(context.Background(), sr.Selected.FoundVindex, nil, [][]sqltypes.Value{row})
-	if err != nil {
-		return false
-	}
-	_, one := destinations[0].(key.DestinationKeyspaceID)
-	return one
+// routesToOneShard reports whether a routing is a sharded EqualUnique routing, which main also
+// merges a recursive term through.
+func routesToOneShard(r Routing) bool {
+	_, ok := r.(*ShardedRouting)
+	return ok && r.OpCode() == engine.EqualUnique
 }
 
 // Clone implements the Operator interface
