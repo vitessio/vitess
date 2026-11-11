@@ -1934,7 +1934,7 @@
     }
   },
   {
-    "comment": "push down the ::upper_limit to the sources, since we are doing DISTINCT on them, it's safe",
+    "comment": "do not push the upper limit below UNION DISTINCT",
     "query": "select id from user union select 3 limit 10",
     "plan": {
       "Type": "Complex",
@@ -1958,7 +1958,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1 union select 3 from dual where 1 != 1",
-                "Query": "select id from `user` union select 3 from dual limit :__upper_limit"
+            "Query": "select id from `user` union select 3 from dual"
               }
             ]
           }
@@ -3444,7 +3444,7 @@
                           "Sharded": true
                         },
                         "FieldQuery": "select id from `user` where 1 != 1",
-                        "Query": "select id from `user` limit :__upper_limit"
+                        "Query": "select id from `user`"
                       },
                       {
                         "OperatorType": "Route",
@@ -3454,7 +3454,7 @@
                           "Sharded": false
                         },
                         "FieldQuery": "select id from unsharded where 1 != 1",
-                        "Query": "select id from unsharded limit :__upper_limit"
+                        "Query": "select id from unsharded"
                       }
                     ]
                   }

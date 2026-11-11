@@ -208,6 +208,10 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 		"[[INT64(100)] [INT64(1)] [INT64(2)]]",
 	)
 	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 union select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
+	)
+	mcmp.AssertMatches(
 		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id limit 5",
 		"[[INT64(1)] [INT64(2)] [INT64(100)]]",
 	)

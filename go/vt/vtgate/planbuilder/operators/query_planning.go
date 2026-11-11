@@ -588,8 +588,8 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 		debugNoRewrite("limit push blocked: UNION requires all rows or ordering mapped to each arm")
 		return in, NoRewrite
 	}
-	if hasDistinctUnion(in.Source) && hasOrdering(in.Source) && !allRoutesHaveOrdering(orderToPush) {
-		debugNoRewrite("limit push blocked: DISTINCT needs all input rows without per-route ordering")
+	if hasDistinctUnion(in.Source) {
+		debugNoRewrite("limit push blocked: DISTINCT needs all input rows before deduplication")
 		return in, NoRewrite
 	}
 	in.Pushed = true
@@ -761,25 +761,6 @@ func routesForUnionArm(op Operator) []*Route {
 		routes = append(routes, routesForUnionArm(input)...)
 	}
 	return routes
-}
-
-func hasOrdering(op Operator) bool {
-	if _, ok := op.(*Ordering); ok {
-		return true
-	}
-	return slices.ContainsFunc(op.Inputs(), hasOrdering)
-}
-
-func allRoutesHaveOrdering(ordering map[*Route][]OrderBy) bool {
-	if len(ordering) == 0 {
-		return false
-	}
-	for _, order := range ordering {
-		if len(order) == 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func hasDistinctUnion(op Operator) bool {
