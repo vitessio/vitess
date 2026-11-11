@@ -331,6 +331,41 @@ func TestSiblingReplicasRestartTogether(t *testing.T) {
 	utils.ConfirmReplication(t, p, replicas)
 }
 
+// TestRestartWithRestoreFlagInitializesUnconfiguredReplication restarts R1's vttablet with
+// --restore-from-backup, which finds data and does not restore. With replication reset, as a
+// restore that deferred replication initialization leaves it, R1 initializes replication from
+// the primary and serves, without VTOrc. Restarted again with replication configured, under a
+// test-owned lock, R1 leaves replication alone without waiting for the lock, and serves.
+func TestRestartWithRestoreFlagInitializesUnconfiguredReplication(t *testing.T) {
+	ci := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
+	teardownOnCleanup(t, ci)
+	tablets := ci.Keyspaces[0].Shards[0].Vttablets
+	p, r1 := tablets[0], tablets[1]
+	base := utils.ConfirmReplication(t, p, tablets[1:])
+	r1.VttabletProcess.SupportsBackup = true
+
+	utils.RunSQLs(t.Context(), t, []string{"stop replica", "reset replica all"}, r1)
+	restartVttablet(t, r1, 0)
+	// The restore path initializes replication after Setup returns.
+	require.Eventually(t, func() bool { return receiverState(t, r1) == "Yes" }, 60*time.Second, 250*time.Millisecond,
+		"R1 did not initialize its reset replication after the restart")
+	requireReplicating(t, r1, p, "R1 did not serve after initializing replication")
+
+	l := holdShardLock(t, ci.TopoProcess.Server, "reparent", 30*time.Second, 10*time.Second)
+	restartVttablet(t, r1, 1)
+	requireReplicating(t, r1, p, "R1 did not serve after the restart with replication configured")
+	require.Equal(t, []string{"reparent"}, shardLockActions(t, ci), "R1 requested the shard lock")
+	b, err := os.ReadFile(r1.VttabletProcess.ErrorLog)
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "for action initialize replication", "R1 tried to take the shard lock")
+	l.release(t)
+
+	n := utils.ConfirmReplication(t, p, tablets[1:])
+	for _, i := range []int{base, n} {
+		require.NoError(t, utils.CheckInsertedValues(t.Context(), t, r1, i))
+	}
+}
+
 // TestERSRepointsRestartingReplica restarts R1's vttablet during the held ERS (see
 // TestERSHeldByApplierBarriers) and releases the hold without waiting for R1 to answer RPCs.
 // R1 waits for the shard lock that ERS holds, and ERS needs R1's RPCs to repoint it; R1's

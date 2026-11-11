@@ -1056,23 +1056,26 @@ func TestDeferredRestoreRecordsRestoredPosition(t *testing.T) {
 
 // TestRestartAfterRestoreInitializesReplication covers a vttablet with a
 // restore flag that restarts after a restore, finding data. It does not
-// restore again, and must initialize replication as an ordinary start does: a
-// restore that deferred replication initialization left replication reset. A
-// point-in-time restore keeps the replication it disabled, also when this start
-// has no point-in-time flag. A start that finds data runs the restore hook, as
-// on main.
+// restore again, and must initialize replication only when none is
+// configured, as a restore that deferred replication initialization leaves it.
+// Configured replication, including one that a point-in-time restore disabled,
+// must stay as it is, without the shard lock. A start that finds data runs the
+// restore hook, as on main.
 func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 	for _, tc := range []struct {
-		name        string
-		locked      bool
-		pointInTime bool
-		disabled    bool
-		statusErr   error
+		name          string
+		notConfigured bool
+		locked        bool
+		pointInTime   bool
+		disabled      bool
+		statusErr     error
+		initializes   bool
 	}{
-		{name: "shard lock free"},
-		{name: "shard lock held", locked: true},
+		{name: "replication not configured", notConfigured: true, initializes: true},
+		{name: "replication not configured, shard lock held", notConfigured: true, locked: true},
+		{name: "replication configured", locked: true},
 		{name: "point-in-time restore", pointInTime: true},
-		{name: "replication disabled by a point-in-time restore", disabled: true},
+		{name: "replication disabled by a point-in-time restore", disabled: true, locked: true},
 		{name: "replication status unreadable", statusErr: errors.New("status read failed")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1081,11 +1084,11 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 			if tc.locked {
 				holdInitializationShardLock(t, ts)
 			}
-			if tc.locked || tc.pointInTime || tc.disabled || tc.statusErr != nil {
+			if !tc.initializes {
 				md.ExpectedExecuteSuperQueryList = nil
 			}
+			md.Replicating, md.IOThreadRunning = false, false
 			if tc.disabled {
-				md.Replicating, md.IOThreadRunning = false, false
 				md.CurrentSourceHost, md.CurrentSourcePort = "//", 0
 			}
 			if tc.pointInTime {
@@ -1093,8 +1096,11 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 				restoreToPos = "MySQL56/" + gtidPosition
 				t.Cleanup(func() { restoreToPos = previous })
 			}
-
 			md.ReplicationStatusError = tc.statusErr
+			if tc.notConfigured {
+				md.ReplicationStatusError = mysql.ErrNotReplica
+			}
+
 			hookOutput := setupHookDir(t)
 			err := tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger())
 			if !tc.pointInTime {
@@ -1104,14 +1110,15 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 				assert.NotContains(t, hookEnv, "TM_RESTORE_DATA_ERROR=")
 			}
 			if tc.statusErr != nil {
-				// It may be disabled by a point-in-time restore.
+				// Replication may be configured.
 				require.ErrorContains(t, err, "status read failed")
 			} else {
 				require.NoError(t, err)
 			}
 			require.NoError(t, md.CheckSuperQueryList())
-			assert.Equal(t, !tc.locked && !tc.pointInTime && !tc.disabled && tc.statusErr == nil, md.Replicating)
-			assert.Equal(t, tc.locked, tm.tmState.replicationInitPending())
+			assert.Equal(t, tc.initializes, md.Replicating)
+			// Only an attempt to initialize finds the shard lock held.
+			assert.Equal(t, tc.notConfigured && tc.locked, tm.tmState.replicationInitPending())
 		})
 	}
 }
@@ -1157,6 +1164,7 @@ func TestFormerPrimaryIsFencedWithoutPrimaryHostname(t *testing.T) {
 func TestRestartAfterRestoreTakesTheActionLock(t *testing.T) {
 	tm, md, _, _ := newReplicationInitializationTM(t)
 	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
+	md.ReplicationStatusError = mysql.ErrNotReplica
 	require.NoError(t, tm.lock(t.Context()))
 	returned := make(chan error, 1)
 	go func() { returned <- tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger()) }()
