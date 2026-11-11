@@ -816,9 +816,10 @@ func TestSchemaReloadWaitsForDDLCommit(t *testing.T) {
 		"select variable_name from performance_schema.global_variables where variable_name in "+
 			"('rpl_semi_sync_source_timeout', 'rpl_semi_sync_master_timeout')")
 	require.NoError(t, err)
-	if len(qr.Rows) == 0 {
-		t.Skip("the semi-sync source plugin is not loaded")
-	}
+	// mysqlctl's my.cnf templates for MySQL all load the semi-sync plugins. Fail rather than skip
+	// when the source plugin is missing, so that the test can't silently stop running in CI.
+	require.NotEmpty(t, qr.Rows, "the semi-sync source plugin is not loaded; "+
+		"check the mysqld error log for a plugin load failure")
 	semiSync := strings.TrimSuffix(strings.ToLower(qr.Rows[0][0].ToString()), "_timeout")
 
 	require.NoError(t, createSchemaVersionTable(t))
