@@ -138,11 +138,18 @@ func testValues(t *testing.T, env *evalengine.ExpressionEnv, i int, original, si
 			env.Row[i] = sqltypes.NULL
 		}
 
+		// read each result before the next evaluation: a VM result lives in
+		// the environment's arena until the next Evaluate call.
 		v1, err := env.Evaluate(original)
 		require.NoError(t, err)
+		r1 := v1.Value(collations.MySQL8().DefaultConnectionCharset())
 		v2, err := env.Evaluate(simpler)
 		require.NoError(t, err)
-		assert.Equal(t, v1.Value(collations.MySQL8().DefaultConnectionCharset()), v2.Value(collations.MySQL8().DefaultConnectionCharset()))
+		r2 := v2.Value(collations.MySQL8().DefaultConnectionCharset())
+		// a rewritten predicate must keep its truth value; its declared type
+		// may change (e.g. `n1 AND n1` is BIGINT, `n1` is INT)
+		assert.Equal(t, r1.IsNull(), r2.IsNull())
+		assert.Equal(t, r1.ToString(), r2.ToString())
 		if len(env.Row) > i+1 {
 			testValues(t, env, i+1, original, simpler)
 		}

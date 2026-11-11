@@ -86,6 +86,12 @@ func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 	}
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
+		if value.IsNull() {
+			// no field metadata and a NULL value: the type is unknown, compile
+			// for a constant NULL (a NULL_TYPE column must be nullable for
+			// parents to emit their NULL checks)
+			return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}, nil
+		}
 		return ctype{Type: value.Type(), Flag: 0, Col: c.Collation, Values: c.Values}, nil
 	}
 	return ctype{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no column at offset %d", c.Offset)
