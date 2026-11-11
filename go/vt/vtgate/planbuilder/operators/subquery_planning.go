@@ -851,7 +851,7 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 			// outer route can ask the question on every shard: only that shard answers it. A write
 			// to the reference table has to reach all of its copies, so it is not asked that way. A
 			// LIMIT in the outer route may pick other rows on each shard.
-			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(m.subq) && !hasLimit(ctx, outRoute) {
+			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(ctx, m.subq) && !hasLimit(ctx, outRoute) {
 				m.onEveryShard = true
 				return m.merge(ctx, inRoute, outRoute, scatterOf(inRouting.(*ShardedRouting)))
 			}
@@ -907,7 +907,7 @@ func routedByOuterColumns(subq *SubQuery, routing Routing) bool {
 // false or NULL on a shard that has none of the subquery's rows, so that running it on every shard
 // returns each outer row at most once. That needs a subquery whose rows all come from its tables
 // through inner joins, or a max, min, sum or avg over them, which are NULL over no rows.
-func answeredOnlyWhereItsRowsLive(subq *SubQuery) bool {
+func answeredOnlyWhereItsRowsLive(ctx *plancontext.PlanningContext, subq *SubQuery) bool {
 	if !subq.TopLevel || subq.IsArgument {
 		return false
 	}
@@ -925,7 +925,7 @@ func answeredOnlyWhereItsRowsLive(subq *SubQuery) bool {
 		return false
 	}
 	// An aggregate in ORDER BY makes the query return a row over no rows, like one in the select list.
-	if slices.ContainsFunc(sel.OrderBy, func(o *sqlparser.Order) bool { return sqlparser.ContainsAggregation(o.Expr) }) {
+	if slices.ContainsFunc(sel.OrderBy, func(o *sqlparser.Order) bool { return ctx.ContainsAggr(o.Expr) }) {
 		return false
 	}
 	// A select list that mixes an aggregate with another column returns a row over no rows, and
@@ -942,7 +942,7 @@ func answeredOnlyWhereItsRowsLive(subq *SubQuery) bool {
 			aggregates++
 			continue
 		}
-		if sqlparser.ContainsAggregation(ae.Expr) {
+		if ctx.ContainsAggr(ae.Expr) {
 			return false
 		}
 		others++

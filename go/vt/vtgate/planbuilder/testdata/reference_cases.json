@@ -4787,6 +4787,21 @@
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
+    "comment": "an aggregate UDF in a subquery is refused over a reference table as a count is, as it returns a row on a shard without rows",
+    "query": "select a.id from ref a where a.id in (select udf_aggr(x.col) from user x where x.id = a.id)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "an aggregate UDF in a compared subquery is refused over a reference table as a count is",
+    "query": "select a.id from ref a where a.id = (select udf_aggr(x.col) from user x where x.id = a.id)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
+    "comment": "an aggregate UDF in the ORDER BY of a subquery is refused over a reference table as a count is",
+    "query": "select a.id from ref a where a.id in (select x.col from user x where x.id = a.id order by udf_aggr(x.col))",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+  },
+  {
     "comment": "a subquery with a max next to a constant is refused over a reference table left joined with a sharded table",
     "query": "select a.col from ref a left join user u on u.col = a.col where (a.col, a.id) != (select max(x.col), 0 from user x where x.id = a.col)",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
