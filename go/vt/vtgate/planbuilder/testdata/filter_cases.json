@@ -8508,5 +8508,106 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "A subquery that doesn't merge into the right side of a join, over a left side of several tables, feeds no variable of its own to the right side, as on main",
+    "query": "select count(distinct m.user_id) from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.id = m.id where ue.foo in (select col from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct m.user_id) from user u join user_extra ue on u.id = ue.user_id straight_join music m on u.id = m.id where ue.foo in (select col from user_extra)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct m.user_id)",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "u_id": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutIn",
+                "PulloutVars": [
+                  "__sq_has_values",
+                  "__sq1"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col from user_extra where 1 != 1",
+                    "Query": "select col from user_extra"
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.id from `user` as u, user_extra as ue where 1 != 1 group by u.id",
+                    "Query": "select u.id from `user` as u, user_extra as ue where u.id = ue.user_id and :__sq_has_values and ue.foo in ::__sq1 group by u.id"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "VindexLookup",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "Values": [
+                  ":u_id"
+                ],
+                "Vindex": "music_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select count(distinct m.user_id) from music as m where 1 != 1 group by .0",
+                    "Query": "select count(distinct m.user_id) from music as m where m.id = :u_id group by .0"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

@@ -53,7 +53,11 @@ func TestRewriteOriginalPushedToRHSKeepsColumnsWithoutDependencies(t *testing.T)
 	}
 	expr := sqlparser.AndExpressions(fed, unknown)
 
-	rewritten, _ := rewriteOriginalPushedToRHS(ctx, expr, outer)
+	rewritten, varsBefore, varsAfterExact := rewriteOriginalPushedToRHS(ctx, expr, outer)
 
 	require.Equal(t, ":fed and `unknown`", sqlparser.String(rewritten))
+	// the column is only fed by the pass that takes any column that the left side solves, not by the exact match
+	require.Equal(t, 0, varsBefore)
+	require.Equal(t, 0, varsAfterExact)
+	require.Len(t, outer.ExtraLHSVars, 1)
 }

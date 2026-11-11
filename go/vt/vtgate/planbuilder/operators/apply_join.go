@@ -50,9 +50,9 @@ type (
 		// these are needed by other operators further down the right hand side of the join
 		ExtraLHSVars []BindVarExpr
 
-		// UnmergedLHSExprs are the left-side columns that a subquery needed on the right side of the join until
-		// it failed to merge there. They are not selected from the left side, but a distinct aggregation
-		// still has to know that they were needed.
+		// UnmergedLHSExprs are the left-side columns that the exact match of a subquery fed to the right side of the join
+		// until it failed to merge there. They are not selected from the left side, but a distinct aggregation
+		// still has to know that main selected them.
 		UnmergedLHSExprs []sqlparser.Expr
 
 		// After offset planning
