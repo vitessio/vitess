@@ -46,7 +46,7 @@ func TestTwopczHandlerEscapesActionMessage(t *testing.T) {
 	form.Set("dtid", "zz")
 
 	resp := httptest.NewRecorder()
-	req, err := http.NewRequest("GET", "/twopcz?"+form.Encode(), nil)
+	req, err := http.NewRequest(http.MethodPost, "/twopcz?"+form.Encode(), nil)
 	require.NoError(t, err)
 
 	twopczHandler(txe, resp, req)

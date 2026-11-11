@@ -79,7 +79,7 @@ var (
 		<td>{{.Dtid}}</td>
 		<td>{{range .Queries}}{{.}}<br>{{end}}</td>
 		<td>{{.Time}}</td>
-		<td><form>
+		<td><form method="post">
 			<input type="hidden" name="dtid" value="{{.Dtid}}"></input>
 			<input type="submit" name="Action" value="Discard"></input>
 		</form></td>
@@ -100,7 +100,7 @@ var (
 		<td>{{.Dtid}}</td>
 		<td>{{range .Queries}}{{.}}<br>{{end}}</td>
 		<td>{{.Time}}</td>
-		<td><form>
+		<td><form method="post">
 			<input type="hidden" name="dtid" value="{{.Dtid}}"></input>
 			<input type="submit" name="Action" value="Rollback"></input>
 			<input type="submit" name="Action" value="Commit"></input>
@@ -124,7 +124,7 @@ var (
 		<td>{{.State}}</td>
 		<td>{{.Created}}</td>
 		<td>{{range .Participants}}{{.Keyspace}}:{{.Shard}}<br>{{end}}</td>
-		<td><form>
+		<td><form method="post">
 			<input type="hidden" name="dtid" value="{{.Dtid}}"></input>
 			<input type="submit" name="Action" value="Conclude"></input>
 		</form></td>
@@ -140,6 +140,16 @@ func twopczHandler(txe *DTExecutor, w http.ResponseWriter, r *http.Request) {
 	var err error
 	dtid := r.FormValue("dtid")
 	action := r.FormValue("Action")
+	if action != "" {
+		if r.Method != http.MethodPost {
+			http.Error(w, "twopcz actions require POST", http.StatusMethodNotAllowed)
+			return
+		}
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			acl.SendError(w, err)
+			return
+		}
+	}
 	switch action {
 	case "Discard", "Rollback":
 		err = txe.RollbackPrepared(dtid, 0)
