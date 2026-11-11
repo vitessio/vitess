@@ -21,23 +21,27 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
+// TestDBDDLSerializesCreateAndDrop checks that concurrent CREATE and DROP calls
+// cannot overlap their callbacks, with each callback released through a channel.
 func TestDBDDLSerializesCreateAndDrop(t *testing.T) {
 	oldCreate, oldDrop := globalCreateDb, globalDropDb
 	t.Cleanup(func() { globalCreateDb, globalDropDb = oldCreate, oldDrop })
 	var active atomic.Int32
 	var overlapping atomic.Bool
+	entered := make(chan chan struct{})
 	operation := func() error {
 		if active.Add(1) != 1 {
 			overlapping.Store(true)
 		}
-		time.Sleep(time.Millisecond)
+		release := make(chan struct{})
+		entered <- release
+		<-release
 		active.Add(-1)
 		return nil
 	}
@@ -57,6 +61,9 @@ func TestDBDDLSerializesCreateAndDrop(t *testing.T) {
 		})
 	}
 	close(start)
+	for range 16 * 8 * 2 {
+		close(<-entered)
+	}
 	workers.Wait()
 	assert.False(t, overlapping.Load(), "database lifecycle callbacks ran concurrently")
 }

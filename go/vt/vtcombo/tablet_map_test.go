@@ -247,6 +247,8 @@ func TestDialer(t *testing.T) {
 	}
 }
 
+// TestTabletRegistryConcurrentLifecycle exercises registry mutation alongside
+// concurrent dialer lookups and snapshot iteration.
 func TestTabletRegistryConcurrentLifecycle(t *testing.T) {
 	tabletMapMu.Lock()
 	originalTabletMap := tabletMap
@@ -269,7 +271,10 @@ func TestTabletRegistryConcurrentLifecycle(t *testing.T) {
 			for range 1000 {
 				registerTablet(tablet)
 				conn, err := dialer(ctx, &topodatapb.Tablet{Alias: alias}, grpcclient.FailFast(false))
-				assert.NoError(t, err, "registered tablet unavailable")
+				if err != nil {
+					assert.NoError(t, err, "registered tablet unavailable")
+					return
+				}
 				assert.NotNil(t, conn, "registered tablet unavailable")
 				// Snapshot iteration must be safe while other workers mutate the map.
 				for _, current := range snapshotTablets() {
