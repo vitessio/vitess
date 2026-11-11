@@ -12,15 +12,119 @@
     "skip_e2e": true
   },
   {
-    "comment": "Same when the subquery is correlated with the table",
+    "comment": "Same when the subquery is correlated with the table, which plans as on main (known limitation)",
     "query": "select count(distinct ue.id) from user_extra ue where exists (select 1 from music m where m.col = ue.col)",
-    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct ue.id) from user_extra ue where exists (select 1 from music m where m.col = ue.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct ue.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "ue_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select ue.id, ue.col from user_extra as ue where 1 != 1 group by ue.col, ue.id",
+                "Query": "select ue.id, ue.col from user_extra as ue group by ue.col, ue.id"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music as m where 1 != 1",
+                    "Query": "select 1 from music as m where m.col = :ue_col /* INT16 */ limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    },
     "skip_e2e": true
   },
   {
-    "comment": "The first column of a composite primary key is not unique",
+    "comment": "The first column of a composite primary key is not unique, and a correlated EXISTS groups by the column it reads as on main",
     "query": "select count(distinct u.id) from unsharded_a u where exists (select 1 from user_extra ue where ue.col = u.col)",
-    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.id) from unsharded_a u where exists (select 1 from user_extra ue where ue.col = u.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select count(distinct u.id), u.col from unsharded_a as u where 1 != 1 group by u.col",
+                "Query": "select count(distinct u.id), u.col from unsharded_a as u group by u.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "user.user_extra"
+      ]
+    },
     "skip_e2e": true
   },
   {
@@ -286,9 +390,61 @@
     "skip_e2e": true
   },
   {
-    "comment": "A distinct aggregation of a column in no key of an unsharded table is refused",
+    "comment": "A distinct aggregation of a column in no key of an unsharded table is grouped by the column a correlated EXISTS reads, as on main (known limitation)",
     "query": "select count(distinct u.baz) from unsharded u where exists (select 1 from user_extra ue where ue.col = u.col)",
-    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.baz) from unsharded u where exists (select 1 from user_extra ue where ue.col = u.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.baz)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select count(distinct u.baz), u.col from unsharded as u where 1 != 1 group by u.col",
+                "Query": "select count(distinct u.baz), u.col from unsharded as u group by u.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                    "Query": "select 1 from user_extra as ue where ue.col = :u_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user_extra"
+      ]
+    },
     "skip_e2e": true
   },
   {
@@ -350,9 +506,61 @@
     "skip_e2e": true
   },
   {
-    "comment": "A distinct aggregation of a column in no key of a reference table is refused",
+    "comment": "A distinct aggregation of a column in no key of a reference table is grouped by the column a correlated EXISTS reads, as on main (known limitation)",
     "query": "select count(distinct r.baz) from ref r where exists (select 1 from music m where m.col = r.col)",
-    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct r.baz) from ref r where exists (select 1 from music m where m.col = r.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct r.baz)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "r_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct r.baz), r.col from ref as r where 1 != 1 group by r.col",
+                "Query": "select count(distinct r.baz), r.col from ref as r group by r.col"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music as m where 1 != 1",
+                    "Query": "select 1 from music as m where m.col = :r_col limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.ref"
+      ]
+    },
     "skip_e2e": true
   },
   {
@@ -518,9 +726,61 @@
     "skip_e2e": true
   },
   {
-    "comment": "A distinct aggregation of a unique key that is only a non-unique lookup vindex is refused, since the key can repeat across shards",
+    "comment": "A distinct aggregation of a unique key that is only a non-unique lookup vindex is grouped by the column a correlated EXISTS reads, as on main (known limitation)",
     "query": "select count(distinct u.name) from user u where exists (select 1 from music m where m.col = u.col)",
-    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.name) from user u where exists (select 1 from music m where m.col = u.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.name)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "u_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u.`name`, u.col from `user` as u where 1 != 1 group by u.col, u.`name`",
+                "Query": "select u.`name`, u.col from `user` as u group by u.col, u.`name`"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music as m where 1 != 1",
+                    "Query": "select 1 from music as m where m.col = :u_col /* INT16 */ limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    },
     "skip_e2e": true
   }
 ]

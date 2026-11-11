@@ -98,24 +98,26 @@ func pushAggregationThroughSubquery(
 	src *SubQueryContainer,
 ) (Operator, *ApplyResult) {
 	pushedAggr := rootAggr.SplitAggregatorBelowOperators(ctx, []Operator{src.Outer})
-	addGrouping := func(col *sqlparser.ColName, byVindex bool) {
+	addGrouping := func(col *sqlparser.ColName, checkDistinct bool) {
 		if slices.IndexFunc(pushedAggr.Columns, func(ae *sqlparser.AliasedExpr) bool {
 			return ctx.SemTable.EqualsExpr(ae.Expr, col)
 		}) >= 0 {
 			// we already have the column, no need to push it again
 			return
 		}
-		checkGroupingKeepsDistinct(ctx, rootAggr, col, byVindex)
+		if checkDistinct {
+			checkGroupingKeepsDistinct(ctx, rootAggr, col)
+		}
 		pushedAggr.addColumnWithoutPushing(ctx, aeWrap(col), true)
 	}
 	for _, subQuery := range src.Inner {
 		for _, colName := range subQuery.OuterExpressionsNeeded(ctx, src.Outer) {
-			addGrouping(colName, true)
+			addGrouping(colName, false)
 		}
 		// A filter that doesn't merge ends up above the join, and then reads these columns from the sides below it.
 		if _, isJoin := src.Outer.(*ApplyJoin); isJoin && !subQuery.IsArgument {
 			for _, col := range outsideSubqueryColumns(subQuery.Original) {
-				addGrouping(col, false)
+				addGrouping(col, true)
 			}
 		}
 	}
@@ -141,9 +143,8 @@ func pushAggregationThroughSubquery(
 // summed per group, which is only right when no value of the distinct argument is in two groups. That holds when col is
 // already a grouping of the query, is one of the arguments, or is on the table of an argument that is a single-column
 // primary or unique key that is unique across shards: in an unsharded keyspace, on a reference table, or with a unique
-// vindex. byVindex also accepts an argument with a unique vindex, which is what the columns the subquery needs from the
-// outer side were already grouped by before this check existed.
-func checkGroupingKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Aggregator, col sqlparser.Expr, byVindex bool) {
+// vindex.
+func checkGroupingKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Aggregator, col sqlparser.Expr) {
 	if slices.ContainsFunc(aggregator.Grouping, func(gb GroupBy) bool { return ctx.SemTable.EqualsExpr(gb.Inner, col) }) {
 		return
 	}
@@ -153,7 +154,7 @@ func checkGroupingKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Ag
 		}
 		keepsDistinct := slices.ContainsFunc(aggr.Func.GetArgs(), func(arg sqlparser.Expr) bool {
 			return ctx.SemTable.EqualsExpr(arg, col) ||
-				(byVindex && exprHasUniqueVindex(ctx, arg) || exprIsUniqueKey(ctx, arg)) && ctx.SemTable.RecursiveDeps(arg) == ctx.SemTable.RecursiveDeps(col)
+				exprIsUniqueKey(ctx, arg) && ctx.SemTable.RecursiveDeps(arg) == ctx.SemTable.RecursiveDeps(col)
 		})
 		if !keepsDistinct {
 			panic(vterrors.VT12001("distinct aggregation over a subquery that needs more grouping columns"))
@@ -522,7 +523,7 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 			continue
 		}
 		if i >= extraFrom {
-			checkGroupingKeepsDistinct(ctx, lhs.orig, bve.Expr, false)
+			checkGroupingKeepsDistinct(ctx, lhs.orig, bve.Expr)
 		}
 
 		lhs.pushed.Grouping = append(lhs.pushed.Grouping, GroupBy{
@@ -533,7 +534,7 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 	}
 	for _, expr := range join.UnmergedLHSExprs {
 		if !isGroupedOrDetermined(ctx, lhs.pushed.Grouping, expr) {
-			checkGroupingKeepsDistinct(ctx, lhs.orig, expr, false)
+			checkGroupingKeepsDistinct(ctx, lhs.orig, expr)
 		}
 	}
 }

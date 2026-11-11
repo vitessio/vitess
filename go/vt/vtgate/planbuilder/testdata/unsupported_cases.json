@@ -647,9 +647,59 @@
     "skip_e2e": true
   },
   {
-    "comment": "A distinct aggregation can't be grouped by a column other than its argument for a correlated EXISTS either",
+    "comment": "A distinct aggregation is grouped by the column a correlated EXISTS reads, even when it isn't its argument, as on main (known limitation)",
     "query": "select count(distinct a.col) from unsharded a where exists (select 1 from user_extra ue where ue.user_id = a.id)",
-    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct a.col) from unsharded a where exists (select 1 from user_extra ue where ue.user_id = a.id)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct a.col)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "a_id": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select count(distinct a.col), a.id from unsharded as a where 1 != 1 group by a.id",
+                "Query": "select count(distinct a.col), a.id from unsharded as a group by a.id"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
+                "Query": "select 1 from user_extra as ue where ue.user_id = :a_id limit 1",
+                "Values": [
+                  ":a_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user_extra"
+      ]
+    },
     "skip_e2e": true
   },
   {

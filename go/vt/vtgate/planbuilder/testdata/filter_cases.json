@@ -8447,5 +8447,66 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "A distinct aggregation over a single shard is not refused because a correlated EXISTS needs the column it reads, as on main",
+    "query": "select count(distinct ue.id) from user_extra ue where ue.user_id = 5 and exists (select 1 from music m where m.col = ue.col)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct ue.id) from user_extra ue where ue.user_id = 5 and exists (select 1 from music m where m.col = ue.col)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct ue.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "SemiJoin",
+            "JoinVars": {
+              "ue_col": 1
+            },
+            "Inputs": [
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct ue.id), ue.col from user_extra as ue where 1 != 1 group by ue.col",
+                "Query": "select count(distinct ue.id), ue.col from user_extra as ue where ue.user_id = 5 group by ue.col",
+                "Values": [
+                  "5"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Limit",
+                "Count": "1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1 from music as m where 1 != 1",
+                    "Query": "select 1 from music as m where m.col = :ue_col /* INT16 */ limit 1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user_extra"
+      ]
+    }
   }
 ]
