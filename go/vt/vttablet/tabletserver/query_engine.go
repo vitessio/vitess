@@ -243,7 +243,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		se:                            se,
 		queryRuleSources:              rules.NewMap(),
 		enablePerWorkloadTableMetrics: config.EnablePerWorkloadTableMetrics,
-		redactUIQuery:                 streamlog.NewQueryLogConfigForTest().RedactDebugUIQueries,
+		redactUIQuery:                 streamlog.GetQueryLogConfig().RedactDebugUIQueries,
 	}
 
 	// Cache for query plans: user configured size with a doorkeeper by default to prevent one-off queries

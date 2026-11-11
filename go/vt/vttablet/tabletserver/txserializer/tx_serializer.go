@@ -131,7 +131,7 @@ func New(env tabletenv.Env) *TxSerializer {
 		logQueueExceededDryRun:       logutil.NewThrottledLogger("HotRowProtection QueueExceeded DryRun", 5*time.Second),
 		logGlobalQueueExceededDryRun: logutil.NewThrottledLogger("HotRowProtection GlobalQueueExceeded DryRun", 5*time.Second),
 		queues:                       make(map[string]*queue),
-		redactUIQuery:                streamlog.NewQueryLogConfigForTest().RedactDebugUIQueries,
+		redactUIQuery:                streamlog.GetQueryLogConfig().RedactDebugUIQueries,
 	}
 }
 
