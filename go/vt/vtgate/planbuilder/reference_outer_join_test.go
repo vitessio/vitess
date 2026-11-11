@@ -747,7 +747,16 @@ func TestASubqueryOverATableWithoutACopyOfTheSameNameIsNotReadThroughTheCopy(t *
 // A join let through only because of an alternate that a refused merge makes the planner decline
 // is a cross-keyspace join, which the setting denies.
 func TestADeclinedAlternateDoesNotAuthorizeACrossKeyspaceJoin(t *testing.T) {
-	_, err := planReferenceOuterJoinWithoutCrossKeyspaceReads(t,
-		"select d.col, x.col from (select col from global_ref limit 1) d join (select col from `user` limit 3) x where exists (select 1 from ref r9 left join (select * from `user` where id = 1) u9 on u9.col = r9.col)")
-	require.ErrorContains(t, err, "cross-keyspace JOIN")
+	refused := "exists (select 1 from ref r9 left join (select * from `user` where id = 1) u9 on u9.col = r9.col)"
+	for _, query := range []string{
+		"select d.col, x.col from (select col from global_ref limit 1) d join (select col from `user` limit 3) x where " + refused,
+		"select g.col, x.col from global_ref g join (select col from `user` limit 3) x where " + refused,
+		"select x.col, g.col from (select col from `user` limit 3) x join global_ref g where " + refused,
+		"select r.col from ref r left join `user` u on u.col = r.col join (select col from global_ref limit 1) d on d.col = r.col",
+	} {
+		t.Run(query, func(t *testing.T) {
+			_, err := planReferenceOuterJoinWithoutCrossKeyspaceReads(t, query)
+			require.ErrorContains(t, err, "cross-keyspace JOIN")
+		})
+	}
 }
