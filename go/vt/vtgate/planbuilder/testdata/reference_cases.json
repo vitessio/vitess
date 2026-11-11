@@ -2343,6 +2343,73 @@
     "skip_e2e": true
   },
   {
+    "comment": "a recursive CTE over a reference table left joined with a sharded table and filtered by a reference subquery is planned without a panic",
+    "query": "with recursive c as (select col from main.global_ref union all select col + 1 from c where col < 5) select c.col from c left join user u on u.col = c.col where c.col in (select col from ref)",
+    "plan": {
+      "Type": "Join",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from main.global_ref union all select col + 1 from c where col < 5) select c.col from c left join user u on u.col = c.col where c.col in (select col from ref)",
+      "Instructions": {
+        "OperatorType": "Join",
+        "Variant": "LeftJoin",
+        "JoinColumnIndexes": "L:0",
+        "JoinVars": {
+          "c_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Reference",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from ref where 1 != 1",
+                "Query": "select col from ref"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "with recursive c as (select col from global_ref where 1 != 1 union all select col + 1 from c where 1 != 1) select c.col from c where 1 != 1",
+                "Query": "with recursive c as (select col from global_ref union all select col + 1 from c where col < 5) select c.col from c where :__sq_has_values and c.col in ::__sq1"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select 1 from `user` as u where 1 != 1",
+            "Query": "select 1 from `user` as u where u.col = :c_col"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.global_ref",
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "an in subquery routed by a column of the outer query is asked on every shard of a reference outer route",
     "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col)",
     "plan": {
