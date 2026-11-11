@@ -17,6 +17,10 @@ limitations under the License.
 package logutil
 
 import (
+	"errors"
+	"log/slog"
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -26,6 +30,8 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/race"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestLogEvent(t *testing.T) {
@@ -99,6 +105,150 @@ func TestMemoryLogger(t *testing.T) {
 	ml.Errorf("test %v", 789)
 	require.Len(t, ml.Events, 3)
 	assert.Equal(t, "logger_test.go", ml.Events[2].File, "ml.Events[2].File")
+}
+
+// TestCallbackLoggerAttrs checks that Info, Warn and Error send one event at
+// their level, from the caller's file and line, with the attributes written
+// after the message the way slog.TextHandler writes them.
+func TestCallbackLoggerAttrs(t *testing.T) {
+	tests := []struct {
+		name  string
+		log   func(Logger)
+		level logutilpb.Level
+		want  string
+	}{{
+		name:  "no attributes",
+		log:   func(l Logger) { l.Info("Restore: complete") },
+		level: logutilpb.Level_INFO,
+		want:  "Restore: complete",
+	}, {
+		name: "quoting",
+		log: func(l Logger) {
+			l.Info("Backing up file", slog.String("file", "vt_ks/t 1.ibd"), slog.Int("chunk", 3), slog.String("query", `select "a"`))
+		},
+		level: logutilpb.Level_INFO,
+		want:  `Backing up file file="vt_ks/t 1.ibd" chunk=3 query="select \"a\""`,
+	}, {
+		name: "duration and group",
+		log: func(l Logger) {
+			l.Warn("slow", slog.Duration("duration", 1500*time.Millisecond), slog.Group("g", slog.Bool("b", true)))
+		},
+		level: logutilpb.Level_WARNING,
+		want:  "slow duration=1.5s g.b=true",
+	}, {
+		name:  "plain error",
+		log:   func(l Logger) { l.Error("failed", slog.Any("error", errors.New("no space left"))) },
+		level: logutilpb.Level_ERROR,
+		want:  `failed error="no space left"`,
+	}, {
+		name: "vterrors error keeps its code",
+		log: func(l Logger) {
+			l.Error("failed", slog.Any("error", vterrors.New(vtrpcpb.Code_INTERNAL, "boom")))
+		},
+		level: logutilpb.Level_ERROR,
+		want:  `failed error="Code: INTERNAL\nboom\n"`,
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ml := NewMemoryLogger()
+			tt.log(ml)
+			require.Len(t, ml.Events, 1)
+			assert.Equal(t, tt.level, ml.Events[0].Level)
+			assert.Equal(t, tt.want, ml.Events[0].Value)
+			assert.Equal(t, "logger_test.go", ml.Events[0].File)
+		})
+	}
+}
+
+// TestTeeLoggerAttrs checks that each structured TeeLogger method sends the
+// structured record to the server log and the rendered line to the caller's
+// stream, both at its level and with the caller's file and line.
+func TestTeeLoggerAttrs(t *testing.T) {
+	const msg = "Restore: skipping backup with invalid time"
+	attrs := []slog.Attr{slog.String("backup_name", "b1"), slog.Any("error", errors.New("bad time"))}
+	tests := []struct {
+		name      string
+		log       func(tl *TeeLogger) (line int)
+		level     logutilpb.Level
+		jsonLevel string
+	}{{
+		name: "Info",
+		log: func(tl *TeeLogger) int {
+			_, _, line, _ := runtime.Caller(0)
+			tl.Info(msg, attrs...)
+			return line + 1
+		},
+		level:     logutilpb.Level_INFO,
+		jsonLevel: "INFO",
+	}, {
+		name: "Warn",
+		log: func(tl *TeeLogger) int {
+			_, _, line, _ := runtime.Caller(0)
+			tl.Warn(msg, attrs...)
+			return line + 1
+		},
+		level:     logutilpb.Level_WARNING,
+		jsonLevel: "WARN",
+	}, {
+		name: "Error",
+		log: func(tl *TeeLogger) int {
+			_, _, line, _ := runtime.Caller(0)
+			tl.Error(msg, attrs...)
+			return line + 1
+		},
+		level:     logutilpb.Level_ERROR,
+		jsonLevel: "ERROR",
+	}, {
+		name: "InfoDepth",
+		log: func(tl *TeeLogger) int {
+			_, _, line, _ := runtime.Caller(0)
+			tl.InfoDepth(0, msg, attrs...)
+			return line + 1
+		},
+		level:     logutilpb.Level_INFO,
+		jsonLevel: "INFO",
+	}, {
+		name: "WarningDepth",
+		log: func(tl *TeeLogger) int {
+			_, _, line, _ := runtime.Caller(0)
+			tl.WarningDepth(0, msg, attrs...)
+			return line + 1
+		},
+		level:     logutilpb.Level_WARNING,
+		jsonLevel: "WARN",
+	}, {
+		name: "ErrorDepth",
+		log: func(tl *TeeLogger) int {
+			_, _, line, _ := runtime.Caller(0)
+			tl.ErrorDepth(0, msg, attrs...)
+			return line + 1
+		},
+		level:     logutilpb.Level_ERROR,
+		jsonLevel: "ERROR",
+	}}
+	_, file, _, _ := runtime.Caller(0)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logs := captureWithSource(t)
+			ml := NewMemoryLogger()
+			line := tt.log(NewTeeLogger(NewConsoleLogger(), ml))
+
+			require.Len(t, ml.Events, 1)
+			assert.Equal(t, tt.level, ml.Events[0].Level)
+			assert.Equal(t, msg+` backup_name=b1 error="bad time"`, ml.Events[0].Value)
+			assert.Equal(t, filepath.Base(file), ml.Events[0].File)
+			assert.Equal(t, int64(line), ml.Events[0].Line)
+
+			records := logs.records(t)
+			require.Len(t, records, 1)
+			r := records[0]
+			assert.Equal(t, msg, r["msg"])
+			assert.Equal(t, tt.jsonLevel, r["level"])
+			assert.Equal(t, "b1", r["backup_name"])
+			assert.Equal(t, "bad time", r["error"])
+			assertSource(t, r, file, line)
+		})
+	}
 }
 
 func TestTeeLogger(t *testing.T) {

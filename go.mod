@@ -1,6 +1,6 @@
 module vitess.io/vitess
 
-go 1.27.3
+go 1.27.4
 
 tool (
 	github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto

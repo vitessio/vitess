@@ -17,6 +17,7 @@
 package process
 
 import (
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -37,7 +38,7 @@ var ThisNodeHealth = &NodeHealth{}
 func writeHealthToDatabase() bool {
 	_, err := db.ExecVTOrc("DELETE FROM node_health")
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to delete node health", slog.Any("error", err))
 		return false
 	}
 	sqlResult, err := db.ExecVTOrc(`INSERT
@@ -47,12 +48,12 @@ func writeHealthToDatabase() bool {
 			DATETIME('now')
 		)`)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to write node health", slog.Any("error", err))
 		return false
 	}
 	rows, err := sqlResult.RowsAffected()
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read rows affected by node health write", slog.Any("error", err))
 		return false
 	}
 	return rows > 0

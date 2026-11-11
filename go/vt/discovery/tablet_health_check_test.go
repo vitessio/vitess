@@ -17,11 +17,47 @@ limitations under the License.
 package discovery
 
 import (
+	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+// TestSetServingStateLogs checks that the serving state change line logs the
+// tablet's health error when there is one, and no error attributes when there
+// is none.
+func TestSetServingStateLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	thc := &tabletHealthCheck{
+		Tablet:  createTestTablet(100, "zone1", "host1"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		logger:  logutil.NewConsoleLogger(),
+	}
+
+	logServingChange := thc.setServingState(false, "healthCheck update", errors.New("vttablet error: replication is not running"))
+	require.NotNil(t, logServingChange)
+	logServingChange()
+
+	r := logs.Record(t, "HealthCheckUpdate(Serving State)")
+	assert.Equal(t, "vttablet error: replication is not running", r["error"])
+
+	// Without an error, the line has no error attributes.
+	logs.Reset()
+	thc.setServingState(true, "healthCheck update", nil)()
+	r = logs.Record(t, "HealthCheckUpdate(Serving State)")
+	assert.NotContains(t, r, "error")
+	assert.NotContains(t, r, "error_code")
+}
 
 // TestNextHealthCheckRetryDelay verifies the back-off doubles below the cap,
 // caps at maxHealthCheckRetryDelay, and leaves an already-above-cap delay
