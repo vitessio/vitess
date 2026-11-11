@@ -9675,5 +9675,11 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A right join whose preserved side is the table on its right: the columns of the parenthesized join on its left are the ones its ON clause can fill with NULLs",
+    "query": "select count(distinct a.foo) from (music b join music c on b.id = c.id) right join user a on a.col = b.col and a.foo = b.foo where (a.foo = 1 or b.foo in (select col from user_extra))",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
   }
 ]
