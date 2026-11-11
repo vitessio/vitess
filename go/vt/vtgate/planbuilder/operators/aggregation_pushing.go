@@ -531,6 +531,20 @@ func addColumnsFromLHSInJoinPredicates(ctx *plancontext.PlanningContext, join *A
 			WSOffset:  -1,
 		})
 	}
+	for _, expr := range join.UnmergedLHSExprs {
+		if !isGroupedOrDetermined(ctx, lhs.pushed.Grouping, expr) {
+			checkGroupingKeepsDistinct(ctx, lhs.orig, expr, false)
+		}
+	}
+}
+
+// isGroupedOrDetermined says if expr is one of the groupings or is on the table of a grouping that is a unique key,
+// where every group is a single row.
+func isGroupedOrDetermined(ctx *plancontext.PlanningContext, grouping []GroupBy, expr sqlparser.Expr) bool {
+	return slices.ContainsFunc(grouping, func(gb GroupBy) bool {
+		return ctx.SemTable.EqualsExpr(gb.Inner, expr) ||
+			exprIsUniqueKey(ctx, gb.Inner) && ctx.SemTable.RecursiveDeps(gb.Inner) == ctx.SemTable.RecursiveDeps(expr)
+	})
 }
 
 func splitGroupingToLeftAndRight(

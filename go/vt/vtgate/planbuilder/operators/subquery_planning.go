@@ -409,6 +409,9 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 	newOp := mergeSubqueryInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
 	if newOp == nil {
+		for _, bve := range outer.ExtraLHSVars[exactVars:] {
+			outer.UnmergedLHSExprs = append(outer.UnmergedLHSExprs, bve.Expr)
+		}
 		outer.ExtraLHSVars = outer.ExtraLHSVars[:exactVars]
 		return nil, nil
 	}
@@ -442,13 +445,13 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 // instead of the column names
 func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) (sqlparser.Expr, int) {
 	outerID := TableID(outer.LHS)
-	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
-		return ctx.SemTable.RecursiveDeps(col) == outerID
-	})
-	// Only a successful merge needs the variables that the second pass adds. Otherwise the left
+	// Only a successful merge needs the variables that either pass adds. Otherwise the left
 	// side would select columns that nothing groups on, so the caller truncates ExtraLHSVars to
 	// the length returned here.
 	exactVars := len(outer.ExtraLHSVars)
+	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
+		return ctx.SemTable.RecursiveDeps(col) == outerID
+	})
 	// Any column the LHS solves is fed from it, even when the LHS spans several tables.
 	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
 		deps := ctx.SemTable.RecursiveDeps(col)

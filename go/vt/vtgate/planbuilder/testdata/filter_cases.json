@@ -5666,9 +5666,6 @@
                 "OperatorType": "Join",
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,L:1,R:0",
-                "JoinVars": {
-                  "u_id": 1
-                },
                 "Inputs": [
                   {
                     "OperatorType": "Route",
@@ -5716,8 +5713,7 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u_col": 1,
-          "u_id": 2
+          "u_col": 1
         },
         "Inputs": [
           {
@@ -5727,8 +5723,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select coalesce((select ue.col from user_extra as ue where 1 != 1), (select um.col from user_metadata as um where 1 != 1)), u.col, u.id from `user` as u where 1 != 1",
-            "Query": "select coalesce((select ue.col from user_extra as ue where ue.user_id = u.id), (select um.col from user_metadata as um where um.user_id = u.id)), u.col, u.id from `user` as u"
+            "FieldQuery": "select coalesce((select ue.col from user_extra as ue where 1 != 1), (select um.col from user_metadata as um where 1 != 1)), u.col from `user` as u where 1 != 1",
+            "Query": "select coalesce((select ue.col from user_extra as ue where ue.user_id = u.id), (select um.col from user_metadata as um where um.user_id = u.id)), u.col from `user` as u"
           },
           {
             "OperatorType": "Route",
@@ -5763,8 +5759,7 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u_col": 1,
-          "u_id": 0
+          "u_col": 1
         },
         "Inputs": [
           {
@@ -5911,8 +5906,7 @@
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
         "JoinVars": {
-          "u_col": 1,
-          "u_id": 0
+          "u_col": 1
         },
         "Inputs": [
           {
@@ -6225,8 +6219,7 @@
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0,L:1",
                 "JoinVars": {
-                  "u_col": 0,
-                  "u_id": 1
+                  "u_col": 0
                 },
                 "Inputs": [
                   {
@@ -6684,8 +6677,7 @@
                                 "Variant": "Join",
                                 "JoinColumnIndexes": "L:0,R:0,R:1,L:1,R:2",
                                 "JoinVars": {
-                                  "u_col": 2,
-                                  "u_foo": 1
+                                  "u_col": 2
                                 },
                                 "Inputs": [
                                   {
@@ -7469,8 +7461,7 @@
                 "Variant": "Join",
                 "JoinColumnIndexes": "L:0,R:0",
                 "JoinVars": {
-                  "u_col": 1,
-                  "u_foo": 2
+                  "u_col": 1
                 },
                 "Inputs": [
                   {
@@ -7500,8 +7491,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(*), u.col, u.foo from `user` as u where 1 != 1 group by u.col, u.foo",
-                        "Query": "select count(*), u.col, u.foo from `user` as u where :__sq_has_values and u.foo in ::__sq1 group by u.col, u.foo"
+                        "FieldQuery": "select count(*), u.col from `user` as u where 1 != 1 group by u.col",
+                        "Query": "select count(*), u.col from `user` as u where :__sq_has_values and u.foo in ::__sq1 group by u.col"
                       }
                     ]
                   },
@@ -8130,8 +8121,7 @@
             "Variant": "Join",
             "JoinColumnIndexes": "L:0",
             "JoinVars": {
-              "a_col": 1,
-              "a_foo": 2
+              "a_col": 1
             },
             "Inputs": [
               {
@@ -8166,8 +8156,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(distinct a.id), a.col, a.foo from `user` as a where 1 != 1 group by a.col, a.foo",
-                    "Query": "select count(distinct a.id), a.col, a.foo from `user` as a where a.foo = 1 or :__sq_has_values group by a.col, a.foo"
+                    "FieldQuery": "select count(distinct a.id), a.col from `user` as a where 1 != 1 group by a.col",
+                    "Query": "select count(distinct a.id), a.col from `user` as a where a.foo = 1 or :__sq_has_values group by a.col"
                   }
                 ]
               },
@@ -8270,8 +8260,7 @@
             "Variant": "Join",
             "JoinColumnIndexes": "L:0",
             "JoinVars": {
-              "u_col": 1,
-              "u_foo": 2
+              "u_col": 1
             },
             "Inputs": [
               {
@@ -8301,8 +8290,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select count(distinct u.id), u.col, u.foo from `user` as u where 1 != 1 group by u.col, u.foo",
-                    "Query": "select count(distinct u.id), u.col, u.foo from `user` as u where :__sq_has_values and u.foo in ::__sq1 group by u.col, u.foo"
+                    "FieldQuery": "select count(distinct u.id), u.col from `user` as u where 1 != 1 group by u.col",
+                    "Query": "select count(distinct u.id), u.col from `user` as u where :__sq_has_values and u.foo in ::__sq1 group by u.col"
                   }
                 ]
               },
@@ -8385,5 +8374,78 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A failed merge into the right side of a join leaves no left-side variable to group by, so a distinct aggregation grouped by the primary key on the join condition plans as on main",
+    "query": "select count(distinct u.id) from music m straight_join user u on u.col = m.id where m.foo in (select col from user_extra)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.id) from music m straight_join user u on u.col = m.id where m.foo in (select col from user_extra)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0",
+            "JoinVars": {
+              "m_id": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "UncorrelatedSubquery",
+                "Variant": "PulloutIn",
+                "PulloutVars": [
+                  "__sq_has_values",
+                  "__sq1"
+                ],
+                "Inputs": [
+                  {
+                    "InputName": "SubQuery",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select col from user_extra where 1 != 1",
+                    "Query": "select col from user_extra"
+                  },
+                  {
+                    "InputName": "Outer",
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select m.id from music as m where 1 != 1 group by m.id",
+                    "Query": "select m.id from music as m where :__sq_has_values and m.foo in ::__sq1 group by m.id"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select count(distinct u.id) from `user` as u where 1 != 1 group by .0",
+                "Query": "select count(distinct u.id) from `user` as u where u.col = :m_id group by .0"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]

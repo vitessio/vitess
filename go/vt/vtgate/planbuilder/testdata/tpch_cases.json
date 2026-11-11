@@ -2045,8 +2045,7 @@
                     "Variant": "Join",
                     "JoinColumnIndexes": "R:0,R:1,R:2,L:0,R:3,R:4,R:5,L:2",
                     "JoinVars": {
-                      "ps_partkey": 1,
-                      "ps_suppkey": 0
+                      "ps_partkey": 1
                     },
                     "Inputs": [
                       {
@@ -2395,8 +2394,7 @@
                                     "Variant": "Join",
                                     "JoinColumnIndexes": "L:0,R:0,L:1",
                                     "JoinVars": {
-                                      "l1_l_orderkey": 2,
-                                      "l1_l_suppkey": 1
+                                      "l1_l_orderkey": 2
                                     },
                                     "Inputs": [
                                       {
