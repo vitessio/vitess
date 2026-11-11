@@ -116,6 +116,7 @@ func ConnectWithAttributes(ctx context.Context, params *ConnParams, attributes C
 
 		// Send the connection back, so the other side can close it.
 		c := newConn(conn, params.FlushDelay, params.TruncateErrLen)
+		c.maxLogicalPacketSize = maxAllowedPacketLimit
 		status <- connectResult{
 			c: c,
 		}

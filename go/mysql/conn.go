@@ -244,6 +244,10 @@ type Conn struct {
 	closing bool
 
 	truncateErrLen int
+
+	// maxLogicalPacketSize caps the payload readPacket and
+	// readEphemeralPacket reassemble from consecutive packets.
+	maxLogicalPacketSize int
 }
 
 // PrepareData is a buffer used for store prepare statement meta data
@@ -297,10 +301,11 @@ func newConn(conn net.Conn, flushDelay time.Duration, truncateErrLen int) *Conn 
 		flushDelay = DefaultFlushDelay
 	}
 	return &Conn{
-		conn:           conn,
-		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
-		flushDelay:     flushDelay,
-		truncateErrLen: truncateErrLen,
+		conn:                 conn,
+		bufferedReader:       bufio.NewReaderSize(conn, connBufferSize),
+		flushDelay:           flushDelay,
+		truncateErrLen:       truncateErrLen,
+		maxLogicalPacketSize: defaultMaxLogicalPacketSize,
 	}
 }
 
@@ -327,13 +332,14 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	}
 
 	c := &Conn{
-		conn:           conn,
-		listener:       listener,
-		PrepareData:    make(map[uint32]*PrepareData),
-		keepAliveOn:    enabledKeepAlive,
-		flushDelay:     listener.flushDelay,
-		truncateErrLen: listener.truncateErrLen,
-		multiQuery:     listener.multiQuery,
+		conn:                 conn,
+		listener:             listener,
+		PrepareData:          make(map[uint32]*PrepareData),
+		keepAliveOn:          enabledKeepAlive,
+		flushDelay:           listener.flushDelay,
+		truncateErrLen:       listener.truncateErrLen,
+		multiQuery:           listener.multiQuery,
+		maxLogicalPacketSize: defaultMaxLogicalPacketSize,
 	}
 
 	if listener.connReadBufferSize > 0 {
@@ -602,7 +608,7 @@ func (c *Conn) readEphemeralPacket() ([]byte, error) {
 	}
 	c.recordPacketBytesRead(length)
 	for {
-		next, err := c.readOnePacket()
+		next, err := c.readOnePacket(c.maxLogicalPacketSize - len(data))
 		if err != nil {
 			return nil, err
 		}
@@ -674,11 +680,15 @@ func (c *Conn) recycleReadPacket() {
 }
 
 // readOnePacket reads a single packet into a newly allocated buffer.
-func (c *Conn) readOnePacket() ([]byte, error) {
+// It fails without reading the body if the payload is longer than maxLength.
+func (c *Conn) readOnePacket(maxLength int) ([]byte, error) {
 	r := c.getReader()
 	length, err := c.readHeaderFrom(r)
 	if err != nil {
 		return nil, err
+	}
+	if length > maxLength {
+		return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "packet exceeds the maximum logical packet size of %d bytes", c.maxLogicalPacketSize)
 	}
 	if length == 0 {
 		// This can be caused by the packet after a packet of
@@ -700,7 +710,7 @@ func (c *Conn) readOnePacket() ([]byte, error) {
 // This method returns a generic error, not a SQLError.
 func (c *Conn) readPacket() ([]byte, error) {
 	// Optimize for a single packet case.
-	data, err := c.readOnePacket()
+	data, err := c.readOnePacket(c.maxLogicalPacketSize)
 	if err != nil {
 		return nil, err
 	}
@@ -712,7 +722,7 @@ func (c *Conn) readPacket() ([]byte, error) {
 
 	// There is more than one packet, read them all.
 	for {
-		next, err := c.readOnePacket()
+		next, err := c.readOnePacket(c.maxLogicalPacketSize - len(data))
 		if err != nil {
 			return nil, err
 		}

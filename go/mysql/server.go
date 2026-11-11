@@ -551,6 +551,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 
 	c.User = user
 	c.UserData = userData
+	c.maxLogicalPacketSize = maxAllowedPacketLimit
 
 	if c.User != "" {
 		connCountPerUser.Add(c.User, 1)

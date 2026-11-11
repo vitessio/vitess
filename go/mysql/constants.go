@@ -25,6 +25,15 @@ const (
 	// the server supports.
 	MaxPacketSize = (1 << 24) - 1
 
+	// defaultMaxLogicalPacketSize caps the payload reassembled from
+	// consecutive packets before a server connection is authenticated.
+	// It is MySQL's default max_allowed_packet.
+	defaultMaxLogicalPacketSize = 64 << 20
+
+	// maxAllowedPacketLimit is the largest max_allowed_packet MySQL
+	// accepts, so no MySQL peer can legitimately send a larger payload.
+	maxAllowedPacketLimit = 1 << 30
+
 	// protocolVersion is the current version of the protocol.
 	// Always 10.
 	protocolVersion = 10
