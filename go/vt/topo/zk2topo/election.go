@@ -42,7 +42,7 @@ func (zs *Server) NewLeaderParticipation(name, id string) (topo.LeaderParticipat
 
 	// Create the toplevel directory, OK if it exists already.
 	// We will create the parent directory as well, but not more.
-	if err := zs.bindACL(ctx, zkPath, PermDirectory); err != nil && err != zk.ErrNoNode {
+	if err := zs.bindACL(ctx, zkPath); err != nil && err != zk.ErrNoNode {
 		return nil, convertError(err, zkPath)
 	}
 	if _, err := CreateRecursive(ctx, zs.conn, zkPath, nil, 0, ACL(PermDirectory), 1); err != nil && err != zk.ErrNodeExists {

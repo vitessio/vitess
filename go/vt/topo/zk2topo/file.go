@@ -31,7 +31,7 @@ import (
 func (zs *Server) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
 	zkPath := path.Join(zs.root, filePath)
 
-	if err := zs.bindACL(ctx, path.Dir(zkPath), PermDirectory); err != nil && err != zk.ErrNoNode {
+	if err := zs.bindACL(ctx, path.Dir(zkPath)); err != nil && err != zk.ErrNoNode {
 		return nil, convertError(err, zkPath)
 	}
 	pathCreated, err := CreateRecursive(ctx, zs.conn, zkPath, contents, 0, ACL(PermFile), -1)
@@ -68,7 +68,7 @@ func (zs *Server) Update(ctx context.Context, filePath string, contents []byte, 
 
 	// Bind the ACL before writing, so a session without credentials cannot
 	// replace the bytes we write.
-	err := zs.bindACL(ctx, zkPath, PermFile)
+	err := zs.bindACL(ctx, zkPath)
 	if err != nil && err != zk.ErrNoNode {
 		return nil, convertError(err, zkPath)
 	}

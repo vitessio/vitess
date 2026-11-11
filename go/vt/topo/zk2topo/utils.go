@@ -61,33 +61,6 @@ func CreateRecursive(ctx context.Context, conn *ZkConn, zkPath string, value []b
 	return pathCreated, err
 }
 
-// bindACL replaces any ACL that grants access without credentials (world or
-// ip) with ACL(perms) on zkPath, and with ACL(PermDirectory) on its parents
-// up to and including zs.root. Parents are bound first, so a child cannot be
-// deleted and recreated by someone else while it is being bound. It returns
-// zk.ErrNoNode if zkPath or one of those parents does not exist.
-func (zs *Server) bindACL(ctx context.Context, zkPath string, perms int32) error {
-	if authFile == "" || zkPath == "/" || len(zkPath) < len(zs.root) {
-		return nil
-	}
-	if len(zkPath) > len(zs.root) {
-		if err := zs.bindACL(ctx, path.Dir(zkPath), PermDirectory); err != nil {
-			return err
-		}
-	}
-	aclv, stat, err := zs.conn.GetACL(ctx, zkPath)
-	if err != nil {
-		return err
-	}
-	for _, acl := range aclv {
-		if acl.Scheme == "world" || acl.Scheme == "ip" {
-			// The ACL version makes this fail if the ACL changed after we read it.
-			return zs.conn.SetACL(ctx, zkPath, ACL(perms), stat.Aversion)
-		}
-	}
-	return nil
-}
-
 // ChildrenRecursive returns the relative path of all the children of
 // the provided node.
 func ChildrenRecursive(ctx context.Context, zconn *ZkConn, zkPath string) ([]string, error) {

@@ -82,7 +82,7 @@ func (zs *Server) lock(ctx context.Context, dirPath, contents string, wait bool)
 	locksDir := path.Join(zs.root, dirPath, locksPath) + "/"
 
 	// A locks directory others can write to would let them delete our lock node.
-	if err := zs.bindACL(ctx, path.Dir(locksDir), PermDirectory); err != nil && err != zk.ErrNoNode {
+	if err := zs.bindACL(ctx, path.Dir(locksDir)); err != nil && err != zk.ErrNoNode {
 		return nil, convertError(err, locksDir)
 	}
 

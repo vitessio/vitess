@@ -17,6 +17,7 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"strings"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -80,18 +81,28 @@ func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 type Server struct {
 	root string
 	conn *ZkConn
+
+	// stopMigration stops the ACL migration started by NewServer.
+	stopMigration context.CancelFunc
 }
 
 // NewServer returns a topo.Conn connecting to real Zookeeper processes.
 func NewServer(serverAddr, root string) *Server {
-	return &Server{
-		root: root,
-		conn: Connect(serverAddr),
+	ctx, cancel := context.WithCancel(context.Background())
+	zs := &Server{
+		root:          root,
+		conn:          Connect(serverAddr),
+		stopMigration: cancel,
 	}
+	if authFile != "" {
+		go migrateACLs(ctx, zs.conn, root)
+	}
+	return zs
 }
 
 // Close is part of topo.Conn interface.
 func (zs *Server) Close() {
+	zs.stopMigration()
 	zs.conn.Close()
 	zs.conn = nil
 }
