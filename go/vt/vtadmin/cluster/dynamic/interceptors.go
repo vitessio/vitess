@@ -3,7 +3,8 @@ package dynamic
 import (
 	"context"
 	"fmt"
-	"strings"
+	"log/slog"
+	"runtime/debug"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -11,8 +12,10 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // StreamServerInterceptor returns a StreamServerInterceptor that redirects a
@@ -20,7 +23,16 @@ import (
 // its metadata. Otherwise, the interceptor is a no-op, and the original stream
 // handler is invoked.
 func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
-	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
+		streamHandler, ok := streamHandlersByFullMethod[info.FullMethod]
+		if !ok {
+			// Not a VTAdmin method (e.g. health checks or reflection), so
+			// there is no dynamic API to redirect to.
+			return handler(srv, ss)
+		}
+
+		defer recoverPanic(info.FullMethod, &err)
+
 		c, id, ok, err := clusterFromIncomingContextMetadata(ss.Context())
 		switch { // TODO: see if it's possible to de-duplicate this somehow. Unfortunately the callbacks have different signatures which might make it impossible.
 		case !ok:
@@ -37,8 +49,11 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 			log.Warn(fmt.Sprintf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err))
 		}
 
-		dynamicAPI := api.WithCluster(c, id)
-		streamHandler := streamHandlersByName[nameFromFullMethod(info.FullMethod)]
+		dynamicAPI, err := api.WithCluster(c, id)
+		if err != nil {
+			return vterrors.ToGRPC(err)
+		}
+
 		return streamHandler(dynamicAPI, ss)
 	}
 }
@@ -49,6 +64,15 @@ func StreamServerInterceptor(api API) grpc.StreamServerInterceptor {
 // handler is invoked.
 func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+		method, ok := methodHandlersByFullMethod[info.FullMethod]
+		if !ok {
+			// Not a VTAdmin method (e.g. health checks or reflection), so
+			// there is no dynamic API to redirect to.
+			return handler(ctx, req)
+		}
+
+		defer recoverPanic(info.FullMethod, &err)
+
 		c, id, ok, err := clusterFromIncomingContextMetadata(ctx)
 		switch {
 		case !ok:
@@ -65,14 +89,27 @@ func UnaryServerInterceptor(api API) grpc.UnaryServerInterceptor {
 			log.Warn(fmt.Sprintf("failed to extract valid cluster from incoming metadata; attempting to use existing cluster with id=%s; error: %v", id, err))
 		}
 
-		dynamicAPI := api.WithCluster(c, id)
-		method := methodHandlersByName[nameFromFullMethod(info.FullMethod)]
+		dynamicAPI, err := api.WithCluster(c, id)
+		if err != nil {
+			return nil, vterrors.ToGRPC(err)
+		}
 
 		// NOTE: because we don't have access to the interceptor
 		// chain (but we _could_ if we wanted to add a method to the
-		// DynamicAPI interface), this MUST be the last interceptor
-		// in the chain.
+		// DynamicAPI interface), the interceptors after this one in
+		// the chain do not run for this request.
 		return method(dynamicAPI, ctx, dec(req), nil)
+	}
+}
+
+// recoverPanic turns a panic in a dynamic interceptor, or in the VTAdmin
+// handler it calls, into an INTERNAL error. It must be deferred directly, and
+// is needed because grpcserver's recovery interceptor comes later in the chain
+// and does not run for those calls.
+func recoverPanic(fullMethod string, err *error) {
+	if p := recover(); p != nil {
+		log.Error("panic in dynamic cluster interceptor", slog.String("method", fullMethod), slog.Any("panic", p), slog.String("stack", string(debug.Stack())))
+		*err = vterrors.ToGRPC(vterrors.Errorf(vtrpcpb.Code_INTERNAL, "panic triggered: %v", p))
 	}
 }
 
@@ -98,8 +135,8 @@ func dec(src any) func(dst any) error {
 		// decodes an arbitrary req into a req of the correct type
 		// for the particular handler.
 		//
-		// Because we are doing a lookup that matches on method
-		// name, we know that the `req` passed to the interceptor
+		// Because we are doing a lookup that matches on the full
+		// method name, we know that the `req` passed to the interceptor
 		// and the `req2` passed to `dec` are the same type, we're
 		// just going to proto.Merge blindly and return nil.
 		proto.Merge(dst.(proto.Message), src.(proto.Message))
@@ -107,14 +144,13 @@ func dec(src any) func(dst any) error {
 	}
 }
 
-func nameFromFullMethod(fullMethod string) string {
-	parts := strings.Split(fullMethod, "/")
-	return parts[len(parts)-1]
+func fullMethodName(method string) string {
+	return "/" + vtadminpb.VTAdmin_ServiceDesc.ServiceName + "/" + method
 }
 
 var (
-	methodHandlersByName = map[string]methodHandler{}
-	streamHandlersByName = map[string]grpc.StreamHandler{}
+	methodHandlersByFullMethod = map[string]methodHandler{}
+	streamHandlersByFullMethod = map[string]grpc.StreamHandler{}
 )
 
 // for whatever reason, grpc exports the StreamHandler type but _not_ the
@@ -126,10 +162,10 @@ type methodHandler func(srv any, ctx context.Context, dec func(in any) error, in
 
 func init() {
 	for _, m := range vtadminpb.VTAdmin_ServiceDesc.Methods {
-		methodHandlersByName[m.MethodName] = methodHandler(m.Handler)
+		methodHandlersByFullMethod[fullMethodName(m.MethodName)] = methodHandler(m.Handler)
 	}
 
 	for _, s := range vtadminpb.VTAdmin_ServiceDesc.Streams {
-		streamHandlersByName[s.StreamName] = s.Handler
+		streamHandlersByFullMethod[fullMethodName(s.StreamName)] = s.Handler
 	}
 }

@@ -137,16 +137,6 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 		vtctldCfg = opt(vtctldCfg)
 	}
 
-	cluster.DB, err = vtsql.New(ctx, vtsqlCfg)
-	if err != nil {
-		return nil, fmt.Errorf("error creating vtsql proxy: %w", err)
-	}
-
-	cluster.Vtctld, err = vtctldclient.New(ctx, vtctldCfg)
-	if err != nil {
-		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
-	}
-
 	if cfg.TabletFQDNTmplStr != "" {
 		cluster.TabletFQDNTmpl, err = template.New(cluster.ID + "-tablet-fqdn").Parse(cfg.TabletFQDNTmplStr)
 		if err != nil {
@@ -198,6 +188,38 @@ func New(ctx context.Context, cfg Config) (*Cluster, error) {
 		return []*vtadminpb.Schema{schema}, nil
 	}, *cluster.cfg.SchemaCacheConfig)
 
+	// The schema cache starts a goroutine and the vtgate proxy dials when it
+	// is created, so close them if New fails or panics before it returns. This
+	// doesn't close the vtctld proxy, so it must stay the last thing New
+	// creates.
+	built := false
+	defer func() {
+		if built {
+			return
+		}
+
+		_ = cluster.schemaCache.Close()
+
+		if cluster.DB != nil {
+			_ = cluster.DB.Close()
+		}
+	}()
+
+	db, err := vtsql.New(ctx, vtsqlCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtsql proxy: %w", err)
+	}
+
+	cluster.DB = db
+
+	vtctld, err := vtctldclient.New(ctx, vtctldCfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating vtctldclient: %w", err)
+	}
+
+	cluster.Vtctld = vtctld
+
+	built = true
 	return cluster, nil
 }
 
