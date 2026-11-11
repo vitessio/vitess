@@ -244,7 +244,7 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	convt.Flag = arg.Flag | flagNullable
+	convt.Flag = arg.Flag&^flagYear | flagNullable
 	return convt, nil
 }
 

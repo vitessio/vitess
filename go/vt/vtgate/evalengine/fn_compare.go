@@ -104,7 +104,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		ct.Type = sqltypes.Null
 	}
 	c.asm.Coalesce(len(b.Arguments), ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
-	return ct, nil
+	return ct.fromSQLType(), nil
 }
 
 func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiComparisonFunc {
@@ -354,11 +354,17 @@ func compareTemporal(args []*evalTemporal, idx1, idx2 int) int {
 
 func compareAllInteger_u(_ *ExpressionEnv, args []eval, cmp, _ int) (eval, error) {
 	x := args[0].(*evalUint64)
+	years := x.year
 	for _, arg := range args[1:] {
 		y := arg.(*evalUint64)
+		years = years && y.year
 		if (cmp < 0) == (y.u < x.u) {
 			x = y
 		}
+	}
+	if !years {
+		// the result is a YEAR only if all the arguments are
+		return x.withoutYear(), nil
 	}
 	return x, nil
 }
@@ -515,6 +521,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		text      int
 		binary    int
 		json      int
+		years     int
 		args      []ctype
 		nullable  bool
 		prec      int
@@ -548,6 +555,9 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 			signed++
 		case sqltypes.Uint64:
 			unsigned++
+			if tt.isYear() {
+				years++
+			}
 		case sqltypes.Float64:
 			floats++
 			prec = max(prec, datetime2.DefaultPrecision)
@@ -659,6 +669,14 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 			return ctype{Type: sqltypes.Int64, Flag: f, Col: collationNumeric}, nil
 		}
 		if unsigned == len(args) {
+			// the result is a YEAR only if all the arguments are
+			if years == len(args) {
+				f |= flagYear
+			} else {
+				for i, tt := range args {
+					c.compileDropYear(tt, len(args)-i)
+				}
+			}
 			c.asm.Fn_MULTICMP_u(len(args), call.cmp < 0)
 			c.asm.jumpDestination(jumps...)
 			return ctype{Type: sqltypes.Uint64, Flag: f, Col: collationNumeric}, nil

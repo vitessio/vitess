@@ -123,6 +123,7 @@ func (a *Arena) newEvalUint64(u uint64) *evalUint64 {
 	val := &a.aUint64[len(a.aUint64)-1]
 	val.u = u
 	val.hexLiteral = false
+	val.year = false
 	return val
 }
 

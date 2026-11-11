@@ -240,9 +240,44 @@ func (c *compiler) compile(expr IR) (*CompiledExpr, error) {
 	return &CompiledExpr{code: c.asm.ins, ir: expr, stack: c.asm.stack.max, typed: ct}, nil
 }
 
+// isYear returns whether ct describes YEAR values. Inside the compiler a YEAR is
+// an UINT64 with flagYear, so that every consumer of an UINT64 handles it.
+func (ct ctype) isYear() bool {
+	return ct.Type == sqltypes.Uint64 && ct.Flag&flagYear != 0
+}
+
+// sqlType returns the SQL type of the values described by ct.
+func (ct ctype) sqlType() sqltypes.Type {
+	if ct.isYear() {
+		return sqltypes.Year
+	}
+	return ct.Type
+}
+
+// fromSQLType is the inverse of sqlType: it stores an aggregated sqltypes.Year as
+// an UINT64 with flagYear.
+func (ct ctype) fromSQLType() ctype {
+	if ct.Type == sqltypes.Year {
+		ct.Type = sqltypes.Uint64
+		ct.Flag |= flagYear
+	}
+	return ct
+}
+
+// compileDropYear turns a YEAR value into a plain UINT64, for consumers that
+// use it as a number and would otherwise pass the YEAR type through.
+func (c *compiler) compileDropYear(ct ctype, offset int) ctype {
+	if !ct.isYear() {
+		return ct
+	}
+	c.asm.Convert_xu(offset)
+	ct.Flag &^= flagYear
+	return ct
+}
+
 func (c *compiler) compileToNumeric(ct ctype, offset int, fallback sqltypes.Type, preciseDatetime bool) ctype {
 	if sqltypes.IsNumber(ct.Type) {
-		return ct
+		return c.compileDropYear(ct, offset)
 	}
 	if ct.Type == sqltypes.VarBinary {
 		if (ct.Flag & flagHex) != 0 {
@@ -299,7 +334,7 @@ func (c *compiler) compileToInt64(ct ctype, offset int) ctype {
 func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
 	switch ct.Type {
 	case sqltypes.Uint64:
-		return ct
+		return c.compileDropYear(ct, offset)
 	case sqltypes.Int64:
 		c.asm.Convert_iu(offset)
 	// TODO: specialization
@@ -312,7 +347,7 @@ func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
 func (c *compiler) compileToBitwiseUint64(ct ctype, offset int) ctype {
 	switch ct.Type {
 	case sqltypes.Uint64:
-		return ct
+		return c.compileDropYear(ct, offset)
 	case sqltypes.Int64:
 		c.asm.Convert_iu(offset)
 	case sqltypes.Decimal:

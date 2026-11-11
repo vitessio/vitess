@@ -26,7 +26,7 @@ func (c *compiler) compileFn_rounding(arg0 IR, asm_ins_f, asm_ins_d func()) (cty
 		return ctype{}, err
 	}
 
-	if arg.Type == sqltypes.Int64 || arg.Type == sqltypes.Uint64 {
+	if arg.Type == sqltypes.Int64 || (arg.Type == sqltypes.Uint64 && !arg.isYear()) {
 		// No-op for integers.
 		return arg, nil
 	}
@@ -35,6 +35,8 @@ func (c *compiler) compileFn_rounding(arg0 IR, asm_ins_f, asm_ins_d func()) (cty
 
 	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
 	switch arg.Type {
+	case sqltypes.Uint64:
+		convt = c.compileDropYear(arg, 1)
 	case sqltypes.Float64:
 		asm_ins_f()
 	case sqltypes.Decimal:

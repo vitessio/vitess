@@ -46,8 +46,10 @@ func (call *builtinCeil) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	switch num := arg.(type) {
-	case *evalInt64, *evalUint64:
+	case *evalInt64:
 		return num, nil
+	case *evalUint64:
+		return num.withoutYear(), nil
 	case *evalDecimal:
 		dec := num.dec
 		dec = dec.Ceil()
@@ -82,8 +84,10 @@ func (call *builtinFloor) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	switch num := arg.(type) {
-	case *evalInt64, *evalUint64:
+	case *evalInt64:
 		return num, nil
+	case *evalUint64:
+		return num.withoutYear(), nil
 	case *evalDecimal:
 		dec := num.dec
 		dec = dec.Floor()
@@ -119,7 +123,7 @@ func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 
 	switch num := arg.(type) {
 	case *evalUint64:
-		return num, nil
+		return num.withoutYear(), nil
 	case *evalInt64:
 		if num.i < 0 {
 			if num.i == math.MinInt64 {
@@ -142,7 +146,7 @@ func (expr *builtinAbs) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	if arg.Type == sqltypes.Uint64 {
+	if arg.Type == sqltypes.Uint64 && !arg.isYear() {
 		// No-op if it's unsigned since that's already positive.
 		return arg, nil
 	}
@@ -151,6 +155,8 @@ func (expr *builtinAbs) compile(c *compiler) (ctype, error) {
 
 	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}
 	switch arg.Type {
+	case sqltypes.Uint64:
+		c.compileDropYear(arg, 1)
 	case sqltypes.Int64:
 		c.asm.Fn_ABS_i()
 	case sqltypes.Float64:
@@ -1004,6 +1010,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// No-op, already rounded
 		case sqltypes.Uint64:
 			// No-op, already rounded
+			arg = c.compileDropYear(arg, 1)
 		case sqltypes.Float64:
 			c.asm.Fn_ROUND1_f()
 		case sqltypes.Decimal:
@@ -1036,6 +1043,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 		case sqltypes.Int64:
 			c.asm.Fn_ROUND2_i()
 		case sqltypes.Uint64:
+			arg = c.compileDropYear(arg, 2)
 			c.asm.Fn_ROUND2_u()
 		case sqltypes.Float64:
 			c.asm.Fn_ROUND2_f()
@@ -1211,6 +1219,7 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 	case sqltypes.Int64:
 		c.asm.Fn_TRUNCATE_i()
 	case sqltypes.Uint64:
+		arg = c.compileDropYear(arg, 2)
 		c.asm.Fn_TRUNCATE_u()
 	case sqltypes.Float64:
 		c.asm.Fn_TRUNCATE_f()

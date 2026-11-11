@@ -164,7 +164,7 @@ var Cases = []TestCase{
 	{Run: FnWeek},
 	{Run: FnWeekDay},
 	{Run: FnWeekOfYear},
-	{Run: FnYear},
+	{Run: FnYear, Strict: true},
 	{Run: FnYearWeek},
 	{Run: FnPeriodAdd},
 	{Run: FnPeriodDiff},

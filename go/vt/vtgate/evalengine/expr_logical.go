@@ -809,7 +809,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	tt := ta.result()
 	ct := ctype{Type: tt, Flag: f, Col: ca.resultFor(tt, cs.collate), Scale: ta.scale, Size: ta.size}
 	res.tt, res.size, res.scale, res.col = ct.Type, ct.Size, ct.Scale, ct.Col.Collation
-	return ct, nil
+	return ct.fromSQLType(), nil
 }
 
 var _ IR = (*CaseExpr)(nil)

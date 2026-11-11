@@ -72,6 +72,9 @@ func (l *Literal) typeof(*ExpressionEnv) (ctype, error) {
 		if e.u > math.MaxInt64+1 {
 			f |= flagIntegerOvf
 		}
+		if e.year {
+			return ctype{Type: sqltypes.Uint64, Flag: f | flagYear, Col: collationNumeric}, nil
+		}
 	case *evalTemporal:
 		return ctype{Type: e.t, Col: collationNumeric, Size: int32(e.prec)}, nil
 	case *evalDecimal:

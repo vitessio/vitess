@@ -61,6 +61,11 @@ const (
 	// and cannot be computed accurately
 	flagAmbiguousType typeFlag = 1 << 11
 
+	// flagYear marks an UINT64 value that has the YEAR type (the result of YEAR()
+	// on MySQL 8.1+). It behaves like any other UINT64 except that it reports
+	// sqltypes.Year as its type; see ctype.sqlType.
+	flagYear typeFlag = 1 << 12
+
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 )

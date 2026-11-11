@@ -1894,7 +1894,7 @@ func (b *builtinYear) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	if yearType(env.currentVersion()) {
-		return newEvalYear(int64(d.dt.Date.Year())), nil
+		return newEvalYear(uint64(d.dt.Date.Year())), nil
 	}
 	return newEvalInt64(int64(d.dt.Date.Year())), nil
 }
@@ -1913,9 +1913,16 @@ func (call *builtinYear) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xD(1, true)
 	}
 
-	c.asm.Fn_YEAR(yearType(c.env.MySQLVersion()))
+	isYear := yearType(c.env.MySQLVersion())
+	c.asm.Fn_YEAR(isYear)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	// The result is an integer whatever the argument, so it inherits none of its
+	// flags: YEAR(false) is not a boolean.
+	f := nullableFlags(arg.Flag) | flagNullable
+	if isYear {
+		return ctype{Type: sqltypes.Uint64, Col: collationNumeric, Flag: f | flagYear}, nil
+	}
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: f}, nil
 }
 
 func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {

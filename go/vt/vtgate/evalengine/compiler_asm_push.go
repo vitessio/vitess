@@ -559,7 +559,9 @@ func (asm *assembler) PushLiteral(lit eval) error {
 		}, "PUSH INT64(%s)", lit.ToRawBytes())
 	case *evalUint64:
 		asm.emit(func(env *ExpressionEnv) int {
-			env.vm.stack[env.vm.sp] = env.vm.arena.newEvalUint64(lit.u)
+			u := env.vm.arena.newEvalUint64(lit.u)
+			u.year = lit.year
+			env.vm.stack[env.vm.sp] = u
 			env.vm.sp++
 			return 1
 		}, "PUSH UINT64(%s)", lit.ToRawBytes())

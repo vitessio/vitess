@@ -4466,7 +4466,9 @@ func (asm *assembler) Fn_YEAR(yearType bool) {
 				return 1
 			}
 			arg := env.vm.stack[env.vm.sp-1].(*evalTemporal)
-			env.vm.stack[env.vm.sp-1] = newEvalYear(int64(arg.dt.Date.Year()))
+			year := env.vm.arena.newEvalUint64(uint64(arg.dt.Date.Year()))
+			year.year = true
+			env.vm.stack[env.vm.sp-1] = year
 			return 1
 		}, "FN YEAR DATE(SP-1)")
 	} else {

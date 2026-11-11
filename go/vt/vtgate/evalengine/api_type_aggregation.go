@@ -130,6 +130,7 @@ func (ta *typeAggregation) add(tt sqltypes.Type, f typeFlag, size, scale int32) 
 	if f&flagNullable != 0 {
 		ta.nullable = true
 	}
+	tt = ctype{Type: tt, Flag: f}.sqlType()
 	ta.size = max(ta.size, size)
 	ta.scale = max(ta.scale, scale)
 	switch tt {

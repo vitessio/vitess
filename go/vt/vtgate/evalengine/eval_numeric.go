@@ -48,6 +48,9 @@ type (
 	evalUint64 struct {
 		u          uint64
 		hexLiteral bool
+		// year marks the result of YEAR() on MySQL 8.1+, which has type YEAR
+		// but otherwise behaves like an unsigned integer.
+		year bool
 	}
 
 	evalFloat struct {
@@ -57,10 +60,6 @@ type (
 	evalDecimal struct {
 		dec    decimal.Decimal
 		length int32
-	}
-
-	evalYear struct {
-		evalInt64
 	}
 )
 
@@ -110,12 +109,14 @@ func newEvalBool(b bool) *evalInt64 {
 	return evalBoolFalse
 }
 
-func newEvalYear(i int64) *evalYear {
-	return &evalYear{evalInt64{i: i}}
+func newEvalYear(u uint64) *evalUint64 {
+	return &evalUint64{u: u, year: true}
 }
 
 func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 	switch e := e.(type) {
+	case *evalUint64:
+		return e.withoutYear()
 	case evalNumeric:
 		return e
 	case *evalBytes:
@@ -426,6 +427,9 @@ func (e *evalUint64) Hash(h *vthash.Hasher) {
 }
 
 func (e *evalUint64) SQLType() sqltypes.Type {
+	if e.year {
+		return sqltypes.Year
+	}
 	return sqltypes.Uint64
 }
 
@@ -468,6 +472,14 @@ func (e *evalUint64) toDecimal(m, d int32) *evalDecimal {
 }
 
 func (e *evalUint64) toUint64() *evalUint64 {
+	return e
+}
+
+// withoutYear returns e as a plain UINT64 if it has the YEAR type.
+func (e *evalUint64) withoutYear() *evalUint64 {
+	if e.year {
+		return newEvalUint64(e.u)
+	}
 	return e
 }
 
@@ -627,8 +639,4 @@ func (e *evalDecimal) toUint64() *evalUint64 {
 		return newEvalUint64(math.MaxUint64)
 	}
 	return newEvalUint64(u)
-}
-
-func (e *evalYear) SQLType() sqltypes.Type {
-	return sqltypes.Year
 }
