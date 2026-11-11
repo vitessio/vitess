@@ -18,6 +18,8 @@ package logutil
 
 import (
 	"fmt"
+	stdlog "log"
+	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
@@ -26,7 +28,24 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
+
+// TestStdlibLog checks that a line written through the standard library's log
+// package, such as net/http's errors, is under "message" and not in "msg".
+func TestStdlibLog(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	stdlog.Printf("http: panic serving %s", "10.0.0.1:1234")
+
+	r := logs.Record(t, "standard library log")
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, "http: panic serving 10.0.0.1:1234", r["message"])
+	for _, r := range logs.Records(t) {
+		assert.NotContains(t, r["msg"], "10.0.0.1")
+	}
+}
 
 func TestParsing(t *testing.T) {
 	path := []string{

@@ -125,7 +125,7 @@ const (
 )
 
 func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (result BackupResult, finalErr error) {
-	params.Logger.Infof("Starting ExecuteBackup in %s", params.TabletAlias)
+	params.Logger.Info("Starting ExecuteBackup", slog.String("tablet", params.TabletAlias))
 
 	location, err := be.backupLocation(bh.Directory(), bh.Name())
 	if err != nil {
@@ -167,7 +167,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	// oncce we have the lock, we start it and wait unti it has acquired and release its global read lock, which
 	// should guarantee that both use and mysql shell are seeing the same executed GTID sets.
 	// after this we release the lock so that replication can continue. this usually should take just a few seconds.
-	params.Logger.Infof("acquiring a global read lock before fetching the executed GTID sets")
+	params.Logger.Info("acquiring a global read lock before fetching the executed GTID sets")
 	err = params.Mysqld.AcquireGlobalReadLock(ctx)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrap(err, "failed to acquire read lock to start backup")
@@ -186,7 +186,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 	cmd := exec.CommandContext(ctx, be.binaryName, args...)
 
-	params.Logger.Infof("running %s", cmd.String())
+	params.Logger.Info("running mysql shell", slog.String("exec_cmd", mysqlShellCommandString(cmd)))
 
 	stdoutReader, stdoutWriter := io.Pipe()
 	stderrReader, stderrWriter := io.Pipe()
@@ -199,8 +199,8 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	cmdWg := &sync.WaitGroup{}
 	cmdWg.Add(3)
 	go releaseReadLock(ctx, lockWaiterReader, params, cmdWg, lockAcquired)
-	go scanLinesToLogger(mysqlShellBackupEngineName+" stdout", stdoutReader, params.Logger, cmdWg.Done)
-	go scanLinesToLogger(mysqlShellBackupEngineName+" stderr", combinedErr, params.Logger, cmdWg.Done)
+	go scanLinesToLogger(mysqlShellBackupEngineName, "stdout", stdoutReader, params.Logger, cmdWg.Done)
+	go scanLinesToLogger(mysqlShellBackupEngineName, "stderr", combinedErr, params.Logger, cmdWg.Done)
 
 	// we run the command, wait for it to complete and close all pipes so the goroutines can complete on their own.
 	// after that we can process if an error has happened or not.
@@ -221,7 +221,7 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 	}
 
 	// open the MANIFEST
-	params.Logger.Infof("Writing backup MANIFEST")
+	params.Logger.Info("Writing backup MANIFEST")
 	mwc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
 	if err != nil {
 		return BackupUnusable, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
@@ -266,12 +266,12 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 		return BackupUnusable, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 
-	params.Logger.Infof("Backup completed")
+	params.Logger.Info("Backup completed")
 	return BackupUsable, nil
 }
 
 func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
-	params.Logger.Infof("Calling ExecuteRestore for %s (DeleteBeforeRestore: %v)", params.DbName, params.DeleteBeforeRestore)
+	params.Logger.Info("Calling ExecuteRestore", slog.String("db_name", params.DbName), slog.Bool("delete_before_restore", params.DeleteBeforeRestore))
 
 	shouldDeleteUsers, err := be.restorePreCheck(ctx, params)
 	if err != nil {
@@ -312,7 +312,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		return nil, vterrors.Wrap(err, "disable semi-sync failed")
 	}
 
-	params.Logger.Infof("restoring on an existing tablet, so dropping database %q", params.DbName)
+	params.Logger.Info("restoring on an existing tablet, so dropping database", slog.String("db_name", params.DbName))
 
 	readonly, err := params.Mysqld.IsSuperReadOnly(ctx)
 	if err != nil {
@@ -328,7 +328,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		defer func() {
 			err := resetFunc()
 			if err != nil {
-				params.Logger.Errorf("Not able to set super_read_only to its original value after restore")
+				params.Logger.Error("Not able to set super_read_only to its original value after restore", slog.Any("error", err))
 			}
 		}()
 	}
@@ -358,14 +358,14 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 		if err != nil {
 			return nil, vterrors.Wrap(err, "unable to disable REDO_LOG")
 		}
-		params.Logger.Infof("Disabled REDO_LOG")
+		params.Logger.Info("Disabled REDO_LOG")
 
 		defer func() { // re-enable once we are done with the restore.
 			err := params.Mysqld.ExecuteSuperQuery(ctx, "ALTER INSTANCE ENABLE INNODB REDO_LOG")
 			if err != nil {
-				params.Logger.Errorf("unable to re-enable REDO_LOG: %v", err)
+				params.Logger.Error("unable to re-enable REDO_LOG", slog.Any("error", err))
 			} else {
-				params.Logger.Infof("Enabled REDO_LOG")
+				params.Logger.Info("Enabled REDO_LOG")
 			}
 		}()
 	}
@@ -396,7 +396,7 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 
 	cmd := exec.CommandContext(ctx, "mysqlsh", args...)
 
-	params.Logger.Infof("running %s", cmd.String())
+	params.Logger.Info("running mysql shell", slog.String("exec_cmd", mysqlShellCommandString(cmd)))
 
 	cmdOut, err := cmd.StdoutPipe()
 	if err != nil {
@@ -412,24 +412,24 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 
 	cmdWg := &sync.WaitGroup{}
 	cmdWg.Add(2)
-	go scanLinesToLogger(mysqlShellBackupEngineName+" stdout", cmdOut, params.Logger, cmdWg.Done)
-	go scanLinesToLogger(mysqlShellBackupEngineName+" stderr", cmdErr, params.Logger, cmdWg.Done)
+	go scanLinesToLogger(mysqlShellBackupEngineName, "stdout", cmdOut, params.Logger, cmdWg.Done)
+	go scanLinesToLogger(mysqlShellBackupEngineName, "stderr", cmdErr, params.Logger, cmdWg.Done)
 	cmdWg.Wait()
 
 	// Get the exit status.
 	if err := cmd.Wait(); err != nil {
 		return nil, vterrors.Wrap(err, mysqlShellBackupEngineName+" failed")
 	}
-	params.Logger.Infof("%s completed successfully", be.binaryName)
+	params.Logger.Info("mysql shell completed successfully", slog.String("command", be.binaryName))
 
 	// disable local_infile now that the restore is done.
 	err = params.Mysqld.ExecuteSuperQuery(ctx, "SET GLOBAL LOCAL_INFILE=0")
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to set local_infile=0")
 	}
-	params.Logger.Infof("set local_infile=0")
+	params.Logger.Info("set local_infile=0")
 
-	params.Logger.Infof("Restore completed")
+	params.Logger.Info("Restore completed")
 
 	return &bm.BackupManifest, nil
 }
@@ -562,7 +562,7 @@ func (be *MySQLShellBackupEngine) handleSuperReadOnly(ctx context.Context, param
 		return nil, vterrors.Wrap(err, fmt.Sprintf("checking if mysqld has super_read_only=enable: %v", err))
 	}
 
-	params.Logger.Infof("Is Super Read Only: %v", readonly)
+	params.Logger.Info("Is Super Read Only", slog.Bool("super_read_only", readonly))
 
 	if readonly {
 		resetFunc, err := params.Mysqld.SetSuperReadOnly(ctx, false)
@@ -573,7 +573,7 @@ func (be *MySQLShellBackupEngine) handleSuperReadOnly(ctx context.Context, param
 		return func() {
 			err := resetFunc()
 			if err != nil {
-				params.Logger.Errorf("Not able to set super_read_only to its original value after restore")
+				params.Logger.Error("Not able to set super_read_only to its original value after restore", slog.Any("error", err))
 			}
 		}, nil
 	}
@@ -596,27 +596,136 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 			}
 			released = true
 
-			params.Logger.Infof("mysql shell released its global read lock, doing the same")
+			params.Logger.Info("mysql shell released its global read lock, doing the same")
 
 			err := params.Mysqld.ReleaseGlobalReadLock(ctx)
 			if err != nil {
-				params.Logger.Errorf("unable to release global read lock: %v", err)
+				params.Logger.Error("unable to release global read lock", slog.Any("error", err))
 			}
 
-			params.Logger.Infof("global read lock released after %v", time.Since(lockAcquired))
+			params.Logger.Info("global read lock released", slog.Duration("duration", time.Since(lockAcquired)))
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		params.Logger.Errorf("error reading from reader: %v", err)
+		params.Logger.Error("error reading from reader", slog.Any("error", err))
 	}
 
 	if !released {
-		params.Logger.Errorf("could not release global lock earlier")
+		params.Logger.Error("could not release global lock earlier")
 	}
 }
 
+// mysqlShellCommandString returns cmd.String() with the passwords in mysqlsh's
+// arguments masked (see maskMySQLShellPasswords).
+func mysqlShellCommandString(cmd *exec.Cmd) string {
+	return strings.Join(append([]string{cmd.Path}, maskMySQLShellPasswords(cmd.Args[1:])...), " ")
+}
+
+// maskMySQLShellPasswords returns a copy of mysqlsh's arguments with each
+// password replaced by "****":
+//   - the value of --password, --password1, --password2, --password3 and the
+//     older --dbpassword, after "=" or as the next argument (mysqlsh reads
+//     that one only for --password2 and --password3, but it was meant as a
+//     password in every case). Names match in any case,
+//     without "-" and "_", and after "loose-" prefixes;
+//   - the rest of a group of short options from -p on (-p<password>,
+//     -Ep<password>), or the argument after a lone -p;
+//   - the password in a connection string ([scheme://]user:password@host)
+//     given to --uri or --ssh, or as an argument of its own.
+//
+// Any other argument, including the value that follows an option like --uri,
+// -h or -e, runs through maskURIPassword, so it is masked when it is a
+// connection string and kept when it is a plain value like a host. Only the
+// values of --execute, --file, --pyc and --pym are kept verbatim.
+func maskMySQLShellPasswords(args []string) []string {
+	optionName := func(option string) string {
+		name := strings.ToLower(strings.TrimPrefix(option, "--"))
+		for strings.HasPrefix(name, "loose-") || strings.HasPrefix(name, "loose_") {
+			name = name[len("loose-"):]
+		}
+		return strings.NewReplacer("-", "", "_", "").Replace(name)
+	}
+	isValue := func(i int) bool {
+		return i < len(args) && !strings.HasPrefix(args[i], "-")
+	}
+	masked := make([]string, len(args))
+	copy(masked, args)
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case strings.HasPrefix(arg, "--"):
+			option, value, hasValue := strings.Cut(arg, "=")
+			switch optionName(option) {
+			case "password", "password1", "password2", "password3", "dbpassword":
+				if hasValue && value != "" {
+					masked[i] = option + "=****"
+				} else if !hasValue && isValue(i+1) {
+					i++
+					masked[i] = "****"
+				}
+			case "uri", "ssh":
+				if hasValue {
+					masked[i] = option + "=" + maskURIPassword(value)
+				}
+			case "execute", "pyc", "file", "pym":
+				if !hasValue && isValue(i+1) {
+					i++
+				}
+			}
+		case strings.HasPrefix(arg, "-") && len(arg) > 1:
+			// The first short option that takes a value takes the rest of
+			// the group, or else the next argument if its value is required.
+			j := strings.IndexAny(arg[1:], "CDPScefhipu") + 1
+			switch {
+			case j == 0:
+			case arg[j] == 'p' && j+1 < len(arg):
+				masked[i] = arg[:j+1] + "****"
+			case arg[j] == 'p' && isValue(i+1):
+				i++
+				masked[i] = "****"
+			}
+		default:
+			masked[i] = maskURIPassword(arg)
+		}
+	}
+	return masked
+}
+
+// maskURIPassword replaces the password in a connection string of the form
+// [scheme://][user[:password]@]host... with "****". It takes the user
+// information to end at the first "@", if no "/" comes before it, and only a
+// "://" (or ":/") that comes before that "@" to end an optional scheme.
+//
+// mysqlsh's own parser (Uri_parser::preprocess) instead takes the first ":/"
+// anywhere as the end of the scheme, so it rejects a schemeless string with a
+// ":/" after the "@", such as root:secret@host/db?ssl-ca=file:/x (it reads
+// root:secret@host/db?ssl-ca=file as the scheme and fails). Masking that string
+// is still right, since the password in it is real.
+func maskURIPassword(uri string) string {
+	at := strings.Index(uri, "@")
+	if at < 0 {
+		return uri
+	}
+	start := 0
+	if i := strings.Index(uri[:at], ":/"); i > 0 {
+		start = i + len(":/")
+		if strings.HasPrefix(uri[start:], "/") {
+			start++
+		}
+	}
+	userinfo := uri[start:at]
+	if strings.Contains(userinfo, "/") {
+		return uri
+	}
+	user, _, hasPassword := strings.Cut(userinfo, ":")
+	if !hasPassword {
+		return uri
+	}
+	return uri[:start] + user + ":****" + uri[at:]
+}
+
 func cleanupMySQL(ctx context.Context, params RestoreParams, shouldDeleteUsers bool) error {
-	params.Logger.Infof("Cleaning up MySQL ahead of a restore")
+	params.Logger.Info("Cleaning up MySQL ahead of a restore")
 	result, err := params.Mysqld.FetchSuperQuery(ctx, "SHOW DATABASES")
 	if err != nil {
 		return err
@@ -629,7 +738,7 @@ func cleanupMySQL(ctx context.Context, params RestoreParams, shouldDeleteUsers b
 			continue // not dropping internal DBs
 		}
 
-		params.Logger.Infof("Dropping DB %q", dbName)
+		params.Logger.Info("Dropping DB", slog.String("db_name", dbName))
 		err = params.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", row[0].ToString()))
 		if err != nil {
 			return fmt.Errorf("error droppping database %q: %w", row[0].ToString(), err)
@@ -664,7 +773,7 @@ func cleanupMySQL(ctx context.Context, params RestoreParams, shouldDeleteUsers b
 				continue // we skip reserved MySQL users
 			}
 
-			params.Logger.Infof("Dropping User %q", user)
+			params.Logger.Info("Dropping User", slog.String("mysql_user", user))
 			err = params.Mysqld.ExecuteSuperQuery(ctx, fmt.Sprintf("DROP USER '%s'@'%s'", row[0].ToString(), row[1].ToString()))
 			if err != nil {
 				return fmt.Errorf("error droppping user %q: %w", user, err)

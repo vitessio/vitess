@@ -19,9 +19,12 @@ package inst
 import (
 	"bytes"
 	"database/sql"
+	"errors"
 	"fmt"
+	"log/slog"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,6 +35,7 @@ import (
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
@@ -1262,4 +1266,38 @@ func TestErrantGTIDCountGaugeIsResetWhenResolved(t *testing.T) {
 		"GtidErrant should be cleared on the no-errant path so callers reusing the Instance don't see stale state")
 	require.EqualValues(t, 0, currentErrantGTIDCount.Counts()[replicaAlias],
 		"gauge should be reset to 0 after errant GTIDs are resolved")
+}
+
+var logTestRuns atomic.Uint32
+
+// newRunUIDOffset returns a multiple of 1000 that no earlier call returned. A
+// test that checks a line logged once a minute per tablet (util.ClearToLog)
+// adds it to its tablets' UIDs, so the line is logged again on each run.
+func newRunUIDOffset() uint32 {
+	return 1000 * logTestRuns.Add(1)
+}
+
+// TestLogReadTopologyInstanceErrorLogs checks the line logged for a failed
+// instance read: the hint is its own attribute, left out when there is none.
+func TestLogReadTopologyInstanceErrorLogs(t *testing.T) {
+	offset := newRunUIDOffset()
+	withHint := &topodatapb.TabletAlias{Cell: "zone1", Uid: 900 + offset}
+	withoutHint := &topodatapb.TabletAlias{Cell: "zone1", Uid: 901 + offset}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	err := logReadTopologyInstanceError(withHint, "ReadInstanceClusterAttributes", errors.New("read failed"))
+	require.EqualError(t, err, "ReadTopologyInstance("+topoproto.TabletAliasString(withHint)+") ReadInstanceClusterAttributes: read failed")
+	record := logs.Record(t, "ReadTopologyInstance failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, topoproto.TabletAliasString(withHint), record["tablet"])
+	assert.Equal(t, "ReadInstanceClusterAttributes", record["hint"])
+	assert.Equal(t, "read failed", record["error"])
+
+	logs.Reset()
+	err = logReadTopologyInstanceError(withoutHint, "", errors.New("read failed"))
+	require.EqualError(t, err, "ReadTopologyInstance("+topoproto.TabletAliasString(withoutHint)+"): read failed")
+	record = logs.Record(t, "ReadTopologyInstance failed")
+	assert.Equal(t, topoproto.TabletAliasString(withoutHint), record["tablet"])
+	assert.NotContains(t, record, "hint")
+	assert.Equal(t, "read failed", record["error"])
 }

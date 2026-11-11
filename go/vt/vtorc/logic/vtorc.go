@@ -18,7 +18,7 @@ package logic
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -33,6 +33,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/process"
@@ -139,7 +140,7 @@ func handleDiscoveryRequests() {
 func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) {
 	tabletAliasString := topoproto.TabletAliasString(tabletAlias)
 	if inst.InstanceIsForgotten(tabletAlias) {
-		log.Info(fmt.Sprintf("discoverInstance: skipping discovery of %+v because it is set to be forgotten", tabletAliasString))
+		log.Info("DiscoverInstance: skipping discovery because it is set to be forgotten", slog.String("tablet", tabletAliasString))
 		return
 	}
 
@@ -161,7 +162,7 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 		discoveryTime := latency.Elapsed("total")
 		if discoveryTime > config.GetInstancePollTime() {
 			instancePollSecondsExceededCounter.Add(1)
-			log.Warn(fmt.Sprintf("discoverInstance exceeded InstancePollSeconds for %+v, took %.4fs", tabletAliasString, discoveryTime.Seconds()))
+			log.Warn("DiscoverInstance exceeded --instance-poll-time", slog.String("tablet", tabletAliasString), slog.Duration("duration", discoveryTime))
 			if instance != nil && instance.TabletType == topodatapb.TabletType_PRIMARY {
 				// Consider this a type of healthcheck failure.
 				inst.RecordPrimaryHealthCheck(tabletAlias, false)
@@ -208,20 +209,28 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 	discoveryInstanceTimings.Add("Other", otherLatency)
 
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to discover %s (force: %t), err: %v", tabletAliasString, forceDiscovery, err))
+		log.Error("Failed to discover",
+			slog.String("tablet", tabletAliasString),
+			slog.Bool("force_discovery", forceDiscovery),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 	} else {
-		log.Info(fmt.Sprintf("Discovered %s (force: %t): %+v", tabletAliasString, forceDiscovery, instance))
+		log.Info("Discovered", instance.LogAttrs(slog.String("tablet", tabletAliasString), slog.Bool("force_discovery", forceDiscovery))...)
 	}
 
 	if instance == nil {
 		failedDiscoveriesCounter.Add(1)
 		if util.ClearToLog("discoverInstance", tabletAliasString) {
-			log.Warn(fmt.Sprintf("DiscoverInstance(%+v) instance is nil in %.3fs (Backend: %.3fs, Instance: %.3fs), error=%+v",
-				tabletAliasString,
-				totalLatency.Seconds(),
-				backendLatency.Seconds(),
-				instanceLatency.Seconds(),
-				err))
+			attrs := []slog.Attr{
+				slog.String("tablet", tabletAliasString),
+				slog.Duration("duration", totalLatency),
+				slog.Duration("backend_duration", backendLatency),
+				slog.Duration("instance_duration", instanceLatency),
+			}
+			if err != nil {
+				attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+			}
+			log.Warn("DiscoverInstance: instance is nil", attrs...)
 		}
 		return
 	}
@@ -231,7 +240,7 @@ func DiscoverInstance(tabletAlias *topodatapb.TabletAlias, forceDiscovery bool) 
 func onHealthTick() {
 	tabletAliases, err := inst.ReadOutdatedInstances()
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("onHealthTick: failed to read outdated instances", slog.Any("error", err))
 	}
 
 	func() {
@@ -261,7 +270,7 @@ func ContinuousDiscovery() {
 	if !config.GetAllowRecovery() {
 		log.Info("--allow-recovery is set to 'false', disabling recovery actions")
 		if err := DisableRecovery(); err != nil {
-			log.Error(fmt.Sprintf("failed to disable recoveries: %+v", err))
+			log.Error("failed to disable recoveries", slog.Any("error", err))
 			return
 		}
 	}
@@ -315,7 +324,7 @@ func ContinuousDiscovery() {
 		case <-tabletTopoTick:
 			ctx, cancel := context.WithTimeout(context.Background(), config.GetTopoInformationRefreshDuration())
 			if err := refreshAllInformation(ctx); err != nil {
-				log.Error(fmt.Sprintf("failed to refresh topo information: %+v", err))
+				log.Error("failed to refresh topo information", slog.Any("error", err))
 			}
 			cancel()
 		}
@@ -350,7 +359,7 @@ func refreshAllInformation(ctx context.Context) error {
 		retryCtx, retryCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer retryCancel()
 		if retryErr := validateCellsNoRecovery(retryCtx); retryErr != nil {
-			log.Error(fmt.Sprintf("--cells-no-recovery validation failed, shutting down: %v", retryErr))
+			log.Error("--cells-no-recovery validation failed, shutting down", slog.Any("error", retryErr))
 			// Run graceful shutdown directly (releases shard locks, closes topo)
 			// then exit nonzero so restart-on-failure policies detect the fatal
 			// configuration error. We call closeVTOrc ourselves instead of

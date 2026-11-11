@@ -247,7 +247,7 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		return nil, err
 	}
 
-	bh.bs.params.Logger.Infof("Using S3 upload part size: %s", humanize.IBytes(uint64(partSizeBytes)))
+	bh.bs.params.Logger.Info("Using S3 upload part size", slog.String("file_name", filename), slog.Int64("part_size_bytes", partSizeBytes))
 
 	reader, writer := io.Pipe()
 	bh.handleAddFile(ctx, filename, partSizeBytes, reader, func(err error) {
