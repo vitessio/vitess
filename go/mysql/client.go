@@ -195,6 +195,9 @@ func (c *Conn) Ping() error {
 		return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
 	defer c.recycleReadPacket()
+	if len(data) == 0 {
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_PING response packet")
+	}
 	switch data[0] {
 	case OKPacket:
 		return nil
@@ -207,7 +210,15 @@ func (c *Conn) Ping() error {
 // clientHandshake handles the client side of the handshake.
 // Note the connection can be closed while this is running.
 // Returns a SQLError.
-func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttributes) error {
+func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttributes) (err error) {
+	// Connect runs this on its own goroutine, where a panic on a malformed
+	// server packet would take down the whole process.
+	defer func() {
+		if x := recover(); x != nil {
+			err = sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "malformed packet during handshake: %v", x)
+		}
+	}()
+
 	// if EnableQueryInfo is set, make sure that all queries starting with the handshake
 	// will actually process the INFO fields in QUERY_OK packets
 	if params.EnableQueryInfo {
@@ -341,6 +352,9 @@ func (c *Conn) clientHandshake(params *ConnParams, attributes ConnectionAttribut
 		if err != nil {
 			return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 		}
+		if len(response) == 0 {
+			return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty COM_INIT_DB response packet")
+		}
 		switch response[0] {
 		case OKPacket:
 			// OK packet, we are authenticated.
@@ -454,11 +468,17 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 
 	// 10 reserved 0 bytes.
 	pos += 10
+	if pos > len(data) {
+		return 0, nil, sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no reserved bytes")
+	}
 
 	if capabilities&CapabilityClientSecureConnection != 0 {
 		// The next part of the auth-plugin-data.
 		// The length is max(13, length of auth-plugin-data - 8).
 		l := min(int(authPluginDataLength)-8, 13)
+		if l < 1 {
+			return 0, nil, sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: invalid auth-plugin-data length %v", authPluginDataLength)
+		}
 		var authPluginDataPart2 []byte
 		authPluginDataPart2, pos, ok = readBytes(data, pos, l)
 		if !ok {
@@ -476,6 +496,9 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if capabilities&CapabilityClientPluginAuth != 0 {
 		authPluginName, _, ok := readNullString(data, pos)
 		if !ok {
+			if pos >= len(data) {
+				return 0, nil, sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "parseInitialHandshakePacket: packet has no auth-plugin name")
+			}
 			// Fallback for versions prior to 5.5.10 and
 			// 5.6.2 that don't have a null terminated string.
 			authPluginName = string(data[pos : len(data)-1])
@@ -659,6 +682,9 @@ func (c *Conn) handleAuthResponse(params *ConnParams) error {
 	if err != nil {
 		return sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", err)
 	}
+	if len(response) == 0 {
+		return sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty auth response packet")
+	}
 
 	switch response[0] {
 	case OKPacket:
@@ -671,6 +697,9 @@ func (c *Conn) handleAuthResponse(params *ConnParams) error {
 		}
 	case AuthMoreDataPacket:
 		// Server is requesting more data - maybe un-scrambled password
+		if len(response) < 2 {
+			return sqlerror.NewSQLErrorf(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "AuthMoreDataPacket too short: %v", response)
+		}
 		if err := c.handleAuthMoreDataPacket(response[1], params); err != nil {
 			return err
 		}
@@ -786,17 +815,27 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 	}
 
 	// Server should respond with a AuthMoreDataPacket containing the public key
+	if len(response) == 0 {
+		return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty public key packet")
+	}
 	if response[0] != AuthMoreDataPacket {
 		return nil, ParseErrorPacket(response)
 	}
 
 	block, _ := pem.Decode(response[1:])
+	if block == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to decode PEM public key from server")
+	}
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to parse public key from server: %v", err)
 	}
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "public key from server is %T, not RSA", pub)
+	}
 
-	return pub.(*rsa.PublicKey), nil
+	return rsaPub, nil
 }
 
 // writeClearTextPassword writes the clear text password.

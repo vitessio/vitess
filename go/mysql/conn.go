@@ -1883,7 +1883,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 // More docs here:
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_response_packets.html
 func (c *Conn) isEOFPacket(data []byte) bool {
-	if data[0] != EOFPacket {
+	if len(data) == 0 || data[0] != EOFPacket {
 		return false
 	}
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
@@ -2012,7 +2012,7 @@ func (c *Conn) parseOKPacket(packetOK *PacketOK, in []byte) error {
 // isErrorPacket determines whether or not the packet is an error packet. Mostly here for
 // consistency with isEOFPacket
 func isErrorPacket(data []byte) bool {
-	return data[0] == ErrPacket
+	return len(data) > 0 && data[0] == ErrPacket
 }
 
 // ParseErrorPacket parses the error packet and returns a SQLError.

@@ -326,6 +326,9 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 	}
 	pos := 0
 	for i := range colNumber {
+		if pos >= len(data) {
+			return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "row packet too short")
+		}
 		if data[pos] == NullValue {
 			result = append(result, sqltypes.Value{})
 			pos++

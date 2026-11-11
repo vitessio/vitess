@@ -349,6 +349,9 @@ func (mariadbFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	if err != nil {
 		return nil, err
 	}
+	if len(result) == 0 {
+		return nil, sqlerror.NewSQLError(sqlerror.CRMalformedPacket, sqlerror.SSUnknownSQLState, "invalid empty binlog event packet")
+	}
 	switch result[0] {
 	case EOFPacket:
 		return nil, sqlerror.NewSQLErrorf(sqlerror.CRServerLost, sqlerror.SSUnknownSQLState, "%v", io.EOF)
