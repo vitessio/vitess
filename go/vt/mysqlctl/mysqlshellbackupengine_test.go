@@ -554,7 +554,7 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 	}
 
 	t.Run("backup", func(t *testing.T) {
-		mysqlShellBackupLocation = "logical"
+		mysqlShellBackupLocation = t.TempDir()
 		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
 		argsFile := fakeMySQLShell(t, be.binaryName)
 		logs := logtest.Capture(t, slog.LevelInfo)
