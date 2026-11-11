@@ -430,8 +430,8 @@ func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, err
 }
 
 // statusText returns an exit status as HookResult.String renders it: the name
-// of a HOOK_* status that has one, and exit(N) for any other status, including
-// the exit status of the hook itself.
+// of a HOOK_* status, and exit(N) for any other status, which is the exit
+// status of the hook itself.
 func statusText(status int) string {
 	switch status {
 	case HOOK_SUCCESS:
@@ -446,6 +446,10 @@ func statusText(status int) string {
 		return "HOOK_INVALID_NAME"
 	case HOOK_VTROOT_ERROR:
 		return "HOOK_VTROOT_ERROR"
+	case HOOK_GENERIC_ERROR:
+		return "HOOK_GENERIC_ERROR"
+	case HOOK_TIMEOUT_ERROR:
+		return "HOOK_TIMEOUT_ERROR"
 	default:
 		return fmt.Sprintf("exit(%v)", status)
 	}
