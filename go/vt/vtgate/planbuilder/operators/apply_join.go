@@ -254,6 +254,10 @@ func (aj *ApplyJoin) AddColumn(
 	col := aj.getJoinColumnFor(ctx, expr, expr.Expr, groupBy)
 	offset := len(aj.JoinColumns.columns)
 	aj.JoinColumns.add(col)
+	if len(aj.Columns) > 0 {
+		// The offsets are planned already, so the inputs have to return the new column too.
+		aj.planOffsetFor(ctx, col)
+	}
 	return offset
 }
 
@@ -272,26 +276,23 @@ func (aj *ApplyJoin) AddWSColumn(ctx *plancontext.PlanningContext, offset int, u
 		return index
 	}
 
-	i := aj.Columns[offset]
-	out := 0
-	if i < 0 {
-		out = aj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute)
-		out = ToLeftOffset(out)
-		aj.JoinColumns.addLeft(wsExpr)
-	} else {
-		out = aj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute)
-		out = ToRightOffset(out)
+	// The input returns -1 when it can't add the column, and the offset it returns is converted only after that check,
+	// since a left offset is negative.
+	if i := aj.Columns[offset]; i < 0 {
+		if out := aj.LHS.AddWSColumn(ctx, FromLeftOffset(i), underRoute); out >= 0 {
+			aj.JoinColumns.addLeft(wsExpr)
+			aj.addOffset(ToLeftOffset(out))
+			return len(aj.Columns) - 1
+		}
+	} else if out := aj.RHS.AddWSColumn(ctx, FromRightOffset(i), underRoute); out >= 0 {
 		aj.JoinColumns.addRight(wsExpr)
+		aj.addOffset(ToRightOffset(out))
+		return len(aj.Columns) - 1
 	}
 
-	if out >= 0 {
-		aj.addOffset(out)
-	} else {
-		col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ctx.ContainsAggr(wsExpr))
-		aj.JoinColumns.add(col)
-		aj.planOffsetFor(ctx, col)
-	}
-
+	col := aj.getJoinColumnFor(ctx, aeWrap(wsExpr), wsExpr, !ctx.ContainsAggr(wsExpr))
+	aj.JoinColumns.add(col)
+	aj.planOffsetFor(ctx, col)
 	return len(aj.Columns) - 1
 }
 

@@ -1070,7 +1070,7 @@
                           {
                             "OperatorType": "Join",
                             "Variant": "Join",
-                            "JoinColumnIndexes": "R:0,L:0,L:4,L:6,L:8",
+                            "JoinColumnIndexes": "R:0,L:0,L:4,L:6,L:7",
                             "JoinVars": {
                               "l_discount": 2,
                               "l_extendedprice": 1,
@@ -1082,7 +1082,7 @@
                               {
                                 "OperatorType": "Sort",
                                 "Variant": "Memory",
-                                "OrderBy": "(0|6) ASC, (4|8) ASC",
+                                "OrderBy": "(0|6) ASC, (4|7) ASC",
                                 "Inputs": [
                                   {
                                     "OperatorType": "Join",

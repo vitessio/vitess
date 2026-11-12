@@ -952,7 +952,7 @@
                       {
                         "OperatorType": "Sort",
                         "Variant": "Memory",
-                        "OrderBy": "(1|3) ASC, (2|4) ASC, (0|6) ASC",
+                        "OrderBy": "(1|3) ASC, (2|4) ASC, (0|5) ASC",
                         "Inputs": [
                           {
                             "OperatorType": "Join",

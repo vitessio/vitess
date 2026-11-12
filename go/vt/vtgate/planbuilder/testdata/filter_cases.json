@@ -9864,5 +9864,86 @@
     "query": "select * from (select count(distinct u.id) from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra)) as t",
     "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
+  },
+  {
+    "comment": "A DISTINCT over a filter above a join gets the column that the filter reads from the right side, which main leaves out of the right side's query once the weight string of the DISTINCT has planned the join's offsets",
+    "query": "select distinct ue.id from music m join user_extra ue on ue.col = m.col where ue.m2 in (select col from user)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select distinct ue.id from music m join user_extra ue on ue.col = m.col where ue.m2 in (select col from user)",
+      "Instructions": {
+        "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from `user` where 1 != 1",
+                "Query": "select col from `user`"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Filter",
+                "Predicate": ":__sq_has_values and ue.m2 in ::__sq1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "R:0,R:1,R:2",
+                    "JoinVars": {
+                      "m_col": 0
+                    },
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select m.col from music as m where 1 != 1",
+                        "Query": "select m.col from music as m"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select ue.id, weight_string(ue.id), ue.m2 from user_extra as ue where 1 != 1",
+                        "Query": "select ue.id, weight_string(ue.id), ue.m2 from user_extra as ue where ue.col = :m_col"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
   }
 ]
