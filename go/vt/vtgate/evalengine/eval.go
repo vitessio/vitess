@@ -192,7 +192,7 @@ func evalPlain(e eval) eval {
 	case *evalBytes:
 		if e.flag&flagNumericContext != 0 {
 			b := *e
-			b.flag &^= flagNumericContext
+			b.makePlain()
 			return &b
 		}
 	case *evalInt64:
@@ -234,7 +234,7 @@ func evalKeepNumber(sel, res eval, keep typeFlag) eval {
 		return res
 	}
 	r := *b
-	r.flag &^= flagNumericContext
+	r.makePlain()
 	if keep != 0 {
 		r.flag |= keep | s.flag&flagDecimalFromText
 	}

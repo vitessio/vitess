@@ -136,6 +136,17 @@ func (e *evalBytes) isHexOrBitLiteral() bool {
 	return e.isHexLiteral() || e.isBitLiteral()
 }
 
+// makePlain turns e, in place, into an ordinary string: numeric conversions
+// parse its text instead of reading its bytes as the number of a hex or bit
+// literal. The result of a function is such a string even when it holds the
+// bytes of a literal argument, so REVERSE(0x41) + 0 is 0, not 65.
+// It must only be called on a value that the caller owns, such as a value on
+// the stack of the virtual machine. Use evalPlain for a value that may be
+// shared, such as the value of a Literal.
+func (e *evalBytes) makePlain() {
+	e.flag &^= flagNumericContext
+}
+
 // decimalFromBytes reports whether a conversion of e to a decimal reads its
 // bytes as a number: e is a hex or bit literal, or a string that IF, CASE or
 // NULLIF selected from one. ELT gives a decimal conversion the text of its
