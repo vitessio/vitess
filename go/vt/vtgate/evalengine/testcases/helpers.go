@@ -89,8 +89,12 @@ func mustJSON(j string) sqltypes.Value {
 	return v
 }
 
-// yieldNested yields each expression, which returns NULL for non-NULL
-// arguments, as the argument of consumers that must see that NULL.
+// yieldNested yields each expression on its own, inside LENGTH() and
+// inside an addition.
+//
+// It is for expressions that return NULL although their arguments are not
+// NULL. The functions around them only handle that NULL if the expression
+// is declared nullable.
 func yieldNested(yield Query, exprs ...string) {
 	for _, expr := range exprs {
 		yield(fmt.Sprintf("LENGTH(%s)", expr), nil, false)

@@ -149,10 +149,12 @@ func (e *evalBytes) makePlain() {
 	e.flag &^= flagNumericContext
 }
 
-// decimalFromBytes reports whether a conversion of e to a decimal reads its
-// bytes as a number: e is a hex or bit literal, or a string that IF, CASE or
-// NULLIF selected from one. ELT gives a decimal conversion the text of its
-// argument.
+// decimalFromBytes reports whether a conversion of e to a decimal reads the
+// bytes of e as a number, instead of parsing its text.
+//
+// It does for a hex or bit literal, and for a string that IF, CASE or
+// NULLIF selected from one: CAST(0x3132 AS DECIMAL) is 12594. It does not
+// for a string that ELT selected: CAST(ELT(1, 0x3132) AS DECIMAL) is 12.
 func (e *evalBytes) decimalFromBytes() bool {
 	return e.flag&flagNumericContext != 0 && e.flag&flagDecimalFromText == 0
 }

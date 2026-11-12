@@ -61,25 +61,25 @@ const (
 	// and cannot be computed accurately
 	flagAmbiguousType typeFlag = 1 << 11
 
-	// flagNumericBytes marks a string whose conversion to a number, as a
-	// double, an integer, a decimal or a truth value, reads its bytes as an
-	// unsigned integer instead of parsing its text, as for a hex literal. It
-	// is not a literal: it is the binary string that IF, CASE, NULLIF or ELT
-	// return for a hex or bit literal (or for another such string) that they
-	// select, because MySQL hands these conversions to the selected argument.
+	// flagNumericBytes marks a string that IF, CASE, NULLIF or ELT returned
+	// for a hex or bit literal that they selected.
+	//
+	// The string is not a literal, but it still counts as the number of
+	// that literal in arithmetic: IF(1, 0x41, 'x') + 0 is 65 in MySQL.
 	flagNumericBytes typeFlag = 1 << 12
-	// flagDecimalFromText marks, with flagNumericBytes, a string whose
-	// conversion to a decimal parses its text all the same. MySQL's ELT has
-	// no decimal conversion of its own and converts from its text, so this
-	// is set on a string that ELT selected somewhere between it and the
-	// literal.
+	// flagDecimalFromText is set together with flagNumericBytes on a string
+	// that ELT returned.
+	//
+	// ELT differs from IF in one conversion: MySQL converts its result to
+	// a decimal by parsing the text. CAST(ELT(1, 0x3132) AS DECIMAL) is 12,
+	// where CAST(IF(1, 0x3132, 'x') AS DECIMAL) is 12594.
 	flagDecimalFromText typeFlag = 1 << 13
 
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 
-	// flagNumericContext are the flags that give a string a number of its own
-	// in a numeric context, which the result of a function does not have
+	// flagNumericContext are the flags that make a string count as a number
+	// in arithmetic. See (*evalBytes).makePlain.
 	flagNumericContext = flagHex | flagBit | flagNumericBytes | flagDecimalFromText
 )
 
@@ -182,11 +182,14 @@ func evalIsTruthy(e eval) boolean {
 	}
 }
 
-// evalPlain returns e as an ordinary value: a boolean, or a value that came
-// from a hex or bit literal (or that IF, CASE, NULLIF or ELT selected from
-// one), is returned as a copy without that property.
-// The result of a function is such an ordinary value even when it is one of
-// its arguments.
+// evalPlain returns e as a regular value.
+//
+// The result of a function is never a boolean and never a hex or bit
+// literal, even when the function returns its argument: ABS(TRUE) is the
+// integer 1. Functions call evalPlain on such a result.
+//
+// evalPlain does not change e. It returns a copy if something has to
+// change, so it is safe on a shared value such as the value of a Literal.
 func evalPlain(e eval) eval {
 	switch e := e.(type) {
 	case *evalBytes:
@@ -207,8 +210,9 @@ func evalPlain(e eval) eval {
 	return evalNotBoolean(e)
 }
 
-// evalNotBoolean returns e, or an ordinary integer with the same value if e
-// is a boolean.
+// evalNotBoolean returns e, or the integer 1 or 0 if e is TRUE or FALSE.
+//
+// CASE and IF call it on their result: IF(1, TRUE, 2) is the integer 1.
 func evalNotBoolean(e eval) eval {
 	if e == evalBoolTrue || e == evalBoolFalse {
 		return newEvalInt64(e.(*evalInt64).i)
@@ -216,14 +220,21 @@ func evalNotBoolean(e eval) eval {
 	return e
 }
 
-// evalKeepNumber returns res, the value that IF, CASE, NULLIF or ELT made of sel,
-// the argument that it selected. In a numeric context MySQL converts the
-// selected argument itself, so when sel is a hex or bit literal, or a string
-// selected from one, res keeps the number of that literal; it is still a
-// string, not a literal. keep are the flags that res gets then:
-// flagNumericBytes for IF, CASE and NULLIF, flagNumericBytes |
-// flagDecimalFromText for ELT, and none for IFNULL, whose res is an ordinary
-// string. res also keeps the flagDecimalFromText of sel.
+// evalKeepNumber is called by IF, CASE, NULLIF and ELT on their result.
+// sel is the argument that they selected, and res is the result that they
+// made of it.
+//
+// If sel counts as a number in arithmetic, like the hex literal 0x41, then
+// res must too: IF(1, 0x41, 'x') + 0 is 65 in MySQL. In that case
+// evalKeepNumber returns a copy of res with the flags in keep:
+//
+//   - flagNumericBytes for IF, CASE and NULLIF
+//   - flagNumericBytes | flagDecimalFromText for ELT
+//   - none for IFNULL, whose result is a regular string:
+//     IFNULL(0x41, 'x') + 0 is 0
+//
+// Unless keep is none, the copy also keeps the flagDecimalFromText of sel.
+// In every other case evalKeepNumber returns res as it is.
 func evalKeepNumber(sel, res eval, keep typeFlag) eval {
 	s, ok := sel.(*evalBytes)
 	if !ok || s.flag&flagNumericContext == 0 {

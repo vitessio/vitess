@@ -64,9 +64,9 @@ type (
 	CaseExpr struct {
 		cases []WhenThen
 		Else  IR
-		// plain makes the result an ordinary string when the selected
-		// argument is a hex or bit literal, as for IFNULL, a function
-		// whose result MySQL converts to a number from its text.
+		// plain is set for IFNULL, whose result is a regular string even
+		// when it selects a hex or bit literal: IFNULL(0x41, 'x') + 0 is
+		// 0 in MySQL, where IF(1, 0x41, 'x') + 0 is 65.
 		plain bool
 	}
 )
@@ -637,14 +637,14 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	// The result is not a boolean, but converts to the number of a selected
-	// hex or bit literal, as in MySQL.
+	// TRUE and FALSE become the integers 1 and 0. A selected hex or bit
+	// literal still counts as a number: see evalKeepNumber.
 	res, err := evalCoerce(evalNotBoolean(result), ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
 	return evalKeepNumber(result, res, c.numberFlags()), err
 }
 
-// numberFlags returns the flags that the result gets when the selected
-// argument is a hex or bit literal: none for IFNULL, which hands no literal on.
+// numberFlags returns the flags to pass to evalKeepNumber:
+// flagNumericBytes, or none for IFNULL. See CaseExpr.plain.
 func (c *CaseExpr) numberFlags() typeFlag {
 	if c.plain {
 		return 0

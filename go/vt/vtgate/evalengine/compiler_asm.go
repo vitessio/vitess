@@ -188,9 +188,11 @@ func (asm *assembler) BitCount_b() {
 	}, "BIT_COUNT BINARY(SP-1)")
 }
 
-// BitCount_x counts the bits of a value that is declared a binary string but
-// can be a number when it runs: byte by byte if it is a string, and as a
-// number otherwise.
+// BitCount_x is BIT_COUNT for an argument that is declared a binary string,
+// but can be a number when it runs. See builtinBitCount.compile.
+//
+// It counts the bits of every byte of a string, and converts any other
+// value to a 64-bit integer first.
 func (asm *assembler) BitCount_x() {
 	asm.emit(func(env *ExpressionEnv) int {
 		var count int
@@ -1160,8 +1162,9 @@ func (asm *assembler) Convert_xf(offset int) {
 	}, "CONV (SP-%d), FLOAT64", offset)
 }
 
-// Convert_xf_decimalOperand converts to a double the operand of a function
-// that takes the decimal value of its argument in MySQL.
+// Convert_xf_decimalOperand converts a value to a double, like Convert_xf,
+// for a function that reads its argument as a decimal in MySQL. See
+// evalDecimalOperand.
 func (asm *assembler) Convert_xf_decimalOperand(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		env.vm.stack[env.vm.sp-offset], _ = evalToFloat(evalDecimalOperand(env.vm.stack[env.vm.sp-offset]))

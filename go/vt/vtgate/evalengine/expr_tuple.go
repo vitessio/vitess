@@ -53,7 +53,8 @@ func (tuple TupleExpr) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		// A NULL element can make an IN over this tuple NULL.
+		// A NULL in the tuple can make IN return NULL: 1 IN (2, NULL) is
+		// NULL.
 		f |= ct.Flag & flagNullable
 	}
 	c.asm.PackTuple(len(tuple))

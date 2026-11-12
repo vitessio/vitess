@@ -675,8 +675,8 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 			prec = int(ts.prec)
 		}
 	case *evalBytes:
-		// A literal, or a string that IF, CASE or NULLIF selected from one, is a
-		// whole number of seconds.
+		// The bytes are read as a whole number of seconds: 0x3132 is
+		// second 12594. See decimalFromBytes.
 		if ts.decimalFromBytes() {
 			u, _ := ts.toNumericHex()
 			if u.u >= maxUnixtime {
@@ -1413,8 +1413,8 @@ func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
 		e = evalToDecimal(arg, 0, 0)
 	case sqltypes.IsTextOrBinary(arg.SQLType()):
 		b := arg.(*evalBytes)
-		// A literal, or a string that IF, CASE or NULLIF selected from one, has
-		// no fractional digits.
+		// The bytes are read as a whole number of seconds, which has no
+		// fractional digits. See decimalFromBytes.
 		if b.decimalFromBytes() {
 			e = evalToDecimal(arg, 0, 0)
 		} else {

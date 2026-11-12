@@ -41,8 +41,11 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(bitCount(arg))), nil
 }
 
-// bitCount counts the bits of a binary string byte by byte, and those of any
-// other value as a number.
+// bitCount returns the number of bits that are set in e.
+//
+// For a binary string it counts the bits of every byte:
+// BIT_COUNT(_binary 'a') is 3. It converts any other value to a 64-bit
+// integer first: BIT_COUNT('a') is 0, because 'a' is the number 0.
 func bitCount(e eval) int {
 	if b, ok := e.(*evalBytes); ok && (b.isBinary() || isBinaryText(b.SQLType(), b.col.Collation)) && !b.isHexOrBitLiteral() {
 		return bitCountBytes(b.bytes)
@@ -58,10 +61,11 @@ func bitCountBytes(raw []byte) int {
 	return count
 }
 
-// isBinaryText reports whether a character string type has the binary
-// collation. Several string functions return such a value for a binary string
-// argument, and BIT_COUNT counts its bits byte by byte like those of any other
-// binary string.
+// isBinaryText reports whether tt and col describe a character string with
+// the binary collation.
+//
+// Several string functions declare that type for a binary string argument,
+// such as REVERSE(_binary 'a'). BIT_COUNT treats it like a binary string.
 func isBinaryText(tt sqltypes.Type, col collations.ID) bool {
 	return sqltypes.IsText(tt) && col == collations.CollationBinaryID
 }
@@ -81,10 +85,10 @@ func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 	}
 
 	if isBinaryText(ct.Type, ct.Col.Collation) && !ct.isHexOrBitLiteral() {
-		// A character string with the binary collation is also the declared
-		// type of expressions whose value is a number, such as ROUND of such
-		// a string or COALESCE of one and a number, so the instruction checks
-		// that the value is a string.
+		// The declared type can be wrong here. COALESCE of such a string
+		// and a number declares this type, but returns the argument that
+		// it selects as it is, which can be the number. So BitCount_x
+		// looks at the value when it runs.
 		c.asm.BitCount_x()
 		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
