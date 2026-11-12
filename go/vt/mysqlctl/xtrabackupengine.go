@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -720,15 +721,25 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// now extract the files by running xbstream
 		xbstreamProgram := path.Join(xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
+		// The operator's --xbstream-restore-flags can hold an --encrypt-key, so
+		// the log line shows a placeholder for them instead.
+		loggedArgs := slices.Clone(flagsToExec)
 		if xbstreamRestoreFlags != "" {
 			restoreFlags, err := shlex.Split(xbstreamRestoreFlags)
 			if err != nil {
 				return vterrors.Wrap(err, "failed to parse --xbstream-restore-flags")
 			}
 			flagsToExec = append(flagsToExec, restoreFlags...)
+			loggedArgs = append(loggedArgs, "<--xbstream-restore-flags>")
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
+<<<<<<< HEAD
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
+||||||| parent of 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
+		logger.Info("Executing xbstream cmd", slog.String("command", xbstreamProgram), slog.Any("args", redactEncryptKey(flagsToExec)))
+=======
+		logger.Info("Executing xbstream cmd", slog.String("command", xbstreamProgram), slog.Any("args", loggedArgs))
+>>>>>>> 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
 		xbstreamCmd.Stdin = reader
 		xbstreamOut, err := xbstreamCmd.StdoutPipe()
 		if err != nil {
