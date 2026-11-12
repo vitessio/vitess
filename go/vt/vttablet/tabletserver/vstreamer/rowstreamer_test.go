@@ -849,6 +849,16 @@ func TestStreamRowsReusesRowPool(t *testing.T) {
 			packetSize: 64 << 10,
 			minPackets: 60,
 		},
+		{
+			// 32 rows of 64 KiB per 2 MiB packet: the pool holds about 2.1 MB, over the 1 MiB floor, and
+			// almost all of it is values. A budget that ignores the payload term drops it on every packet.
+			name:       "several large rows per packet",
+			create:     "create table t1(id int, val longblob, primary key(id))",
+			rowValues:  func(id int) string { return fmt.Sprintf("(%d, repeat('c', %d))", id, 64<<10) },
+			rows:       200,
+			packetSize: 2 << 20,
+			minPackets: 6,
+		},
 	}
 
 	for _, tc := range cases {
