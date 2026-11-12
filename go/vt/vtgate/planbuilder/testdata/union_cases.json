@@ -2909,5 +2909,179 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "union all over a recursive CTE — the CTE arm keeps the columns the recursion needs; the narrower arm is padded so the Concatenate sees equal widths (issue #21960)",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte union all select name from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, id from user where manager_id is null union all select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte union all select name from user",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "RecurseCTE",
+                "JoinVars": {
+                  "cte_id": 1
+                },
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, id from `user` where 1 != 1",
+                    "Query": "select `name`, id from `user` where manager_id is null"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select e.`name`, e.id from `user` as e where 1 != 1",
+                    "Query": "select e.`name`, e.id from `user` as e where e.manager_id = :cte_id"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, 0 from `user` where 1 != 1",
+                "Query": "select `name`, 0 from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a distinct union followed by a union all arm that is not merged — the distinct arm carries weight_string columns, the other arm is padded (issue #21995)",
+    "query": "select name from user union select name from music union all select name from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select name from user union select name from music union all select name from user",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:1)"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, weight_string(`name`) from `user` where 1 != 1 union select `name`, weight_string(`name`) from music where 1 != 1",
+                    "Query": "select `name`, weight_string(`name`) from `user` union select `name`, weight_string(`name`) from music"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select `name`, 0 from `user` where 1 != 1",
+                "Query": "select `name`, 0 from `user`"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "same as above with an order by on top (issue #21995)",
+    "query": "select name from user union select name from music union all select name from user order by name",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select name from user union select name from music union all select name from user order by name",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(0|1) ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:2)",
+                  "1"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, weight_string(`name`), weight_string(`name`) from `user` where 1 != 1 union select `name`, weight_string(`name`), weight_string(`name`) from music where 1 != 1",
+                    "Query": "select `name`, weight_string(`name`), weight_string(`name`) from `user` union select `name`, weight_string(`name`), weight_string(`name`) from music"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as `name`, weight_string(dt.c0), 0 from (select `name` from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as `name`, weight_string(dt.c0), 0 from (select `name` from `user`) as dt(c0)"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
+        "user.user"
+      ]
+    }
   }
 ]
