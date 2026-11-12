@@ -80,6 +80,7 @@
         - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
         - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
         - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
+        - [Backup MANIFESTs no longer store engine flags](#backup-manifest-no-engine-flags)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v24.21.0 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -977,6 +978,12 @@ Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tab
 | unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
 
 `--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
+
+#### <a id="backup-manifest-no-engine-flags"/>Backup MANIFESTs no longer store engine flags</a>
+
+The `xtrabackup` engine no longer writes `--xtrabackup-backup-flags` to the `ExtraCommandLineParams` field of the backup MANIFEST, and the `mysqlshell` engine no longer writes `--mysql-shell-load-flags` to its `Params` field. These flags can hold credentials or encryption keys, such as an `--encrypt-key` or an `azureStorageSasToken`, and the MANIFEST is stored in plain text next to the backup. No version of Vitess reads either field, so restores are unchanged in both directions: new versions restore backups that have the fields, and older versions restore backups that lack them.
+
+Backups taken by earlier versions keep the fields. If they hold secrets, rotate those secrets or rewrite the MANIFESTs. Tooling that read the flags from a MANIFEST must take them from the tablet's configuration instead.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

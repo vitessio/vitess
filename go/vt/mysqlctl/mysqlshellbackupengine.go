@@ -80,7 +80,9 @@ var (
 	}
 )
 
-// MySQLShellBackupManifest represents a backup.
+// MySQLShellBackupManifest represents a backup. It must not hold the mysqlsh
+// flags, which can contain credentials or tokens: the MANIFEST is stored in
+// plain text next to the backup.
 type MySQLShellBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	// Note that the manifest itself doesn't fill the Position field, as we have
@@ -89,8 +91,6 @@ type MySQLShellBackupManifest struct {
 
 	// Location of the backup directory
 	BackupLocation string
-	// Params are the parameters that backup was created with
-	Params string
 }
 
 func init() {
@@ -106,7 +106,7 @@ func init() {
 func registerMysqlShellBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&mysqlShellBackupLocation, "mysql-shell-backup-location", mysqlShellBackupLocation, "location where the backup will be stored")
 	fs.StringVar(&mysqlShellFlags, "mysql-shell-flags", mysqlShellFlags, "execution flags to pass to mysqlsh binary to be used during dump/load")
-	fs.StringVar(&mysqlShellDumpFlags, "mysql-shell-dump-flags", mysqlShellDumpFlags, "flags to pass to mysql shell dump utility. This should be a JSON string and will be saved in the MANIFEST")
+	fs.StringVar(&mysqlShellDumpFlags, "mysql-shell-dump-flags", mysqlShellDumpFlags, "flags to pass to mysql shell dump utility. This should be a JSON string")
 	fs.StringVar(&mysqlShellLoadFlags, "mysql-shell-load-flags", mysqlShellLoadFlags, "flags to pass to mysql shell load utility. This should be a JSON string")
 	fs.BoolVar(&mysqlShellBackupShouldDrain, "mysql-shell-should-drain", mysqlShellBackupShouldDrain, "decide if we should drain while taking a backup or continue to serving traffic")
 	fs.BoolVar(&mysqlShellSpeedUpRestore, "mysql-shell-speedup-restore", mysqlShellSpeedUpRestore, "speed up restore by disabling redo logging and double write buffer during the restore process")
@@ -256,7 +256,6 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 		// mysql shell backup specific fields
 		BackupLocation: location,
-		Params:         mysqlShellLoadFlags,
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")

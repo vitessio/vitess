@@ -360,13 +360,18 @@ func generateTestFile(t *testing.T, name, contents string) {
 }
 
 // This tests if we are properly releasing the global read lock we acquire
-// during ExecuteBackup(), even if the backup didn't succeed.
+// during ExecuteBackup(), even if the backup didn't succeed, and that a
+// successful backup's MANIFEST leaves out the mysqlsh flags, which can hold
+// credentials.
 func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
-	originalLocation := mysqlShellBackupLocation
+	const secret = "mysqlsh_secret_3f7c"
+	originalLocation, originalDumpFlags, originalLoadFlags := mysqlShellBackupLocation, mysqlShellDumpFlags, mysqlShellLoadFlags
 	mysqlShellBackupLocation = "logical"
+	mysqlShellDumpFlags = `{"threads": 4, "azureStorageSasToken": "` + secret + `"}`
+	mysqlShellLoadFlags = `{"threads": 4, "azureStorageSasToken": "` + secret + `"}`
 
 	defer func() { // restore the original value.
-		mysqlShellBackupLocation = originalLocation
+		mysqlShellBackupLocation, mysqlShellDumpFlags, mysqlShellLoadFlags = originalLocation, originalDumpFlags, originalLoadFlags
 	}()
 
 	logger := logutil.NewMemoryLogger()
@@ -419,6 +424,7 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, mysqlShellBackupEngineName, manifest.BackupMethod)
+		assert.NotContains(t, manifestBuffer.String(), secret)
 
 		// The engine verified the position its MANIFEST records.
 		require.Len(t, verified, 1)

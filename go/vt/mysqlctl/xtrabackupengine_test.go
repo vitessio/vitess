@@ -309,12 +309,14 @@ func TestExtractFilesLogOmitsXbstreamFlags(t *testing.T) {
 
 // TestXtrabackupExecuteBackupVerifiesPosition runs a full backup with a fake
 // xtrabackup binary, and checks that the engine verifies the position its
-// MANIFEST records before it writes the MANIFEST, and writes none when that
-// check fails.
+// MANIFEST records before it writes the MANIFEST, writes none when that check
+// fails, and leaves --xtrabackup-backup-flags, which can hold an
+// --encrypt-key, out of the MANIFEST.
 func TestXtrabackupExecuteBackupVerifiesPosition(t *testing.T) {
 	const (
 		serverUUID = "16b1039f-22b6-11ed-b765-0a43f95f28a3"
 		gtids      = serverUUID + ":1-10"
+		secret     = "encrypt_key_sentinel_8e4a"
 	)
 
 	// The fake xtrabackup writes xtrabackup_info into --target-dir, where the
@@ -328,9 +330,9 @@ echo "binlog_pos = filename 'vt-bin.000001', position '4', GTID of the last chan
 echo "backup data"
 `, gtids)
 	require.NoError(t, os.WriteFile(path.Join(binDir, xtrabackupBinaryName), []byte(script), 0o755))
-	oldEnginePath, oldUser := xtrabackupEnginePath, xtrabackupUser
-	xtrabackupEnginePath, xtrabackupUser = binDir, "backup"
-	t.Cleanup(func() { xtrabackupEnginePath, xtrabackupUser = oldEnginePath, oldUser })
+	oldEnginePath, oldUser, oldFlags := xtrabackupEnginePath, xtrabackupUser, xtrabackupBackupFlags
+	xtrabackupEnginePath, xtrabackupUser, xtrabackupBackupFlags = binDir, "backup", "--encrypt=AES256 --encrypt-key="+secret
+	t.Cleanup(func() { xtrabackupEnginePath, xtrabackupUser, xtrabackupBackupFlags = oldEnginePath, oldUser, oldFlags })
 
 	fakedb := fakesqldb.New(t)
 	t.Cleanup(fakedb.Close)
@@ -361,8 +363,12 @@ echo "backup data"
 		{"no MANIFEST when the check fails", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			manifest := ioutil.NewBytesBufferWriter()
 			bh := &FakeBackupHandle{
-				AddFileReturnF: func(string) FakeBackupHandleAddFileReturn {
+				AddFileReturnF: func(name string) FakeBackupHandleAddFileReturn {
+					if name == backupManifestFileName {
+						return FakeBackupHandleAddFileReturn{WriteCloser: manifest}
+					}
 					return FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()}
 				},
 			}
@@ -390,6 +396,8 @@ echo "backup data"
 				require.NoError(t, err)
 				assert.Equal(t, BackupUsable, result)
 				assert.Contains(t, added, backupManifestFileName)
+				assert.Contains(t, manifest.String(), `"BackupMethod": "xtrabackup"`)
+				assert.NotContains(t, manifest.String(), secret)
 			} else {
 				require.ErrorContains(t, err, "errant GTIDs")
 				assert.Equal(t, BackupUnusable, result)

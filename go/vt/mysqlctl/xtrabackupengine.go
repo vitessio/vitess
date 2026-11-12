@@ -81,7 +81,9 @@ const (
 	xbstream             = "xbstream"
 )
 
-// xtraBackupManifest represents a backup.
+// xtraBackupManifest represents a backup. It must not hold
+// --xtrabackup-backup-flags, which can contain credentials or keys: the
+// MANIFEST is stored in plain text next to the backup.
 // It stores the name of the backup file, the replication position,
 // whether the backup is compressed using gzip, and any extra
 // command line parameters used while invoking it.
@@ -95,8 +97,6 @@ type xtraBackupManifest struct {
 	CompressionEngine string `json:",omitempty"`
 	// Name of the backup file
 	FileName string
-	// Params are the parameters that backup was run with
-	Params string `json:"ExtraCommandLineParams"`
 	// StreamMode is the stream mode used to create this backup.
 	StreamMode string
 	// NumStripes is the number of stripes the file is split across, if any.
@@ -371,7 +371,6 @@ func (be *XtrabackupEngine) executeFullBackup(ctx context.Context, params Backup
 		FileName:        backupFileName,
 		StreamMode:      xtrabackupStreamMode,
 		SkipCompress:    !backupStorageCompress,
-		Params:          xtrabackupBackupFlags,
 		NumStripes:      int32(numStripes),
 		StripeBlockSize: int32(xtrabackupStripeBlockSize),
 		// builtin specific field
