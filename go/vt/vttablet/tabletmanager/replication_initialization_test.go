@@ -1959,11 +1959,10 @@ func TestStartFailureStopsReplicationInitWatcher(t *testing.T) {
 	}
 }
 
-// closeOrderFactory records, when a tablet record is updated, whether the
-// tablet manager's state was still open.
+// closeOrderFactory calls onTabletWrite when a tablet record is updated.
 type closeOrderFactory struct {
 	topo.Factory
-	openDuringWrite func()
+	onTabletWrite func()
 }
 
 func (f closeOrderFactory) Create(cell, addr, root string) (topo.Conn, error) {
@@ -1971,43 +1970,40 @@ func (f closeOrderFactory) Create(cell, addr, root string) (topo.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return closeOrderConn{Conn: c, openDuringWrite: f.openDuringWrite}, nil
+	return closeOrderConn{Conn: c, onTabletWrite: f.onTabletWrite}, nil
 }
 
 type closeOrderConn struct {
 	topo.Conn
-	openDuringWrite func()
+	onTabletWrite func()
 }
 
 func (c closeOrderConn) Update(ctx context.Context, path string, contents []byte, version topo.Version) (topo.Version, error) {
 	if strings.HasSuffix(path, "/Tablet") {
-		c.openDuringWrite()
+		c.onTabletWrite()
 	}
 	return c.Conn.Update(ctx, path, contents, version)
 }
 
-// TestCloseClosesStateBeforeItsTopoWrite checks that Close closes the state,
-// which stops the watchers and keeps them from changing serving, before it
-// clears the tablet record, which can take topo.RemoteOperationTimeout: vttablet
-// stops the query service and closes MySQL in OnClose hooks that run
-// concurrently with Close. TestCanceledWatcherLeavesReplicationInitError runs a
-// watcher through Close.
-func TestCloseClosesStateBeforeItsTopoWrite(t *testing.T) {
+// TestCloseStampsShutdownBeforeWaitingForWatchers checks that Close clears the
+// tablet record, whose shutdown time tells VTOrc that the tablet was stopped
+// rather than crashed, without waiting for a watcher stuck in MySQL or for the
+// state's lock, which an update behind the query service's drain can hold:
+// servenv gives the OnClose hooks only --onclose-timeout. The watchers are
+// already canceled by then, and Close returns only once they have exited.
+func TestCloseStampsShutdownBeforeWaitingForWatchers(t *testing.T) {
 	_, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
 	var tm *TabletManager
-	var writes, openWrites atomic.Int32
 	// Open publishes the tablet record under the state's lock.
-	var armed atomic.Bool
-	ts, err := topo.NewWithFactory(closeOrderFactory{Factory: factory, openDuringWrite: func() {
+	var armed, canceledAtWrite atomic.Bool
+	written := make(chan struct{})
+	var once sync.Once
+	ts, err := topo.NewWithFactory(closeOrderFactory{Factory: factory, onTabletWrite: func() {
 		if !armed.Load() {
 			return
 		}
-		writes.Add(1)
-		tm.tmState.mu.Lock()
-		defer tm.tmState.mu.Unlock()
-		if tm.tmState.isOpen {
-			openWrites.Add(1)
-		}
+		canceledAtWrite.Store(tm.tmState.ctx.Err() != nil)
+		once.Do(func() { close(written) })
 	}}, "", "")
 	require.NoError(t, err)
 	t.Cleanup(ts.Close)
@@ -2016,11 +2012,61 @@ func TestCloseClosesStateBeforeItsTopoWrite(t *testing.T) {
 	require.NoError(t, qsc.InitDBConfig(&querypb.Target{Keyspace: "ks", Shard: "0"}, nil, md))
 	tm.QueryServiceControl = qsc
 	tm.tmState.Open()
-	armed.Store(true)
+	id := tm.tmState.deferReplicationInit(t.Context(), nil, nil)
+	stalled := &stalledStatusDaemon{FakeMysqlDaemon: md, entered: make(chan struct{}), release: make(chan struct{})}
+	tm.MysqlDaemon = stalled
+	tm.tmState.goWatch(func(ctx context.Context) { tm.watchReplicationInit(ctx, id) })
+	select {
+	case <-stalled.entered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the watcher did not check replication")
+	}
 
-	tm.Close()
-	require.NotZero(t, writes.Load(), "Close did not update the tablet record")
-	assert.Zero(t, openWrites.Load(), "Close updated the tablet record with its state still open")
+	armed.Store(true)
+	tm.tmState.mu.Lock()
+	closed := make(chan struct{})
+	go func() {
+		tm.Close()
+		close(closed)
+	}()
+	select {
+	case <-written:
+	case <-time.After(30 * time.Second):
+		tm.tmState.mu.Unlock()
+		close(stalled.release)
+		require.FailNow(t, "Close did not clear the tablet record while a watcher was in MySQL and the state's lock was held")
+	}
+	assert.True(t, canceledAtWrite.Load(), "the watchers were not canceled before the tablet record was cleared")
+	tm.tmState.mu.Unlock()
+
+	select {
+	case <-closed:
+		assert.Fail(t, "Close returned while its watcher was still in MySQL")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(stalled.release)
+	select {
+	case <-closed:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "Close did not return once its watcher exited")
+	}
+	ti, err := ts.GetTablet(t.Context(), tm.tabletAlias)
+	require.NoError(t, err)
+	assert.NotNil(t, ti.TabletShutdownTime)
+}
+
+// stalledStatusDaemon is a mysqld whose SHOW REPLICA STATUS returns only on
+// release, whatever the context, as a killed query on a stalled server can.
+type stalledStatusDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	entered, release chan struct{}
+	once             sync.Once
+}
+
+func (d *stalledStatusDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	d.once.Do(func() { close(d.entered) })
+	<-d.release
+	return d.FakeMysqlDaemon.ReplicationStatus(ctx)
 }
 
 // TestCanceledWatcherLeavesReplicationInitError checks that a watcher whose

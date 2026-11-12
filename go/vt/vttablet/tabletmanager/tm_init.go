@@ -615,10 +615,13 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
 func (tm *TabletManager) Close() {
-	// Stop the watchers first: the other OnClose hooks, which stop the query
-	// service and close MySQL, run concurrently with this one. An admission
-	// already in progress can still overlap them.
-	tm.tmState.Close()
+	// The other OnClose hooks, which stop the query service and close MySQL,
+	// run concurrently with this one. Cancel the watchers first, so they stop
+	// and no new one starts; an admission already in progress can still
+	// overlap those hooks. Waiting for them, and for the state's lock, happens
+	// last, so that neither delays clearing the tablet record, whose shutdown
+	// time tells VTOrc that the tablet was stopped rather than crashed.
+	tm.tmState.cancel()
 	tm.stopShardHealthMonitor()
 
 	// Stop the shard sync loop and wait for it to exit. We do this in Close()
@@ -646,6 +649,8 @@ func (tm *TabletManager) Close() {
 	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.tabletAlias, f); err != nil {
 		log.Warn("Failed to update tablet record, may contain stale identifiers", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
+
+	tm.tmState.Close()
 }
 
 // Stop shuts down the tm. Normally this is not necessary, since we use
