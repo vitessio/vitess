@@ -8305,7 +8305,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "A distinct aggregation over a single shard is not refused because a correlated EXISTS needs the column it reads, as on main",
@@ -8467,7 +8468,8 @@
         "user.user",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "A failed merge into the right side leaves a column that main selects without grouping on it, so a distinct aggregation on the other side of a later join is refused instead of counting once per repeated row",

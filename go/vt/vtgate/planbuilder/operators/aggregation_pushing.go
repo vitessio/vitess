@@ -213,8 +213,9 @@ func checkJoinKeepsDistinct(ctx *plancontext.PlanningContext, aggregator *Aggreg
 // returnsEachGroupOnce says if no group of op, where it groups by the exprs, comes from several shards. That holds when
 // every route that isn't a single shard has the value of a unique vindex column fixed by the exprs.
 func returnsEachGroupOnce(ctx *plancontext.PlanningContext, sel *sqlparser.Select, op Operator, exprs []sqlparser.Expr) bool {
-	var candidates []sqlparser.Expr
-	for _, eq := range joinEqualities(ctx, sel, nil) {
+	equalities := joinEqualities(ctx, sel, nil)
+	candidates := make([]sqlparser.Expr, 0, 2*len(equalities)+len(exprs))
+	for _, eq := range equalities {
 		candidates = append(candidates, eq.cmp.Left, eq.cmp.Right)
 	}
 	candidates = append(candidates, exprs...)
