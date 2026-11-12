@@ -1242,14 +1242,14 @@ func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Lo
 			var err error
 			backupTime, err = time.Parse(mysqlctl.BackupTimestampFormat, restoreFromBackupTsStr)
 			if err != nil {
-				return fmt.Errorf("RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr)
+				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "RestoreFromBackup failed: unable to parse the backup timestamp value provided of '%s'", restoreFromBackupTsStr)
 			}
 		}
 		if restoreToTimestampStr != "" {
 			var err error
 			restoreToTimestamp, err = mysqlctl.ParseRFC3339(restoreToTimestampStr)
 			if err != nil {
-				return fmt.Errorf("RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s'. Error: %v", restoreToTimestampStr, err)
+				return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "RestoreFromBackup failed: unable to parse the --restore-to-timestamp value provided of '%s': %v", restoreToTimestampStr, err)
 			}
 		}
 	}
@@ -1603,10 +1603,11 @@ func (tm *TabletManager) initializeReplicationLocked(ctx context.Context, tablet
 		log.Warn("cannot start replication during initialization: primary in shard record still points to this tablet.")
 		return "", nil
 	}
-	// Fence a former primary before anything that can fail, as a deferral
-	// does: the fence releases a commit waiting for acknowledgements, which
-	// the errant GTID checks below then see, and with source-side semi-sync
-	// on, the applier's commit can itself wait until the fence disables it.
+	// Fence a former primary as soon as the shard record names another
+	// primary, before reading it or its status, as a deferral does: the
+	// fence releases a commit waiting for acknowledgements, which the errant
+	// GTID checks below then see, and with source-side semi-sync on, the
+	// applier's commit can itself wait until the fence disables it.
 	if _, err := tm.fenceFormerPrimary(ctx); err != nil {
 		return "", err
 	}

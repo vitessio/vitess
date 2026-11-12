@@ -17,9 +17,11 @@ limitations under the License.
 package failover
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"strconv"
 	"testing"
@@ -294,13 +296,22 @@ func TestRestartWithRestoreFlagInitializesUnconfiguredReplication(t *testing.T) 
 	require.Equal(t, []string{"reparent"}, shardLockActions(t, ci), "R1 requested the shard lock")
 	b, err := os.ReadFile(r1.VttabletProcess.ErrorLog)
 	require.NoError(t, err)
-	require.NotContains(t, string(b), `action="initialize replication"`, "R1 tried to take the shard lock")
+	require.False(t, triedInitializationLock(b), "R1 tried to take the shard lock")
 	l.release(t)
 
 	n := utils.ConfirmReplication(t, p, tablets[1:])
 	for _, i := range []int{base, n} {
 		require.NoError(t, utils.CheckInsertedValues(t.Context(), t, r1, i))
 	}
+}
+
+// ansiEscape matches the color codes that coverage builds add to the log.
+var ansiEscape = regexp.MustCompile("\x1b\\[[0-9;]*m")
+
+// triedInitializationLock reports whether a vttablet log shows an attempt to
+// take the shard lock to initialize replication.
+func triedInitializationLock(log []byte) bool {
+	return bytes.Contains(ansiEscape.ReplaceAll(log, nil), []byte(`action="initialize replication"`))
 }
 
 // TestERSRepointsRestartingReplica restarts R1's vttablet during the held ERS (see
@@ -320,7 +331,7 @@ func TestERSRepointsRestartingReplica(t *testing.T) {
 		// Release ERS only once R1 waits for its lock.
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			b, _ := os.ReadFile(vp.ErrorLog)
-			assert.Contains(c, string(b), `action="initialize replication"`, "R1 did not try to take the shard lock")
+			assert.True(c, triedInitializationLock(b), "R1 did not try to take the shard lock")
 		}, time.Until(deadline), 100*time.Millisecond)
 	})
 }
