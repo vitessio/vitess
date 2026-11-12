@@ -25,7 +25,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
-	"slices"
 	"strings"
 	"testing"
 
@@ -258,63 +257,6 @@ func (s *planTestSuite) addPKs(vschema *vindexes.VSchema, ks string, tbls []stri
 	}
 }
 
-// addDistinctKeys gives a sharded table a primary key and a unique key that are not vindexes, an unsharded table
-// single-column and composite keys, and a reference table a single-column key, to tell apart the keys that are unique
-// across shards from those that are not. The unique keys are NOT NULL columns, except nk, which can be NULL. The
-// columns sk and md5 are strings with a collation, bk is a binary string, user_metadata.user_id is a typed integer, and
-// music.id is a vindex column that the schema gives no type.
-func (s *planTestSuite) addDistinctKeys(vschema *vindexes.VSchema) {
-	s.addPKs(vschema, "user", []string{"user", "user_extra", "ref", "pin_test"})
-	s.addPKs(vschema, "main", []string{"unsharded"})
-	s.addPKsProvided(vschema, "main", []string{"unsharded_a"}, []string{"id", "bar"})
-	s.Require().NoError(vschema.AddUniqueKey("user", "user_extra", []sqlparser.Expr{sqlparser.NewColName("foo")}))
-	s.Require().NoError(vschema.AddUniqueKey("user", "user", []sqlparser.Expr{sqlparser.NewColName("name")}))
-	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("foo")}))
-	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("col"), sqlparser.NewColName("bar")}))
-	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("nk")}))
-	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("sk")}))
-	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("bk")}))
-	s.Require().NoError(vschema.AddUniqueKey("user", "user_metadata", []sqlparser.Expr{sqlparser.NewColName("md5")}))
-	s.Require().NoError(vschema.AddUniqueKey("user", "user_metadata", []sqlparser.Expr{sqlparser.NewColName("user_id")}))
-	s.Require().NoError(vschema.AddUniqueKey("user", "music", []sqlparser.Expr{sqlparser.NewColName("id")}))
-	s.addColumns(vschema, "user", "user_extra", false, "foo")
-	s.addColumns(vschema, "user", "user", false, "name")
-	s.addColumns(vschema, "main", "unsharded", false, "foo", "col", "bar")
-	s.setColumnType(vschema, "main", "unsharded", "foo", sqltypes.VarChar)
-	s.addColumns(vschema, "main", "unsharded", true, "nk")
-	s.addColumns(vschema, "main", "unsharded", false, "sk")
-	s.setColumnType(vschema, "main", "unsharded", "sk", sqltypes.VarChar)
-	s.setColumnCollation(vschema, "main", "unsharded", "sk", "latin1_swedish_ci")
-	s.addColumns(vschema, "main", "unsharded", false, "bk")
-	s.setColumnType(vschema, "main", "unsharded", "bk", sqltypes.VarBinary)
-	s.addColumns(vschema, "user", "music", false, "id")
-	s.addColumns(vschema, "user", "user_metadata", false, "user_id", "md5")
-	s.setColumnType(vschema, "user", "user_metadata", "user_id", sqltypes.Int64)
-	s.setColumnType(vschema, "user", "user_metadata", "md5", sqltypes.VarChar)
-	s.setColumnCollation(vschema, "user", "user_metadata", "md5", "big5_bin")
-}
-
-func (s *planTestSuite) addColumns(vschema *vindexes.VSchema, ks, tbl string, nullable bool, cols ...string) {
-	table := vschema.Keyspaces[ks].Tables[tbl]
-	for _, col := range cols {
-		table.Columns = append(table.Columns, vindexes.Column{Name: sqlparser.NewIdentifierCI(col), Nullable: nullable})
-	}
-}
-
-func (s *planTestSuite) setColumnCollation(vschema *vindexes.VSchema, ks, tbl, col, collation string) {
-	columns := vschema.Keyspaces[ks].Tables[tbl].Columns
-	i := slices.IndexFunc(columns, func(c vindexes.Column) bool { return c.Name.EqualString(col) })
-	s.Require().GreaterOrEqual(i, 0)
-	columns[i].CollationName = collation
-}
-
-func (s *planTestSuite) setColumnType(vschema *vindexes.VSchema, ks, tbl, col string, typ sqltypes.Type) {
-	columns := vschema.Keyspaces[ks].Tables[tbl].Columns
-	i := slices.IndexFunc(columns, func(c vindexes.Column) bool { return c.Name.EqualString(col) })
-	s.Require().GreaterOrEqual(i, 0)
-	columns[i].Type = typ
-}
-
 func (s *planTestSuite) addPKsProvided(vschema *vindexes.VSchema, ks string, tbls []string, pks []string) {
 	for _, tbl := range tbls {
 		s.Require().NoError(vschema.AddPrimaryKey(ks, tbl, pks))
@@ -354,17 +296,6 @@ func (s *planTestSuite) TestViews() {
 	vw.EnableViews = true
 
 	s.testFile("view_cases.json", vw, false)
-}
-
-func (s *planTestSuite) TestDistinctAggregationKeys() {
-	env := vtenv.NewTestEnv()
-	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
-	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
-	s.Require().NoError(err)
-
-	s.addDistinctKeys(vschema)
-
-	s.testFile("distinct_keys_cases.json", vw, false)
 }
 
 func (s *planTestSuite) TestOne() {

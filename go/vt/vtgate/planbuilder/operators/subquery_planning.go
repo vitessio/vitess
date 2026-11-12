@@ -401,7 +401,7 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 		return nil, nil
 	}
 
-	newExpr, varsBefore, varsAfterExact := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
+	newExpr, varsBefore := rewriteOriginalPushedToRHS(ctx, inner.Original, outer)
 	sqm := &subqueryRouteMerger{
 		outer:    outerRoute,
 		original: newExpr,
@@ -409,9 +409,6 @@ func tryMergeWithRHS(ctx *plancontext.PlanningContext, inner *SubQuery, outer *A
 	}
 	newOp := mergeSubqueryInputs(ctx, innerRoute, outerRoute, inner.GetMergePredicates(), sqm)
 	if newOp == nil {
-		for _, bve := range outer.ExtraLHSVars[varsBefore:varsAfterExact] {
-			outer.UnmergedLHSExprs = append(outer.UnmergedLHSExprs, bve.Expr)
-		}
 		outer.ExtraLHSVars = outer.ExtraLHSVars[:varsBefore]
 		return nil, nil
 	}
@@ -443,23 +440,21 @@ func addSubQuery(in Operator, inner *SubQuery) Operator {
 // rewriteOriginalPushedToRHS rewrites the original expression to use the argument names instead of the column names
 // this is necessary because we are pushing the subquery into the RHS of the join, and we need to use the argument names
 // instead of the column names
-func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) (sqlparser.Expr, int, int) {
+func rewriteOriginalPushedToRHS(ctx *plancontext.PlanningContext, expression sqlparser.Expr, outer *ApplyJoin) (sqlparser.Expr, int) {
 	outerID := TableID(outer.LHS)
 	// Only a successful merge needs the variables that either pass adds. Otherwise the left
 	// side would select columns that nothing groups on, so the caller truncates ExtraLHSVars to
-	// the length returned first. The second length is the one after the exact match, whose
-	// variables are the ones that main leaves on the left side.
+	// the length returned.
 	varsBefore := len(outer.ExtraLHSVars)
 	expression = rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
 		return ctx.SemTable.RecursiveDeps(col) == outerID
 	})
-	varsAfterExact := len(outer.ExtraLHSVars)
 	// Any column the LHS solves is fed from it, even when the LHS spans several tables.
 	rewritten := rewriteColumnsFedFromLHS(ctx, expression, outer, func(col *sqlparser.ColName) bool {
 		deps := ctx.SemTable.RecursiveDeps(col)
 		return deps.NotEmpty() && deps.IsSolvedBy(outerID)
 	})
-	return rewritten, varsBefore, varsAfterExact
+	return rewritten, varsBefore
 }
 
 func rewriteColumnsFedFromLHS(

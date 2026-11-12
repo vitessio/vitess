@@ -50,11 +50,6 @@ type (
 		// these are needed by other operators further down the right hand side of the join
 		ExtraLHSVars []BindVarExpr
 
-		// UnmergedLHSExprs are the left-side columns that the exact match of a subquery fed to the right side of the join
-		// until it failed to merge there. They are not selected from the left side, but a distinct aggregation
-		// still has to know that main selected them.
-		UnmergedLHSExprs []sqlparser.Expr
-
 		// After offset planning
 
 		// Columns stores the column indexes of the columns coming from the left and right side
@@ -119,7 +114,6 @@ func (aj *ApplyJoin) Clone(inputs []Operator) Operator {
 	kopy.JoinPredicates = aj.JoinPredicates.clone()
 	kopy.Vars = maps.Clone(aj.Vars)
 	kopy.ExtraLHSVars = slices.Clone(aj.ExtraLHSVars)
-	kopy.UnmergedLHSExprs = slices.Clone(aj.UnmergedLHSExprs)
 	return &kopy
 }
 
