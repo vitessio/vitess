@@ -204,3 +204,52 @@ func TestRecurseCTEStreamConcurrentDelivery(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Rows, seedChunks)
 }
+
+// Recursion depth depends on levels, even when the seed or a later frontier
+// contains more rows than the depth limit.
+func TestRecurseCTEDepthDoesNotCountRows(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id", "int64")
+	rows := func(start, count int) []sqltypes.Row {
+		result := make([]sqltypes.Row, count)
+		for i := range count {
+			result[i] = sqltypes.Row{sqltypes.NewInt64(int64(start + i))}
+		}
+		return result
+	}
+	for _, tc := range []struct {
+		name               string
+		seedRows, termRows int
+	}{
+		{"wide seed with empty term", maxRecurseDepth + 1, 0},
+		{"wide recursive frontier", 1, maxRecurseDepth + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, mode := range []string{"execute", "stream", "transaction stream"} {
+				t.Run(mode, func(t *testing.T) {
+					seedResult := &sqltypes.Result{Fields: fields, Rows: rows(1, tc.seedRows)}
+					firstTerm := &sqltypes.Result{Fields: fields, Rows: rows(tc.seedRows+1, tc.termRows)}
+					results := make([]*sqltypes.Result, tc.seedRows+tc.termRows)
+					for i := range results {
+						results[i] = &sqltypes.Result{Fields: fields}
+					}
+					results[0] = firstTerm
+					term := &fakePrimitive{results: results, noLog: true}
+					cte := &RecurseCTE{Seed: &fakePrimitive{results: []*sqltypes.Result{seedResult}}, Term: term, Vars: map[string]int{"id": 0}}
+					cursor := &noopVCursor{inTx: mode == "transaction stream"}
+					var result *sqltypes.Result
+					var err error
+					if mode == "execute" {
+						result, err = cte.TryExecute(t.Context(), cursor, nil, true)
+					} else {
+						result, err = wrapStreamExecute(cte, cursor, nil, true)
+					}
+					require.NoError(t, err)
+					want := seedResult.Copy()
+					want.Rows = append(want.Rows, firstTerm.Rows...)
+					expectResult(t, result, want)
+					require.Equal(t, len(results), term.curResult, "every row must drive its recursive term")
+				})
+			}
+		})
+	}
+}

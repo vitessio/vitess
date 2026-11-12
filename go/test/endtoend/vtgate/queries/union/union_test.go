@@ -17,6 +17,8 @@ limitations under the License.
 package union
 
 import (
+	"strconv"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -322,6 +324,38 @@ func TestRecursiveUnionAllSeedReturnedOnceWithEmptyTerm(t *testing.T) {
 				mcmp.AssertMatches(query, "[[INT64(100)]]")
 				mcmp.AssertMatches(query+" union all select id1 from t1", "[[INT64(100)]]")
 			}
+		})
+	}
+}
+
+// A reference seed routed through VTGate recursion must return all of its rows
+// even when its cardinality exceeds the recursion depth limit.
+func TestRecursiveReferenceSeedLargerThanDepthLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	const count = 1001
+	values := make([]string, count)
+	for i := range count {
+		values[i] = "(" + strconv.Itoa(i+1) + ")"
+	}
+	insert := "insert into ref(id) values " + strings.Join(values, ",")
+	utils.Exec(t, mcmp.MySQLConn, insert)
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet(insert, keyspaceName, true)
+		require.NoError(t, err)
+	}
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			// The shared Exec helper caps fetched rows at 1000.
+			query := "with recursive c as (select id from ref union all select u.id1 from t1 u join c on u.id1 = c.id) select id from c order by id"
+			result, err := mcmp.VtConn.ExecuteFetch(query, count, true)
+			require.NoError(mcmp.AsT(), err)
+			expected, err := mcmp.MySQLConn.ExecuteFetch(query, count, true)
+			require.NoError(mcmp.AsT(), err)
+			utils.CompareVitessAndMySQLResults(mcmp.AsT(), query, mcmp.VtConn, result, expected, utils.CompareOptions{})
+			require.Len(mcmp.AsT(), result.Rows, count)
 		})
 	}
 }

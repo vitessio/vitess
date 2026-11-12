@@ -38,7 +38,7 @@ type RecurseCTE struct {
 
 var _ Primitive = (*RecurseCTE)(nil)
 
-// maxRecurseDepth caps the number of recursion iterations before we abort.
+// maxRecurseDepth caps recursive expansion levels, regardless of rows per level.
 // TODO: This should be controlled with the cte_max_recursion_depth system variable.
 const maxRecurseDepth = 1000
 
@@ -51,8 +51,12 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	// recurseRows contains the rows used in the next recursion
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
-	loops := 0
+	depth := 0
 	for len(recurseRows) > 0 {
+		depth++
+		if depth > maxRecurseDepth {
+			return nil, vterrors.VT09030("")
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
@@ -63,10 +67,6 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			// check if the context is done - we might be in a long running recursion
 			if err := ctx.Err(); err != nil {
 				return nil, err
-			}
-			loops++
-			if loops > maxRecurseDepth {
-				return nil, vterrors.VT09030("")
 			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
@@ -110,8 +110,12 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// one Term stream is active at a time: recursing inside the Term callback
 	// would nest a live stream per level and exhaust the connection pool.
 	joinVars := make(map[string]*querypb.BindVariable)
-	loops := 0
+	depth := 0
 	for len(recurseRows) > 0 {
+		depth++
+		if depth > maxRecurseDepth {
+			return vterrors.VT09030("")
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
@@ -122,10 +126,6 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			// check if the context is done - we might be in a long running recursion
 			if err := ctx.Err(); err != nil {
 				return err
-			}
-			loops++
-			if loops > maxRecurseDepth {
-				return vterrors.VT09030("")
 			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
 				mu.Lock()
