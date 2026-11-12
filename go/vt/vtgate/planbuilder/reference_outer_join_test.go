@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -769,7 +770,7 @@ func TestAnAlternateAuthorizesACrossKeyspaceJoinWhenNoMergeIsRefused(t *testing.
 }
 
 // A recursive CTE that preserves reference rows in a reference route does not hand the no-destination
-// handling to the single shard route of the query around it, which runs nowhere when it finds no shard.
+// handling to the sharded route of the query around it, which runs nowhere when its value maps to no shard.
 func TestARecursiveCTEOverReferenceRowsDoesNotMakeTheOuterRouteRunWithoutADestination(t *testing.T) {
 	const seedPreserves = "with recursive c as (select r.col from ref r left join ref r2 on r2.col = r.col union all select r.col from c join ref r on r.col = c.col where r.col < 3) "
 	const termPreserves = "with recursive c as (select col from ref where col = 1 union all select r.col from c join ref r on r.col = c.col left join ref r2 on r2.col = r.col where r.col < 3) "
@@ -785,4 +786,38 @@ func TestARecursiveCTEOverReferenceRowsDoesNotMakeTheOuterRouteRunWithoutADestin
 			require.False(t, route.NoRoutesSpecialHandling)
 		})
 	}
+}
+
+func planAsOneRoute(t *testing.T, query string) *engine.Route {
+	t.Helper()
+
+	route, ok := planReferenceOuterJoin(t, query).(*engine.Route)
+	require.True(t, ok, "expected one route")
+	return route
+}
+
+// The no-destination handling carries through the merge of a recursive CTE with its seed, and
+// through the union of the inputs of a recursive term.
+func TestARecursiveCTEKeepsTheNoDestinationHandlingOfItsSeedAndOfEveryUnionArm(t *testing.T) {
+	const term = "with recursive c as (select col from ref where col = 1 union all select r.col from c join ref r on r.col = c.col join (%s) d on d.col = r.col where r.col < 3) select col from c"
+	for name, query := range map[string]string{
+		"seed":              "with recursive c as (select col from ref where col = 1 and col in (with recursive c2 as (select col from ref where col = 1 union all select r.col from c2 join ref r on r.col = c2.col left join `user` u on u.id = :x where r.col < 3) select col from c2) union all select c.col + 1 from c join `user` u on u.id = :x where c.col < 5) select col from c",
+		"flagged arm first": fmt.Sprintf(term, "select r2.col from ref r2 left join `user` u on u.id = :x union all select r3.col from ref r3 join `user` u3 on u3.id = :x"),
+		"flagged arm last":  fmt.Sprintf(term, "select r3.col from ref r3 join `user` u3 on u3.id = :x union all select r2.col from ref r2 left join `user` u on u.id = :x"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			route := planAsOneRoute(t, query)
+			require.Equal(t, engine.EqualUnique, route.Opcode)
+			require.True(t, route.NoRoutesSpecialHandling)
+		})
+	}
+}
+
+// A recursive CTE of a sharded table has no reference rows to return, so it runs nowhere when its
+// value maps to no shard.
+func TestAShardedRecursiveCTEOnOneShardIsNotRunWithoutADestination(t *testing.T) {
+	route := planAsOneRoute(t,
+		"with recursive c as (select id from `user` where id = :x union all select u.id + 1 from c join `user` u on u.id = :x where u.id < 3) select id from c")
+	require.Equal(t, engine.EqualUnique, route.Opcode)
+	require.False(t, route.NoRoutesSpecialHandling)
 }

@@ -5060,7 +5060,7 @@ func TestRecursiveTermOverReferenceTableNextToShardWithNoDestination(t *testing.
 }
 
 // The no-destination handling starts in a recursive term only, so a join of two reference tables
-// next to a single shard that finds none runs nowhere, as on main.
+// next to a sharded table whose value maps to no shard runs nowhere, as on main.
 func TestReferenceJoinNextToShardWithNoDestinationRunsNowhere(t *testing.T) {
 	list, err := sqltypes.BuildBindVariable([]any{nil})
 	require.NoError(t, err)

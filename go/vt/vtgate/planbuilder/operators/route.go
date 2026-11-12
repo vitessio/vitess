@@ -60,7 +60,8 @@ type (
 		// NoRoutesSpecialHandling makes the engine route run on an arbitrary shard when its routing
 		// finds no destination, so that the preserved reference rows of a recursive term still come
 		// back. The predicate that found none matches nothing there. It starts only where a recursive
-		// term keeps the preserved rows on one shard, and later merges carry it on.
+		// CTE keeps preserved rows on one shard, in its term or in the merge with its seed, and later
+		// merges carry it on.
 		NoRoutesSpecialHandling bool
 
 		ResultColumns int
