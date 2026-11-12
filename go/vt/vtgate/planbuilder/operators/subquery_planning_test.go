@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 )
 
 func TestEvaluatesPerShard(t *testing.T) {
@@ -36,12 +37,20 @@ func TestEvaluatesPerShard(t *testing.T) {
 		"day(utc_date())":            true,
 		"unix_timestamp()":           true,
 		"unix_timestamp('2026-1-1')": false,
+		"a + connection_id()":        true,
+		"a + ps_current_thread_id()": true,
+		"a + @@server_id":            true,
+		"a + @@session.timestamp":    true,
+		"myudf(a)":                   true,
+		"db.myfn(a)":                 true,
+		"a + @v":                     false,
+		"ascii(a) + abs(a)":          false,
 		"a + 3":                      false,
 	} {
 		t.Run(expr, func(t *testing.T) {
 			e, err := sqlparser.NewTestParser().ParseExpr(expr)
 			require.NoError(t, err)
-			assert.Equal(t, want, evaluatesPerShard(e))
+			assert.Equal(t, want, evaluatesPerShard(vtenv.NewTestEnv(), e))
 		})
 	}
 }

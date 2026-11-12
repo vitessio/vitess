@@ -23,9 +23,11 @@ import (
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -865,9 +867,10 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 			// outer route can ask the question on every shard: only that shard answers it. A write
 			// to the reference table has to reach all of its copies, so it is not asked that way. A
 			// LIMIT in the outer route may pick other rows on each shard, and a function like RAND()
-			// or NOW() may route the subquery to another shard on each one.
+			// or NOW() in it may give it other values, or route the subquery to another shard on each
+			// one in the value that routes it.
 			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(ctx, m.subq) &&
-				!variesByShard(ctx, outRoute) && !evaluatesPerShard(m.subq.originalSubquery) {
+				!variesByShard(ctx, outRoute) && !routedByValuesPerShard(ctx, inRouting) {
 				m.onEveryShard = true
 				merged := m.merge(ctx, inRoute, outRoute, scatterOf(inRouting.(*ShardedRouting)))
 				if merged != nil {
@@ -1012,6 +1015,14 @@ func sameNameCopy(ctx *plancontext.PlanningContext, route, other *Route) *Route 
 	return &onTheCopy
 }
 
+// routedByValuesPerShard reports whether a value that routes a subquery can be evaluated differently
+// on each shard.
+func routedByValuesPerShard(ctx *plancontext.PlanningContext, routing Routing) bool {
+	return slices.ContainsFunc(routing.(*ShardedRouting).Selected.ValueExprs, func(value sqlparser.Expr) bool {
+		return evaluatesPerShard(ctx.VSchema.Environment(), value)
+	})
+}
+
 // variesByShard reports whether the SQL of a route can return other rows or values on each shard of
 // a reference table: through a LIMIT, or through a function like RAND() or NOW().
 func variesByShard(ctx *plancontext.PlanningContext, route *Route) bool {
@@ -1019,7 +1030,7 @@ func variesByShard(ctx *plancontext.PlanningContext, route *Route) bool {
 	if err != nil {
 		return true
 	}
-	found := evaluatesPerShard(stmt)
+	found := evaluatesPerShard(ctx.VSchema.Environment(), stmt)
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, ok := node.(*sqlparser.Limit); ok {
 			found = true
@@ -1030,24 +1041,29 @@ func variesByShard(ctx *plancontext.PlanningContext, route *Route) bool {
 	return found
 }
 
-// evaluatesPerShard reports whether node calls a function that each shard can evaluate to another
-// value: one that varies by row, or one that reads the time, which each shard takes when its own
-// statement starts.
-func evaluatesPerShard(node sqlparser.SQLNode) bool {
+// evaluatesPerShard reports whether node has a value that each shard can evaluate differently: a
+// function that varies by row, one that reads the time, which each shard takes when its own
+// statement starts, one that reads the shard's own connection, a system variable, or a function
+// that VTGate doesn't know, such as a user defined or stored function.
+func evaluatesPerShard(env *vtenv.Environment, node sqlparser.SQLNode) bool {
 	if containsNonDeterministicFunction(node) {
 		return true
 	}
 	found := false
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		switch node := node.(type) {
-		case *sqlparser.CurTimeFuncExpr:
+		case *sqlparser.CurTimeFuncExpr, *sqlparser.PerformanceSchemaFuncExpr:
 			found = true
+		case *sqlparser.Variable:
+			found = node.Scope != sqlparser.VariableScope
 		case *sqlparser.FuncExpr:
 			switch node.Name.Lowered() {
-			case "curdate", "current_date", "utc_date":
+			case "curdate", "current_date", "utc_date", "connection_id":
 				found = true
 			case "unix_timestamp":
 				found = len(node.Exprs) == 0
+			default:
+				found = unknownFunction(env, node)
 			}
 		}
 		if found {
@@ -1056,6 +1072,22 @@ func evaluatesPerShard(node sqlparser.SQLNode) bool {
 		return true, nil
 	}, node)
 	return found
+}
+
+// unknownFunction reports whether VTGate can't evaluate fn, which then can return anything.
+func unknownFunction(env *vtenv.Environment, fn *sqlparser.FuncExpr) bool {
+	if fn.Qualifier.NotEmpty() {
+		return true
+	}
+	call := &sqlparser.FuncExpr{Name: fn.Name}
+	for range fn.Exprs {
+		call.Exprs = append(call.Exprs, sqlparser.NewIntLiteral("1"))
+	}
+	_, err := evalengine.Translate(call, &evalengine.Config{
+		Collation:   env.CollationEnv().DefaultConnectionCharset(),
+		Environment: env,
+	})
+	return err != nil
 }
 
 // readsOnlyItsTables reports whether the SQL of a route names no table but those of its operators,

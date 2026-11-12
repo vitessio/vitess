@@ -5356,6 +5356,24 @@
     "skip_e2e": true
   },
   {
+    "comment": "a derived reference table that reads connection_id() is not asked on every shard, as each shard has its own connection",
+    "query": "select a.col from (select col + connection_id() % 2 as col from ref) a where a.col in (select x.col from user x where x.id = a.col)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
+  },
+  {
+    "comment": "a derived reference table that reads a system variable is not asked on every shard, as each shard has its own value",
+    "query": "select a.col from (select col + @@server_id % 2 as col from ref) a where a.col in (select x.col from user x where x.id = a.col)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
+  },
+  {
+    "comment": "a derived reference table that calls a function that VTGate doesn't know, such as a user defined function, is not asked on every shard",
+    "query": "select a.col from (select col + myudf(col) % 2 as col from ref) a where a.col in (select x.col from user x where x.id = a.col)",
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
+  },
+  {
     "comment": "a recursive CTE that keeps reference rows next to one shard in a subquery that is not used for routing is pulled out, not merged into a reference route",
     "query": "select col from ref where col = 5 or col in (with recursive c as (select col from ref where col = 1 union all select u.col from c join ref r on r.col = c.col left join `user` u on u.id = 3 where r.col < 2) select col from c)",
     "plan": {
