@@ -2446,25 +2446,43 @@
     }
   },
   {
-    "comment": "Merge CTE with reference tables 2",
+    "comment": "Reference-seeded recursive UNION ALL stays outside a multi-shard route",
     "query": "with recursive cte as (select sr.id, sr.foo from main.source_of_ref sr join main.rerouted_ref rr on rr.bar = sr.bar union all select ue.id, ue.foo from cte join user_extra ue on cte.foo = ue.foo join user u on ue.user_id = u.id) select * from cte",
     "plan": {
-      "Type": "Scatter",
+      "Type": "Complex",
       "QueryType": "SELECT",
       "Original": "with recursive cte as (select sr.id, sr.foo from main.source_of_ref sr join main.rerouted_ref rr on rr.bar = sr.bar union all select ue.id, ue.foo from cte join user_extra ue on cte.foo = ue.foo join user u on ue.user_id = u.id) select * from cte",
       "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "cte_foo": 1
         },
-        "FieldQuery": "with recursive cte as (select 1 from ref_with_source as sr, ref as rr where 1 != 1 union all select ue.id, ue.foo from cte, user_extra as ue, `user` as u where 1 != 1) select id, foo from cte where 1 != 1",
-        "Query": "with recursive cte as (select 1 from ref_with_source as sr, ref as rr where rr.bar = sr.bar union all select ue.id, ue.foo from cte, user_extra as ue, `user` as u where cte.foo = ue.foo and ue.user_id = u.id) select id, foo from cte"
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select sr.id, sr.foo from source_of_ref as sr, rerouted_ref as rr where 1 != 1",
+            "Query": "select sr.id, sr.foo from source_of_ref as sr, rerouted_ref as rr where rr.bar = sr.bar"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select ue.id, ue.foo from user_extra as ue, `user` as u where 1 != 1",
+            "Query": "select ue.id, ue.foo from user_extra as ue, `user` as u where ue.foo = :cte_foo and ue.user_id = u.id"
+          }
+        ]
       },
       "TablesUsed": [
-        "user.ref",
-        "user.ref_with_source",
+        "main.rerouted_ref",
+        "main.source_of_ref",
         "user.user",
         "user.user_extra"
       ]

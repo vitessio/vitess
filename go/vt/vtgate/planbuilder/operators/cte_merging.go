@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -78,6 +79,31 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 }
 
 func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
+	// Evaluate routing with the original recursive predicates on a copy before
+	// committing the merge. A multi-shard UNION ALL would repeat a replicated
+	// seed even when its recursive term produces no rows.
+	if !in.Distinct && routeContainsSpecialUnionInput(seed) {
+		candidate := r.Clone()
+		if routing, ok := candidate.(*ShardedRouting); ok {
+			for i, expr := range routing.SeenPredicates {
+				join, ok := expr.(*predicates.JoinPredicate)
+				if !ok {
+					continue
+				}
+				for _, predicate := range in.Predicates {
+					if predicate.JoinPredicateID != nil && *predicate.JoinPredicateID == join.ID {
+						routing.SeenPredicates[i] = predicate.Original
+						break
+					}
+				}
+			}
+		}
+		candidate = candidate.resetRoutingLogic(ctx)
+		if !candidate.OpCode().IsSingleShard() {
+			return nil
+		}
+	}
+
 	in.Def.Merged = true
 	hz := in.Horizon
 	hz.Source = term.Source
@@ -87,8 +113,8 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 			ctx.PredTracker.Set(*predicate.JoinPredicateID, predicate.Original)
 		}
 	}
-	// The merged SQL contains the original CTE predicates, so routing must
-	// no longer use arguments that were supplied by the recursive operator.
+
+	// Accepted merges retain tracked predicates for subsequent routing rewrites.
 	r = r.Clone().resetRoutingLogic(ctx)
 
 	cte := &RecurseCTE{

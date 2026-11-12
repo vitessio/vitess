@@ -446,6 +446,10 @@ func (s *planTestSuite) TestRecursiveReferenceUnionDoesNotLeaveUnboundCTEBind() 
 	plan, err := TestBuilder("with recursive c as (select id from ref union all select u.id from user u join c on u.id = c.id) select id from c union all select id from user", vw, vw.CurrentDb())
 	s.Require().NoError(err)
 	s.Require().False(hasUnboundCTEReference(plan.Instructions, false), "recursive CTE bind must be owned by the recursive term")
+	s.Require().NotNil(engine.Find(func(primitive engine.Primitive) bool {
+		_, ok := primitive.(*engine.RecurseCTE)
+		return ok
+	}, plan.Instructions), "replicated seed must be evaluated once by VTGate")
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.

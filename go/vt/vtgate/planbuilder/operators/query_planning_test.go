@@ -20,10 +20,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestMergeOffsetExpressions(t *testing.T) {
@@ -351,4 +355,29 @@ func TestUpperLimitAcrossUnion(t *testing.T) {
 		assert.Equal(t, NoRewrite, rewrite)
 		assert.False(t, limit.Pushed)
 	})
+}
+
+// A rejected CTE merge must leave both recursive state and tracked arguments
+// intact so the VTGate recursive operator can still bind its term correctly.
+func TestRejectedCTEMergeLeavesRecursiveStateUntouched(t *testing.T) {
+	tracker := predicates.NewTracker()
+	temporary := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewArgument("c_id")}
+	join := tracker.NewJoinPredicate(temporary)
+	original := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewColNameWithQualifier("id", sqlparser.NewTableName("c"))}
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable(), PredTracker: tracker, VSchema: &mockVSchema{}}
+	ctx.SemTable.Recursive[original] = semantics.SingleTableSet(0)
+	routing := &ShardedRouting{keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true}, RouteOpCode: engine.EqualUnique, SeenPredicates: []sqlparser.Expr{join}}
+	term := &Route{Routing: routing}
+	horizon := &Horizon{}
+	in := &RecurseCTE{Def: &semantics.CTE{}, Horizon: horizon, Predicates: []*plancontext.RecurseExpression{{JoinPredicateID: &join.ID, Original: original}}}
+	seed := &Route{ContainsSpecialUnionInput: true}
+
+	result := mergeCTE(ctx, seed, term, routing, in, nil)
+	require.Nil(t, result)
+	assert.False(t, in.Def.Merged)
+	assert.Same(t, horizon, in.Horizon)
+	assert.Nil(t, horizon.Source)
+	assert.Same(t, temporary, join.Current())
+	assert.Equal(t, engine.EqualUnique, routing.RouteOpCode)
+	assert.Same(t, join, routing.SeenPredicates[0])
 }

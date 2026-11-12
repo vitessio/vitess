@@ -302,3 +302,26 @@ func TestUnion(t *testing.T) {
 	mcmp.AssertMatches(`(SELECT 1,'a' order by 1) union (SELECT 1,'a' ORDER BY 1)`, `[[INT64(1) VARCHAR("a")]]`)
 	mcmp.AssertMatches(`(SELECT id2,'a' from t1 where id1 = 1) union (SELECT 'a',id2 from t1 where id1 = 2)`, `[[VARCHAR("1") VARCHAR("a")] [VARCHAR("a") VARCHAR("2")]]`)
 }
+
+// Reference and dual seeds must be returned once when a correlated recursive
+// term is empty, even though resetting that term's routing produces Scatter.
+func TestRecursiveUnionAllSeedReturnedOnceWithEmptyTerm(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, seed := range []string{"select id from ref", "select 100 as id from dual"} {
+				query := "with recursive c as (" + seed + " union all select u.id1 from t1 u join c on u.id1 = c.id) select id from c"
+				mcmp.AssertMatches(query, "[[INT64(100)]]")
+				mcmp.AssertMatches(query+" union all select id1 from t1", "[[INT64(100)]]")
+			}
+		})
+	}
+}
