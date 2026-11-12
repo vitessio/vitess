@@ -5344,6 +5344,90 @@
     "skip_e2e": true
   },
   {
+    "comment": "a recursive term asked on every shard is not merged with a reference seed, which would run on every shard too",
+    "query": "with recursive c as (select col from ref where col = 1 union all select r.col + 1 from c join ref r on r.col = c.col where r.col < 2 and r.col in (select x.col from user x where x.id = r.col)) select col from c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref where col = 1 union all select r.col + 1 from c join ref r on r.col = c.col where r.col < 2 and r.col in (select x.col from user x where x.id = r.col)) select col from c",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "c_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from ref where 1 != 1",
+            "Query": "select col from ref where col = 1"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col + 1 from ref as r where 1 != 1",
+            "Query": "select r.col + 1 from ref as r where r.col = :c_col and r.col < 2 and r.col in (select x.col from `user` as x where x.id = r.col)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "the same with a dual seed",
+    "query": "with recursive c as (select 1 as col from dual union all select r.col + 1 from c join ref r on r.col = c.col where r.col < 2 and r.col in (select x.col from user x where x.id = r.col)) select col from c",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select 1 as col from dual union all select r.col + 1 from c join ref r on r.col = c.col where r.col < 2 and r.col in (select x.col from user x where x.id = r.col)) select col from c",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "JoinVars": {
+          "c_col": 0
+        },
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 as col from dual where 1 != 1",
+            "Query": "select 1 as col from dual"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select r.col + 1 from ref as r where 1 != 1",
+            "Query": "select r.col + 1 from ref as r where r.col = :c_col and r.col < 2 and r.col in (select x.col from `user` as x where x.id = r.col)"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "a subquery routed by an expression with NOW() is not asked on every shard, as each shard takes the time when its own statement starts",
     "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col + microsecond(now(6)) % 2)",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",

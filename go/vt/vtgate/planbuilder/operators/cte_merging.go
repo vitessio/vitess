@@ -86,6 +86,13 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		return nil
 	}
 
+	// A term asked on every shard would run a seed of reference or dual rows on every shard too, and
+	// return each of its rows once per shard.
+	if _, sharded := seed.Routing.(*ShardedRouting); term.AsksReferenceRowsOnEveryShard && !sharded && !seed.AsksReferenceRowsOnEveryShard {
+		debugNoRewrite("CTE merge blocked: the seed would run on every shard that the term is asked on")
+		return nil
+	}
+
 	in.Def.Merged = true
 	hz := in.Horizon
 	hz.Source = term.Source
