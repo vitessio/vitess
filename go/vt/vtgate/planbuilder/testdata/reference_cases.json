@@ -5149,5 +5149,50 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "an EXISTS over an outer join of reference tables that is not used for routing is merged into a sharded route, since it reads the same rows on every shard",
+    "query": "select u.id from user u where u.foo = 1 or exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col where r1.col = u.col)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u where u.foo = 1 or exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col where r1.col = u.col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where u.foo = 1 or exists (select 1 from ref as r1 left join ref as r2 on r1.col = r2.col where r1.col = u.col)"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "an EXISTS over an outer join of reference tables that is not used for routing is merged into a reference route",
+    "query": "select r.col from ref r where r.col = 1 or exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col where r1.col = r.col)",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "select r.col from ref r where r.col = 1 or exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col where r1.col = r.col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Reference",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select r.col from ref as r where 1 != 1",
+        "Query": "select r.col from ref as r where r.col = 1 or exists (select 1 from ref as r1 left join ref as r2 on r1.col = r2.col where r1.col = r.col)"
+      },
+      "TablesUsed": [
+        "user.ref"
+      ]
+    }
   }
 ]

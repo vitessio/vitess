@@ -702,8 +702,9 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 	}
 
 	// A subquery that is not used for routing leaves the outer routing as it is, which cannot be
-	// the single shard that the rows of the subquery are read on.
-	if !s.subq.TopLevel && (inner.PreservesReferenceRows || inner.NoRoutesSpecialHandling) && !routesToOneShard(outer.Routing) {
+	// the single shard that the rows of the subquery are read on. A reference subquery reads the
+	// same rows on every shard.
+	if !s.subq.TopLevel && (inner.PreservesReferenceRows || inner.NoRoutesSpecialHandling) && !canCarryReferenceRows(inner.Routing) && !routesToOneShard(outer.Routing) {
 		debugNoRewrite("subquery merge blocked: the preserved reference rows of the subquery cannot be read through %s routing", outer.Routing.OpCode().String())
 		return nil
 	}
