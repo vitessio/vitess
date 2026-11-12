@@ -1000,11 +1000,64 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(3)`,
 		},
 		{
-			// ROUND of that string is declared with the type of the string,
-			// but it is a number, whose bits BIT_COUNT counts.
+			// ROUND of that string is a number, whose bits BIT_COUNT counts.
 			expression: `BIT_COUNT(ROUND(REVERSE(column0)))`,
 			values:     []sqltypes.Value{sqltypes.NewVarBinary("1")},
 			result:     `INT64(1)`,
+		},
+		{
+			// ROUND and TRUNCATE convert an argument that is not a number to a
+			// double.
+			expression: `ROUND(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("1.5")},
+			result:     `FLOAT64(2)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `ROUND(column0, 1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("1.25")},
+			result:     `FLOAT64(1.2)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `ROUND(TIME'10:11:12.5')`,
+			result:     `FLOAT64(101112)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			expression: `TRUNCATE('1.5', 0)`,
+			result:     `FLOAT64(1)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			expression: `TRUNCATE(column0, 1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("1.25")},
+			result:     `FLOAT64(1.2)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `TRUNCATE(column0, 0)`,
+			values:     []sqltypes.Value{sqltypes.NewDatetime("2020-01-02 10:11:12")},
+			result:     `FLOAT64(20200102101112)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			// CRC32 returns an unsigned integer for every argument.
+			expression: `CRC32(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `UINT64(3904355907)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `CRC32(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewDecimal("1.5")},
+			result:     `UINT64(2270993338)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `CRC32(1 = 1)`,
+			result:     `UINT64(2212294583)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, false, 0, 0, nil),
 		},
 	}
 

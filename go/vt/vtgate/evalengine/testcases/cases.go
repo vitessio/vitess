@@ -692,6 +692,9 @@ func FnRound(yield Query) {
 	}
 
 	yieldNested(yield, "ROUND(1.5, NULL)", "ROUND(2.5e0, NULL)", "ROUND(3, NULL)")
+	yieldIn(yield, "LENGTH(%s)", "ROUND('1.5')", "ROUND(_binary'2.5', 1)")
+	yieldIn(yield, "(%s) + 1", "ROUND(TIME'10:11:12.5')")
+	yieldIn(yield, "CAST(%s AS JSON)", "ROUND(0x31)")
 }
 
 func FnTruncate(yield Query) {
@@ -714,6 +717,9 @@ func FnTruncate(yield Query) {
 	}
 
 	yieldNested(yield, "TRUNCATE(1.5, NULL)", "TRUNCATE(2.5e0, NULL)", "TRUNCATE(3, NULL)")
+	yieldIn(yield, "LENGTH(%s)", "TRUNCATE('1.5', 0)", "TRUNCATE(_binary'2.5', 1)")
+	yieldIn(yield, "(%s) + 1", "TRUNCATE(TIMESTAMP'2020-01-02 10:11:12.5', 0)")
+	yieldIn(yield, "-%s", "TRUNCATE(0x31, 0)")
 }
 
 func FnCrc32(yield Query) {
@@ -728,6 +734,10 @@ func FnCrc32(yield Query) {
 	for _, num := range inputConversions {
 		yield(fmt.Sprintf("CRC32(%s)", num), nil, false)
 	}
+
+	yieldNested(yield, "CRC32('a')")
+	yieldIn(yield, "(%s) + 1", "CRC32(1.5)", "CRC32(1=1)")
+	yieldIn(yield, "CAST(%s AS JSON)", "CRC32(1=1)")
 }
 
 func FnConv(yield Query) {

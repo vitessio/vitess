@@ -1012,6 +1012,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// the decimal fits into an integer.
 			c.asm.Fn_ROUND1_d()
 		default:
+			arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 			c.asm.Convert_xf(1)
 			c.asm.Fn_ROUND1_f()
 		}
@@ -1046,17 +1047,14 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// the decimal fits into an integer.
 			c.asm.Fn_ROUND2_d()
 		default:
+			arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 			c.asm.Convert_xf(2)
 			c.asm.Fn_ROUND2_f()
 		}
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	// A string argument is declared with its own type, although the result is
-	// a number, and the consumers of that type rely on its flags.
-	if sqltypes.IsNumber(arg.Type) {
-		arg.Flag = nullableFlags(arg.Flag)
-	}
+	arg.Flag = nullableFlags(arg.Flag)
 	return arg, nil
 }
 
@@ -1227,16 +1225,13 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 		// the decimal fits into an integer.
 		c.asm.Fn_TRUNCATE_d()
 	default:
+		arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 		c.asm.Convert_xf(2)
 		c.asm.Fn_TRUNCATE_f()
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	// A string argument is declared with its own type, although the result is
-	// a number, and the consumers of that type rely on its flags.
-	if sqltypes.IsNumber(arg.Type) {
-		arg.Flag = nullableFlags(arg.Flag)
-	}
+	arg.Flag = nullableFlags(arg.Flag)
 	return arg, nil
 }
 
@@ -1276,7 +1271,7 @@ func (expr *builtinCrc32) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_CRC32()
 	c.asm.jumpDestination(skip)
-	return arg, nil
+	return ctype{Type: sqltypes.Uint64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 }
 
 type builtinConv struct {
