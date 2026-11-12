@@ -806,5 +806,11 @@
     "query": "select b.intcol, count(distinct a.col) from music a left join (user b join user d on d.id = b.intcol) on a.foo = b.col where (d.bar = 1 or a.col in (select col from user_extra)) group by b.intcol",
     "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
+  },
+  {
+    "comment": "A string column of a unique key isn't fixed by a string column of another collation, since MySQL compares them in one collation and values that differ in the other can be equal (main plans it and sends x.bar to the user_metadata route, ERROR 1054)",
+    "query": "select count(distinct um.md5) from user_metadata um straight_join unsharded x on x.sk = um.md5 where (x.bar = 1 or um.user_id in (select col from user_extra))",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
   }
 ]
