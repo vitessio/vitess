@@ -3605,3 +3605,31 @@ func assertColumnWithDefault(t *testing.T, col Column, expectedName string, expe
 		assert.Equal(t, expDefault, col.Default, "column default does not match")
 	}
 }
+
+// TestAdvisoryLockKeyspaces tests that the VSchema reports the keyspaces that
+// set advisory_locks, sorted by name.
+func TestAdvisoryLockKeyspaces(t *testing.T) {
+	build := func(designated ...string) *VSchema {
+		source := &vschemapb.SrvVSchema{Keyspaces: map[string]*vschemapb.Keyspace{
+			"aks": {},
+			"bks": {},
+			"cks": {},
+		}}
+		for _, name := range designated {
+			source.Keyspaces[name].AdvisoryLocks = true
+		}
+		return BuildVSchema(source, sqlparser.NewTestParser())
+	}
+
+	names := func(keyspaces []*Keyspace) []string {
+		var out []string
+		for _, ks := range keyspaces {
+			out = append(out, ks.Name)
+		}
+		return out
+	}
+
+	assert.Empty(t, build().AdvisoryLockKeyspaces())
+	assert.Equal(t, []string{"bks"}, names(build("bks").AdvisoryLockKeyspaces()))
+	assert.Equal(t, []string{"bks", "cks"}, names(build("cks", "bks").AdvisoryLockKeyspaces()))
+}

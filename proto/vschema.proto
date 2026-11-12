@@ -62,6 +62,10 @@ message Keyspace {
   // keyspaces. Can be overridden per-query with the
   // /*vt+ ALLOW_CROSS_KEYSPACE_READS */ comment directive.
   bool prevent_cross_keyspace_reads = 7;
+  // If advisory_locks is true, vtgate runs advisory lock functions such as
+  // GET_LOCK and RELEASE_LOCK in this keyspace, and never moves them to
+  // another keyspace. Designating more than one keyspace is not supported yet.
+  bool advisory_locks = 8;
 }
 
 message MultiTenantSpec {

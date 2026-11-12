@@ -332,10 +332,14 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 }
 
 func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema, lockFunctions []*engine.LockFunc) (engine.Primitive, error) {
-	ks, err := vschema.FirstSortedKeyspace()
+	keyspaces, err := vschema.AdvisoryLockKeyspaces()
 	if err != nil {
 		return nil, err
 	}
+	if len(keyspaces) > 1 {
+		return nil, vterrors.VT12001("advisory locks designated in more than one keyspace")
+	}
+	ks := keyspaces[0]
 	buf := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(sel)
 	return &engine.Lock{
 		Keyspace:          ks,

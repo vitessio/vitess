@@ -61665,6 +61665,9 @@ export namespace vschema {
         /** Keyspace prevent_cross_keyspace_reads. */
         prevent_cross_keyspace_reads: boolean;
 
+        /** Keyspace advisory_locks. */
+        advisory_locks: boolean;
+
         /**
          * Creates a new Keyspace instance using the specified properties.
          * @param [properties] Properties to set
@@ -61769,6 +61772,9 @@ export namespace vschema {
 
             /** Keyspace prevent_cross_keyspace_reads */
             prevent_cross_keyspace_reads?: (boolean|null);
+
+            /** Keyspace advisory_locks */
+            advisory_locks?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
