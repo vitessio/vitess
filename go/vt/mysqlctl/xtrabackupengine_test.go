@@ -18,6 +18,7 @@ package mysqlctl
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"io"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -147,4 +149,42 @@ func TestShouldDrainForBackupXtrabackup(t *testing.T) {
 	xtrabackupShouldDrain = true
 	assert.True(t, be.ShouldDrainForBackup(nil))
 	assert.True(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
+}
+
+// TestExtractFilesLogOmitsXbstreamFlags checks that the xbstream command line
+// that a restore logs leaves out the operator's --xbstream-restore-flags, which
+// can hold an --encrypt-key, and keeps the arguments that Vitess adds, and
+// that xbstream still gets the flags as given.
+func TestExtractFilesLogOmitsXbstreamFlags(t *testing.T) {
+	const secret = "encrypt_key_sentinel_5c1d"
+	oldEnginePath, oldFlags := xtrabackupEnginePath, xbstreamRestoreFlags
+	// The fake xbstream records its arguments, one per line, and fails.
+	xtrabackupEnginePath = t.TempDir()
+	argsFile := path.Join(t.TempDir(), "args")
+	generateTestFile(t, path.Join(xtrabackupEnginePath, xbstream), "#!/bin/bash\nprintf '%s\\n' \"$@\" > '"+argsFile+"'\nexit 1")
+	xbstreamRestoreFlags = "--decrypt=AES256 --encrypt-key=" + secret + "1 -k " + secret + "2 -vk" + secret + "3"
+	t.Cleanup(func() { xtrabackupEnginePath, xbstreamRestoreFlags = oldEnginePath, oldFlags })
+
+	stream := logutil.NewMemoryLogger()
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(nil)), nil
+		},
+	}
+	tempDir := t.TempDir()
+	bm := xtraBackupManifest{SkipCompress: true, StreamMode: xbstream, FileName: "backup.xbstream"}
+	err := (&XtrabackupEngine{}).extractFiles(t.Context(), logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream), bh, bm, tempDir)
+	require.ErrorContains(t, err, "xbstream failed")
+
+	args, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, "-C\n"+tempDir+"\n-xv\n--decrypt=AES256\n--encrypt-key="+secret+"1\n-k\n"+secret+"2\n-vk"+secret+"3\n", string(args))
+
+	// The memory logger holds the line that the tee logger writes.
+	var logged []string
+	for _, event := range stream.LogEvents() {
+		logged = append(logged, event.Value)
+	}
+	assert.Contains(t, logged, "Executing xbstream cmd: "+path.Join(xtrabackupEnginePath, xbstream)+" [-C "+tempDir+" -xv <--xbstream-restore-flags>]")
+	assert.NotContains(t, stream.String(), secret)
 }

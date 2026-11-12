@@ -17,11 +17,14 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -459,4 +462,99 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 	})
 
+}
+
+// TestMySQLShellLogOmitsFlags checks that the mysqlsh command line that a
+// backup and a restore log leaves out the operator's --mysql-shell-flags and
+// the dump or load flags, which can hold passwords and tokens in forms that are
+// hard to parse, keeps the rest of the "-e" call that Vitess adds, and that
+// mysqlsh still gets everything as given.
+func TestMySQLShellLogOmitsFlags(t *testing.T) {
+	const secret = "mysqlsh_secret_5d2b"
+	originalFlags, originalLocation, originalDumpFlags, originalLoadFlags := mysqlShellFlags, mysqlShellBackupLocation, mysqlShellDumpFlags, mysqlShellLoadFlags
+	t.Cleanup(func() {
+		mysqlShellFlags, mysqlShellBackupLocation, mysqlShellDumpFlags, mysqlShellLoadFlags = originalFlags, originalLocation, originalDumpFlags, originalLoadFlags
+	})
+	withSecret := func(s string) string { return strings.ReplaceAll(s, "{pw}", secret) }
+	mysqlShellFlags = withSecret("--defaults-file=/dev/null --js -h localhost -uroot --password={pw} " +
+		"--password2 -{pw} -mc root:p@{pw}@host:3306 mysql://root:pa/{pw}@host:3306")
+	// Compact JSON, as mysqlsh gets it.
+	const credentials = `"s3EndpointOverride":"https://user:{pw}@minio:9000","azureStorageSasToken":"{pw}"`
+	mysqlShellDumpFlags = withSecret(`{"threads":4,` + credentials + `}`)
+
+	newMysqld := func(t *testing.T) *FakeMysqlDaemon {
+		fakedb := fakesqldb.New(t)
+		t.Cleanup(fakedb.Close)
+		mysqld := NewFakeMysqlDaemon(fakedb)
+		t.Cleanup(mysqld.Close)
+		return mysqld
+	}
+
+	// fakeMySQLShell writes a mysqlsh that records its arguments, one per line,
+	// and fails.
+	fakeMySQLShell := func(t *testing.T, binary string) (argsFile string) {
+		argsFile = path.Join(t.TempDir(), "args")
+		generateTestFile(t, binary, "#!/bin/bash\nprintf '%s\\n' \"$@\" > '"+argsFile+"'\nexit 1")
+		return argsFile
+	}
+	// assertRanAndLogged checks that mysqlsh got the flags and the "-e" call
+	// with the JSON flags as given, and that the logged command line is that
+	// call with placeholders for the flags and the JSON. It reads the line from
+	// the memory logger that the tee logger writes it to.
+	assertRanAndLogged := func(t *testing.T, stream *logutil.MemoryLogger, binary, argsFile, function, jsonFlags, placeholder string) {
+		recorded, err := os.ReadFile(argsFile)
+		require.NoError(t, err)
+		args := strings.Split(strings.TrimSuffix(string(recorded), "\n"), "\n")
+		require.GreaterOrEqual(t, len(args), 2)
+		call := args[len(args)-1]
+		assert.Equal(t, mysqlShellFlags+" -e", strings.Join(args[:len(args)-1], " "))
+		require.True(t, strings.HasPrefix(call, "util."+function+"(\""), call)
+		require.True(t, strings.HasSuffix(call, "\", "+jsonFlags+")"), call)
+
+		var logged []string
+		for _, event := range stream.LogEvents() {
+			logged = append(logged, event.Value)
+		}
+		assert.Contains(t, logged, "running "+binary+" <--mysql-shell-flags> -e "+strings.TrimSuffix(call, jsonFlags+")")+placeholder+")")
+		assert.NotContains(t, stream.String(), secret)
+	}
+
+	t.Run("backup", func(t *testing.T) {
+		mysqlShellBackupLocation = t.TempDir()
+		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
+		argsFile := fakeMySQLShell(t, be.binaryName)
+		stream := logutil.NewMemoryLogger()
+
+		_, err := be.ExecuteBackup(t.Context(), BackupParams{
+			TabletAlias: "test",
+			Logger:      logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream),
+			Mysqld:      newMysqld(t),
+		}, &FakeBackupHandle{Dir: t.TempDir(), NameV: t.Name()})
+		require.ErrorContains(t, err, "mysqlshell failed")
+		assertRanAndLogged(t, stream, be.binaryName, argsFile, "dumpInstance", mysqlShellDumpFlags, "<--mysql-shell-dump-flags>")
+	})
+
+	t.Run("restore", func(t *testing.T) {
+		mysqlShellBackupLocation = t.TempDir()
+		mysqlShellLoadFlags = withSecret(`{"updateGtidSet":"replace","skipBinlog":true,"progressFile":"",` + credentials + `}`)
+		bin := t.TempDir()
+		argsFile := fakeMySQLShell(t, path.Join(bin, "mysqlsh"))
+		t.Setenv("PATH", bin)
+		manifest, err := json.Marshal(MySQLShellBackupManifest{BackupLocation: path.Join(mysqlShellBackupLocation, "backup")})
+		require.NoError(t, err)
+		mysqld := newMysqld(t)
+		mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{"SHOW DATABASES": {}}
+		mysqld.ExpectedExecuteSuperQueryList = []string{"FAKE RESET ALL REPLICATION", "SET GLOBAL LOCAL_INFILE=1"}
+		stream := logutil.NewMemoryLogger()
+
+		_, err = (&MySQLShellBackupEngine{}).ExecuteRestore(t.Context(), RestoreParams{
+			Cnf:    &Mycnf{DataDir: path.Join(t.TempDir(), "data")},
+			Logger: logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream),
+			Mysqld: mysqld,
+		}, &FakeBackupHandle{ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(manifest)), nil
+		}})
+		require.ErrorContains(t, err, "mysqlshell failed")
+		assertRanAndLogged(t, stream, path.Join(bin, "mysqlsh"), argsFile, "loadDump", mysqlShellLoadFlags, "<--mysql-shell-load-flags>")
+	})
 }
