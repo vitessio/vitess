@@ -98,6 +98,7 @@ func (expr *BitwiseNotExpr) compile(c *compiler) (ctype, error) {
 	ct = c.compileToBitwiseUint64(ct, 1)
 	c.asm.BitwiseNot_u()
 	c.asm.jumpDestination(skip)
+	ct.Flag = nullableFlags(ct.Flag)
 	return ct, nil
 }
 

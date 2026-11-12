@@ -172,6 +172,39 @@ func evalIsTruthy(e eval) boolean {
 	}
 }
 
+// evalPlain returns e as an ordinary value: a boolean, or a value that came
+// from a hex or bit literal, is returned as a copy without that property.
+// The result of a function is such an ordinary value even when it is one of
+// its arguments.
+func evalPlain(e eval) eval {
+	switch e := e.(type) {
+	case *evalBytes:
+		if e.isHexOrBitLiteral() {
+			b := *e
+			b.flag &^= flagHex | flagBit
+			return &b
+		}
+	case *evalInt64:
+		if e.bitLiteral {
+			return newEvalInt64(e.i)
+		}
+	case *evalUint64:
+		if e.hexLiteral {
+			return newEvalUint64(e.u)
+		}
+	}
+	return evalNotBoolean(e)
+}
+
+// evalNotBoolean returns e, or an ordinary integer with the same value if e
+// is a boolean.
+func evalNotBoolean(e eval) eval {
+	if e == evalBoolTrue || e == evalBoolFalse {
+		return newEvalInt64(e.(*evalInt64).i)
+	}
+	return e
+}
+
 func evalCoerce(e eval, typ sqltypes.Type, size, scale int32, col collations.ID, now time.Time, allowZero bool) (eval, error) {
 	if e == nil {
 		return nil, nil

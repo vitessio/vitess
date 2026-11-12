@@ -118,7 +118,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return nil, c.returnUnsupportedError()
 	case "SIGNED", "SIGNED INTEGER":
-		return evalToInt64(e), nil
+		return evalPlain(evalToInt64(e)), nil
 	case "UNSIGNED", "UNSIGNED INTEGER":
 		return evalToInt64(e).toUint64(), nil
 	case "JSON":
@@ -244,7 +244,7 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	convt.Flag = arg.Flag | flagNullable
+	convt.Flag = nullableFlags(arg.Flag) | arg.Flag&flagExplicitCollation | flagNullable
 	return convt, nil
 }
 

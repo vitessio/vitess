@@ -183,6 +183,7 @@ var Cases = []TestCase{
 	{Run: RegexpInstr},
 	{Run: RegexpSubstr},
 	{Run: RegexpReplace},
+	{Run: FunctionResultLiterals},
 }
 
 func FnJSONKeys(yield Query) {
@@ -2975,4 +2976,51 @@ func RegexpReplace(yield Query) {
 	for _, q := range mysqlDocSamples {
 		yield(q, nil, false)
 	}
+}
+
+// FunctionResultLiterals checks that the result of a function is an ordinary
+// value: it is not a number the way a hex or bit literal argument is, in a
+// numeric context, under unary minus or in CONV, and it is not a boolean the
+// way the result of a comparison is, when converted to JSON.
+func FunctionResultLiterals(yield Query) {
+	yieldIn(yield, "(%s) + 0",
+		"LOWER(0x31)", "UPPER(0b110001)", "REVERSE(0x31)", "REPEAT(0x31, 1)", "REPLACE(0x31, 'a', 'b')",
+		"LEFT(0x31, 1)", "RIGHT(0x31, 1)", "LPAD(0x31, 1, '0')", "RPAD(0x31, 1, '0')",
+		"LTRIM(0x31)", "RTRIM(0x31)", "TRIM(0x31)", "TRIM(LEADING 'a' FROM 0x31)", "TRIM(TRAILING 'a' FROM 0x31)", "TRIM(BOTH 'a' FROM 0x31)",
+		"SUBSTRING(0x31, 1)", "SUBSTRING(0x31, 1, 1)", "CONCAT(0x31)", "CONCAT_WS(0x31, 0x31)",
+		"TO_BASE64(0x31)", "FROM_BASE64(TO_BASE64(0x31))", "MD5(0x36)", "SHA1(0x31)", "SHA2(0x31, 256)",
+		"BIN_TO_UUID(0x31313131313131313131313131313131)", "BIN_TO_UUID(0x31313131313131313131313131313131, 0)",
+		"UUID_TO_BIN(0x33313331333133312d333133312d333133312d333133312d333133313331333133313331)",
+		"UUID_TO_BIN(0x33313331333133312d333133312d333133312d333133312d333133313331333133313331, 0)",
+		"0x31 COLLATE 'binary'", "CAST(0x31 AS BINARY)", "COALESCE(0x31)", "COALESCE(NULL, 0b110001)",
+	)
+	yieldIn(yield, "-(%s)",
+		"CAST(0b110001 AS SIGNED)", "CAST(0x31 AS UNSIGNED)", "PERIOD_ADD(0b1, 0b1)", "UNIX_TIMESTAMP(0b1)",
+		"REGEXP_LIKE('a', 'a', b'01100011')", "REGEXP_LIKE('a', CONCAT('a'), b'01100011')",
+	)
+	yieldIn(yield, "CONV(%s, 10, 10)",
+		"CEIL(0x31)", "FLOOR(0x31)", "SQRT(0x31)", "EXP(0b0)", "~0x31", "CAST(0x31 AS CHAR)",
+		"REGEXP_SUBSTR('1', '1', 0b1)", "REGEXP_SUBSTR('1', CONCAT('1'), 0b1)",
+		"REGEXP_REPLACE('1', 'a', 'b', 0b1)", "REGEXP_REPLACE('1', CONCAT('a'), 'b', 0b1)",
+		"FROM_UNIXTIME(0x31)", "FROM_UNIXTIME(0x31, '%s')", "MAKEDATE(0b11111100100, 0b1)", "MAKETIME(0b1, 0b1, 0b1)",
+		"FROM_DAYS(0b1111111111111)", "SEC_TO_TIME(0b1)", "TIME_TO_SEC(0x31303a31313a3132)",
+	)
+	// 0x323032302d30312d30312031303a31313a3132 is '2020-01-01 10:11:12'.
+	for _, fn := range []string{
+		"DATE", "DAYOFMONTH", "DAYOFWEEK", "DAYOFYEAR", "HOUR", "LAST_DAY", "MICROSECOND", "MINUTE", "MONTH", "MONTHNAME",
+		"QUARTER", "SECOND", "TIME", "TO_DAYS", "TO_SECONDS", "UNIX_TIMESTAMP", "WEEK", "WEEKDAY", "WEEKOFYEAR", "YEAR", "YEARWEEK",
+	} {
+		yield(fmt.Sprintf("CONV(%s(0x323032302d30312d30312031303a31313a3132), 10, 10)", fn), nil, false)
+	}
+	yieldIn(yield, "CONV(%s, 10, 10)",
+		"DATE_FORMAT(0x323032302d30312d30312031303a31313a3132, '%d')",
+		"CONVERT_TZ(0x323032302d30312d30312031303a31313a3132, '+00:00', '+00:00')",
+		"DATE_ADD(0x323032302d30312d30312031303a31313a3132, INTERVAL 1 DAY)",
+	)
+	yieldIn(yield, "CAST(%s AS JSON)",
+		"HOUR(1=1)", "MINUTE(1=1)", "SECOND(1=1)", "MICROSECOND(1=1)", "TIME_TO_SEC(1=1)", "PERIOD_DIFF(1=1, 1=1)", "UNIX_TIMESTAMP(1=1)",
+		"CEIL(1=1)", "FLOOR(1=0)", "ROUND(1=1)", "ROUND(1=1, 0)", "TRUNCATE(1=1, 0)", "ABS(1=1)",
+		"CAST(1=1 AS SIGNED)", "CONVERT(1=0, SIGNED)", "COALESCE(1=1)", "GREATEST(1=1, 0)", "LEAST(1=1, 2)",
+		"IF(true, 1=1, 0)", "IFNULL(1=1, 0)", "NULLIF(1=1, 0)", "CASE WHEN true THEN 1=1 END", "REGEXP_INSTR('a', 'a')",
+	)
 }

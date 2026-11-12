@@ -28,12 +28,13 @@ func (c *compiler) compileFn_rounding(arg0 IR, asm_ins_f, asm_ins_d func()) (cty
 
 	if arg.Type == sqltypes.Int64 || arg.Type == sqltypes.Uint64 {
 		// No-op for integers.
+		arg.Flag = nullableFlags(arg.Flag)
 		return arg, nil
 	}
 
 	skip := c.compileNullCheck1(arg)
 
-	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
+	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}
 	switch arg.Type {
 	case sqltypes.Float64:
 		asm_ins_f()
@@ -62,7 +63,7 @@ func (c *compiler) compileFn_math1(arg0 IR, asm_ins func(), nullable typeFlag) (
 	c.compileToFloat(arg, 1)
 	asm_ins()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag | nullable}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | nullable}, nil
 }
 
 func (c *compiler) compileFn_length(arg IR, asm_ins func()) (ctype, error) {

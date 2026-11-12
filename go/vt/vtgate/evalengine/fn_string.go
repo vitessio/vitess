@@ -636,6 +636,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_LUCASE(call.upcase)
 	c.asm.jumpDestination(skip)
 
+	str.Flag = nullableFlags(str.Flag) | str.Flag&flagExplicitCollation
 	return str, nil
 }
 
@@ -1858,7 +1859,7 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		f |= a.Flag
+		f |= nullableFlags(a.Flag) | a.Flag&flagExplicitCollation
 		skips = append(skips, c.compileNullCheckArg(a, i))
 		args = append(args, a)
 		tt = concatSQLType(a.Type, tt)
@@ -2027,7 +2028,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_CONCAT_WS(tt, tc, len(args)-1)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: tt, Flag: args[0].Flag, Col: tc}, nil
+	return ctype{Type: tt, Flag: nullableFlags(args[0].Flag) | args[0].Flag&flagExplicitCollation, Col: tc}, nil
 }
 
 func (call *builtinChar) eval(env *ExpressionEnv) (eval, error) {

@@ -930,6 +930,28 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `TRIM(TRAILING '0' FROM '1.500')`,
 			result:     `VARCHAR("1.5")`,
 		},
+		{
+			// The result of a function is not a boolean, and it is not a bit
+			// literal, which unary minus would turn into a DOUBLE.
+			expression: `CAST(CEIL(1=1) AS JSON)`,
+			result:     `JSON("1")`,
+		},
+		{
+			expression: `CAST(FLOOR(1=0) AS JSON)`,
+			result:     `JSON("0")`,
+		},
+		{
+			expression: `CAST(CAST(1=1 AS SIGNED) AS JSON)`,
+			result:     `JSON("1")`,
+		},
+		{
+			expression: `CAST(CONVERT(1=0, SIGNED) AS JSON)`,
+			result:     `JSON("0")`,
+		},
+		{
+			expression: `-(CAST(0b110001 AS SIGNED))`,
+			result:     `INT64(-49)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

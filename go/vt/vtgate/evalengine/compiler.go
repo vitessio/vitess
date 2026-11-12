@@ -590,7 +590,7 @@ func (c *compiler) compileParseJSON(fn string, doct ctype, offset int) (ctype, e
 	default:
 		return ctype{}, errJSONType(fn)
 	}
-	return ctype{Type: sqltypes.TypeJSON, Flag: doct.Flag, Col: collationJSON}, nil
+	return ctype{Type: sqltypes.TypeJSON, Flag: nullableFlags(doct.Flag), Col: collationJSON}, nil
 }
 
 func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {

@@ -358,7 +358,7 @@ func (call *builtinDateFormat) compile(c *compiler) (ctype, error) {
 	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_DATE_FORMAT(col)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(arg.Flag) | arg.Flag&flagExplicitCollation | flagNullable}, nil
 }
 
 type builtinConvertTz struct {
@@ -475,7 +475,7 @@ func (call *builtinConvertTz) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_CONVERT_TZ()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: n.Flag | flagNullable, Size: prec}, nil
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: nullableFlags(n.Flag) | flagNullable, Size: prec}, nil
 }
 
 func (b *builtinDate) eval(env *ExpressionEnv) (eval, error) {
@@ -508,7 +508,7 @@ func (call *builtinDate) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinDayOfMonth) eval(env *ExpressionEnv) (eval, error) {
@@ -541,7 +541,7 @@ func (call *builtinDayOfMonth) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_DAYOFMONTH()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinDayOfWeek) eval(env *ExpressionEnv) (eval, error) {
@@ -574,7 +574,7 @@ func (call *builtinDayOfWeek) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_DAYOFWEEK()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinDayOfYear) eval(env *ExpressionEnv) (eval, error) {
@@ -607,7 +607,7 @@ func (call *builtinDayOfYear) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_DAYOFYEAR()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 const maxUnixtime = 32536771200
@@ -770,7 +770,7 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 
 	if len(call.Arguments) == 1 {
 		c.asm.jumpDestination(skip1)
-		return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: arg.Flag | flagNullable, Size: prec}, nil
+		return ctype{Type: sqltypes.Datetime, Col: collationBinary, Flag: nullableFlags(arg.Flag) | flagNullable, Size: prec}, nil
 	}
 
 	format, err := call.Arguments[1].compile(c)
@@ -789,7 +789,7 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 	col := typedCoercionCollation(sqltypes.VarChar, c.collation)
 	c.asm.Fn_DATE_FORMAT(col)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(arg.Flag) | arg.Flag&flagExplicitCollation | flagNullable}, nil
 }
 
 func (b *builtinHour) eval(env *ExpressionEnv) (eval, error) {
@@ -822,7 +822,7 @@ func (call *builtinHour) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_HOUR()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func yearDayToTime(loc *time.Location, y, yd int64) time.Time {
@@ -902,7 +902,7 @@ func (call *builtinMakedate) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_MAKEDATE()
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: year.Flag | yearDay.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Date, Col: collationBinary, Flag: nullableFlags(year.Flag|yearDay.Flag) | flagNullable}, nil
 }
 
 func clampHourMinute(h, m int64) (int64, int64, bool, bool) {
@@ -1135,7 +1135,7 @@ func (call *builtinMaketime) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2, skip3)
-	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: hour.Flag | min.Flag | sec.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: nullableFlags(hour.Flag|min.Flag|sec.Flag) | flagNullable}, nil
 }
 
 func (b *builtinMicrosecond) eval(env *ExpressionEnv) (eval, error) {
@@ -1168,7 +1168,7 @@ func (call *builtinMicrosecond) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_MICROSECOND()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinMinute) eval(env *ExpressionEnv) (eval, error) {
@@ -1201,7 +1201,7 @@ func (call *builtinMinute) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_MINUTE()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinMonth) eval(env *ExpressionEnv) (eval, error) {
@@ -1234,7 +1234,7 @@ func (call *builtinMonth) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_MONTH()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinMonthName) eval(env *ExpressionEnv) (eval, error) {
@@ -1273,7 +1273,7 @@ func (call *builtinMonthName) compile(c *compiler) (ctype, error) {
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	c.asm.Fn_MONTHNAME(col)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: col, Flag: nullableFlags(arg.Flag) | arg.Flag&flagExplicitCollation | flagNullable}, nil
 }
 
 func lastDay(loc *time.Location, dt datetime.DateTime) datetime.Date {
@@ -1317,7 +1317,7 @@ func (call *builtinLastDay) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_LAST_DAY()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Date, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinToDays) eval(env *ExpressionEnv) (eval, error) {
@@ -1352,7 +1352,7 @@ func (call *builtinToDays) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_TO_DAYS()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinFromDays) eval(env *ExpressionEnv) (eval, error) {
@@ -1389,7 +1389,7 @@ func (call *builtinFromDays) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_FROM_DAYS()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Date, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Date, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
@@ -1453,7 +1453,7 @@ func (call *builtinSecToTime) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Time, Flag: arg.Flag}, nil
+	return ctype{Type: sqltypes.Time, Flag: nullableFlags(arg.Flag)}, nil
 }
 
 func (b *builtinTimeToSec) eval(env *ExpressionEnv) (eval, error) {
@@ -1490,7 +1490,7 @@ func (call *builtinTimeToSec) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_TIME_TO_SEC()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinToSeconds) eval(env *ExpressionEnv) (eval, error) {
@@ -1524,7 +1524,7 @@ func (call *builtinToSeconds) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_TO_SECONDS()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinQuarter) eval(env *ExpressionEnv) (eval, error) {
@@ -1557,7 +1557,7 @@ func (call *builtinQuarter) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_QUARTER()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinSecond) eval(env *ExpressionEnv) (eval, error) {
@@ -1590,7 +1590,7 @@ func (call *builtinSecond) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_SECOND()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinTime) eval(env *ExpressionEnv) (eval, error) {
@@ -1637,7 +1637,7 @@ func (call *builtinTime) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xT(1, -1)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: arg.Flag | flagNullable, Size: prec}, nil
+	return ctype{Type: sqltypes.Time, Col: collationBinary, Flag: nullableFlags(arg.Flag) | flagNullable, Size: prec}, nil
 }
 
 func dateTimeUnixTimestamp(env *ExpressionEnv, date eval) evalNumeric {
@@ -1721,26 +1721,26 @@ func (call *builtinUnixTimestamp) compile(c *compiler) (ctype, error) {
 	switch arg.Type {
 	case sqltypes.Datetime, sqltypes.Time, sqltypes.Decimal, sqltypes.Timestamp:
 		if arg.Size == 0 {
-			return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+			return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 		}
-		return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + arg.Size, Scale: arg.Size, Col: collationNumeric, Flag: arg.Flag}, nil
+		return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + arg.Size, Scale: arg.Size, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 	case sqltypes.Date, sqltypes.Int64, sqltypes.Uint64:
-		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 	case sqltypes.VarChar, sqltypes.VarBinary:
 		if arg.isHexOrBitLiteral() {
-			return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+			return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 		}
 		if lit, ok := call.Arguments[0].(*Literal); ok {
 			if dt := evalToDateTime(lit.inner, -1, time.Now(), c.sqlmode.AllowZeroDate()); dt != nil {
 				if dt.prec == 0 {
-					return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag}, nil
+					return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 				}
-				return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + int32(dt.prec), Scale: int32(dt.prec), Col: collationNumeric, Flag: arg.Flag}, nil
+				return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + int32(dt.prec), Scale: int32(dt.prec), Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 			}
 		}
 		fallthrough
 	default:
-		return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + maxTimePrec, Scale: maxTimePrec, Col: collationNumeric, Flag: arg.Flag}, nil
+		return ctype{Type: sqltypes.Decimal, Size: decimalSizeBase + maxTimePrec, Scale: maxTimePrec, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 	}
 }
 
@@ -1802,7 +1802,7 @@ func (call *builtinWeek) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinWeekDay) eval(env *ExpressionEnv) (eval, error) {
@@ -1836,7 +1836,7 @@ func (call *builtinWeekDay) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_WEEKDAY()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinWeekOfYear) eval(env *ExpressionEnv) (eval, error) {
@@ -1872,7 +1872,7 @@ func (call *builtinWeekOfYear) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_WEEKOFYEAR()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func yearType(version string) bool {
@@ -1915,7 +1915,7 @@ func (call *builtinYear) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_YEAR(yearType(c.env.MySQLVersion()))
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func (b *builtinYearWeek) eval(env *ExpressionEnv) (eval, error) {
@@ -1976,7 +1976,7 @@ func (call *builtinYearWeek) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(arg.Flag) | flagNullable}, nil
 }
 
 func periodAdd(period, months int64) (*evalInt64, error) {
@@ -2025,7 +2025,7 @@ func (call *builtinPeriodAdd) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_PERIOD_ADD()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: period.Flag | months.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(period.Flag|months.Flag) | flagNullable}, nil
 }
 
 func periodDiff(period1, period2 int64) (*evalInt64, error) {
@@ -2075,7 +2075,7 @@ func (call *builtinPeriodDiff) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_PERIOD_DIFF()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Flag: period1.Flag | period2.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Flag: nullableFlags(period1.Flag|period2.Flag) | flagNullable}, nil
 }
 
 func evalToInterval(itv eval, unit datetime.IntervalType, negate bool) *datetime.Interval {
@@ -2131,7 +2131,7 @@ func (call *builtinDateMath) compile(c *compiler) (ctype, error) {
 	}
 
 	var ret ctype
-	ret.Flag = date.Flag | flagNullable
+	ret.Flag = nullableFlags(date.Flag) | date.Flag&flagExplicitCollation | flagNullable
 	ret.Col = collationBinary
 
 	switch {

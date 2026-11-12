@@ -790,6 +790,7 @@ func (asm *assembler) CmpDates() {
 func (asm *assembler) Collate(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		a.flag &^= flagHex | flagBit
 		a.tt = int16(sqltypes.VarChar)
 		a.col = col
 		return 1
@@ -1470,6 +1471,7 @@ func (asm *assembler) Fn_ASCII() {
 func (asm *assembler) Fn_REVERSE() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		arg.flag &^= flagHex | flagBit
 
 		arg.tt = int16(sqltypes.VarChar)
 		arg.bytes = reverse(arg)
@@ -2085,6 +2087,7 @@ func (asm *assembler) Fn_COLLATION(collationEnv *collations.Environment, col col
 func (asm *assembler) Fn_FROM_BASE64(t sqltypes.Type) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 
 		decoded, err := mysqlBase64Decode(str.bytes)
 		if err != nil {
@@ -2675,6 +2678,7 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 	if upcase {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+			str.flag &^= flagHex | flagBit
 
 			coll := colldata.Lookup(str.col.Collation)
 			csa, ok := coll.(colldata.CaseAwareCollation)
@@ -2689,6 +2693,7 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 	} else {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+			str.flag &^= flagHex | flagBit
 
 			coll := colldata.Lookup(str.col.Collation)
 			csa, ok := coll.(colldata.CaseAwareCollation)
@@ -2850,6 +2855,7 @@ func (asm *assembler) Fn_REPEAT(base sqltypes.Type, fallback sqltypes.Type) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		repeat := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		if len(str.bytes) == 0 {
@@ -2885,6 +2891,7 @@ func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		if length.i <= 0 {
@@ -2916,6 +2923,7 @@ func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		if length.i <= 0 {
@@ -2948,6 +2956,7 @@ func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		length := env.vm.stack[env.vm.sp-2].(*evalInt64)
 		pad := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
@@ -3002,6 +3011,7 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		length := env.vm.stack[env.vm.sp-2].(*evalInt64)
 		pad := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
@@ -3056,6 +3066,7 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 func (asm *assembler) Fn_LTRIM1(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = bytes.TrimLeft(str.bytes, " ")
 		str.col = col
@@ -3066,6 +3077,7 @@ func (asm *assembler) Fn_LTRIM1(col collations.TypedCollation) {
 func (asm *assembler) Fn_RTRIM1(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = bytes.TrimRight(str.bytes, " ")
 		str.col = col
@@ -3076,6 +3088,7 @@ func (asm *assembler) Fn_RTRIM1(col collations.TypedCollation) {
 func (asm *assembler) Fn_TRIM1(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = bytes.Trim(str.bytes, " ")
 		str.col = col
@@ -3087,6 +3100,7 @@ func (asm *assembler) Fn_LTRIM2(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = trimLeftRepeated(str.bytes, pat.bytes)
@@ -3100,6 +3114,7 @@ func (asm *assembler) Fn_RTRIM2(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = trimRightRepeated(str.bytes, pat.bytes)
@@ -3113,6 +3128,7 @@ func (asm *assembler) Fn_TRIM2(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = trimRightRepeated(trimLeftRepeated(str.bytes, pat.bytes), pat.bytes)
@@ -3126,6 +3142,7 @@ func (asm *assembler) Fn_SUBSTRING2(tt sqltypes.Type, cs types.Charset, col coll
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		pos := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		end := int64(charset.Length(cs, str.bytes))
@@ -3152,6 +3169,7 @@ func (asm *assembler) Fn_SUBSTRING3(tt sqltypes.Type, cs types.Charset, col coll
 	asm.adjustStack(-2)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		pos := env.vm.stack[env.vm.sp-2].(*evalInt64)
 		ll := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
@@ -3184,6 +3202,7 @@ func (asm *assembler) Fn_SUBSTRING3(tt sqltypes.Type, cs types.Charset, col coll
 func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		encoded := mysqlBase64Encode(str.bytes)
 		str.tt = int16(t)
 		str.col = col
@@ -3377,6 +3396,7 @@ func (asm *assembler) Replace() {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
+		str.flag &^= flagHex | flagBit
 		from := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		to := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		env.vm.sp -= 2
@@ -3825,6 +3845,7 @@ func (asm *assembler) Fn_Version() {
 func (asm *assembler) Fn_MD5(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		arg.flag &^= flagHex | flagBit
 
 		sum := md5.Sum(arg.bytes)
 		buf := make([]byte, gohex.EncodedLen(len(sum)))
@@ -3840,6 +3861,7 @@ func (asm *assembler) Fn_MD5(col collations.TypedCollation) {
 func (asm *assembler) Fn_SHA1(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		arg.flag &^= flagHex | flagBit
 
 		sum := sha1.Sum(arg.bytes)
 		buf := make([]byte, gohex.EncodedLen(len(sum)))
@@ -3856,6 +3878,7 @@ func (asm *assembler) Fn_SHA2(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		arg.flag &^= flagHex | flagBit
 		bits := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		var sum []byte
@@ -4649,6 +4672,7 @@ func (asm *assembler) Fn_CONCAT(tt querypb.Type, tc collations.TypedCollation, a
 		}
 
 		ret := env.vm.stack[env.vm.sp-args].(*evalBytes)
+		ret.flag &^= flagHex | flagBit
 		ret.bytes = buf
 		ret.tt = int16(tt)
 		ret.col = tc
@@ -4677,6 +4701,7 @@ func (asm *assembler) Fn_CONCAT_WS(tt querypb.Type, tc collations.TypedCollation
 		}
 
 		ret := env.vm.stack[env.vm.sp-args-1].(*evalBytes)
+		ret.flag &^= flagHex | flagBit
 		ret.bytes = buf
 		ret.tt = int16(tt)
 		ret.col = tc
@@ -4711,6 +4736,7 @@ func (asm *assembler) Fn_CHAR(tt querypb.Type, tc collations.TypedCollation, arg
 func (asm *assembler) Fn_BIN_TO_UUID0(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		arg.flag &^= flagHex | flagBit
 
 		parsed, err := uuid.FromBytes(arg.bytes)
 		if err != nil {
@@ -4729,6 +4755,7 @@ func (asm *assembler) Fn_BIN_TO_UUID1(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		arg.flag &^= flagHex | flagBit
 		b := arg.bytes
 
 		if env.vm.stack[env.vm.sp-1] != nil &&
@@ -4786,6 +4813,7 @@ func (asm *assembler) Fn_UUID() {
 func (asm *assembler) Fn_UUID_TO_BIN0() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
+		arg.flag &^= flagHex | flagBit
 
 		parsed, err := uuid.ParseBytes(arg.bytes)
 		if err != nil {
@@ -4804,6 +4832,7 @@ func (asm *assembler) Fn_UUID_TO_BIN1() {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-2].(*evalBytes)
+		arg.flag &^= flagHex | flagBit
 		parsed, err := uuid.ParseBytes(arg.bytes)
 		if err != nil {
 			env.vm.stack[env.vm.sp-2] = nil

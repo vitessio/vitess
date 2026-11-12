@@ -320,7 +320,7 @@ func (r *builtinRegexpLike) compileSlow(c *compiler, input, pat, fl ctype, merge
 
 	c.asm.Fn_REGEXP_LIKE_slow(r.Negate, colldata.Lookup(merged.Collation).Charset(), flags, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | fl.Flag | flagIsBoolean}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag|pat.Flag|fl.Flag) | flagIsBoolean}, nil
 }
 
 func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
@@ -366,7 +366,7 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_REGEXP_LIKE(icuregex.NewMatcher(p), r.Negate, colldata.Lookup(merged.Collation).Charset(), len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | f.Flag | flagIsBoolean}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag|pat.Flag|f.Flag) | flagIsBoolean}, nil
 }
 
 var _ IR = (*builtinRegexpLike)(nil)
@@ -493,7 +493,7 @@ func (r *builtinRegexpInstr) compileSlow(c *compiler, input, pat, pos, occ, retu
 
 	c.asm.Fn_REGEXP_INSTR_slow(colldata.Lookup(merged.Collation).Charset(), flags, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | returnOption.Flag | matchType.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag | pat.Flag | pos.Flag | occ.Flag | returnOption.Flag | matchType.Flag)}, nil
 }
 
 func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
@@ -573,7 +573,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_REGEXP_INSTR(icuregex.NewMatcher(p), colldata.Lookup(merged.Collation).Charset(), len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | nullableFlags(pos.Flag|occ.Flag|returnOpt.Flag|matchType.Flag) | flagIsBoolean}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag | pat.Flag | pos.Flag | occ.Flag | returnOpt.Flag | matchType.Flag)}, nil
 }
 
 var _ IR = (*builtinRegexpInstr)(nil)
@@ -679,7 +679,7 @@ func (r *builtinRegexpSubstr) compileSlow(c *compiler, input, pat, pos, occ, mat
 
 	c.asm.Fn_REGEXP_SUBSTR_slow(merged, flags, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag|pat.Flag|pos.Flag|occ.Flag|matchType.Flag) | flagNullable}, nil
 }
 
 func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
@@ -749,7 +749,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_REGEXP_SUBSTR(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag | flagNullable}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag|pat.Flag|pos.Flag|occ.Flag|matchType.Flag) | flagNullable}, nil
 }
 
 var _ IR = (*builtinRegexpSubstr)(nil)
@@ -913,7 +913,7 @@ func (r *builtinRegexpReplace) compileSlow(c *compiler, input, pat, repl, pos, o
 
 	c.asm.Fn_REGEXP_REPLACE_slow(merged, flags, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag)}, nil
 }
 
 func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
@@ -993,7 +993,7 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_REGEXP_REPLACE(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag)}, nil
 }
 
 var _ IR = (*builtinRegexpReplace)(nil)

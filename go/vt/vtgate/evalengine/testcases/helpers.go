@@ -98,6 +98,13 @@ func yieldNested(yield Query, exprs ...string) {
 	}
 }
 
+// yieldIn yields each expression in context, a format with a single %s.
+func yieldIn(yield Query, context string, exprs ...string) {
+	for _, expr := range exprs {
+		yield(fmt.Sprintf(context, expr), nil, false)
+	}
+}
+
 type bugs struct{}
 
 // CanCompare skips comparisons in CASE and IN expressions that behave in unexpected

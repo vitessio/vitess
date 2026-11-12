@@ -54,7 +54,7 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 	}
 	for _, arg := range args {
 		if arg != nil {
-			return arg, nil
+			return evalPlain(arg), nil
 		}
 	}
 	return nil, nil
@@ -86,7 +86,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 	c.asm.emit(func(env *ExpressionEnv) int {
 		for sp := env.vm.sp - args; sp < env.vm.sp; sp++ {
 			if env.vm.stack[sp] != nil {
-				env.vm.stack[env.vm.sp-args] = env.vm.stack[sp]
+				env.vm.stack[env.vm.sp-args] = evalPlain(env.vm.stack[sp])
 				break
 			}
 		}
@@ -457,7 +457,8 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	return call.getMultiComparisonFunc(args)(env, args, call.cmp, call.prec)
+	res, err := call.getMultiComparisonFunc(args)(env, args, call.cmp, call.prec)
+	return evalPlain(res), err
 }
 
 func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype, jumps []*jump) (ctype, error) {

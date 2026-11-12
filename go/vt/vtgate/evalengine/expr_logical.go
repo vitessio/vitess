@@ -633,7 +633,8 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	return evalCoerce(result, ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
+	// The result keeps a hex or bit literal, as in MySQL, but is not a boolean.
+	return evalCoerce(evalNotBoolean(result), ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
 }
 
 func (c *CaseExpr) constant() bool {

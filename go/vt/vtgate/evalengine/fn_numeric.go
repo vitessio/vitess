@@ -47,7 +47,7 @@ func (call *builtinCeil) eval(env *ExpressionEnv) (eval, error) {
 
 	switch num := arg.(type) {
 	case *evalInt64, *evalUint64:
-		return num, nil
+		return evalPlain(num), nil
 	case *evalDecimal:
 		dec := num.dec
 		dec = dec.Ceil()
@@ -83,7 +83,7 @@ func (call *builtinFloor) eval(env *ExpressionEnv) (eval, error) {
 
 	switch num := arg.(type) {
 	case *evalInt64, *evalUint64:
-		return num, nil
+		return evalPlain(num), nil
 	case *evalDecimal:
 		dec := num.dec
 		dec = dec.Floor()
@@ -119,7 +119,7 @@ func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 
 	switch num := arg.(type) {
 	case *evalUint64:
-		return num, nil
+		return evalPlain(num), nil
 	case *evalInt64:
 		if num.i < 0 {
 			if num.i == math.MinInt64 {
@@ -127,7 +127,7 @@ func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 			}
 			return newEvalInt64(-num.i), nil
 		}
-		return num, nil
+		return evalPlain(num), nil
 	case *evalDecimal:
 		return newEvalDecimalWithPrec(num.dec.Abs(), num.length), nil
 	default:
@@ -144,6 +144,7 @@ func (expr *builtinAbs) compile(c *compiler) (ctype, error) {
 
 	if arg.Type == sqltypes.Uint64 {
 		// No-op if it's unsigned since that's already positive.
+		arg.Flag = nullableFlags(arg.Flag)
 		return arg, nil
 	}
 
@@ -1051,6 +1052,11 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
+	// A string argument is declared with its own type, although the result is
+	// a number, and the consumers of that type rely on its flags.
+	if sqltypes.IsNumber(arg.Type) {
+		arg.Flag = nullableFlags(arg.Flag)
+	}
 	return arg, nil
 }
 
@@ -1226,6 +1232,11 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
+	// A string argument is declared with its own type, although the result is
+	// a number, and the consumers of that type rely on its flags.
+	if sqltypes.IsNumber(arg.Type) {
+		arg.Flag = nullableFlags(arg.Flag)
+	}
 	return arg, nil
 }
 

@@ -127,7 +127,7 @@ func (expr *CollateExpr) compile(c *compiler) (ctype, error) {
 
 	ct.Type = sqltypes.VarChar
 	ct.Col = expr.TypedCollation
-	ct.Flag |= flagExplicitCollation | flagNullable
+	ct.Flag = nullableFlags(ct.Flag) | flagExplicitCollation | flagNullable
 	return ct, nil
 }
 
