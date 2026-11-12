@@ -42,6 +42,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -5015,8 +5016,8 @@ func TestRecursiveTermOverReferenceTableNextToShardWithNoDestination(t *testing.
 		},
 		{
 			name:  "union",
-			query: "with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id join (select z2.id from zip_detail z2 left join `user` u on u.id = :u_id union all select z3.id from zip_detail z3 left join `user` u3 on u3.id = :u_id) d on d.id = z.id where z.id < 5) select id from c",
-			want:  "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from (select z2.id from zip_detail as z2 left join `user` as u on u.id = :u_id where id = :z_id union all select z3.id from zip_detail as z3 left join `user` as u3 on u3.id = :u_id where id = :z_id) as d, zip_detail as z where z.id = c.id and z.id < 5 and d.id = z.id) select id from c",
+			query: "with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id where z.id < 5 and z.id in (select z2.id from zip_detail z2 left join `user` u on u.id = :u_id union all select z3.id from zip_detail z3 left join `user` u3 on u3.id = :u_id)) select id from c",
+			want:  "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from c, zip_detail as z where z.id = c.id and z.id < 5 and z.id in (select z2.id from zip_detail as z2 left join `user` as u on u.id = :u_id union all select z3.id from zip_detail as z3 left join `user` as u3 on u3.id = :u_id)) select id from c",
 		},
 		{
 			name:  "subquery that is a predicate",
@@ -5051,12 +5052,26 @@ func TestRecursiveTermOverReferenceTableNextToShardWithNoDestination(t *testing.
 			for _, sbc := range []*sandboxconn.SandboxConn{sbc1, sbc2} {
 				for _, q := range sbc.Queries {
 					sent = append(sent, q.Sql)
+					requireBound(t, q.Sql, q.BindVariables)
 				}
 			}
 			require.Equal(t, []string{tc.want}, sent)
 			require.Nil(t, sbclookup.Queries)
 		})
 	}
+}
+
+// requireBound checks that every argument of a query that a tablet gets has a bind variable, since the sandbox runs
+// the query without them.
+func requireBound(t *testing.T, sql string, bindVars map[string]*querypb.BindVariable) {
+	stmt, err := sqlparser.NewTestParser().Parse(sql)
+	require.NoError(t, err)
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		if arg, ok := node.(*sqlparser.Argument); ok {
+			require.Contains(t, bindVars, arg.Name, sql)
+		}
+		return true, nil
+	}, stmt)
 }
 
 // The no-destination handling starts in a recursive term only, so a join of two reference tables
