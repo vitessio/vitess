@@ -110,7 +110,7 @@ jobs:
               - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
               - '.github/actions/tool-downloads/**'
-              - '.github/actions/setup-microceph/action.yml'
+              - '.github/actions/setup-microceph/**'
 
   test:
     needs: generate-matrix
@@ -225,9 +225,9 @@ jobs:
 
       - name: Install MicroCeph
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
-        # Room for the action's 5 snap install attempts. Failures have taken up to
-        # 105 seconds each, so four of them and their pauses still leave time for a
-        # fifth attempt and the bootstrap and RGW setup.
+        # More time for the action to download the snaps from the Snap Store when
+        # the cache has no entry for them. It retries each download, and this
+        # timeout is what bounds those retries in all.
         timeout-minutes: 15
         uses: $/.github/actions/setup-microceph
 
