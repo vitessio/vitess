@@ -794,5 +794,17 @@
     "query": "select count(distinct u.id) from user u straight_join unsharded x on x.foo = u.id where (x.bar = 1 or u.col in (select col from user_extra))",
     "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
+  },
+  {
+    "comment": "An equality inside the side of a left join that is filled with NULLs fixes a column only once the ON clause's left columns are known, so a distinct aggregation over a subquery whose value the grouping doesn't determine is refused (main sends d.bar to the music route, ERROR 1054)",
+    "query": "select b.intcol, count(distinct a.col) from music a left join (user b join user d on d.id = coalesce(b.intcol, 1)) on a.foo = b.col where (d.bar = 1 or a.col in (select col from user_extra)) group by b.intcol",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "Same for the plain column equality on the side that is filled with NULLs (main sends d.bar to the music route, ERROR 1054)",
+    "query": "select b.intcol, count(distinct a.col) from music a left join (user b join user d on d.id = b.intcol) on a.foo = b.col where (d.bar = 1 or a.col in (select col from user_extra)) group by b.intcol",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
   }
 ]

@@ -801,44 +801,54 @@ func joinEqualities(ctx *plancontext.PlanningContext, sel *sqlparser.Select, non
 	if sel.Where != nil {
 		add(sel.Where.Expr, nil)
 	}
-	var collect func(sqlparser.TableExpr)
-	collect = func(te sqlparser.TableExpr) {
+	var collect func(te sqlparser.TableExpr, enclosing []*sqlparser.ColName)
+	collect = func(te sqlparser.TableExpr, enclosing []*sqlparser.ColName) {
 		switch te := te.(type) {
 		case *sqlparser.JoinTableExpr:
-			collect(te.LeftExpr)
-			collect(te.RightExpr)
-			if te.Condition == nil || te.Condition.On == nil {
+			if te.Join == sqlparser.LeftJoinType || te.Join == sqlparser.RightJoinType {
+				preserved, nullSupplying := outerJoinSides(te)
+				needs := enclosing
+				if te.Condition != nil && te.Condition.On != nil {
+					needs = append(slices.Clone(enclosing), outerJoinNeeds(ctx, te, nonNull)...)
+					add(te.Condition.On, needs)
+				}
+				collect(preserved, enclosing)
+				collect(nullSupplying, needs)
 				return
 			}
-			switch {
-			case te.Join.IsInner():
-				add(te.Condition.On, nil)
-			case te.Join == sqlparser.LeftJoinType || te.Join == sqlparser.RightJoinType:
-				preserved, nullSupplying := outerJoinSides(te)
-				right := tablesIn(ctx, nullSupplying)
-				if slices.ContainsFunc(nonNull, func(expr sqlparser.Expr) bool { return isColumnOf(ctx, expr, right) }) {
-					add(te.Condition.On, nil)
-					return
-				}
-				left := tablesIn(ctx, preserved)
-				var leftCols []*sqlparser.ColName
-				for _, col := range outsideSubqueryColumns(te.Condition.On) {
-					if isColumnOf(ctx, col, left) {
-						leftCols = append(leftCols, col)
-					}
-				}
-				add(te.Condition.On, leftCols)
+			collect(te.LeftExpr, enclosing)
+			collect(te.RightExpr, enclosing)
+			if te.Join.IsInner() && te.Condition != nil && te.Condition.On != nil {
+				add(te.Condition.On, enclosing)
 			}
 		case *sqlparser.ParenTableExpr:
 			for _, inner := range te.Exprs {
-				collect(inner)
+				collect(inner, enclosing)
 			}
 		}
 	}
 	for _, te := range sel.From {
-		collect(te)
+		collect(te, nil)
 	}
 	return equalities
+}
+
+// outerJoinNeeds returns the columns that must be known for the ON clause of an outer join to fix its null-supplying
+// side: none once a column of nonNull on that side shows the match, else the preserved side's columns of the ON clause.
+func outerJoinNeeds(ctx *plancontext.PlanningContext, join *sqlparser.JoinTableExpr, nonNull []sqlparser.Expr) []*sqlparser.ColName {
+	preserved, nullSupplying := outerJoinSides(join)
+	right := tablesIn(ctx, nullSupplying)
+	if slices.ContainsFunc(nonNull, func(expr sqlparser.Expr) bool { return isColumnOf(ctx, expr, right) }) {
+		return nil
+	}
+	left := tablesIn(ctx, preserved)
+	var needs []*sqlparser.ColName
+	for _, col := range outsideSubqueryColumns(join.Condition.On) {
+		if isColumnOf(ctx, col, left) {
+			needs = append(needs, col)
+		}
+	}
+	return needs
 }
 
 // columnsNeverNull returns the columns of the equalities that every row of the query fulfils: those of the WHERE clause
