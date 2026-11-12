@@ -616,7 +616,8 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 // stale identifiers from hanging around in topology.
 func (tm *TabletManager) Close() {
 	// Stop the watchers first: the other OnClose hooks, which stop the query
-	// service and close MySQL, run concurrently with this one.
+	// service and close MySQL, run concurrently with this one. An admission
+	// already in progress can still overlap them.
 	tm.tmState.Close()
 	tm.stopShardHealthMonitor()
 

@@ -1971,11 +1971,13 @@ func (c closeOrderConn) Update(ctx context.Context, path string, contents []byte
 	return c.Conn.Update(ctx, path, contents, version)
 }
 
-// TestCloseStopsWatchersBeforeItsTopoWrite checks that Close stops a deferred
-// replication initialization's watcher before it clears the tablet record,
-// which can take topo.RemoteOperationTimeout: vttablet stops the query service
-// and closes MySQL in OnClose hooks that run concurrently with Close.
-func TestCloseStopsWatchersBeforeItsTopoWrite(t *testing.T) {
+// TestCloseClosesStateBeforeItsTopoWrite checks that Close closes the state,
+// which stops the watchers and keeps them from changing serving, before it
+// clears the tablet record, which can take topo.RemoteOperationTimeout: vttablet
+// stops the query service and closes MySQL in OnClose hooks that run
+// concurrently with Close. TestCanceledWatcherLeavesReplicationInitError runs a
+// watcher through Close.
+func TestCloseClosesStateBeforeItsTopoWrite(t *testing.T) {
 	_, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
 	var tm *TabletManager
 	var writes, openWrites atomic.Int32
