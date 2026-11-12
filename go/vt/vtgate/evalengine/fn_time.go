@@ -677,14 +677,14 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 	case *evalBytes:
 		// A literal, or a string that IF, CASE or NULLIF selected from one, is a
 		// whole number of seconds.
-		if ts.isLiteralDecimal() {
+		if ts.decimalFromBytes() {
 			u, _ := ts.toNumericHex()
 			if u.u >= maxUnixtime {
 				return nil, nil
 			}
 			sec = int64(u.u)
 		} else {
-			f, _ := evalToFloat(evalDecimalArg(ts))
+			f, _ := evalToFloat(evalDecimalOperand(ts))
 			if f.f < 0 || f.f >= maxUnixtime {
 				return nil, nil
 			}
@@ -761,7 +761,7 @@ func (call *builtinFromUnixtime) compile(c *compiler) (ctype, error) {
 			c.asm.Fn_FROM_UNIXTIME_u()
 		} else {
 			prec = maxTimePrec
-			c.asm.ConvertArg_xf(1)
+			c.asm.Convert_xf_decimalOperand(1)
 			c.asm.Fn_FROM_UNIXTIME_f()
 		}
 	default:
@@ -1415,7 +1415,7 @@ func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
 		b := arg.(*evalBytes)
 		// A literal, or a string that IF, CASE or NULLIF selected from one, has
 		// no fractional digits.
-		if b.isLiteralDecimal() {
+		if b.decimalFromBytes() {
 			e = evalToDecimal(arg, 0, 0)
 		} else {
 			e = evalToDecimal(arg, 0, datetime.DefaultPrecision)

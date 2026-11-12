@@ -640,16 +640,16 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	// The result is not a boolean, but converts to the number of a selected
 	// hex or bit literal, as in MySQL.
 	res, err := evalCoerce(evalNotBoolean(result), ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
-	return evalSelected(result, res, c.selected()), err
+	return evalKeepNumber(result, res, c.numberFlags()), err
 }
 
-// selected returns the flags that a string selected from a hex or bit literal
-// gets: none for IFNULL, which hands no literal on.
-func (c *CaseExpr) selected() typeFlag {
+// numberFlags returns the flags that the result gets when the selected
+// argument is a hex or bit literal: none for IFNULL, which hands no literal on.
+func (c *CaseExpr) numberFlags() typeFlag {
 	if c.plain {
 		return 0
 	}
-	return flagSelectedLiteral
+	return flagNumericBytes
 }
 
 func (c *CaseExpr) constant() bool {
@@ -732,7 +732,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		f |= flagNullable
 	}
 	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, cs.selected(), ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, cs.numberFlags(), ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }
 

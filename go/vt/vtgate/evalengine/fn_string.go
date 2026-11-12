@@ -405,7 +405,7 @@ func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	return evalSelected(args[i], newEvalRaw(tt, b.bytes, b.col), flagSelectedLiteral|flagSelectedByElt), nil
+	return evalKeepNumber(args[i], newEvalRaw(tt, b.bytes, b.col), flagNumericBytes|flagDecimalFromText), nil
 }
 
 func (call *builtinElt) compile(c *compiler) (ctype, error) {

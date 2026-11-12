@@ -119,7 +119,7 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 	case evalNumeric:
 		return e
 	case *evalBytes:
-		if e.flag&flagSelectedLiteral != 0 {
+		if e.flag&flagNumericBytes != 0 {
 			// a string, so a double, but of the number of the selected literal
 			f, _ := evalToFloat(e)
 			return f
@@ -182,7 +182,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 	case evalNumeric:
 		return e.toFloat()
 	case *evalBytes:
-		if e.flag&(flagHex|flagSelectedLiteral) != 0 {
+		if e.flag&(flagHex|flagNumericBytes) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -240,7 +240,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	case evalNumeric:
 		return e.toDecimal(m, d)
 	case *evalBytes:
-		if e.flag&(flagHex|flagSelectedLiteral) != 0 && e.flag&flagSelectedByElt == 0 {
+		if e.flag&(flagHex|flagNumericBytes) != 0 && e.flag&flagDecimalFromText == 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -309,19 +309,18 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 // evalToInt64 reads the number of the literal. A literal itself still
 // converts to its number.
 func evalCastToInt64(e eval) *evalInt64 {
-	if b, ok := e.(*evalBytes); ok && b.flag&flagSelectedLiteral != 0 {
+	if b, ok := e.(*evalBytes); ok && b.flag&flagNumericBytes != 0 {
 		i, _ := fastparse.ParseInt64(b.string(), 10)
 		return newEvalInt64(i)
 	}
 	return evalToInt64(e)
 }
 
-// evalDecimalArg returns e as the argument of a function that MySQL gives the
-// decimal value of its argument, such as FROM_UNIXTIME: a string that ELT
-// selected from a hex or bit literal is an ordinary string there, because
-// ELT gives a decimal conversion its text.
-func evalDecimalArg(e eval) eval {
-	if b, ok := e.(*evalBytes); ok && b.flag&flagSelectedByElt != 0 {
+// evalDecimalOperand returns e as the operand of a function that takes the
+// decimal value of its argument in MySQL, such as FROM_UNIXTIME: a string
+// whose decimal conversion parses its text is an ordinary string there.
+func evalDecimalOperand(e eval) eval {
+	if b, ok := e.(*evalBytes); ok && b.flag&flagDecimalFromText != 0 {
 		return evalPlain(b)
 	}
 	return e
@@ -334,7 +333,7 @@ func evalToInt64(e eval) *evalInt64 {
 	case evalNumeric:
 		return e.toInt64()
 	case *evalBytes:
-		if e.flag&(flagHex|flagSelectedLiteral) != 0 {
+		if e.flag&(flagHex|flagNumericBytes) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow

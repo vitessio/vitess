@@ -61,27 +61,26 @@ const (
 	// and cannot be computed accurately
 	flagAmbiguousType typeFlag = 1 << 11
 
-	// flagSelectedLiteral marks a string that IF, CASE, NULLIF or ELT returned
-	// for a hex or bit literal (or for another such string) that it selected.
-	// It is not a literal: it is a binary string, but its conversion to a
-	// number, as a double, an integer, a decimal or a truth value, is the
-	// number of the literal, because MySQL hands these conversions to the
-	// selected argument. That number is unsigned, as for a hex literal, also
-	// when the literal was a bit literal.
-	flagSelectedLiteral typeFlag = 1 << 12
-	// flagSelectedByElt marks, with flagSelectedLiteral, a string that ELT
-	// selected somewhere between it and the literal. MySQL's ELT converts to
-	// a decimal from its text, so such a string converts to a decimal from
-	// its text too, and to a double, an integer or a truth value from the
-	// number of the literal.
-	flagSelectedByElt typeFlag = 1 << 13
+	// flagNumericBytes marks a string whose conversion to a number, as a
+	// double, an integer, a decimal or a truth value, reads its bytes as an
+	// unsigned integer instead of parsing its text, as for a hex literal. It
+	// is not a literal: it is the binary string that IF, CASE, NULLIF or ELT
+	// return for a hex or bit literal (or for another such string) that they
+	// select, because MySQL hands these conversions to the selected argument.
+	flagNumericBytes typeFlag = 1 << 12
+	// flagDecimalFromText marks, with flagNumericBytes, a string whose
+	// conversion to a decimal parses its text all the same. MySQL's ELT has
+	// no decimal conversion of its own and converts from its text, so this
+	// is set on a string that ELT selected somewhere between it and the
+	// literal.
+	flagDecimalFromText typeFlag = 1 << 13
 
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 
-	// flagLiteralNumber are the flags that make a string convert to the number
-	// of a hex or bit literal
-	flagLiteralNumber = flagHex | flagBit | flagSelectedLiteral | flagSelectedByElt
+	// flagNumericContext are the flags that give a string a number of its own
+	// in a numeric context, which the result of a function does not have
+	flagNumericContext = flagHex | flagBit | flagNumericBytes | flagDecimalFromText
 )
 
 func (f typeFlag) Nullable() bool {
@@ -164,7 +163,7 @@ func evalIsTruthy(e eval) boolean {
 	case *evalDecimal:
 		return makeboolean(!e.dec.IsZero())
 	case *evalBytes:
-		if e.flag&flagLiteralNumber != 0 {
+		if e.flag&flagNumericContext != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -191,9 +190,9 @@ func evalIsTruthy(e eval) boolean {
 func evalPlain(e eval) eval {
 	switch e := e.(type) {
 	case *evalBytes:
-		if e.flag&flagLiteralNumber != 0 {
+		if e.flag&flagNumericContext != 0 {
 			b := *e
-			b.flag &^= flagLiteralNumber
+			b.flag &^= flagNumericContext
 			return &b
 		}
 	case *evalInt64:
@@ -217,17 +216,17 @@ func evalNotBoolean(e eval) eval {
 	return e
 }
 
-// evalSelected returns res, the value that IF, CASE, NULLIF or ELT made of sel,
+// evalKeepNumber returns res, the value that IF, CASE, NULLIF or ELT made of sel,
 // the argument that it selected. In a numeric context MySQL converts the
 // selected argument itself, so when sel is a hex or bit literal, or a string
-// selected from one, res converts to the number of that literal; it is still
-// a string, not a literal. selected are the flags that res gets then:
-// flagSelectedLiteral for IF, CASE and NULLIF, flagSelectedLiteral |
-// flagSelectedByElt for ELT, and none for IFNULL, whose res is an ordinary
-// string. res keeps the flagSelectedByElt of sel.
-func evalSelected(sel, res eval, selected typeFlag) eval {
+// selected from one, res keeps the number of that literal; it is still a
+// string, not a literal. keep are the flags that res gets then:
+// flagNumericBytes for IF, CASE and NULLIF, flagNumericBytes |
+// flagDecimalFromText for ELT, and none for IFNULL, whose res is an ordinary
+// string. res also keeps the flagDecimalFromText of sel.
+func evalKeepNumber(sel, res eval, keep typeFlag) eval {
 	s, ok := sel.(*evalBytes)
-	if !ok || s.flag&flagLiteralNumber == 0 {
+	if !ok || s.flag&flagNumericContext == 0 {
 		return res
 	}
 	b, ok := res.(*evalBytes)
@@ -235,9 +234,9 @@ func evalSelected(sel, res eval, selected typeFlag) eval {
 		return res
 	}
 	r := *b
-	r.flag &^= flagLiteralNumber
-	if selected != 0 {
-		r.flag |= selected | s.flag&flagSelectedByElt
+	r.flag &^= flagNumericContext
+	if keep != 0 {
+		r.flag |= keep | s.flag&flagDecimalFromText
 	}
 	return &r
 }
