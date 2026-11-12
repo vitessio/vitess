@@ -760,3 +760,10 @@ func TestADeclinedAlternateDoesNotAuthorizeACrossKeyspaceJoin(t *testing.T) {
 		})
 	}
 }
+
+// A join let through because of an alternate keeps that alternate when no merge is refused.
+func TestAnAlternateAuthorizesACrossKeyspaceJoinWhenNoMergeIsRefused(t *testing.T) {
+	_, err := planReferenceOuterJoinWithoutCrossKeyspaceReads(t,
+		"select d.col, x.col from (select col from global_ref limit 1) d join (select col from `user` limit 3) x")
+	require.NoError(t, err)
+}
