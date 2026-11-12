@@ -261,7 +261,7 @@ func (s *planTestSuite) addPKs(vschema *vindexes.VSchema, ks string, tbls []stri
 // addDistinctKeys gives a sharded table a primary key and a unique key that are not vindexes, an unsharded table
 // single-column and composite keys, and a reference table a single-column key, to tell apart the keys that are unique
 // across shards from those that are not. The unique keys are NOT NULL columns, except nk, which can be NULL. The
-// columns sk and md5 are strings with a collation.
+// columns sk and md5 are strings with a collation, and user_metadata.user_id is a typed integer.
 func (s *planTestSuite) addDistinctKeys(vschema *vindexes.VSchema) {
 	s.addPKs(vschema, "user", []string{"user", "user_extra", "ref", "pin_test"})
 	s.addPKs(vschema, "main", []string{"unsharded"})
@@ -273,6 +273,8 @@ func (s *planTestSuite) addDistinctKeys(vschema *vindexes.VSchema) {
 	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("nk")}))
 	s.Require().NoError(vschema.AddUniqueKey("main", "unsharded", []sqlparser.Expr{sqlparser.NewColName("sk")}))
 	s.Require().NoError(vschema.AddUniqueKey("user", "user_metadata", []sqlparser.Expr{sqlparser.NewColName("md5")}))
+	s.Require().NoError(vschema.AddUniqueKey("user", "user_metadata", []sqlparser.Expr{sqlparser.NewColName("user_id")}))
+	s.Require().NoError(vschema.AddUniqueKey("user", "user_metadata", []sqlparser.Expr{sqlparser.NewColName("user_id")}))
 	s.addColumns(vschema, "user", "user_extra", false, "foo")
 	s.addColumns(vschema, "user", "user", false, "name")
 	s.addColumns(vschema, "main", "unsharded", false, "foo", "col", "bar")
@@ -281,7 +283,8 @@ func (s *planTestSuite) addDistinctKeys(vschema *vindexes.VSchema) {
 	s.addColumns(vschema, "main", "unsharded", false, "sk")
 	s.setColumnType(vschema, "main", "unsharded", "sk", sqltypes.VarChar)
 	s.setColumnCollation(vschema, "main", "unsharded", "sk", "latin1_swedish_ci")
-	s.addColumns(vschema, "user", "user_metadata", false, "md5")
+	s.addColumns(vschema, "user", "user_metadata", false, "user_id", "md5")
+	s.setColumnType(vschema, "user", "user_metadata", "user_id", sqltypes.Int64)
 	s.setColumnType(vschema, "user", "user_metadata", "md5", sqltypes.VarChar)
 	s.setColumnCollation(vschema, "user", "user_metadata", "md5", "big5_bin")
 }

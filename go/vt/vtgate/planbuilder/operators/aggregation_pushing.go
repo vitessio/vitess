@@ -679,13 +679,14 @@ func isDetermined(ctx *plancontext.PlanningContext, sel *sqlparser.Select, seeds
 }
 
 // haveSameType says if a and b can be compared as values of one type. When their types differ, MySQL converts them, and
-// values that are different in one type can be equal in the other, like '1' and '01' as numbers. A column whose type the
-// schema doesn't declare passes as it does on main, where nothing checks it.
+// values that are different in one type can be equal in the other, like '1' and '01' as numbers. A pair passes when
+// either side has no type in the schema, as it does on main where nothing checks it, when both are integers, or when
+// both have the same type and collation.
 func haveSameType(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 	typeA, knownA := ctx.TypeForExpr(a)
 	typeB, knownB := ctx.TypeForExpr(b)
-	if !knownA || !knownB {
-		return false
+	if !knownA || !knownB || typeA.Type() == sqltypes.Unknown || typeB.Type() == sqltypes.Unknown {
+		return true
 	}
 	if sqltypes.IsIntegral(typeA.Type()) && sqltypes.IsIntegral(typeB.Type()) {
 		return true

@@ -791,7 +791,7 @@
   },
   {
     "comment": "A string column of a unique key isn't fixed by the number it equals, since MySQL compares both as numbers and '1' and '01' are equal",
-    "query": "select count(distinct u.id) from user u straight_join unsharded x on x.foo = u.id where (x.bar = 1 or u.col in (select col from user_extra))",
+    "query": "select count(distinct um.user_id) from user_metadata um straight_join unsharded x on x.foo = um.user_id where (x.bar = 1 or um.md5 in (select col from user_extra))",
     "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
   },
@@ -811,6 +811,87 @@
     "comment": "A string column of a unique key isn't fixed by a string column of another collation, since MySQL compares them in one collation and values that differ in the other can be equal (main plans it and sends x.bar to the user_metadata route, ERROR 1054)",
     "query": "select count(distinct um.md5) from user_metadata um straight_join unsharded x on x.sk = um.md5 where (x.bar = 1 or um.user_id in (select col from user_extra))",
     "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
+  },
+  {
+    "comment": "A column that the schema gives no type passes against a string, as on main where nothing compares the types of an equality, so the right side is fixed by the grouping and planned with the filter above the join (main plans the filter on x.bar inside the user route, ERROR 1054)",
+    "query": "select count(distinct u.id) from user u straight_join unsharded x on x.foo = u.id where (x.bar = 1 or u.col in (select col from user_extra))",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select count(distinct u.id) from user u straight_join unsharded x on x.foo = u.id where (x.bar = 1 or u.col in (select col from user_extra))",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct u.id)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "UncorrelatedSubquery",
+            "Variant": "PulloutIn",
+            "PulloutVars": [
+              "__sq_has_values",
+              "__sq1"
+            ],
+            "Inputs": [
+              {
+                "InputName": "SubQuery",
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select col from user_extra where 1 != 1",
+                "Query": "select col from user_extra"
+              },
+              {
+                "InputName": "Outer",
+                "OperatorType": "Filter",
+                "Predicate": "x.bar = 1 or :__sq_has_values and u.col in ::__sq1",
+                "Inputs": [
+                  {
+                    "OperatorType": "Join",
+                    "Variant": "Join",
+                    "JoinColumnIndexes": "L:0,R:0,L:1",
+                    "JoinVars": {
+                      "u_id": 2
+                    },
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select count(distinct u.id), u.col, u.id from `user` as u where 1 != 1 group by u.col, u.id",
+                        "Query": "select count(distinct u.id), u.col, u.id from `user` as u group by u.col, u.id"
+                      },
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Unsharded",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select x.bar from unsharded as x where 1 != 1 group by x.bar",
+                        "Query": "select x.bar from unsharded as x where x.foo = :u_id group by x.bar"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
     "skip_e2e": true
   }
 ]
