@@ -1329,11 +1329,15 @@ func TestRestartAfterRestoreTakesTheActionLock(t *testing.T) {
 	tm, md, _, _ := newReplicationInitializationTM(t)
 	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
 	md.ReplicationStatusError = mysql.ErrNotReplica
+	// assert.Never can poll once more after it returns, so its condition
+	// reads only this counter, not the fake's fields.
+	stopped := &countingStopDaemon{FakeMysqlDaemon: md}
+	tm.MysqlDaemon = stopped
 	require.NoError(t, tm.lock(t.Context()))
 	returned := make(chan error, 1)
 	go func() { returned <- tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger()) }()
 
-	assert.Never(t, func() bool { return md.ExpectedExecuteSuperQueryCurrent > 0 || len(returned) > 0 }, time.Second, 10*time.Millisecond,
+	assert.Never(t, func() bool { return stopped.stops.Load() > 0 || len(returned) > 0 }, time.Second, 10*time.Millisecond,
 		"replication changed while an action held the lock")
 	tm.unlock()
 	var err error
@@ -1348,6 +1352,17 @@ func TestRestartAfterRestoreTakesTheActionLock(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, md.CheckSuperQueryList())
 	assert.True(t, md.Replicating)
+}
+
+// countingStopDaemon counts the STOP REPLICA that changing replication starts with.
+type countingStopDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	stops atomic.Int32
+}
+
+func (d *countingStopDaemon) StopReplication(ctx context.Context, hookExtraEnv map[string]string) error {
+	d.stops.Add(1)
+	return d.FakeMysqlDaemon.StopReplication(ctx, hookExtraEnv)
 }
 
 // endingDeferralBackupEngine ends the tablet's deferred replication
