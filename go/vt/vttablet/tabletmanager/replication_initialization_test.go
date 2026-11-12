@@ -2105,8 +2105,9 @@ func (d *blockingStatusDaemon) ReplicationStatus(ctx context.Context) (replicati
 
 // TestReplicationInitLockWait checks that replication initialization retries a
 // held shard lock for --init-replication-lock-wait, and that a wait longer than
-// the caller's deadline allows ends in time to defer: it leaves
-// topo.RemoteOperationTimeout for the fence or the work under the lock.
+// the caller's deadline allows ends in time to defer: it leaves twice
+// topo.RemoteOperationTimeout, for a last attempt and for the fence or the work
+// under the lock.
 func TestReplicationInitLockWait(t *testing.T) {
 	savedWait, savedTimeout := replicationInitLockWait, topo.RemoteOperationTimeout
 	t.Cleanup(func() { replicationInitLockWait, topo.RemoteOperationTimeout = savedWait, savedTimeout })
@@ -2142,23 +2143,32 @@ func TestReplicationInitLockWait(t *testing.T) {
 	})
 }
 
-// TestCanceledStateDoesNotResumeServing checks that once Close has canceled the
-// state, which happens while the query service stops, ending a deferral no
-// longer puts the replica back in rotation, while a deferral still takes it
-// out.
-func TestCanceledStateDoesNotResumeServing(t *testing.T) {
-	t.Run("an admission does not resume serving", func(t *testing.T) {
+// TestCanceledStateLeavesQueryService checks that once Close has canceled the
+// state, while the query service stops, deferred replication initialization no
+// longer changes the query service: putting the tablet back in rotation would
+// resume serving, and any transition after StopService reconnects it.
+func TestCanceledStateLeavesQueryService(t *testing.T) {
+	t.Run("an admission", func(t *testing.T) {
 		tm, _, _, qsc, id := newPendingReplicationTM(t)
+		drainStateChanges(qsc)
 		tm.tmState.cancel()
 		require.True(t, tm.tmState.endReplicationInit(t.Context(), id, false))
 		assert.False(t, qsc.IsServing())
+		assert.Empty(t, qsc.StateChanges)
 	})
-	t.Run("a deferral still stops serving", func(t *testing.T) {
+	t.Run("a deferral", func(t *testing.T) {
 		tm, _, _, qsc, id := newPendingReplicationTM(t)
 		require.True(t, tm.tmState.endReplicationInit(t.Context(), id, false))
 		require.True(t, qsc.IsServing())
+		drainStateChanges(qsc)
 		tm.tmState.cancel()
-		tm.tmState.deferReplicationInit(t.Context(), nil, nil)
-		assert.False(t, qsc.IsServing())
+		tm.tmState.deferReplicationInit(t.Context(), errors.New("shard lock held"), nil)
+		assert.Empty(t, qsc.StateChanges)
 	})
+}
+
+func drainStateChanges(qsc *tabletservermock.Controller) {
+	for len(qsc.StateChanges) > 0 {
+		<-qsc.StateChanges
+	}
 }
