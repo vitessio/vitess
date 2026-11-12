@@ -1531,34 +1531,25 @@
     }
   },
   {
-    "comment": "reference table stays separate from a single-shard derived route",
+    "comment": "reference table merges into a single-shard derived route",
     "query": "select ref.col from ref join (select aa from user where user.id=1) user",
     "plan": {
-      "Type": "Join",
+      "Type": "Passthrough",
       "QueryType": "SELECT",
       "Original": "select ref.col from ref join (select aa from user where user.id=1) user",
       "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {"Name": "user", "Sharded": true},
-            "FieldQuery": "select ref.col from ref where 1 != 1",
-            "Query": "select ref.col from ref"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {"Name": "user", "Sharded": true},
-            "FieldQuery": "select 1 from (select aa from `user` where 1 != 1) as `user` where 1 != 1",
-            "Query": "select 1 from (select aa from `user` where `user`.id = 1) as `user`",
-            "Values": ["1"],
-            "Vindex": "user_index"
-          }
-        ]
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select ref.col from (select aa from `user` where 1 != 1) as `user`, ref where 1 != 1",
+        "Query": "select ref.col from (select aa from `user` where `user`.id = 1) as `user`, ref",
+        "Values": [
+          "1"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.ref",

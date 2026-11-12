@@ -705,7 +705,7 @@ func addWSColumnToInput(ctx *plancontext.PlanningContext, source Operator, offse
 		cloned := slice.Map(op.Sources, func(src Operator) Operator {
 			return Clone(src)
 		})
-		wsOffset, err := op.addWeightStringToOffset(ctx, offset)
+		wsOffset, err := op.addWeightStringToOffset(ctx, offset, false)
 		if err != nil {
 			op.Sources = cloned
 			return false, -1
@@ -765,6 +765,9 @@ func wrapInDerivedProjection(
 	}
 
 	proj := newAliasedProjection(derivedProj)
+	if hasUnionOutputCount {
+		proj.UnionColumns = unionColumns[:derivedColumnCount]
+	}
 	for i, col := range unionColumns {
 		projExpr := newProjExpr(col)
 		projExpr.EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", i), tbl)

@@ -379,7 +379,7 @@ func TestMemorySortResolvesUnknownCollationPerExecution(t *testing.T) {
 	assert.Equal(t, collations.Unknown, ms.OrderBy[0].Type.Collation())
 }
 
-func TestMemorySortResolvesUnknownCollationWhenWeightStringIsAvailable(t *testing.T) {
+func TestMemorySortPrefersWeightStringToConnectionCollation(t *testing.T) {
 	connectionCollation, ok := collations.MySQL8().LookupID("utf8mb4_0900_ai_ci")
 	require.True(t, ok)
 	fields := []*querypb.Field{
@@ -399,30 +399,17 @@ func TestMemorySortResolvesUnknownCollationWhenWeightStringIsAvailable(t *testin
 
 	result, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, true)
 	require.NoError(t, err)
-	utils.MustMatch(t, sqltypes.MakeTestResult(fields, "a|a", "B|B"), result)
-}
+	utils.MustMatch(t, sqltypes.MakeTestResult(fields, "B|B", "a|a"), result)
 
-func TestMemorySortUsesCombinedCollationInsteadOfArmWeightStrings(t *testing.T) {
-	collationID, ok := collations.MySQL8().LookupID("utf8mb4_0900_ai_ci")
-	require.True(t, ok)
-	fields := []*querypb.Field{
-		{Name: "name", Type: querypb.Type_VARCHAR, Charset: uint32(collationID)},
-		{Name: "weight", Type: querypb.Type_VARBINARY, Charset: collations.CollationBinaryID},
-	}
-	fp := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "é|é", "z|z")}}
-	ms := &MemorySort{
-		OrderBy: []evalengine.OrderByParams{{
-			Col:             0,
-			WeightStringCol: 1,
-			Type:            evalengine.NewType(sqltypes.Unknown, collations.Unknown),
-			CollationEnv:    collations.MySQL8(),
-		}},
-		Input: fp,
-	}
-
-	result, err := ms.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	fp.rewind()
+	var results []*sqltypes.Result
+	err = ms.TryStreamExecute(t.Context(), &noopVCursor{}, nil, true, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
 	require.NoError(t, err)
-	utils.MustMatch(t, sqltypes.MakeTestResult(fields, "é|é", "z|z"), result)
+	utils.MustMatch(t, sqltypes.MakeTestStreamingResults(fields, "B|B", "a|a"), results)
+	assert.Equal(t, sqltypes.Unknown, ms.OrderBy[0].Type.Type())
 }
 
 func TestMemorySortFallsBackToWeightStringForUnsupportedCollation(t *testing.T) {

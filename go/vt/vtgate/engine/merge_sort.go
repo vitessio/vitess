@@ -78,12 +78,14 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		handles[i] = runOneStream(ctx, vcursor, input, bindVars, gotFields, ms.FetchLastInsertID)
 		if !ms.ScatterErrorsAsWarnings {
 			// we only need the fields from the first input, unless we allow ScatterErrorsAsWarnings.
-			// in that case, we need to ask all the inputs for fields - we don't know which will return anything.
+			// in that case, we need to ask all the inputs for fields - we don't know which will return anything
 			gotFields = false
 		}
 	}
 
-	merge := &evalengine.Merger{Compare: ms.OrderBy}
+	merge := &evalengine.Merger{
+		Compare: ms.OrderBy,
+	}
 
 	if wantfields {
 		fields, err := ms.getStreamingFields(handles)

@@ -48,7 +48,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 			}
 		}
 
-		if !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
+		if ctx.SemTable.DMLTargets.IsEmpty() && !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
 			debugNoRewrite("apply join merge blocked: %s routing with non-inner join type %s and multi-shard routing %s", a.String(), jm.joinType.ToString(), newRouting.OpCode().String())
 			return nil
 		}
@@ -73,7 +73,7 @@ func (jm *joinMerger) mergeJoinInputs(ctx *plancontext.PlanningContext, lhs, rhs
 				newRouting = UpdateRoutingLogic(ctx, predicate, newRouting)
 			}
 		}
-		if !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
+		if ctx.SemTable.DMLTargets.IsEmpty() && !jm.joinType.IsInner() && !newRouting.OpCode().IsSingleShard() {
 			debugNoRewrite("apply join merge blocked: %s routing with non-inner join type %s and multi-shard routing %s", a.String(), jm.joinType.ToString(), newRouting.OpCode().String())
 			return nil
 		}

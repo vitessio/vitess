@@ -40,6 +40,8 @@ type Projection struct {
 	// DT will hold all the necessary information if this is a derived table projection
 	DT       *DerivedTable
 	FromAggr bool
+	// UnionColumns maps generated derived-table outputs back to UNION expressions.
+	UnionColumns []*sqlparser.AliasedExpr
 }
 
 type (
@@ -343,6 +345,11 @@ func (p *Projection) addColumn(
 	push bool,
 ) int {
 	expr := p.DT.RewriteExpression(ctx, ae.Expr)
+	if p.UnionColumns != nil {
+		if rebound, ok := rebindDerivedUnionColumn(ctx, p.UnionColumns, ae); ok {
+			expr = rebound
+		}
+	}
 
 	if reuse {
 		offset := p.FindCol(ctx, expr, false)

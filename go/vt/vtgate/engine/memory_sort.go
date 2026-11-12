@@ -115,6 +115,11 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 func resolveUnknownOrderTypes(orderBy evalengine.Comparison, fields []*querypb.Field) {
 	for i := range orderBy {
 		order := &orderBy[i]
+		if order.WeightStringCol >= 0 {
+			// Result fields can report the connection collation rather than the
+			// column collation. Prefer MySQL's weight string in that case.
+			continue
+		}
 		if order.Col < 0 || order.Col >= len(fields) {
 			continue
 		}

@@ -87,6 +87,9 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 			ctx.PredTracker.Set(*predicate.JoinPredicateID, predicate.Original)
 		}
 	}
+	// The merged SQL contains the original CTE predicates, so routing must
+	// no longer use arguments that were supplied by the recursive operator.
+	r = r.Clone().resetRoutingLogic(ctx)
 
 	cte := &RecurseCTE{
 		binaryOperator: newBinaryOp(seed.Source, newTerm),

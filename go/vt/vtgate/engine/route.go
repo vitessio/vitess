@@ -376,6 +376,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	// The copy can be shallow because we won't be changing
 	// the contents of any row.
 	out := in.ShallowCopy()
+
 	err := route.OrderBy.SortResult(out)
 	return out, err
 }

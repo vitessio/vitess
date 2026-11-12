@@ -303,6 +303,10 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs Operator, joinPredic
 	}
 
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "JOIN")
+	if left, right := operatorsToRoutes(lhs, rhs); left != nil && right != nil {
+		left, right, _, _, _ = getRoutesOrAlternates(ctx, left, right)
+		lhs, rhs = left, right
+	}
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !joinType.IsCommutative() || requiresSwitchingSides(ctx, lhs) {

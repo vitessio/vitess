@@ -269,6 +269,21 @@ func TestReferenceUnionAllRowsReturnedOnce(t *testing.T) {
 		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 order by id desc limit 5",
 		"[[INT64(106)] [INT64(105)] [INT64(104)] [INT64(103)] [INT64(102)]]",
 	)
+	// More than five distinct values expose an unordered limit below the sort.
+	mcmp.AssertMatches(
+		"select cast(id as signed) as id from ref union all select cast(id1 as signed) from t1 union select cast(id1 as signed) from t1 order by id limit 5",
+		"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+	)
+	// Each shard has enough copies of 1 to exhaust a pushed LIMIT before
+	// VTGate can deduplicate. Later rows must remain available to the sort.
+	mcmp.Exec("insert into t2(id3, id4) values (1,1),(2,1),(3,1),(4,1),(5,1),(6,1),(7,1),(8,1),(9,1),(10,1),(11,1),(12,1),(13,1),(14,1),(15,1),(16,1),(17,1),(18,1),(19,1),(20,1),(21,2),(22,3),(23,4),(24,5),(25,6)")
+	for _, workload := range []string{"oltp", "olap"} {
+		utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		mcmp.AssertMatches(
+			"select distinct id from (select id4 as id from t2 union all select id from ref) t order by id limit 5",
+			"[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)]]",
+		)
+	}
 	result := utils.Exec(t, mcmp.VtConn, "select id1 from t1 union all select id3 from t2 union select id1 from t1 limit 5")
 	assert.Len(t, result.Rows, 5)
 }

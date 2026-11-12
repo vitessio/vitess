@@ -233,12 +233,12 @@ func TestHasDistinctBeforeRoute(t *testing.T) {
 	assert.False(t, hasDistinctBeforeRoute(routeLocalDistinct), "MySQL applies a route-local UNION DISTINCT before its LIMIT")
 
 	vtgateDistinct := &Distinct{unaryOperator: newUnaryOp(&Union{
-		Sources: []Operator{&Route{}, &Route{}},
+		Sources: []Operator{&Route{unaryOperator: newUnaryOp(&Table{})}, &Route{unaryOperator: newUnaryOp(&Table{})}},
 	})}
 	assert.True(t, hasDistinctBeforeRoute(vtgateDistinct), "VTGate DISTINCT over UNION ALL must see all rows")
 
 	globalUnionDistinct := &Distinct{unaryOperator: newUnaryOp(&Union{
-		Sources:  []Operator{&Route{}, &Route{}},
+		Sources:  []Operator{&Route{unaryOperator: newUnaryOp(&Table{})}, &Route{unaryOperator: newUnaryOp(&Table{})}},
 		distinct: true,
 	})}
 	assert.True(t, hasDistinctBeforeRoute(globalUnionDistinct), "VTGate UNION DISTINCT must see all rows")

@@ -1934,7 +1934,7 @@
     }
   },
   {
-    "comment": "do not push the upper limit below UNION DISTINCT",
+    "comment": "push upper limit after route-local UNION DISTINCT",
     "query": "select id from user union select 3 limit 10",
     "plan": {
       "Type": "Complex",
@@ -1958,7 +1958,7 @@
                   "Sharded": true
                 },
                 "FieldQuery": "select id from `user` where 1 != 1 union select 3 from dual where 1 != 1",
-                "Query": "select id from `user` union select 3 from dual"
+                "Query": "select id from `user` union select 3 from dual limit :__upper_limit"
               }
             ]
           }
@@ -2186,12 +2186,14 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "0 ASC",
+        "OrderBy": "(0|1) ASC",
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "0"
+              "0",
+              "1"
             ],
             "Inputs": [
               {
@@ -2201,8 +2203,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id from `user` where 1 != 1 union select 3 from dual where 1 != 1",
-                "Query": "select id from `user` union select 3 from dual"
+                "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 union select 3, weight_string(3) from dual where 1 != 1",
+                "Query": "select id, weight_string(id) from `user` union select 3, weight_string(3) from dual"
               }
             ]
           }
@@ -2223,14 +2225,15 @@
       "Instructions": {
         "OperatorType": "Sort",
         "Variant": "Memory",
-        "OrderBy": "0 ASC",
+        "OrderBy": "(0|2) ASC",
         "ResultColumns": 2,
         "Inputs": [
           {
             "OperatorType": "Distinct",
             "Collations": [
-              "(0:2)",
-              "(1:3)"
+              "(0:3)",
+              "(1:4)",
+              "2"
             ],
             "Inputs": [
               {
@@ -2240,8 +2243,8 @@
                   "Name": "user",
                   "Sharded": true
                 },
-                "FieldQuery": "select id, id, weight_string(id), weight_string(id) from `user` where 1 != 1 union select id, bar, weight_string(id), weight_string(bar) from user_extra where 1 != 1",
-                "Query": "select id, id, weight_string(id), weight_string(id) from `user` union select id, bar, weight_string(id), weight_string(bar) from user_extra"
+                "FieldQuery": "select id, id, weight_string(id), weight_string(id), weight_string(id) from `user` where 1 != 1 union select id, bar, weight_string(id), weight_string(id), weight_string(bar) from user_extra where 1 != 1",
+                "Query": "select id, id, weight_string(id), weight_string(id), weight_string(id) from `user` union select id, bar, weight_string(id), weight_string(id), weight_string(bar) from user_extra"
               }
             ]
           }
@@ -3557,14 +3560,15 @@
           {
             "OperatorType": "Sort",
             "Variant": "Memory",
-            "OrderBy": "1 ASC",
+            "OrderBy": "(1|2) ASC",
             "ResultColumns": 1,
             "Inputs": [
               {
                 "OperatorType": "Distinct",
                 "Collations": [
                   "(0:2)",
-                  "(1:3)"
+                  "(1:2)",
+                  "2"
                 ],
                 "Inputs": [
                   {
@@ -3574,8 +3578,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select dt.c0 as id, dt.c0, weight_string(dt.c0), weight_string(dt.c0) from (select cast(id as signed) as id from ref where 1 != 1 union select cast(id as signed) from `user` where 1 != 1 union select cast(id as signed) from music where 1 != 1) as dt(c0) where 1 != 1",
-                    "Query": "select dt.c0 as id, dt.c0, weight_string(dt.c0), weight_string(dt.c0) from (select cast(id as signed) as id from ref union select cast(id as signed) from `user` union select cast(id as signed) from music) as dt(c0)"
+                    "FieldQuery": "select dt.c0 as id, dt.c0 as id, weight_string(dt.c0) from (select cast(id as signed) as id from ref where 1 != 1 union select cast(id as signed) from `user` where 1 != 1 union select cast(id as signed) from music where 1 != 1) as dt(c0) where 1 != 1",
+                    "Query": "select dt.c0 as id, dt.c0 as id, weight_string(dt.c0) from (select cast(id as signed) as id from ref union select cast(id as signed) from `user` union select cast(id as signed) from music) as dt(c0)"
                   }
                 ]
               }
@@ -3586,6 +3590,196 @@
       "TablesUsed": [
         "user.music",
         "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "mixed reference UNION ordering across keyspaces",
+    "query": "select id from ref union all select id from user union select id from unsharded order by id",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from ref union all select id from user union select id from unsharded order by id",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(0|1) ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:2)",
+              "1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id), weight_string(id) from ref where 1 != 1 union select id, weight_string(id), weight_string(id) from `user` where 1 != 1",
+                    "Query": "select id, weight_string(id), weight_string(id) from ref union select id, weight_string(id), weight_string(id) from `user`"
+                  },
+                  {
+                    "OperatorType": "SimpleProjection",
+                    "Columns": "0,1,1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Unsharded",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                        "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from unsharded) as dt(c0)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "mixed UNION ordering across keyspaces",
+    "query": "select id from user union all select id from unsharded union select id from user order by id",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user union all select id from unsharded union select id from user order by id",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(0|1) ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Distinct",
+            "Collations": [
+              "(0:2)",
+              "1"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Concatenate",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id, weight_string(id), weight_string(id) from `user` where 1 != 1 union select id, weight_string(id), weight_string(id) from `user` where 1 != 1",
+                    "Query": "select id, weight_string(id), weight_string(id) from `user` union select id, weight_string(id), weight_string(id) from `user`"
+                  },
+                  {
+                    "OperatorType": "SimpleProjection",
+                    "Columns": "0,1,1",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Unsharded",
+                        "Keyspace": {
+                          "Name": "main",
+                          "Sharded": false
+                        },
+                        "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                        "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from unsharded) as dt(c0)"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "mixed UNION ordering and limit across keyspaces",
+    "query": "select id from user union all select id from unsharded union select id from user order by id limit 5",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id from user union all select id from unsharded union select id from user order by id limit 5",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "5",
+        "Inputs": [
+          {
+            "OperatorType": "Sort",
+            "Variant": "Memory",
+            "OrderBy": "(0|1) ASC",
+            "ResultColumns": 1,
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:2)",
+                  "1"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Concatenate",
+                    "Inputs": [
+                      {
+                        "OperatorType": "Route",
+                        "Variant": "Scatter",
+                        "Keyspace": {
+                          "Name": "user",
+                          "Sharded": true
+                        },
+                        "FieldQuery": "select id, weight_string(id), weight_string(id) from `user` where 1 != 1 union select id, weight_string(id), weight_string(id) from `user` where 1 != 1",
+                        "Query": "select id, weight_string(id), weight_string(id) from `user` union select id, weight_string(id), weight_string(id) from `user`"
+                      },
+                      {
+                        "OperatorType": "SimpleProjection",
+                        "Columns": "0,1,1",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Unsharded",
+                            "Keyspace": {
+                              "Name": "main",
+                              "Sharded": false
+                            },
+                            "FieldQuery": "select dt.c0 as id, weight_string(dt.c0) from (select id from unsharded where 1 != 1) as dt(c0) where 1 != 1",
+                            "Query": "select dt.c0 as id, weight_string(dt.c0) from (select distinct id from unsharded) as dt(c0)"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
         "user.user"
       ]
     }

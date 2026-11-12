@@ -218,12 +218,15 @@ func (s *planTestSuite) TestDistinctUnionLimitIsPushedIntoLocalRoute() {
 	for _, query := range []string{
 		"select id from user union select id from music limit 10",
 		"select id from user union select 3 limit 10",
+		"select col from user union select col from unsharded limit 5",
 	} {
 		plan, err := TestBuilder(query, vw, vw.CurrentDb())
 		s.Require().NoError(err, query)
-		route, ok := plan.Instructions.(*engine.Route)
-		s.Require().True(ok, query)
-		s.Require().Contains(strings.ToLower(route.Query), "limit", query)
+		routes := routePrimitives(plan.Instructions)
+		s.Require().NotEmpty(routes, query)
+		for _, route := range routes {
+			s.Require().Contains(strings.ToLower(route.Query), "limit", query)
+		}
 	}
 }
 
@@ -247,8 +250,40 @@ func (s *planTestSuite) TestOuterDistinctOverUnionAllDoesNotPushLimitIntoArms() 
 	orderedRoutes := routePrimitives(ordered.Instructions)
 	s.Require().NotEmpty(orderedRoutes)
 	for _, route := range orderedRoutes {
-		s.Require().Contains(strings.ToLower(route.Query), "order by")
-		s.Require().Contains(strings.ToLower(route.Query), "limit :__upper_limit")
+		s.Require().NotContains(strings.ToLower(route.Query), "limit :__upper_limit")
+	}
+}
+
+func (s *planTestSuite) TestMixedUnionOrderingAcrossKeyspaces() {
+	for _, tracked := range []bool{false, true} {
+		env := vtenv.NewTestEnv()
+		vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+		if !tracked {
+			for _, name := range []string{"user", "music"} {
+				vschema.Keyspaces["user"].Tables[name].Columns = nil
+			}
+		}
+		vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+		s.Require().NoError(err)
+		s.addPKs(vschema, "user", []string{"user", "music"})
+		for _, query := range []string{
+			"select id from ref union all select id from user union select id from unsharded order by id",
+			"select id from user union all select id from unsharded union select id from user order by id",
+			"select id from user union all select id from unsharded union select id from user order by id limit 5",
+			"select col from user union all select col from unsharded union select col from user order by col limit 5",
+			"select cast(col as signed) as c from user union all select cast(col as signed) from unsharded union select cast(col as signed) from user order by c limit 5",
+			"select cast(col as signed) as c from user union select cast(col as signed) from unsharded order by c limit 5",
+			"select col from user union select col from music order by col limit 5",
+		} {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err, "tracking=%t query=%s", tracked, query)
+			for _, route := range routePrimitives(plan.Instructions) {
+				if strings.Contains(strings.ToLower(route.Query), "limit :__upper_limit") {
+					s.Require().Contains(strings.ToLower(route.Query), "order by", query)
+					s.Require().Contains(strings.ToLower(route.Query), "select distinct", query)
+				}
+			}
+		}
 	}
 }
 
@@ -316,6 +351,7 @@ func (s *planTestSuite) TestSpecialUnionProvenanceSurvivesEveryMergeSite() {
 		"select id from user where id = 1 union all select id from ref union all select id from user",
 		"select id from ref union all select id from user where id = 1 union all select id from user where id = 1 union all select id from user",
 		"select (select id from user where id = 1) from dual union all select id from user",
+		"select t.id from (select id from user where id = 1 union all select id from ref) t where t.id in (select u2.id from user u2 where u2.id = 1) or t.id = 5 union all select id from user",
 	}
 	for _, query := range queries {
 		s.Run(query, func() {
@@ -363,7 +399,9 @@ func (s *planTestSuite) TestReferenceOuterJoinDMLKeepsSingleRoutePlans() {
 		s.Run(query, func() {
 			plan, err := TestBuilder(query, vw, vw.CurrentDb())
 			s.Require().NoError(err)
-			s.Require().IsType(&engine.Route{}, plan.Instructions)
+			update, ok := plan.Instructions.(*engine.Update)
+			s.Require().True(ok)
+			s.Require().Equal(engine.Scatter, update.Opcode)
 		})
 	}
 }
@@ -378,9 +416,11 @@ func (s *planTestSuite) TestReferenceOuterJoinHonorsCrossKeyspaceReadPolicy() {
 
 	plan, err := TestBuilder("select r.id from source_of_ref r left join user u on u.id = r.id", vw, vw.CurrentDb())
 	s.Require().NoError(err)
-	route, ok := plan.Instructions.(*engine.Route)
-	s.Require().True(ok)
-	s.Require().Equal("main", route.Keyspace.Name)
+	routes := routePrimitives(plan.Instructions)
+	s.Require().NotEmpty(routes)
+	for _, route := range routes {
+		s.Require().Equal("user", route.Keyspace.Name)
+	}
 }
 
 func (s *planTestSuite) TestReferenceUnionProvenanceSurvivesMergedCTE() {

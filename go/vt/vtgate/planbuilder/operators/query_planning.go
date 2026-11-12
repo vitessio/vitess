@@ -197,7 +197,7 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	// isn't INNER or targeting a single shard, we cannot safely perform this rewrite.
 	_, isDual := rb.Routing.(*DualRouting)
 	_, isAnyShard := rb.Routing.(*AnyShardRouting)
-	if (isDual || isAnyShard) &&
+	if ctx.SemTable.DMLTargets.IsEmpty() && (isDual || isAnyShard) &&
 		(!jm.joinType.IsInner() && !r.Routing.OpCode().IsSingleShard()) {
 		// to check the resulting opcode, we've used the original predicates.
 		// Since we are not using them, we need to restore the argument versions of the predicates
@@ -592,7 +592,7 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 	for _, order := range orderToPush {
 		hasOrderingToPush = hasOrderingToPush || len(order) > 0
 	}
-	if hasDistinctBeforeRoute(in.Source) && !hasOrderingToPush {
+	if (hasOrdering(in.Source) && !hasOrderingToPush) || hasDistinctBeforeRoute(in.Source) {
 		debugNoRewrite("limit push blocked: VTGate DISTINCT needs all input rows before deduplication")
 		return in, NoRewrite
 	}
@@ -633,6 +633,16 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 	TopDown(in.Source, TableID, visitor, shouldVisit)
 
 	return in, result
+}
+
+func hasOrdering(op Operator) bool {
+	switch op.(type) {
+	case *Route:
+		return false
+	case *Ordering:
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), hasOrdering)
 }
 
 // findOrderingInSourceChain finds an Ordering above a Window that can be pushed
@@ -768,13 +778,29 @@ func hasDistinctBeforeRoute(op Operator) bool {
 	case *Route:
 		return false
 	case *Distinct:
-		return containsUnionAll(op.Source) || hasDistinctUnionOutsideRoute(op.Source)
+		return (containsUnionAll(op.Source) || hasDistinctUnionOutsideRoute(op.Source)) && !unionRoutesDeduplicate(op.Source)
 	case *Union:
 		if op.distinct {
-			return true
+			return !unionRoutesDeduplicate(op)
 		}
 	}
 	return slices.ContainsFunc(op.Inputs(), hasDistinctBeforeRoute)
+}
+
+func unionRoutesDeduplicate(op Operator) bool {
+	if route, ok := op.(*Route); ok {
+		return isDistinct(route.Source)
+	}
+	inputs := op.Inputs()
+	if len(inputs) == 0 {
+		return false
+	}
+	for _, input := range inputs {
+		if !unionRoutesDeduplicate(input) {
+			return false
+		}
+	}
+	return true
 }
 
 func hasDistinctUnionOutsideRoute(op Operator) bool {
