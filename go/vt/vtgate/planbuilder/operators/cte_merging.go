@@ -110,5 +110,7 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		MergedWith:             []*Route{term},
 		Conditions:             conditions,
 		PreservesReferenceRows: preserved,
+
+		NoRoutesSpecialHandling: preserved && routesToOneShard(r),
 	}
 }

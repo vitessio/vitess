@@ -234,6 +234,20 @@ func TestARecursiveTermOverAReferenceTableNextToOneShard(t *testing.T) {
 		`[[INT64(1)] [INT64(2)]]`)
 }
 
+// TestARecursiveTermOverAReferenceTableNextToAShardThatTheValueDoesNotReach checks a recursive CTE
+// whose term keeps the zip_detail rows next to delivery_failure with f.id = 'abc'. The string maps to
+// no shard, and the CTE still has to return its rows, as the left join keeps them. The seed is
+// zip_detail 1, the first pass yields 2, and the second adds nothing because of z.id < 2.
+func TestARecursiveTermOverAReferenceTableNextToAShardThatTheValueDoesNotReach(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	conn, closer := start(t)
+	defer closer()
+
+	utils.AssertMatches(t, conn,
+		"with recursive c as (select id from "+shardedKeyspaceName+".zip_detail where id = 1 union all select z.id + 1 from c join "+shardedKeyspaceName+".zip_detail z on z.id = c.id left join "+shardedKeyspaceName+".delivery_failure f on f.id = 'abc' where z.id < 2) select id from c order by id",
+		`[[INT64(1)] [INT64(2)]]`)
+}
+
 // TestARecursiveTermOverAReferenceTableProbingOneShardByItsColumn checks a recursive CTE whose term
 // probes delivery_failure with f.id = z.id, a column of the reference table. The probe goes to one
 // shard per row, so the zip_detail rows are read once. No delivery_failure has the reason, so the left

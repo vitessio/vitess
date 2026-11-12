@@ -57,6 +57,11 @@ type (
 		// each of them once per shard.
 		PreservesReferenceRows bool
 
+		// NoRoutesSpecialHandling makes the engine route run on an arbitrary shard when its
+		// single-shard routing finds no destination, so that the preserved reference rows still
+		// come back. The predicate that found none matches nothing there.
+		NoRoutesSpecialHandling bool
+
 		ResultColumns int
 	}
 
