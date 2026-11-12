@@ -19,6 +19,8 @@ package vtgate
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/acl/acltest"
 	"vitess.io/vitess/go/test/utils"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
@@ -977,4 +980,36 @@ func TestBinlogDumpGTID(t *testing.T) {
 		}, noopSend)
 		require.NoError(t, err)
 	})
+}
+
+// TestDebugBalancerHandler checks that /debug/balancer requires the DEBUGGING
+// role: it is served without a restrictive policy and under read-only, and
+// refused under deny-all.
+func TestDebugBalancerHandler(t *testing.T) {
+	vtg, _, _ := createVtgateEnv(t)
+
+	tests := []struct {
+		mode     acltest.Mode
+		wantCode int
+	}{
+		{acltest.AllowAll, http.StatusOK},
+		{acltest.ReadOnly, http.StatusOK},
+		{acltest.DenyAll, http.StatusForbidden},
+	}
+	for _, tt := range tests {
+		t.Run(tt.mode.String(), func(t *testing.T) {
+			acltest.SetMode(t, tt.mode)
+
+			rec := httptest.NewRecorder()
+			vtg.debugBalancerHandler(rec, httptest.NewRequest(http.MethodGet, "/debug/balancer", nil))
+
+			assert.Equal(t, tt.wantCode, rec.Code)
+			if tt.wantCode == http.StatusOK {
+				assert.Contains(t, rec.Body.String(), "Balancer mode")
+			} else {
+				// The handler must stop after the error and write nothing else.
+				assert.Equal(t, acltest.DeniedBody(tt.mode), rec.Body.String())
+			}
+		})
+	}
 }

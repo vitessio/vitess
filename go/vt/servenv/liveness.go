@@ -31,5 +31,7 @@ import (
 func init() {
 	HTTPHandleFunc("/debug/liveness", func(rw http.ResponseWriter, r *http.Request) {
 		// Do nothing. Return success immediately.
+		// Note: This endpoint is intentionally unauthenticated and does not check ACLs,
+		// allowing external orchestrators (e.g., Kubernetes liveness probes) to probe process health.
 	})
 }

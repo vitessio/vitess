@@ -20,14 +20,24 @@ import (
 	"fmt"
 	"net/http"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/vt/logutil"
 )
 
 func init() {
 	OnInit(func() {
-		HTTPHandleFunc("/debug/flushlogs", func(w http.ResponseWriter, r *http.Request) {
-			logutil.Flush()
-			fmt.Fprint(w, "flushed")
-		})
+		HTTPHandleFunc("/debug/flushlogs", flushLogsHandler)
 	})
+}
+
+// flushLogsHandler flushes buffered logs. Like the other debug toggles such as
+// /debug/blockprofilerate, it requires the DEBUGGING role, so the built-in
+// read-only policy keeps allowing it.
+func flushLogsHandler(w http.ResponseWriter, r *http.Request) {
+	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
+		acl.SendError(w, err)
+		return
+	}
+	logutil.Flush()
+	fmt.Fprint(w, "flushed")
 }
