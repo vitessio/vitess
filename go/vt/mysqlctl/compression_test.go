@@ -24,7 +24,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
+	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +36,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 )
 
@@ -329,6 +333,55 @@ func TestExternalCompressors(t *testing.T) {
 
 			decompressor.Close()
 			assert.Equal(t, data, decompressed.Bytes())
+		})
+	}
+}
+
+// TestExternalCompressorLogOmitsFlags checks that the command line that an
+// external compressor and decompressor log is the binary and a placeholder for
+// the operator's arguments, which can hold credentials, and that the command
+// still gets the arguments as given.
+func TestExternalCompressorLogOmitsFlags(t *testing.T) {
+	const secret = "compressor_secret_7e3a"
+	// The fake command records its arguments, one per line, and copies stdin
+	// to stdout.
+	binary := path.Join(t.TempDir(), "compress.sh")
+	argsFile := path.Join(t.TempDir(), "args")
+	generateTestFile(t, binary, "#!/bin/bash\nprintf '%s\\n' \"$@\" > '"+argsFile+"'\ncat")
+	withArgs := binary + " --password=" + secret + " -k '" + secret + " 2'"
+	compress := func(ctx context.Context, cmdStr string, logger logutil.Logger) (io.Closer, error) {
+		return newExternalCompressor(ctx, cmdStr, io.Discard, logger)
+	}
+	decompress := func(ctx context.Context, cmdStr string, logger logutil.Logger) (io.Closer, error) {
+		return newExternalDecompressor(ctx, cmdStr, strings.NewReader(""), logger)
+	}
+
+	tests := []struct {
+		name, cmdStr, message, wantArgs, wantLogged string
+		start                                       func(context.Context, string, logutil.Logger) (io.Closer, error)
+	}{
+		{"compressor", withArgs, "Compressing using external command", "--password=" + secret + "\n-k\n" + secret + " 2\n", binary + " <--external-compressor>", compress},
+		{"decompressor", withArgs, "Decompressing using external command", "--password=" + secret + "\n-k\n" + secret + " 2\n", binary + " <--external-decompressor>", decompress},
+		{"no arguments", binary, "Compressing using external command", "\n", binary, compress},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logs := logtest.Capture(t, slog.LevelInfo)
+			stream := logutil.NewMemoryLogger()
+			c, err := tt.start(t.Context(), tt.cmdStr, logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream))
+			require.NoError(t, err)
+			require.NoError(t, c.Close())
+
+			args, err := os.ReadFile(argsFile)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantArgs, string(args))
+
+			r := logs.Record(t, tt.message)
+			assert.Equal(t, "INFO", r["level"])
+			assert.Equal(t, tt.wantLogged, r["exec_cmd"])
+			assert.NotContains(t, logs.String(), secret)
+			assert.Contains(t, stream.String(), tt.wantLogged)
+			assert.NotContains(t, stream.String(), secret)
 		})
 	}
 }
