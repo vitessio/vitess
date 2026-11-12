@@ -263,7 +263,7 @@ func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func(
 		if !lt.isHexOrBitLiteral() || !rt.isHexOrBitLiteral() {
 			asm_ins_bb()
 			c.asm.jumpDestination(skip1, skip2)
-			return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+			return ctype{Type: sqltypes.VarBinary, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationBinary}, nil
 		}
 	}
 
@@ -298,7 +298,7 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 			c.asm.BitShiftRight_bu()
 		}
 		c.asm.jumpDestination(skip1, skip2)
-		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationBinary}, nil
 	}
 
 	lt = c.compileToBitwiseUint64(lt, 2)

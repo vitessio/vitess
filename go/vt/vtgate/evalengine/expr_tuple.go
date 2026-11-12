@@ -47,14 +47,17 @@ func (tuple TupleExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (tuple TupleExpr) compile(c *compiler) (ctype, error) {
+	var f typeFlag
 	for _, arg := range tuple {
-		_, err := arg.compile(c)
+		ct, err := arg.compile(c)
 		if err != nil {
 			return ctype{}, err
 		}
+		// A NULL element can make an IN over this tuple NULL.
+		f |= ct.Flag & flagNullable
 	}
 	c.asm.PackTuple(len(tuple))
-	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
+	return ctype{Type: sqltypes.Tuple, Flag: f, Col: collationBinary}, nil
 }
 
 func (tuple TupleExpr) IsExpr() {}

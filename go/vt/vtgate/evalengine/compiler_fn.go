@@ -82,5 +82,5 @@ func (c *compiler) compileFn_length(arg IR, asm_ins func()) (ctype, error) {
 	asm_ins()
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(str.Flag)}, nil
 }

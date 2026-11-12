@@ -573,7 +573,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_REGEXP_INSTR(icuregex.NewMatcher(p), colldata.Lookup(merged.Collation).Charset(), len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | flagIsBoolean}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | nullableFlags(pos.Flag|occ.Flag|returnOpt.Flag|matchType.Flag) | flagIsBoolean}, nil
 }
 
 var _ IR = (*builtinRegexpInstr)(nil)
@@ -679,7 +679,7 @@ func (r *builtinRegexpSubstr) compileSlow(c *compiler, input, pat, pos, occ, mat
 
 	c.asm.Fn_REGEXP_SUBSTR_slow(merged, flags, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag | flagNullable}, nil
 }
 
 func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
@@ -749,7 +749,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_REGEXP_SUBSTR(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag | flagNullable}, nil
 }
 
 var _ IR = (*builtinRegexpSubstr)(nil)

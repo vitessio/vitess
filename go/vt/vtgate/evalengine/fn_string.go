@@ -1111,7 +1111,7 @@ func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
 
 		c.asm.Fn_WEIGHT_STRING(typ, *call.Len)
 		c.asm.jumpDestination(skip)
-		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable, Col: collationBinary}, nil
 	}
 
 	switch str.Type {

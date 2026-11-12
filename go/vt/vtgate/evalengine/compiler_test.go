@@ -1143,6 +1143,109 @@ func TestBindVarLiteralMalformed(t *testing.T) {
 	}
 }
 
+// TestInTupleBindVarNull checks that IN over a tuple bind variable that holds
+// a NULL is declared nullable, so that the compiled consumer of its NULL result
+// checks for it.
+func TestInTupleBindVarNull(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`1 IN ::list`, `NULL`},
+		{`1 NOT IN ::list`, `NULL`},
+		{`LENGTH(1 IN ::list)`, `NULL`},
+		{`(1 NOT IN ::list) + 1`, `NULL`},
+		{`2 IN ::list`, `INT64(1)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	list := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(2)), sqltypes.ValueToProto(sqltypes.NULL)},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{"list": list}, evalengine.NewEmptyVCursor(venv, nil))
+
+			interpreted, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, interpreted.String())
+
+			var res evalengine.EvalResult
+			require.NotPanics(t, func() {
+				res, err = env.Evaluate(converted)
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+
+			typ, err := env.TypeOf(converted)
+			require.NoError(t, err)
+			assert.True(t, typ.Nullable())
+		})
+	}
+}
+
+// TestUntypedColumnNullRow checks a column that has neither a static type nor
+// field metadata, and so takes its type from the row value: a NULL value makes
+// it nullable, like a NULL literal.
+func TestUntypedColumnNullRow(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`column0`, `NULL`},
+		{`LENGTH(column0)`, `NULL`},
+		{`column0 + 1`, `NULL`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	values := []sqltypes.Value{sqltypes.NULL}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     evalengine.FieldResolver(makeFields(values)).Column,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = values
+
+			typ, err := env.TypeOf(translated)
+			require.NoError(t, err)
+			assert.True(t, typ.Nullable())
+
+			// A bare column is evaluated as it is; anything around it is compiled
+			// for the column's type.
+			if untyped, ok := translated.(*evalengine.UntypedExpr); ok {
+				translated, err = untyped.Compile(env)
+				require.NoError(t, err)
+			}
+			var res evalengine.EvalResult
+			require.NotPanics(t, func() {
+				res, err = env.Evaluate(translated)
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+		})
+	}
+}
+
 type testVcursor struct {
 	lastInsertID *uint64
 	env          *vtenv.Environment

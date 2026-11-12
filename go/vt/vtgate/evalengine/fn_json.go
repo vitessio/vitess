@@ -132,8 +132,6 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 		return ctype{}, err
 	}
 
-	// Handle `NULL` arguments
-	nullable := doct.nullable()
 	skip := c.compileNullCheck1(doct)
 
 	jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
@@ -144,13 +142,9 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 	staticPaths := make([]staticPath, 0, len(call.Arguments[1:]))
 
 	for _, arg := range call.Arguments[1:] {
-		argType, err := arg.compile(c)
+		_, err := arg.compile(c)
 		if err != nil {
 			return ctype{}, err
-		}
-
-		if !nullable {
-			nullable = argType.nullable()
 		}
 
 		if arg.constant() {
@@ -170,11 +164,8 @@ func (call *builtinJSONExtract) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_JSON_EXTRACT(len(call.Arguments[1:]), staticPaths)
 	c.asm.jumpDestination(skip)
 
-	if nullable {
-		// If any argument is nullable, the result is nullable too
-		jt.Flag |= flagNullable
-	}
-
+	// A path that matches nothing returns NULL.
+	jt.Flag |= flagNullable
 	return jt, nil
 }
 

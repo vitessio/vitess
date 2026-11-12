@@ -225,6 +225,7 @@ func FnJSONExtract(yield Query) {
 	yield(`JSON_EXTRACT('{"a": 1}', '$.b')`, nil, false)
 	yield(`JSON_EXTRACT('{"a": 1}', '$.b', '$.c')`, nil, false)
 	yield(`JSON_EXTRACT('[1,2,3]', '$[10]')`, nil, false)
+	yieldNested(yield, `JSON_EXTRACT('{"a": 1}', '$.b')`, `JSON_EXTRACT('[1,2,3]', '$[10]')`, `JSON_UNQUOTE(JSON_EXTRACT('{"a": 1}', '$.b'))`)
 
 	yield(`JSON_EXTRACT('{invalid}', '$.a')`, nil, false)
 	yield(`JSON_EXTRACT('not json', '$.a')`, nil, false)
@@ -340,6 +341,8 @@ func CaseExprWithPredicate(yield Query) {
 			), nil, false)
 		})
 	})
+
+	yieldNested(yield, "case when 1=2 then 1 end", "case when null then 'a' end")
 }
 
 func FnCeil(yield Query) {
@@ -569,6 +572,8 @@ func FnLog(yield Query) {
 			yield(fmt.Sprintf("LOG(%s, %s)", num1, num2), nil, false)
 		}
 	}
+
+	yieldNested(yield, "LOG(0, 1)", "LOG(2, 0)")
 }
 
 func FnLog10(yield Query) {
@@ -633,6 +638,8 @@ func FnPow(yield Query) {
 			yield(fmt.Sprintf("POWER(%s, %s)", num1, num2), nil, false)
 		}
 	}
+
+	yieldNested(yield, "POW(0, -1)", "POWER(10, 400)")
 }
 
 func FnSign(yield Query) {
@@ -681,6 +688,8 @@ func FnRound(yield Query) {
 			yield(fmt.Sprintf("ROUND(%s, %s)", num1, num2), nil, false)
 		}
 	}
+
+	yieldNested(yield, "ROUND(1.5, NULL)", "ROUND(2.5e0, NULL)", "ROUND(3, NULL)")
 }
 
 func FnTruncate(yield Query) {
@@ -701,6 +710,8 @@ func FnTruncate(yield Query) {
 			yield(fmt.Sprintf("TRUNCATE(%s, %s)", num1, num2), nil, false)
 		}
 	}
+
+	yieldNested(yield, "TRUNCATE(1.5, NULL)", "TRUNCATE(2.5e0, NULL)", "TRUNCATE(3, NULL)")
 }
 
 func FnCrc32(yield Query) {
@@ -816,6 +827,8 @@ func FnSHA2(yield Query) {
 			yield(fmt.Sprintf("SHA2(%s, %s)", num, bits), nil, false)
 		}
 	}
+
+	yieldNested(yield, "SHA2('a', 1)", "SHA2('a', NULL)")
 }
 
 func FnRandomBytes(yield Query) {
@@ -879,6 +892,8 @@ func Base64(yield Query) {
 		yield(fmt.Sprintf("FROM_BASE64(%s)", lhs), nil, false)
 		yield(fmt.Sprintf("TO_BASE64(%s)", lhs), nil, false)
 	}
+
+	yieldNested(yield, "FROM_BASE64('!')", "FROM_BASE64(1)")
 }
 
 func Conversion(yield Query) {
@@ -1069,6 +1084,8 @@ func BitwiseOperators(yield Query) {
 			}
 		}
 	}
+
+	yieldNested(yield, "_binary 'ab' << NULL", "_binary 'ab' >> NULL", "_binary 'ab' & UNHEX('zz')")
 }
 
 func WeightString(yield Query) {
@@ -1699,6 +1716,8 @@ func FnCharLength(yield Query) {
 		yield(fmt.Sprintf("CHAR_LENGTH(%s)", str), nil, false)
 		yield(fmt.Sprintf("CHARACTER_LENGTH(%s)", str), nil, false)
 	}
+
+	yieldNested(yield, "CHAR_LENGTH(NULL)")
 }
 
 func FnLength(yield Query) {
@@ -1706,12 +1725,16 @@ func FnLength(yield Query) {
 		yield(fmt.Sprintf("LENGTH(%s)", str), nil, false)
 		yield(fmt.Sprintf("OCTET_LENGTH(%s)", str), nil, false)
 	}
+
+	yieldNested(yield, "LENGTH(NULL)")
 }
 
 func FnBitLength(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("BIT_LENGTH(%s)", str), nil, false)
 	}
+
+	yieldNested(yield, "BIT_LENGTH(NULL)")
 }
 
 func FnAscii(yield Query) {
@@ -2054,6 +2077,8 @@ func InStatement(yield Query) {
 		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil, false)
 		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil, false)
 	})
+
+	yieldNested(yield, "1 IN (2, NULL)", "1 NOT IN (2, NULL)", "(1, 2) IN ((1, NULL))")
 }
 
 func FnNow(yield Query) {
@@ -2089,6 +2114,8 @@ func FnInfo(yield Query) {
 	for _, fn := range fns {
 		yield(fn, nil, false)
 	}
+
+	yieldNested(yield, "DATABASE()", "SCHEMA()")
 }
 
 func FnDateFormat(yield Query) {
@@ -2797,6 +2824,8 @@ func RegexpInstr(yield Query) {
 	for _, q := range mysqlDocSamples {
 		yield(q, nil, false)
 	}
+
+	yieldNested(yield, `REGEXP_INSTR('dog cat dog', 'DOG', NULL, 2, 1, 'c')`, `REGEXP_INSTR('dog cat dog', 'DOG', 1, NULL, 1, 'c')`)
 }
 
 func RegexpSubstr(yield Query) {
@@ -2864,6 +2893,8 @@ func RegexpSubstr(yield Query) {
 	for _, q := range mysqlDocSamples {
 		yield(q, nil, false)
 	}
+
+	yieldNested(yield, `REGEXP_SUBSTR('abc', 'x')`, `REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'c')`)
 }
 
 func RegexpReplace(yield Query) {

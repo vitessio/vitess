@@ -86,7 +86,11 @@ func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 	}
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
-		return ctype{Type: value.Type(), Flag: 0, Col: c.Collation, Values: c.Values}, nil
+		var f typeFlag
+		if value.IsNull() {
+			f = flagNull | flagNullable
+		}
+		return ctype{Type: value.Type(), Flag: f, Col: c.Collation, Values: c.Values}, nil
 	}
 	return ctype{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no column at offset %d", c.Offset)
 }

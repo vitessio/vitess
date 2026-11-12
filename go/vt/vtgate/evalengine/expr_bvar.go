@@ -174,6 +174,8 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		c.asm.PushBVar_vector(bvar.Key)
 	case tt == sqltypes.Tuple:
 		c.asm.PushBVar_tuple(bvar.Key)
+		// Its values can be NULL, which can make an IN over it NULL.
+		typ.Flag |= flagNullable
 	default:
 		return ctype{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}

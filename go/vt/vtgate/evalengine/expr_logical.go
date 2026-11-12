@@ -711,7 +711,8 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	var f typeFlag
-	if ta.nullable {
+	// Without ELSE, a CASE that matches no WHEN returns NULL.
+	if ta.nullable || cs.Else == nil {
 		f |= flagNullable
 	}
 	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}

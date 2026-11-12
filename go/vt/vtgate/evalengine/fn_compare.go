@@ -686,7 +686,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		if nullable {
 			c.asm.adjustStack(-len(args) + 1)
 			c.asm.jumpDestination(jumps...)
-			return ctype{Type: sqltypes.Null, Flag: f, Col: collationBinary}, nil
+			return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationBinary}, nil
 		}
 	}
 	return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected argument for GREATEST/LEAST")

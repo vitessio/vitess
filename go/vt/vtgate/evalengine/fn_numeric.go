@@ -538,7 +538,7 @@ func (expr *builtinLog) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_LOG()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag|arg2.Flag) | flagNullable}, nil
 }
 
 type builtinLog10 struct {
@@ -638,7 +638,7 @@ func (expr *builtinPow) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_POW()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag|arg2.Flag) | flagNullable}, nil
 }
 
 type builtinSign struct {
@@ -1021,6 +1021,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 		}
 
 		skip2 = c.compileNullCheck1r(round)
+		arg.Flag |= nullableFlags(round.Flag)
 
 		switch round.Type {
 		case sqltypes.Int64:
@@ -1196,6 +1197,7 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 	}
 
 	skip2 := c.compileNullCheck1r(round)
+	arg.Flag |= nullableFlags(round.Flag)
 
 	switch round.Type {
 	case sqltypes.Int64:

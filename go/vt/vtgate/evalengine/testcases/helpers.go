@@ -89,6 +89,15 @@ func mustJSON(j string) sqltypes.Value {
 	return v
 }
 
+// yieldNested yields each expression, which returns NULL for non-NULL
+// arguments, as the argument of consumers that must see that NULL.
+func yieldNested(yield Query, exprs ...string) {
+	for _, expr := range exprs {
+		yield(fmt.Sprintf("LENGTH(%s)", expr), nil, false)
+		yield(fmt.Sprintf("(%s) + 1", expr), nil, false)
+	}
+}
+
 type bugs struct{}
 
 // CanCompare skips comparisons in CASE and IN expressions that behave in unexpected
