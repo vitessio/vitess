@@ -359,3 +359,38 @@ func TestRecursiveReferenceSeedLargerThanDepthLimit(t *testing.T) {
 		})
 	}
 }
+
+// Branching reference-seeded recursion must honor VTGate's configured row
+// budget in both modes, while the explicit override still permits the result.
+func TestRecursiveReferenceBranchingHonorsMemoryLimit(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (1)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (1)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	values := make([]string, 0, 22)
+	for parent := 1; parent < 12; parent++ {
+		values = append(values, "("+strconv.Itoa(2*parent-1)+","+strconv.Itoa(parent)+")", "("+strconv.Itoa(2*parent)+","+strconv.Itoa(parent)+")")
+	}
+	mcmp.Exec("insert into t2(id3, id4) values " + strings.Join(values, ","))
+	// Two term rows per input produce 4095 rows over twelve levels, safely
+	// bounded even when testing a binary without the row-budget guard.
+	query := "with recursive c as (select id from ref union all select u.id4+1 from t2 u join c on u.id4 = c.id) select id from c"
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			_, err := mcmp.VtConn.ExecuteFetch(query, 10000, true)
+			require.ErrorContains(mcmp.AsT(), err, "in-memory row count exceeded allowed limit of 2000")
+			override := strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1)
+			result, err := mcmp.VtConn.ExecuteFetch(override, 10000, true)
+			require.NoError(mcmp.AsT(), err)
+			expected, err := mcmp.MySQLConn.ExecuteFetch(query, 10000, true)
+			require.NoError(mcmp.AsT(), err)
+			utils.CompareVitessAndMySQLResults(mcmp.AsT(), override, mcmp.VtConn, result, expected, utils.CompareOptions{})
+			require.Len(mcmp.AsT(), result.Rows, 4095)
+		})
+	}
+}

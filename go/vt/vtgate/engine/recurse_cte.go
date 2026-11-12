@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -48,6 +49,10 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		return nil, err
 	}
 
+	if vcursor.ExceedsMaxMemoryRows(len(res.Rows)) {
+		return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+	}
+
 	// recurseRows contains the rows used in the next recursion
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
@@ -72,6 +77,9 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err != nil {
 				return nil, err
 			}
+			if vcursor.ExceedsMaxMemoryRows(len(res.Rows) + len(rresult.Rows)) {
+				return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+			}
 			recurseRows = append(recurseRows, rresult.Rows...)
 			res.Rows = append(res.Rows, rresult.Rows...)
 		}
@@ -93,15 +101,29 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// serialized.
 	var mu sync.Mutex
 
-	// Stream the seed, emitting its rows and collecting them to drive the first
-	// recursion level.
+	// Keep the seed/next frontier and the current level within one row budget.
+	// Latch callback errors so concurrent scatter chunks cannot resume delivery.
 	var recurseRows []sqltypes.Row
-	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
+	var currentLevelRows int
+	var callbackErr error
+	collect := func(result *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
+		if callbackErr != nil {
+			return callbackErr
+		}
+		if callbackErr = ctx.Err(); callbackErr != nil {
+			return callbackErr
+		}
+		if vcursor.ExceedsMaxMemoryRows(currentLevelRows + len(recurseRows) + len(result.Rows)) {
+			callbackErr = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+			return callbackErr
+		}
 		recurseRows = append(recurseRows, result.Rows...)
-		return callback(result)
-	})
+		callbackErr = callback(result)
+		return callbackErr
+	}
+	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, collect)
 	if err != nil {
 		return err
 	}
@@ -119,6 +141,7 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
+		currentLevelRows = len(theseRows)
 		for _, row := range theseRows {
 			for k, col := range r.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(row[col])
@@ -127,12 +150,7 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
-				mu.Lock()
-				defer mu.Unlock()
-				recurseRows = append(recurseRows, result.Rows...)
-				return callback(result)
-			})
+			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, collect)
 			if err != nil {
 				return err
 			}
