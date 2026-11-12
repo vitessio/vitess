@@ -17,11 +17,14 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -458,196 +461,6 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 		require.ErrorContains(t, err, "mysqlshell failed")
 		require.False(t, mysql.GlobalReadLock) // lock must be released.
 	})
-<<<<<<< HEAD
-||||||| parent of 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
-
-	t.Run("lock released and no MANIFEST written when the position check fails", func(t *testing.T) {
-		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
-		mysql.GlobalReadLock = false // clear lock status.
-		logger.Clear()
-		handle := &FakeBackupHandle{
-			Dir:           t.TempDir(),
-			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()},
-		}
-		bs.StartBackupReturn.BackupHandle = handle
-
-		// this simulates mysql shell completing without any issues.
-		generateTestFile(t, be.binaryName, fmt.Sprintf(
-			"#!/bin/bash\n>&2 echo %s; echo \"backup completed\"; sleep 0.01", mysqlShellLockMessage))
-
-		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
-		require.NoError(t, err)
-
-		failingParams := params
-		failingParams.VerifyPosition = func(context.Context, replication.Position) error {
-			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
-		}
-		result, err := be.ExecuteBackup(t.Context(), failingParams, bh)
-		require.ErrorContains(t, err, "errant GTIDs")
-		assert.Equal(t, BackupUnusable, result)
-		assert.Empty(t, handle.AddFileCalls, "a failed check must not write the MANIFEST")
-		require.False(t, mysql.GlobalReadLock) // lock must be released.
-	})
-}
-
-// TestMySQLShellLogsMaskPasswords checks that the mysqlsh command line that a
-// backup and a restore log has each password from --mysql-shell-flags masked,
-// in every form mysqlsh takes one, and the other arguments as given, and that
-// mysqlsh still gets the passwords.
-func TestMySQLShellLogsMaskPasswords(t *testing.T) {
-	const secret = "mysqlsh_secret_5d2b"
-	originalFlags, originalLocation, originalLoadFlags := mysqlShellFlags, mysqlShellBackupLocation, mysqlShellLoadFlags
-	t.Cleanup(func() {
-		mysqlShellFlags, mysqlShellBackupLocation, mysqlShellLoadFlags = originalFlags, originalLocation, originalLoadFlags
-	})
-	mysqlShellFlags = strings.ReplaceAll("--defaults-file=/dev/null --js -h localhost -uroot --user root "+
-		"--password={pw} --password {pw} -p{pw} -p {pw} -Ep{pw} --password1={pw} --password2 {pw} --password3={pw} "+
-		"--dbpassword={pw} --dbPassword={pw} --db-password={pw} --loose-password={pw} "+
-		"--uri=root:{pw}@localhost --uri root:{pw}@localhost mysql://root:{pw}@localhost:3306 --ssh=me:{pw}@bastion "+
-		"--uri=root:{pw}@host/db?ssl-ca=file:/x "+
-		"-C root:{pw}@localhost -S root:{pw}@localhost -i root:{pw}@localhost -mc root:{pw}@host:3306", "{pw}", secret)
-	wantArgs := "--defaults-file=/dev/null --js -h localhost -uroot --user root " +
-		"--password=**** --password **** -p**** -p **** -Ep**** --password1=**** --password2 **** --password3=**** " +
-		"--dbpassword=**** --dbPassword=**** --db-password=**** --loose-password=**** " +
-		"--uri=root:****@localhost --uri root:****@localhost mysql://root:****@localhost:3306 --ssh=me:****@bastion " +
-		"--uri=root:****@host/db?ssl-ca=file:/x " +
-		"-C root:****@localhost -S root:****@localhost -i root:****@localhost -mc root:****@host:3306 -e util."
-
-	newMysqld := func(t *testing.T) *FakeMysqlDaemon {
-		fakedb := fakesqldb.New(t)
-		t.Cleanup(fakedb.Close)
-		mysqld := NewFakeMysqlDaemon(fakedb)
-		t.Cleanup(mysqld.Close)
-		return mysqld
-	}
-	assertMasked := func(t *testing.T, logs *logtest.Logs, stream *logutil.MemoryLogger, binary string) {
-		record := logs.Record(t, "running mysql shell")
-		assert.Equal(t, "INFO", record["level"])
-		assert.Contains(t, record["exec_cmd"], binary+" "+wantArgs)
-		assert.NotContains(t, logs.String(), secret)
-		assert.NotContains(t, stream.String(), secret)
-	}
-
-	// fakeMySQLShell writes a mysqlsh that records its arguments, one per line,
-	// and fails. assertRanUnmasked checks that it got the flags as given.
-	fakeMySQLShell := func(t *testing.T, binary string) (argsFile string) {
-		argsFile = path.Join(t.TempDir(), "args")
-		generateTestFile(t, binary, "#!/bin/bash\nprintf '%s\\n' \"$@\" > '"+argsFile+"'\nexit 1")
-		return argsFile
-	}
-	assertRanUnmasked := func(t *testing.T, argsFile string) {
-		args, err := os.ReadFile(argsFile)
-		require.NoError(t, err)
-		assert.Contains(t, strings.ReplaceAll(string(args), "\n", " "), mysqlShellFlags+" -e util.")
-	}
-
-	t.Run("backup", func(t *testing.T) {
-		mysqlShellBackupLocation = "logical"
-		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
-		argsFile := fakeMySQLShell(t, be.binaryName)
-		logs := logtest.Capture(t, slog.LevelInfo)
-		stream := logutil.NewMemoryLogger()
-
-		_, err := be.ExecuteBackup(t.Context(), BackupParams{
-			TabletAlias: "test",
-			Logger:      logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream),
-			Mysqld:      newMysqld(t),
-		}, &FakeBackupHandle{Dir: t.TempDir(), NameV: t.Name()})
-		require.ErrorContains(t, err, "mysqlshell failed")
-		assertMasked(t, logs, stream, be.binaryName)
-		assertRanUnmasked(t, argsFile)
-	})
-
-	t.Run("restore", func(t *testing.T) {
-		mysqlShellBackupLocation = t.TempDir()
-		mysqlShellLoadFlags = `{"updateGtidSet": "replace", "skipBinlog": true, "progressFile": ""}`
-		bin := t.TempDir()
-		argsFile := fakeMySQLShell(t, path.Join(bin, "mysqlsh"))
-		t.Setenv("PATH", bin)
-		manifest, err := json.Marshal(MySQLShellBackupManifest{BackupLocation: path.Join(mysqlShellBackupLocation, "backup")})
-		require.NoError(t, err)
-		mysqld := newMysqld(t)
-		mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{"SHOW DATABASES": {}}
-		mysqld.ExpectedExecuteSuperQueryList = []string{"FAKE RESET ALL REPLICATION", "SET GLOBAL LOCAL_INFILE=1"}
-		logs := logtest.Capture(t, slog.LevelInfo)
-		stream := logutil.NewMemoryLogger()
-
-		_, err = (&MySQLShellBackupEngine{}).ExecuteRestore(t.Context(), RestoreParams{
-			Cnf:    &Mycnf{DataDir: path.Join(t.TempDir(), "data")},
-			Logger: logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream),
-			Mysqld: mysqld,
-		}, &FakeBackupHandle{ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(manifest)), nil
-		}})
-		require.ErrorContains(t, err, "mysqlshell failed")
-		assertMasked(t, logs, stream, path.Join(bin, "mysqlsh"))
-		assertRanUnmasked(t, argsFile)
-	})
-}
-
-// TestMaskURIPassword probes maskURIPassword across the connection-string
-// shapes mysqlsh accepts, since a wrong parse logs a password in clear.
-func TestMaskURIPassword(t *testing.T) {
-	cases := []struct {
-		name string
-		uri  string
-		want string
-	}{
-		{"no scheme", "root:secret@localhost", "root:****@localhost"},
-		{"with scheme", "mysql://root:secret@localhost:3306", "mysql://root:****@localhost:3306"},
-		{"ssh user info", "me:secret@bastion", "me:****@bastion"},
-		// mysqlsh's parser takes the first ":/" anywhere as the end of the
-		// scheme, so it rejects a schemeless string with a ":/" after the "@"
-		// (it reads everything up to that ":/" as the scheme). The password is
-		// real, so mask it.
-		{"colon-slash after host", "root:secret@host/db?ssl-ca=file:/x", "root:****@host/db?ssl-ca=file:/x"},
-		{"colon-slash after host with scheme", "mysql://root:secret@host/db?ssl-ca=file:/x", "mysql://root:****@host/db?ssl-ca=file:/x"},
-		{"percent-encoded at in password", "root:p%40ss@host", "root:****@host"},
-		{"colon in password", "user:pa:ss@host", "user:****@host"},
-		{"colon-run password", "user:::@host", "user:****@host"},
-		{"IPv6 host", "root:secret@[::1]:3306", "root:****@[::1]:3306"},
-		{"IPv6 host with scheme", "mysql://root:secret@[fe80::1]:3306", "mysql://root:****@[fe80::1]:3306"},
-		{"no password", "root@localhost", "root@localhost"},
-		{"no at sign", "localhost:3306", "localhost:3306"},
-		{"empty", "", ""},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := maskURIPassword(tc.uri)
-			assert.Equal(t, tc.want, got)
-			assert.NotContains(t, got, "secret")
-		})
-	}
-}
-=======
-
-	t.Run("lock released and no MANIFEST written when the position check fails", func(t *testing.T) {
-		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
-		mysql.GlobalReadLock = false // clear lock status.
-		logger.Clear()
-		handle := &FakeBackupHandle{
-			Dir:           t.TempDir(),
-			AddFileReturn: FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()},
-		}
-		bs.StartBackupReturn.BackupHandle = handle
-
-		// this simulates mysql shell completing without any issues.
-		generateTestFile(t, be.binaryName, fmt.Sprintf(
-			"#!/bin/bash\n>&2 echo %s; echo \"backup completed\"; sleep 0.01", mysqlShellLockMessage))
-
-		bh, err := bs.StartBackup(t.Context(), t.TempDir(), t.Name())
-		require.NoError(t, err)
-
-		failingParams := params
-		failingParams.VerifyPosition = func(context.Context, replication.Position) error {
-			return vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")
-		}
-		result, err := be.ExecuteBackup(t.Context(), failingParams, bh)
-		require.ErrorContains(t, err, "errant GTIDs")
-		assert.Equal(t, BackupUnusable, result)
-		assert.Empty(t, handle.AddFileCalls, "a failed check must not write the MANIFEST")
-		require.False(t, mysql.GlobalReadLock) // lock must be released.
-	})
 }
 
 // TestMySQLShellLogOmitsFlags checks that the mysqlsh command line that a
@@ -686,7 +499,7 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 	// assertRanAndLogged checks that mysqlsh got the flags and the "-e" call
 	// with the JSON flags as given, and that the logged command line is that
 	// call with placeholders for the flags and the JSON.
-	assertRanAndLogged := func(t *testing.T, logs *logtest.Logs, stream *logutil.MemoryLogger, binary, argsFile, function, jsonFlags, placeholder string) {
+	assertRanAndLogged := func(t *testing.T, logger *logutil.MemoryLogger, binary, argsFile, function, jsonFlags, placeholder string) {
 		recorded, err := os.ReadFile(argsFile)
 		require.NoError(t, err)
 		args := strings.Split(strings.TrimSuffix(string(recorded), "\n"), "\n")
@@ -696,28 +509,29 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 		require.True(t, strings.HasPrefix(call, "util."+function+"(\""), call)
 		require.True(t, strings.HasSuffix(call, "\", "+jsonFlags+")"), call)
 
-		record := logs.Record(t, "running mysql shell")
-		assert.Equal(t, "INFO", record["level"])
-		assert.Equal(t, binary+" <--mysql-shell-flags> -e "+strings.TrimSuffix(call, jsonFlags+")")+placeholder+")", record["exec_cmd"])
-		assert.NotContains(t, logs.String(), secret)
-		assert.Contains(t, stream.String(), placeholder)
-		assert.NotContains(t, stream.String(), secret)
+		var running []string
+		for _, event := range logger.LogEvents() {
+			if strings.HasPrefix(event.Value, "running ") {
+				running = append(running, event.Value)
+			}
+		}
+		assert.Equal(t, []string{"running " + binary + " <--mysql-shell-flags> -e " + strings.TrimSuffix(call, jsonFlags+")") + placeholder + ")"}, running)
+		assert.NotContains(t, logger.String(), secret)
 	}
 
 	t.Run("backup", func(t *testing.T) {
 		mysqlShellBackupLocation = t.TempDir()
 		be := &MySQLShellBackupEngine{binaryName: path.Join(t.TempDir(), "mysqlsh.sh")}
 		argsFile := fakeMySQLShell(t, be.binaryName)
-		logs := logtest.Capture(t, slog.LevelInfo)
-		stream := logutil.NewMemoryLogger()
+		logger := logutil.NewMemoryLogger()
 
 		_, err := be.ExecuteBackup(t.Context(), BackupParams{
 			TabletAlias: "test",
-			Logger:      logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream),
+			Logger:      logger,
 			Mysqld:      newMysqld(t),
 		}, &FakeBackupHandle{Dir: t.TempDir(), NameV: t.Name()})
 		require.ErrorContains(t, err, "mysqlshell failed")
-		assertRanAndLogged(t, logs, stream, be.binaryName, argsFile, "dumpInstance", mysqlShellDumpFlags, "<--mysql-shell-dump-flags>")
+		assertRanAndLogged(t, logger, be.binaryName, argsFile, "dumpInstance", mysqlShellDumpFlags, "<--mysql-shell-dump-flags>")
 	})
 
 	t.Run("restore", func(t *testing.T) {
@@ -731,18 +545,16 @@ func TestMySQLShellLogOmitsFlags(t *testing.T) {
 		mysqld := newMysqld(t)
 		mysqld.FetchSuperQueryMap = map[string]*sqltypes.Result{"SHOW DATABASES": {}}
 		mysqld.ExpectedExecuteSuperQueryList = []string{"FAKE RESET ALL REPLICATION", "SET GLOBAL LOCAL_INFILE=1"}
-		logs := logtest.Capture(t, slog.LevelInfo)
-		stream := logutil.NewMemoryLogger()
+		logger := logutil.NewMemoryLogger()
 
 		_, err = (&MySQLShellBackupEngine{}).ExecuteRestore(t.Context(), RestoreParams{
 			Cnf:    &Mycnf{DataDir: path.Join(t.TempDir(), "data")},
-			Logger: logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream),
+			Logger: logger,
 			Mysqld: mysqld,
 		}, &FakeBackupHandle{ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
 			return io.NopCloser(bytes.NewReader(manifest)), nil
 		}})
 		require.ErrorContains(t, err, "mysqlshell failed")
-		assertRanAndLogged(t, logs, stream, path.Join(bin, "mysqlsh"), argsFile, "loadDump", mysqlShellLoadFlags, "<--mysql-shell-load-flags>")
+		assertRanAndLogged(t, logger, path.Join(bin, "mysqlsh"), argsFile, "loadDump", mysqlShellLoadFlags, "<--mysql-shell-load-flags>")
 	})
->>>>>>> 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
 }

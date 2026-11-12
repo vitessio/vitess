@@ -182,14 +182,8 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 	cmd := exec.CommandContext(ctx, be.binaryName, args...)
 
-<<<<<<< HEAD
-	params.Logger.Infof("running %s", cmd.String())
-||||||| parent of 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
-	params.Logger.Info("running mysql shell", slog.String("exec_cmd", mysqlShellCommandString(cmd)))
-=======
-	params.Logger.Info("running mysql shell", slog.String("exec_cmd",
-		mysqlShellCommandString(cmd.Path, fmt.Sprintf("util.dumpInstance(%q, <--mysql-shell-dump-flags>)", location))))
->>>>>>> 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
+	params.Logger.Infof("running %s",
+		mysqlShellCommandString(cmd.Path, fmt.Sprintf("util.dumpInstance(%q, <--mysql-shell-dump-flags>)", location)))
 
 	stdoutReader, stdoutWriter := io.Pipe()
 	stderrReader, stderrWriter := io.Pipe()
@@ -396,14 +390,8 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 
 	cmd := exec.CommandContext(ctx, "mysqlsh", args...)
 
-<<<<<<< HEAD
-	params.Logger.Infof("running %s", cmd.String())
-||||||| parent of 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
-	params.Logger.Info("running mysql shell", slog.String("exec_cmd", mysqlShellCommandString(cmd)))
-=======
-	params.Logger.Info("running mysql shell", slog.String("exec_cmd",
-		mysqlShellCommandString(cmd.Path, fmt.Sprintf("util.loadDump(%q, <--mysql-shell-load-flags>)", location))))
->>>>>>> 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
+	params.Logger.Infof("running %s",
+		mysqlShellCommandString(cmd.Path, fmt.Sprintf("util.loadDump(%q, <--mysql-shell-load-flags>)", location)))
 
 	cmdOut, err := cmd.StdoutPipe()
 	if err != nil {
@@ -613,118 +601,6 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 	}
 }
 
-<<<<<<< HEAD
-||||||| parent of 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
-// mysqlShellCommandString returns cmd.String() with the passwords in mysqlsh's
-// arguments masked (see maskMySQLShellPasswords).
-func mysqlShellCommandString(cmd *exec.Cmd) string {
-	return strings.Join(append([]string{cmd.Path}, maskMySQLShellPasswords(cmd.Args[1:])...), " ")
-}
-
-// maskMySQLShellPasswords returns a copy of mysqlsh's arguments with each
-// password replaced by "****":
-//   - the value of --password, --password1, --password2, --password3 and the
-//     older --dbpassword, after "=" or as the next argument (mysqlsh reads
-//     that one only for --password2 and --password3, but it was meant as a
-//     password in every case). Names match in any case,
-//     without "-" and "_", and after "loose-" prefixes;
-//   - the rest of a group of short options from -p on (-p<password>,
-//     -Ep<password>), or the argument after a lone -p;
-//   - the password in a connection string ([scheme://]user:password@host)
-//     given to --uri or --ssh, or as an argument of its own.
-//
-// Any other argument, including the value that follows an option like --uri,
-// -h or -e, runs through maskURIPassword, so it is masked when it is a
-// connection string and kept when it is a plain value like a host. Only the
-// values of --execute, --file, --pyc and --pym are kept verbatim.
-func maskMySQLShellPasswords(args []string) []string {
-	optionName := func(option string) string {
-		name := strings.ToLower(strings.TrimPrefix(option, "--"))
-		for strings.HasPrefix(name, "loose-") || strings.HasPrefix(name, "loose_") {
-			name = name[len("loose-"):]
-		}
-		return strings.NewReplacer("-", "", "_", "").Replace(name)
-	}
-	isValue := func(i int) bool {
-		return i < len(args) && !strings.HasPrefix(args[i], "-")
-	}
-	masked := make([]string, len(args))
-	copy(masked, args)
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		switch {
-		case strings.HasPrefix(arg, "--"):
-			option, value, hasValue := strings.Cut(arg, "=")
-			switch optionName(option) {
-			case "password", "password1", "password2", "password3", "dbpassword":
-				if hasValue && value != "" {
-					masked[i] = option + "=****"
-				} else if !hasValue && isValue(i+1) {
-					i++
-					masked[i] = "****"
-				}
-			case "uri", "ssh":
-				if hasValue {
-					masked[i] = option + "=" + maskURIPassword(value)
-				}
-			case "execute", "pyc", "file", "pym":
-				if !hasValue && isValue(i+1) {
-					i++
-				}
-			}
-		case strings.HasPrefix(arg, "-") && len(arg) > 1:
-			// The first short option that takes a value takes the rest of
-			// the group, or else the next argument if its value is required.
-			j := strings.IndexAny(arg[1:], "CDPScefhipu") + 1
-			switch {
-			case j == 0:
-			case arg[j] == 'p' && j+1 < len(arg):
-				masked[i] = arg[:j+1] + "****"
-			case arg[j] == 'p' && isValue(i+1):
-				i++
-				masked[i] = "****"
-			}
-		default:
-			masked[i] = maskURIPassword(arg)
-		}
-	}
-	return masked
-}
-
-// maskURIPassword replaces the password in a connection string of the form
-// [scheme://][user[:password]@]host... with "****". It takes the user
-// information to end at the first "@", if no "/" comes before it, and only a
-// "://" (or ":/") that comes before that "@" to end an optional scheme.
-//
-// mysqlsh's own parser (Uri_parser::preprocess) instead takes the first ":/"
-// anywhere as the end of the scheme, so it rejects a schemeless string with a
-// ":/" after the "@", such as root:secret@host/db?ssl-ca=file:/x (it reads
-// root:secret@host/db?ssl-ca=file as the scheme and fails). Masking that string
-// is still right, since the password in it is real.
-func maskURIPassword(uri string) string {
-	at := strings.Index(uri, "@")
-	if at < 0 {
-		return uri
-	}
-	start := 0
-	if i := strings.Index(uri[:at], ":/"); i > 0 {
-		start = i + len(":/")
-		if strings.HasPrefix(uri[start:], "/") {
-			start++
-		}
-	}
-	userinfo := uri[start:at]
-	if strings.Contains(userinfo, "/") {
-		return uri
-	}
-	user, _, hasPassword := strings.Cut(userinfo, ":")
-	if !hasPassword {
-		return uri
-	}
-	return uri[:start] + user + ":****" + uri[at:]
-}
-
-=======
 // mysqlShellCommandString returns the mysqlsh command line to log: the binary, a
 // placeholder for the operator's --mysql-shell-flags, which can hold passwords,
 // and the "-e" call that Vitess appends, which the caller gives with a
@@ -733,7 +609,6 @@ func mysqlShellCommandString(binary, call string) string {
 	return fmt.Sprintf("%s <--mysql-shell-flags> -e %s", binary, call)
 }
 
->>>>>>> 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
 func cleanupMySQL(ctx context.Context, params RestoreParams, shouldDeleteUsers bool) error {
 	params.Logger.Infof("Cleaning up MySQL ahead of a restore")
 	result, err := params.Mysqld.FetchSuperQuery(ctx, "SHOW DATABASES")
