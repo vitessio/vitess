@@ -733,13 +733,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 			loggedArgs = append(loggedArgs, "<--xbstream-restore-flags>")
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
-<<<<<<< HEAD
-		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
-||||||| parent of 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
-		logger.Info("Executing xbstream cmd", slog.String("command", xbstreamProgram), slog.Any("args", redactEncryptKey(flagsToExec)))
-=======
-		logger.Info("Executing xbstream cmd", slog.String("command", xbstreamProgram), slog.Any("args", loggedArgs))
->>>>>>> 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
+		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, loggedArgs)
 		xbstreamCmd.Stdin = reader
 		xbstreamOut, err := xbstreamCmd.StdoutPipe()
 		if err != nil {
