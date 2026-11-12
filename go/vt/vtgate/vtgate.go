@@ -1037,7 +1037,7 @@ func formatError(err error) error {
 // HandlePanic recovers from panics, and logs / increment counters
 func (vtg *VTGate) HandlePanic(err *error) {
 	if x := recover(); x != nil {
-		log.Error("Uncaught panic", slog.Any("panic", x), slog.String("stack", string(tb.Stack(4))))
+		log.Error("Uncaught panic", slog.String("panic", fmt.Sprint(x)), slog.String("stack", string(tb.Stack(4))))
 		*err = fmt.Errorf("uncaught panic: %v, vtgate: %v", x, servenv.ListeningURL.String())
 		errorCounts.Add([]string{"Panic", "Unknown", "Unknown", vtrpcpb.Code_INTERNAL.String()}, 1)
 	}

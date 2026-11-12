@@ -1039,6 +1039,33 @@ func TestExecuteErrorWithTerseErrorsLogsNoClientData(t *testing.T) {
 	assert.NotContains(t, logs.String(), "sentinel")
 }
 
+func TestHandlePanicLogsPanicValue(t *testing.T) {
+	type panicValue struct {
+		code   int
+		reason string
+	}
+	tests := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{name: "string", value: "panic-string", want: "panic-string"},
+		{name: "error", value: errors.New("panic-error"), want: "panic-error"},
+		{name: "struct with unexported fields", value: panicValue{code: 7, reason: "panic-struct"}, want: "{7 panic-struct}"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logs := logtest.Capture(t, slog.LevelInfo)
+			err := func() (err error) {
+				defer (&VTGate{}).HandlePanic(&err)
+				panic(tt.value)
+			}()
+			require.ErrorContains(t, err, "uncaught panic: "+tt.want)
+			assert.Equal(t, tt.want, logs.Record(t, "Uncaught panic")["panic"])
+		})
+	}
+}
+
 func TestHTTPErrorfDoesNotLogTheRequest(t *testing.T) {
 	logs := logtest.Capture(t, slog.LevelInfo)
 	r := httptest.NewRequest(http.MethodGet, "/api/keyspaces/?token=query-sentinel", nil)
