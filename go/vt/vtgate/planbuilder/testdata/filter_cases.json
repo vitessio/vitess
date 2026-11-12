@@ -9858,5 +9858,11 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "A distinct aggregation inside a derived table is the SELECT's own when the aggregation is pushed under a join, so it is refused when the subquery feeds the right side a column the grouping doesn't determine (main plans it grouped by u.col, which MySQL rejects with ERROR 1055)",
+    "query": "select * from (select count(distinct u.id) from user u straight_join music m on m.col = u.col where u.foo in (select col from user_extra)) as t",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
+    "skip_e2e": true
   }
 ]
