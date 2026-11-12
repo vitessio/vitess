@@ -15,11 +15,11 @@ runs:
         # those errors only once snapd has given up on the install, and installing
         # a snap that is already installed exits 0, so another attempt is safe.
         attempts=5
-        for attempt in {1..$attempts}; do
+        for attempt in $(seq 1 "$attempts"); do
           if sudo snap install microceph --channel=squid/stable; then
             break
           fi
-          if [ "$attempt" -eq ${attempts} ]; then
+          if [ "$attempt" -eq "$attempts" ]; then
             exit 1
           fi
           echo "snap install failed (attempt ${attempt} of ${attempts}); retrying in 30 seconds"
