@@ -14,14 +14,15 @@ runs:
         # timeouts, EOFs, "unable to contact snap store"), so retry. snap reports
         # those errors only once snapd has given up on the install, and installing
         # a snap that is already installed exits 0, so another attempt is safe.
-        for attempt in 1 2 3; do
+        attempts=5
+        for attempt in {1..$attempts}; do
           if sudo snap install microceph --channel=squid/stable; then
             break
           fi
-          if [ "$attempt" -eq 3 ]; then
+          if [ "$attempt" -eq ${attempts} ]; then
             exit 1
           fi
-          echo "snap install failed (attempt $attempt of 3); retrying in 30 seconds"
+          echo "snap install failed (attempt ${attempt} of ${attempts}); retrying in 30 seconds"
           sleep 30
         done
         # Hold the snap so an automatic refresh cannot restart Ceph mid-job.
