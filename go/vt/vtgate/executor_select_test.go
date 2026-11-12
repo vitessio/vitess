@@ -5029,6 +5029,11 @@ func TestRecursiveTermOverReferenceTableNextToShardWithNoDestination(t *testing.
 			want:  "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from zip_detail as z left join `user` as u on u.id = :u_id left join user_extra as e on e.user_id = :u_id where z.id = c.id and z.id < 5 and (z.id = 7 or exists (select 1 from zip_detail as z2 where z2.id = z.id))) select id from c",
 		},
 		{
+			name:  "subquery that is not a predicate with its own preserved rows",
+			query: "with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id join `user` u on u.id = :u_id where z.id < 5 and (z.id = 7 or z.id in (select z2.id from zip_detail z2 left join `user` u2 on u2.id = :u_id))) select id from c",
+			want:  "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from zip_detail as z, `user` as u where z.id = c.id and z.id < 5 and u.id = :u_id and (z.id = 7 or z.id in (select z2.id from zip_detail as z2 left join `user` as u2 on u2.id = :u_id))) select id from c",
+		},
+		{
 			name:  "seed that keeps reference rows",
 			query: "with recursive c as (select z.id from zip_detail z left join zip_detail z2 on z2.id = z.id + 100 where z.id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id join `user` u on u.id = :u_id where z.id < 5) select id from c",
 			want:  "with recursive c as (select 1 from zip_detail as z left join zip_detail as z2 on z2.id = z.id + 100 where z.id = 1 union all select z.id + 1 from zip_detail as z, `user` as u where z.id = c.id and z.id < 5 and u.id = :u_id) select id from c",
