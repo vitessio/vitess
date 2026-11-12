@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -47,6 +48,8 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/reparenttestutil"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/semisyncmonitor"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -1803,4 +1806,46 @@ func TestDeferredReplicaStaysOutOfServiceDuringDemotion(t *testing.T) {
 
 	release()
 	require.NoError(t, <-finished)
+}
+
+// grantsFailDaemon fails the DBA grants wait, the last step of Start.
+type grantsFailDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+}
+
+func (grantsFailDaemon) WaitForDBAGrants(context.Context, time.Duration) error {
+	return errors.New("no DBA grants")
+}
+
+// TestStartFailureStopsReplicationInitWatcher checks that a Start failing after
+// it deferred replication initialization stops the watcher, which uses the topo
+// server that the caller may close once Start has returned.
+func TestStartFailureStopsReplicationInitWatcher(t *testing.T) {
+	ts := memorytopo.NewServer(t.Context(), "cell1")
+	t.Cleanup(ts.Close)
+	_, err := ts.GetOrCreateShard(t.Context(), "ks", "0")
+	require.NoError(t, err)
+	primary := newTestTablet(t, 2, "ks", "0", nil)
+	primary.Type = topodatapb.TabletType_PRIMARY
+	require.NoError(t, ts.CreateTablet(t.Context(), primary))
+	_, err = ts.UpdateShardFields(t.Context(), "ks", "0", func(si *topo.ShardInfo) error { si.PrimaryAlias = primary.Alias; return nil })
+	require.NoError(t, err)
+	holdInitializationShardLock(t, ts)
+
+	fakeDb := newTestMysqlDaemon(t, 1)
+	tm := &TabletManager{
+		BatchCtx:            t.Context(),
+		TopoServer:          ts,
+		MysqlDaemon:         grantsFailDaemon{fakeDb},
+		DBConfigs:           &dbconfigs.DBConfigs{},
+		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
+		QueryServiceControl: tabletservermock.NewController(),
+	}
+	t.Cleanup(tm.stopShardSync)
+	config := tabletenv.NewDefaultConfig()
+	config.DB = &dbconfigs.DBConfigs{}
+	err = tm.Start(newTestTablet(t, 1, "ks", "0", nil), config)
+	require.ErrorContains(t, err, "no DBA grants")
+	require.NotZero(t, tm.tmState.pendingReplicationInit, "Start should have deferred replication initialization")
+	assert.Error(t, tm.tmState.ctx.Err(), "the watcher's context should be canceled")
 }

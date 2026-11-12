@@ -479,6 +479,8 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 		tm.stopShardHealthMonitor()
 		tm.stopShardSync()
 		tm.stopRebuildKeyspace()
+		// Stops a deferred replication initialization's watcher.
+		tm.tmState.Close()
 	}()
 
 	ctx, cancel := context.WithTimeout(tm.BatchCtx, initTimeout)
