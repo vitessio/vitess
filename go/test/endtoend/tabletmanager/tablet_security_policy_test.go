@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -97,8 +99,12 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	err := cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
 	require.NoError(t, err)
 
-	// Requesting a deny-all security-policy.
-	clusterInstance.VtTabletExtraArgs = []string{"--security-policy", "deny-all"}
+	// Requesting a deny-all security-policy. The OpenTSDB URI makes the tablet
+	// serve /debug/opentsdb.
+	clusterInstance.VtTabletExtraArgs = []string{
+		"--security-policy", "deny-all",
+		"--opentsdb-uri", "file://" + path.Join(clusterInstance.TmpDirectory, "opentsdb.out"),
+	}
 	err = clusterInstance.StartVttablet(mTablet, false, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
@@ -122,10 +128,52 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 	url = fmt.Sprintf("http://localhost:%d/debug/liveness", mTablet.HTTPPort)
 	assertAllowedURLTest(t, url)
 
+	// /debug/opentsdb requires the DEBUGGING role.
+	url = fmt.Sprintf("http://localhost:%d/debug/opentsdb", mTablet.HTTPPort)
+	assertNotAllowedURLTest(t, url)
+
 	// Reset the VtTabletExtraArgs
 	clusterInstance.VtTabletExtraArgs = []string{}
 	// Tear down custom processes
 	killTablets(mTablet)
+
+	// /debug/gateway and /debug/balancer are served by vtgate, so start a
+	// second vtgate with the deny-all policy.
+	vtgate := startDenyAllVtgate(t)
+	for _, endpoint := range []string{"/debug/gateway", "/debug/balancer"} {
+		assertNotAllowedURLTest(t, fmt.Sprintf("http://localhost:%d%s", vtgate.Port, endpoint))
+	}
+}
+
+// startDenyAllVtgate starts a vtgate with --security-policy=deny-all next to
+// the cluster's own vtgate and tears it down when the test ends. It uses
+// freshly reserved ports and its own socket, query log and log directory, so
+// clusterInstance.VtgateProcess and clusterInstance.VtgateMySQLPort are left
+// untouched. Setup still works because its readiness check polls /debug/vars,
+// which no policy guards.
+func startDenyAllVtgate(t *testing.T) *cluster.VtgateProcess {
+	logDir := path.Join(clusterInstance.TmpDirectory, "vtgate_deny_all")
+	require.NoError(t, os.MkdirAll(logDir, 0o755))
+
+	extraArgs := append([]string{}, clusterInstance.VtGateExtraArgs...)
+	extraArgs = append(extraArgs, "--security-policy", "deny-all")
+	vtgate := cluster.VtgateProcessInstance(
+		clusterInstance.GetAndReservePort(),
+		clusterInstance.GetAndReservePort(),
+		clusterInstance.GetAndReservePort(),
+		cell,
+		cell,
+		hostname,
+		"PRIMARY",
+		clusterInstance.TopoProcess.Port,
+		logDir,
+		extraArgs,
+		clusterInstance.VtGatePlannerVersion)
+	vtgate.MySQLServerSocketPath = path.Join(clusterInstance.TmpDirectory, "deny_all.sock")
+
+	require.NoError(t, vtgate.Setup())
+	t.Cleanup(func() { assert.NoError(t, vtgate.TearDown()) })
+	return vtgate
 }
 
 func TestReadOnlySecurityPolicy(t *testing.T) {

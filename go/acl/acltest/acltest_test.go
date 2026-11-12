@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/acl"
 )
@@ -47,7 +48,7 @@ func TestSetMode(t *testing.T) {
 				if tt.allowed[role] {
 					assert.NoError(t, err, role)
 				} else {
-					assert.Error(t, err, role)
+					require.Error(t, err, role)
 					rec := httptest.NewRecorder()
 					acl.SendError(rec, err)
 					assert.Equal(t, DeniedBody(tt.mode), rec.Body.String(), role)
