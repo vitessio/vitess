@@ -9,6 +9,8 @@ permissions:
 jobs:
   auto_approve:
     name: Auto Approve Pull Request
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 

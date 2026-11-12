@@ -13,6 +13,8 @@ on:
 jobs:
   build:
     name: Create Release
+    # Skip the other vitessio repositories, such as vitess-security.
+    if: github.repository_owner != 'vitessio' || github.repository == 'vitessio/vitess'
     permissions:
       contents: write
       actions: read

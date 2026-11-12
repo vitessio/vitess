@@ -56,6 +56,15 @@ func TestSubqueriesHasValues(t *testing.T) {
 	mcmp.Exec("insert into t1(id1, id2) values (0,1),(1,2),(2,3),(3,4),(4,5),(5,6)")
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 IN (SELECT id1 FROM t1 WHERE id1 > 10)`, `[]`)
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE id1 NOT IN (SELECT id1 FROM t1 WHERE id1 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+
+	// Row IN and NOT IN subqueries that can't be merged bind each row as a tuple, also when they return no rows.
+	if utils.BinaryIsAtLeastAtVersion(24, "vtgate") {
+		mcmp.Exec("insert into t2(id3, id4) values (1, 2), (3, 4), (7, 8)")
+		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) IN (SELECT id3, id4 FROM t2) ORDER BY id2`, `[[INT64(2)] [INT64(4)]]`)
+		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) NOT IN (SELECT id3, id4 FROM t2) ORDER BY id2`, `[[INT64(1)] [INT64(3)] [INT64(5)] [INT64(6)]]`)
+		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) IN (SELECT id3, id4 FROM t2 WHERE id3 > 10)`, `[]`)
+		mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE (id1, id2) NOT IN (SELECT id3, id4 FROM t2 WHERE id3 > 10) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+	}
 }
 
 func TestNotINQueries(t *testing.T) {
@@ -218,6 +227,17 @@ func TestSubqueries(t *testing.T) {
 		// `SELECT id, name, (SELECT SUM(LENGTH(extra_info)) FROM user_extra) AS total_length_extra_info, COUNT(id) AS count_ids FROM user GROUP BY id, name ORDER BY (SELECT SUM(LENGTH(extra_info)) FROM user_extra)`,
 		// `SELECT id, name, (SELECT COUNT(*) FROM user_extra) AS total_extra_count, (SELECT SUM(LENGTH(extra_info)) FROM user_extra) AS total_length_extra_info, (SELECT AVG(LENGTH(extra_info)) FROM user_extra) AS avg_length_extra_info, (SELECT MAX(LENGTH(extra_info)) FROM user_extra) AS max_length_extra_info, (SELECT MIN(LENGTH(extra_info)) FROM user_extra) AS min_length_extra_info, SUM(id) AS sum_ids FROM user GROUP BY id, name HAVING (SELECT AVG(LENGTH(extra_info)) FROM user_extra) > 2`,
 		`SELECT id, name, (SELECT COUNT(*) FROM user_extra) + id AS total_extra_count_plus_id, AVG(id) AS avg_ids FROM user WHERE id < (SELECT MAX(user_id) FROM user_extra) GROUP BY id, name`,
+	}
+
+	// Row comparisons with value subqueries that can't be merged, including one that returns no rows, which
+	// compares as a row of NULLs.
+	if utils.BinaryIsAtLeastAtVersion(24, "vtgate") {
+		queries = append(queries,
+			`SELECT id FROM user WHERE (id, name) < (SELECT user_id, extra_info FROM user_extra WHERE user_id = 3 ORDER BY extra_info LIMIT 1) ORDER BY id`,
+			`SELECT id FROM user WHERE (id, 'info1') = (SELECT user_id, extra_info FROM user_extra WHERE user_id = 7)`,
+			`SELECT id FROM user WHERE (id, name) <=> (SELECT user_id, extra_info FROM user_extra WHERE user_id = 42)`,
+			`SELECT id, (id, name) >= (SELECT user_id, extra_info FROM user_extra WHERE user_id = 5) FROM user ORDER BY id`,
+		)
 	}
 
 	for idx, query := range queries {

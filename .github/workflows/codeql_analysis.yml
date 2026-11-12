@@ -14,7 +14,10 @@ permissions: read-all
 jobs:
   analyze:
     name: Analyze
-    runs-on: ubuntu-24.04
+    # vitess-security is private, so its GitHub-hosted runners are billed and
+    # smaller; it uses a CNCF VM the size of the public ubuntu-24.04 runner
+    # instead.
+    runs-on: ${{ github.repository == 'vitessio/vitess-security' && 'cncf-ubuntu-24.04-4-16-x86' || 'ubuntu-24.04' }}
     permissions:
       actions: read
       contents: read
@@ -37,11 +40,7 @@ jobs:
           persist-credentials: 'false'
 
       - name: Set up Go
-        # zizmor: ignore[cache-poisoning] this workflow publishes no artifacts
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+        uses: $/.github/actions/setup-go
 
       - name: Tune the OS
         uses: $/.github/actions/tune-os

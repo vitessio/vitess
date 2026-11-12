@@ -31,10 +31,14 @@ jobs:
           persist-credentials: 'false'
 
       - name: Set up Go
+        # The shared setup-go action is resolved from the matrix.branch
+        # checkout, where it may not exist or may be outdated. This job only
+        # compiles the small go-upgrade tool once a day, so caching is not
+        # worth it anyway.
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: ${{ (github.base_ref == 'main' || (github.base_ref == '' && github.ref_name == 'main')) && 'true' || 'false' }}
+          cache: false
 
       - name: Detect new version and update codebase
         env:

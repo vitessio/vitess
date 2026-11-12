@@ -51,6 +51,9 @@ func TestVtgateHealthCheck(t *testing.T) {
 	assert.Equal(t, 3, len(qr.Rows), "wrong number of results from show")
 }
 
+// TestVtgateReplicationStatusCheck checks the replication status vtgate shows
+// for replicas that stopped replicating, and that vtgate stops routing to a
+// replica once its lag grows past the high lag threshold.
 func TestVtgateReplicationStatusCheck(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
@@ -65,6 +68,29 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	expectNumRows := 2
 	numRows := len(qr.Rows)
 	assert.Equal(t, expectNumRows, numRows, fmt.Sprintf("wrong number of results from show vitess_replication_status. Expected %d, got %d", expectNumRows, numRows))
+
+	// Lower vtgate's lag thresholds so the replica passes the high one soon
+	// after replication stops. Restore the defaults afterward as the cluster
+	// is re-used.
+	vtgateProcess := &clusterInstance.VtgateProcess
+	t.Cleanup(func() {
+		vtgateProcess.Config.DiscoveryLowReplicationLag = "30s"
+		vtgateProcess.Config.DiscoveryHighReplicationLag = "2h"
+		require.NoError(t, vtgateProcess.RewriteConfiguration())
+		require.NoError(t, vtgateProcess.WaitForConfig(`"discovery_low_replication_lag":"30s"`))
+		require.NoError(t, vtgateProcess.WaitForConfig(`"discovery_high_replication_lag":"2h"`))
+	})
+	vtgateProcess.Config.DiscoveryLowReplicationLag = "5s"
+	vtgateProcess.Config.DiscoveryHighReplicationLag = "25s"
+	require.NoError(t, vtgateProcess.RewriteConfiguration())
+	require.NoError(t, vtgateProcess.WaitForConfig(`"discovery_low_replication_lag":"5s"`))
+	require.NoError(t, vtgateProcess.WaitForConfig(`"discovery_high_replication_lag":"25s"`))
+	replicaConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer replicaConn.Close()
+	utils.Exec(t, replicaConn, "use @replica")
+	replicaRead := "select id from customer limit 1"
+	utils.Exec(t, replicaConn, replicaRead)
 
 	// Disable VTOrc(s) recoveries so that it doesn't immediately repair/restart replication.
 	for _, vtorcProcess := range clusterInstance.VTOrcProcesses {
@@ -88,6 +114,11 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 		// Testing ExecuteMultiFetchAsDBA by running multiple commands in a single call:
 		_, err = clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("ExecuteMultiFetchAsDBA", clusterInstance.Keyspaces[0].Shards[0].Rdonly().Alias, "start replica sql_thread; start replica io_thread;")
 		require.NoError(t, err)
+		// Wait for vtgate to route to the caught-up replica again.
+		assert.Eventually(t, func() bool {
+			_, err := replicaConn.ExecuteFetch(replicaRead, 1, false)
+			return err == nil
+		}, 30*time.Second, time.Second, "vtgate did not route to the replica after replication restarted")
 	}()
 	time.Sleep(2 * time.Second) // Build up some replication lag
 	res, err := conn.ExecuteFetch("show vitess_replication_status", 2, false)
@@ -98,6 +129,15 @@ func TestVtgateReplicationStatusCheck(t *testing.T) {
 	rawLag := res.Named().Rows[0]["ReplicationLag"] // Let's just look at the first row
 	lagInt, _ := rawLag.ToInt64()                   // Don't check the error as the value could be "NULL"
 	assert.True(t, rawLag.IsNull() || lagInt > 0, "replication lag should be NULL or greater than 0 but was: %s", rawLag.ToString())
+
+	// The replica's lag now grows about 1s per 1s health update, less than
+	// 10% each time once it is past 10s. vtgate must still stop routing to
+	// the replica once that lag passes the 25s high threshold. The replica
+	// itself keeps serving, as its --unhealthy-threshold defaults to 2h.
+	assert.Eventually(t, func() bool {
+		_, err := replicaConn.ExecuteFetch(replicaRead, 1, false)
+		return err != nil && strings.Contains(err.Error(), "no healthy tablet available")
+	}, 60*time.Second, time.Second, "vtgate kept routing to a replica lagging past the high threshold")
 }
 
 func TestVtgateReplicationStatusCheckWithTabletTypeChange(t *testing.T) {

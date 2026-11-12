@@ -34,10 +34,16 @@ func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo
 		// we would end up with "//". in that case, we want "/".
 		nodePath = "/"
 	}
-	resp, err := s.cli.Get(ctx, nodePath,
+	opts := []clientv3.OpOption{
 		clientv3.WithPrefix(),
 		clientv3.WithSort(clientv3.SortByKey, clientv3.SortAscend),
-		clientv3.WithKeysOnly())
+	}
+	if !full {
+		// etcd 3.7+ servers omit the lease from keys-only responses,
+		// so a full listing must read values to detect ephemeral entries.
+		opts = append(opts, clientv3.WithKeysOnly())
+	}
+	resp, err := s.cli.Get(ctx, nodePath, opts...)
 	if err != nil {
 		return nil, convertError(err, dirPath)
 	}

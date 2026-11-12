@@ -315,7 +315,7 @@ func (asm *assembler) PushBVar_hexval(key string) {
 
 func push_json(env *ExpressionEnv, raw []byte) int {
 	var parser json.Parser
-	env.vm.stack[env.vm.sp], env.vm.err = parser.ParseBytes(raw)
+	env.vm.stack[env.vm.sp], env.vm.err = parser.ParseStored(raw)
 	env.vm.sp++
 	return 1
 }
