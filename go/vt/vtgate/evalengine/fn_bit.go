@@ -38,17 +38,24 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 
-	var count int
-	if b, ok := arg.(*evalBytes); ok && (b.isBinary() || isBinaryText(b.SQLType(), b.col.Collation)) && !b.isHexOrBitLiteral() {
-		binary := b.bytes
-		for _, b := range binary {
-			count += bits.OnesCount8(b)
-		}
-	} else {
-		u := evalToInt64(arg)
-		count = bits.OnesCount64(uint64(u.i))
+	return newEvalInt64(int64(bitCount(arg))), nil
+}
+
+// bitCount counts the bits of a binary string byte by byte, and those of any
+// other value as a number.
+func bitCount(e eval) int {
+	if b, ok := e.(*evalBytes); ok && (b.isBinary() || isBinaryText(b.SQLType(), b.col.Collation)) && !b.isHexOrBitLiteral() {
+		return bitCountBytes(b.bytes)
 	}
-	return newEvalInt64(int64(count)), nil
+	return bits.OnesCount64(uint64(evalToInt64(e).i))
+}
+
+func bitCountBytes(raw []byte) int {
+	var count int
+	for _, c := range raw {
+		count += bits.OnesCount8(c)
+	}
+	return count
 }
 
 // isBinaryText reports whether a character string type has the binary
@@ -67,8 +74,18 @@ func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(ct)
 
-	if (ct.Type == sqltypes.VarBinary || isBinaryText(ct.Type, ct.Col.Collation)) && !ct.isHexOrBitLiteral() {
+	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
 		c.asm.BitCount_b()
+		c.asm.jumpDestination(skip)
+		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
+	}
+
+	if isBinaryText(ct.Type, ct.Col.Collation) && !ct.isHexOrBitLiteral() {
+		// A character string with the binary collation is also the declared
+		// type of expressions whose value is a number, such as ROUND of such
+		// a string or COALESCE of one and a number, so the instruction checks
+		// that the value is a string.
+		c.asm.BitCount_x()
 		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
 	}

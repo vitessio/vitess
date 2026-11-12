@@ -992,6 +992,20 @@ func TestCompilerSingle(t *testing.T) {
 			collation:  collations.CollationUtf8mb4ID,
 			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
 		},
+		{
+			// BIT_COUNT counts the bits of the bytes of a binary string that a
+			// string function returns.
+			expression: `BIT_COUNT(REVERSE(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("1")},
+			result:     `INT64(3)`,
+		},
+		{
+			// ROUND of that string is declared with the type of the string,
+			// but it is a number, whose bits BIT_COUNT counts.
+			expression: `BIT_COUNT(ROUND(REVERSE(column0)))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("1")},
+			result:     `INT64(1)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

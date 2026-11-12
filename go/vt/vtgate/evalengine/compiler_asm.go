@@ -188,6 +188,22 @@ func (asm *assembler) BitCount_b() {
 	}, "BIT_COUNT BINARY(SP-1)")
 }
 
+// BitCount_x counts the bits of a value that is declared a binary string but
+// can be a number when it runs: byte by byte if it is a string, and as a
+// number otherwise.
+func (asm *assembler) BitCount_x() {
+	asm.emit(func(env *ExpressionEnv) int {
+		var count int
+		if b, ok := env.vm.stack[env.vm.sp-1].(*evalBytes); ok && !b.isHexOrBitLiteral() {
+			count = bitCountBytes(b.bytes)
+		} else {
+			count = bitCount(env.vm.stack[env.vm.sp-1])
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(count))
+		return 1
+	}, "BIT_COUNT (SP-1)")
+}
+
 func (asm *assembler) BitCount_u() {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalUint64)
