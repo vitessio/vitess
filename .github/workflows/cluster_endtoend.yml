@@ -225,7 +225,10 @@ jobs:
 
       - name: Install MicroCeph
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
-        timeout-minutes: 10
+        # Room for the action's 5 snap install attempts. Failures have taken up to
+        # 105 seconds each, so four of them and their pauses still leave time for a
+        # fifth attempt and the bootstrap and RGW setup.
+        timeout-minutes: 15
         uses: $/.github/actions/setup-microceph
 
       # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
