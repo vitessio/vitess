@@ -952,6 +952,22 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `-(CAST(0b110001 AS SIGNED))`,
 			result:     `INT64(-49)`,
 		},
+		{
+			// A number is converted to a string in the connection collation,
+			// which is the collation of the result.
+			expression: `REVERSE(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(12)},
+			result:     `VARCHAR("21")`,
+			collation:  collations.CollationUtf8mb4ID,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: `REPEAT(column0, 2)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(12)},
+			result:     `VARCHAR("1212")`,
+			collation:  collations.CollationUtf8mb4ID,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

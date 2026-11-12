@@ -1069,6 +1069,14 @@ func BitwiseOperatorsUnary(yield Query) {
 			yield(fmt.Sprintf("%s(%s)", op, rhs), nil, false)
 		}
 	}
+
+	// BIT_COUNT counts the bits of a binary string byte by byte, also when the
+	// binary string is the result of a string function.
+	yieldIn(yield, "BIT_COUNT(%s)",
+		"TRIM(0x31)", "LTRIM(0x31)", "RTRIM(0x31)", "TRIM(LEADING 'z' FROM 0x31)",
+		"LEFT(0x31, 1)", "RIGHT(0x31, 1)", "LPAD(0x31, 1, '0')", "RPAD(0x31, 1, '0')", "REVERSE(0x31)",
+		"REPEAT(_binary'1', 1)", "REPLACE(_binary'1', 'z', 'y')", "_binary'1' COLLATE 'binary'",
+	)
 }
 
 func BitwiseOperators(yield Query) {

@@ -19,6 +19,7 @@ package evalengine
 import (
 	"math/bits"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -38,7 +39,7 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var count int
-	if b, ok := arg.(*evalBytes); ok && b.isBinary() && !b.isHexOrBitLiteral() {
+	if b, ok := arg.(*evalBytes); ok && (b.isBinary() || isBinaryText(b.SQLType(), b.col.Collation)) && !b.isHexOrBitLiteral() {
 		binary := b.bytes
 		for _, b := range binary {
 			count += bits.OnesCount8(b)
@@ -50,6 +51,14 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalInt64(int64(count)), nil
 }
 
+// isBinaryText reports whether a character string type has the binary
+// collation. Several string functions return such a value for a binary string
+// argument, and BIT_COUNT counts its bits byte by byte like those of any other
+// binary string.
+func isBinaryText(tt sqltypes.Type, col collations.ID) bool {
+	return sqltypes.IsText(tt) && col == collations.CollationBinaryID
+}
+
 func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 	ct, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -58,7 +67,7 @@ func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(ct)
 
-	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
+	if (ct.Type == sqltypes.VarBinary || isBinaryText(ct.Type, ct.Col.Collation)) && !ct.isHexOrBitLiteral() {
 		c.asm.BitCount_b()
 		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil

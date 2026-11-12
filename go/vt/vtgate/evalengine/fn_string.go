@@ -779,6 +779,11 @@ func (call *builtinReverse) compile(c *compiler) (ctype, error) {
 	case arg.isTextual():
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+		arg.Col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
 	}
 
 	c.asm.Fn_REVERSE()
@@ -987,6 +992,11 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 		tt = str.Type
 	default:
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
+		str.Col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
 	}
 	_ = c.compileToInt64(repeat, 1)
 
