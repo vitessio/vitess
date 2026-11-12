@@ -680,12 +680,12 @@ func isDetermined(ctx *plancontext.PlanningContext, sel *sqlparser.Select, seeds
 
 // haveSameType says if a and b can be compared as values of one type. When their types differ, MySQL converts them, and
 // values that are different in one type can be equal in the other, like '1' and '01' as numbers. A pair passes when
-// either side has no type in the schema, as it does on main where nothing checks it, when both are integers, or when
+// either side has no type, as it does on main where nothing checks it, when both are integers, or when
 // both have the same type and collation.
 func haveSameType(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
-	typeA, knownA := ctx.TypeForExpr(a)
-	typeB, knownB := ctx.TypeForExpr(b)
-	if !knownA || !knownB || typeA.Type() == sqltypes.Unknown || typeB.Type() == sqltypes.Unknown {
+	typeA, _ := ctx.TypeForExpr(a)
+	typeB, _ := ctx.TypeForExpr(b)
+	if typeA.Type() == sqltypes.Unknown || typeB.Type() == sqltypes.Unknown {
 		return true
 	}
 	if sqltypes.IsIntegral(typeA.Type()) && sqltypes.IsIntegral(typeB.Type()) {
@@ -785,10 +785,10 @@ type equality struct {
 }
 
 // joinEqualities returns the equalities that every row of the query's FROM and WHERE clauses where no column of nonNull
-// is NULL fulfils: the conjuncts of the WHERE clause and of the ON clauses of the SELECT. The ON clause of a
-// left join holds only in the rows where its right side matched, which a column on that side that can't be NULL shows.
-// Without one, whether a row matched depends only on the left side's columns in the ON clause, so the ON clause fixes
-// the right side once those columns are known.
+// is NULL fulfils: the conjuncts of the WHERE clause and of the ON clauses of the SELECT. The ON clause of an outer
+// join holds only in the rows where its null-supplying side matched, which a column on that side that can't be NULL
+// shows. Without one, whether a row matched depends only on the preserved side's columns in the ON clause, so the
+// equalities of the null-supplying side, in that ON clause or in the joins inside it, wait for those columns.
 func joinEqualities(ctx *plancontext.PlanningContext, sel *sqlparser.Select, nonNull []sqlparser.Expr) (equalities []equality) {
 	if sel == nil {
 		return nil
