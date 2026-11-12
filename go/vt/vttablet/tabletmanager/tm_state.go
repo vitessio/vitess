@@ -405,7 +405,7 @@ func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint6
 	}
 	if ts.isOpen && reason != ts.canServe(ts.tablet.Type) {
 		if err := ts.updateLocked(ctx); err != nil {
-			log.Error(fmt.Sprintf("Cannot update query service after replication initialization state change: %v", err))
+			log.Error("Cannot update query service after replication initialization state change", slog.Any("error", err))
 		}
 	}
 }

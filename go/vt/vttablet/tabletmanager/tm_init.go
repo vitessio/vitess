@@ -1267,7 +1267,7 @@ func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Lo
 			// initialize.
 			_, err := tm.MysqlDaemon.ReplicationStatus(ctx)
 			if err == nil {
-				logger.Infof("Replication is configured, leaving it as it is")
+				logger.Info("Replication is configured, leaving it as it is")
 				return nil
 			}
 			if !errors.Is(err, mysql.ErrNotReplica) {
@@ -1284,11 +1284,11 @@ func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Lo
 		// restoreFromBackup will just be a regular action
 		// (same as if it was triggered remotely)
 		if err := tm.RestoreBackup(ctx, logger, waitForBackupInterval, false /* deleteBeforeRestore */, backupTime, restoreToTimestamp, restoreToPos, restoreFromBackupAllowedEngines, mysqlShutdownTimeout); err != nil {
-			return fmt.Errorf("RestoreFromBackup failed: %v", err)
+			return vterrors.Wrap(err, "RestoreFromBackup failed")
 		}
 	case restoreWithClone:
 		if err := tm.restoreFromClone(ctx, logger, false /*deleteBeforeRestore*/); err != nil {
-			return fmt.Errorf("restoreFromClone failed: %v", err)
+			return vterrors.Wrap(err, "restoreFromClone failed")
 		}
 	}
 	return nil
@@ -1321,9 +1321,9 @@ func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Cont
 			return "", vterrors.Wrapf(fenceErr, "cannot fence a former primary before deferring replication initialization (%v)", err)
 		}
 		if fenced {
-			logger.Infof("fenced a former primary before deferring replication initialization")
+			logger.Info("fenced a former primary before deferring replication initialization")
 		}
-		logger.Warningf("deferring replication initialization, staying out of rotation until replication runs from the shard primary: %v", err)
+		logger.Warn("deferring replication initialization, staying out of rotation until replication runs from the shard primary", slog.Any("error", err))
 		id := tm.tmState.deferReplicationInit(ctx, err, restored)
 		go tm.watchReplicationInit(tm.tmState.ctx, id)
 		return "", nil
@@ -1358,7 +1358,7 @@ func (tm *TabletManager) watchReplicationInit(ctx context.Context, id uint64) {
 		}
 		lastErr = key
 		tm.tmState.setReplicationInitError(ctx, id, err)
-		log.Info(fmt.Sprintf("Deferred replication initialization is waiting: %v", err))
+		log.Info("Deferred replication initialization is waiting", slog.Any("error", err))
 	}
 }
 
@@ -1440,7 +1440,7 @@ func (tm *TabletManager) replicaSemiSyncAction(ctx context.Context, primary *top
 	if err != nil {
 		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot read keyspace durability policy %v", tablet.Keyspace)
 	}
-	log.Info(fmt.Sprintf("Getting a new durability policy for %v", durabilityName))
+	log.Info("Getting a new durability policy", slog.String("durability_policy", durabilityName))
 	durability, err := policy.GetDurabilityPolicy(durabilityName)
 	if err != nil {
 		return SemiSyncActionNone, vterrors.Wrapf(err, "cannot get durability policy %v", durabilityName)
@@ -1520,7 +1520,7 @@ func (tm *TabletManager) fenceFormerPrimary(ctx context.Context) (_ bool, err er
 		revertCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), fenceRevertTimeout)
 		defer cancel()
 		if revertErr := tm.MysqlDaemon.SetSemiSyncEnabled(revertCtx, true, replica); revertErr != nil {
-			log.Warn(fmt.Sprintf("Failed to re-enable source-side semi-sync after a failed fence: %v", revertErr))
+			log.Warn("Failed to re-enable source-side semi-sync after a failed fence", slog.Any("error", revertErr))
 		}
 	}()
 	// Release the waiting commits first: enabling super_read_only waits for
@@ -1562,7 +1562,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		return "", vterrors.Wrap(err, "cannot read shard")
 	}
 	if si.PrimaryAlias == nil {
-		log.Warn(fmt.Sprintf("cannot start replication during initialization: shard %v/%v has no primary.", tablet.Keyspace, tablet.Shard))
+		log.Warn("cannot start replication during initialization: shard has no primary.", slog.String("keyspace", tablet.Keyspace), slog.String("shard", tablet.Shard))
 		return "", nil
 	}
 	if topoproto.TabletAliasEqual(si.PrimaryAlias, tablet.Alias) {

@@ -294,7 +294,7 @@ func TestRestartWithRestoreFlagInitializesUnconfiguredReplication(t *testing.T) 
 	require.Equal(t, []string{"reparent"}, shardLockActions(t, ci), "R1 requested the shard lock")
 	b, err := os.ReadFile(r1.VttabletProcess.ErrorLog)
 	require.NoError(t, err)
-	require.NotContains(t, string(b), "for action initialize replication", "R1 tried to take the shard lock")
+	require.NotContains(t, string(b), `action="initialize replication"`, "R1 tried to take the shard lock")
 	l.release(t)
 
 	n := utils.ConfirmReplication(t, p, tablets[1:])
@@ -320,7 +320,7 @@ func TestERSRepointsRestartingReplica(t *testing.T) {
 		// Release ERS only once R1 waits for its lock.
 		require.EventuallyWithT(t, func(c *assert.CollectT) {
 			b, _ := os.ReadFile(vp.ErrorLog)
-			assert.Contains(c, string(b), "for action initialize replication", "R1 did not try to take the shard lock")
+			assert.Contains(c, string(b), `action="initialize replication"`, "R1 did not try to take the shard lock")
 		}, time.Until(deadline), 100*time.Millisecond)
 	})
 }

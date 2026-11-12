@@ -243,16 +243,16 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			if deferred {
 				status, err := tm.MysqlDaemon.ReplicationStatus(replCtx)
 				if err != nil && !errors.Is(err, mysql.ErrNotReplica) {
-					l.Errorf("Leaving semi-sync off: cannot read the replication status: %v", err)
+					l.Error("Leaving semi-sync off: cannot read the replication status", slog.Any("error", err))
 					return
 				}
 				// A receiver that is connecting acknowledges its source once it connects.
 				if err == nil && status.IOState != replication.ReplicationStateStopped && (status.SourceHost != shardPrimary.MysqlHostname || status.SourcePort != shardPrimary.MysqlPort) {
-					l.Infof("Leaving semi-sync off: replication runs from %v, not from the shard primary", netutil.JoinHostPort(status.SourceHost, status.SourcePort))
+					l.Info("Leaving semi-sync off: replication does not run from the shard primary", slog.String("source", netutil.JoinHostPort(status.SourceHost, status.SourcePort)))
 					return
 				}
 				if err := tm.fixSemiSyncAndReplication(replCtx, tabletInfo.Type, semiSyncAction); err != nil {
-					l.Errorf("Failed to restore semi-sync, error: %v", err)
+					l.Error("Failed to restore semi-sync", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				}
 				return
 			}
