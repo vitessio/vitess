@@ -149,3 +149,447 @@ func TestShouldDrainForBackupXtrabackup(t *testing.T) {
 	assert.True(t, be.ShouldDrainForBackup(nil))
 	assert.True(t, be.ShouldDrainForBackup(&tabletmanagerdatapb.BackupRequest{}))
 }
+<<<<<<< HEAD
+||||||| parent of 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
+
+// TestCloseBackupFilesDoesNotCancelContextOnSuccess guards against a
+// regression where closeBackupFiles cancelled ctx as soon as all files
+// finished closing. On backends like S3 and Ceph, that ctx is also used by a
+// background upload goroutine that Close() does not wait for, so cancelling
+// it right after Close() returns aborts an otherwise-successful, still
+// in-flight upload. A successful close must only stop the watchdog, never
+// cancel the context itself — that's left for bh.Wait()/EndBackup() later.
+func TestCloseBackupFilesDoesNotCancelContextOnSuccess(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	logger := logutil.NewMemoryLogger()
+
+	destFiles := []io.WriteCloser{nopWriteCloser{}, nopWriteCloser{}}
+	var finalErr error
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Use a generous, CI-safe watchdog timeout. The nop closers return
+		// immediately, so a successful close stops the watchdog long before
+		// this fires. A large timeout keeps a preempted CI worker from
+		// spuriously tripping the watchdog and cancelling ctx.
+		closeBackupFiles(ctx, cancel, 30*time.Second, destFiles, "backup", len(destFiles), logger, &finalErr)
+	}()
+
+	// closeBackupFiles stops the watchdog before returning, so once it has
+	// returned the watchdog can no longer fire. Synchronizing on completion
+	// (rather than sleeping past a wall-clock window) makes the assertions
+	// below deterministic: with a 30s watchdog timeout, the timer cannot have
+	// fired during this sub-second test. Poll non-blockingly so a regression
+	// that hangs closeBackupFiles fails at the deadline instead of blocking on
+	// <-done indefinitely.
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, finalErr)
+
+	// A successful close must leave ctx untouched for the still-in-flight
+	// upload, and must not have logged a watchdog timeout.
+	assert.NoError(t, ctx.Err())
+	assert.NotContains(t, logger.String(), "Timed out waiting for Close()")
+}
+
+// TestCloseBackupFilesCancelsOnRealTimeout guards the other direction: if
+// Close() genuinely hangs past the timeout, the watchdog must still log and
+// cancel ctx so a stuck Close() (e.g. GCS's synchronous upload-on-Close) can
+// abort instead of hanging forever.
+func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	logger := logutil.NewMemoryLogger()
+
+	destFiles := []io.WriteCloser{ctxAwareCloser{ctx: ctx}}
+	var finalErr error
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		closeBackupFiles(ctx, cancel, 50*time.Millisecond, destFiles, "backup", len(destFiles), logger, &finalErr)
+	}()
+
+	// The ctxAwareCloser blocks until the watchdog cancels ctx, so this path
+	// is deterministic in outcome — it only needs a generous, CI-safe deadline
+	// for how long we wait. A resource-starved runner can pause the goroutine
+	// for multiple seconds before the 50ms watchdog fires, so use 30s. Poll
+	// non-blockingly so a regression that hangs closeBackupFiles fails the test
+	// at the deadline instead of blocking on <-done indefinitely.
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	require.ErrorIs(t, finalErr, context.Canceled)
+
+	assert.Contains(t, logger.String(), "Timed out waiting for Close()")
+	assert.Error(t, ctx.Err())
+}
+
+// TestExtractFilesLogsXbstreamArgs checks that the xbstream command line is
+// logged as a list, with the --encrypt-key value replaced in every form
+// xbstream accepts.
+func TestExtractFilesLogsXbstreamArgs(t *testing.T) {
+	const secret = "encrypt_key_sentinel_5c1d"
+	oldEnginePath, oldFlags := xtrabackupEnginePath, xbstreamRestoreFlags
+	// No xbstream binary in the directory, so extractFiles fails right after
+	// logging the command.
+	xtrabackupEnginePath = t.TempDir()
+	xbstreamRestoreFlags = "--decrypt=AES256 --encrypt-key=" + secret + "1 --encrypt-key " + secret + "2 --loose_encrypt_key=" + secret + "3 -k " + secret + "4 -vk" + secret + "5 --loose-loose-encrypt-key=" + secret + "6 --skip-loose-encrypt-key=" + secret + "7 --maximum-loose_encrypt-key " + secret + "8 --encrypt-key-file=/keys/xbstream"
+	t.Cleanup(func() { xtrabackupEnginePath, xbstreamRestoreFlags = oldEnginePath, oldFlags })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	stream := logutil.NewMemoryLogger()
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(nil)), nil
+		},
+	}
+	tempDir := t.TempDir()
+	bm := xtraBackupManifest{SkipCompress: true, StreamMode: xbstream, FileName: "backup.xbstream"}
+	err := (&XtrabackupEngine{}).extractFiles(t.Context(), logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream), bh, bm, tempDir)
+	require.ErrorContains(t, err, "xbstream")
+
+	r := logs.Record(t, "Executing xbstream cmd")
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, path.Join(xtrabackupEnginePath, xbstream), r["command"])
+	assert.Equal(t, []any{
+		"-C", tempDir, "-xv", "--decrypt=AES256",
+		"--encrypt-key=****", "--encrypt-key", "****", "--loose_encrypt_key=****", "-k", "****", "-vk****",
+		"--loose-loose-encrypt-key=****", "--skip-loose-encrypt-key=****", "--maximum-loose_encrypt-key", "****",
+		"--encrypt-key-file=/keys/xbstream",
+	}, r["args"])
+	assert.NotContains(t, logs.String(), secret)
+	for _, event := range stream.Events {
+		assert.NotContains(t, event.Value, secret)
+	}
+}
+
+// TestXtrabackupExecuteBackupVerifiesPosition runs a full backup with a fake
+// xtrabackup binary, and checks that the engine verifies the position its
+// MANIFEST records before it writes the MANIFEST, and writes none when that
+// check fails.
+func TestXtrabackupExecuteBackupVerifiesPosition(t *testing.T) {
+	const (
+		serverUUID = "16b1039f-22b6-11ed-b765-0a43f95f28a3"
+		gtids      = serverUUID + ":1-10"
+	)
+
+	// The fake xtrabackup writes xtrabackup_info into --target-dir, where the
+	// engine reads the position, and streams a few bytes as the backup.
+	binDir := t.TempDir()
+	script := fmt.Sprintf(`#!/bin/bash
+for arg in "$@"; do
+  case "$arg" in --target-dir=*) dir="${arg#--target-dir=}" ;; esac
+done
+echo "binlog_pos = filename 'vt-bin.000001', position '4', GTID of the last change '%s'" > "$dir/xtrabackup_info"
+echo "backup data"
+`, gtids)
+	require.NoError(t, os.WriteFile(path.Join(binDir, xtrabackupBinaryName), []byte(script), 0o755))
+	oldEnginePath, oldUser := xtrabackupEnginePath, xtrabackupUser
+	xtrabackupEnginePath, xtrabackupUser = binDir, "backup"
+	t.Cleanup(func() { xtrabackupEnginePath, xtrabackupUser = oldEnginePath, oldUser })
+
+	fakedb := fakesqldb.New(t)
+	t.Cleanup(fakedb.Close)
+	fakedb.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.gtid_executed", "varchar"), gtids))
+	fakedb.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.server_uuid", "varchar"), serverUUID))
+	mysqld := NewFakeMysqlDaemon(fakedb)
+	t.Cleanup(mysqld.Close)
+	mysqld.Version = "8.0.40"
+
+	root := t.TempDir()
+	for _, dir := range []string{"innodb", "log", "datadir", "tmp"} {
+		require.NoError(t, os.MkdirAll(path.Join(root, dir), 0o755))
+	}
+	cnf := &Mycnf{
+		InnodbDataHomeDir:     path.Join(root, "innodb"),
+		InnodbLogGroupHomeDir: path.Join(root, "log"),
+		DataDir:               path.Join(root, "datadir"),
+		TmpDir:                path.Join(root, "tmp"),
+	}
+
+	for _, tc := range []struct {
+		name      string
+		verifyErr error
+	}{
+		{"MANIFEST written after the check passes", nil},
+		{"no MANIFEST when the check fails", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bh := &FakeBackupHandle{
+				AddFileReturnF: func(string) FakeBackupHandleAddFileReturn {
+					return FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()}
+				},
+			}
+			var verified []replication.Position
+			params := BackupParams{
+				Cnf:    cnf,
+				Mysqld: mysqld,
+				Logger: logutil.NewMemoryLogger(),
+				Stats:  backupstats.NoStats(),
+				VerifyPosition: func(ctx context.Context, pos replication.Position) error {
+					verified = append(verified, pos)
+					return tc.verifyErr
+				},
+			}
+
+			result, err := (&XtrabackupEngine{}).ExecuteBackup(t.Context(), params, bh)
+
+			require.Len(t, verified, 1)
+			assert.Equal(t, gtids, verified[0].String())
+			var added []string
+			for _, call := range bh.AddFileCalls {
+				added = append(added, call.Filename)
+			}
+			if tc.verifyErr == nil {
+				require.NoError(t, err)
+				assert.Equal(t, BackupUsable, result)
+				assert.Contains(t, added, backupManifestFileName)
+			} else {
+				require.ErrorContains(t, err, "errant GTIDs")
+				assert.Equal(t, BackupUnusable, result)
+				assert.NotContains(t, added, backupManifestFileName)
+			}
+		})
+	}
+}
+=======
+
+// TestCloseBackupFilesDoesNotCancelContextOnSuccess guards against a
+// regression where closeBackupFiles cancelled ctx as soon as all files
+// finished closing. On backends like S3 and Ceph, that ctx is also used by a
+// background upload goroutine that Close() does not wait for, so cancelling
+// it right after Close() returns aborts an otherwise-successful, still
+// in-flight upload. A successful close must only stop the watchdog, never
+// cancel the context itself — that's left for bh.Wait()/EndBackup() later.
+func TestCloseBackupFilesDoesNotCancelContextOnSuccess(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	logger := logutil.NewMemoryLogger()
+
+	destFiles := []io.WriteCloser{nopWriteCloser{}, nopWriteCloser{}}
+	var finalErr error
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		// Use a generous, CI-safe watchdog timeout. The nop closers return
+		// immediately, so a successful close stops the watchdog long before
+		// this fires. A large timeout keeps a preempted CI worker from
+		// spuriously tripping the watchdog and cancelling ctx.
+		closeBackupFiles(ctx, cancel, 30*time.Second, destFiles, "backup", len(destFiles), logger, &finalErr)
+	}()
+
+	// closeBackupFiles stops the watchdog before returning, so once it has
+	// returned the watchdog can no longer fire. Synchronizing on completion
+	// (rather than sleeping past a wall-clock window) makes the assertions
+	// below deterministic: with a 30s watchdog timeout, the timer cannot have
+	// fired during this sub-second test. Poll non-blockingly so a regression
+	// that hangs closeBackupFiles fails at the deadline instead of blocking on
+	// <-done indefinitely.
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	require.NoError(t, finalErr)
+
+	// A successful close must leave ctx untouched for the still-in-flight
+	// upload, and must not have logged a watchdog timeout.
+	assert.NoError(t, ctx.Err())
+	assert.NotContains(t, logger.String(), "Timed out waiting for Close()")
+}
+
+// TestCloseBackupFilesCancelsOnRealTimeout guards the other direction: if
+// Close() genuinely hangs past the timeout, the watchdog must still log and
+// cancel ctx so a stuck Close() (e.g. GCS's synchronous upload-on-Close) can
+// abort instead of hanging forever.
+func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	logger := logutil.NewMemoryLogger()
+
+	destFiles := []io.WriteCloser{ctxAwareCloser{ctx: ctx}}
+	var finalErr error
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		closeBackupFiles(ctx, cancel, 50*time.Millisecond, destFiles, "backup", len(destFiles), logger, &finalErr)
+	}()
+
+	// The ctxAwareCloser blocks until the watchdog cancels ctx, so this path
+	// is deterministic in outcome — it only needs a generous, CI-safe deadline
+	// for how long we wait. A resource-starved runner can pause the goroutine
+	// for multiple seconds before the 50ms watchdog fires, so use 30s. Poll
+	// non-blockingly so a regression that hangs closeBackupFiles fails the test
+	// at the deadline instead of blocking on <-done indefinitely.
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, 10*time.Millisecond)
+
+	require.ErrorIs(t, finalErr, context.Canceled)
+
+	assert.Contains(t, logger.String(), "Timed out waiting for Close()")
+	assert.Error(t, ctx.Err())
+}
+
+// TestExtractFilesLogOmitsXbstreamFlags checks that the xbstream command line
+// that a restore logs leaves out the operator's --xbstream-restore-flags, which
+// can hold an --encrypt-key, and keeps the arguments that Vitess adds, and
+// that xbstream still gets the flags as given.
+func TestExtractFilesLogOmitsXbstreamFlags(t *testing.T) {
+	const secret = "encrypt_key_sentinel_5c1d"
+	oldEnginePath, oldFlags := xtrabackupEnginePath, xbstreamRestoreFlags
+	// The fake xbstream records its arguments, one per line, and fails.
+	xtrabackupEnginePath = t.TempDir()
+	argsFile := path.Join(t.TempDir(), "args")
+	generateTestFile(t, path.Join(xtrabackupEnginePath, xbstream), "#!/bin/bash\nprintf '%s\\n' \"$@\" > '"+argsFile+"'\nexit 1")
+	xbstreamRestoreFlags = "--decrypt=AES256 --encrypt-key=" + secret + "1 -k " + secret + "2 -vk" + secret + "3"
+	t.Cleanup(func() { xtrabackupEnginePath, xbstreamRestoreFlags = oldEnginePath, oldFlags })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	stream := logutil.NewMemoryLogger()
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(nil)), nil
+		},
+	}
+	tempDir := t.TempDir()
+	bm := xtraBackupManifest{SkipCompress: true, StreamMode: xbstream, FileName: "backup.xbstream"}
+	err := (&XtrabackupEngine{}).extractFiles(t.Context(), logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream), bh, bm, tempDir)
+	require.ErrorContains(t, err, "xbstream failed")
+
+	args, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, "-C\n"+tempDir+"\n-xv\n--decrypt=AES256\n--encrypt-key="+secret+"1\n-k\n"+secret+"2\n-vk"+secret+"3\n", string(args))
+
+	r := logs.Record(t, "Executing xbstream cmd")
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, path.Join(xtrabackupEnginePath, xbstream), r["command"])
+	assert.Equal(t, []any{"-C", tempDir, "-xv", "<--xbstream-restore-flags>"}, r["args"])
+	assert.NotContains(t, logs.String(), secret)
+	assert.Contains(t, stream.String(), "<--xbstream-restore-flags>")
+	for _, event := range stream.Events {
+		assert.NotContains(t, event.Value, secret)
+	}
+}
+
+// TestXtrabackupExecuteBackupVerifiesPosition runs a full backup with a fake
+// xtrabackup binary, and checks that the engine verifies the position its
+// MANIFEST records before it writes the MANIFEST, and writes none when that
+// check fails.
+func TestXtrabackupExecuteBackupVerifiesPosition(t *testing.T) {
+	const (
+		serverUUID = "16b1039f-22b6-11ed-b765-0a43f95f28a3"
+		gtids      = serverUUID + ":1-10"
+	)
+
+	// The fake xtrabackup writes xtrabackup_info into --target-dir, where the
+	// engine reads the position, and streams a few bytes as the backup.
+	binDir := t.TempDir()
+	script := fmt.Sprintf(`#!/bin/bash
+for arg in "$@"; do
+  case "$arg" in --target-dir=*) dir="${arg#--target-dir=}" ;; esac
+done
+echo "binlog_pos = filename 'vt-bin.000001', position '4', GTID of the last change '%s'" > "$dir/xtrabackup_info"
+echo "backup data"
+`, gtids)
+	require.NoError(t, os.WriteFile(path.Join(binDir, xtrabackupBinaryName), []byte(script), 0o755))
+	oldEnginePath, oldUser := xtrabackupEnginePath, xtrabackupUser
+	xtrabackupEnginePath, xtrabackupUser = binDir, "backup"
+	t.Cleanup(func() { xtrabackupEnginePath, xtrabackupUser = oldEnginePath, oldUser })
+
+	fakedb := fakesqldb.New(t)
+	t.Cleanup(fakedb.Close)
+	fakedb.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.gtid_executed", "varchar"), gtids))
+	fakedb.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.server_uuid", "varchar"), serverUUID))
+	mysqld := NewFakeMysqlDaemon(fakedb)
+	t.Cleanup(mysqld.Close)
+	mysqld.Version = "8.0.40"
+
+	root := t.TempDir()
+	for _, dir := range []string{"innodb", "log", "datadir", "tmp"} {
+		require.NoError(t, os.MkdirAll(path.Join(root, dir), 0o755))
+	}
+	cnf := &Mycnf{
+		InnodbDataHomeDir:     path.Join(root, "innodb"),
+		InnodbLogGroupHomeDir: path.Join(root, "log"),
+		DataDir:               path.Join(root, "datadir"),
+		TmpDir:                path.Join(root, "tmp"),
+	}
+
+	for _, tc := range []struct {
+		name      string
+		verifyErr error
+	}{
+		{"MANIFEST written after the check passes", nil},
+		{"no MANIFEST when the check fails", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bh := &FakeBackupHandle{
+				AddFileReturnF: func(string) FakeBackupHandleAddFileReturn {
+					return FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()}
+				},
+			}
+			var verified []replication.Position
+			params := BackupParams{
+				Cnf:    cnf,
+				Mysqld: mysqld,
+				Logger: logutil.NewMemoryLogger(),
+				Stats:  backupstats.NoStats(),
+				VerifyPosition: func(ctx context.Context, pos replication.Position) error {
+					verified = append(verified, pos)
+					return tc.verifyErr
+				},
+			}
+
+			result, err := (&XtrabackupEngine{}).ExecuteBackup(t.Context(), params, bh)
+
+			require.Len(t, verified, 1)
+			assert.Equal(t, gtids, verified[0].String())
+			var added []string
+			for _, call := range bh.AddFileCalls {
+				added = append(added, call.Filename)
+			}
+			if tc.verifyErr == nil {
+				require.NoError(t, err)
+				assert.Equal(t, BackupUsable, result)
+				assert.Contains(t, added, backupManifestFileName)
+			} else {
+				require.ErrorContains(t, err, "errant GTIDs")
+				assert.Equal(t, BackupUnusable, result)
+				assert.NotContains(t, added, backupManifestFileName)
+			}
+		})
+	}
+}
+>>>>>>> 1479a3c3e0 (mysqlctl: log a placeholder instead of the operator's flags in the mysqlsh and xbstream command lines (#21994))
