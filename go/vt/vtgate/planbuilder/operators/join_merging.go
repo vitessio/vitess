@@ -341,6 +341,7 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 		Conditions:             conditions,
 		PreservesReferenceRows: owed,
 
-		NoRoutesSpecialHandling: op1.NoRoutesSpecialHandling || op2.NoRoutesSpecialHandling || owed && routesToOneShard(r),
+		NoRoutesSpecialHandling:       op1.NoRoutesSpecialHandling || op2.NoRoutesSpecialHandling || owed && routesToOneShard(r),
+		AsksReferenceRowsOnEveryShard: op1.AsksReferenceRowsOnEveryShard || op2.AsksReferenceRowsOnEveryShard,
 	}
 }

@@ -111,6 +111,7 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		Conditions:             conditions,
 		PreservesReferenceRows: preserved,
 
-		NoRoutesSpecialHandling: seed.NoRoutesSpecialHandling || term.NoRoutesSpecialHandling || preserved && routesToOneShard(r),
+		NoRoutesSpecialHandling:       seed.NoRoutesSpecialHandling || term.NoRoutesSpecialHandling || preserved && routesToOneShard(r),
+		AsksReferenceRowsOnEveryShard: seed.AsksReferenceRowsOnEveryShard || term.AsksReferenceRowsOnEveryShard,
 	}
 }

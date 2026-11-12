@@ -5190,6 +5190,160 @@
     "skip_e2e": true
   },
   {
+    "comment": "the same when another subquery merges into the arm after it",
+    "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col) and exists (select 1 from ref r9 where r9.col = a.col) union all select 1 from dual",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col) and exists (select 1 from ref r9 where r9.col = a.col) union all select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a.col from ref as a where 1 != 1",
+            "Query": "select a.col from ref as a where a.col in (select x.col from `user` as x where x.id = a.col) and exists (select 1 from ref as r9 where r9.col = a.col)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "the same when that subquery is inside an OR",
+    "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col) and (a.col = 7 or exists (select 1 from ref r9 where r9.col = a.col)) union all select 1 from dual",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col) and (a.col = 7 or exists (select 1 from ref r9 where r9.col = a.col)) union all select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select a.col from ref as a where 1 != 1",
+            "Query": "select a.col from ref as a where a.col in (select x.col from `user` as x where x.id = a.col) and (a.col = 7 or exists (select 1 from ref as r9 where r9.col = a.col))"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "the same when the arm is a derived table merged in a join",
+    "query": "select d.col from (select a.col from ref a where a.col in (select x.col from user x where x.id = a.col)) d join ref b on d.col = b.col union all select 1 from dual",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select d.col from (select a.col from ref a where a.col in (select x.col from user x where x.id = a.col)) d join ref b on d.col = b.col union all select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select d.col from (select a.col from ref as a where 1 != 1) as d, ref as b where 1 != 1",
+            "Query": "select d.col from (select a.col from ref as a where a.col in (select x.col from `user` as x where x.id = a.col)) as d, ref as b where d.col = b.col"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "the same when the arm is a recursive CTE whose seed is asked on every shard",
+    "query": "with recursive c as (select a.col from ref a where a.col in (select x.col from user x where x.id = a.col) union all select r.col from c join ref r on r.col = c.col + 1 where r.col < 5) select col from c union all select 1 from dual",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select a.col from ref a where a.col in (select x.col from user x where x.id = a.col) union all select r.col from c join ref r on r.col = c.col + 1 where r.col < 5) select col from c union all select 1 from dual",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "with recursive c as (select a.col from ref as a where 1 != 1 union all select r.col from c, ref as r where 1 != 1) select col from c where 1 != 1",
+            "Query": "with recursive c as (select a.col from ref as a where a.col in (select x.col from `user` as x where x.id = a.col) union all select r.col from c, ref as r where r.col = c.col + 1 and r.col < 5) select col from c"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from dual where 1 != 1",
+            "Query": "select 1 from dual"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "a subquery routed by an expression with NOW() is not asked on every shard, as each shard takes the time when its own statement starts",
     "query": "select a.col from ref a where a.col in (select x.col from user x where x.id = a.col + microsecond(now(6)) % 2)",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
