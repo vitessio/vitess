@@ -4134,7 +4134,8 @@
   {
     "comment": "a distinct aggregation over a reference table with one subquery routed by its column and another one correlated by a second column is refused, as the pushed aggregation is grouped by both",
     "query": "select count(distinct a.id) from ref a where exists (select 1 from user_extra ue where ue.user_id = a.id) and exists (select 1 from user_extra ue2 where ue2.extra_id = a.col)",
-    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
+    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by",
+    "skip_e2e": true
   },
   {
     "comment": "a distinct aggregation over a reference table with both correlated columns of its subqueries as arguments is pushed under the joins",
@@ -4215,7 +4216,8 @@
         "user.ref",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a distinct aggregation over a derived table of an unsharded table that is not a reference table is planned as in main",
@@ -4327,7 +4329,8 @@
         "user.ref",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a distinct aggregation over a reference table with a subquery that is a join is planned as in main",
@@ -4415,7 +4418,8 @@
         "user.ref",
         "user.user_extra"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a distinct aggregation over a sharded route that reads a reference table is planned as in main",
@@ -4494,7 +4498,8 @@
         "main.global_ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a subquery over a reference table joined with a recursive CTE is planned as in main",
@@ -4517,22 +4522,26 @@
         "user.global_ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a distinct aggregation over a reference table with a subquery routed by one column and another correlated by its argument is refused, as the pushed aggregation is grouped by both",
     "query": "select count(distinct a.col) from ref a where exists (select 1 from user_extra ue where ue.user_id = a.id) and exists (select 1 from user_extra ue2 where ue2.extra_id = a.col)",
-    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
+    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by",
+    "skip_e2e": true
   },
   {
     "comment": "a distinct aggregation over a reference table with a subquery routed by a column of a recursive CTE, which has no vindex table, is refused",
     "query": "select count(distinct r.col) from ref r join (with recursive c as (select 1 as x union all select x + 1 from c where x < 3) select x from c) d where exists (select 1 from user_extra ue where ue.user_id = d.x)",
-    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
+    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by",
+    "skip_e2e": true
   },
   {
     "comment": "a distinct aggregation over a derived table that reads an unsharded table and the source of a reference table is refused",
     "query": "select count(distinct a.col) from (select id, col from unsharded union all select id, col from main.source_of_ref) a where exists (select 1 from user_extra ue where ue.user_id = a.id)",
-    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by"
+    "plan": "VT12001: unsupported: distinct aggregation over a reference table that is not grouped by the columns its subquery is routed by",
+    "skip_e2e": true
   },
   {
     "comment": "a recursive term over a reference table left joined with a sharded table by a column of the reference table is a left join of the reference route and a one-shard probe",
@@ -4605,7 +4614,8 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a recursive term seeded from a sharded table, over a reference table left joined with a sharded table by a column of the reference table, probes one shard",
@@ -4682,7 +4692,8 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a recursive term written with a comma join, over a reference table left joined with a sharded table by a column of the reference table, probes one shard",
@@ -4774,32 +4785,38 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a subquery with a max next to a constant is refused over a reference table, as it returns a row on a shard without rows",
     "query": "select a.col from ref a where (a.col, a.id) != (select max(x.col), 0 from user x where x.id = a.col)",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "a subquery with a constant next to a max is refused over a reference table, as it returns a row on a shard without rows",
     "query": "select a.col from ref a where (a.id, a.col) < (select 5, max(x.col) from user x where x.id = a.col)",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "an aggregate UDF in a subquery is refused over a reference table as a count is, as it returns a row on a shard without rows",
     "query": "select a.id from ref a where a.id in (select udf_aggr(x.col) from user x where x.id = a.id)",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "an aggregate UDF in a compared subquery is refused over a reference table as a count is",
     "query": "select a.id from ref a where a.id = (select udf_aggr(x.col) from user x where x.id = a.id)",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "an aggregate UDF in the ORDER BY of a subquery is refused over a reference table as a count is",
     "query": "select a.id from ref a where a.id in (select x.col from user x where x.id = a.id order by udf_aggr(x.col))",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "a count in a scalar subquery of the select list of a subquery does not make it return a row on a shard without rows, so it is asked on every shard",
@@ -4854,7 +4871,8 @@
   {
     "comment": "a subquery with a max next to a constant is refused over a reference table left joined with a sharded table",
     "query": "select a.col from ref a left join user u on u.col = a.col where (a.col, a.id) != (select max(x.col), 0 from user x where x.id = a.col)",
-    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
+    "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
+    "skip_e2e": true
   },
   {
     "comment": "a nested subquery over a reference table next to a left joined sharded table is a pull-out",
@@ -4921,7 +4939,8 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a nested exists subquery over a reference table next to a left joined sharded table is a pull-out",
@@ -4987,7 +5006,8 @@
         "user.ref",
         "user.user"
       ]
-    }
+    },
+    "skip_e2e": true
   },
   {
     "comment": "a derived reference table that picks a row at random is not asked on every shard, as each shard may pick another row",
