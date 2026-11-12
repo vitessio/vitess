@@ -182,7 +182,8 @@ func (be *MySQLShellBackupEngine) ExecuteBackup(ctx context.Context, params Back
 
 	cmd := exec.CommandContext(ctx, be.binaryName, args...)
 
-	params.Logger.Infof("running %s", cmd.String())
+	params.Logger.Infof("running %s",
+		mysqlShellCommandString(cmd.Path, fmt.Sprintf("util.dumpInstance(%q, <--mysql-shell-dump-flags>)", location)))
 
 	stdoutReader, stdoutWriter := io.Pipe()
 	stderrReader, stderrWriter := io.Pipe()
@@ -389,7 +390,8 @@ func (be *MySQLShellBackupEngine) ExecuteRestore(ctx context.Context, params Res
 
 	cmd := exec.CommandContext(ctx, "mysqlsh", args...)
 
-	params.Logger.Infof("running %s", cmd.String())
+	params.Logger.Infof("running %s",
+		mysqlShellCommandString(cmd.Path, fmt.Sprintf("util.loadDump(%q, <--mysql-shell-load-flags>)", location)))
 
 	cmdOut, err := cmd.StdoutPipe()
 	if err != nil {
@@ -597,6 +599,14 @@ func releaseReadLock(ctx context.Context, reader io.Reader, params BackupParams,
 	if !released {
 		params.Logger.Errorf("could not release global lock earlier")
 	}
+}
+
+// mysqlShellCommandString returns the mysqlsh command line to log: the binary, a
+// placeholder for the operator's --mysql-shell-flags, which can hold passwords,
+// and the "-e" call that Vitess appends, which the caller gives with a
+// placeholder for the dump or load flags, since those can hold credentials too.
+func mysqlShellCommandString(binary, call string) string {
+	return fmt.Sprintf("%s <--mysql-shell-flags> -e %s", binary, call)
 }
 
 func cleanupMySQL(ctx context.Context, params RestoreParams, shouldDeleteUsers bool) error {
