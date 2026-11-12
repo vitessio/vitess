@@ -1245,16 +1245,22 @@ func TestEnsureRestoredGTIDsMatchManifest(t *testing.T) {
 	require.NotNil(t, emptyPos.GTIDSet)
 	localOnlyPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000002:1")
 	require.NoError(t, err)
+	olderPos, err := replication.DecodePosition("MySQL56/00000000-0000-0000-0000-000000000001:1-5")
+	require.NoError(t, err)
 
 	for _, tc := range []struct {
 		name     string
 		manifest replication.Position
 		executed replication.Position
-		wantSet  bool
+		// purged defaults to the manifest position.
+		purged  *replication.Position
+		wantSet bool
 	}{
 		{name: "matching", manifest: manifestPos, executed: manifestPos},
 		{name: "local GTID after restore", manifest: manifestPos, executed: localPos, wantSet: true},
 		{name: "empty manifest GTID set", manifest: emptyPos, executed: localOnlyPos, wantSet: true},
+		// Xtrabackup 2.4 restores gtid_purged as of the backup.
+		{name: "gtid_purged as of the backup", manifest: manifestPos, executed: manifestPos, purged: &olderPos, wantSet: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sqldb := fakesqldb.New(t)
@@ -1262,6 +1268,9 @@ func TestEnsureRestoredGTIDsMatchManifest(t *testing.T) {
 			mysqld := NewFakeMysqlDaemon(sqldb)
 			t.Cleanup(mysqld.Close)
 			mysqld.GTIDPurged = tc.manifest
+			if tc.purged != nil {
+				mysqld.GTIDPurged = *tc.purged
+			}
 			mysqld.SetPrimaryPositionLocked(tc.executed)
 			mysqld.SetReplicationPositionPos = tc.manifest
 			if tc.wantSet {

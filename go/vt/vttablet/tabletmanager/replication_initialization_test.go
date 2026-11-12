@@ -1237,9 +1237,6 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 	}
 }
 
-// TestRestartAfterRestoreHookReportsInitializationError covers a restart with a
-// restore flag that finds data and no replication, and fails to initialize it:
-// the restore hook must receive that error.
 // hungStatusDaemon is a mysqld that does not answer SHOW REPLICA STATUS.
 type hungStatusDaemon struct {
 	*mysqlctl.FakeMysqlDaemon
@@ -1273,6 +1270,9 @@ func TestRestartAfterRestoreBoundsReplicationStatus(t *testing.T) {
 	}
 }
 
+// TestRestartAfterRestoreHookReportsInitializationError covers a restart with a
+// restore flag that finds data and no replication, and fails to initialize it:
+// the restore hook must receive that error.
 func TestRestartAfterRestoreHookReportsInitializationError(t *testing.T) {
 	tm, md, _, _ := newReplicationInitializationTM(t)
 	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
