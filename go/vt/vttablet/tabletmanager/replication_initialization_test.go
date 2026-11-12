@@ -17,9 +17,12 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -1707,18 +1710,40 @@ func TestSetReplicationSourceDoesNotStartDeferredReplica(t *testing.T) {
 	}
 }
 
-func TestRestoreFinalizationAndDeferredReplication(t *testing.T) {
-	t.Run("dry run keeps the deferral", func(t *testing.T) {
-		tm, _, _, qsc, id := newPendingReplicationTM(t)
-		require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
-		rsm := tm.newRestoreStateManager(logutil.NewMemoryLogger(), false)
-		rsm.dryRun = true
-		rsm.state = restoreStarted
-		rsm.nextTabletType = topodatapb.TabletType_REPLICA
-		require.NoError(t, rsm.finish(t.Context(), replicationCommand{action: replicationActionNone}))
-		assert.True(t, tm.tmState.isPendingReplicationInit(id), "a dry run changes no data")
-		assert.False(t, qsc.IsServing())
+// TestDryRunRestoreFromBackupKeepsDeferral runs a dry-run RestoreFromBackup on a
+// replica whose replication initialization is deferred. A dry run changes no
+// data, so the replica must stay pending and out of rotation.
+func TestDryRunRestoreFromBackupKeepsDeferral(t *testing.T) {
+	tm, _, _, qsc, id := newPendingReplicationTM(t)
+	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
+	manifest, err := json.Marshal(mysqlctl.BackupManifest{BackupMethod: "builtin", Position: replication.Position{}})
+	require.NoError(t, err)
+	handle := &mysqlctl.FakeBackupHandle{
+		NameV: "2026-11-12.000000.zone1-0000000002", ReadOnly: true,
+		ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(manifest)), nil
+		},
+	}
+	storage := &mysqlctl.FakeBackupStorage{ListBackupsReturn: mysqlctl.FakeBackupStorageListBackupsReturn{BackupHandles: []backupstorage.BackupHandle{handle}}}
+	storage.WithParamsReturn = storage
+	const storageName = "fake-dry-run-restore"
+	previous := backupstorage.BackupStorageImplementation
+	backupstorage.BackupStorageMap[storageName] = storage
+	backupstorage.BackupStorageImplementation = storageName
+	t.Cleanup(func() {
+		backupstorage.BackupStorageImplementation = previous
+		delete(backupstorage.BackupStorageMap, storageName)
 	})
+
+	logger := logutil.NewMemoryLogger()
+	require.NoError(t, tm.RestoreFromBackup(t.Context(), logger, &tabletmanagerdatapb.RestoreFromBackupRequest{DryRun: true}))
+	require.Contains(t, logger.String(), "Dry run. No changes made")
+	assert.True(t, tm.tmState.isPendingReplicationInit(id), "a dry run changes no data")
+	assert.False(t, qsc.IsServing())
+	assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
+}
+
+func TestRestoreFinalizationAndDeferredReplication(t *testing.T) {
 	t.Run("aborted restore keeps the deferral", func(t *testing.T) {
 		tm, _, _, qsc, id := newPendingReplicationTM(t)
 		require.NoError(t, tm.tmState.ChangeTabletType(t.Context(), topodatapb.TabletType_RESTORE, DBActionNone))
