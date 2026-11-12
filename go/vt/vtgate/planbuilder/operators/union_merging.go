@@ -319,7 +319,7 @@ func createMergedUnion(
 		Routing:       routing,
 		Conditions:    conditions,
 
-		NoRoutesSpecialHandling: (lhsRoute.NoRoutesSpecialHandling || rhsRoute.NoRoutesSpecialHandling) && routesToOneShard(routing),
+		NoRoutesSpecialHandling: lhsRoute.NoRoutesSpecialHandling || rhsRoute.NoRoutesSpecialHandling,
 	}, selectExprs
 }
 
