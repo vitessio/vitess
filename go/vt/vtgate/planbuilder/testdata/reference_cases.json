@@ -5218,5 +5218,78 @@
         "user.ref"
       ]
     }
+  },
+  {
+    "comment": "the same EXISTS inside a predicate of an IN route is merged into that route",
+    "query": "select u.id from user u where u.id in (1, 2) and (u.foo = 1 or exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col where r1.col = u.col))",
+    "plan": {
+      "Type": "MultiShard",
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u where u.id in (1, 2) and (u.foo = 1 or exists (select 1 from ref r1 left join ref r2 on r1.col = r2.col where r1.col = u.col))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where u.id in ::__vals and (u.foo = 1 or exists (select 1 from ref as r1 left join ref as r2 on r1.col = r2.col where r1.col = u.col))",
+        "Values": [
+          "(1, 2)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "a value subquery over an outer join of reference tables that is not used for routing is merged into a sharded route",
+    "query": "select u.id from user u where u.foo = 1 or u.col = (select b.col from ref a left join ref b on b.col = a.col where a.col = u.col)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u where u.foo = 1 or u.col = (select b.col from ref a left join ref b on b.col = a.col where a.col = u.col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where u.foo = 1 or u.col = (select b.col from ref as a left join ref as b on b.col = a.col where a.col = u.col)"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "an uncorrelated IN over an outer join of reference tables that is not used for routing is merged into a sharded route",
+    "query": "select u.id from user u where u.foo = 1 or u.col in (select r1.col from ref r1 left join ref r2 on r1.col = r2.col)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select u.id from user u where u.foo = 1 or u.col in (select r1.col from ref r1 left join ref r2 on r1.col = r2.col)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select u.id from `user` as u where 1 != 1",
+        "Query": "select u.id from `user` as u where u.foo = 1 or u.col in (select r1.col from ref as r1 left join ref as r2 on r1.col = r2.col)"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    }
   }
 ]
