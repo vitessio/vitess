@@ -121,8 +121,10 @@ if [[ -n "$existing_cache_image" ]]; then
   image=$existing_cache_image
 fi
 
-# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions
-chmod -R o=rx -- *;
+# Fix permissions before copying files, to avoid AUFS bug other must have read/access permissions.
+# dist/ is left out: the container doesn't copy it, and the vitess user owns
+# the files that it adds to dist/download-cache.
+find . -mindepth 1 -maxdepth 1 ! -name '.*' ! -name dist -exec chmod -R o=rx -- {} +
 
 # This is required by the vtctld_web_test.py test.
 # Otherwise, /usr/bin/chromium will crash with the error:
@@ -132,10 +134,35 @@ args="$args --cap-add=SYS_ADMIN"
 args="$args -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
 
-# Share maven dependency cache so they don't have to be redownloaded every time.
+# Share Maven's dependency cache so it doesn't have to be redownloaded every time.
 mkdir -p /tmp/mavencache
 chmod 777 /tmp/mavencache
 args="$args -v /tmp/mavencache:/home/vitess/.m2"
+
+# Share the downloads that bootstrap.sh keeps, so that each test installs the
+# tools that the image lacks, such as Maven, without downloading them again.
+# bootstrap.sh checks each file's checksum before it uses it. The vitess user
+# (uid 1000) adds missing files.
+mkdir -p dist/download-cache
+chmod 777 dist/download-cache
+args="$args -v $PWD/dist/download-cache:/vt/src/vitess.io/vitess/dist/download-cache"
+
+# Share the Go module and build caches, so that each test doesn't download
+# every module and compile every package again. DOCKER_TEST_GOMODCACHE and
+# DOCKER_TEST_GOCACHE point them at existing caches, which the vitess user
+# (uid 1000) must be able to write to.
+gomodcache=${DOCKER_TEST_GOMODCACHE:-/tmp/gomodcache}
+gocache=${DOCKER_TEST_GOCACHE:-/tmp/gocache}
+if [[ -z "$DOCKER_TEST_GOMODCACHE" ]]; then
+	mkdir -p "$gomodcache"
+	chmod 777 "$gomodcache"
+fi
+if [[ -z "$DOCKER_TEST_GOCACHE" ]]; then
+	mkdir -p "$gocache"
+	chmod 777 "$gocache"
+fi
+args="$args -v $gomodcache:/vt/gomodcache -e GOMODCACHE=/vt/gomodcache"
+args="$args -v $gocache:/vt/gocache -e GOCACHE=/vt/gocache"
 
 # Add in the vitess user
 args="$args --user vitess"
@@ -189,11 +216,9 @@ bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
-# Maven was setup in /vt/dist, may need to reinstall it.
-bashcmd=$(append_cmd "$bashcmd" "echo 'Checking if mvn needs installing...'; if [[ ! \$(command -v mvn) ]]; then echo 'install maven'; curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 /vt/dist/maven; fi; echo 'mvn check done'")
-
-# Run bootstrap every time now
-bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
+# Run bootstrap every time now. It also installs Maven, which the image leaves
+# out (CVE-2024-47554).
+bashcmd=$(append_cmd "$bashcmd" "BUILD_MAVEN=1 ./bootstrap.sh")
 
 # At last, append the user's command.
 bashcmd=$(append_cmd "$bashcmd" "$cmd")

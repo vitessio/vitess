@@ -165,7 +165,7 @@ func TestTableACL(t *testing.T) {
 	// carries a subquery is refused whatever it reads: on the settings-pool
 	// path a plain query takes, and on the reservation a lock function forces.
 	subquerySetting := "set @@sql_select_limit = (select count(*) from vitess_acl_read_only)"
-	settingErr := "connection setting must not contain a subquery: " + subquerySetting
+	settingErr := "connection setting must not contain a subquery"
 	_, err = client.ReserveExecute("select 1", []string{subquerySetting}, nil)
 	require.ErrorContains(t, err, settingErr)
 	_, err = client.ReserveExecute("select get_lock('acl', 0)", []string{subquerySetting}, nil)

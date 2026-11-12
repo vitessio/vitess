@@ -206,30 +206,21 @@ func (thc *tabletHealthCheck) processResponse(hc *HealthCheckImpl, shr *query.St
 }
 
 // isTrivialReplagChange returns true iff the old and new RealtimeStats
-// haven't changed enough to warrant re-calling FilterLegacyStatsByReplicationLag.
+// haven't changed enough to warrant re-calling FilterStatsByReplicationLag.
 func (thc *tabletHealthCheck) isTrivialReplagChange(newStats *query.RealtimeStats) bool {
 	// first time always return false
 	if thc.Stats == nil {
 		return false
 	}
 	// Skip replag filter when replag remains in the low rep lag range,
-	// which should be the case majority of the time.
+	// which should be the case majority of the time. Any other change,
+	// however small, re-runs the filter: thc.Stats holds the previous
+	// response, so a lag that grows a little on each update must still
+	// take the tablet out of the healthy list at the high watermark.
 	lowRepLag := lowReplicationLag.Get().Seconds()
 	oldRepLag := float64(thc.Stats.ReplicationLagSeconds)
 	newRepLag := float64(newStats.ReplicationLagSeconds)
-	if oldRepLag <= lowRepLag && newRepLag <= lowRepLag {
-		return true
-	}
-	// Skip replag filter when replag remains in the high rep lag range,
-	// and did not change beyond +/- 10%.
-	// when there is a high rep lag, it takes a long time for it to reduce,
-	// so it is not necessary to re-calculate every time.
-	// In that case, we won't save the new record, so we still
-	// remember the original replication lag.
-	if oldRepLag > lowRepLag && newRepLag > lowRepLag && newRepLag < oldRepLag*1.1 && newRepLag > oldRepLag*0.9 {
-		return true
-	}
-	return false
+	return oldRepLag <= lowRepLag && newRepLag <= lowRepLag
 }
 
 // checkConn performs health checking on the given tablet.
