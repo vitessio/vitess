@@ -614,9 +614,10 @@ func TestOpenAndReload(t *testing.T) {
 	assert.Equal(t, pos5, se.reloadAtPos)
 
 	// The vstreams that reach the same DDL share one wait, and each stops waiting when its own
-	// context ends: a second caller neither runs a wait query of its own nor waits past its
-	// context, while the first one goes on waiting until the DDL commits.
-	se.reloadTimeout = 30 * time.Second // outlasts the second caller's context
+	// context ends. The wait goes on after the vstream that started it stops waiting, so the
+	// others don't fail then or run a wait query of their own, and one that goes on waiting
+	// reloads once the DDL commits.
+	se.reloadTimeout = 30 * time.Second // outlasts the callers' contexts
 	pos6, err := replication.DecodePosition("MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-60")
 	require.NoError(t, err)
 	gtid60 := replication.Mysql56GTID{Server: sid, Sequence: 60}
@@ -635,8 +636,10 @@ func TestOpenAndReload(t *testing.T) {
 			waitsDDL60.Add(1)
 			<-commit
 		})
+	firstCtx, cancelFirst := context.WithCancel(t.Context())
+	defer cancelFirst()
 	firstDone := make(chan error, 1)
-	go func() { firstDone <- se.ReloadAtDDL(t.Context(), pos6, gtid60) }()
+	go func() { firstDone <- se.ReloadAtDDL(firstCtx, pos6, gtid60) }()
 	require.Eventually(t, func() bool {
 		return waitsDDL60.Load() == 1
 	}, 30*time.Second, 10*time.Millisecond)
@@ -644,17 +647,27 @@ func TestOpenAndReload(t *testing.T) {
 	// state changes and schema readers, don't wait for a DDL that is slow to commit.
 	require.True(t, se.mu.TryLock(), "the DDL commit wait holds the engine's mutex")
 	se.mu.Unlock()
-	secondCtx, cancelSecond := context.WithTimeout(t.Context(), 200*time.Millisecond)
-	defer cancelSecond()
-	err = se.ReloadAtDDL(secondCtx, pos6, gtid60)
+	// The second caller goes on waiting until the DDL commits. It has the third caller's 200ms
+	// below to join the wait, since the DDL commits only after that.
+	secondDone := make(chan error, 1)
+	go func() { secondDone <- se.ReloadAtDDL(t.Context(), pos6, gtid60) }()
+	cancelFirst()
+	err = <-firstDone
+	require.ErrorContains(t, err, "stopped waiting for the DDL")
+	assert.Equal(t, vtrpcpb.Code_CANCELED, vterrors.Code(err))
+	// The third caller reaches the DDL after the first has stopped waiting, and still joins the
+	// wait that the first started.
+	thirdCtx, cancelThird := context.WithTimeout(t.Context(), 200*time.Millisecond)
+	defer cancelThird()
+	err = se.ReloadAtDDL(thirdCtx, pos6, gtid60)
 	require.ErrorContains(t, err, "stopped waiting for the DDL")
 	assert.Equal(t, vtrpcpb.Code_DEADLINE_EXCEEDED, vterrors.Code(err))
 	assert.EqualValues(t, 1, waitsDDL60.Load())
 	commitDDL60()
-	require.NoError(t, <-firstDone)
+	require.NoError(t, <-secondDone)
 	assert.EqualValues(t, 1, waitsDDL60.Load())
 	assert.Equal(t, pos6, se.reloadAtPos)
-	// The two vstreams shared one wait, so it was timed once: the waits for 30, 40, 42, 45
+	// The three vstreams shared one wait, so it was timed once: the waits for 30, 40, 42, 45
 	// (twice) and 60 make six.
 	assert.EqualValues(t, 6, ddlCommitWaits()-ddlCommitWaitsBefore)
 	// None of them is counted as a schema reload.
