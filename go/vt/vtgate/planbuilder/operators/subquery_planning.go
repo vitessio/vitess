@@ -714,7 +714,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 			Conditions:             allCond,
 			PreservesReferenceRows: preserved,
 
-			NoRoutesSpecialHandling: outer.NoRoutesSpecialHandling,
+			NoRoutesSpecialHandling: (inner.NoRoutesSpecialHandling || outer.NoRoutesSpecialHandling) && routesToOneShard(outer.Routing),
 		}
 	}
 	_, isSharded := r.(*ShardedRouting)
@@ -736,7 +736,7 @@ func (s *subqueryRouteMerger) merge(ctx *plancontext.PlanningContext, inner, out
 		Conditions:             allCond,
 		PreservesReferenceRows: preserved,
 
-		NoRoutesSpecialHandling: outer.NoRoutesSpecialHandling && routesToOneShard(r),
+		NoRoutesSpecialHandling: (inner.NoRoutesSpecialHandling || outer.NoRoutesSpecialHandling) && routesToOneShard(r),
 	}
 }
 

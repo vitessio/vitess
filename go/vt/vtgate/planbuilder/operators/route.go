@@ -207,8 +207,8 @@ func canCarryReferenceRows(r Routing) bool {
 	return ok && r.OpCode() == engine.Reference
 }
 
-// routesToOneShard reports whether a routing is a sharded EqualUnique routing, which main also
-// merges a recursive term through.
+// routesToOneShard reports whether a routing is a sharded EqualUnique routing. Only a recursive term
+// keeps the preserved reference rows on it, as main does, and it can still resolve to no destination.
 func routesToOneShard(r Routing) bool {
 	_, ok := r.(*ShardedRouting)
 	return ok && r.OpCode() == engine.EqualUnique

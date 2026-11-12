@@ -5002,21 +5002,39 @@ func BenchmarkSelectMirror(b *testing.B) {
 }
 
 func TestRecursiveTermOverReferenceTableNextToShardWithNoDestination(t *testing.T) {
-	executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
+	for _, tc := range []struct{ name, query, want string }{
+		{
+			name:  "left join",
+			query: "with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id left join `user` u on u.id = :u_id where z.id < 5) select id from c",
+			want:  "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from zip_detail as z left join `user` as u on u.id = :u_id where z.id = c.id and z.id < 5) select id from c",
+		},
+		{
+			name:  "second join",
+			query: "with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id left join `user` u on u.id = :u_id left join user_extra e on e.user_id = :u_id where z.id < 5) select id from c",
+			want:  "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from zip_detail as z left join `user` as u on u.id = :u_id left join user_extra as e on e.user_id = :u_id where z.id = c.id and z.id < 5) select id from c",
+		},
+		{
+			name:  "union",
+			query: "with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id join (select z2.id from zip_detail z2 left join `user` u on u.id = :u_id union all select z3.id from zip_detail z3 left join `user` u3 on u3.id = :u_id) d on d.id = z.id where z.id < 5) select id from c",
+			want:  "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from (select z2.id from zip_detail as z2 left join `user` as u on u.id = :u_id where id = :z_id union all select z3.id from zip_detail as z3 left join `user` as u3 on u3.id = :u_id where id = :z_id) as d, zip_detail as z where z.id = c.id and z.id < 5 and d.id = z.id) select id from c",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
 
-	query := "with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id left join `user` u on u.id = :u_id where z.id < 5) select id from c"
-	session := &vtgatepb.Session{TargetString: "@primary"}
-	_, err := executorExec(ctx, executor, session, query, map[string]*querypb.BindVariable{"u_id": sqltypes.NullBindVariable})
-	require.NoError(t, err)
+			session := &vtgatepb.Session{TargetString: "@primary"}
+			_, err := executorExec(ctx, executor, session, tc.query, map[string]*querypb.BindVariable{"u_id": sqltypes.NullBindVariable})
+			require.NoError(t, err)
 
-	// A NULL maps to no shard, and the seed rows have to come back from one all the same.
-	want := "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from zip_detail as z left join `user` as u on u.id = :u_id where z.id = c.id and z.id < 5) select id from c"
-	var sent []string
-	for _, sbc := range []*sandboxconn.SandboxConn{sbc1, sbc2} {
-		for _, q := range sbc.Queries {
-			sent = append(sent, q.Sql)
-		}
+			// A NULL maps to no shard, and the seed rows have to come back from one all the same.
+			var sent []string
+			for _, sbc := range []*sandboxconn.SandboxConn{sbc1, sbc2} {
+				for _, q := range sbc.Queries {
+					sent = append(sent, q.Sql)
+				}
+			}
+			require.Equal(t, []string{tc.want}, sent)
+			require.Nil(t, sbclookup.Queries)
+		})
 	}
-	require.Equal(t, []string{want}, sent)
-	require.Nil(t, sbclookup.Queries)
 }
