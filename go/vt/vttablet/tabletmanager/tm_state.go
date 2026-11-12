@@ -419,7 +419,10 @@ func (ts *tmState) setPendingReplicationInitLocked(ctx context.Context, id uint6
 	if id != 0 && err != nil {
 		ts.replicationInitError = err.Error()
 	}
-	if ts.isOpen && reason != ts.canServe(ts.tablet.Type) {
+	// Once Close has canceled the state, the query service is stopping: a
+	// change may still take the tablet out of rotation, but not put it back.
+	newReason := ts.canServe(ts.tablet.Type)
+	if ts.isOpen && reason != newReason && (newReason != "" || ts.ctx.Err() == nil) {
 		if err := ts.updateLocked(ctx); err != nil {
 			log.Error("Cannot update query service after replication initialization state change", slog.Any("error", err))
 		}

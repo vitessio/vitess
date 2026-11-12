@@ -2135,3 +2135,24 @@ func TestReplicationInitLockWait(t *testing.T) {
 		assert.GreaterOrEqual(t, time.Until(deadline), topo.RemoteOperationTimeout/2, "the wait left no time for the fence or the work under the lock")
 	})
 }
+
+// TestCanceledStateDoesNotResumeServing checks that once Close has canceled the
+// state, which happens while the query service stops, ending a deferral no
+// longer puts the replica back in rotation, while a deferral still takes it
+// out.
+func TestCanceledStateDoesNotResumeServing(t *testing.T) {
+	t.Run("an admission does not resume serving", func(t *testing.T) {
+		tm, _, _, qsc, id := newPendingReplicationTM(t)
+		tm.tmState.cancel()
+		require.True(t, tm.tmState.endReplicationInit(t.Context(), id, false))
+		assert.False(t, qsc.IsServing())
+	})
+	t.Run("a deferral still stops serving", func(t *testing.T) {
+		tm, _, _, qsc, id := newPendingReplicationTM(t)
+		require.True(t, tm.tmState.endReplicationInit(t.Context(), id, false))
+		require.True(t, qsc.IsServing())
+		tm.tmState.cancel()
+		tm.tmState.deferReplicationInit(t.Context(), nil, nil)
+		assert.False(t, qsc.IsServing())
+	})
+}
