@@ -116,18 +116,21 @@ func TestExistsKeepsTheRestOfThePredicate(t *testing.T) {
 		`select count(*) from t1 a join t2 b on a.id2 < b.id3 where (b.id4 = 4 or a.id1 in (select id4 from t2)) and (select max(id3) from t2) = 7`,
 		`select id2 from t1 where id1 = (select min(id3) from t2) or id2 = (select min(id3) from t2) order by id2`,
 		`select id2 from t1 where exists (select 1 from t2) or exists (select 1 from t2) order by id2`,
+		// A distinct aggregation next to a subquery is counted above the join, also over rows that repeat its value.
+		`select count(distinct a.id1) from t1 a join t2 b on b.id3 = a.id2 where b.id4 = 4 or a.id2 in (select id4 from t2)`,
+		`select count(distinct a.id2) from t1 a join t2 b on a.id2 = b.id4 where b.id3 = 1 or exists (select 1 from t2)`,
+		`select count(distinct b.id4) from t1 a join t2 b on b.id3 = a.id2 where a.id1 = 0 or b.id4 in (select id4 from t2 where id3 > 4)`,
+		`select count(distinct b.id4) from t1 a left join t2 b on b.id3 = a.id2 where a.id1 = 0 or b.id4 in (select id4 from t2 where id3 > 4)`,
+		`select a.id1 % 2, count(distinct b.id4) from t1 a join t2 b on b.id3 = a.id2 where a.id1 = 0 or b.id4 in (select id4 from t2 where id3 > 4) group by a.id1 % 2 order by a.id1 % 2`,
 	}
 	for _, query := range queries {
 		mcmp.Exec(query)
 	}
 
-	mcmp.Exec("insert into t2(id3, id4) values (1, 2), (3, 4), (7, 8)")
+	mcmp.Exec("insert into t2(id3, id4) values (1, 2), (3, 4), (5, 4), (7, 8)")
 	for _, query := range queries {
 		mcmp.Exec(query)
 	}
-
-	_, err := utils.ExecAllowError(t, mcmp.VtConn, `select count(distinct a.id2) from t1 a join t2 b on a.id2 = b.id4 where b.id3 = 1 or exists (select 1 from t2)`)
-	require.ErrorContains(t, err, "distinct aggregation over a subquery that needs more grouping columns")
 
 	mcmp.Exec("insert into user(id, name) values (1, 'a'), (2, 'b'), (3, 'c'), (4, 'd')")
 	mcmp.Exec("delete from user where id = 1 or exists (select 1 from t2 where id3 > 100)")
