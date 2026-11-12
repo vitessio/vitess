@@ -126,7 +126,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	utils.SetFlagVar(fs, &initTags, "init-tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	utils.SetFlagDurationVar(fs, &initTimeout, "init-timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "Timeout to use when MySQL is being shut down.")
-	fs.DurationVar(&replicationInitLockWait, "init-replication-lock-wait", replicationInitLockWait, "(init parameter) how long replication initialization, at startup or after a restore, retries a shard lock that another operation holds before it leaves replication unchanged and keeps the tablet out of rotation until VTOrc, a reparent or an operator starts replication. A reparent that holds the lock can wait this long for the tablet's RPCs, so keep it well below the reparent's --wait-replicas-timeout. The wait ends in time to leave --remote-operation-timeout before the deadline of the startup or restore that runs it.")
+	fs.DurationVar(&replicationInitLockWait, "init-replication-lock-wait", replicationInitLockWait, "(init parameter) how long replication initialization, at startup or after a restore, retries a shard lock that another operation holds before it leaves replication unchanged and keeps the tablet out of rotation until VTOrc, a reparent or an operator starts replication. A reparent that holds the lock can wait this long for the tablet's RPCs, so keep it well below the reparent's --wait-replicas-timeout. 0 disables retrying. The wait ends in time to leave twice --remote-operation-timeout before the deadline of the startup or restore that runs it, so with an --init-timeout close to that, startup may not retry at all.")
 }
 
 var (
@@ -1210,10 +1210,11 @@ func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (con
 	msg := fmt.Sprintf("cannot initialize replication for %s/%s; replication has not been changed", tablet.Keyspace, tablet.Shard)
 	deadline := time.Now().Add(replicationInitLockWait)
 	// A wait that ran into the caller's deadline would fail initialization
-	// instead of deferring it: leave the fence before a deferral, and the work
-	// under the lock, their budget.
-	if d, ok := ctx.Deadline(); ok && d.Add(-topo.RemoteOperationTimeout).Before(deadline) {
-		deadline = d.Add(-topo.RemoteOperationTimeout)
+	// instead of deferring it. Leave a budget for the last attempt, which can
+	// start just before the deadline below, and one for the fence before a
+	// deferral or for the work under the lock.
+	if d, ok := ctx.Deadline(); ok && d.Add(-2*topo.RemoteOperationTimeout).Before(deadline) {
+		deadline = d.Add(-2 * topo.RemoteOperationTimeout)
 	}
 	for {
 		lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication",

@@ -2123,16 +2123,22 @@ func TestReplicationInitLockWait(t *testing.T) {
 		assert.GreaterOrEqual(t, time.Since(start), replicationInitLockWait)
 	})
 	t.Run("ends in time to defer before the caller's deadline", func(t *testing.T) {
-		tm, _, ts, _ := newReplicationInitializationTM(t)
+		// Each attempt takes most of an attempt's budget, as on a slow
+		// topology server, so the last one can end well after it started.
+		_, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
+		ts, err := topo.NewWithFactory(&slowLockFactory{Factory: factory, delay: 900 * time.Millisecond}, "", "")
+		require.NoError(t, err)
+		t.Cleanup(ts.Close)
+		tm, _ := newReplicationInitializationTMWithServer(t, ts, 1)
 		holdInitializationShardLock(t, ts)
 		replicationInitLockWait = time.Minute
-		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 3500*time.Millisecond)
 		defer cancel()
-		_, _, err := tm.lockReplicationInitialization(ctx)
+		_, _, err = tm.lockReplicationInitialization(ctx)
 		_, deferrable := errors.AsType[*shardLockUnavailableError](err)
 		require.True(t, deferrable, "got %v", err)
 		deadline, _ := ctx.Deadline()
-		assert.GreaterOrEqual(t, time.Until(deadline), topo.RemoteOperationTimeout/2, "the wait left no time for the fence or the work under the lock")
+		assert.GreaterOrEqual(t, time.Until(deadline), topo.RemoteOperationTimeout, "the wait left less than the fence's budget")
 	})
 }
 
