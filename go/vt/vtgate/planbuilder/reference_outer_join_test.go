@@ -767,3 +767,22 @@ func TestAnAlternateAuthorizesACrossKeyspaceJoinWhenNoMergeIsRefused(t *testing.
 		"select d.col, x.col from (select col from global_ref limit 1) d join (select col from `user` limit 3) x")
 	require.NoError(t, err)
 }
+
+// A recursive CTE that preserves reference rows in a reference route does not hand the no-destination
+// handling to the single shard route of the query around it, which runs nowhere when it finds no shard.
+func TestARecursiveCTEOverReferenceRowsDoesNotMakeTheOuterRouteRunWithoutADestination(t *testing.T) {
+	const seedPreserves = "with recursive c as (select r.col from ref r left join ref r2 on r2.col = r.col union all select r.col from c join ref r on r.col = c.col where r.col < 3) "
+	const termPreserves = "with recursive c as (select col from ref where col = 1 union all select r.col from c join ref r on r.col = c.col left join ref r2 on r2.col = r.col where r.col < 3) "
+	for _, query := range []string{
+		seedPreserves + "select c.col from c join `user` u on u.id = :x",
+		termPreserves + "select c.col from c join `user` u on u.id = :x",
+		seedPreserves + "select c.col from c join `user` u on u.id in ::list",
+		seedPreserves + "select d.col from (select col from c) d join `user` u on u.id = :x",
+	} {
+		t.Run(query, func(t *testing.T) {
+			route, ok := planReferenceOuterJoin(t, query).(*engine.Route)
+			require.True(t, ok, "expected one route")
+			require.False(t, route.NoRoutesSpecialHandling)
+		})
+	}
+}
