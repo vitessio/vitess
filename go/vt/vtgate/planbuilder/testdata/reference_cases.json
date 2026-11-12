@@ -5020,5 +5020,106 @@
     "query": "select a.id from (select id from ref limit 1) a where a.id in (select x.id from user x where x.id = a.id)",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS",
     "skip_e2e": true
+  },
+  {
+    "comment": "a recursive CTE that keeps reference rows next to one shard in a subquery that is not used for routing is pulled out, not merged into a reference route",
+    "query": "select col from ref where col = 5 or col in (with recursive c as (select col from ref where col = 1 union all select u.col from c join ref r on r.col = c.col left join `user` u on u.id = 3 where r.col < 2) select col from c)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col from ref where col = 5 or col in (with recursive c as (select col from ref where col = 1 union all select u.col from c join ref r on r.col = c.col left join `user` u on u.id = 3 where r.col < 2) select col from c)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select u.col from (c, ref as r) left join `user` as u on u.id = 3 where 1 != 1) select col from c where 1 != 1",
+            "Query": "with recursive c as (select col from ref where col = 1 union all select u.col from (c, ref as r) left join `user` as u on u.id = 3 where r.col = c.col and r.col < 2) select col from c",
+            "Values": [
+              "3"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from ref where 1 != 1",
+            "Query": "select col from ref where col = 5 or :__sq_has_values and col in ::__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a recursive CTE with two left joins next to one shard in a subquery that is not used for routing is pulled out, not merged into a reference route",
+    "query": "select col from ref where col = 5 or col in (with recursive c as (select col from ref where col = 1 union all select u.col from c join ref r on r.col = c.col left join `user` u on u.id = 3 left join user_extra e on e.user_id = 3 where r.col < 2) select col from c)",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select col from ref where col = 5 or col in (with recursive c as (select col from ref where col = 1 union all select u.col from c join ref r on r.col = c.col left join `user` u on u.id = 3 left join user_extra e on e.user_id = 3 where r.col < 2) select col from c)",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select u.col from (c, ref as r) left join `user` as u on u.id = 3 left join user_extra as e on e.user_id = 3 where 1 != 1) select col from c where 1 != 1",
+            "Query": "with recursive c as (select col from ref where col = 1 union all select u.col from (c, ref as r) left join `user` as u on u.id = 3 left join user_extra as e on e.user_id = 3 where r.col = c.col and r.col < 2) select col from c",
+            "Values": [
+              "3"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Reference",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col from ref where 1 != 1",
+            "Query": "select col from ref where col = 5 or :__sq_has_values and col in ::__sq1"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
