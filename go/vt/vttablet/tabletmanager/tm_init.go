@@ -615,6 +615,9 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, config *tabletenv.Tabl
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
 func (tm *TabletManager) Close() {
+	// Stop the watchers first: the other OnClose hooks, which stop the query
+	// service and close MySQL, run concurrently with this one.
+	tm.tmState.Close()
 	tm.stopShardHealthMonitor()
 
 	// Stop the shard sync loop and wait for it to exit. We do this in Close()
@@ -642,8 +645,6 @@ func (tm *TabletManager) Close() {
 	if _, err := tm.TopoServer.UpdateTabletFields(updateCtx, tm.tabletAlias, f); err != nil {
 		log.Warn("Failed to update tablet record, may contain stale identifiers", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
-
-	tm.tmState.Close()
 }
 
 // Stop shuts down the tm. Normally this is not necessary, since we use
@@ -1347,7 +1348,8 @@ func (tm *TabletManager) watchReplicationInit(ctx context.Context, id uint64) {
 		case <-time.After(replicationInitWatchInterval):
 		}
 		ended, err := tm.admitDeferredReplicationInit(ctx, id)
-		if ended {
+		if ended || ctx.Err() != nil {
+			// A canceled check says nothing about replication.
 			return
 		}
 		if err == nil {

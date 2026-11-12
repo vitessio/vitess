@@ -153,7 +153,7 @@ func newReplicationInitializationTMWithServer(t *testing.T, ts *topo.Server, uid
 		actionSema: semaphore.NewWeighted(1),
 	}
 	tm.tmState = newTMState(tm, tablet)
-	t.Cleanup(tm.tmState.cancel)
+	t.Cleanup(tm.tmState.Close)
 	require.NoError(t, ts.CreateTablet(ctx, tablet))
 	primary := newTestTablet(t, 2, "ks", "0", nil)
 	if _, err := ts.GetTablet(ctx, primary.Alias); topo.IsErrType(err, topo.NoNode) {
@@ -443,7 +443,7 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 				tm, md, ts, factory := newReplicationInitializationTM(t)
 				holdInitializationShardLock(t, ts)
 				// Stop the watcher before the lock is released.
-				t.Cleanup(tm.tmState.cancel)
+				t.Cleanup(tm.tmState.Close)
 				if tc.lockErr != nil {
 					factory.AddOperationError(memorytopo.TryLock, ".*", tc.lockErr)
 				}
@@ -554,7 +554,7 @@ func TestPendingReplicationReasonShowsLatestError(t *testing.T) {
 	_, err := tm.initializeReplicationUnlessShardLocked(t.Context(), logutil.NewMemoryLogger(), topodatapb.TabletType_REPLICA, nil)
 	require.NoError(t, err)
 	// Stop the watcher, so that only this test changes the reason.
-	tm.tmState.cancel()
+	tm.tmState.Close()
 	assert.Contains(t, tm.tmState.canServe(topodatapb.TabletType_REPLICA), "replication is not initialized: cannot initialize replication for ks/0; replication has not been changed: timed out acquiring the shard lock")
 
 	id := tm.tmState.pendingReplicationInit
@@ -1942,4 +1942,100 @@ func TestStartFailureStopsReplicationInitWatcher(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		require.FailNow(t, "Start did not return once its watcher could exit")
 	}
+}
+
+// closeOrderFactory records, when a tablet record is updated, whether the
+// tablet manager's state was still open.
+type closeOrderFactory struct {
+	topo.Factory
+	openDuringWrite func()
+}
+
+func (f closeOrderFactory) Create(cell, addr, root string) (topo.Conn, error) {
+	c, err := f.Factory.Create(cell, addr, root)
+	if err != nil {
+		return nil, err
+	}
+	return closeOrderConn{Conn: c, openDuringWrite: f.openDuringWrite}, nil
+}
+
+type closeOrderConn struct {
+	topo.Conn
+	openDuringWrite func()
+}
+
+func (c closeOrderConn) Update(ctx context.Context, path string, contents []byte, version topo.Version) (topo.Version, error) {
+	if strings.HasSuffix(path, "/Tablet") {
+		c.openDuringWrite()
+	}
+	return c.Conn.Update(ctx, path, contents, version)
+}
+
+// TestCloseStopsWatchersBeforeItsTopoWrite checks that Close stops a deferred
+// replication initialization's watcher before it clears the tablet record,
+// which can take topo.RemoteOperationTimeout: vttablet stops the query service
+// and closes MySQL in OnClose hooks that run concurrently with Close.
+func TestCloseStopsWatchersBeforeItsTopoWrite(t *testing.T) {
+	_, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
+	var tm *TabletManager
+	var writes, openWrites atomic.Int32
+	// Open publishes the tablet record under the state's lock.
+	var armed atomic.Bool
+	ts, err := topo.NewWithFactory(closeOrderFactory{Factory: factory, openDuringWrite: func() {
+		if !armed.Load() {
+			return
+		}
+		writes.Add(1)
+		tm.tmState.mu.Lock()
+		defer tm.tmState.mu.Unlock()
+		if tm.tmState.isOpen {
+			openWrites.Add(1)
+		}
+	}}, "", "")
+	require.NoError(t, err)
+	t.Cleanup(ts.Close)
+	tm, md := newReplicationInitializationTMWithServer(t, ts, 1)
+	qsc := tabletservermock.NewController()
+	require.NoError(t, qsc.InitDBConfig(&querypb.Target{Keyspace: "ks", Shard: "0"}, nil, md))
+	tm.QueryServiceControl = qsc
+	tm.tmState.Open()
+	armed.Store(true)
+
+	tm.Close()
+	require.NotZero(t, writes.Load(), "Close did not update the tablet record")
+	assert.Zero(t, openWrites.Load(), "Close updated the tablet record with its state still open")
+}
+
+// TestCanceledWatcherLeavesReplicationInitError checks that a watcher whose
+// check is canceled by Close does not record the cancellation as the reason
+// the replica does not serve.
+func TestCanceledWatcherLeavesReplicationInitError(t *testing.T) {
+	tm, md, _, _, id := newPendingReplicationTM(t)
+	blocked := &blockingStatusDaemon{FakeMysqlDaemon: md, entered: make(chan struct{})}
+	tm.MysqlDaemon = blocked
+	tm.tmState.setReplicationInitError(t.Context(), id, errors.New("replication is not running"))
+	tm.tmState.goWatch(func(ctx context.Context) { tm.watchReplicationInit(ctx, id) })
+	select {
+	case <-blocked.entered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the watcher did not check replication")
+	}
+
+	tm.tmState.Close()
+	tm.tmState.mu.Lock()
+	defer tm.tmState.mu.Unlock()
+	assert.Equal(t, "replication is not running", tm.tmState.replicationInitError)
+}
+
+// blockingStatusDaemon answers SHOW REPLICA STATUS only once ctx is done.
+type blockingStatusDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+	entered chan struct{}
+	once    sync.Once
+}
+
+func (d *blockingStatusDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	d.once.Do(func() { close(d.entered) })
+	<-ctx.Done()
+	return replication.ReplicationStatus{}, ctx.Err()
 }
