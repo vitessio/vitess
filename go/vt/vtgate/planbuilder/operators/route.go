@@ -930,7 +930,7 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		offset := -1
+		var offset int
 		if hasUnionOperator(r.Source) {
 			if knownOffset, found := knownOutputOffset(ctx, r.Source, order.SimplifiedExpr); found {
 				offset = knownOffset
