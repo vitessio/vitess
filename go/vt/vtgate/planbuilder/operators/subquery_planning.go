@@ -862,8 +862,10 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 			// Every row of the subquery lives on the shard its outer value routes to, so a reference
 			// outer route can ask the question on every shard: only that shard answers it. A write
 			// to the reference table has to reach all of its copies, so it is not asked that way. A
-			// LIMIT in the outer route may pick other rows on each shard.
-			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(ctx, m.subq) && !hasLimit(ctx, outRoute) {
+			// LIMIT in the outer route may pick other rows on each shard, and a function like RAND()
+			// may route the subquery to another shard on each one.
+			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(ctx, m.subq) &&
+				!variesByShard(ctx, outRoute) && !containsNonDeterministicFunction(m.subq.originalSubquery) {
 				m.onEveryShard = true
 				return m.merge(ctx, inRoute, outRoute, scatterOf(inRouting.(*ShardedRouting)))
 			}
@@ -1004,13 +1006,14 @@ func sameNameCopy(ctx *plancontext.PlanningContext, route, other *Route) *Route 
 	return &onTheCopy
 }
 
-// hasLimit reports whether the SQL of a route contains a LIMIT.
-func hasLimit(ctx *plancontext.PlanningContext, route *Route) bool {
+// variesByShard reports whether the SQL of a route can return other rows or values on each shard of
+// a reference table: through a LIMIT, or through a function like RAND().
+func variesByShard(ctx *plancontext.PlanningContext, route *Route) bool {
 	stmt, _, err := ToSQL(ctx, route.Source)
 	if err != nil {
 		return true
 	}
-	found := false
+	found := containsNonDeterministicFunction(stmt)
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, ok := node.(*sqlparser.Limit); ok {
 			found = true
