@@ -64,6 +64,11 @@ type (
 		// merges carry it on.
 		NoRoutesSpecialHandling bool
 
+		// AsksReferenceRowsOnEveryShard marks a route that runs the rows of a reference table on every
+		// shard, which a subquery that only one shard answers lets through once. Another reference or
+		// dual arm of a UNION merged into it would come back from every shard.
+		AsksReferenceRowsOnEveryShard bool
+
 		ResultColumns int
 	}
 

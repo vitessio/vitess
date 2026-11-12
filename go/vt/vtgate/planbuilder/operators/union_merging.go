@@ -129,6 +129,11 @@ func mergeUnionInputs(
 	}
 
 	switch {
+	// A reference or dual arm would come back from every shard of a route that asks reference rows on every shard.
+	case (b == dual || b == anyShard) && lhsRoute.AsksReferenceRowsOnEveryShard,
+		(a == dual || a == anyShard) && rhsRoute.AsksReferenceRowsOnEveryShard:
+		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+		return nil, nil
 	// if either side is a dual query, we can always merge them together
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case b == dual || (b == anyShard && sameKeyspace):
@@ -320,6 +325,8 @@ func createMergedUnion(
 		Conditions:    conditions,
 
 		NoRoutesSpecialHandling: lhsRoute.NoRoutesSpecialHandling || rhsRoute.NoRoutesSpecialHandling,
+
+		AsksReferenceRowsOnEveryShard: lhsRoute.AsksReferenceRowsOnEveryShard || rhsRoute.AsksReferenceRowsOnEveryShard,
 	}, selectExprs
 }
 

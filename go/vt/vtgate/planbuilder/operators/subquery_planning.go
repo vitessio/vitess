@@ -867,7 +867,11 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(ctx, m.subq) &&
 				!variesByShard(ctx, outRoute) && !evaluatesPerShard(m.subq.originalSubquery) {
 				m.onEveryShard = true
-				return m.merge(ctx, inRoute, outRoute, scatterOf(inRouting.(*ShardedRouting)))
+				merged := m.merge(ctx, inRoute, outRoute, scatterOf(inRouting.(*ShardedRouting)))
+				if merged != nil {
+					merged.AsksReferenceRowsOnEveryShard = true
+				}
+				return merged
 			}
 			debugNoRewrite("subquery merge blocked: the inner route is routed by a bind variable that only the outer query provides")
 			return nil
