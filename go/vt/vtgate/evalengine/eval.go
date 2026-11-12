@@ -61,26 +61,29 @@ const (
 	// and cannot be computed accurately
 	flagAmbiguousType typeFlag = 1 << 11
 
-	// flagNumericBytes marks a string that IF, CASE, NULLIF or ELT returned
-	// for a hex or bit literal that they selected.
+	// flagIsNumber marks a string that counts as a number in arithmetic,
+	// although it is not a hex or bit literal.
 	//
-	// The string is not a literal, but it still counts as the number of
-	// that literal in arithmetic: IF(1, 0x41, 'x') + 0 is 65 in MySQL.
-	flagNumericBytes typeFlag = 1 << 12
-	// flagDecimalFromText is set together with flagNumericBytes on a string
-	// that ELT returned.
+	// IF, CASE, NULLIF and ELT return such a string when they select a hex
+	// or bit literal: IF(1, 0x41, 'x') + 0 is 65 in MySQL.
 	//
-	// ELT differs from IF in one conversion: MySQL converts its result to
-	// a decimal by parsing the text. CAST(ELT(1, 0x3132) AS DECIMAL) is 12,
+	// This flag and flagNotDecimal are only set on an evalBytes value,
+	// never on a ctype: which argument is selected is only known when the
+	// expression runs.
+	flagIsNumber typeFlag = 1 << 12
+	// flagNotDecimal marks a string with flagIsNumber that does not count
+	// as a number in one case: a conversion to a decimal parses its text.
+	//
+	// ELT returns such a string: CAST(ELT(1, 0x3132) AS DECIMAL) is 12,
 	// where CAST(IF(1, 0x3132, 'x') AS DECIMAL) is 12594.
-	flagDecimalFromText typeFlag = 1 << 13
+	flagNotDecimal typeFlag = 1 << 13
 
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 
 	// flagNumericContext are the flags that make a string count as a number
 	// in arithmetic. See (*evalBytes).makePlain.
-	flagNumericContext = flagHex | flagBit | flagNumericBytes | flagDecimalFromText
+	flagNumericContext = flagHex | flagBit | flagIsNumber | flagNotDecimal
 )
 
 func (f typeFlag) Nullable() bool {
@@ -228,12 +231,12 @@ func evalNotBoolean(e eval) eval {
 // res must too: IF(1, 0x41, 'x') + 0 is 65 in MySQL. In that case
 // evalKeepNumber returns a copy of res with the flags in keep:
 //
-//   - flagNumericBytes for IF, CASE and NULLIF
-//   - flagNumericBytes | flagDecimalFromText for ELT
+//   - flagIsNumber for IF, CASE and NULLIF
+//   - flagIsNumber | flagNotDecimal for ELT
 //   - none for IFNULL, whose result is a regular string:
 //     IFNULL(0x41, 'x') + 0 is 0
 //
-// Unless keep is none, the copy also keeps the flagDecimalFromText of sel.
+// Unless keep is none, the copy also keeps the flagNotDecimal of sel.
 // In every other case evalKeepNumber returns res as it is.
 func evalKeepNumber(sel, res eval, keep typeFlag) eval {
 	s, ok := sel.(*evalBytes)
@@ -247,7 +250,7 @@ func evalKeepNumber(sel, res eval, keep typeFlag) eval {
 	r := *b
 	r.makePlain()
 	if keep != 0 {
-		r.flag |= keep | s.flag&flagDecimalFromText
+		r.flag |= keep | s.flag&flagNotDecimal
 	}
 	return &r
 }

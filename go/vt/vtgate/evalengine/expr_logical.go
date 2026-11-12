@@ -644,12 +644,12 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // numberFlags returns the flags to pass to evalKeepNumber:
-// flagNumericBytes, or none for IFNULL. See CaseExpr.plain.
+// flagIsNumber, or none for IFNULL. See CaseExpr.plain.
 func (c *CaseExpr) numberFlags() typeFlag {
 	if c.plain {
 		return 0
 	}
-	return flagNumericBytes
+	return flagIsNumber
 }
 
 func (c *CaseExpr) constant() bool {
