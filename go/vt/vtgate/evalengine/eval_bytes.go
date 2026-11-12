@@ -136,13 +136,15 @@ func (e *evalBytes) isHexOrBitLiteral() bool {
 	return e.isHexLiteral() || e.isBitLiteral()
 }
 
-// makePlain turns e, in place, into an ordinary string: numeric conversions
-// parse its text instead of reading its bytes as the number of a hex or bit
-// literal. The result of a function is such a string even when it holds the
-// bytes of a literal argument, so REVERSE(0x41) + 0 is 0, not 65.
-// It must only be called on a value that the caller owns, such as a value on
-// the stack of the virtual machine. Use evalPlain for a value that may be
-// shared, such as the value of a Literal.
+// makePlain marks e as a regular string.
+//
+// A hex or bit literal such as 0x41 is a string that counts as a number in
+// arithmetic: 0x41 + 0 is 65. The result of a function never does, even if
+// it has the same bytes: REVERSE(0x41) + 0 is 0. Functions call makePlain
+// on their result to remove that special treatment.
+//
+// makePlain changes e itself, so do not call it on a shared value such as
+// the value of a Literal. Use evalPlain there, which returns a copy.
 func (e *evalBytes) makePlain() {
 	e.flag &^= flagNumericContext
 }
