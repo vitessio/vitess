@@ -9,7 +9,21 @@ runs:
         # Pin the Ceph release. The store's default track is squid (Ceph 19);
         # latest/stable currently still points at reef (Ceph 18). Bumping this is
         # a deliberate change, as the MinIO package version was before.
-        sudo snap install microceph --channel=squid/stable
+        #
+        # The Snap Store sometimes doesn't answer GitHub's runners (connection
+        # timeouts, EOFs, "unable to contact snap store"), so retry. snap reports
+        # those errors only once snapd has given up on the install, and installing
+        # a snap that is already installed exits 0, so another attempt is safe.
+        for attempt in 1 2 3; do
+          if sudo snap install microceph --channel=squid/stable; then
+            break
+          fi
+          if [ "$attempt" -eq 3 ]; then
+            exit 1
+          fi
+          echo "snap install failed (attempt $attempt of 3); retrying in 30 seconds"
+          sleep 30
+        done
         # Hold the snap so an automatic refresh cannot restart Ceph mid-job.
         sudo snap refresh --hold microceph
 
