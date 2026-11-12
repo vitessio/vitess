@@ -953,6 +953,30 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(-49)`,
 		},
 		{
+			// A hex literal that IF selects at run time is the string '12',
+			// but its number in a numeric context.
+			expression: `IF(column0 > 0, 0x3132, column1) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("34"))},
+			result:     `FLOAT64(12594)`,
+		},
+		{
+			expression: `ELT(column0, column1, IF(column0 > 0, 0x3132, column1)) = 12594`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarChar("a")},
+			result:     `INT64(1)`,
+		},
+		{
+			// 0b110000 is the string '0', but the number 48, which is true.
+			expression: `NOT (CASE WHEN column0 THEN 0b110000 ELSE column1 END)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("1")},
+			result:     `INT64(0)`,
+		},
+		{
+			// IFNULL does not hand the bit literal on.
+			expression: `IFNULL(column0, 0b11000100110010) + 0`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     `FLOAT64(12)`,
+		},
+		{
 			// A number is converted to a string in the connection collation,
 			// which is the collation of the result.
 			expression: `REVERSE(column0)`,

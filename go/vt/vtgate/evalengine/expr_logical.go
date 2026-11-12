@@ -64,6 +64,10 @@ type (
 	CaseExpr struct {
 		cases []WhenThen
 		Else  IR
+		// plain makes the result an ordinary string when the selected
+		// argument is a hex or bit literal, as for IFNULL, a function
+		// whose result MySQL converts to a number from its text.
+		plain bool
 	}
 )
 
@@ -633,8 +637,19 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	// The result keeps a hex or bit literal, as in MySQL, but is not a boolean.
-	return evalCoerce(evalNotBoolean(result), ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
+	// The result is not a boolean, but converts to the number of a selected
+	// hex or bit literal, as in MySQL.
+	res, err := evalCoerce(evalNotBoolean(result), ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
+	return evalSelected(result, res, c.selected()), err
+}
+
+// selected returns the flags that a string selected from a hex or bit literal
+// gets: none for IFNULL, which hands no literal on.
+func (c *CaseExpr) selected() typeFlag {
+	if c.plain {
+		return 0
+	}
+	return flagSelectedLiteral
 }
 
 func (c *CaseExpr) constant() bool {
@@ -717,7 +732,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		f |= flagNullable
 	}
 	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, cs.selected(), ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }
 

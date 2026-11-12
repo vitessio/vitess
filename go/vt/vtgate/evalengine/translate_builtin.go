@@ -1179,7 +1179,8 @@ func builtinIfNullRewrite(args []IR) (IR, error) {
 			},
 			then: args[1],
 		}},
-		Else: args[0],
+		Else:  args[0],
+		plain: true,
 	}, nil
 }
 

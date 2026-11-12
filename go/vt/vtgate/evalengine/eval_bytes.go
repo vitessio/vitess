@@ -68,7 +68,7 @@ func newEvalVector(raw []byte) *evalBytes {
 }
 
 func evalToBinary(e eval) *evalBytes {
-	if e, ok := e.(*evalBytes); ok && e.isBinary() && !e.isHexOrBitLiteral() {
+	if e, ok := e.(*evalBytes); ok && e.isBinary() && e.flag&flagLiteralNumber == 0 {
 		return e
 	}
 	return newEvalBinary(e.ToRawBytes())
@@ -79,7 +79,7 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 	var typedcol collations.TypedCollation
 
 	if b, ok := e.(*evalBytes); ok && convert {
-		if b.isVarChar() && b.col.Collation == col {
+		if b.isVarChar() && b.col.Collation == col && b.flag&flagSelectedLiteral == 0 {
 			return b, nil
 		}
 
@@ -134,6 +134,13 @@ func (e *evalBytes) isBitLiteral() bool {
 
 func (e *evalBytes) isHexOrBitLiteral() bool {
 	return e.isHexLiteral() || e.isBitLiteral()
+}
+
+// isLiteralDecimal reports whether e converts to a decimal as the number of a
+// hex or bit literal: it is one, or a string that IF, CASE or NULLIF selected
+// from one. ELT gives a decimal conversion the text of its argument.
+func (e *evalBytes) isLiteralDecimal() bool {
+	return e.flag&flagLiteralNumber != 0 && e.flag&flagSelectedByElt == 0
 }
 
 func (e *evalBytes) isVarChar() bool {

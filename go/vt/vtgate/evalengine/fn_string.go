@@ -405,7 +405,7 @@ func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	return newEvalRaw(tt, b.bytes, b.col), nil
+	return evalSelected(args[i], newEvalRaw(tt, b.bytes, b.col), flagSelectedLiteral|flagSelectedByElt), nil
 }
 
 func (call *builtinElt) compile(c *compiler) (ctype, error) {
@@ -442,28 +442,6 @@ func (call *builtinElt) compile(c *compiler) (ctype, error) {
 	}
 
 	_ = c.compileToInt64(args[0], len(args))
-
-	for i, arg := range args[1:] {
-		offset := len(args) - (i + 1)
-		skip := c.compileNullCheckOffset(arg, offset)
-
-		switch arg.Type {
-		case sqltypes.VarBinary, sqltypes.Binary, sqltypes.Blob:
-			if tc.Collation != collations.CollationBinaryID {
-				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
-			}
-		case sqltypes.VarChar, sqltypes.Char, sqltypes.Text:
-			fromCharset := colldata.Lookup(arg.Col.Collation).Charset()
-			toCharset := colldata.Lookup(tc.Collation).Charset()
-			if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
-				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
-			}
-		default:
-			c.asm.Convert_xce(offset, arg.Type, tc.Collation)
-		}
-
-		c.asm.jumpDestination(skip)
-	}
 
 	c.asm.Fn_ELT(len(args), tt, tc)
 	c.asm.jumpDestination(skip)

@@ -119,6 +119,11 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 	case evalNumeric:
 		return e
 	case *evalBytes:
+		if e.flag&flagSelectedLiteral != 0 {
+			// a string, so a double, but of the number of the selected literal
+			f, _ := evalToFloat(e)
+			return f
+		}
 		if e.isHexLiteral() {
 			hex, ok := e.toNumericHex()
 			if !ok {
@@ -177,7 +182,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 	case evalNumeric:
 		return e.toFloat()
 	case *evalBytes:
-		if e.isHexLiteral() {
+		if e.flag&(flagHex|flagSelectedLiteral) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -235,7 +240,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	case evalNumeric:
 		return e.toDecimal(m, d)
 	case *evalBytes:
-		if e.isHexLiteral() {
+		if e.flag&(flagHex|flagSelectedLiteral) != 0 && e.flag&flagSelectedByElt == 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -298,6 +303,30 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	}
 }
 
+// evalCastToInt64 converts e for CAST AS SIGNED or UNSIGNED. MySQL converts a
+// string argument of CAST from its text, so this reads the text of a string
+// that IF, CASE, NULLIF or ELT selected from a hex or bit literal, where
+// evalToInt64 reads the number of the literal. A literal itself still
+// converts to its number.
+func evalCastToInt64(e eval) *evalInt64 {
+	if b, ok := e.(*evalBytes); ok && b.flag&flagSelectedLiteral != 0 {
+		i, _ := fastparse.ParseInt64(b.string(), 10)
+		return newEvalInt64(i)
+	}
+	return evalToInt64(e)
+}
+
+// evalDecimalArg returns e as the argument of a function that MySQL gives the
+// decimal value of its argument, such as FROM_UNIXTIME: a string that ELT
+// selected from a hex or bit literal is an ordinary string there, because
+// ELT gives a decimal conversion its text.
+func evalDecimalArg(e eval) eval {
+	if b, ok := e.(*evalBytes); ok && b.flag&flagSelectedByElt != 0 {
+		return evalPlain(b)
+	}
+	return e
+}
+
 func evalToInt64(e eval) *evalInt64 {
 	switch e := e.(type) {
 	case *evalInt64:
@@ -305,7 +334,7 @@ func evalToInt64(e eval) *evalInt64 {
 	case evalNumeric:
 		return e.toInt64()
 	case *evalBytes:
-		if e.isHexLiteral() {
+		if e.flag&(flagHex|flagSelectedLiteral) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow

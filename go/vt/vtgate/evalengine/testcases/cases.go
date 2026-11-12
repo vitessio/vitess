@@ -184,6 +184,7 @@ var Cases = []TestCase{
 	{Run: RegexpSubstr},
 	{Run: RegexpReplace},
 	{Run: FunctionResultLiterals},
+	{Run: SelectedLiterals},
 }
 
 func FnJSONKeys(yield Query) {
@@ -3031,4 +3032,57 @@ func FunctionResultLiterals(yield Query) {
 		"CAST(1=1 AS SIGNED)", "CONVERT(1=0, SIGNED)", "COALESCE(1=1)", "GREATEST(1=1, 0)", "LEAST(1=1, 2)",
 		"IF(true, 1=1, 0)", "IFNULL(1=1, 0)", "NULLIF(1=1, 0)", "CASE WHEN true THEN 1=1 END", "REGEXP_INSTR('a', 'a')",
 	)
+}
+
+// SelectedLiterals checks that IF, CASE, NULLIF and ELT hand a hex or bit
+// literal that they select on to a numeric context: a number, a comparison
+// with a number, a truth value or an integer argument reads the number of the
+// literal (0x3132 is 12594, 0x30 is 48), while CAST AS SIGNED, CONV, a
+// comparison with a string and the string functions read its text ('12',
+// '0'). It also checks that a branch that is not selected, and IFNULL,
+// COALESCE and functions around or inside these, do not hand a literal on.
+func SelectedLiterals(yield Query) {
+	selected := []string{
+		"IF(true, 0x3132, 'a')", "IF(false, 5, 0b11000100110010)",
+		"CASE WHEN true THEN 0x3132 ELSE 1.5 END", "CASE WHEN false THEN 'a' ELSE b'11000100110010' END",
+		"CASE 1 WHEN 1 THEN x'3132' END", "CASE 2 WHEN 1 THEN 'a' WHEN 2 THEN 0b11000100110010 END",
+		"NULLIF(0x3132, 0x33)", "NULLIF(0b11000100110010, 5)",
+		"ELT(2, 'a', 0x3132)", "ELT(1, 0b11000100110010, NULL)",
+		"IF(true, CASE WHEN true THEN 0x3132 END, 0x34)", "NULLIF(ELT(1, IF(true, 0b11000100110010, 0x33)), 0x34)",
+	}
+	// Not selected or not handed on: these are the strings '12' or '34'.
+	plain := []string{
+		"IF(false, 0x3132, '34')", "CASE WHEN false THEN 0b11000100110010 ELSE '34' END", "ELT(1, '34', 0x3132)",
+		"IFNULL(0x3132, 0x33)", "IFNULL(NULL, 0b11000100110010)", "COALESCE(IF(true, 0x3132, 0x33))",
+		"CONCAT(CASE WHEN true THEN 0x3132 END)", "IF(true, TRIM(0x3132), 0x33)", "IF(true, IFNULL(0b11000100110010, 1), 0x33)",
+		"CAST(NULLIF(0x3132, 0x33) AS BINARY)",
+	}
+	for _, consumer := range []string{
+		"(%s) + 0", "-(%s)", "(%s) = 12594", "(%s) = '12'", "MAKEDATE(2020, %s)", "CHAR(%s)",
+		"CAST(%s AS SIGNED)", "CONV(%s, 10, 10)", "CONCAT(%s, 'x')",
+	} {
+		yieldIn(yield, consumer, selected...)
+		yieldIn(yield, consumer, plain...)
+	}
+	// ELT gives a decimal conversion, and so DIV, FROM_UNIXTIME and
+	// SEC_TO_TIME, its text; IF, CASE and NULLIF give it the number of the
+	// literal.
+	elt := []string{
+		"ELT(2, 'a', 0x3132)", "ELT(1, 0b11000100110010, NULL)",
+		"CASE WHEN true THEN ELT(1, 0x3132) END", "ELT(1, IF(true, 0x3132, 0x33))",
+	}
+	yieldIn(yield, "CAST(%s AS DECIMAL(10, 2))", selected...)
+	yieldIn(yield, "CAST(%s AS DECIMAL(10, 2))", plain...)
+	yieldIn(yield, "CAST(%s AS DECIMAL(10, 2))", elt[2:]...)
+	yieldIn(yield, "(%s) DIV 5", elt...)
+	yieldIn(yield, "FROM_UNIXTIME(%s)", elt...)
+	yieldIn(yield, "SEC_TO_TIME(%s)", elt...)
+
+	// 0x30 and 0b110000 are '0' as a string, but 48 as a number.
+	for _, consumer := range []string{"IF(%s, 'T', 'F')", "NOT (%s)", "(%s) IS TRUE", "CASE WHEN %s THEN 'T' ELSE 'F' END"} {
+		yieldIn(yield, consumer,
+			"IF(true, 0x30, 0x31)", "CASE WHEN true THEN 0b110000 END", "NULLIF(0x30, 0x31)", "ELT(1, 0b110000)",
+			"IFNULL(0x30, 0x31)", "IF(true, CONCAT(0x30), 0x31)",
+		)
+	}
 }

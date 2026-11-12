@@ -118,9 +118,9 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return nil, c.returnUnsupportedError()
 	case "SIGNED", "SIGNED INTEGER":
-		return evalPlain(evalToInt64(e)), nil
+		return evalPlain(evalCastToInt64(e)), nil
 	case "UNSIGNED", "UNSIGNED INTEGER":
-		return evalToInt64(e).toUint64(), nil
+		return evalCastToInt64(e).toUint64(), nil
 	case "JSON":
 		return evalToJSON(e)
 	case "DATETIME":
@@ -210,10 +210,20 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 		return ctype{}, conv.returnUnsupportedError()
 
 	case "SIGNED", "SIGNED INTEGER":
-		convt = c.compileToInt64(arg, 1)
+		if arg.isTextual() {
+			c.asm.Convert_ci(1)
+			convt = ctype{Type: sqltypes.Int64, Col: collationNumeric}
+		} else {
+			convt = c.compileToInt64(arg, 1)
+		}
 
 	case "UNSIGNED", "UNSIGNED INTEGER":
-		convt = c.compileToUint64(arg, 1)
+		if arg.isTextual() {
+			c.asm.Convert_cu(1)
+			convt = ctype{Type: sqltypes.Uint64, Col: collationNumeric}
+		} else {
+			convt = c.compileToUint64(arg, 1)
+		}
 
 	case "JSON":
 		// TODO: what does NULL map to?
