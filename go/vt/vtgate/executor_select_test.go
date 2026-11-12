@@ -5053,3 +5053,43 @@ func TestRecursiveTermOverReferenceTableNextToShardWithNoDestination(t *testing.
 		})
 	}
 }
+
+// The no-destination handling starts in a recursive term only, so a join of two reference tables
+// next to a single shard that finds none runs nowhere, as on main.
+func TestReferenceJoinNextToShardWithNoDestinationRunsNowhere(t *testing.T) {
+	list, err := sqltypes.BuildBindVariable([]any{nil})
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name, query string
+		binds       map[string]*querypb.BindVariable
+	}{
+		{
+			name:  "equal",
+			query: "select z.id from zip_detail z left join zip_detail z2 on z2.id = z.id join `user` u on u.id = :x",
+			binds: map[string]*querypb.BindVariable{"x": sqltypes.NullBindVariable},
+		},
+		{
+			name:  "in",
+			query: "select z.id from zip_detail z left join zip_detail z2 on z2.id = z.id join `user` u on u.id in ::list",
+			binds: map[string]*querypb.BindVariable{"list": list},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			executor, sbc1, sbc2, _, ctx := createExecutorEnv(t)
+
+			session := &vtgatepb.Session{TargetString: "@primary"}
+			_, err := executorExec(ctx, executor, session, tc.query, tc.binds)
+			require.NoError(t, err)
+
+			var sent []string
+			for _, sbc := range []*sandboxconn.SandboxConn{sbc1, sbc2} {
+				for _, q := range sbc.Queries {
+					if !strings.Contains(q.Sql, "1 != 1") {
+						sent = append(sent, q.Sql)
+					}
+				}
+			}
+			require.Empty(t, sent)
+		})
+	}
+}
