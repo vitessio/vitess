@@ -4802,6 +4802,56 @@
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
   },
   {
+    "comment": "a count in a scalar subquery of the select list of a subquery does not make it return a row on a shard without rows, so it is asked on every shard",
+    "query": "select a.id from ref a where a.id in (select (select count(*) from user_extra e where e.user_id = x.id) from user x where x.id = a.id)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.id from ref a where a.id in (select (select count(*) from user_extra e where e.user_id = x.id) from user x where x.id = a.id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.id from ref as a where 1 != 1",
+        "Query": "select a.id from ref as a where a.id in (select (select count(*) from user_extra as e where e.user_id = x.id) from `user` as x where x.id = a.id)"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
+    "comment": "a count in a scalar subquery of the ORDER BY of a subquery does not make it return a row on a shard without rows, so it is asked on every shard",
+    "query": "select a.id from ref a where a.id in (select x.id from user x where x.id = a.id order by (select count(*) from user_extra e where e.user_id = x.id))",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.id from ref a where a.id in (select x.id from user x where x.id = a.id order by (select count(*) from user_extra e where e.user_id = x.id))",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.id from ref as a where 1 != 1",
+        "Query": "select a.id from ref as a where a.id in (select x.id from `user` as x where x.id = a.id order by (select count(*) from user_extra as e where e.user_id = x.id) asc)"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user",
+        "user.user_extra"
+      ]
+    },
+    "skip_e2e": true
+  },
+  {
     "comment": "a subquery with a max next to a constant is refused over a reference table left joined with a sharded table",
     "query": "select a.col from ref a left join user u on u.col = a.col where (a.col, a.id) != (select max(x.col), 0 from user x where x.id = a.col)",
     "plan": "VT12001: unsupported: correlated subquery is only supported for EXISTS"
