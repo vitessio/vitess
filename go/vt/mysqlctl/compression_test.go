@@ -374,6 +374,7 @@ func TestExternalCompressorLogOmitsFlags(t *testing.T) {
 
 			args, err := os.ReadFile(argsFile)
 			require.NoError(t, err)
+			require.NoError(t, os.Remove(argsFile))
 			assert.Equal(t, tt.wantArgs, string(args))
 
 			r := logs.Record(t, tt.message)
