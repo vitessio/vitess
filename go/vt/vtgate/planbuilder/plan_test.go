@@ -1217,3 +1217,95 @@ func benchmarkPlanner(b *testing.B, version plancontext.PlannerVersion, testCase
 		}
 	}
 }
+
+// DML joins can merge, but read-only subqueries inside the same statement must
+// still preserve reference and dual rows on the left of an outer join.
+func (s *planTestSuite) TestDMLSubqueryOuterJoinsPreserveRows() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user", "music"})
+	for _, query := range []string{
+		"update user set col = (select count(*) from (select 1 as x from dual) d left join music m on m.col = 5) where id = 1",
+		"update user set col = (select count(*) from ref r left join music m on m.col = r.col) where id = 1",
+		"update user set col = (select count(*) from ref r left join music m on m.id = r.col) where id = 1",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		s.Require().NotNil(engine.Find(func(p engine.Primitive) bool {
+			join, ok := p.(*engine.Join)
+			return ok && join.Opcode == engine.LeftJoin
+		}, plan.Instructions), query)
+	}
+}
+
+// MySQL can perform recursive DISTINCT on one shard. VTGate recursion must
+// reject it until it can deduplicate across levels and shards.
+func (s *planTestSuite) TestRecursiveDistinctRequiresSingleShard() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+	for _, seed := range []string{"select id from ref", "select 1 as id from dual", "select id from unsharded"} {
+		query := "with recursive c as (" + seed + " union select u.id from user u join c on u.id = c.id) select id from c"
+		_, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().ErrorContains(err, "VT12001", query)
+		s.Require().ErrorContains(err, "recursive UNION DISTINCT", query)
+	}
+	for _, seed := range []string{"select id from ref", "select 1 as id from dual"} {
+		query := "with recursive c as (" + seed + " union select u.id from user u join c on u.id = 5) select id from c"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		routes := routePrimitives(plan.Instructions)
+		s.Require().Len(routes, 1, query)
+		s.Require().Equal(engine.EqualUnique, routes[0].Opcode, query)
+		widened, err := TestBuilder(query+" union all select id from user", vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		s.Require().IsType(&engine.Concatenate{}, widened.Instructions, "a merged reference-seeded DISTINCT CTE must not widen under a later UNION ALL")
+	}
+}
+
+// Choose reference copies before seed projection planning and enforce the
+// policy on actual remaining keyspaces if recursion stays in VTGate.
+func (s *planTestSuite) TestRecursiveCTEReferenceCopiesAndReadPolicy() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["main"].PreventCrossKeyspaceReads = true
+	vschema.Keyspaces["user"].PreventCrossKeyspaceReads = true
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+	for _, query := range []string{
+		"with recursive c as (select id from source_of_ref union all select u.id from user u join c on u.col = c.id) select id from c",
+		"with recursive c as (select r.id as x from source_of_ref r union all select u.id from user u join c on u.col = c.x) select x from c",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		routes := routePrimitives(plan.Instructions)
+		s.Require().NotEmpty(routes, query)
+		for _, route := range routes {
+			s.Require().Equal("user", route.Keyspace.Name, query)
+		}
+		s.Require().Contains(routes[0].Query, "ref_with_source", query)
+	}
+	// An already-projected seed cannot be replaced by a bare alternate. Keep
+	// the projection and require an override for the actual cross-keyspace read.
+	derived := "with recursive c as (select x from (select id as x from source_of_ref where id = 42) t union all select u.id from user u join c on u.col = c.x) select x from c"
+	_, err = TestBuilder(derived, vw, vw.CurrentDb())
+	s.Require().ErrorContains(err, "cross-keyspace", derived)
+	derivedOverride := strings.Replace(derived, "select x from c", "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ x from c", 1)
+	plan, err := TestBuilder(derivedOverride, vw, vw.CurrentDb())
+	s.Require().NoError(err, derivedOverride)
+	routes := routePrimitives(plan.Instructions)
+	s.Require().NotEmpty(routes)
+	s.Require().Contains(routes[0].Query, "= 42")
+	s.Require().Contains(routes[0].Query, " as x")
+	query := "with recursive c as (select id from unsharded union all select u.id from user u join c on u.col = c.id) select id from c"
+	_, err = TestBuilder(query, vw, vw.CurrentDb())
+	s.Require().ErrorContains(err, "cross-keyspace", query)
+	override := strings.Replace(query, "select id from c", "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ id from c", 1)
+	_, err = TestBuilder(override, vw, vw.CurrentDb())
+	s.Require().NoError(err, override)
+}

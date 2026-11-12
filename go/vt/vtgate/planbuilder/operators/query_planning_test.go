@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -360,6 +361,35 @@ func TestUpperLimitAcrossUnion(t *testing.T) {
 // A rejected CTE merge must leave both recursive state and tracked arguments
 // intact so the VTGate recursive operator can still bind its term correctly.
 func TestRejectedCTEMergeLeavesRecursiveStateUntouched(t *testing.T) {
+	for _, distinct := range []bool{false, true} {
+		t.Run(fmt.Sprintf("distinct=%t", distinct), func(t *testing.T) {
+			tracker := predicates.NewTracker()
+			temporary := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewArgument("c_id")}
+			join := tracker.NewJoinPredicate(temporary)
+			original := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewColNameWithQualifier("id", sqlparser.NewTableName("c"))}
+			ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable(), PredTracker: tracker, VSchema: &mockVSchema{}}
+			ctx.SemTable.Recursive[original] = semantics.SingleTableSet(0)
+			routing := &ShardedRouting{keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true}, RouteOpCode: engine.EqualUnique, SeenPredicates: []sqlparser.Expr{join}}
+			term := &Route{Routing: routing}
+			horizon := &Horizon{}
+			in := &RecurseCTE{Def: &semantics.CTE{}, Distinct: distinct, Horizon: horizon, Predicates: []*plancontext.RecurseExpression{{JoinPredicateID: &join.ID, Original: original}}}
+			seed := &Route{ContainsSpecialUnionInput: true}
+
+			result := mergeCTE(ctx, seed, term, routing, in, nil)
+			require.Nil(t, result)
+			assert.False(t, in.Def.Merged)
+			assert.Same(t, horizon, in.Horizon)
+			assert.Nil(t, horizon.Source)
+			assert.Same(t, temporary, join.Current())
+			assert.Equal(t, engine.EqualUnique, routing.RouteOpCode)
+			assert.Same(t, join, routing.SeenPredicates[0])
+		})
+	}
+}
+
+// An accepted CTE merge must restore predicates before recomputing routing,
+// rather than retaining a reserved recursive argument in its merged route.
+func TestMergedCTERestoresPredicatesAndRecomputesRouting(t *testing.T) {
 	tracker := predicates.NewTracker()
 	temporary := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewArgument("c_id")}
 	join := tracker.NewJoinPredicate(temporary)
@@ -367,17 +397,45 @@ func TestRejectedCTEMergeLeavesRecursiveStateUntouched(t *testing.T) {
 	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable(), PredTracker: tracker, VSchema: &mockVSchema{}}
 	ctx.SemTable.Recursive[original] = semantics.SingleTableSet(0)
 	routing := &ShardedRouting{keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true}, RouteOpCode: engine.EqualUnique, SeenPredicates: []sqlparser.Expr{join}}
-	term := &Route{Routing: routing}
-	horizon := &Horizon{}
+	term := &Route{Routing: routing, unaryOperator: newUnaryOp(&fakeOp{})}
+	statement, err := sqlparser.NewTestParser().Parse("select 1")
+	require.NoError(t, err)
+	horizon := &Horizon{Query: statement.(*sqlparser.Select)}
 	in := &RecurseCTE{Def: &semantics.CTE{}, Horizon: horizon, Predicates: []*plancontext.RecurseExpression{{JoinPredicateID: &join.ID, Original: original}}}
-	seed := &Route{ContainsSpecialUnionInput: true}
-
+	seed := &Route{Routing: &ShardedRouting{RouteOpCode: engine.Scatter}, unaryOperator: newUnaryOp(&fakeOp{})}
 	result := mergeCTE(ctx, seed, term, routing, in, nil)
-	require.Nil(t, result)
-	assert.False(t, in.Def.Merged)
-	assert.Same(t, horizon, in.Horizon)
-	assert.Nil(t, horizon.Source)
-	assert.Same(t, temporary, join.Current())
-	assert.Equal(t, engine.EqualUnique, routing.RouteOpCode)
-	assert.Same(t, join, routing.SeenPredicates[0])
+	require.NotNil(t, result)
+	require.Equal(t, engine.Scatter, result.Routing.OpCode())
+	require.Same(t, original, join.Current())
+	require.Equal(t, engine.EqualUnique, routing.RouteOpCode, "recompute a copy")
+}
+
+// Both special left-input cases may bypass the read guard only when the join
+// itself includes a DML target, not merely because the statement has a target.
+func TestOuterJoinDMLExemptionIsLocalToTargets(t *testing.T) {
+	for _, dual := range []bool{false, true} {
+		for _, touchesTarget := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dual=%t/target=%t", dual, touchesTarget), func(t *testing.T) {
+				ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
+				ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable(), PredTracker: predicates.NewTracker(), VSchema: &mockVSchema{}}
+				ctx.SemTable.DMLTargets = semantics.SingleTableSet(0)
+				if !touchesTarget {
+					ctx.SemTable.DMLTargets = semantics.SingleTableSet(1)
+				}
+				var leftRouting Routing = &AnyShardRouting{keyspace: ks}
+				if dual {
+					leftRouting = &DualRouting{}
+				}
+				lhs := &Route{Routing: leftRouting, unaryOperator: newUnaryOp(&fakeOp{id: semantics.SingleTableSet(2)})}
+				rhs := &Route{Routing: &ShardedRouting{keyspace: ks, RouteOpCode: engine.Scatter}, unaryOperator: newUnaryOp(&fakeOp{id: semantics.SingleTableSet(0)})}
+				result := newJoinMerge(nil, sqlparser.LeftJoinType).mergeJoinInputs(ctx, lhs, rhs)
+				if touchesTarget {
+					require.NotNil(t, result)
+					require.Equal(t, engine.Scatter, result.Routing.OpCode())
+				} else {
+					require.Nil(t, result)
+				}
+			})
+		}
+	}
 }

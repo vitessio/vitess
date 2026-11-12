@@ -394,3 +394,54 @@ func TestRecursiveReferenceBranchingHonorsMemoryLimit(t *testing.T) {
 		})
 	}
 }
+
+// An UPDATE target does not exempt independent scalar subqueries from
+// preserving the left side of a dual/reference outer join.
+func TestDMLScalarSubqueryPreservesOuterJoinRows(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	mcmp.Exec("insert into t1(id1,id2) values (1,1)")
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	// Arithmetic on the indexed column forces Scatter rather than a lookup
+	// miss, whose no-route fallback can otherwise hide duplicated left rows.
+	for _, query := range []string{
+		"update t1 set id2 = (select count(*) from (select 1 as x from dual) d left join t2 m on m.id4 + 1 = 5) where id1 = 1",
+		"update t1 set id2 = (select count(*) from ref r left join t2 m on m.id4 + 1 = r.id) where id1 = 1",
+	} {
+		mcmp.Exec(query)
+		mcmp.AssertMatches("select id2 from t1 where id1 = 1", "[[INT64(1)]]")
+	}
+}
+
+// Recursive DISTINCT must either execute on one shard with MySQL's
+// deduplication or fail at planning, never silently run as UNION ALL in VTGate.
+func TestRecursiveDistinctReferenceSeeds(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	mcmp.Exec("insert into t1(id1,id2) values (1,1)")
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			for _, seed := range []string{"select id from ref", "select 100 as id from dual"} {
+				query := "with recursive c as (" + seed + " union select u.id1 from t1 u join c on u.id1 = c.id) select id from c"
+				_, err := mcmp.VtConn.ExecuteFetch(query, 1000, true)
+				require.ErrorContains(mcmp.AsT(), err, "VT12001")
+				require.ErrorContains(mcmp.AsT(), err, "recursive UNION DISTINCT")
+				safe := strings.Replace(query, "u.id1 = c.id", "u.id1 = 1", 1)
+				mcmp.AssertMatchesNoOrder(safe, "[[INT64(100)] [INT64(1)]]")
+				mcmp.AssertMatchesNoOrder(safe+" union all select id1 from t1", "[[INT64(100)] [INT64(1)] [INT64(1)]]")
+			}
+		})
+	}
+}

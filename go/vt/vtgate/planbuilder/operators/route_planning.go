@@ -385,6 +385,11 @@ func checkCrossKeyspacePair(ctx *plancontext.PlanningContext, lhs, rhs Operator,
 		return
 	}
 
+	checkCrossKeyspacePolicy(ctx, lhsKs, rhsKs, opType)
+}
+
+// checkCrossKeyspacePolicy checks actual keyspaces after route selection.
+func checkCrossKeyspacePolicy(ctx *plancontext.PlanningContext, lhsKs, rhsKs *vindexes.Keyspace, opType string) {
 	if sqlparser.AllowCrossKeyspaceReadsDirective(ctx.Statement) {
 		return
 	}

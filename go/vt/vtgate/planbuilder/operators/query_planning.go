@@ -197,7 +197,7 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 	// isn't INNER or targeting a single shard, we cannot safely perform this rewrite.
 	_, isDual := rb.Routing.(*DualRouting)
 	_, isAnyShard := rb.Routing.(*AnyShardRouting)
-	if ctx.SemTable.DMLTargets.IsEmpty() && (isDual || isAnyShard) &&
+	if !TableID(in).IsOverlapping(ctx.SemTable.DMLTargets) && (isDual || isAnyShard) &&
 		(!jm.joinType.IsInner() && !r.Routing.OpCode().IsSingleShard()) {
 		// to check the resulting opcode, we've used the original predicates.
 		// Since we are not using them, we need to restore the argument versions of the predicates

@@ -2460,13 +2460,13 @@
         "Inputs": [
           {
             "OperatorType": "Route",
-            "Variant": "Unsharded",
+            "Variant": "Reference",
             "Keyspace": {
-              "Name": "main",
-              "Sharded": false
+              "Name": "user",
+              "Sharded": true
             },
-            "FieldQuery": "select sr.id, sr.foo from source_of_ref as sr, rerouted_ref as rr where 1 != 1",
-            "Query": "select sr.id, sr.foo from source_of_ref as sr, rerouted_ref as rr where rr.bar = sr.bar"
+            "FieldQuery": "select sr.id, sr.foo from ref_with_source as sr, ref as rr where 1 != 1",
+            "Query": "select sr.id, sr.foo from ref_with_source as sr, ref as rr where rr.bar = sr.bar"
           },
           {
             "OperatorType": "Route",
@@ -2481,34 +2481,17 @@
         ]
       },
       "TablesUsed": [
-        "main.rerouted_ref",
-        "main.source_of_ref",
+        "user.ref",
+        "user.ref_with_source",
         "user.user",
         "user.user_extra"
       ]
     }
   },
   {
-    "comment": "Merged recursive CTE with DISTINCT",
+    "comment": "Recursive DISTINCT cannot execute across shards",
     "query": "WITH RECURSIVE hierarchy AS (SELECT id, name, manager_id FROM user UNION ALL SELECT id, name, manager_id FROM user UNION DISTINCT SELECT id*2, name, manager_id from hierarchy WHERE id < 10 ) SELECT * FROM hierarchy",
-    "plan": {
-      "Type": "Scatter",
-      "QueryType": "SELECT",
-      "Original": "WITH RECURSIVE hierarchy AS (SELECT id, name, manager_id FROM user UNION ALL SELECT id, name, manager_id FROM user UNION DISTINCT SELECT id*2, name, manager_id from hierarchy WHERE id < 10 ) SELECT * FROM hierarchy",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "with recursive hierarchy as (select id, `name`, manager_id from `user` where 1 != 1 union all select id, `name`, manager_id from `user` where 1 != 1 union select id * 2, `name`, manager_id from hierarchy where 1 != 1) select id, `name`, manager_id from hierarchy where 1 != 1",
-        "Query": "with recursive hierarchy as (select id, `name`, manager_id from `user` union all select id, `name`, manager_id from `user` union select id * 2, `name`, manager_id from hierarchy where id < 10) select id, `name`, manager_id from hierarchy"
-      },
-      "TablesUsed": [
-        "user.user"
-      ]
-    }
+    "plan": "VT12001: unsupported: recursive UNION DISTINCT that cannot be executed on a single shard"
   },
   {
     "comment": "Query that caused planner to stack overflow",
