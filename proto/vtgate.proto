@@ -162,6 +162,11 @@ message Session {
   string migration_context = 27;
 
   bool error_until_rollback = 28;
+
+  // additional_lock_sessions keeps track of the lock connections in keyspaces
+  // other than the one in lock_session. It is only used when more than one
+  // keyspace is designated for advisory locks.
+  repeated ShardSession additional_lock_sessions = 29;
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.

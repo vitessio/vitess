@@ -286,6 +286,7 @@ type KeyspaceSchema struct {
 	Keyspace                  *Keyspace
 	ForeignKeyMode            vschemapb.Keyspace_ForeignKeyMode
 	PreventCrossKeyspaceReads bool
+	AdvisoryLocks             bool
 	Tables                    map[string]*BaseTable
 	Vindexes                  map[string]Vindex
 	Views                     map[string]*View
@@ -300,6 +301,7 @@ type ksJSON struct {
 	Sharded                   bool                       `json:"sharded,omitempty"`
 	ForeignKeyMode            string                     `json:"foreignKeyMode,omitempty"`
 	PreventCrossKeyspaceReads bool                       `json:"preventCrossKeyspaceReads,omitempty"`
+	AdvisoryLocks             bool                       `json:"advisoryLocks,omitempty"`
 	Tables                    map[string]*BaseTable      `json:"tables,omitempty"`
 	Vindexes                  map[string]Vindex          `json:"vindexes,omitempty"`
 	Views                     map[string]string          `json:"views,omitempty"`
@@ -337,6 +339,7 @@ func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
 		Tables:                    ks.Tables,
 		ForeignKeyMode:            ks.ForeignKeyMode.String(),
 		PreventCrossKeyspaceReads: ks.PreventCrossKeyspaceReads,
+		AdvisoryLocks:             ks.AdvisoryLocks,
 		Vindexes:                  ks.Vindexes,
 		MultiTenantSpec:           ks.MultiTenantSpec,
 	}
@@ -431,6 +434,7 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema, parser *sqlp
 			},
 			ForeignKeyMode:            replaceUnspecifiedForeignKeyMode(ks.ForeignKeyMode),
 			PreventCrossKeyspaceReads: ks.PreventCrossKeyspaceReads,
+			AdvisoryLocks:             ks.AdvisoryLocks,
 			Tables:                    make(map[string]*BaseTable),
 			Vindexes:                  make(map[string]Vindex),
 			MultiTenantSpec:           ks.MultiTenantSpec,
@@ -1554,6 +1558,21 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topo
 		return nil, v, nil
 	}
 	return nil, nil, NotFoundError{TableName: name}
+}
+
+// AdvisoryLockKeyspaces returns the keyspaces whose VSchema sets
+// advisory_locks, sorted by name.
+func (vschema *VSchema) AdvisoryLockKeyspaces() []*Keyspace {
+	var keyspaces []*Keyspace
+	for _, ks := range vschema.Keyspaces {
+		if ks.AdvisoryLocks {
+			keyspaces = append(keyspaces, ks.Keyspace)
+		}
+	}
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
+	return keyspaces
 }
 
 func (vschema *VSchema) FindView(keyspace, name string) sqlparser.TableStatement {

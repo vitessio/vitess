@@ -470,7 +470,7 @@ func (txc *TxConn) Release(ctx context.Context, session *econtext.SafeSession) e
 	})
 }
 
-// ReleaseLock releases the reserved connection used for locking.
+// ReleaseLock releases the reserved connections used for locking.
 func (txc *TxConn) ReleaseLock(ctx context.Context, session *econtext.SafeSession) error {
 	if !session.InLockSession() {
 		return nil
@@ -478,15 +478,19 @@ func (txc *TxConn) ReleaseLock(ctx context.Context, session *econtext.SafeSessio
 	defer session.ResetLock()
 
 	session.ClearAdvisoryLock()
-	ls := session.LockSession
-	if ls.ReservedId == 0 {
-		return nil
+	allErrors := new(concurrency.AllErrorRecorder)
+	for _, ls := range session.LockSessions() {
+		if ls.ReservedId == 0 {
+			continue
+		}
+		qs, err := txc.queryService(ctx, ls.TabletAlias)
+		if err != nil {
+			allErrors.RecordError(err)
+			continue
+		}
+		allErrors.RecordError(qs.Release(ctx, ls.Target, 0, ls.ReservedId))
 	}
-	qs, err := txc.queryService(ctx, ls.TabletAlias)
-	if err != nil {
-		return err
-	}
-	return qs.Release(ctx, ls.Target, 0, ls.ReservedId)
+	return allErrors.Error()
 }
 
 // ReleaseAll releases all the shard sessions and lock session.

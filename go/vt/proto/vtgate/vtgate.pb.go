@@ -226,8 +226,12 @@ type Session struct {
 	// MigrationContext
 	MigrationContext   string `protobuf:"bytes,27,opt,name=migration_context,json=migrationContext,proto3" json:"migration_context,omitempty"`
 	ErrorUntilRollback bool   `protobuf:"varint,28,opt,name=error_until_rollback,json=errorUntilRollback,proto3" json:"error_until_rollback,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// additional_lock_sessions keeps track of the lock connections in keyspaces
+	// other than the one in lock_session. It is only used when more than one
+	// keyspace is designated for advisory locks.
+	AdditionalLockSessions []*Session_ShardSession `protobuf:"bytes,29,rep,name=additional_lock_sessions,json=additionalLockSessions,proto3" json:"additional_lock_sessions,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *Session) Reset() {
@@ -447,6 +451,13 @@ func (x *Session) GetErrorUntilRollback() bool {
 		return x.ErrorUntilRollback
 	}
 	return false
+}
+
+func (x *Session) GetAdditionalLockSessions() []*Session_ShardSession {
+	if x != nil {
+		return x.AdditionalLockSessions
+	}
+	return nil
 }
 
 // PrepareData keeps the prepared statement and other information related for execution of it.
@@ -2112,7 +2123,7 @@ var File_vtgate_proto protoreflect.FileDescriptor
 
 const file_vtgate_proto_rawDesc = "" +
 	"\n" +
-	"\fvtgate.proto\x12\x06vtgate\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\vvtrpc.proto\"\xce\x0f\n" +
+	"\fvtgate.proto\x12\x06vtgate\x1a\x10binlogdata.proto\x1a\vquery.proto\x1a\x0etopodata.proto\x1a\vvtrpc.proto\"\xa6\x10\n" +
 	"\aSession\x12%\n" +
 	"\x0ein_transaction\x18\x01 \x01(\bR\rinTransaction\x12C\n" +
 	"\x0eshard_sessions\x18\x02 \x03(\v2\x1c.vtgate.Session.ShardSessionR\rshardSessions\x12\x1e\n" +
@@ -2146,7 +2157,8 @@ const file_vtgate_proto_rawDesc = "" +
 	"\rquery_timeout\x18\x19 \x01(\x03R\fqueryTimeout\x12R\n" +
 	"\x11prepare_statement\x18\x1a \x03(\v2%.vtgate.Session.PrepareStatementEntryR\x10prepareStatement\x12+\n" +
 	"\x11migration_context\x18\x1b \x01(\tR\x10migrationContext\x120\n" +
-	"\x14error_until_rollback\x18\x1c \x01(\bR\x12errorUntilRollback\x1a\xf9\x01\n" +
+	"\x14error_until_rollback\x18\x1c \x01(\bR\x12errorUntilRollback\x12V\n" +
+	"\x18additional_lock_sessions\x18\x1d \x03(\v2\x1c.vtgate.Session.ShardSessionR\x16additionalLockSessions\x1a\xf9\x01\n" +
 	"\fShardSession\x12%\n" +
 	"\x06target\x18\x01 \x01(\v2\r.query.TargetR\x06target\x12%\n" +
 	"\x0etransaction_id\x18\x02 \x01(\x03R\rtransactionId\x128\n" +
@@ -2360,60 +2372,61 @@ var file_vtgate_proto_depIdxs = []int32{
 	4,  // 9: vtgate.Session.read_after_write:type_name -> vtgate.ReadAfterWrite
 	29, // 10: vtgate.Session.advisory_lock:type_name -> vtgate.Session.AdvisoryLockEntry
 	30, // 11: vtgate.Session.prepare_statement:type_name -> vtgate.Session.PrepareStatementEntry
-	33, // 12: vtgate.ExecuteMultiRequest.caller_id:type_name -> vtrpc.CallerID
-	2,  // 13: vtgate.ExecuteMultiRequest.session:type_name -> vtgate.Session
-	34, // 14: vtgate.ExecuteMultiResponse.error:type_name -> vtrpc.RPCError
-	2,  // 15: vtgate.ExecuteMultiResponse.session:type_name -> vtgate.Session
-	35, // 16: vtgate.ExecuteMultiResponse.results:type_name -> query.QueryResult
-	33, // 17: vtgate.ExecuteRequest.caller_id:type_name -> vtrpc.CallerID
-	2,  // 18: vtgate.ExecuteRequest.session:type_name -> vtgate.Session
-	36, // 19: vtgate.ExecuteRequest.query:type_name -> query.BoundQuery
-	34, // 20: vtgate.ExecuteResponse.error:type_name -> vtrpc.RPCError
-	2,  // 21: vtgate.ExecuteResponse.session:type_name -> vtgate.Session
-	35, // 22: vtgate.ExecuteResponse.result:type_name -> query.QueryResult
-	33, // 23: vtgate.ExecuteBatchRequest.caller_id:type_name -> vtrpc.CallerID
-	2,  // 24: vtgate.ExecuteBatchRequest.session:type_name -> vtgate.Session
-	36, // 25: vtgate.ExecuteBatchRequest.queries:type_name -> query.BoundQuery
-	34, // 26: vtgate.ExecuteBatchResponse.error:type_name -> vtrpc.RPCError
-	2,  // 27: vtgate.ExecuteBatchResponse.session:type_name -> vtgate.Session
-	37, // 28: vtgate.ExecuteBatchResponse.results:type_name -> query.ResultWithError
-	33, // 29: vtgate.StreamExecuteRequest.caller_id:type_name -> vtrpc.CallerID
-	36, // 30: vtgate.StreamExecuteRequest.query:type_name -> query.BoundQuery
-	2,  // 31: vtgate.StreamExecuteRequest.session:type_name -> vtgate.Session
-	35, // 32: vtgate.StreamExecuteResponse.result:type_name -> query.QueryResult
-	2,  // 33: vtgate.StreamExecuteResponse.session:type_name -> vtgate.Session
-	33, // 34: vtgate.StreamExecuteMultiRequest.caller_id:type_name -> vtrpc.CallerID
-	2,  // 35: vtgate.StreamExecuteMultiRequest.session:type_name -> vtgate.Session
-	37, // 36: vtgate.StreamExecuteMultiResponse.result:type_name -> query.ResultWithError
-	2,  // 37: vtgate.StreamExecuteMultiResponse.session:type_name -> vtgate.Session
-	33, // 38: vtgate.ResolveTransactionRequest.caller_id:type_name -> vtrpc.CallerID
-	33, // 39: vtgate.VStreamRequest.caller_id:type_name -> vtrpc.CallerID
-	38, // 40: vtgate.VStreamRequest.tablet_type:type_name -> topodata.TabletType
-	39, // 41: vtgate.VStreamRequest.vgtid:type_name -> binlogdata.VGtid
-	40, // 42: vtgate.VStreamRequest.filter:type_name -> binlogdata.Filter
-	17, // 43: vtgate.VStreamRequest.flags:type_name -> vtgate.VStreamFlags
-	41, // 44: vtgate.VStreamResponse.events:type_name -> binlogdata.VEvent
-	33, // 45: vtgate.PrepareRequest.caller_id:type_name -> vtrpc.CallerID
-	2,  // 46: vtgate.PrepareRequest.session:type_name -> vtgate.Session
-	36, // 47: vtgate.PrepareRequest.query:type_name -> query.BoundQuery
-	34, // 48: vtgate.PrepareResponse.error:type_name -> vtrpc.RPCError
-	2,  // 49: vtgate.PrepareResponse.session:type_name -> vtgate.Session
-	42, // 50: vtgate.PrepareResponse.fields:type_name -> query.Field
-	33, // 51: vtgate.CloseSessionRequest.caller_id:type_name -> vtrpc.CallerID
-	2,  // 52: vtgate.CloseSessionRequest.session:type_name -> vtgate.Session
-	34, // 53: vtgate.CloseSessionResponse.error:type_name -> vtrpc.RPCError
-	33, // 54: vtgate.BinlogDumpGTIDRequest.caller_id:type_name -> vtrpc.CallerID
-	38, // 55: vtgate.BinlogDumpGTIDRequest.tablet_type:type_name -> topodata.TabletType
-	43, // 56: vtgate.BinlogDumpGTIDRequest.tablet_alias:type_name -> topodata.TabletAlias
-	44, // 57: vtgate.Session.ShardSession.target:type_name -> query.Target
-	43, // 58: vtgate.Session.ShardSession.tablet_alias:type_name -> topodata.TabletAlias
-	45, // 59: vtgate.Session.UserDefinedVariablesEntry.value:type_name -> query.BindVariable
-	3,  // 60: vtgate.Session.PrepareStatementEntry.value:type_name -> vtgate.PrepareData
-	61, // [61:61] is the sub-list for method output_type
-	61, // [61:61] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	26, // 12: vtgate.Session.additional_lock_sessions:type_name -> vtgate.Session.ShardSession
+	33, // 13: vtgate.ExecuteMultiRequest.caller_id:type_name -> vtrpc.CallerID
+	2,  // 14: vtgate.ExecuteMultiRequest.session:type_name -> vtgate.Session
+	34, // 15: vtgate.ExecuteMultiResponse.error:type_name -> vtrpc.RPCError
+	2,  // 16: vtgate.ExecuteMultiResponse.session:type_name -> vtgate.Session
+	35, // 17: vtgate.ExecuteMultiResponse.results:type_name -> query.QueryResult
+	33, // 18: vtgate.ExecuteRequest.caller_id:type_name -> vtrpc.CallerID
+	2,  // 19: vtgate.ExecuteRequest.session:type_name -> vtgate.Session
+	36, // 20: vtgate.ExecuteRequest.query:type_name -> query.BoundQuery
+	34, // 21: vtgate.ExecuteResponse.error:type_name -> vtrpc.RPCError
+	2,  // 22: vtgate.ExecuteResponse.session:type_name -> vtgate.Session
+	35, // 23: vtgate.ExecuteResponse.result:type_name -> query.QueryResult
+	33, // 24: vtgate.ExecuteBatchRequest.caller_id:type_name -> vtrpc.CallerID
+	2,  // 25: vtgate.ExecuteBatchRequest.session:type_name -> vtgate.Session
+	36, // 26: vtgate.ExecuteBatchRequest.queries:type_name -> query.BoundQuery
+	34, // 27: vtgate.ExecuteBatchResponse.error:type_name -> vtrpc.RPCError
+	2,  // 28: vtgate.ExecuteBatchResponse.session:type_name -> vtgate.Session
+	37, // 29: vtgate.ExecuteBatchResponse.results:type_name -> query.ResultWithError
+	33, // 30: vtgate.StreamExecuteRequest.caller_id:type_name -> vtrpc.CallerID
+	36, // 31: vtgate.StreamExecuteRequest.query:type_name -> query.BoundQuery
+	2,  // 32: vtgate.StreamExecuteRequest.session:type_name -> vtgate.Session
+	35, // 33: vtgate.StreamExecuteResponse.result:type_name -> query.QueryResult
+	2,  // 34: vtgate.StreamExecuteResponse.session:type_name -> vtgate.Session
+	33, // 35: vtgate.StreamExecuteMultiRequest.caller_id:type_name -> vtrpc.CallerID
+	2,  // 36: vtgate.StreamExecuteMultiRequest.session:type_name -> vtgate.Session
+	37, // 37: vtgate.StreamExecuteMultiResponse.result:type_name -> query.ResultWithError
+	2,  // 38: vtgate.StreamExecuteMultiResponse.session:type_name -> vtgate.Session
+	33, // 39: vtgate.ResolveTransactionRequest.caller_id:type_name -> vtrpc.CallerID
+	33, // 40: vtgate.VStreamRequest.caller_id:type_name -> vtrpc.CallerID
+	38, // 41: vtgate.VStreamRequest.tablet_type:type_name -> topodata.TabletType
+	39, // 42: vtgate.VStreamRequest.vgtid:type_name -> binlogdata.VGtid
+	40, // 43: vtgate.VStreamRequest.filter:type_name -> binlogdata.Filter
+	17, // 44: vtgate.VStreamRequest.flags:type_name -> vtgate.VStreamFlags
+	41, // 45: vtgate.VStreamResponse.events:type_name -> binlogdata.VEvent
+	33, // 46: vtgate.PrepareRequest.caller_id:type_name -> vtrpc.CallerID
+	2,  // 47: vtgate.PrepareRequest.session:type_name -> vtgate.Session
+	36, // 48: vtgate.PrepareRequest.query:type_name -> query.BoundQuery
+	34, // 49: vtgate.PrepareResponse.error:type_name -> vtrpc.RPCError
+	2,  // 50: vtgate.PrepareResponse.session:type_name -> vtgate.Session
+	42, // 51: vtgate.PrepareResponse.fields:type_name -> query.Field
+	33, // 52: vtgate.CloseSessionRequest.caller_id:type_name -> vtrpc.CallerID
+	2,  // 53: vtgate.CloseSessionRequest.session:type_name -> vtgate.Session
+	34, // 54: vtgate.CloseSessionResponse.error:type_name -> vtrpc.RPCError
+	33, // 55: vtgate.BinlogDumpGTIDRequest.caller_id:type_name -> vtrpc.CallerID
+	38, // 56: vtgate.BinlogDumpGTIDRequest.tablet_type:type_name -> topodata.TabletType
+	43, // 57: vtgate.BinlogDumpGTIDRequest.tablet_alias:type_name -> topodata.TabletAlias
+	44, // 58: vtgate.Session.ShardSession.target:type_name -> query.Target
+	43, // 59: vtgate.Session.ShardSession.tablet_alias:type_name -> topodata.TabletAlias
+	45, // 60: vtgate.Session.UserDefinedVariablesEntry.value:type_name -> query.BindVariable
+	3,  // 61: vtgate.Session.PrepareStatementEntry.value:type_name -> vtgate.PrepareData
+	62, // [62:62] is the sub-list for method output_type
+	62, // [62:62] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_vtgate_proto_init() }

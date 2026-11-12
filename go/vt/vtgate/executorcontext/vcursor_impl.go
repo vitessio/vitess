@@ -109,7 +109,7 @@ type (
 		ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (qr *sqltypes.Result, errs []error)
 		ExecuteMultiShardPerShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, resultsObserver ResultsObserver, fetchLastInsertID bool) (results []*sqltypes.Result, errs []error)
 		StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error, observer ResultsObserver, fetchLastInsertID bool) []error
-		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error)
+		ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, session *SafeSession, lockFuncType sqlparser.LockingFuncType, multiKeyspace bool) (*sqltypes.Result, error)
 		Commit(ctx context.Context, safeSession *SafeSession) error
 		ExecuteMessageStream(ctx context.Context, rss []*srvtopo.ResolvedShard, name string, callback func(*sqltypes.Result) error) error
 		ExecuteVStream(ctx context.Context, rss []*srvtopo.ResolvedShard, filter *binlogdatapb.Filter, gtid string, callback func(evs []*binlogdatapb.VEvent) error) error
@@ -697,6 +697,20 @@ func (vc *VCursorImpl) FirstSortedKeyspace() (*vindexes.Keyspace, error) {
 	return keyspaces[0], nil
 }
 
+// AdvisoryLockKeyspaces implements the VSchema interface. It returns the
+// keyspaces designated for advisory locks in the VSchema. If none is
+// designated, it falls back to FirstSortedKeyspace.
+func (vc *VCursorImpl) AdvisoryLockKeyspaces() ([]*vindexes.Keyspace, error) {
+	if keyspaces := vc.vschema.AdvisoryLockKeyspaces(); len(keyspaces) > 0 {
+		return keyspaces, nil
+	}
+	ks, err := vc.FirstSortedKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	return []*vindexes.Keyspace{ks}, nil
+}
+
 // SysVarSetEnabled implements the ContextVSchema interface
 func (vc *VCursorImpl) SysVarSetEnabled() bool {
 	return vc.GetSessionEnableSystemSettings()
@@ -969,9 +983,9 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 }
 
 // ExecuteLock is for executing advisory lock statements.
-func (vc *VCursorImpl) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
+func (vc *VCursorImpl) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType, multiKeyspace bool) (*sqltypes.Result, error) {
 	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
-	return vc.executor.ExecuteLock(ctx, rs, query, vc.SafeSession, lockFuncType)
+	return vc.executor.ExecuteLock(ctx, rs, query, vc.SafeSession, lockFuncType, multiKeyspace)
 }
 
 // ExecuteStandalone is part of the engine.VCursor interface.
