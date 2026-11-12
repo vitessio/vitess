@@ -105,6 +105,14 @@ var (
 
 	initTimeout          = 1 * time.Minute
 	mysqlShutdownTimeout = mysqlctl.DefaultShutdownTimeout
+
+	// replicationInitLockWait is how long replication initialization retries a
+	// held shard lock before it defers. The lock holder may need RPCs to this
+	// tablet, which a starting tablet does not serve yet and a restoring tablet
+	// blocks with its action lock, so the wait delays the holder. Other
+	// tablets' initializations hold the lock too: replicas that restart
+	// together can outlast the default and defer.
+	replicationInitLockWait = time.Second
 )
 
 func registerInitFlags(fs *pflag.FlagSet) {
@@ -118,6 +126,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	utils.SetFlagVar(fs, &initTags, "init-tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 	utils.SetFlagDurationVar(fs, &initTimeout, "init-timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 	fs.DurationVar(&mysqlShutdownTimeout, "mysql-shutdown-timeout", mysqlShutdownTimeout, "Timeout to use when MySQL is being shut down.")
+	fs.DurationVar(&replicationInitLockWait, "init-replication-lock-wait", replicationInitLockWait, "(init parameter) how long replication initialization, at startup or after a restore, retries a shard lock that another operation holds before it leaves replication unchanged and keeps the tablet out of rotation until VTOrc, a reparent or an operator starts replication. A reparent that holds the lock can wait this long for the tablet's RPCs, so keep it well below the reparent's --wait-replicas-timeout. The wait ends in time to leave --remote-operation-timeout before the deadline of the startup or restore that runs it.")
 }
 
 var (
@@ -1187,27 +1196,25 @@ func (tm *TabletManager) hookExtraEnv() map[string]string {
 
 const replicationInitializationPrimaryStatusTimeout = 2 * time.Second
 
-// replicationInitializationLockWait is how long replication initialization
-// retries a held shard lock: long enough for other tablets' replication
-// initializations, which hold it briefly, but not for a reparent. The lock
-// holder may need RPCs to this tablet, which a starting tablet does not serve
-// yet and a restoring tablet blocks with its action lock, so the wait delays
-// the holder.
-const replicationInitializationLockWait = time.Second
-
 // replicationInitializationLockRetryInterval is the pause between attempts to
 // take a held shard lock.
 const replicationInitializationLockRetryInterval = 100 * time.Millisecond
 
 // lockReplicationInitialization takes the shard lock without waiting in the
-// lock's queue, retrying for replicationInitializationLockWait while it is
+// lock's queue, retrying for replicationInitLockWait while it is
 // held. Each attempt has its own topo.RemoteOperationTimeout, and the first
 // one always runs to completion, so a slow topology server costs only its
 // round trips and is not mistaken for a held lock.
 func (tm *TabletManager) lockReplicationInitialization(ctx context.Context) (context.Context, func(*error), error) {
 	tablet := tm.Tablet()
 	msg := fmt.Sprintf("cannot initialize replication for %s/%s; replication has not been changed", tablet.Keyspace, tablet.Shard)
-	deadline := time.Now().Add(replicationInitializationLockWait)
+	deadline := time.Now().Add(replicationInitLockWait)
+	// A wait that ran into the caller's deadline would fail initialization
+	// instead of deferring it: leave the fence before a deferral, and the work
+	// under the lock, their budget.
+	if d, ok := ctx.Deadline(); ok && d.Add(-topo.RemoteOperationTimeout).Before(deadline) {
+		deadline = d.Add(-topo.RemoteOperationTimeout)
+	}
 	for {
 		lockedCtx, unlock, err := tm.TopoServer.LockShard(ctx, tablet.Keyspace, tablet.Shard, "initialize replication",
 			topo.WithType(topo.NonBlocking), topo.WithAcquireTimeout(topo.RemoteOperationTimeout))

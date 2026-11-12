@@ -258,7 +258,7 @@ func (c *slowLockConn) TryLock(ctx context.Context, dirPath, contents string) (t
 // not treated as held.
 func TestInitializeReplicationTakesFreeShardLockFromSlowTopo(t *testing.T) {
 	_, factory := memorytopo.NewServerAndFactory(t.Context(), "cell1")
-	ts, err := topo.NewWithFactory(&slowLockFactory{Factory: factory, delay: replicationInitializationLockWait + 500*time.Millisecond}, "", "")
+	ts, err := topo.NewWithFactory(&slowLockFactory{Factory: factory, delay: replicationInitLockWait + 500*time.Millisecond}, "", "")
 	require.NoError(t, err)
 	t.Cleanup(ts.Close)
 	tm, md := newReplicationInitializationTMWithServer(t, ts, 1)
@@ -476,7 +476,7 @@ func TestRestoreFinalizationShardLockFailures(t *testing.T) {
 				// may need, so it waits for the shard lock only briefly.
 				start := time.Now()
 				err := rsm.finish(ctx, replCmd)
-				assert.Less(t, time.Since(start), replicationInitializationLockWait+5*time.Second)
+				assert.Less(t, time.Since(start), replicationInitLockWait+5*time.Second)
 
 				require.NoError(t, md.CheckSuperQueryList())
 				assert.False(t, md.Replicating)
@@ -517,7 +517,7 @@ func TestStartWaitsBrieflyForHeldShardLock(t *testing.T) {
 	start := time.Now()
 	tm := newTestTM(t, ts, 1, "ks", "0", nil)
 	t.Cleanup(tm.Stop)
-	assert.Less(t, time.Since(start), replicationInitializationLockWait+5*time.Second)
+	assert.Less(t, time.Since(start), replicationInitLockWait+5*time.Second)
 
 	md := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	assert.False(t, tm.QueryServiceControl.(*tabletservermock.Controller).IsServing())
@@ -2101,4 +2101,37 @@ func (d *blockingStatusDaemon) ReplicationStatus(ctx context.Context) (replicati
 	d.once.Do(func() { close(d.entered) })
 	<-ctx.Done()
 	return replication.ReplicationStatus{}, ctx.Err()
+}
+
+// TestReplicationInitLockWait checks that replication initialization retries a
+// held shard lock for --init-replication-lock-wait, and that a wait longer than
+// the caller's deadline allows ends in time to defer: it leaves
+// topo.RemoteOperationTimeout for the fence or the work under the lock.
+func TestReplicationInitLockWait(t *testing.T) {
+	savedWait, savedTimeout := replicationInitLockWait, topo.RemoteOperationTimeout
+	t.Cleanup(func() { replicationInitLockWait, topo.RemoteOperationTimeout = savedWait, savedTimeout })
+	topo.RemoteOperationTimeout = time.Second
+
+	t.Run("retries for the configured wait", func(t *testing.T) {
+		tm, _, ts, _ := newReplicationInitializationTM(t)
+		holdInitializationShardLock(t, ts)
+		replicationInitLockWait = 1500 * time.Millisecond
+		start := time.Now()
+		_, _, err := tm.lockReplicationInitialization(t.Context())
+		_, deferrable := errors.AsType[*shardLockUnavailableError](err)
+		require.True(t, deferrable, "got %v", err)
+		assert.GreaterOrEqual(t, time.Since(start), replicationInitLockWait)
+	})
+	t.Run("ends in time to defer before the caller's deadline", func(t *testing.T) {
+		tm, _, ts, _ := newReplicationInitializationTM(t)
+		holdInitializationShardLock(t, ts)
+		replicationInitLockWait = time.Minute
+		ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+		defer cancel()
+		_, _, err := tm.lockReplicationInitialization(ctx)
+		_, deferrable := errors.AsType[*shardLockUnavailableError](err)
+		require.True(t, deferrable, "got %v", err)
+		deadline, _ := ctx.Deadline()
+		assert.GreaterOrEqual(t, time.Until(deadline), topo.RemoteOperationTimeout/2, "the wait left no time for the fence or the work under the lock")
+	})
 }
