@@ -64,6 +64,9 @@ type tmState struct {
 	tm     *TabletManager
 	ctx    context.Context
 	cancel context.CancelFunc
+	// watchers counts the running deferred replication initialization
+	// watchers, which Close waits for.
+	watchers sync.WaitGroup
 
 	// mu must be held while accessing the following members and
 	// while changing the state of the system to match these values.
@@ -132,13 +135,26 @@ func (ts *tmState) Open() {
 	ts.publishStateLocked(ts.ctx)
 }
 
+// Close cancels the state's context and waits for the watchers, which use the
+// topo server and MySQL.
 func (ts *tmState) Close() {
 	log.Info("In tmState.Close()")
 	ts.mu.Lock()
-	defer ts.mu.Unlock()
-
 	ts.isOpen = false
 	ts.cancel()
+	ts.mu.Unlock()
+	// Watchers take ts.mu to finish.
+	ts.watchers.Wait()
+}
+
+// goWatch runs watch with the state's context unless Close has canceled it.
+func (ts *tmState) goWatch(watch func(context.Context)) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	if ts.ctx.Err() != nil {
+		return
+	}
+	ts.watchers.Go(func() { watch(ts.ctx) })
 }
 
 func (ts *tmState) RefreshFromTopo(ctx context.Context) error {

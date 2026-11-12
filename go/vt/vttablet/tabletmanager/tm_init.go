@@ -674,8 +674,9 @@ func (tm *TabletManager) Stop() {
 		tm.VDiffEngine.Close()
 	}
 
-	tm.MysqlDaemon.Close()
+	// Stop the watchers before closing MySQL, which they use.
 	tm.tmState.Close()
+	tm.MysqlDaemon.Close()
 }
 
 // stopShardHealthMonitor drains shard-peer health work on failed startup, shutdown, and test
@@ -1327,7 +1328,7 @@ func (tm *TabletManager) initializeReplicationUnlessShardLocked(ctx context.Cont
 		}
 		logger.Warn("deferring replication initialization, staying out of rotation until replication runs from the shard primary", slog.Any("error", err))
 		id := tm.tmState.deferReplicationInit(ctx, err, restored)
-		go tm.watchReplicationInit(tm.tmState.ctx, id)
+		tm.tmState.goWatch(func(ctx context.Context) { tm.watchReplicationInit(ctx, id) })
 		return "", nil
 	}
 	return primaryPos, err

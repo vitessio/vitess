@@ -1808,18 +1808,36 @@ func TestDeferredReplicaStaysOutOfServiceDuringDemotion(t *testing.T) {
 	require.NoError(t, <-finished)
 }
 
-// grantsFailDaemon fails the DBA grants wait, the last step of Start.
-type grantsFailDaemon struct {
+// watcherBlockingDaemon fails the DBA grants wait, the last step of Start, once
+// the watcher is inside ReplicationStatus, which then returns only on release.
+type watcherBlockingDaemon struct {
 	*mysqlctl.FakeMysqlDaemon
+	armed             atomic.Bool
+	entered, released chan struct{}
 }
 
-func (grantsFailDaemon) WaitForDBAGrants(context.Context, time.Duration) error {
-	return errors.New("no DBA grants")
+func (d *watcherBlockingDaemon) WaitForDBAGrants(ctx context.Context, _ time.Duration) error {
+	d.armed.Store(true)
+	select {
+	case <-d.entered:
+		return errors.New("no DBA grants")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (d *watcherBlockingDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	if d.armed.CompareAndSwap(true, false) {
+		close(d.entered)
+		<-d.released
+	}
+	return d.FakeMysqlDaemon.ReplicationStatus(ctx)
 }
 
 // TestStartFailureStopsReplicationInitWatcher checks that a Start failing after
-// it deferred replication initialization stops the watcher, which uses the topo
-// server that the caller may close once Start has returned.
+// it deferred replication initialization returns only once the watcher has
+// exited: the watcher uses the topo server, which the caller may close once
+// Start has returned.
 func TestStartFailureStopsReplicationInitWatcher(t *testing.T) {
 	ts := memorytopo.NewServer(t.Context(), "cell1")
 	t.Cleanup(ts.Close)
@@ -1833,10 +1851,11 @@ func TestStartFailureStopsReplicationInitWatcher(t *testing.T) {
 	holdInitializationShardLock(t, ts)
 
 	fakeDb := newTestMysqlDaemon(t, 1)
+	md := &watcherBlockingDaemon{FakeMysqlDaemon: fakeDb, entered: make(chan struct{}), released: make(chan struct{})}
 	tm := &TabletManager{
 		BatchCtx:            t.Context(),
 		TopoServer:          ts,
-		MysqlDaemon:         grantsFailDaemon{fakeDb},
+		MysqlDaemon:         md,
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		SemiSyncMonitor:     semisyncmonitor.CreateTestSemiSyncMonitor(fakeDb.DB(), exporter),
 		QueryServiceControl: tabletservermock.NewController(),
@@ -1844,8 +1863,25 @@ func TestStartFailureStopsReplicationInitWatcher(t *testing.T) {
 	t.Cleanup(tm.stopShardSync)
 	config := tabletenv.NewDefaultConfig()
 	config.DB = &dbconfigs.DBConfigs{}
-	err = tm.Start(newTestTablet(t, 1, "ks", "0", nil), config)
-	require.ErrorContains(t, err, "no DBA grants")
-	require.NotZero(t, tm.tmState.pendingReplicationInit, "Start should have deferred replication initialization")
-	assert.Error(t, tm.tmState.ctx.Err(), "the watcher's context should be canceled")
+	startErr := make(chan error, 1)
+	tablet := newTestTablet(t, 1, "ks", "0", nil)
+	go func() { startErr <- tm.Start(tablet, config) }()
+
+	select {
+	case <-md.entered:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the watcher did not run")
+	}
+	select {
+	case <-startErr:
+		assert.Fail(t, "Start returned while its watcher was running")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(md.released)
+	select {
+	case err := <-startErr:
+		require.ErrorContains(t, err, "no DBA grants")
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "Start did not return once its watcher could exit")
+	}
 }
