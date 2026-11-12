@@ -84,9 +84,8 @@ const (
 // xtraBackupManifest represents a backup. It must not hold
 // --xtrabackup-backup-flags, which can contain credentials or keys: the
 // MANIFEST is stored in plain text next to the backup.
-// It stores the name of the backup file, the replication position,
-// whether the backup is compressed using gzip, and any extra
-// command line parameters used while invoking it.
+// It stores the name of the backup file, the replication position, and how
+// the backup was streamed and compressed.
 type xtraBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest

@@ -8,6 +8,7 @@
     - **[Security](#security)**
         - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
+        - [Backup MANIFESTs no longer store `--xtrabackup-backup-flags` or `--mysql-shell-load-flags`](#backup-manifest-no-engine-flags)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
         - [Query throttler `TABLET_THROTTLER` strategy](#vttablet-query-throttler-tablet-throttler)
@@ -80,7 +81,6 @@
         - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
         - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
         - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
-        - [Backup MANIFESTs no longer store engine flags](#backup-manifest-no-engine-flags)
     - **[VTAdmin](#minor-changes-vtadmin)**
         - [vtadmin-web updated to node v24.21.0 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
@@ -114,6 +114,14 @@ VTAdmin's VExplain API was authorized with the `get` action, but `VEXPLAIN QUERI
 **Migration**: grant the `execute` action on `VExplain` to the actors that should run `VEXPLAIN QUERIES`, `ALL`, `TRACE` or `MYSQLPLAN`. Rules that grant all actions (`*`) and `--no-rbac` already include it.
 
 **Impact**: an actor with only `get` on `VExplain` gets an `unauthorized` error from `VEXPLAIN QUERIES`, `ALL`, `TRACE` and `MYSQLPLAN`.
+
+#### <a id="backup-manifest-no-engine-flags"/>Backup MANIFESTs no longer store `--xtrabackup-backup-flags` or `--mysql-shell-load-flags`</a>
+
+The `xtrabackup` engine no longer writes `--xtrabackup-backup-flags` to the `ExtraCommandLineParams` field of the backup MANIFEST, and the `mysqlshell` engine no longer writes `--mysql-shell-load-flags` to its `Params` field. These flags can hold credentials or encryption keys, such as a `--password`, an `--encrypt-key` or an `azureStorageSasToken`, and the MANIFEST is stored in plain text next to the backup. No version of Vitess reads either field, so restores are unchanged in both directions: new versions restore backups that have the fields, and older versions restore backups that lack them.
+
+**Migration**: backups taken by earlier versions keep the fields. If those flags held secrets, rotate the secrets. Removing them from an old MANIFEST doesn't remove copies that storage versioning or replication kept. Tooling that read the flags from a MANIFEST must take them from the tablet's configuration instead.
+
+**Impact**: new MANIFESTs have neither field. For anyone who builds on the Go packages, the `Params` field of `mysqlctl.MySQLShellBackupManifest` is gone.
 
 ### <a id="new-support"/>New Support</a>
 
@@ -978,12 +986,6 @@ Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tab
 | unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
 
 `--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
-
-#### <a id="backup-manifest-no-engine-flags"/>Backup MANIFESTs no longer store engine flags</a>
-
-The `xtrabackup` engine no longer writes `--xtrabackup-backup-flags` to the `ExtraCommandLineParams` field of the backup MANIFEST, and the `mysqlshell` engine no longer writes `--mysql-shell-load-flags` to its `Params` field. These flags can hold credentials or encryption keys, such as an `--encrypt-key` or an `azureStorageSasToken`, and the MANIFEST is stored in plain text next to the backup. No version of Vitess reads either field, so restores are unchanged in both directions: new versions restore backups that have the fields, and older versions restore backups that lack them.
-
-Backups taken by earlier versions keep the fields. If they hold secrets, rotate those secrets or rewrite the MANIFESTs. Tooling that read the flags from a MANIFEST must take them from the tablet's configuration instead.
 
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 

@@ -370,9 +370,9 @@ func TestMySQLShellBackupEngine_ExecuteBackup_ReleaseLock(t *testing.T) {
 	mysqlShellDumpFlags = `{"threads": 4, "azureStorageSasToken": "` + secret + `"}`
 	mysqlShellLoadFlags = `{"threads": 4, "azureStorageSasToken": "` + secret + `"}`
 
-	defer func() { // restore the original value.
+	t.Cleanup(func() {
 		mysqlShellBackupLocation, mysqlShellDumpFlags, mysqlShellLoadFlags = originalLocation, originalDumpFlags, originalLoadFlags
-	}()
+	})
 
 	logger := logutil.NewMemoryLogger()
 	fakedb := fakesqldb.New(t)
