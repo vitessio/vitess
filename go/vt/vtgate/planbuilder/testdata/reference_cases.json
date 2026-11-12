@@ -5121,5 +5121,33 @@
       ]
     },
     "skip_e2e": true
+  },
+  {
+    "comment": "a subquery that is not used for routing, with its own preserved reference rows, is merged into the one-shard route of a recursive term",
+    "query": "with recursive c as (select col from ref where col = 1 union all select z.col + 1 from c join ref z on z.col = c.col join `user` u on u.id = :u_id where z.col < 5 and (z.col = 7 or z.col in (select z2.col from ref z2 left join `user` u2 on u2.id = :u_id))) select col from c",
+    "plan": {
+      "Type": "Passthrough",
+      "QueryType": "SELECT",
+      "Original": "with recursive c as (select col from ref where col = 1 union all select z.col + 1 from c join ref z on z.col = c.col join `user` u on u.id = :u_id where z.col < 5 and (z.col = 7 or z.col in (select z2.col from ref z2 left join `user` u2 on u2.id = :u_id))) select col from c",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "with recursive c as (select col from ref where 1 != 1 union all select z.col + 1 from c, ref as z, `user` as u where 1 != 1) select col from c where 1 != 1",
+        "Query": "with recursive c as (select col from ref where col = 1 union all select z.col + 1 from c, ref as z, `user` as u where z.col = c.col and z.col < 5 and u.id = :u_id and (z.col = 7 or z.col in (select z2.col from ref as z2 left join `user` as u2 on u2.id = :u_id))) select col from c",
+        "Values": [
+          ":u_id"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.ref",
+        "user.user"
+      ]
+    },
+    "skip_e2e": true
   }
 ]
