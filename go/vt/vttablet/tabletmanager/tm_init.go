@@ -1268,7 +1268,9 @@ func (tm *TabletManager) restoreAtStartup(ctx context.Context, logger logutil.Lo
 			defer tm.unlock()
 			// Without the status, replication may be configured: do not
 			// initialize.
-			_, err := tm.MysqlDaemon.ReplicationStatus(ctx)
+			statusCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+			_, err := tm.MysqlDaemon.ReplicationStatus(statusCtx)
+			cancel()
 			if err == nil {
 				logger.Info("Replication is configured, leaving it as it is")
 				return nil

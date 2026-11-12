@@ -1237,6 +1237,39 @@ func TestRestartAfterRestoreInitializesReplication(t *testing.T) {
 // TestRestartAfterRestoreHookReportsInitializationError covers a restart with a
 // restore flag that finds data and no replication, and fails to initialize it:
 // the restore hook must receive that error.
+// hungStatusDaemon is a mysqld that does not answer SHOW REPLICA STATUS.
+type hungStatusDaemon struct {
+	*mysqlctl.FakeMysqlDaemon
+}
+
+func (hungStatusDaemon) ReplicationStatus(ctx context.Context) (replication.ReplicationStatus, error) {
+	<-ctx.Done()
+	return replication.ReplicationStatus{}, ctx.Err()
+}
+
+// TestRestartAfterRestoreBoundsReplicationStatus checks that a restart that finds
+// data fails, rather than holding the action lock, when mysqld does not answer
+// the replication status read.
+func TestRestartAfterRestoreBoundsReplicationStatus(t *testing.T) {
+	previous := topo.RemoteOperationTimeout
+	topo.RemoteOperationTimeout = time.Second
+	t.Cleanup(func() { topo.RemoteOperationTimeout = previous })
+	tm, md, _, _ := newReplicationInitializationTM(t)
+	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
+	tm.MysqlDaemon = hungStatusDaemon{md}
+	setupHookDir(t)
+
+	done := make(chan error, 1)
+	go func() { done <- tm.restoreAtStartup(t.Context(), logutil.NewMemoryLogger()) }()
+	select {
+	case err := <-done:
+		require.ErrorContains(t, err, "cannot read the replication status")
+		require.ErrorContains(t, err, context.DeadlineExceeded.Error())
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "restoreAtStartup did not bound the replication status read")
+	}
+}
+
 func TestRestartAfterRestoreHookReportsInitializationError(t *testing.T) {
 	tm, md, _, _ := newReplicationInitializationTM(t)
 	tm.Cnf = &mysqlctl.Mycnf{DataDir: filepath.Join(t.TempDir(), "data")}
