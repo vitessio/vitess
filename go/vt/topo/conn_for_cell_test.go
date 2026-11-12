@@ -124,23 +124,38 @@ func TestConnForCellPointedBackAfterFailedReplacement(t *testing.T) {
 }
 
 // TestConnForCellReplacementClosesReplacedConn verifies that when a cell is re-pointed at a topo server that
-// can be reached, ConnForCell returns a connection to it and closes the connection it replaced.
+// can be reached, whether by changing its root or only its address, ConnForCell returns a connection to it and
+// closes the connection it replaced.
 func TestConnForCellReplacementClosesReplacedConn(t *testing.T) {
-	ctx := t.Context()
-	_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
-	ts, err := topo.NewWithFactory(&downFactory{Factory: memFactory, t: t}, "", "")
-	require.NoError(t, err)
-	t.Cleanup(ts.Close)
+	repoints := []struct {
+		name    string
+		repoint func(ci *topodatapb.CellInfo)
+	}{
+		{"root", func(ci *topodatapb.CellInfo) { ci.Root = "/zone1-moved" }},
+		{"address only", func(ci *topodatapb.CellInfo) { ci.ServerAddress = "zone1-moved:2379" }},
+	}
+	for _, r := range repoints {
+		t.Run(r.name, func(t *testing.T) {
+			ctx := t.Context()
+			_, memFactory := memorytopo.NewServerAndFactory(ctx, "zone1")
+			ts, err := topo.NewWithFactory(&downFactory{Factory: memFactory, t: t}, "", "")
+			require.NoError(t, err)
+			t.Cleanup(ts.Close)
 
-	conn, err := ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
+			conn, err := ts.ConnForCell(ctx, "zone1")
+			require.NoError(t, err)
 
-	repointCell(t, ts, "zone1", "/zone1-moved")
-	got, err := ts.ConnForCell(ctx, "zone1")
-	require.NoError(t, err)
-	require.NotSame(t, conn, got, "ConnForCell returned the connection to the topo server the cell pointed at before")
-	assertClosed(t, conn, true, "ConnForCell did not close the connection it replaced")
-	assertClosed(t, got, false, "ConnForCell returned a closed connection")
+			require.NoError(t, ts.UpdateCellInfoFields(ctx, "zone1", func(ci *topodatapb.CellInfo) error {
+				r.repoint(ci)
+				return nil
+			}))
+			got, err := ts.ConnForCell(ctx, "zone1")
+			require.NoError(t, err)
+			require.NotSame(t, conn, got, "ConnForCell returned the connection to the topo server the cell pointed at before")
+			assertClosed(t, conn, true, "ConnForCell did not close the connection it replaced")
+			assertClosed(t, got, false, "ConnForCell returned a closed connection")
+		})
+	}
 }
 
 // TestConnForCellConcurrentWithReadOnly verifies that SetReadOnly and IsReadOnly, which srvtopo's read-only

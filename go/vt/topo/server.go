@@ -320,7 +320,7 @@ func (ts *Server) ConnForCell(ctx context.Context, cell string) (Conn, error) {
 		cellReadSem := semaphore.NewWeighted(DefaultReadConcurrency)
 		statsConn := NewStatsConn(cell, conn, cellReadSem)
 		if globalCellConn, ok := ts.globalCell.(*StatsConn); ok {
-			// All connections of a Server share its read-only state, see SetReadOnly.
+			// The global cell connection and the cell connections share one read-only state, see SetReadOnly.
 			statsConn.readOnly = globalCellConn.readOnly
 		}
 		if cached && cc.conn != nil {
