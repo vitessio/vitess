@@ -863,9 +863,9 @@ func mergeSubqueryInputs(ctx *plancontext.PlanningContext, in, out Operator, joi
 			// outer route can ask the question on every shard: only that shard answers it. A write
 			// to the reference table has to reach all of its copies, so it is not asked that way. A
 			// LIMIT in the outer route may pick other rows on each shard, and a function like RAND()
-			// may route the subquery to another shard on each one.
+			// or NOW() may route the subquery to another shard on each one.
 			if !TableID(outRoute).IsOverlapping(ctx.SemTable.DMLTargets) && answeredOnlyWhereItsRowsLive(ctx, m.subq) &&
-				!variesByShard(ctx, outRoute) && !containsNonDeterministicFunction(m.subq.originalSubquery) {
+				!variesByShard(ctx, outRoute) && !evaluatesPerShard(m.subq.originalSubquery) {
 				m.onEveryShard = true
 				return m.merge(ctx, inRoute, outRoute, scatterOf(inRouting.(*ShardedRouting)))
 			}
@@ -1007,13 +1007,13 @@ func sameNameCopy(ctx *plancontext.PlanningContext, route, other *Route) *Route 
 }
 
 // variesByShard reports whether the SQL of a route can return other rows or values on each shard of
-// a reference table: through a LIMIT, or through a function like RAND().
+// a reference table: through a LIMIT, or through a function like RAND() or NOW().
 func variesByShard(ctx *plancontext.PlanningContext, route *Route) bool {
 	stmt, _, err := ToSQL(ctx, route.Source)
 	if err != nil {
 		return true
 	}
-	found := containsNonDeterministicFunction(stmt)
+	found := evaluatesPerShard(stmt)
 	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, ok := node.(*sqlparser.Limit); ok {
 			found = true
@@ -1021,6 +1021,34 @@ func variesByShard(ctx *plancontext.PlanningContext, route *Route) bool {
 		}
 		return true, nil
 	}, stmt)
+	return found
+}
+
+// evaluatesPerShard reports whether node calls a function that each shard can evaluate to another
+// value: one that varies by row, or one that reads the time, which each shard takes when its own
+// statement starts.
+func evaluatesPerShard(node sqlparser.SQLNode) bool {
+	if containsNonDeterministicFunction(node) {
+		return true
+	}
+	found := false
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		switch node := node.(type) {
+		case *sqlparser.CurTimeFuncExpr:
+			found = true
+		case *sqlparser.FuncExpr:
+			switch node.Name.Lowered() {
+			case "curdate", "current_date", "utc_date":
+				found = true
+			case "unix_timestamp":
+				found = len(node.Exprs) == 0
+			}
+		}
+		if found {
+			return false, io.EOF
+		}
+		return true, nil
+	}, node)
 	return found
 }
 
