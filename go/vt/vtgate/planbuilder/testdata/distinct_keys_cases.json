@@ -814,16 +814,16 @@
     "skip_e2e": true
   },
   {
-    "comment": "A column that the schema gives no type passes against a string, as on main where nothing compares the types of an equality, so the right side is fixed by the grouping and planned with the filter above the join (main plans the filter on x.bar inside the user route, ERROR 1054)",
-    "query": "select count(distinct u.id) from user u straight_join unsharded x on x.foo = u.id where (x.bar = 1 or u.col in (select col from user_extra))",
+    "comment": "A column the schema gives no type passes against a string, as on main where nothing compares the types of an equality, so the grouping fixes the right side and the filter on it is planned above the join (main plans it inside the music route, ERROR 1054)",
+    "query": "select count(distinct m.id) from music m straight_join unsharded x on x.foo = m.id where (x.bar = 1 or m.foo in (select col from user_extra))",
     "plan": {
       "Type": "Complex",
       "QueryType": "SELECT",
-      "Original": "select count(distinct u.id) from user u straight_join unsharded x on x.foo = u.id where (x.bar = 1 or u.col in (select col from user_extra))",
+      "Original": "select count(distinct m.id) from music m straight_join unsharded x on x.foo = m.id where (x.bar = 1 or m.foo in (select col from user_extra))",
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Scalar",
-        "Aggregates": "sum_count_distinct(0) AS count(distinct u.id)",
+        "Aggregates": "sum_count_distinct(0) AS count(distinct m.id)",
         "ResultColumns": 1,
         "Inputs": [
           {
@@ -848,14 +848,14 @@
               {
                 "InputName": "Outer",
                 "OperatorType": "Filter",
-                "Predicate": "x.bar = 1 or :__sq_has_values and u.col in ::__sq1",
+                "Predicate": "x.bar = 1 or :__sq_has_values and m.foo in ::__sq1",
                 "Inputs": [
                   {
                     "OperatorType": "Join",
                     "Variant": "Join",
                     "JoinColumnIndexes": "L:0,R:0,L:1",
                     "JoinVars": {
-                      "u_id": 2
+                      "m_id": 2
                     },
                     "Inputs": [
                       {
@@ -865,8 +865,8 @@
                           "Name": "user",
                           "Sharded": true
                         },
-                        "FieldQuery": "select count(distinct u.id), u.col, u.id from `user` as u where 1 != 1 group by u.col, u.id",
-                        "Query": "select count(distinct u.id), u.col, u.id from `user` as u group by u.col, u.id"
+                        "FieldQuery": "select count(distinct m.id), m.foo, m.id from music as m where 1 != 1 group by m.foo, m.id",
+                        "Query": "select count(distinct m.id), m.foo, m.id from music as m group by m.foo, m.id"
                       },
                       {
                         "OperatorType": "Route",
@@ -876,7 +876,7 @@
                           "Sharded": false
                         },
                         "FieldQuery": "select x.bar from unsharded as x where 1 != 1 group by x.bar",
-                        "Query": "select x.bar from unsharded as x where x.foo = :u_id group by x.bar"
+                        "Query": "select x.bar from unsharded as x where x.foo = :m_id group by x.bar"
                       }
                     ]
                   }
@@ -888,10 +888,16 @@
       },
       "TablesUsed": [
         "main.unsharded",
-        "user.user",
+        "user.music",
         "user.user_extra"
       ]
     },
+    "skip_e2e": true
+  },
+  {
+    "comment": "The equalities of a join nested in the side that a left join fills with NULLs wait for the ON clause's left columns too, when the nested join is an outer join as well (main sends d.bar to the music route, ERROR 1054)",
+    "query": "select b.intcol, count(distinct a.col) from music a left join (user b left join user d on d.id = coalesce(b.intcol, 1)) on a.foo = b.col where (d.bar = 1 or a.col in (select col from user_extra)) group by b.intcol",
+    "plan": "VT12001: unsupported: distinct aggregation over a subquery that needs more grouping columns",
     "skip_e2e": true
   }
 ]
