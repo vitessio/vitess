@@ -5025,6 +5025,11 @@ func TestRecursiveTermOverReferenceTableNextToShardWithNoDestination(t *testing.
 			want:  "select id from zip_detail where id in (with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail as z on z.id = c.id left join `user` as u on u.id = :u_id where z.id < 5) select id from c)",
 		},
 		{
+			name:  "subquery that is a predicate next to another subquery",
+			query: "select id from zip_detail where id in (with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id left join `user` u on u.id = :u_id where z.id < 5) select id from c) and exists (select 1 from dual)",
+			want:  "select id from zip_detail where id in (with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail as z on z.id = c.id left join `user` as u on u.id = :u_id where z.id < 5) select id from c) and exists (select 1 from dual)",
+		},
+		{
 			name:  "subquery that is not a predicate",
 			query: "with recursive c as (select id from zip_detail where id = 1 union all select z.id + 1 from c join zip_detail z on z.id = c.id left join `user` u on u.id = :u_id left join user_extra e on e.user_id = :u_id where z.id < 5 and (z.id = 7 or exists (select 1 from zip_detail z2 where z2.id = z.id))) select id from c",
 			want:  "with recursive c as (select 1 from zip_detail where id = 1 union all select z.id + 1 from zip_detail as z left join `user` as u on u.id = :u_id left join user_extra as e on e.user_id = :u_id where z.id = c.id and z.id < 5 and (z.id = 7 or exists (select 1 from zip_detail as z2 where z2.id = z.id))) select id from c",
