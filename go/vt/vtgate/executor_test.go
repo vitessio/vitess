@@ -3846,3 +3846,97 @@ func TestExecutorShowShards(t *testing.T) {
 		})
 	}
 }
+
+// TestReleaseLockAfterServingBlip tests that a session releases its advisory
+// lock on the connection that holds it after the lock keyspace stops serving.
+//
+// RELEASE_LOCK is planned while the lock keyspace is not serving, so its plan
+// targets another keyspace. Routing it there would miss the reserved
+// connection that holds the lock.
+func TestReleaseLockAfterServingBlip(t *testing.T) {
+	buffer.SetBufferingModeInTestingEnv(true)
+	t.Cleanup(func() {
+		buffer.SetBufferingModeInTestingEnv(false)
+	})
+
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
+
+	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
+	require.True(t, ok)
+	hc := gw.hc.(*discovery.FakeHealthCheck)
+	// Broadcast twice so the keyspace event watcher has consumed every
+	// healthcheck from the first broadcast before the test reads serving state.
+	hc.BroadcastAll()
+	hc.BroadcastAll()
+	require.ElementsMatch(t, []string{KsTestSharded, KsTestUnsharded}, gw.GetServingKeyspaces())
+
+	session := econtext.NewSafeSession(nil)
+	_, err := exec(executor, session, "select get_lock('lock name', 10) from dual")
+	require.NoError(t, err)
+	require.NotNil(t, session.LockSession)
+	require.Equal(t, KsTestSharded, session.LockSession.Target.Keyspace)
+
+	for _, tablet := range hc.GetAllTablets() {
+		if tablet.Keyspace == KsTestSharded {
+			hc.SetServing(tablet, false)
+		}
+	}
+	hc.BroadcastAll()
+	hc.BroadcastAll()
+	require.ElementsMatch(t, []string{KsTestUnsharded}, gw.GetServingKeyspaces())
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+	_, err = exec(executor, session, "select release_lock('lock name') from dual")
+	require.NoError(t, err)
+	require.Nil(t, session.LockSession)
+	require.NotEmpty(t, sbc1.Queries)
+	require.Empty(t, sbclookup.Queries)
+}
+
+// TestLockPicksKeyspaceWhenItRuns tests that a cached advisory lock plan does
+// not fix the lock keyspace. The keyspace is picked each time a lock function
+// runs, so a new session uses the current first serving keyspace.
+func TestLockPicksKeyspaceWhenItRuns(t *testing.T) {
+	buffer.SetBufferingModeInTestingEnv(true)
+	t.Cleanup(func() {
+		buffer.SetBufferingModeInTestingEnv(false)
+	})
+
+	executor, sbc1, _, sbclookup, _ := createExecutorEnv(t)
+
+	gw, ok := executor.resolver.resolver.GetGateway().(*TabletGateway)
+	require.True(t, ok)
+	hc := gw.hc.(*discovery.FakeHealthCheck)
+	// Broadcast twice so the keyspace event watcher has consumed every
+	// healthcheck from the first broadcast before the test reads serving state.
+	hc.BroadcastAll()
+	hc.BroadcastAll()
+	require.ElementsMatch(t, []string{KsTestSharded, KsTestUnsharded}, gw.GetServingKeyspaces())
+
+	const query = "select get_lock('lock name', 10) from dual"
+	first := econtext.NewSafeSession(nil)
+	_, err := exec(executor, first, query)
+	require.NoError(t, err)
+	require.NotNil(t, first.LockSession)
+	require.Equal(t, KsTestSharded, first.LockSession.Target.Keyspace)
+
+	for _, tablet := range hc.GetAllTablets() {
+		if tablet.Keyspace == KsTestSharded {
+			hc.SetServing(tablet, false)
+		}
+	}
+	hc.BroadcastAll()
+	hc.BroadcastAll()
+	require.ElementsMatch(t, []string{KsTestUnsharded}, gw.GetServingKeyspaces())
+
+	sbc1.Queries = nil
+	sbclookup.Queries = nil
+	second := econtext.NewSafeSession(nil)
+	_, err = exec(executor, second, query)
+	require.NoError(t, err)
+	require.NotNil(t, second.LockSession)
+	require.Equal(t, KsTestUnsharded, second.LockSession.Target.Keyspace)
+	require.NotEmpty(t, sbclookup.Queries)
+	require.Empty(t, sbc1.Queries)
+}

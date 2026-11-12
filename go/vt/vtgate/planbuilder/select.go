@@ -322,7 +322,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 		}
 	}
 	if len(lockFunctions) > 0 {
-		return buildLockingPrimitive(sel, vschema, lockFunctions)
+		return buildLockingPrimitive(sel, lockFunctions)
 	}
 	return &engine.Projection{
 		Exprs: exprs,
@@ -331,14 +331,11 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 	}, nil
 }
 
-func buildLockingPrimitive(sel *sqlparser.Select, vschema plancontext.VSchema, lockFunctions []*engine.LockFunc) (engine.Primitive, error) {
-	ks, err := vschema.FirstSortedKeyspace()
-	if err != nil {
-		return nil, err
-	}
+// buildLockingPrimitive builds a Lock primitive. The plan does not fix a lock
+// keyspace. The engine picks it each time a lock function runs.
+func buildLockingPrimitive(sel *sqlparser.Select, lockFunctions []*engine.LockFunc) (engine.Primitive, error) {
 	buf := sqlparser.NewTrackedBuffer(sqlparser.FormatImpossibleQuery).WriteNode(sel)
 	return &engine.Lock{
-		Keyspace:          ks,
 		TargetDestination: key.DestinationKeyspaceID{0},
 		FieldQuery:        buf.String(),
 		LockFunctions:     lockFunctions,
