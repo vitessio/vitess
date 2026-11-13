@@ -676,6 +676,7 @@ func TestVDiffUpdate(t *testing.T) {
 	defer env.close()
 
 	env.tmc.strict = true
+	require.NoError(t, env.ts.CreateCellsAlias(ctx, "testalias", &topodatapb.CellsAlias{Cells: []string{defaultCellName}}))
 	action := string(vdiff.UpdateAction)
 	expectedReq := func() *tabletmanagerdatapb.VDiffRequest {
 		return &tabletmanagerdatapb.VDiffRequest{
@@ -836,6 +837,67 @@ func TestVDiffUpdate(t *testing.T) {
 				TabletTypes:    []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
 			},
 			wantErr: "invalid UUID provided: not-a-uuid",
+		},
+		{
+			name: "invalid tablet type",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           vduuid,
+				TabletTypes:    []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_BACKUP},
+			},
+			wantErr: "invalid tablet type BACKUP: only PRIMARY, REPLICA, and RDONLY are allowed",
+		},
+		{
+			name: "unknown source cell",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           vduuid,
+				SourceCells:    []string{defaultCellName, "nosuchcell"},
+			},
+			wantErr: `invalid source cell "nosuchcell": no such cell or cell alias in the topology`,
+		},
+		{
+			name: "unknown target cell",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				Workflow:       workflow,
+				Uuid:           vduuid,
+				TargetCells:    []string{"nosuchcell"},
+			},
+			wantErr: `invalid target cell "nosuchcell": no such cell or cell alias in the topology`,
+		},
+		{
+			name: "known cell and cell alias",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace: targetKeyspace.KeyspaceName,
+				TargetShards:   targetKeyspace.ShardNames[:1],
+				Workflow:       workflow,
+				Uuid:           vduuid,
+				SourceCells:    []string{defaultCellName},
+				TargetCells:    []string{"testalias"},
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: &tabletmanagerdatapb.VDiffRequest{
+						Keyspace:  targetKeyspace.KeyspaceName,
+						Workflow:  workflow,
+						Action:    action,
+						VdiffUuid: vduuid,
+						Options: &tabletmanagerdatapb.VDiffOptions{
+							PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
+								SourceCell: defaultCellName,
+								TargetCell: "testalias",
+							},
+						},
+					},
+					res: shardOutput("stopped"),
+				},
+			},
+			wantStates: map[string]string{
+				"-80": "stopped",
+			},
 		},
 	}
 	for _, tt := range tests {

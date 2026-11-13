@@ -2186,19 +2186,20 @@ message VDiffUpdateRequest {
   string target_keyspace = 2;
   string uuid = 3;
   repeated string target_shards = 4;
-  // Tablet types to use when picking source and target tablets. When empty,
-  // the existing picker_options.tablet_types value is left unchanged.
+  // Tablet types to use when picking source and target tablets. Only PRIMARY,
+  // REPLICA, and RDONLY are allowed. When empty, the existing
+  // picker_options.tablet_types value is left unchanged.
   repeated topodata.TabletType tablet_types = 5;
   // Used with tablet_types to produce the stored tablet_types string
   // (optionally prefixed with "in_order:"). Ignored when tablet_types is empty.
   tabletmanagerdata.TabletSelectionPreference tablet_selection_preference = 6;
-  // Source cells to search for tablets. When empty, the existing
-  // picker_options.source_cell value is left unchanged unless
-  // clear_source_cells is true.
+  // Source cells to search for tablets. Each cell must exist in the
+  // topology. When empty, the existing picker_options.source_cell value
+  // is left unchanged unless clear_source_cells is true.
   repeated string source_cells = 7;
-  // Target cells to search for tablets. When empty, the existing
-  // picker_options.target_cell value is left unchanged unless
-  // clear_target_cells is true.
+  // Target cells to search for tablets. Each cell must exist in the
+  // topology. When empty, the existing picker_options.target_cell value
+  // is left unchanged unless clear_target_cells is true.
   repeated string target_cells = 8;
   // When true, reset picker_options.source_cell to every cell in the
   // topology (the same default as vdiff create). Mutually exclusive

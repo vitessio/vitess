@@ -277,6 +277,9 @@ effect.
 Only the stored options are updated. A completed VDiff stays completed; the new
 options apply the next time it is resumed.
 
+Tablet types must be PRIMARY, REPLICA, or RDONLY, and each cell must be a cell
+or cell alias in the topology.
+
 If a shard rejects the update, the command fails and other shards may already
 have been updated. It is safe to rerun the update after stopping the remaining
 shards.

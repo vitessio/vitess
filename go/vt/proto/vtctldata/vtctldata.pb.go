@@ -15631,19 +15631,20 @@ type VDiffUpdateRequest struct {
 	TargetKeyspace string                 `protobuf:"bytes,2,opt,name=target_keyspace,json=targetKeyspace,proto3" json:"target_keyspace,omitempty"`
 	Uuid           string                 `protobuf:"bytes,3,opt,name=uuid,proto3" json:"uuid,omitempty"`
 	TargetShards   []string               `protobuf:"bytes,4,rep,name=target_shards,json=targetShards,proto3" json:"target_shards,omitempty"`
-	// Tablet types to use when picking source and target tablets. When empty,
-	// the existing picker_options.tablet_types value is left unchanged.
+	// Tablet types to use when picking source and target tablets. Only PRIMARY,
+	// REPLICA, and RDONLY are allowed. When empty, the existing
+	// picker_options.tablet_types value is left unchanged.
 	TabletTypes []topodata.TabletType `protobuf:"varint,5,rep,packed,name=tablet_types,json=tabletTypes,proto3,enum=topodata.TabletType" json:"tablet_types,omitempty"`
 	// Used with tablet_types to produce the stored tablet_types string
 	// (optionally prefixed with "in_order:"). Ignored when tablet_types is empty.
 	TabletSelectionPreference tabletmanagerdata.TabletSelectionPreference `protobuf:"varint,6,opt,name=tablet_selection_preference,json=tabletSelectionPreference,proto3,enum=tabletmanagerdata.TabletSelectionPreference" json:"tablet_selection_preference,omitempty"`
-	// Source cells to search for tablets. When empty, the existing
-	// picker_options.source_cell value is left unchanged unless
-	// clear_source_cells is true.
+	// Source cells to search for tablets. Each cell must exist in the
+	// topology. When empty, the existing picker_options.source_cell value
+	// is left unchanged unless clear_source_cells is true.
 	SourceCells []string `protobuf:"bytes,7,rep,name=source_cells,json=sourceCells,proto3" json:"source_cells,omitempty"`
-	// Target cells to search for tablets. When empty, the existing
-	// picker_options.target_cell value is left unchanged unless
-	// clear_target_cells is true.
+	// Target cells to search for tablets. Each cell must exist in the
+	// topology. When empty, the existing picker_options.target_cell value
+	// is left unchanged unless clear_target_cells is true.
 	TargetCells []string `protobuf:"bytes,8,rep,name=target_cells,json=targetCells,proto3" json:"target_cells,omitempty"`
 	// When true, reset picker_options.source_cell to every cell in the
 	// topology (the same default as vdiff create). Mutually exclusive

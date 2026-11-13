@@ -35,6 +35,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
@@ -650,6 +651,7 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 // Otherwise the stored options are updated in place; lastpk/progress
 // are untouched and the new options take effect on the next VDiff resume.
 //
+// The tablet types and cells are validated before anything is stored.
 // If a shard rejects the update, an error is returned and other shards
 // may already have been updated. Rerunning the update after stopping
 // the remaining shards is safe.
@@ -677,6 +679,13 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 	}
 	if req.ClearTargetCells && len(req.TargetCells) > 0 {
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both target_cells and clear_target_cells")
+	}
+
+	if err := validateVDiffUpdateTabletTypes(req.TabletTypes); err != nil {
+		return nil, err
+	}
+	if err := validateVDiffUpdateCells(ctx, s.ts, req.SourceCells, req.TargetCells); err != nil {
+		return nil, err
 	}
 
 	picker := &tabletmanagerdatapb.VDiffPickerOptions{}
@@ -766,6 +775,60 @@ func allTopoCells(ctx context.Context, ts *topo.Server) (string, error) {
 	}
 	sort.Strings(cells)
 	return strings.Join(cells, ","), nil
+}
+
+// validateVDiffUpdateTabletTypes returns an INVALID_ARGUMENT error if any
+// of the given tablet types is not one that a VDiff can pick tablets of
+// (PRIMARY, REPLICA, or RDONLY).
+func validateVDiffUpdateTabletTypes(tabletTypes []topodatapb.TabletType) error {
+	for _, tt := range tabletTypes {
+		switch tt {
+		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"invalid tablet type %s: only PRIMARY, REPLICA, and RDONLY are allowed", tt.String())
+		}
+	}
+	return nil
+}
+
+// validateVDiffUpdateCells returns an INVALID_ARGUMENT error if any of the
+// given source or target cells is neither a cell nor a cell alias in the
+// topology. The topology is only read when cells are specified.
+func validateVDiffUpdateCells(ctx context.Context, ts *topo.Server, sourceCells, targetCells []string) error {
+	if len(sourceCells) == 0 && len(targetCells) == 0 {
+		return nil
+	}
+	cellNames, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to list cells")
+	}
+	aliases, err := ts.GetCellsAliases(ctx, false)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to list cell aliases")
+	}
+	known := make(map[string]bool, len(cellNames)+len(aliases))
+	for _, cell := range cellNames {
+		known[cell] = true
+	}
+	for alias := range aliases {
+		known[alias] = true
+	}
+	for _, check := range []struct {
+		kind  string
+		cells []string
+	}{
+		{"source", sourceCells},
+		{"target", targetCells},
+	} {
+		for _, cell := range check.cells {
+			if !known[cell] {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+					"invalid %s cell %q: no such cell or cell alias in the topology", check.kind, cell)
+			}
+		}
+	}
+	return nil
 }
 
 func shardResultFromVDiffResponse(shard string, resp *tabletmanagerdatapb.VDiffResponse) *vtctldatapb.VDiffUpdateResponse_ShardResult {
