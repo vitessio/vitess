@@ -184,6 +184,20 @@ func ConvertMySQLVersionToCommentVersion(version string) (string, error) {
 	return fmt.Sprintf("%01d%02d%02d", res[0], res[1], res[2]), nil
 }
 
+// commentVersion converts the MySQL version into the number that versions in
+// versioned comments are compared with.
+func commentVersion(version string) (int, error) {
+	convVersion, err := ConvertMySQLVersionToCommentVersion(version)
+	if err != nil {
+		return 0, err
+	}
+	v, err := strconv.Atoi(convVersion)
+	if err != nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "MySQL version not correctly setup - %s.", version)
+	}
+	return v, nil
+}
+
 // ParseExpr parses an expression and transforms it to an AST
 func (p *Parser) ParseExpr(sql string) (Expr, error) {
 	stmt, err := p.Parse("select " + sql)
@@ -357,7 +371,26 @@ func (p *Parser) IsStatementIncomplete(stmt string) bool {
 }
 
 func (p *Parser) IsMySQL80AndAbove() bool {
-	return p.version >= "80000"
+	return p.version >= 80000
+}
+
+// readsSixDigitCommentVersions reports whether the parser's MySQL version
+// reads six-digit versions in versioned comments, as MySQL does from 8.1.0.
+func (p *Parser) readsSixDigitCommentVersions() bool {
+	return p.commentVersionApplies("80100")
+}
+
+// commentVersionApplies reports whether a versioned comment for the given
+// five- or six-digit version, or for no version if it is empty, applies to the
+// parser's MySQL version. The versions are compared as numbers, as they can
+// differ in length.
+func (p *Parser) commentVersionApplies(version string) bool {
+	if version == "" {
+		return true
+	}
+	// The tokenizer passes only five or six ASCII digits, so Atoi cannot fail.
+	v, _ := strconv.Atoi(version)
+	return v <= p.version
 }
 
 func (p *Parser) SetTruncateErrLen(l int) {
@@ -371,7 +404,7 @@ type Options struct {
 }
 
 type Parser struct {
-	version        string
+	version        int
 	truncateUILen  int
 	truncateErrLen int
 }
@@ -380,7 +413,7 @@ func New(opts Options) (*Parser, error) {
 	if opts.MySQLServerVersion == "" {
 		opts.MySQLServerVersion = config.DefaultMySQLVersion
 	}
-	convVersion, err := ConvertMySQLVersionToCommentVersion(opts.MySQLServerVersion)
+	convVersion, err := commentVersion(opts.MySQLServerVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +425,7 @@ func New(opts Options) (*Parser, error) {
 }
 
 func NewTestParser() *Parser {
-	convVersion, err := ConvertMySQLVersionToCommentVersion(config.DefaultMySQLVersion)
+	convVersion, err := commentVersion(config.DefaultMySQLVersion)
 	if err != nil {
 		panic(err)
 	}
