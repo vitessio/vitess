@@ -1060,6 +1060,8 @@ func TestKeyRangeContains(t *testing.T) {
 		{kid: "3000000000000000", start: "", end: "3000000000000000", contained: false},
 		{kid: "4000000000000000", start: "3000000000000000", end: "", contained: true},
 		{kid: "2000000000000000", start: "3000000000000000", end: "", contained: false},
+		// An End of 00 normalizes to empty, which means no upper bound.
+		{kid: "30", start: "", end: "00", contained: true},
 	}
 
 	for _, el := range table {

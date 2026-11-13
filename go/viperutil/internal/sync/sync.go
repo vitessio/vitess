@@ -18,6 +18,7 @@ package sync
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/spf13/viper"
 
 	"vitess.io/vitess/go/viperutil/internal/log"
+	vtlog "vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -185,6 +187,7 @@ func (v *Viper) persistChanges(ctx context.Context, minWaitInterval time.Duratio
 
 	persistOnce := func() {
 		if err := v.WriteConfig(); err != nil {
+			vtlog.Error("failed to persist config changes back to disk", slog.Any("error", err))
 			log.ERROR("failed to persist config changes back to disk: %s", err.Error())
 			// If we failed to persist, don't wait the entire interval before
 			// writing again, instead writing immediately on the next request.

@@ -19,6 +19,9 @@ package vtgate
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +37,9 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log/logtest"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/binlogacl"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -977,4 +983,100 @@ func TestBinlogDumpGTID(t *testing.T) {
 		}, noopSend)
 		require.NoError(t, err)
 	})
+}
+
+func TestRecordAndAnnotateErrorLogs(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	parser := sqlparser.NewTestParser()
+	request := map[string]any{"Sql": "select 'request-sentinel'"}
+
+	err := recordAndAnnotateError(vterrors.New(vtrpcpb.Code_INTERNAL, "internal error"), []string{"Execute", "ks", "primary"}, request, logutil.NewThrottledLogger("Execute", time.Minute), parser)
+	require.EqualError(t, err, "internal error")
+	record := logs.Record(t, "Request failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "Execute", record["logger"])
+	assert.Equal(t, "internal error", record["error"])
+	assert.Equal(t, "INTERNAL", record["error_code"])
+	assert.Equal(t, "map[Sql:select 'request-sentinel']", record["request"])
+
+	logs.Reset()
+	err = recordAndAnnotateError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, "unavailable"), []string{"StreamExecute", "ks", "primary"}, request, logutil.NewThrottledLogger("StreamExecute", time.Minute), parser)
+	require.EqualError(t, err, "unavailable")
+	record = logs.Record(t, "Request failed")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "StreamExecute", record["logger"])
+	assert.Equal(t, "UNAVAILABLE", record["error_code"])
+
+	for _, record := range logs.Records(t) {
+		assert.NotContains(t, record["msg"], "sentinel")
+	}
+}
+
+// TestExecuteErrorWithTerseErrorsLogsNoClientData checks that with terse
+// errors, a failed Execute logs none of the client's SQL, bind variables or
+// session, nor the bind variables quoted in the tablet's error.
+func TestExecuteErrorWithTerseErrorsLogsNoClientData(t *testing.T) {
+	saved := terseErrors
+	t.Cleanup(func() { terseErrors = saved })
+	terseErrors = true
+
+	vtg, sbc, ctx := createVtgateEnv(t)
+	logs := logtest.Capture(t, slog.LevelInfo)
+	// The tablet's error quotes the bound query, as vttablet's does.
+	sbc.EphemeralShardErr = vterrors.New(vtrpcpb.Code_INTERNAL,
+		`internal error: Sql: "select id from t1 where name = :name and val = :vtg1", BindVars: {name: "type:VARCHAR value:\"bv-sentinel\""vtg1: "type:VARCHAR value:\"sql-sentinel\""}`)
+	session := &vtgatepb.Session{
+		TargetString:         KsTestUnsharded + "@primary",
+		UserDefinedVariables: map[string]*querypb.BindVariable{"v": sqltypes.StringBindVariable("session-sentinel")},
+	}
+	bindVars := map[string]*querypb.BindVariable{"name": sqltypes.StringBindVariable("bv-sentinel")}
+	_, _, err := vtg.Execute(ctx, nil, session, "select id from t1 where name = :name and val = 'sql-sentinel'", bindVars, false)
+	require.Error(t, err)
+
+	record := logs.Record(t, "Request failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "map[]", record["request"])
+	assert.NotContains(t, logs.String(), "sentinel")
+}
+
+func TestHandlePanicLogsPanicValue(t *testing.T) {
+	type panicValue struct {
+		code   int
+		reason string
+	}
+	tests := []struct {
+		name  string
+		value any
+		want  string
+	}{
+		{name: "string", value: "panic-string", want: "panic-string"},
+		{name: "error", value: errors.New("panic-error"), want: "panic-error"},
+		{name: "struct with unexported fields", value: panicValue{code: 7, reason: "panic-struct"}, want: "{7 panic-struct}"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logs := logtest.Capture(t, slog.LevelInfo)
+			err := func() (err error) {
+				defer (&VTGate{}).HandlePanic(&err)
+				panic(tt.value)
+			}()
+			require.ErrorContains(t, err, "uncaught panic: "+tt.want)
+			assert.Equal(t, tt.want, logs.Record(t, "Uncaught panic")["panic"])
+		})
+	}
+}
+
+func TestHTTPErrorfDoesNotLogTheRequest(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	r := httptest.NewRequest(http.MethodGet, "/api/keyspaces/?token=query-sentinel", nil)
+	r.Header.Set("Authorization", "Basic header-sentinel")
+
+	httpErrorf(httptest.NewRecorder(), r, "cannot marshal data: %v", errors.New("boom"))
+
+	record := logs.Record(t, "HTTP error")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "/api/keyspaces/", record["url"])
+	assert.Equal(t, "cannot marshal data: boom", record["error"])
+	// The old line printed the whole request with %#v, headers included.
+	assert.NotContains(t, logs.String(), "sentinel")
 }

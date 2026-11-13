@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -85,6 +85,10 @@ jobs:
               - 'tools/**/go.mod'
               - 'tools/**/go.sum'
               - '.github/workflows/static_checks_etc.yml'
+            logcheck:
+              - 'go/tools/logcheck/packages.txt'
+              - 'tools/check_logcheck.sh'
+              - 'Makefile'
             parser_changes:
               - 'go/vt/sqlparser/**'
               - 'go.sum'
@@ -155,7 +159,7 @@ jobs:
               - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
-        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true' || steps.changes.outputs.logcheck == 'true')
         uses: $/.github/actions/setup-go
         with:
           build-cache: build,unit,tools
@@ -243,6 +247,12 @@ jobs:
           lint config verify
           lint run --timeout 10m ./go/...
 
+      - name: Run logcheck
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.logcheck == 'true')
+        timeout-minutes: 10
+        run: |
+          make lint-logcheck
+
       - name: Check license headers
         if: steps.changes.outputs.go_files == 'true'
         timeout-minutes: 5
@@ -301,7 +311,7 @@ jobs:
           exit 1
 
       - name: Run zizmor 🌈
-        uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
         with:
           advanced-security: false
           annotations: true

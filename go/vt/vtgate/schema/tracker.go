@@ -19,6 +19,7 @@ package schema
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
@@ -126,7 +128,7 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("finished loading tables for keyspace %s. Found %d tables", target.Keyspace, numTables))
+	log.Info("finished loading tables for keyspace", slog.String("keyspace", target.Keyspace), slog.Int("table_count", numTables))
 
 	return nil
 }
@@ -153,7 +155,7 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews))
+	log.Info("finished loading views for keyspace", slog.String("keyspace", target.Keyspace), slog.Int("view_count", numViews))
 	return nil
 }
 
@@ -177,11 +179,14 @@ func (t *Tracker) loadUDFs(conn queryservice.QueryService, target *querypb.Targe
 		return nil
 	})
 	if err != nil {
-		log.Error(fmt.Sprintf("error fetching new UDFs for %v: %v", target.Keyspace, err))
+		log.Error("error fetching new UDFs",
+			slog.String("keyspace", target.Keyspace),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 	t.udfs[target.Keyspace] = udfs
-	log.Info(fmt.Sprintf("finished loading %d UDFs for keyspace %s", len(udfs), target.Keyspace))
+	log.Info("finished loading UDFs for keyspace", slog.Int("udf_count", len(udfs)), slog.String("keyspace", target.Keyspace))
 	return nil
 }
 
@@ -239,7 +244,10 @@ func (t *Tracker) setLoaded(ks keyspaceStr, loaded bool) {
 func (t *Tracker) initKeyspace(th *discovery.TabletHealth) error {
 	err := t.LoadKeyspace(th.Conn, th.Target)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Unable to add the %s keyspace to the schema tracker: %v", th.Target.Keyspace, err))
+		log.Warn("Unable to add the keyspace to the schema tracker",
+			slog.String("keyspace", th.Target.Keyspace),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return err
 	}
 	return nil
@@ -357,7 +365,11 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 	if err != nil {
 		t.setLoaded(th.Target.Keyspace, false)
 		// TODO: optimize for the tables that got errored out.
-		log.Warn(fmt.Sprintf("error fetching new schema for %v, making them non-authoritative: %v", tablesUpdated, err))
+		log.Warn("error fetching new schema, making them non-authoritative",
+			slog.String("keyspace", th.Target.Keyspace),
+			slog.Any("tables", tablesUpdated),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 	return true
@@ -367,12 +379,12 @@ func (t *Tracker) updateTables(keyspace string, res map[string]string) {
 	for tableName, tableDef := range res {
 		stmt, err := t.parser.ParseStrictDDL(tableDef)
 		if err != nil {
-			log.Warn(fmt.Sprintf("error parsing table definition for %s: %v", tableName, err))
+			log.Warn("error parsing table definition", slog.String("keyspace", keyspace), slog.String("table", tableName), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			continue
 		}
 		ddl, ok := stmt.(*sqlparser.CreateTable)
 		if !ok {
-			log.Warn(fmt.Sprintf("parsed table definition for '%s' is not a create table definition", tableName))
+			log.Warn("parsed table definition is not a create table definition", slog.String("keyspace", keyspace), slog.String("table", tableName))
 			continue
 		}
 
@@ -465,7 +477,11 @@ func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
 	if err != nil {
 		t.setLoaded(th.Target.Keyspace, false)
 		// TODO: optimize for the views that got errored out.
-		log.Warn(fmt.Sprintf("error fetching new views definition for %v: %v", viewsUpdated, err))
+		log.Warn("error fetching new views definition",
+			slog.String("keyspace", th.Target.Keyspace),
+			slog.Any("views", viewsUpdated),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 	return true
@@ -550,12 +566,12 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 	}
 	stmt, err := vm.parser.ParseStrictDDL(sql)
 	if err != nil {
-		log.Warn(fmt.Sprintf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql))
+		log.Warn("ignoring view, parsing error in view definition", slog.String("keyspace", ks), slog.String("view", tbl), slog.String("query", sql))
 		return
 	}
 	cv, ok := stmt.(*sqlparser.CreateView)
 	if !ok {
-		log.Warn(fmt.Sprintf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt))
+		log.Warn("ignoring view, view definition is not a create view query", slog.String("keyspace", ks), slog.String("view", tbl), slog.String("statement_type", fmt.Sprintf("%T", stmt)))
 		return
 	}
 	sqlparser.AddKeyspace(cv.Select, ks)

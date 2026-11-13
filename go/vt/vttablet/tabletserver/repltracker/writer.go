@@ -19,6 +19,7 @@ package repltracker
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -272,7 +273,15 @@ func (w *heartbeatWriter) recordError(err error) {
 	if err == nil {
 		return
 	}
-	w.errorLog.Errorf("%v", err)
+	w.errorLog.Error("failed to write heartbeat", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+	writeErrors.Add(1)
+}
+
+func (w *heartbeatWriter) recordKillError(err error) {
+	if err == nil {
+		return
+	}
+	w.errorLog.Error("failed to kill heartbeat write", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	writeErrors.Add(1)
 }
 
@@ -315,7 +324,7 @@ func (w *heartbeatWriter) killWritesUntilStopped(ctx context.Context) {
 	for {
 		// Actually try to kill the query.
 		err := w.killWrite()
-		w.recordError(err)
+		w.recordKillError(err)
 		select {
 		case <-ctx.Done():
 			// If the context has been cancelled, then we know that the ticks have stopped.

@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"hash/crc32"
+	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -163,12 +165,12 @@ func (tw *TopologyWatcher) Stop() {
 
 func (tw *TopologyWatcher) loadTabletsForKeyspaceShard(keyspace string, shard string) {
 	if keyspace == "" || shard == "" {
-		tw.logger().Errorf("topologyWatcher: loadTabletsForKeyspaceShard: keyspace and shard are required")
+		tw.logger().Error("topologyWatcher: loadTabletsForKeyspaceShard: keyspace and shard are required")
 		return
 	}
 	tabletInfos, err := tw.getTabletsByShard(keyspace, shard)
 	if err != nil {
-		tw.logger().Errorf("error getting tablets for keyspace-shard: %v:%v: %v", keyspace, shard, err)
+		tw.logger().Error("error getting tablets for keyspace-shard", slog.String("keyspace", keyspace), slog.String("shard", shard), slog.Any("error", err))
 		return
 	}
 	// Since we are only reading tablets for a keyspace shard,
@@ -185,10 +187,10 @@ func (tw *TopologyWatcher) loadTablets() {
 		topologyWatcherErrors.Add(topologyWatcherOpListTablets, 1)
 		// If we get a partial result error, we just log it and process the tablets that we did manage to fetch.
 		if topo.IsErrType(err, topo.PartialResult) {
-			tw.logger().Errorf("received partial result from getTablets for cell %v: %v", tw.cell, err)
+			tw.logger().Error("received partial result from getTablets for cell", slog.String("cell", tw.cell), slog.Any("error", err))
 			partialResult = true
 		} else { // For all other errors, just return.
-			tw.logger().Errorf("error getting tablets for cell: %v: %v", tw.cell, err)
+			tw.logger().Error("error getting tablets for cell", slog.String("cell", tw.cell), slog.Any("error", err))
 			return
 		}
 	}
@@ -396,7 +398,11 @@ func NewFilterByShard(filters []string, opts ...Option) (*FilterByShard, error) 
 func (fbs *FilterByShard) IsIncluded(tablet *topodatapb.Tablet) bool {
 	canonical, kr, err := topo.ValidateShardName(tablet.Shard)
 	if err != nil {
-		fbs.logger().Errorf("Error parsing shard name %v, will ignore tablet: %v", tablet.Shard, err)
+		fbs.logger().Error("Error parsing shard name, will ignore tablet",
+			slog.String("shard", tablet.Shard),
+			slog.String("tablet", topoproto.TabletAliasString(tablet.GetAlias())),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return false
 	}
 

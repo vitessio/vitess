@@ -19,7 +19,10 @@ package buffer
 import (
 	"errors"
 	"fmt"
+	"log/slog"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -121,16 +124,12 @@ func keyspaceShardsToSets(list string) (map[string]bool, map[string]bool) {
 	return keyspaces, shards
 }
 
-// setToString joins the set to a ", " separated string.
-func setToString(set map[string]bool) string {
-	result := ""
-	for item := range set {
-		if result != "" {
-			result += ", "
-		}
-		result += item
-	}
-	return result
+// setToList returns the set's items, sorted. An empty set gives an empty
+// slice, not nil, so it logs as [] rather than null.
+func setToList(set map[string]bool) []string {
+	list := slices.AppendSeq(make([]string, 0, len(set)), maps.Keys(set))
+	slices.Sort(list)
+	return list
 }
 
 type Config struct {
@@ -169,7 +168,7 @@ func NewDefaultConfig() *Config {
 
 func NewConfigFromFlags() *Config {
 	if err := verifyFlags(); err != nil {
-		log.Error(fmt.Sprintf("Invalid buffer configuration: %v", err))
+		log.Error("Invalid buffer configuration", slog.Any("error", err))
 		os.Exit(1)
 	}
 	bufferSizeStat.Set(int64(bufferSize))
@@ -183,24 +182,16 @@ func NewConfigFromFlags() *Config {
 		log.Info("vtgate buffer enabled. PRIMARY requests will be buffered during detected failovers.")
 
 		// Log a second line if it's only enabled for some keyspaces or shards.
-		header := "Buffering limited to configured "
-		limited := ""
-		if len(keyspaces) > 0 {
-			limited += "keyspaces: " + setToString(keyspaces)
-		}
-		if len(shards) > 0 {
-			if limited == "" {
-				limited += " and "
+		if len(keyspaces) > 0 || len(shards) > 0 {
+			attrs := []slog.Attr{
+				slog.Any("keyspaces", setToList(keyspaces)),
+				slog.Any("shards", setToList(shards)),
 			}
-			limited += "shards: " + setToString(shards)
-		}
-		if limited != "" {
-			limited = header + limited
-			dryRunOverride := ""
 			if bufferEnabledDryRun {
-				dryRunOverride = " Dry-run mode is overridden for these entries and actual buffering will take place."
+				log.Info("Buffering limited to configured keyspaces and shards. Dry-run mode is overridden for these entries and actual buffering will take place.", attrs...)
+			} else {
+				log.Info("Buffering limited to configured keyspaces and shards.", attrs...)
 			}
-			log.Info(fmt.Sprintf("%v.%v", limited, dryRunOverride))
 		}
 	}
 

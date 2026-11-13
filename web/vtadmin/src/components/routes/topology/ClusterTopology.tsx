@@ -43,7 +43,7 @@ export const ClusterTopology = () => {
     type RouteParams = {
         clusterID: string;
     };
-    useDocumentTitle('Cluster Topolgy');
+    useDocumentTitle('Cluster Topology');
     const { clusterID } = useParams<RouteParams>() as RouteParams;
     const { data } = useTopologyPath({ clusterID, path: '/' });
     const [topology, setTopology] = useState<{ cell: TopologyCell }>({ cell: data?.cell as TopologyCell });

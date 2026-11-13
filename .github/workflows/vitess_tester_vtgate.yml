@@ -1,10 +1,5 @@
 name: Vitess Tester (vtgate)
 on:
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
-    tags: '**'
   pull_request:
     branches: '**'
 concurrency:
@@ -94,7 +89,7 @@ jobs:
       run: exit 1
 
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2 # v2.22.2
+      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
       with:
         egress-policy: audit
 
@@ -117,7 +112,7 @@ jobs:
 
     - name: Set up python
       if: needs.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
 
     - name: Tune the OS
       if: needs.changes.outputs.end_to_end == 'true'

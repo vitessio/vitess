@@ -17,12 +17,14 @@ limitations under the License.
 package vtgate
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1243,3 +1245,23 @@ func (f *fakeSchema) UDFs(ks string) []string {
 }
 
 var _ SchemaInfo = (*fakeSchema)(nil)
+
+func TestVSchemaUpdateLogsMissingParentTable(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	vm := &VSchemaManager{}
+	vm.subscriber = func(*vindexes.VSchema, *VSchemaStats) {}
+	vm.schema = &fakeSchema{tables: map[string]map[string]*vindexes.TableInfo{
+		"ks": {"t2": createTableInfoWithFK("missing")},
+	}}
+	vm.VSchemaUpdate(&vschemapb.SrvVSchema{Keyspaces: map[string]*vschemapb.Keyspace{
+		"ks": {Sharded: true, ForeignKeyMode: vschemapb.Keyspace_managed},
+	}}, nil)
+
+	// FindRoutedTable returns no table and no error, so there's no error to log.
+	record := logs.Record(t, "error finding parent table")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "missing", record["parent_table"])
+	assert.NotContains(t, record, "error")
+	assert.NotContains(t, record, "error_code")
+	assert.NotContains(t, logs.String(), "<nil>")
+}

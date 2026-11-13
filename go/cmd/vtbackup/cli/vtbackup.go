@@ -331,7 +331,7 @@ func run(cc *cobra.Command, args []string) error {
 	}
 
 	if keepAliveTimeout > 0 {
-		log.Info(fmt.Sprintf("Backup was successful, waiting %s before exiting (or until context expires).", keepAliveTimeout))
+		log.Info("Backup was successful, waiting keep_alive_timeout before exiting (or until context expires).", slog.Duration("keep_alive_timeout", keepAliveTimeout))
 		select {
 		case <-time.After(keepAliveTimeout):
 		case <-ctx.Done():
@@ -364,9 +364,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// accumulate garbage (and run out of disk space) if it's restarted.
 	tabletDir := mysqlctl.TabletDir(tabletAlias.Uid)
 	defer func() {
-		log.Info(fmt.Sprintf("Removing temporary tablet directory: %v", tabletDir))
+		log.Info("Removing temporary tablet directory", slog.String("dir", tabletDir))
 		if err := os.RemoveAll(tabletDir); err != nil {
-			log.Warn(fmt.Sprintf("Failed to remove temporary tablet directory: %v", err))
+			log.Warn("Failed to remove temporary tablet directory", slog.String("dir", tabletDir), slog.Any("error", err))
 		}
 	}()
 
@@ -410,7 +410,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(cleanupCtx, mysqlShutdownTimeout+mysqlctl.MysqldShutdownGracePeriod)
 		defer mysqlShutdownCancel()
 		if err := mysqld.Shutdown(mysqlShutdownCtx, mycnf, false, mysqlShutdownTimeout); err != nil {
-			log.Error(fmt.Sprintf("failed to shutdown mysqld: %v", err))
+			log.Error("failed to shutdown mysqld", slog.Any("error", err))
 		}
 	}()
 
@@ -553,7 +553,7 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 	defer phase.Set(phaseNameRestoreLastBackup, int64(0))
 
 	backupDir := mysqlctl.GetBackupDir(initKeyspace, initShard)
-	log.Info(fmt.Sprintf("Restoring latest backup from directory %v", backupDir))
+	log.Info("Restoring latest backup from directory", slog.String("dir", backupDir))
 
 	restoreAt := time.Now()
 
@@ -575,7 +575,7 @@ func restoreForBackup(ctx context.Context, mysqlTermHandler *mySQLTermHandler, t
 	switch err {
 	case nil:
 		// If err is nil, we expect backupManifest to be non-nil.
-		log.Info(fmt.Sprintf("Successfully restored from backup at replication position %v", backupManifest.Position))
+		log.Info("Successfully restored from backup at replication position", slog.String("position", replication.EncodePosition(backupManifest.Position)))
 		deprecatedDurationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
 		restoredFrom := "the restored backup"
 		if backupManifest.BackupName != "" {
@@ -607,7 +607,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 	disabledRedoLog := false
 	if disableRedoLog {
 		if err := mysqld.DisableRedoLog(ctx); err != nil {
-			log.Warn(fmt.Sprintf("Error disabling redo logging: %v", err))
+			log.Warn("Error disabling redo logging", slog.Any("error", err))
 		} else {
 			disabledRedoLog = true
 		}
@@ -625,7 +625,7 @@ func runBackup(ctx context.Context, topoServer *topo.Server, mysqld *mysqlctl.My
 		return err
 	}
 
-	log.Info("takeBackup: primary position is: " + primaryPos.String())
+	log.Info("takeBackup: primary position", slog.String("position", replication.EncodePosition(primaryPos)))
 
 	// Fail before catching up if the restored base has GTIDs that tablets would
 	// reject. A shard with no primary has already failed in startCatchUp.
@@ -753,14 +753,14 @@ func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManager
 		status, statusErr = mysqld.ReplicationStatus(ctx)
 		if statusErr != nil {
 			lastErr.Record(statusErr)
-			log.Warn(fmt.Sprintf("Error getting replication status: %v", statusErr))
+			log.Warn("Error getting replication status", slog.Any("error", statusErr))
 			continue
 		}
 
 		if status.Position.AtLeast(primaryPos) {
 			// We're caught up on replication to at least the point the primary
 			// was at when this vtbackup run started.
-			log.Info(fmt.Sprintf("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime)))
+			log.Info("Replication caught up to position after duration", slog.String("position", replication.EncodePosition(status.Position)), slog.Duration("duration", time.Since(waitStartTime)))
 			deprecatedDurationByPhase.Set("CatchUpReplication", int64(time.Since(waitStartTime).Seconds()))
 			break
 		}
@@ -774,7 +774,7 @@ func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManager
 		}
 
 		if !status.Healthy() {
-			errStr := "Replication has stopped before backup could be taken. Trying to restart replication."
+			const errStr = "Replication has stopped before backup could be taken. Trying to restart replication."
 			log.Warn(errStr)
 			lastErr.Record(errors.New(strings.ToLower(errStr)))
 
@@ -818,7 +818,7 @@ func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManager
 					}
 				}
 			} else if err := startReplication(ctx, mysqld, topoServer); err != nil {
-				log.Warn(fmt.Sprintf("Failed to restart replication: %v", err))
+				log.Warn("Failed to restart replication", slog.Any("error", err))
 			}
 		} else {
 			// Clear last error as MySQL's replication is healthy
@@ -840,7 +840,7 @@ func catchUpReplicationForBackup(ctx context.Context, tmc tmclient.TabletManager
 		return replication.ReplicationStatus{}, replication.Position{}, fmt.Errorf("can't get replication status: %v", statusErr)
 	}
 
-	log.Info(fmt.Sprintf("Replication caught up to %v", status.Position))
+	log.Info("Replication caught up to position", slog.String("position", replication.EncodePosition(status.Position)))
 	if !status.Position.AtLeast(primaryPos) && status.Position.Equal(restorePos) {
 		return replication.ReplicationStatus{}, replication.Position{}, fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
@@ -1466,11 +1466,14 @@ func retryOnError(ctx context.Context, fn func() error) error {
 		if permanent, ok := errors.AsType[permanentError](err); ok {
 			return permanent.error
 		}
-		log.Error(fmt.Sprintf("Waiting %v to retry after error: %v", waitTime, err))
+		log.Error("Waiting to retry after error",
+			slog.Duration("wait", waitTime),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 
 		select {
 		case <-ctx.Done():
-			log.Error(fmt.Sprintf("Not retrying after error: %v", ctx.Err()))
+			log.Error("Not retrying after error", slog.Any("error", ctx.Err()))
 			return ctx.Err()
 		case <-time.After(waitTime):
 		}
@@ -1488,7 +1491,7 @@ func pruneBackups(ctx context.Context, backupStorage backupstorage.BackupStorage
 	}
 	numBackups := len(backups)
 	if numBackups <= minRetentionCount {
-		log.Info(fmt.Sprintf("Found %v backups. Not pruning any since this is within the min_retention_count of %v.", numBackups, minRetentionCount))
+		log.Info("Found backups. Not pruning any since this is within the min_retention_count.", slog.Int("backup_count", numBackups), slog.Int("min_retention_count", minRetentionCount))
 		return nil
 	}
 	// We have more than the minimum retention count, so we could afford to
@@ -1501,18 +1504,18 @@ func pruneBackups(ctx context.Context, backupStorage backupstorage.BackupStorage
 		}
 		if time.Since(backupTime) < minRetentionTime {
 			// The oldest remaining backup is not old enough to prune.
-			log.Info(fmt.Sprintf("Oldest backup taken at %v has not reached min_retention_time of %v. Nothing left to prune.", backupTime, minRetentionTime))
+			log.Info("Oldest backup taken at backup_time has not reached min_retention_time. Nothing left to prune.", slog.Time("backup_time", backupTime), slog.Duration("min_retention_time", minRetentionTime))
 			break
 		}
 		// Remove the backup.
-		log.Info(fmt.Sprintf("Removing old backup %v from %v, since it's older than min_retention_time of %v", backup.Name(), backupDir, minRetentionTime))
+		log.Info("Removing old backup from dir, since it's older than min_retention_time", slog.String("backup_name", backup.Name()), slog.String("dir", backupDir), slog.Duration("min_retention_time", minRetentionTime))
 		if err := backupStorage.RemoveBackup(ctx, backupDir, backup.Name()); err != nil {
 			return fmt.Errorf("couldn't remove backup %v from %v: %v", backup.Name(), backupDir, err)
 		}
 		// We successfully removed one backup. Can we afford to prune any more?
 		numBackups--
 		if numBackups == minRetentionCount {
-			log.Info(fmt.Sprintf("Successfully pruned backup count to min_retention_count of %v.", minRetentionCount))
+			log.Info("Successfully pruned backup count to min_retention_count.", slog.Int("min_retention_count", minRetentionCount))
 			break
 		}
 	}
@@ -1568,17 +1571,17 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 					return false, fmt.Errorf("refusing to upload initial backup of empty database: the shard %v/%v already has at least one tablet that may be serving (%v); you must take a backup from a live tablet instead", initKeyspace, initShard, tabletAlias)
 				}
 			}
-			log.Info(fmt.Sprintf("Shard %v/%v exists but has no serving tablets.", initKeyspace, initShard))
+			log.Info("Shard exists but has no serving tablets.", slog.String("keyspace", initKeyspace), slog.String("shard", initShard))
 		case topo.IsErrType(shardErr, topo.NoNode):
 			// The shard doesn't exist, so we know no tablets are running.
-			log.Info(fmt.Sprintf("Shard %v/%v doesn't exist; assuming it has no serving tablets.", initKeyspace, initShard))
+			log.Info("Shard doesn't exist; assuming it has no serving tablets.", slog.String("keyspace", initKeyspace), slog.String("shard", initShard))
 		default:
 			// If we encounter any other error, we don't know for sure whether
 			// the shard exists, so it's not safe to continue.
 			return false, fmt.Errorf("failed to check whether shard %v/%v exists before doing initial backup: %v", initKeyspace, initShard, err)
 		}
 
-		log.Info(fmt.Sprintf("Shard %v/%v has no existing backups. Creating initial backup.", initKeyspace, initShard))
+		log.Info("Shard has no existing backups. Creating initial backup.", slog.String("keyspace", initKeyspace), slog.String("shard", initShard))
 		return true, nil
 	}
 
@@ -1605,11 +1608,14 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 	}
 	if elapsedTime := time.Since(lastBackupTime); elapsedTime < minBackupInterval {
 		// It hasn't been long enough yet.
-		log.Info(fmt.Sprintf("Skipping backup since only %v has elapsed since the last backup at %v, which is less than the min_backup_interval of %v.", elapsedTime, lastBackupTime, minBackupInterval))
+		log.Info("Skipping backup since the time elapsed since the last backup at backup_time is less than the min_backup_interval.",
+			slog.Duration("elapsed", elapsedTime),
+			slog.Time("backup_time", lastBackupTime),
+			slog.Duration("min_backup_interval", minBackupInterval))
 		return false, nil
 	}
 	// It has been long enough.
-	log.Info(fmt.Sprintf("The last backup was taken at %v, which is older than the min_backup_interval of %v.", lastBackupTime, minBackupInterval))
+	log.Info("The last backup was taken at backup_time, which is older than the min_backup_interval.", slog.Time("backup_time", lastBackupTime), slog.Duration("min_backup_interval", minBackupInterval))
 	return true, nil
 }
 
@@ -1623,7 +1629,7 @@ func lastCompleteBackup(ctx context.Context, backups []backupstorage.BackupHandl
 		// Check if this backup is complete by looking for the MANIFEST file,
 		// which is written at the end after all files are uploaded.
 		if err := checkBackupComplete(ctx, backup); err != nil {
-			log.Warn(fmt.Sprintf("Ignoring backup %v because it's incomplete: %v", backup.Name(), err))
+			log.Warn("Ignoring backup because it's incomplete", slog.String("backup_name", backup.Name()), slog.Any("error", err))
 			continue
 		}
 		return backup
@@ -1638,6 +1644,6 @@ func checkBackupComplete(ctx context.Context, backup backupstorage.BackupHandle)
 		return fmt.Errorf("can't get backup MANIFEST: %v", err)
 	}
 
-	log.Info(fmt.Sprintf("Found complete backup %v taken at position %v", backup.Name(), manifest.Position.String()))
+	log.Info("Found complete backup taken at position", slog.String("backup_name", backup.Name()), slog.String("position", replication.EncodePosition(manifest.Position)))
 	return nil
 }
