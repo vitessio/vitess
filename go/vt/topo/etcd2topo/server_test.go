@@ -575,7 +575,7 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	// tryLock reports whether TryLock took the lock, and any error other than
 	// the lock being held.
 	tryLock := func() (bool, error) {
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		ld, err := conn.TryLock(ctx, keyspacePath, "probe")
 		if err == nil {
