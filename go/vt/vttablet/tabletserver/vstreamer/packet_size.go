@@ -41,7 +41,7 @@ func registerPacketSizeFlags(fs *pflag.FlagSet) {
 	utils.SetFlagBoolVar(fs, &vttablet.VStreamerUseDynamicPacketSize, "vstream-dynamic-packet-size",
 		vttablet.VStreamerUseDynamicPacketSize, "Enable dynamic packet sizing for vstreamers. This will adjust the packet size in vreplication workflows to improve performance.")
 	utils.SetFlagBoolVar(fs, &vttablet.VStreamerMemoryBounds, "vstream-memory-bounds",
-		vttablet.VStreamerMemoryBounds, "Bound the memory a VStreamRows or VStreamTables stream holds for its lifetime: drop the reused row pools when they retain more than about four times the live packet, and cap dynamic packet sizing at 16 times --vstream-packet-size. Can be overridden per workflow for the source side.")
+		vttablet.VStreamerMemoryBounds, "Bound the memory a VStreamRows or VStreamTables stream holds for its lifetime: drop the reused row pools when they retain more than about four times the live packet, and cap dynamic packet sizing at 16 times --vstream-packet-size. Can be overridden per workflow for the source side; the receiving tablet follows this flag only.")
 }
 
 // PacketSizer is a controller that adjusts the size of the packets being sent by the vstreamer at runtime
