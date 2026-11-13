@@ -19,7 +19,6 @@ package consultopo
 import (
 	"context"
 	"errors"
-	"net/url"
 
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -35,6 +34,7 @@ var (
 	ErrBadResponse = errors.New("consul request returned success, but response is missing required data")
 )
 
+<<<<<<< HEAD
 // convertError converts a context error into a topo error. All errors
 // are either application-level errors, or context errors.
 func convertError(err error, nodePath string) error {
@@ -47,8 +47,31 @@ func convertError(err error, nodePath string) error {
 	// Convert specific sentinel values.
 	switch {
 	case errors.Is(err, context.Canceled):
+||||||| parent of 4ce99dc600 (topo: honor ctx in consultopo KV calls, drop closed cell conns, fix read-only races (#21687))
+// convertError converts a context error into a topo error. All errors
+// are either application-level errors, or context errors.
+func convertError(err error, nodePath string) error {
+	// Unwrap errors from the Go HTTP client.
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
+		err = urlErr.Err
+	}
+
+	// Convert specific sentinel values.
+	switch {
+	case errors.Is(err, context.Canceled):
+=======
+// convertError converts the error of a Consul call made with ctx into a
+// topo error when ctx is done, since the call then failed because of the
+// ctx. Any other error is returned unchanged, so that errors from the Go
+// HTTP client keep their request URL. The error itself can't tell: a dial
+// timeout also matches context.DeadlineExceeded, while the caller's ctx may
+// have no deadline at all.
+func convertError(ctx context.Context, err error, nodePath string) error {
+	switch ctx.Err() {
+	case context.Canceled:
+>>>>>>> 4ce99dc600 (topo: honor ctx in consultopo KV calls, drop closed cell conns, fix read-only races (#21687))
 		return topo.NewError(topo.Interrupted, nodePath)
-	case errors.Is(err, context.DeadlineExceeded):
+	case context.DeadlineExceeded:
 		return topo.NewError(topo.Timeout, nodePath)
 	}
 
