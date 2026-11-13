@@ -282,6 +282,13 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	}
 
 	resp.VdiffUuid = req.VdiffUuid
+
+	// Hold the engine mutex while reading the stored record (including its
+	// options) and starting the controller. handleUpdateAction holds the
+	// same mutex across its state check and options write, so a resume
+	// either sees the updated options or causes the update to be rejected.
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
 	qr, err = vde.getVDiffByID(ctx, dbClient, resp.Id)
 	if err != nil {
 		return err
@@ -302,8 +309,6 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		}
 	}
 
-	vde.mu.Lock()
-	defer vde.mu.Unlock()
 	if err := vde.addController(vdiffRecord, options); err != nil {
 		return err
 	}
@@ -496,6 +501,12 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 // `VDiff stop` first. Otherwise the merged options are persisted and
 // lastpk/progress are left untouched. The new options take effect on
 // `VDiff resume` (or retry).
+//
+// The engine mutex is held across the state and options read, the
+// running check, and the write so that a concurrent resume or retry
+// (which hold the same mutex while reading the record and starting the
+// controller) either sees the updated options or causes the update to be
+// rejected.
 func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer.DBClient, req *tabletmanagerdatapb.VDiffRequest, resp *tabletmanagerdatapb.VDiffResponse) error {
 	if req.VdiffUuid == "" {
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "vdiff UUID is required")
@@ -504,6 +515,9 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 	if !pickerHasUpdates(updates) {
 		return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update")
 	}
+
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
 
 	idQuery, err := sqlparser.ParseAndBind(sqlGetVDiffID,
 		sqltypes.StringBindVariable(req.VdiffUuid),
@@ -537,7 +551,7 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 	}
 
 	state := strings.ToLower(row.AsString("state", ""))
-	if err := vde.rejectIfVDiffRunning(id, req.VdiffUuid, state); err != nil {
+	if err := vde.rejectIfVDiffNotUpdatableLocked(id, req.VdiffUuid, state); err != nil {
 		return err
 	}
 
@@ -584,17 +598,18 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 	return nil
 }
 
-// rejectIfVDiffRunning returns a FAILED_PRECONDITION error when the
-// VDiff is pending/started or a live controller exists, telling the
+// rejectIfVDiffNotUpdatableLocked returns a FAILED_PRECONDITION error when
+// the VDiff is pending/started or a live controller exists, telling the
 // operator to `VDiff stop` first.
-func (vde *Engine) rejectIfVDiffRunning(id int64, uuid, state string) error {
+// The engine mutex (mu) must be held by the caller.
+func (vde *Engine) rejectIfVDiffNotUpdatableLocked(id int64, uuid, state string) error {
 	tablet := topoproto.TabletAliasString(vde.thisTablet.Alias)
 	if state == string(PendingState) || state == string(StartedState) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"vdiff %s is %s on tablet %s; run VDiff stop first, then update, then VDiff resume",
 			uuid, state, tablet)
 	}
-	if vde.hasLiveController(id) {
+	if vde.hasLiveControllerLocked(id) {
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"vdiff %s has a live controller on tablet %s (state %s); run VDiff stop first, then update, then VDiff resume",
 			uuid, tablet, state)
@@ -602,13 +617,12 @@ func (vde *Engine) rejectIfVDiffRunning(id int64, uuid, state string) error {
 	return nil
 }
 
-// hasLiveController reports whether a controller for id is currently
+// hasLiveControllerLocked reports whether a controller for id is currently
 // running (present in the map and its done channel is not closed).
 // Leftover completed/stopped controllers remain in the map after
 // their goroutine exits; those are not live.
-func (vde *Engine) hasLiveController(id int64) bool {
-	vde.mu.Lock()
-	defer vde.mu.Unlock()
+// The engine mutex (mu) must be held by the caller.
+func (vde *Engine) hasLiveControllerLocked(id int64) bool {
 	ct := vde.controllers[id]
 	if ct == nil {
 		return false

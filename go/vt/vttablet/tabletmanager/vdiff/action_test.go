@@ -32,6 +32,7 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -669,6 +670,81 @@ func expectUpdateOptionsQueries(t *testing.T, vdiffenv *testVDiffEnv, vduuid, ex
 		singleRowAffected,
 		nil,
 	)
+}
+
+// queryNotifyingDBClient wraps a MockDBClient and signals on every query.
+type queryNotifyingDBClient struct {
+	*binlogplayer.MockDBClient
+	queried chan string
+}
+
+func (dc *queryNotifyingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	select {
+	case dc.queried <- query:
+	default:
+	}
+	return dc.MockDBClient.ExecuteFetch(query, maxrows)
+}
+
+// TestHandleUpdateActionSerializesWithControllerStartup confirms that an
+// update does not read the vdiff record while the engine mutex is held
+// (as it is by retryVDiffs and resume while they read the record and
+// start a controller), and that it then sees the controller started by
+// the mutex holder and is rejected instead of storing options that the
+// running controller would not use.
+func TestHandleUpdateActionSerializesWithControllerStartup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	vdiffenv := newTestVDiffEnv(t)
+	defer vdiffenv.close()
+
+	vduuid := uuid.New().String()
+	existingJSON := `{"picker_options":{"tablet_types":"replica","source_cell":"zone1","target_cell":"zone1"},"core_options":{"auto_retry":true},"report_options":{}}`
+	// Only the lookups are expected. If the update wrote the options the
+	// mock would fail the test on the unexpected query.
+	expectUpdateLookupQueries(t, vdiffenv, vduuid, existingJSON, "stopped")
+	dbClient := &queryNotifyingDBClient{MockDBClient: vdiffenv.dbClient, queried: make(chan string, 10)}
+
+	vdiffenv.vde.mu.Lock()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vdiffenv.vde.handleUpdateAction(ctx, dbClient, &tabletmanagerdatapb.VDiffRequest{
+			Action:    string(UpdateAction),
+			VdiffUuid: vduuid,
+			Options: &tabletmanagerdatapb.VDiffOptions{
+				PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
+			},
+		}, &tabletmanagerdatapb.VDiffResponse{})
+	}()
+
+	select {
+	case q := <-dbClient.queried:
+		vdiffenv.vde.mu.Unlock()
+		require.FailNow(t, "update read the vdiff record while the engine mutex was held", "query: %s", q)
+	case err := <-errCh:
+		vdiffenv.vde.mu.Unlock()
+		require.FailNow(t, "update returned while the engine mutex was held", "err: %v", err)
+	case <-time.After(250 * time.Millisecond):
+	}
+
+	// While still holding the mutex, start a live controller for the vdiff
+	// as retryVDiffs would.
+	done := make(chan struct{})
+	var closeDone sync.Once
+	vdiffenv.vde.controllers[1] = &controller{
+		id:     1,
+		uuid:   vduuid,
+		vde:    vdiffenv.vde,
+		cancel: func() { closeDone.Do(func() { close(done) }) },
+		done:   done,
+	}
+	vdiffenv.vde.mu.Unlock()
+
+	err := <-errCh
+	vdiffenv.dbClient.Wait()
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.Contains(t, err.Error(), "has a live controller")
 }
 
 // TestResumeUsesFreshOptions confirms that each resumed controller gets
