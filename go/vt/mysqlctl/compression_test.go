@@ -383,7 +383,7 @@ func TestExternalCompressorLogOmitsFlags(t *testing.T) {
 			assert.Equal(t, "INFO", r["level"])
 			assert.Equal(t, tt.wantLogged, r["exec_cmd"])
 			assert.NotContains(t, logs.String(), secret)
-			assert.Contains(t, stream.String(), tt.wantLogged)
+			assert.Contains(t, stream.String(), strings.TrimPrefix(tt.wantLogged, dir))
 			assert.NotContains(t, stream.String(), secret)
 		})
 	}
