@@ -133,10 +133,10 @@ func recordResumption(config *tls.Config) *bool {
 	return &resumed
 }
 
-// TestReadServerConfigRereadsFiles checks that ReadServerConfig picks
+// TestServerConfigRereadsFiles checks that ServerConfig picks
 // up a server certificate, key, client CA and CRL that were replaced
 // on disk, under the same paths, by ones from an unrelated CA.
-func TestReadServerConfigRereadsFiles(t *testing.T) {
+func TestServerConfigRereadsFiles(t *testing.T) {
 	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
 	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
 
@@ -156,11 +156,11 @@ func TestReadServerConfigRereadsFiles(t *testing.T) {
 	}
 
 	install(oldCerts)
-	before, err := ReadServerConfig(cert, key, ca, crl, serverCA, tls.VersionTLS12)
+	before, err := ServerConfig(cert, key, ca, crl, serverCA, tls.VersionTLS12)
 	require.NoError(t, err)
 
 	install(newCerts)
-	after, err := ReadServerConfig(cert, key, ca, crl, serverCA, tls.VersionTLS12)
+	after, err := ServerConfig(cert, key, ca, crl, serverCA, tls.VersionTLS12)
 	require.NoError(t, err)
 
 	require.Equal(t, loadOneCert(t, newCerts.ServerCert).Raw, after.Certificates[0].Certificate[0])
@@ -187,11 +187,11 @@ func TestReadServerConfigRereadsFiles(t *testing.T) {
 	require.ErrorContains(t, res.serverErr, "Certificate revoked: CommonName="+newCerts.RevokedClientName)
 }
 
-// TestReadServerConfigRereadsCAForCRLs checks that ReadServerConfig
+// TestServerConfigRereadsCAForCRLs checks that ServerConfig
 // holds the CRL against the CA certificates now on disk: once the CA
 // file grows to trust an intermediate that the configured CRL
 // revokes, no client chain may end at that intermediate.
-func TestReadServerConfigRereadsCAForCRLs(t *testing.T) {
+func TestServerConfigRereadsCAForCRLs(t *testing.T) {
 	root := t.TempDir()
 	certs := tlstest.CreateClientServerCertPairs(root)
 	clientCA := loadOneCert(t, certs.ClientCA)
@@ -204,11 +204,11 @@ func TestReadServerConfigRereadsCAForCRLs(t *testing.T) {
 
 	ca := path.Join(t.TempDir(), "ca.pem")
 	require.NoError(t, os.WriteFile(ca, rootPEM, 0o600))
-	_, err = ReadServerConfig(certs.ServerCert, certs.ServerKey, ca, rootCRL, certs.ServerCA, tls.VersionTLS12)
+	_, err = ServerConfig(certs.ServerCert, certs.ServerKey, ca, rootCRL, certs.ServerCA, tls.VersionTLS12)
 	require.NoError(t, err)
 
 	require.NoError(t, os.WriteFile(ca, append(clientCAPEM, rootPEM...), 0o600))
-	serverConfig, err := ReadServerConfig(certs.ServerCert, certs.ServerKey, ca, rootCRL, certs.ServerCA, tls.VersionTLS12)
+	serverConfig, err := ServerConfig(certs.ServerCert, certs.ServerKey, ca, rootCRL, certs.ServerCA, tls.VersionTLS12)
 	require.NoError(t, err)
 
 	clientConfig, err := ClientConfig(VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
@@ -444,7 +444,7 @@ func TestPeerChainRoots(t *testing.T) {
 // loadOneCert returns the single certificate in the PEM file.
 func loadOneCert(t *testing.T, file string) *x509.Certificate {
 	t.Helper()
-	loaded, err := loadx509Certificates(file)
+	loaded, err := readx509Certificates(file)
 	require.NoError(t, err)
 	require.Len(t, loaded, 1)
 	return loaded[0]

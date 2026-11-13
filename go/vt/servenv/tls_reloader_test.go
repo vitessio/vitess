@@ -17,7 +17,6 @@ limitations under the License.
 package servenv
 
 import (
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -167,11 +166,9 @@ func TestTLSReloaderSkipsUnchangedFilesUnlessForced(t *testing.T) {
 
 // TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange checks that
 // a CA file replaced between Reload's pre-load digest and its config
-// load is still detected, rather than recorded under the CA
-// fingerprint read before the replacement. Without this, the
-// mismatch would silently skip the session-ticket rotation a CA
-// change requires, letting a session authenticated under a CA that
-// was just removed keep resuming.
+// load is recorded with the digest of what was loaded, rather than the
+// digest read before the replacement, which would have later reloads
+// take the files for unchanged.
 func TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
 	otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
@@ -181,7 +178,6 @@ func TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange(t *testing.T) {
 	var sink configSink
 	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
 	require.NoError(t, err)
-	ticketConfig := reloader.ticketConfig
 
 	// The CA file changes only once the hook fires, simulating a
 	// rotation landing exactly between Reload's pre-load digest and
@@ -192,21 +188,15 @@ func TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange(t *testing.T) {
 			return
 		}
 		fired = true
-		clientCA, err := os.ReadFile(certs.ClientCA)
-		require.NoError(t, err)
-		otherCA, err := os.ReadFile(otherCerts.ClientCA)
-		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(files.CA, append(clientCA, otherCA...), 0o600))
+		copyFile(t, files.CA, otherCerts.ClientCA)
 	}
 
 	require.NoError(t, reloader.Reload(true))
 	require.True(t, fired, "the hook must have run for this test to be meaningful")
 
-	wantCA, err := os.ReadFile(files.CA)
+	want, err := reloader.digest()
 	require.NoError(t, err)
-	require.Equal(t, sha256.Sum256(wantCA), reloader.caFingerprint,
-		"the recorded CA fingerprint must match the CA that was actually loaded, not the one read before the race")
-	require.NotSame(t, ticketConfig, reloader.ticketConfig, "a CA that changed mid-reload must still get new session ticket keys")
+	require.Equal(t, want, reloader.fingerprint, "the recorded digest must be of the files that were actually loaded")
 }
 
 func TestTLSReloaderKeepsConfigOnError(t *testing.T) {
@@ -218,6 +208,7 @@ func TestTLSReloaderKeepsConfigOnError(t *testing.T) {
 	var sink configSink
 	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
 	require.NoError(t, err)
+	errorsBefore := tlsReloadErrors.Counts()[t.Name()]
 
 	// The certificate is replaced before its key, as a rotation that
 	// writes the files one at a time does.
@@ -226,7 +217,7 @@ func TestTLSReloaderKeepsConfigOnError(t *testing.T) {
 	require.ErrorContains(t, err, "the previous config stays in place")
 	require.Equal(t, 1, sink.count())
 	require.Equal(t, readCert(t, oldCerts.ServerCert).Raw, sink.leaf())
-	require.Equal(t, int64(1), tlsReloadErrors.Counts()[t.Name()])
+	require.Equal(t, errorsBefore+1, tlsReloadErrors.Counts()[t.Name()])
 
 	// Once the rotation completes, the next reload picks it up.
 	installTLSFiles(t, files, newCerts)
@@ -242,125 +233,78 @@ func TestNewTLSReloaderFailsOnInvalidFiles(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestTLSReloaderSessionTicketKeys checks, through real handshakes
+// TestTLSReloaderSessionResumption checks, through real handshakes
 // against a server that loads its config the way the gRPC server
-// does, that sessions established before a reload resume after it
-// unless the CA file changed.
-func TestTLSReloaderSessionTicketKeys(t *testing.T) {
+// does, that a session resumed after a reload is held against the
+// reloaded config: it resumes while the client is still accepted, and
+// not once the CA that issued the client's certificate is removed or
+// a reloaded CRL revokes it. Go verifies a resumed session's chain
+// against the current CAs, and VerifyConnection runs on resumption.
+func TestTLSReloaderSessionResumption(t *testing.T) {
 	for _, version := range []uint16{tls.VersionTLS12, tls.VersionTLS13} {
 		t.Run(tls.VersionName(version), func(t *testing.T) {
 			certs := tlstest.CreateClientServerCertPairs(t.TempDir())
 			otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
-			files := liveTLSFiles(t)
-			installTLSFiles(t, files, certs)
-
-			var current atomic.Pointer[tls.Config]
-			reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, func(config *tls.Config) {
-				config.MaxVersion = version
-				current.Store(config)
-			})
-			require.NoError(t, err)
-			serverConfig := &tls.Config{
-				GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-					return current.Load(), nil
-				},
+			newServer := func(t *testing.T) (TLSServerFiles, *TLSReloader, *tls.Config) {
+				files := liveTLSFiles(t)
+				installTLSFiles(t, files, certs)
+				copyFile(t, files.CRL, otherCerts.ClientCRL)
+				var current atomic.Pointer[tls.Config]
+				reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, func(config *tls.Config) {
+					config.MaxVersion = version
+					current.Store(config)
+				})
+				require.NoError(t, err)
+				return files, reloader, &tls.Config{
+					GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+						return current.Load(), nil
+					},
+				}
 			}
-			newClient := func() *tls.Config {
-				config, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+			newClient := func(t *testing.T, cert, key string) *tls.Config {
+				config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
 				require.NoError(t, err)
 				config.ClientSessionCache = tls.NewLRUClientSessionCache(1)
 				return config
 			}
+			established := func(t *testing.T, server, client *tls.Config) {
+				require.False(t, tlsHandshake(t, server, client).DidResume)
+				require.True(t, tlsHandshake(t, server, client).DidResume, "the client must resume for this test to be meaningful")
+			}
 
-			t.Run("resumes after a reload that leaves the CA as it was", func(t *testing.T) {
-				client := newClient()
-				require.False(t, tlsHandshake(t, serverConfig, client).DidResume)
-				require.True(t, tlsHandshake(t, serverConfig, client).DidResume, "the client must resume for this test to be meaningful")
+			t.Run("resumes after a reload that still accepts the client", func(t *testing.T) {
+				files, reloader, server := newServer(t)
+				client := newClient(t, certs.ClientCert, certs.ClientKey)
+				established(t, server, client)
 
-				copyFile(t, files.CRL, certs.CombinedCRL)
-				require.NoError(t, reloader.Reload(false))
-				require.True(t, tlsHandshake(t, serverConfig, client).DidResume)
-			})
-
-			t.Run("does not resume after a reload that changed the CA", func(t *testing.T) {
-				client := newClient()
-				require.False(t, tlsHandshake(t, serverConfig, client).DidResume)
-				require.True(t, tlsHandshake(t, serverConfig, client).DidResume, "the client must resume for this test to be meaningful")
-
-				clientCA, err := os.ReadFile(certs.ClientCA)
-				require.NoError(t, err)
-				otherCA, err := os.ReadFile(otherCerts.ClientCA)
-				require.NoError(t, err)
-				require.NoError(t, os.WriteFile(files.CA, append(clientCA, otherCA...), 0o600))
-				require.NoError(t, reloader.Reload(false))
-				require.False(t, tlsHandshake(t, serverConfig, client).DidResume)
-				require.True(t, tlsHandshake(t, serverConfig, client).DidResume, "sessions established after the reload must resume")
-
-				// A later reload that leaves the CA alone keeps the new
-				// keys, rather than reverting to the ones sessions under
-				// the previous CA were encrypted with.
 				copyFile(t, files.CRL, certs.ClientCRL)
 				require.NoError(t, reloader.Reload(false))
-				require.True(t, tlsHandshake(t, serverConfig, client).DidResume)
+				require.True(t, tlsHandshake(t, server, client).DidResume)
 			})
-		})
-	}
-}
 
-// TestTLSReloaderRotatesTicketKeysWithoutReloading checks, through
-// real handshakes, that the session ticket keys a CA change puts in
-// place rotate and expire on crypto/tls's schedule as handshakes
-// happen, even when nothing reloads again, rather than staying in use
-// for the life of the process.
-func TestTLSReloaderRotatesTicketKeysWithoutReloading(t *testing.T) {
-	for _, version := range []uint16{tls.VersionTLS12, tls.VersionTLS13} {
-		t.Run(tls.VersionName(version), func(t *testing.T) {
-			certs := tlstest.CreateClientServerCertPairs(t.TempDir())
-			otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
-			files := liveTLSFiles(t)
-			installTLSFiles(t, files, certs)
+			t.Run("does not resume once the client's CA is removed", func(t *testing.T) {
+				files, reloader, server := newServer(t)
+				client := newClient(t, certs.ClientCert, certs.ClientKey)
+				established(t, server, client)
 
-			var current atomic.Pointer[tls.Config]
-			reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, func(config *tls.Config) {
-				config.MaxVersion = version
-				current.Store(config)
+				copyFile(t, files.CA, otherCerts.ClientCA)
+				copyFile(t, files.CRL, otherCerts.ClientCRL)
+				require.NoError(t, reloader.Reload(false))
+				res := tryTLSHandshake(t, server, client)
+				require.Error(t, res.serverErr, "a client whose CA was removed must not be accepted on a session of before")
+				require.False(t, res.state.DidResume)
 			})
-			require.NoError(t, err)
-			var clock atomic.Int64
-			clock.Store(time.Now().UnixNano())
-			reloader.ticketClock = func() time.Time { return time.Unix(0, clock.Load()) }
 
-			clientCA, err := os.ReadFile(certs.ClientCA)
-			require.NoError(t, err)
-			otherCA, err := os.ReadFile(otherCerts.ClientCA)
-			require.NoError(t, err)
-			require.NoError(t, os.WriteFile(files.CA, append(clientCA, otherCA...), 0o600))
-			require.NoError(t, reloader.Reload(false))
+			t.Run("does not resume once a reloaded CRL revokes the client", func(t *testing.T) {
+				files, reloader, server := newServer(t)
+				client := newClient(t, certs.RevokedClientCert, certs.RevokedClientKey)
+				established(t, server, client)
 
-			serverConfig := &tls.Config{
-				GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-					return current.Load(), nil
-				},
-			}
-			newClient := func() *tls.Config {
-				config, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
-				require.NoError(t, err)
-				config.ClientSessionCache = tls.NewLRUClientSessionCache(1)
-				return config
-			}
-			rotated, expired := newClient(), newClient()
-			for _, client := range []*tls.Config{rotated, expired} {
-				require.False(t, tlsHandshake(t, serverConfig, client).DidResume)
-			}
-
-			// A day later the key is rotated out for new tickets, but
-			// the tickets it issued still resume.
-			clock.Add(int64(25 * time.Hour))
-			require.True(t, tlsHandshake(t, serverConfig, rotated).DidResume)
-
-			// A week later it is gone, and its tickets no longer resume.
-			clock.Add(int64(7 * 24 * time.Hour))
-			require.False(t, tlsHandshake(t, serverConfig, expired).DidResume)
+				copyFile(t, files.CRL, certs.ClientCRL)
+				require.NoError(t, reloader.Reload(false))
+				res := tryTLSHandshake(t, server, client)
+				require.ErrorContains(t, res.serverErr, "Certificate revoked")
+			})
 		})
 	}
 }
@@ -370,6 +314,21 @@ func TestTLSReloaderRotatesTicketKeysWithoutReloading(t *testing.T) {
 // listener, requires both sides to succeed, and returns the client's
 // connection state.
 func tlsHandshake(t *testing.T, serverConfig, clientConfig *tls.Config) tls.ConnectionState {
+	t.Helper()
+	res := tryTLSHandshake(t, serverConfig, clientConfig)
+	require.NoError(t, res.clientErr)
+	require.NoError(t, res.serverErr)
+	return res.state
+}
+
+type tlsHandshakeResult struct {
+	state                tls.ConnectionState
+	clientErr, serverErr error
+}
+
+// tryTLSHandshake is tlsHandshake without requiring either side to
+// succeed.
+func tryTLSHandshake(t *testing.T, serverConfig, clientConfig *tls.Config) tlsHandshakeResult {
 	t.Helper()
 	const timeout = 30 * time.Second
 
@@ -399,21 +358,25 @@ func tlsHandshake(t *testing.T, serverConfig, clientConfig *tls.Config) tls.Conn
 		serverErr <- err
 	}()
 
+	var res tlsHandshakeResult
 	conn, err := tls.DialWithDialer(&net.Dialer{Timeout: timeout}, "tcp", ln.Addr().String(), clientConfig)
-	require.NoError(t, err)
-	defer conn.Close()
-	require.NoError(t, conn.SetDeadline(time.Now().Add(timeout)))
-	_, err = io.ReadAll(conn)
-	require.NoError(t, err)
-	var serverResult error
+	if err == nil {
+		defer conn.Close()
+		require.NoError(t, conn.SetDeadline(time.Now().Add(timeout)))
+		// A TLS 1.3 client learns that the server rejected its
+		// certificate only once it reads.
+		_, res.clientErr = io.ReadAll(conn)
+		res.state = conn.ConnectionState()
+	} else {
+		res.clientErr = err
+	}
 	require.Eventually(t, func() bool {
 		select {
-		case serverResult = <-serverErr:
+		case res.serverErr = <-serverErr:
 			return true
 		default:
 			return false
 		}
 	}, timeout, 10*time.Millisecond, "the server side did not finish the handshake in time")
-	require.NoError(t, serverResult)
-	return conn.ConnectionState()
+	return res
 }

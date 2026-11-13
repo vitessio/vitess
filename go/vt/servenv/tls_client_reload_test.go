@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -46,6 +47,7 @@ func TestRunClientTLSReload(t *testing.T) {
 		{name: "interval", interval: 10 * time.Millisecond},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(vttls.ResetCachedFilesForTest)
 			oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
 			newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
 			live := t.TempDir()
@@ -86,4 +88,55 @@ func TestRunClientTLSReload(t *testing.T) {
 			}, 30*time.Second, 10*time.Millisecond, "the client must use the new certificate once its files are reloaded")
 		})
 	}
+}
+
+// TestStartClientTLSReload checks that a binary that reloads its TLS
+// files reloads its clients' files on the process's SIGHUPs from
+// startup on, and reports each reload in the metrics of the clients.
+func TestStartClientTLSReload(t *testing.T) {
+	vttls.ResetCachedFilesForTest()
+	t.Cleanup(vttls.ResetCachedFilesForTest)
+	registered := tlsReloadFlagsRegistered
+	tlsReloadFlagsRegistered, onTermSyncHooks = true, event.Hooks{}
+	t.Cleanup(func() {
+		require.True(t, fireOnTermSyncHooks(30*time.Second), "the reload must stop when the process terminates")
+		tlsReloadFlagsRegistered, onTermSyncHooks = registered, event.Hooks{}
+	})
+
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	live := t.TempDir()
+	cert, key, ca := path.Join(live, "cert.pem"), path.Join(live, "key.pem"), path.Join(live, "ca.pem")
+	install := func(certs tlstest.ClientServerKeyPairs) {
+		for dst, src := range map[string]string{cert: certs.ClientCert, key: certs.ClientKey, ca: certs.ServerCA} {
+			copyFile(t, dst, src)
+		}
+	}
+	clientCert := func() []byte {
+		config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, "", "", tls.VersionTLS12)
+		require.NoError(t, err)
+		return config.Certificates[0].Certificate[0]
+	}
+	install(oldCerts)
+	require.Equal(t, readCert(t, oldCerts.ClientCert).Raw, clientCert())
+
+	startClientTLSReload(0)
+
+	tlsReloadSuccessTimestamp.Set(clientTLSReloadName, 0)
+	install(newCerts)
+	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGHUP))
+	newCert := readCert(t, newCerts.ClientCert).Raw
+	assert.Eventually(t, func() bool {
+		return bytes.Equal(newCert, clientCert()) && tlsReloadSuccessTimestamp.Counts()[clientTLSReloadName] > 0
+	}, 30*time.Second, 10*time.Millisecond, "SIGHUP must reload the client's files, and the reload be reported")
+
+	// A key that no longer matches its certificate fails the reload,
+	// which is counted, and the client keeps its files.
+	errorsBefore := tlsReloadErrors.Counts()[clientTLSReloadName]
+	copyFile(t, key, oldCerts.ClientKey)
+	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGHUP))
+	assert.Eventually(t, func() bool {
+		return tlsReloadErrors.Counts()[clientTLSReloadName] > errorsBefore
+	}, 30*time.Second, 10*time.Millisecond, "a failed reload must be counted")
+	require.Equal(t, newCert, clientCert())
 }

@@ -44,6 +44,7 @@ import (
 // verifies the server against, what the files hold then, rather than
 // what they held when it was dialed.
 func TestSecureCredentialsReload(t *testing.T) {
+	t.Cleanup(vttls.ResetCachedFilesForTest)
 	// Two unrelated CAs, each with a server and a client certificate,
 	// under the same names, as a CA rotation issues them.
 	oldRoot, newRoot, live := t.TempDir(), t.TempDir(), t.TempDir()
@@ -64,7 +65,7 @@ func TestSecureCredentialsReload(t *testing.T) {
 	// serve serves gRPC health checks on addr with the server
 	// certificate of root, to clients with a certificate root issued.
 	serve := func(root, addr string) *grpc.Server {
-		config, err := vttls.ReadServerConfig(path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), "", "", tls.VersionTLS12)
+		config, err := vttls.ServerConfig(path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), "", "", tls.VersionTLS12)
 		require.NoError(t, err)
 		server := grpc.NewServer(grpc.Creds(credentials.NewTLS(config)))
 		healthpb.RegisterHealthServer(server, health.NewServer())
@@ -121,14 +122,12 @@ func TestSecureCredentialsReload(t *testing.T) {
 	require.NoError(t, checkErr)
 
 	// The CRL is then replaced by one that revokes the server, and
-	// reloaded, and the connection reconnects while the file is
-	// briefly gone, as when it is being replaced again.
+	// reloaded, and the connection reconnects.
 	tlstest.RevokeCertAndRegenerateCRL(newRoot, tlstest.CA, "server")
 	install(newRoot)
 	reload()
-	require.NoError(t, os.Remove(crl))
 	newServer.Stop()
-	serve(newRoot, addr)
+	newServer = serve(newRoot, addr)
 	requireRevoked := func(conn *grpc.ClientConn, msg string) {
 		t.Helper()
 		var checkErr error
@@ -140,11 +139,17 @@ func TestSecureCredentialsReload(t *testing.T) {
 	}
 	requireRevoked(conn, "the reconnect must hold the reloaded CRL against the server, not the one loaded before it")
 
-	// Once the file is back and reloaded, which changes nothing, a new
-	// handshake must still hold that CRL against the server.
-	install(newRoot)
-	reload()
-	requireRevoked(dial(), "a handshake after the file is back must hold the reloaded CRL against the server")
+	// A CRL file that then breaks, as one truncated by the run that
+	// writes it, fails the reload, and the credentials keep the CRL
+	// they were built with, while a new client config fails.
+	require.NoError(t, os.WriteFile(crl, nil, 0o600))
+	_, err = vttls.ReloadCachedFiles()
+	require.ErrorContains(t, err, crl)
+	_, err = vttls.ClientConfig(vttls.VerifyIdentity, path.Join(live, "client-cert.pem"), path.Join(live, "client-key.pem"), path.Join(live, "ca-cert.pem"), crl, "server.example.com", tls.VersionTLS12)
+	require.Error(t, err, "a client must not be built from a CRL file that cannot be used")
+	newServer.Stop()
+	serve(newRoot, addr)
+	requireRevoked(conn, "the credentials must keep holding the CRL they were built with against the server")
 }
 
 // TestReloadingCredsRetriesFailedBuild checks that credentials that
@@ -152,6 +157,7 @@ func TestSecureCredentialsReload(t *testing.T) {
 // being replaced, are built again on a later handshake once they can
 // be, without another reload.
 func TestReloadingCredsRetriesFailedBuild(t *testing.T) {
+	t.Cleanup(vttls.ResetCachedFilesForTest)
 	var fail atomic.Bool
 	creds, err := newReloadingCreds(func() (*tls.Config, error) {
 		if fail.Load() {
