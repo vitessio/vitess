@@ -73,6 +73,39 @@ func TestPlanTestSuite(t *testing.T) {
 	suite.Run(t, new(planTestSuite))
 }
 
+func TestReferenceUnionByDestinationHandlesLookupMiss(t *testing.T) {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(t, "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		query               string
+		wantSpecialHandling bool
+	}{
+		{"select id from ref union all select id from music where id = 1", true},
+		{"select id from music where id = 1 union all select id from ref", true},
+		{"select d.id from (select id from ref union all select id from music where id = 1) as d cross join ref r", true},
+		{"select id from music where id = 1", false},
+		{"select user_id from ref union all select user_id from user_metadata where non_planable = 'foo'", true},
+		{"select user_id from ref union all select user_id from user_metadata where non_planable in ('foo')", true},
+		{"select user_id from user_metadata where non_planable = 'foo'", false},
+	} {
+		plan, err := TestBuilder(tc.query, vw, vw.CurrentDb())
+		require.NoError(t, err)
+
+		var route *engine.Route
+		switch instructions := plan.Instructions.(type) {
+		case *engine.Route:
+			route = instructions
+		case *engine.VindexLookup:
+			route = instructions.SendTo
+		}
+		require.NotNil(t, route, "expected a route for query %q", tc.query)
+		assert.Equal(t, tc.wantSpecialHandling, route.NoRoutesSpecialHandling, tc.query)
+	}
+}
+
 func (s *planTestSuite) TestPlan() {
 	defer utils.EnsureNoLeaks(s.T())
 

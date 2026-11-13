@@ -268,10 +268,12 @@ func (jm *joinMerger) merge(ctx *plancontext.PlanningContext, op1, op2 *Route, r
 			ctx.PredTracker.Set(*column.JoinPredicateID, column.Original)
 		}
 	}
-	return &Route{
+	route := &Route{
 		unaryOperator: newUnaryOp(aj),
 		MergedWith:    []*Route{op2},
 		Routing:       r,
 		Conditions:    conditions,
 	}
+	inheritNoRoutesSpecialHandling(route, op1, op2)
+	return route
 }
