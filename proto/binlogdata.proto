@@ -537,6 +537,11 @@ message VStreamOptions {
   bool no_timeouts = 4;
   // Only stream events for these types. If not provided, the default behavior is to send all event types.
   repeated VEventType event_types = 5;
+  // Set by VTGate on the streams of its VStream API. The source tablet's vstreamer and rowstreamer then
+  // check the tablet throttler as vstreamer:vtgate-vstream and rowstreamer:vtgate-vstream rather than as
+  // vstreamer and rowstreamer, so that a throttler rule for vtgate-vstream applies to VTGate VStreams but
+  // not to VReplication workflows. Rules for vstreamer and rowstreamer still apply to both.
+  bool from_vtgate = 6;
 }
 
 // VStreamRequest is the payload for VStreamer

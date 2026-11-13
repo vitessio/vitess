@@ -48940,6 +48940,9 @@ export namespace binlogdata {
         /** VStreamOptions event_types. */
         event_types: binlogdata.VEventType[];
 
+        /** VStreamOptions from_vtgate. */
+        from_vtgate: boolean;
+
         /**
          * Creates a new VStreamOptions instance using the specified properties.
          * @param [properties] Properties to set
@@ -49038,6 +49041,9 @@ export namespace binlogdata {
 
             /** VStreamOptions event_types */
             event_types?: (binlogdata.VEventType[]|null);
+
+            /** VStreamOptions from_vtgate */
+            from_vtgate?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
