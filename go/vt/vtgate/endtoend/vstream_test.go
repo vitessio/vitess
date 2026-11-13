@@ -594,9 +594,9 @@ func TestVStreamCopyResume(t *testing.T) {
 
 // TestVStreamCopyResumeMalformedLastPK resumes a copy through VTGate with the
 // malformed lastpk from #21432, whose length runs past the end of its values. It
-// checks that the client gets INVALID_ARGUMENT before any row is streamed, which
-// needs the code to survive the gRPC hops and VTGate to fail the stream rather
-// than retry it, and that a well-formed resume on the same cluster still works.
+// checks that the client receives INVALID_ARGUMENT with the validation message,
+// that no row is streamed before the error, and that a well-formed resume on the
+// same cluster still works.
 func TestVStreamCopyResumeMalformedLastPK(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -640,8 +640,8 @@ func TestVStreamCopyResumeMalformedLastPK(t *testing.T) {
 		reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtidFor(malformed), filter, &vtgatepb.VStreamFlags{})
 		require.NoError(t, err)
 
-		// If VTGate retried the stream instead of failing it, Recv would block
-		// until the context deadline, and the code check below would fail.
+		// The client must receive the code and message from the tablet's
+		// validation, and no row may be streamed before the error.
 		rowEvents := 0
 		for {
 			events, err := reader.Recv()
