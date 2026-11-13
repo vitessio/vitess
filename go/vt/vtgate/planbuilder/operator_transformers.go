@@ -913,6 +913,25 @@ func getAllTableNames(op *operators.Route) ([]string, error) {
 }
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union) (engine.Primitive, error) {
+	// All inputs of a Concatenate must return the same number of columns. Inputs can
+	// legitimately be wider than the union's own columns: a distinct arm carries the
+	// weight_string columns its dedup and the sort above need, and a recursive CTE arm
+	// keeps the columns the recursion joins on. The union truncates to its own columns
+	// on top, so the extra columns never surface - but the narrower inputs are padded
+	// with constant columns so the field counts line up, which the Concatenate
+	// primitive requires (it rejects inputs of different widths).
+	maxCols := 0
+	for _, src := range op.Sources {
+		if cols := len(src.GetColumns(ctx)); cols > maxCols {
+			maxCols = cols
+		}
+	}
+	for _, src := range op.Sources {
+		for len(src.GetColumns(ctx)) < maxCols {
+			src.AddColumn(ctx, false, false, operators.AEWrap(sqlparser.NewIntLiteral("0")))
+		}
+	}
+
 	sources, err := slice.MapWithError(op.Sources, func(src operators.Operator) (engine.Primitive, error) {
 		primitive, err := transformToPrimitive(ctx, src)
 		if err != nil {

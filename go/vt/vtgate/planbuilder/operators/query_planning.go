@@ -1057,6 +1057,12 @@ func stopAtRoute(operator Operator) VisitRule {
 	return VisitRule(!isRoute)
 }
 
+// AEWrap wraps an expression in an AliasedExpr with no alias. Exported for the
+// planbuilder package, which pads narrower UNION inputs with constant columns.
+func AEWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
+	return aeWrap(e)
+}
+
 func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{Expr: e}
 }
