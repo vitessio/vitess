@@ -614,8 +614,9 @@ func TestLockSurvivesEtcdRestart(t *testing.T) {
 // TestKeepAliveStops checks that a lock's KeepAlive stops when the lock is
 // released or its acquisition fails. It also checks that keepAlive returns,
 // once the etcd client has given up on the lease's KeepAlive, when the lease is
-// gone, when the lock is released and when the client is closed, and that it
-// warns only about the first.
+// gone (even after a renewal attempt that got no answer), when the lock is
+// released and when the client is closed, and that it warns only about the
+// first.
 func TestKeepAliveStops(t *testing.T) {
 	addr, stop, start := startRestartableEtcd(t)
 	warnings := countLeaseExpiredWarnings(t)
@@ -671,12 +672,12 @@ func TestKeepAliveStops(t *testing.T) {
 	})
 
 	// run starts keepAlive with a KeepAlive the etcd client gave up on.
-	run := func(ctx context.Context, s *Server, cli *clientv3.Client, leaseID clientv3.LeaseID) chan struct{} {
+	run := func(ctx context.Context, s *Server, cli *clientv3.Client, leaseID clientv3.LeaseID, attemptTimeout time.Duration) chan struct{} {
 		gaveUp := make(chan *clientv3.LeaseKeepAliveResponse)
 		close(gaveUp)
 		returned := make(chan struct{})
 		go func() {
-			s.keepAlive(ctx, cli, leaseID, "/test/locks", gaveUp)
+			s.keepAlive(ctx, cli, leaseID, "/test/locks", gaveUp, attemptTimeout)
 			close(returned)
 		}()
 		return returned
@@ -703,7 +704,19 @@ func TestKeepAliveStops(t *testing.T) {
 		_, err := s.cli.Revoke(t.Context(), leaseID)
 		require.NoError(t, err)
 
-		requireReturns(t, run(t.Context(), s, s.cli, leaseID))
+		requireReturns(t, run(t.Context(), s, s.cli, leaseID, topo.RemoteOperationTimeout))
+		assert.EqualValues(t, 1, warnings.Load())
+	})
+
+	t.Run("lease gone, after a renewal that got no answer", func(t *testing.T) {
+		warnings.Store(0)
+		s, leaseID := newServer(t)
+		t.Cleanup(s.Close)
+		_, err := s.cli.Revoke(t.Context(), leaseID)
+		require.NoError(t, err)
+		s.cli.Lease = &firstKeepAliveOnceUnanswered{Lease: s.cli.Lease}
+
+		requireReturns(t, run(t.Context(), s, s.cli, leaseID, 100*time.Millisecond))
 		assert.EqualValues(t, 1, warnings.Load())
 	})
 
@@ -713,7 +726,7 @@ func TestKeepAliveStops(t *testing.T) {
 		cli := s.cli
 		s.Close()
 
-		requireReturns(t, run(t.Context(), s, cli, leaseID))
+		requireReturns(t, run(t.Context(), s, cli, leaseID, topo.RemoteOperationTimeout))
 		assert.Zero(t, warnings.Load())
 	})
 
@@ -726,7 +739,7 @@ func TestKeepAliveStops(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(t.Context())
 		t.Cleanup(cancel)
-		returned := run(ctx, s, s.cli, leaseID)
+		returned := run(ctx, s, s.cli, leaseID, topo.RemoteOperationTimeout)
 		select {
 		case <-lease.called:
 		case <-time.After(30 * time.Second):
@@ -746,7 +759,7 @@ func TestKeepAliveStops(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(t.Context())
 		t.Cleanup(cancel)
-		returned := run(ctx, s, s.cli, leaseID)
+		returned := run(ctx, s, s.cli, leaseID, topo.RemoteOperationTimeout)
 		cancel()
 		requireReturns(t, returned)
 		assert.Zero(t, warnings.Load())
@@ -762,6 +775,22 @@ type recordKeepAlive struct {
 func (l *recordKeepAlive) KeepAlive(ctx context.Context, id clientv3.LeaseID) (<-chan *clientv3.LeaseKeepAliveResponse, error) {
 	l.ctxs <- ctx
 	return l.Lease.KeepAlive(ctx, id)
+}
+
+// firstKeepAliveOnceUnanswered's first KeepAliveOnce waits for ctx to end, as
+// one sent to an etcd member that stopped answering without closing its
+// connection does.
+type firstKeepAliveOnceUnanswered struct {
+	clientv3.Lease
+	calls atomic.Int32
+}
+
+func (l *firstKeepAliveOnceUnanswered) KeepAliveOnce(ctx context.Context, id clientv3.LeaseID) (*clientv3.LeaseKeepAliveResponse, error) {
+	if l.calls.Add(1) == 1 {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	return l.Lease.KeepAliveOnce(ctx, id)
 }
 
 // leaseNotFoundOnCancel's KeepAliveOnce waits for ctx to end, then reports the

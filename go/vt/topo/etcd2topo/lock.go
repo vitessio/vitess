@@ -221,7 +221,7 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, ttl int, u
 		return nil, convertError(err, nodePath)
 	}
 	if untilUnlock {
-		go s.keepAlive(kaCtx, s.cli, lease.ID, nodePath, leaseKA)
+		go s.keepAlive(kaCtx, s.cli, lease.ID, nodePath, leaseKA, topo.RemoteOperationTimeout)
 	} else {
 		go func() {
 			// Drain the lease keepAlive channel, we're not
@@ -272,13 +272,17 @@ const keepAliveRetryDelay = time.Second
 // the lease can outlive the outage: a new etcd leader gives every lease a fresh
 // TTL. keepAlive then renews the same lease and starts a new KeepAlive on it,
 // until etcd reports the lease gone. It never grants a new lease: a holder that
-// lost its lease no longer holds the lock.
-func (s *Server) keepAlive(ctx context.Context, cli *clientv3.Client, leaseID clientv3.LeaseID, nodePath string, leaseKA <-chan *clientv3.LeaseKeepAliveResponse) {
+// lost its lease no longer holds the lock. Each renewal attempt gets
+// attemptTimeout, because one sent to an etcd member that stopped answering
+// without closing its connection never returns.
+func (s *Server) keepAlive(ctx context.Context, cli *clientv3.Client, leaseID clientv3.LeaseID, nodePath string, leaseKA <-chan *clientv3.LeaseKeepAliveResponse, attemptTimeout time.Duration) {
 	for {
 		for range leaseKA {
 		}
 		for {
-			_, err := cli.KeepAliveOnce(ctx, leaseID)
+			attemptCtx, cancel := context.WithTimeout(ctx, attemptTimeout)
+			_, err := cli.KeepAliveOnce(attemptCtx, leaseID)
+			cancel()
 			// An etcd error can arrive after ctx ended or the client closed.
 			if ctx.Err() != nil || cli.Ctx().Err() != nil {
 				return
