@@ -648,7 +648,7 @@ func TestVStreamCopyResumeMalformedLastPK(t *testing.T) {
 			if err != nil {
 				require.NotErrorIs(t, err, io.EOF, "stream ended without an error")
 				assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err), "unexpected error: %v", err)
-				assert.ErrorContains(t, err, "past the end of the values")
+				require.ErrorContains(t, err, "past the end of the values")
 				break
 			}
 			for _, ev := range events {
