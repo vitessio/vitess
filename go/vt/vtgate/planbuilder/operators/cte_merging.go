@@ -17,7 +17,11 @@ limitations under the License.
 package operators
 
 import (
+	"maps"
+
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -78,15 +82,37 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 }
 
 func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
+	src := term.Source
+	original := predicates.Snapshot{}
+	copied := false
+	for _, predicate := range in.Predicates {
+		if predicate.JoinPredicateID == nil {
+			continue
+		}
+		id := *predicate.JoinPredicateID
+		if len(ctx.PredTracker.DescendantIDs(id)) > 0 {
+			// pushed into a UNION, the predicate survives only as the copies skipped here
+			src = newFilter(src, predicate.Original)
+			copied = true
+		}
+		maps.Copy(original, ctx.PredTracker.ResetToOriginal(id, predicate.Original))
+	}
+
+	// A term routed by the skipped copies needs the RecurseCTE primitive that binds them,
+	// and on more than one shard each shard would recurse over its own rows only.
+	if changedBySkippedCopies(ctx, term.Routing) || copied && !r.OpCode().IsSingleShard() {
+		ctx.PredTracker.Rollback(original)
+		if in.Distinct {
+			// RecurseCTE does not deduplicate (#20903)
+			panic(vterrors.VT12001("UNION DISTINCT in a recursive CTE whose term joins a derived UNION"))
+		}
+		return nil
+	}
+
 	in.Def.Merged = true
 	hz := in.Horizon
-	hz.Source = term.Source
+	hz.Source = src
 	newTerm, _ := expandHorizon(ctx, hz)
-	for _, predicate := range in.Predicates {
-		if predicate.JoinPredicateID != nil {
-			ctx.PredTracker.Set(*predicate.JoinPredicateID, predicate.Original)
-		}
-	}
 
 	cte := &RecurseCTE{
 		binaryOperator: newBinaryOp(seed.Source, newTerm),
@@ -99,7 +125,7 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	return &Route{
 		Routing:       r,
 		unaryOperator: newUnaryOp(cte),
-		MergedWith:    []*Route{term},
+		MergedWith:    append([]*Route{term}, seed.MergedWith...),
 		Conditions:    conditions,
 	}
 }

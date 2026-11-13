@@ -29,9 +29,12 @@ func TestE2ECases(t *testing.T) {
 	err := utils.WaitForAuthoritative(t, "main", "source_of_ref", clusterInstance.VtgateProcess.ReadVSchema)
 	require.NoError(t, err)
 
+	// union_cases must run before dml_cases: the dml cases empty user_extra,
+	// and several union cases need its rows to reach their join primitives.
 	e2eTestCaseFiles := []string{
 		"select_cases.json",
 		"filter_cases.json",
+		"union_cases.json",
 		"dml_cases.json",
 		"reference_cases.json",
 	}

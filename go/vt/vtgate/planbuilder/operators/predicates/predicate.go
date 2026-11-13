@@ -59,10 +59,14 @@ func (j *JoinPredicate) Current() sqlparser.Expr {
 func (j *JoinPredicate) IsExpr() {}
 
 func (j *JoinPredicate) Format(buf *sqlparser.TrackedBuffer) {
-	j.Current().Format(buf)
+	if expr := j.Current(); expr != nil {
+		expr.Format(buf)
+	}
 }
 
 func (j *JoinPredicate) FormatFast(buf *sqlparser.TrackedBuffer) {
 	fmt.Fprintf(buf, "JP(%d):", j.ID)
-	j.Current().FormatFast(buf)
+	if expr := j.Current(); expr != nil {
+		expr.FormatFast(buf)
+	}
 }

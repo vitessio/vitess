@@ -676,6 +676,49 @@ func (tr *ShardedRouting) extraInfo() string {
 	)
 }
 
+// hasJoinPredicates returns true if any of the seen predicates is a join predicate
+// that was pushed into this route from an ApplyJoin above it.
+func (tr *ShardedRouting) hasJoinPredicates() bool {
+	return slices.ContainsFunc(tr.SeenPredicates, func(expr sqlparser.Expr) bool {
+		_, ok := expr.(*predicates.JoinPredicate)
+		return ok
+	})
+}
+
+// withoutJoinPredicates re-derives this routing from its seen predicates, ignoring
+// join predicates pushed down from an ApplyJoin. When a predicate like `col = :arg`
+// is pushed into a route, the argument vindex option can replace a previously selected
+// option, such as a literal pin from the WHERE clause. The routing returned here
+// reflects only the predicates that hold for the route regardless of any join above
+// it. If no join predicates have been seen, the routing itself is returned unchanged.
+// Returns nil if the join-predicate-free routing did not select a vindex.
+func (tr *ShardedRouting) withoutJoinPredicates(ctx *plancontext.PlanningContext) *ShardedRouting {
+	if !tr.hasJoinPredicates() {
+		if tr.Selected == nil {
+			return nil
+		}
+		return tr
+	}
+	replay, ok := tr.Clone().(*ShardedRouting)
+	if !ok {
+		return nil
+	}
+	replay.SeenPredicates = slice.Filter(replay.SeenPredicates, func(expr sqlparser.Expr) bool {
+		_, isJP := expr.(*predicates.JoinPredicate)
+		return !isJP
+	})
+	seen := replay.SeenPredicates
+	routing, ok := replay.resetRoutingLogic(ctx).(*ShardedRouting)
+	if !ok || routing.Selected == nil {
+		return nil
+	}
+	// resetRoutingLogic replays through updateRoutingLogic, which appends every
+	// replayed predicate to SeenPredicates again. This routing outlives the merge
+	// decision, so restore the filtered list instead of keeping the duplicates.
+	routing.SeenPredicates = seen
+	return routing
+}
+
 func tryMergeShardedRouting(
 	ctx *plancontext.PlanningContext,
 	routeA, routeB *Route,

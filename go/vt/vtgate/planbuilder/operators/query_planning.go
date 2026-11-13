@@ -19,6 +19,8 @@ package operators
 import (
 	"fmt"
 	"io"
+	"maps"
+	"slices"
 	"strconv"
 
 	"vitess.io/vitess/go/slice"
@@ -151,28 +153,38 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 
 	//  - Rewrite join predicates already pushed down &&
 	//  - Save original join predicates if we have to bail out of the rewrite
-	original := map[predicates.ID]sqlparser.Expr{}
+	original := predicates.Snapshot{}
+	droppedCopies := false
 	for _, col := range aj.JoinPredicates.columns {
-		if col.JoinPredicateID != nil {
-			// if we have pushed down a join predicate, we need to restore it to its original shape, without the argument from the LHS
-			id := *col.JoinPredicateID
-			oldExpr, err := ctx.PredTracker.Get(id)
-			if err != nil {
-				panic(err)
-			}
-			original[id] = oldExpr
-			ctx.PredTracker.Set(id, col.Original)
+		if col.JoinPredicateID == nil {
+			continue
 		}
+		id := *col.JoinPredicateID
+		if len(col.LHSExprs) == 0 || readsRecursionTable(ctx, col) {
+			// without an argument from the LHS, the copies stay valid where they were pushed, and with
+			// one from a recursive CTE's own table they are all that an unmerged term keeps of the predicate
+			original[id], _ = ctx.PredTracker.Get(id)
+			ctx.PredTracker.Set(id, col.Original)
+			continue
+		}
+		droppedCopies = droppedCopies || len(ctx.PredTracker.DescendantIDs(id)) > 0
+		// if we have pushed down a join predicate, we need to restore it to its original shape, without the argument from the LHS
+		maps.Copy(original, ctx.PredTracker.ResetToOriginal(id, col.Original))
 	}
 
 	// Defer restoration of original predicates if no successful rewrite happens.
 	defer func() {
 		if res == NoRewrite {
-			for id, expr := range original {
-				ctx.PredTracker.Set(id, expr)
-			}
+			ctx.PredTracker.Rollback(original)
 		}
 	}()
+
+	// A merged UNION keeps the routing of one of its sources, which the others may
+	// have matched only through the skipped copies, so dropping them must not change it.
+	if changedBySkippedCopies(ctx, r.Routing) {
+		debugNoRewrite("apply join merge blocked: skipping predicate copies changes the routing")
+		return in, NoRewrite
+	}
 
 	// After merging joins, routing logic may have changed. Re-evaluate routing decisions.
 	// Example scenario:
@@ -199,7 +211,43 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 		return in, NoRewrite
 	}
 
+	// Each shard would repeat the rows of the reference table that the outer join preserves.
+	if _, isRef := rb.Routing.(*AnyShardRouting); isRef && droppedCopies {
+		_, isSharded := r.Routing.(*ShardedRouting)
+		if isSharded && !jm.joinType.IsInner() && !r.Routing.OpCode().IsSingleShard() {
+			debugNoRewrite("apply join merge blocked: reference table preserved through a multi-shard route")
+			return in, NoRewrite
+		}
+	}
+
 	return r, Rewrote(success)
+}
+
+func readsRecursionTable(ctx *plancontext.PlanningContext, col applyJoinColumn) bool {
+	return slices.ContainsFunc(col.LHSExprs, func(lhs BindVarExpr) bool {
+		for _, ts := range ctx.SemTable.RecursiveDeps(lhs.Expr).Constituents() {
+			if _, ok := ctx.SemTable.Tables[ts.TableOffset()].(*semantics.CTETable); ok {
+				return true
+			}
+		}
+		return false
+	})
+}
+
+func changedBySkippedCopies(ctx *plancontext.PlanningContext, r Routing) bool {
+	tr, ok := r.(*ShardedRouting)
+	if !ok || !slices.ContainsFunc(tr.SeenPredicates, func(expr sqlparser.Expr) bool {
+		jp, ok := expr.(*predicates.JoinPredicate)
+		return ok && jp.Current() == nil
+	}) {
+		return false
+	}
+	replayed, ok := tr.Clone().resetRoutingLogic(ctx).(*ShardedRouting)
+	if !ok || replayed.RouteOpCode != tr.RouteOpCode || replayed.SelectedVindex() != tr.SelectedVindex() {
+		return true
+	}
+	equal, _ := gen4ValuesEqual(ctx, replayed.VindexExpressions(), tr.VindexExpressions())
+	return !equal
 }
 
 func tryPushDelete(in *Delete) (Operator, *ApplyResult) {
@@ -288,13 +336,7 @@ func pushOrExpandHorizon(ctx *plancontext.PlanningContext, in *Horizon) (Operato
 	needsOrdering := len(qp.OrderExprs) > 0
 	hasHaving := isSel && sel.Having != nil
 
-	canPush := isRoute &&
-		!hasHaving &&
-		!needsOrdering &&
-		!qp.NeedsAggregation() &&
-		!qp.HasWindow &&
-		!isDistinctAST(in.selectStatement()) &&
-		in.selectStatement().GetLimit() == nil
+	canPush := isRoute && in.computesRowByRow(ctx)
 
 	if canPush {
 		return Swap(in, rb, "push horizon into route")

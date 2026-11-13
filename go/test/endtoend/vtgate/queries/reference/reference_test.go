@@ -35,6 +35,19 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 	}
 }
 
+// TestReferenceUnionQuery tests that a union of a reference table with a sharded table returns the
+// reference rows when it is merged through the copy in the sharded keyspace. It runs before
+// TestReferenceRouting changes the source, so the source and its copy still hold the same rows.
+func TestReferenceUnionQuery(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	// The filter keeps 2 out of the sharded branch, so only the reference branch can return it.
+	utils.AssertMatchesNoOrder(t, conn,
+		"select id from uks.zip_detail union select zip_detail_id from delivery_failure where zip_detail_id = 3",
+		`[[INT64(1)] [INT64(2)] [INT64(3)]]`)
+}
+
 // TestGlobalReferenceRouting tests that unqualified queries for reference
 // tables go to the right place.
 //

@@ -152,7 +152,12 @@ func (qb *queryBuilder) addPredicate(expr sqlparser.Expr) {
 	}
 
 	for _, exp := range sqlparser.SplitAndExpression(nil, expr) {
-		addPred(exp)
+		if jp, ok := exp.(*predicates.JoinPredicate); ok {
+			exp = jp.Current()
+		}
+		if exp != nil {
+			addPred(exp)
+		}
 	}
 }
 
