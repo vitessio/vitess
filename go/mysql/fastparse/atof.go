@@ -263,10 +263,6 @@ func atof64exact(mantissa uint64, exp int, neg bool) (f float64, ok bool) {
 }
 
 func Atof64(s string) (f float64, n int, err error) {
-	if val, n, ok := special(s); ok {
-		return val, n, nil
-	}
-
 	mantissa, exp, neg, trunc, n, ok := readFloat(s)
 	if !ok {
 		return 0, n, strconv.ErrSyntax
