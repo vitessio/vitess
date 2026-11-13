@@ -578,7 +578,10 @@ func (vr *vreplicator) setMessage(message string) (err error) {
 		Message: message,
 	})
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("update _vt.vreplication set message=%s where id=%s", encodeString(message), strconv.Itoa(int(vr.id)))
+	// Lower-tier write: never overwrite the stop/error reason of a parked
+	// stream. History and vreplication_log below still record it.
+	buf.Myprintf("update _vt.vreplication set message=%s where id=%s and %s",
+		encodeString(message), strconv.Itoa(int(vr.id)), notParkedPredicate)
 	query := buf.ParsedQuery().Query
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		// Wrap the real failure, not the query: the query quotes the message,
