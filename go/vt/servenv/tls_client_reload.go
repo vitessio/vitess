@@ -55,29 +55,29 @@ func init() {
 	}
 }
 
+// tlsReloadFlagsRegistered is set in the binaries that reload their TLS
+// files, see tlsReloadBinaries.
+var tlsReloadFlagsRegistered bool
+
 func registerTLSReloadFlags(fs *pflag.FlagSet) {
+	tlsReloadFlagsRegistered = true
 	utils.SetFlagDurationVar(fs, &tlsReloadInterval, "tls-reload-interval", tlsReloadInterval, "how often to check the TLS certificate, key, CA and CRL files of the process's gRPC and MySQL servers and clients for changes and reload them, 0 to disable; SIGHUP always reloads them")
 }
 
-// startClientTLSReload waits for a TLS client of the process to load
-// its files, and from then on reloads them on every SIGHUP, and every
-// interval if it is positive, until the process terminates. SIGHUP is
-// left alone in a process that has no TLS client. A cached ServerConfig
-// load arms the reload as well; its servers read their files anew, so
-// what a reload updates for them is only the cache that ServerConfig
-// serves from.
+// startClientTLSReload reloads the files of the process's TLS clients
+// on every SIGHUP, and every interval if it is positive, until the
+// process terminates. It does nothing in a binary that does not reload
+// its TLS files, which keeps its own handling of SIGHUP.
 func startClientTLSReload(interval time.Duration) {
+	if !tlsReloadFlagsRegistered {
+		return
+	}
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGHUP)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		select {
-		case <-ctx.Done():
-			return
-		case <-vttls.CachedFilesInUse():
-		}
-		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGHUP)
 		defer signal.Stop(signals)
 		runClientTLSReload(ctx, signals, interval)
 	}()

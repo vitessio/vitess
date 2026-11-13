@@ -61,14 +61,8 @@ type TLSReloader struct {
 
 	mu sync.Mutex
 	// fingerprint digests the files the current config was built
-	// from, and caFingerprint the CA file alone.
-	fingerprint, caFingerprint [sha256.Size]byte
-	// ticketConfig encrypts and decrypts the session tickets of every
-	// config built since the CA file last changed. See Reload.
-	ticketConfig *tls.Config
-	// ticketClock is ticketConfig's clock: nil, for time.Now, outside
-	// tests.
-	ticketClock func() time.Time
+	// from.
+	fingerprint [sha256.Size]byte
 
 	// testHook, when set, runs on every attempt Reload makes to read
 	// the files, between the pre-load digest and the config load, so
@@ -152,32 +146,22 @@ func (r *TLSReloader) Stop() {
 // Reload builds a new config from the files and hands it to the sink.
 // Unless force is set, it does nothing when the files are the same as
 // the ones the current config was built from.
-//
-// The configs built from one CA file share their session ticket keys,
-// so sessions resume across reloads, and crypto/tls rotates those
-// keys during handshakes on its usual schedule, whether or not
-// anything reloads. When the CA file changes, the new config gets new
-// keys: on resumption Go does not verify the client's certificate
-// against the CAs again, so a session established under a CA that has
-// since been removed would otherwise still resume.
 func (r *TLSReloader) Reload(force bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	var (
-		fingerprint, caFingerprint [sha256.Size]byte
-		config                     *tls.Config
+		fingerprint [sha256.Size]byte
+		config      *tls.Config
 	)
 	// The files are digested before they are loaded, and again after,
 	// so that a file changing mid-load is caught rather than paired
-	// with a fingerprint of what it contained before the change: a CA
-	// file replaced in that window would otherwise be loaded into
-	// config while caFingerprint still reflected the old CA, silently
-	// skipping the session-ticket rotation below. The read is retried,
+	// with a fingerprint of what it contained before the change, which
+	// would have the next reload skip the change. The read is retried,
 	// re-digesting first, until a pre- and post-load digest agree.
 	for attempt := 1; ; attempt++ {
 		var err error
-		if fingerprint, caFingerprint, err = r.digest(); err != nil {
+		if fingerprint, err = r.digest(); err != nil {
 			return r.failed(err)
 		}
 		if !force && attempt == 1 && fingerprint == r.fingerprint {
@@ -187,11 +171,11 @@ func (r *TLSReloader) Reload(force bool) error {
 			r.testHook()
 		}
 
-		if config, err = vttls.ReadServerConfig(r.files.Cert, r.files.Key, r.files.CA, r.files.CRL, r.files.ServerCA, r.minTLSVersion); err != nil {
+		if config, err = vttls.ServerConfig(r.files.Cert, r.files.Key, r.files.CA, r.files.CRL, r.files.ServerCA, r.minTLSVersion); err != nil {
 			return r.failed(err)
 		}
 
-		after, _, err := r.digest()
+		after, err := r.digest()
 		if err != nil {
 			return r.failed(err)
 		}
@@ -203,18 +187,8 @@ func (r *TLSReloader) Reload(force bool) error {
 		}
 	}
 
-	// ticketConfig serves no handshakes. Its EncryptTicket and
-	// DecryptTicket use the ticket keys crypto/tls manages for it,
-	// rotating them as tickets are issued. Explicit keys set with
-	// SetSessionTicketKeys would never rotate.
-	if r.ticketConfig == nil || caFingerprint != r.caFingerprint {
-		r.ticketConfig = &tls.Config{Time: r.ticketClock}
-	}
-	config.WrapSession = r.ticketConfig.EncryptTicket
-	config.UnwrapSession = r.ticketConfig.DecryptTicket
-
 	r.sink(config)
-	r.fingerprint, r.caFingerprint = fingerprint, caFingerprint
+	r.fingerprint = fingerprint
 
 	now := time.Now()
 	tlsReloadSuccessTimestamp.Set(r.name, now.Unix())
@@ -232,36 +206,22 @@ func (r *TLSReloader) failed(err error) error {
 	return err
 }
 
-// digest returns the SHA-256 digest of the files, and of the CA file
-// alone.
-func (r *TLSReloader) digest() (all, ca [sha256.Size]byte, err error) {
-	entries := []struct {
-		path string
-		ca   bool
-	}{
-		{path: r.files.Cert},
-		{path: r.files.Key},
-		{path: r.files.CA, ca: true},
-		{path: r.files.CRL},
-		{path: r.files.ServerCA},
-	}
+// digest returns the SHA-256 digest of the files.
+func (r *TLSReloader) digest() (digest [sha256.Size]byte, err error) {
 	h := sha256.New()
-	for _, entry := range entries {
+	for _, path := range []string{r.files.Cert, r.files.Key, r.files.CA, r.files.CRL, r.files.ServerCA} {
 		var content []byte
-		if entry.path != "" {
-			if content, err = os.ReadFile(entry.path); err != nil {
-				return all, ca, err
+		if path != "" {
+			if content, err = os.ReadFile(path); err != nil {
+				return digest, err
 			}
-		}
-		if entry.ca {
-			ca = sha256.Sum256(content)
 		}
 		// Length-prefixed, so that no two sets of files digest alike.
 		_ = binary.Write(h, binary.BigEndian, uint64(len(content)))
 		h.Write(content)
 	}
-	copy(all[:], h.Sum(nil))
-	return all, ca, nil
+	copy(digest[:], h.Sum(nil))
+	return digest, nil
 }
 
 // leafCertificate returns the certificate that config presents.
