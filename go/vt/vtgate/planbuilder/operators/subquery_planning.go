@@ -163,23 +163,22 @@ func expandRowSubqueryArgs(ctx *plancontext.PlanningContext, se SubQueryExpressi
 		if sq.FilterType != opcode.PulloutValue || sq.isMerged(ctx) || sq.RowColumns() <= 1 {
 			continue
 		}
-		expr = sqlparser.Rewrite(expr, nil, func(cursor *sqlparser.Cursor) bool {
+		expr = sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			switch node := cursor.Node().(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() || node.Name.String() != sq.ArgName {
-					return true
+					return
 				}
 			case *sqlparser.Argument:
 				if node.Name != sq.ArgName {
-					return true
+					return
 				}
 			default:
-				return true
+				return
 			}
 			cursor.Replace(sq.rowArguments(ctx))
 			rewritten = true
-			return false
-		}).(sqlparser.Expr)
+		}, ctx.SemTable.CopySemanticInfo).(sqlparser.Expr)
 	}
 	return expr, rewritten
 }
