@@ -1916,6 +1916,10 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
+			// On etcd, a lock with a TTL expires after it even while it is held.
+			calls := env.tsf.GetCallStats().Counts()
+			require.NotZero(t, calls["Lock"])
+			require.Zero(t, calls["LockWithTTL"], "SwitchTraffic took a lock with a TTL")
 
 			if tc.multiTenant { // Confirm the keyspace routing rules
 				gotKrrs, err := env.ts.GetKeyspaceRoutingRules(ctx)
