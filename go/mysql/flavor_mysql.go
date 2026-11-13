@@ -299,7 +299,7 @@ func (mysqlFlavor) primaryStatus(c *Conn) (replication.PrimaryStatus, error) {
 
 // replicationConfiguration is part of the Flavor interface.
 func (mysqlFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configuration, error) {
-	qr, err := c.ExecuteFetch(readReplicationConnectionConfiguration, 100, true /* wantfields */)
+	qr, err := c.ExecuteFetch(readDefaultChannelConnectionConfiguration, 100, true /* wantfields */)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +325,7 @@ func (mysqlFlavor) replicationConfiguration(c *Conn) (*replicationdata.Configura
 
 // status is part of the Flavor interface.
 func (mysqlFlavor) status(c *Conn) (replication.ReplicationStatus, error) {
-	qr, err := c.ExecuteFetch("SHOW REPLICA STATUS", 100, true /* wantfields */)
+	qr, err := c.ExecuteFetch("SHOW REPLICA STATUS FOR CHANNEL ''", 100, true /* wantfields */)
 	if err != nil {
 		return replication.ReplicationStatus{}, err
 	}

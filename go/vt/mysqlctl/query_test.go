@@ -313,14 +313,14 @@ func TestSuperQueriesHonorContext(t *testing.T) {
 		},
 	}, {
 		name:  "promotion status read",
-		query: "SHOW REPLICA STATUS",
+		query: "SHOW REPLICA STATUS FOR CHANNEL ''",
 		call: func(ctx context.Context, mysqld *Mysqld) error {
 			_, err := mysqld.Promote(ctx, nil)
 			return err
 		},
 	}, {
 		name:  "replication status",
-		query: "SHOW REPLICA STATUS",
+		query: "SHOW REPLICA STATUS FOR CHANNEL ''",
 		call: func(ctx context.Context, mysqld *Mysqld) error {
 			_, err := mysqld.ReplicationStatus(ctx)
 			return err

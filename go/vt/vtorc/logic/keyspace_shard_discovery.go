@@ -157,6 +157,7 @@ func refreshAllShards(ctx context.Context, keyspaceName string) error {
 			log.Error("Failed to save shard", slog.String("keyspace", keyspaceName), slog.String("shard", shardInfo.ShardName()), slog.Any("error", err))
 			return err
 		}
+		restoreDeletedGroupVoters(ctx, shardInfo)
 		savedShards[shardInfo.ShardName()] = true
 	}
 

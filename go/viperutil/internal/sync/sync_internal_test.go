@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"math/rand/v2"
+	"sync"
 	"testing"
 	"time"
 
@@ -143,6 +144,34 @@ func TestPersistConfig(t *testing.T) {
 
 func jitter(min, max int) int {
 	return min + rand.IntN(max-min+1)
+}
+
+// TestGetterDoesNotRaceWithSetOrReload checks that reading one key does not race with Set of another
+// key, nor with a reload of the config from disk: each key has its own lock, but every key's value
+// lives in the same live viper, which Set writes and a reload replaces. Run it with -race.
+func TestGetterDoesNotRaceWithSetOrReload(t *testing.T) {
+	v := New()
+	getFoo := AdaptGetter("foo", func(v *viper.Viper) func(key string) int { return v.GetInt }, v)
+	_ = AdaptGetter("bar", func(v *viper.Viper) func(key string) int { return v.GetInt }, v)
+
+	const n = 1000
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for range n {
+			_ = getFoo("foo")
+		}
+	})
+	wg.Go(func() {
+		for i := range n {
+			v.Set("bar", i)
+		}
+	})
+	wg.Go(func() {
+		for range n / 10 {
+			v.loadFromDisk()
+		}
+	})
+	wg.Wait()
 }
 
 // TestPersistConfigLogsWriteError checks that a failed write back to disk is

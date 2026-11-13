@@ -247,6 +247,27 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, ptsTime
 	return nil
 }
 
+// announceNotServingBeforeResuming broadcasts once more that a PRIMARY which does not serve does
+// not serve, right before it serves again. The caller holds the transition semaphore. Every attempt
+// to serve as PRIMARY makes it (execTransition), also the retries of a failed one: a buffering
+// that started while an attempt failed waits for the announcement of the attempt that succeeds.
+//
+// vtgate ends the buffering of a shard when its primary serves again, but a buffering that started
+// after vtgate saw the primary stop serving (a request found no serving primary) waits for a
+// primary with a newer term: vtgate then cannot tell the primary that resumes from the old primary
+// of a reparent that still reports serving. Only a not-serving health check seen after the start of
+// the buffering lets the same primary end it with the same term. Without this announcement, a
+// primary that pauses and resumes with its term, as Group Replication's migration steps and
+// UndoDemotePrimary do, makes vtgate buffer until --buffer-max-failover-duration.
+func (sm *stateManager) announceNotServingBeforeResuming() {
+	sm.mu.Lock()
+	resuming := sm.target.TabletType == topodatapb.TabletType_PRIMARY && sm.state == StateNotServing
+	sm.mu.Unlock()
+	if resuming {
+		sm.Broadcast()
+	}
+}
+
 // mustTransition returns true if the requested state does not match the current
 // state. If so, it acquires the semaphore and returns true. If a transition is
 // already in progress, it waits. If the desired state is already reached, it
@@ -272,6 +293,9 @@ func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, ptsTime
 func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state servingState) error {
 	defer sm.transitioning.Release(1)
 
+	if tabletType == topodatapb.TabletType_PRIMARY && state == StateServing {
+		sm.announceNotServingBeforeResuming()
+	}
 	var err error
 	switch state {
 	case StateServing:

@@ -273,6 +273,76 @@ message Shard {
 
   // VtorcState is the vtorc config/state for the shard.
   vtorcdata.Shard vtorc_state = 9;
+
+  // group_replication_voters are the tablets that are the voting members of the shard's
+  // MySQL Group Replication group, when its keyspace uses a Group Replication durability
+  // policy. Only the tablets listed here join the group; the other tablets replicate
+  // asynchronously from the primary. It is changed under the shard lock, by
+  // MigrateReplicationMode and by VTOrc.
+  repeated TabletAlias group_replication_voters = 10;
+
+  // group_replication_incarnation identifies the shard's legitimate MySQL Group Replication
+  // group: the incarnation part of its view id (the part before the ':'), which MySQL keeps for
+  // as long as the group exists and changes when a group is bootstrapped. It is written under
+  // the shard lock by the component that bootstrapped the group (MigrateReplicationMode,
+  // PlannedReparentShard's initial promotion, VTOrc), and cleared when the shard is converted
+  // back to asynchronous replication. A member that reports another incarnation belongs to a
+  // group that Vitess did not create, and is never followed. Empty means unknown.
+  string group_replication_incarnation = 11;
+
+  // group_replication_bootstrap_intent records that VTOrc is about to bootstrap the shard's MySQL
+  // Group Replication group, before it does, under the shard lock. If the bootstrap's reply is
+  // lost, VTOrc adopts the group it created from the intent: it records the group's incarnation
+  // when the group's primary is the intent's target, its incarnation differs from the intent's
+  // previous incarnation, and it has quorum. While it is recent, the intent also keeps another
+  // VTOrc from bootstrapping the group on another tablet. It is cleared when an incarnation is
+  // recorded. Readers that do not know it ignore it.
+  GroupReplicationBootstrapIntent group_replication_bootstrap_intent = 12;
+
+  // durability_policy, if set, is the durability policy of this shard, which then applies instead
+  // of the keyspace's durability_policy. MigrateReplicationMode converts a keyspace between
+  // asynchronous replication and MySQL Group Replication one shard at a time, under the shard
+  // lock: it sets the target policy here once it converted the shard, so that the shard is
+  // managed as a converted shard while the keyspace policy still describes the shards that are
+  // not converted yet, and clears it once the keyspace policy matches. Every component resolves
+  // a shard's policy as "this field if set, else the keyspace's" (topo.ShardDurabilityPolicy).
+  // Readers that do not know the field use the keyspace policy, which is wrong for a converted
+  // shard of a keyspace that is half migrated: vtctld, VTOrc and vttablet must all know it
+  // before a migration starts.
+  string durability_policy = 13;
+
+  // group_replication_voter_identities are how VTOrc finds the listed voters of the shard's MySQL
+  // Group Replication group after their tablet records were deleted, also after VTOrc restarted:
+  // a voter whose record is gone may still run, and hold acknowledged transactions that the other
+  // voters lack, so VTOrc removes it only once it knows the voter is down, and identifies it in
+  // the group's views by its server_uuid. Each voter's vttablet writes its own entry while it is
+  // listed, without the shard lock, and drops the entries of tablets that are no longer listed.
+  // Readers only use the entries of listed voters.
+  repeated GroupReplicationVoterIdentity group_replication_voter_identities = 14;
+}
+
+// GroupReplicationVoterIdentity is what a voter of a shard's MySQL Group Replication group
+// published about itself (see Shard.group_replication_voter_identities).
+message GroupReplicationVoterIdentity {
+  // tablet holds the parts of the voter's tablet record that address it: its alias, keyspace,
+  // shard, hostname, port map, and MySQL hostname and port.
+  Tablet tablet = 1;
+  // server_uuid is the server_uuid of the voter's MySQL.
+  string server_uuid = 2;
+}
+
+// GroupReplicationBootstrapIntent is a bootstrap of a shard's MySQL Group Replication group that
+// VTOrc started (see Shard.group_replication_bootstrap_intent).
+message GroupReplicationBootstrapIntent {
+  // target is the tablet whose MySQL bootstraps the group.
+  TabletAlias target = 1;
+  // time is when the intent was recorded.
+  vttime.Time time = 2;
+  // previous_incarnation is the shard record's group_replication_incarnation when the intent was
+  // recorded. The group the bootstrap creates has another incarnation.
+  string previous_incarnation = 3;
+  // token identifies the intent, so that it is only cleared or replaced by whoever read it.
+  string token = 4;
 }
 
 // A Keyspace contains data about a keyspace.
@@ -323,6 +393,16 @@ message Keyspace {
 
   // QueryThrottler provides a flexible throttling configuration that supports multiple throttling strategies beyond the standard tablet throttling.
   querythrottler.Config query_throttler_config = 12;
+
+  // MigrationSourceDurabilityPolicy is set while MigrateReplicationMode converts the keyspace to a
+  // MySQL Group Replication policy: it is the policy of every shard of the keyspace that has no
+  // policy of its own (Shard.durability_policy), and DurabilityPolicy already names the target
+  // policy. A component that does not know this field therefore reads a group replication policy
+  // for every shard of a keyspace in which a shard may run a group, and fails safe if it does not
+  // know that policy either. A shard's policy is resolved as "its own if set, else this field if
+  // set, else DurabilityPolicy" (topo.ShardDurabilityPolicy). The migration clears it once every
+  // shard is converted.
+  string migration_source_durability_policy = 13;
 }
 
 // ShardReplication describes the MySQL replication relationships
