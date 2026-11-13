@@ -647,10 +647,13 @@ func TestOpenAndReload(t *testing.T) {
 	// state changes and schema readers, don't wait for a DDL that is slow to commit.
 	require.True(t, se.mu.TryLock(), "the DDL commit wait holds the engine's mutex")
 	se.mu.Unlock()
-	// The second caller goes on waiting until the DDL commits. It has the third caller's 200ms
-	// below to join the wait, since the DDL commits only after that.
+	// The second caller joins the wait before the first stops waiting, and goes on waiting
+	// until the DDL commits.
+	secondCtx := &waitingContext{Context: t.Context()}
 	secondDone := make(chan error, 1)
-	go func() { secondDone <- se.ReloadAtDDL(t.Context(), pos6, gtid60) }()
+	go func() { secondDone <- se.ReloadAtDDL(secondCtx, pos6, gtid60) }()
+	require.Eventually(t, secondCtx.waiting.Load, 30*time.Second, 10*time.Millisecond,
+		"the second caller never started waiting for the DDL to commit")
 	cancelFirst()
 	err = <-firstDone
 	require.ErrorContains(t, err, "stopped waiting for the DDL")
@@ -672,6 +675,21 @@ func TestOpenAndReload(t *testing.T) {
 	assert.EqualValues(t, 6, ddlCommitWaits()-ddlCommitWaitsBefore)
 	// None of them is counted as a schema reload.
 	assert.Zero(t, se.SchemaReloadTimings.Counts()["SchemaTest.DDLCommitWait"])
+}
+
+// waitingContext records whether Done has been called. waitForDDLCommit calls it only as it
+// starts to wait, once it has joined or started the shared wait for a DDL, so a test can tell
+// that a caller in another goroutine is waiting. If waitForDDLCommit called it any earlier, a
+// test could go on before the caller had joined the wait.
+type waitingContext struct {
+	context.Context
+	waiting atomic.Bool
+}
+
+// Done records that it has been called and returns the wrapped context's Done channel.
+func (c *waitingContext) Done() <-chan struct{} {
+	c.waiting.Store(true)
+	return c.Context.Done()
 }
 
 // TestUserTableNamedDual verifies that a real user table named `dual` is
