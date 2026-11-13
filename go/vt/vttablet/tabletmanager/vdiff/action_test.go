@@ -18,16 +18,21 @@ package vdiff
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -378,6 +383,41 @@ func TestPerformVDiffAction(t *testing.T) {
 				{query: boundSummaryQuery(true), result: noResults},
 			},
 		},
+		{
+			name: "update without picker options",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(UpdateAction),
+				VdiffUuid: uuid,
+				Options:   &tabletmanagerdatapb.VDiffOptions{},
+			},
+			wantErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update"),
+		},
+		{
+			name: "update missing uuid",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action: string(UpdateAction),
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
+				},
+			},
+			wantErr: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "vdiff UUID is required"),
+		},
+		{
+			name: "update vdiff not found",
+			req: &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(UpdateAction),
+				VdiffUuid: uuid,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
+				},
+			},
+			expectQueries: []queryAndResult{
+				{
+					query: "select id as id from _vt.vdiff where vdiff_uuid = " + encodeString(uuid) + " and db_name = " + encodeString(vdiffDBName),
+				},
+			},
+			wantErr: vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "no vdiff found for UUID "+uuid+" on tablet cell1-0000000100"),
+		},
 	}
 
 	errCount := int64(0)
@@ -419,4 +459,356 @@ func TestPerformVDiffAction(t *testing.T) {
 		})
 		require.Equal(t, errCount, globalStats.ErrorCount.Get(), "expected error count %d, got %d", errCount, globalStats.ErrorCount.Get())
 	}
+}
+
+func TestMergePickerOptions(t *testing.T) {
+	existing := &tabletmanagerdatapb.VDiffPickerOptions{
+		TabletTypes: "replica,rdonly,primary",
+		SourceCell:  "zone1",
+		TargetCell:  "zone2",
+	}
+
+	t.Run("nil updates", func(t *testing.T) {
+		got := protoClonePicker(existing)
+		mergePickerOptions(got, nil)
+		require.Equal(t, existing, got)
+	})
+
+	t.Run("tablet types only", func(t *testing.T) {
+		got := protoClonePicker(existing)
+		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"})
+		require.Equal(t, "in_order:primary", got.TabletTypes)
+		require.Equal(t, "zone1", got.SourceCell)
+		require.Equal(t, "zone2", got.TargetCell)
+	})
+
+	t.Run("cells only", func(t *testing.T) {
+		got := protoClonePicker(existing)
+		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{SourceCell: "zone3", TargetCell: "zone4"})
+		require.Equal(t, "replica,rdonly,primary", got.TabletTypes)
+		require.Equal(t, "zone3", got.SourceCell)
+		require.Equal(t, "zone4", got.TargetCell)
+	})
+
+	t.Run("empty fields do not clobber", func(t *testing.T) {
+		got := protoClonePicker(existing)
+		mergePickerOptions(got, &tabletmanagerdatapb.VDiffPickerOptions{})
+		require.Equal(t, existing, got)
+	})
+}
+
+func protoClonePicker(in *tabletmanagerdatapb.VDiffPickerOptions) *tabletmanagerdatapb.VDiffPickerOptions {
+	return &tabletmanagerdatapb.VDiffPickerOptions{
+		TabletTypes: in.TabletTypes,
+		SourceCell:  in.SourceCell,
+		TargetCell:  in.TargetCell,
+	}
+}
+
+func TestHandleUpdateAction(t *testing.T) {
+	existingJSON := `{"picker_options":{"tablet_types":"replica,rdonly,primary","source_cell":"zone1","target_cell":"zone1"},"core_options":{"auto_retry":true,"max_rows":100},"report_options":{"only_pks":true}}`
+
+	tests := []struct {
+		name            string
+		state           string
+		liveController  bool
+		leftoverDone    bool
+		wantErr         string
+		wantState       string
+		wantControllers int
+	}{
+		{
+			name:      "merges picker options on stopped",
+			state:     "stopped",
+			wantState: "stopped",
+		},
+		{
+			name:    "rejects error",
+			state:   "error",
+			wantErr: "only stopped or completed vdiffs can be updated",
+		},
+		{
+			name:            "merges picker options on completed leftover controller",
+			state:           "completed",
+			leftoverDone:    true,
+			wantState:       "completed",
+			wantControllers: 1,
+		},
+		{
+			name:    "rejects pending",
+			state:   "pending",
+			wantErr: "run VDiff stop first",
+		},
+		{
+			name:    "rejects started",
+			state:   "started",
+			wantErr: "run VDiff stop first",
+		},
+		{
+			name:            "rejects live controller even if stopped",
+			state:           "stopped",
+			liveController:  true,
+			wantErr:         "run VDiff stop first",
+			wantControllers: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			vdiffenv := newTestVDiffEnv(t)
+			defer vdiffenv.close()
+
+			vduuid := uuid.New().String()
+			options := &tabletmanagerdatapb.VDiffOptions{
+				PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
+				CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
+				ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
+			}
+			require.NoError(t, protojson.Unmarshal([]byte(existingJSON), options))
+			mergePickerOptions(options.PickerOptions, &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"})
+			wantJSON, err := json.Marshal(options)
+			require.NoError(t, err)
+
+			var leftover *controller
+			if tt.liveController || tt.leftoverDone {
+				done := make(chan struct{})
+				var closeDone sync.Once
+				if tt.leftoverDone {
+					closeDone.Do(func() { close(done) })
+				}
+				// Like a real controller, cancel causes done to be closed so
+				// that Engine.Close (which stops all controllers) does not
+				// block on a live controller.
+				leftover = &controller{
+					id:     1,
+					uuid:   vduuid,
+					vde:    vdiffenv.vde,
+					cancel: func() { closeDone.Do(func() { close(done) }) },
+					done:   done,
+				}
+				vdiffenv.vde.mu.Lock()
+				vdiffenv.vde.controllers[1] = leftover
+				vdiffenv.vde.mu.Unlock()
+				t.Cleanup(func() {
+					vdiffenv.vde.mu.Lock()
+					delete(vdiffenv.vde.controllers, 1)
+					vdiffenv.vde.mu.Unlock()
+				})
+			}
+
+			if tt.wantErr == "" {
+				expectUpdateOptionsQueries(t, vdiffenv, vduuid, existingJSON, tt.state, string(wantJSON), "in_order:primary", "zone1", "zone1")
+			} else {
+				expectUpdateLookupQueries(t, vdiffenv, vduuid, existingJSON, tt.state)
+			}
+
+			got, err := vdiffenv.vde.PerformVDiffAction(ctx, &tabletmanagerdatapb.VDiffRequest{
+				Action:    string(UpdateAction),
+				VdiffUuid: vduuid,
+				Options: &tabletmanagerdatapb.VDiffOptions{
+					PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
+				},
+			})
+			vdiffenv.dbClient.Wait()
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.wantErr)
+				require.Contains(t, err.Error(), "VDiff stop")
+				require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, int64(1), got.Id)
+				require.Equal(t, vduuid, got.VdiffUuid)
+				require.Equal(t, tt.wantState, sqltypes.Proto3ToResult(got.Output).Named().Row().AsString("state", ""))
+			}
+
+			vdiffenv.vde.mu.Lock()
+			defer vdiffenv.vde.mu.Unlock()
+			require.Len(t, vdiffenv.vde.controllers, tt.wantControllers)
+			if leftover != nil {
+				require.Same(t, leftover, vdiffenv.vde.controllers[1], "update must not replace an existing controller")
+			}
+		})
+	}
+}
+
+func expectUpdateLookupQueries(t *testing.T, vdiffenv *testVDiffEnv, vduuid, existingJSON, state string) {
+	t.Helper()
+	vdiffenv.dbClient.ExpectRequest(
+		"select id as id from _vt.vdiff where vdiff_uuid = "+encodeString(vduuid)+" and db_name = "+encodeString(vdiffDBName),
+		sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), "1"),
+		nil,
+	)
+	vdiffenv.dbClient.ExpectRequest(
+		"select * from _vt.vdiff where id = 1 and db_name = "+encodeString(vdiffDBName),
+		sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(vdiffTestCols, vdiffTestColTypes),
+			fmt.Sprintf("1|%s|wf|ks|0|%s|%s|%s|", vduuid, vdiffDBName, state, existingJSON),
+		),
+		nil,
+	)
+}
+
+func expectUpdateOptionsQueries(t *testing.T, vdiffenv *testVDiffEnv, vduuid, existingJSON, state, wantJSON, tabletTypes, sourceCell, targetCell string) {
+	t.Helper()
+	expectUpdateLookupQueries(t, vdiffenv, vduuid, existingJSON, state)
+	updateQuery, err := sqlparser.ParseAndBind(sqlUpdateVDiffOptions,
+		sqltypes.StringBindVariable(wantJSON),
+		sqltypes.Int64BindVariable(1),
+		sqltypes.StringBindVariable(vdiffDBName),
+	)
+	require.NoError(t, err)
+	vdiffenv.dbClient.ExpectRequest(updateQuery, singleRowAffected, nil)
+	vdiffenv.dbClient.ExpectRequest(
+		fmt.Sprintf("insert into _vt.vdiff_log(vdiff_id, message) values (1, %s)",
+			encodeString(fmt.Sprintf("Updated picker options: tablet_types=%s source_cell=%s target_cell=%s", tabletTypes, sourceCell, targetCell))),
+		singleRowAffected,
+		nil,
+	)
+}
+
+// queryNotifyingDBClient wraps a MockDBClient and signals on every query.
+type queryNotifyingDBClient struct {
+	*binlogplayer.MockDBClient
+	queried chan string
+}
+
+func (dc *queryNotifyingDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	select {
+	case dc.queried <- query:
+	default:
+	}
+	return dc.MockDBClient.ExecuteFetch(query, maxrows)
+}
+
+// TestHandleUpdateActionSerializesWithControllerStartup confirms that an
+// update does not read the vdiff record while the engine mutex is held
+// (as it is by retryVDiffs and resume while they read the record and
+// start a controller), and that it then sees the controller started by
+// the mutex holder and is rejected instead of storing options that the
+// running controller would not use.
+func TestHandleUpdateActionSerializesWithControllerStartup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	vdiffenv := newTestVDiffEnv(t)
+	defer vdiffenv.close()
+
+	vduuid := uuid.New().String()
+	existingJSON := `{"picker_options":{"tablet_types":"replica","source_cell":"zone1","target_cell":"zone1"},"core_options":{"auto_retry":true},"report_options":{}}`
+	// Only the lookups are expected. If the update wrote the options the
+	// mock would fail the test on the unexpected query.
+	expectUpdateLookupQueries(t, vdiffenv, vduuid, existingJSON, "stopped")
+	dbClient := &queryNotifyingDBClient{MockDBClient: vdiffenv.dbClient, queried: make(chan string, 10)}
+
+	vdiffenv.vde.mu.Lock()
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- vdiffenv.vde.handleUpdateAction(ctx, dbClient, &tabletmanagerdatapb.VDiffRequest{
+			Action:    string(UpdateAction),
+			VdiffUuid: vduuid,
+			Options: &tabletmanagerdatapb.VDiffOptions{
+				PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{TabletTypes: "in_order:primary"},
+			},
+		}, &tabletmanagerdatapb.VDiffResponse{})
+	}()
+
+	select {
+	case q := <-dbClient.queried:
+		vdiffenv.vde.mu.Unlock()
+		require.FailNow(t, "update read the vdiff record while the engine mutex was held", "query: %s", q)
+	case err := <-errCh:
+		vdiffenv.vde.mu.Unlock()
+		require.FailNow(t, "update returned while the engine mutex was held", "err: %v", err)
+	case <-time.After(250 * time.Millisecond):
+	}
+
+	// While still holding the mutex, start a live controller for the vdiff
+	// as retryVDiffs would.
+	done := make(chan struct{})
+	var closeDone sync.Once
+	vdiffenv.vde.controllers[1] = &controller{
+		id:     1,
+		uuid:   vduuid,
+		vde:    vdiffenv.vde,
+		cancel: func() { closeDone.Do(func() { close(done) }) },
+		done:   done,
+	}
+	vdiffenv.vde.mu.Unlock()
+
+	err := <-errCh
+	vdiffenv.dbClient.Wait()
+	require.Error(t, err)
+	require.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err))
+	require.Contains(t, err.Error(), "has a live controller")
+}
+
+// TestResumeUsesFreshOptions confirms that each resumed controller gets
+// its own options value, so resuming one vdiff does not change the
+// options of a vdiff that was resumed earlier on the same tablet.
+func TestResumeUsesFreshOptions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	vdiffenv := newTestVDiffEnv(t)
+	defer vdiffenv.close()
+
+	resume := func(id int64, tabletTypes string) *controller {
+		vduuid := uuid.New().String()
+		optionsJSON := fmt.Sprintf(`{"picker_options":{"tablet_types":"%s","source_cell":"zone1","target_cell":"zone1"},"core_options":{},"report_options":{}}`, tabletTypes)
+		record := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(vdiffTestCols, vdiffTestColTypes),
+			// The record is reported as stopped so that the controller's run
+			// loop exits right away without diffing anything.
+			fmt.Sprintf("%d|%s|wf|ks|0|%s|stopped|%s|", id, vduuid, vdiffDBName, optionsJSON),
+		)
+		vdiffenv.dbClient.ExpectRequest(
+			"select id as id from _vt.vdiff where vdiff_uuid = "+encodeString(vduuid)+" and db_name = "+encodeString(vdiffDBName),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), strconv.FormatInt(id, 10)),
+			nil,
+		)
+		vdiffenv.dbClient.ExpectRequest(
+			fmt.Sprintf(`update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
+					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.db_name = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
+					and vdt.state in ('completed', 'stopped')`, encodeString(vduuid), encodeString(vdiffDBName)),
+			singleRowAffected,
+			nil,
+		)
+		byIDQuery := fmt.Sprintf("select * from _vt.vdiff where id = %d and db_name = %s", id, encodeString(vdiffDBName))
+		vdiffenv.dbClient.ExpectRequest(byIDQuery, record, nil) // resume
+		vdiffenv.dbClient.ExpectRequest(byIDQuery, record, nil) // controller run
+
+		_, err := vdiffenv.vde.PerformVDiffAction(ctx, &tabletmanagerdatapb.VDiffRequest{
+			Action:    string(ResumeAction),
+			VdiffUuid: vduuid,
+			Keyspace:  "ks",
+			Workflow:  "wf",
+		})
+		require.NoError(t, err)
+		vdiffenv.dbClient.Wait()
+
+		vdiffenv.vde.mu.Lock()
+		defer vdiffenv.vde.mu.Unlock()
+		ct := vdiffenv.vde.controllers[id]
+		require.NotNil(t, ct)
+		select {
+		case <-ct.done:
+		case <-ctx.Done():
+			require.FailNow(t, "timed out waiting for the controller to finish")
+		}
+		return ct
+	}
+
+	ct1 := resume(1, "replica")
+	ct2 := resume(2, "primary")
+	t.Cleanup(func() {
+		globalStats.mu.Lock()
+		defer globalStats.mu.Unlock()
+		delete(globalStats.controllers, ct1.id)
+		delete(globalStats.controllers, ct2.id)
+	})
+
+	require.NotSame(t, ct1.options, ct2.options)
+	require.Equal(t, "replica", ct1.options.GetPickerOptions().GetTabletTypes())
+	require.Equal(t, "primary", ct2.options.GetPickerOptions().GetTabletTypes())
 }

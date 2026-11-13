@@ -5718,6 +5718,23 @@ func (s *VtctldServer) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStop
 	return resp, err
 }
 
+// VDiffUpdate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRequest) (resp *vtctldatapb.VDiffUpdateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.VDiffUpdate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+	span.Annotate("shards", req.TargetShards)
+	span.Annotate("tablet_types", req.TabletTypes)
+
+	resp, err = s.ws.VDiffUpdate(ctx, req)
+	return resp, err
+}
+
 // WorkflowDelete is part of the vtctlservicepb.VtctldServer interface.
 func (s *VtctldServer) WorkflowDelete(ctx context.Context, req *vtctldatapb.WorkflowDeleteRequest) (resp *vtctldatapb.WorkflowDeleteResponse, err error) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowDelete")

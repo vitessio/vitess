@@ -29,11 +29,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttimepb "vitess.io/vitess/go/vt/proto/vttime"
@@ -638,4 +641,226 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 	}
 
 	return &vtctldatapb.VDiffStopResponse{}, nil
+}
+
+// VDiffUpdate is part of the vtctlservicepb.VtctldServer interface.
+// It merges picker options (tablet types and cells) into the stored
+// _vt.vdiff.options JSON on each target shard primary. Other options
+// are left unchanged. Only stopped or completed VDiffs can be updated:
+// if the VDiff is pending/started, in the error state, or has a live
+// controller on an affected shard, that shard rejects the update.
+// Otherwise the stored options are updated in place; lastpk/progress
+// are untouched and the new options take effect on the next VDiff resume.
+//
+// The tablet types and cells are validated before anything is stored.
+// If a shard rejects the update, an error is returned and other shards
+// may already have been updated. Rerunning the update after stopping
+// the remaining shards is safe.
+func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRequest) (*vtctldatapb.VDiffUpdateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffUpdate")
+	defer span.Finish()
+
+	targetShards := req.GetTargetShards()
+
+	span.Annotate("keyspace", req.TargetKeyspace)
+	span.Annotate("workflow", req.Workflow)
+	span.Annotate("uuid", req.Uuid)
+	span.Annotate("target_shards", targetShards)
+	span.Annotate("tablet_types", req.TabletTypes)
+	span.Annotate("source_cells", req.SourceCells)
+	span.Annotate("target_cells", req.TargetCells)
+	span.Annotate("clear_source_cells", req.ClearSourceCells)
+	span.Annotate("clear_target_cells", req.ClearTargetCells)
+
+	if err := uuid.Validate(req.Uuid); err != nil {
+		return nil, vterrors.Wrapf(err, "invalid UUID provided: %s", req.Uuid)
+	}
+	if req.ClearSourceCells && len(req.SourceCells) > 0 {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both source_cells and clear_source_cells")
+	}
+	if req.ClearTargetCells && len(req.TargetCells) > 0 {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot specify both target_cells and clear_target_cells")
+	}
+
+	if err := validateVDiffUpdateTabletTypes(req.TabletTypes); err != nil {
+		return nil, err
+	}
+	if len(req.TabletTypes) == 0 && len(req.SourceCells) == 0 && !req.ClearSourceCells &&
+		len(req.TargetCells) == 0 && !req.ClearTargetCells {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update")
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	// For Mount/Migrate workflows the source tablets live in an external
+	// cluster with its own topology, so source cells are validated against,
+	// and cleared to the cells of, that topology. Target cells always come
+	// from our own topology.
+	sourceTopo := s.ts
+	if ts.ExternalTopo() != nil {
+		sourceTopo = ts.ExternalTopo()
+	}
+	if err := validateVDiffUpdateCells(ctx, sourceTopo, "source", req.SourceCells); err != nil {
+		return nil, err
+	}
+	if err := validateVDiffUpdateCells(ctx, s.ts, "target", req.TargetCells); err != nil {
+		return nil, err
+	}
+
+	picker := &tabletmanagerdatapb.VDiffPickerOptions{}
+	if len(req.TabletTypes) > 0 {
+		picker.TabletTypes = discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
+	}
+	if req.ClearSourceCells {
+		cells, err := allTopoCells(ctx, sourceTopo)
+		if err != nil {
+			return nil, err
+		}
+		picker.SourceCell = cells
+	} else if len(req.SourceCells) > 0 {
+		picker.SourceCell = strings.Join(req.SourceCells, ",")
+	}
+	if req.ClearTargetCells {
+		cells, err := allTopoCells(ctx, s.ts)
+		if err != nil {
+			return nil, err
+		}
+		picker.TargetCell = cells
+	} else if len(req.TargetCells) > 0 {
+		picker.TargetCell = strings.Join(req.TargetCells, ",")
+	}
+
+	tabletreq := &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  req.TargetKeyspace,
+		Workflow:  req.Workflow,
+		Action:    string(vdiff.UpdateAction),
+		VdiffUuid: req.Uuid,
+		Options: &tabletmanagerdatapb.VDiffOptions{
+			PickerOptions: picker,
+		},
+	}
+
+	if len(targetShards) > 0 {
+		if err := applyTargetShards(ts, targetShards); err != nil {
+			return nil, err
+		}
+	}
+
+	output := &vdiffOutput{
+		responses: make(map[string]*tabletmanagerdatapb.VDiffResponse, len(ts.targets)),
+	}
+	output.err = ts.ForAllTargets(func(target *MigrationTarget) error {
+		resp, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
+		if isVDiffUpdateUnsupportedError(err) {
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"target tablet %s for shard %s/%s does not support VDiff update: the target tablets must run v25 or later",
+				topoproto.TabletAliasString(target.GetPrimary().Alias), target.GetShard().Keyspace(), target.GetShard().ShardName())
+		}
+		output.mu.Lock()
+		defer output.mu.Unlock()
+		output.responses[target.GetShard().ShardName()] = resp
+		return err
+	})
+	if output.err != nil {
+		s.Logger().Errorf("Error executing vdiff update action: %v", output.err)
+		return nil, output.err
+	}
+
+	shards := make([]string, 0, len(output.responses))
+	for shard := range output.responses {
+		shards = append(shards, shard)
+	}
+	sort.Strings(shards)
+
+	results := make([]*vtctldatapb.VDiffUpdateResponse_ShardResult, 0, len(shards))
+	for _, shard := range shards {
+		results = append(results, shardResultFromVDiffResponse(shard, output.responses[shard]))
+	}
+	return &vtctldatapb.VDiffUpdateResponse{Results: results}, nil
+}
+
+// isVDiffUpdateUnsupportedError returns true if the error is the untyped
+// "action update not supported" error that a vttablet older than v25, which
+// does not know the update action, returns for a VDiff update request.
+func isVDiffUpdateUnsupportedError(err error) bool {
+	return err != nil && vterrors.Code(err) == vtrpcpb.Code_UNKNOWN &&
+		strings.Contains(err.Error(), "action "+string(vdiff.UpdateAction)+" not supported")
+}
+
+// allTopoCells returns every cell in the topology as a comma-separated
+// string, matching vdiff create's default for source_cell/target_cell.
+func allTopoCells(ctx context.Context, ts *topo.Server) (string, error) {
+	cells, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return "", vterrors.Wrap(err, "failed to list cells")
+	}
+	if len(cells) == 0 {
+		return "", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "there are no cells in the topo")
+	}
+	sort.Strings(cells)
+	return strings.Join(cells, ","), nil
+}
+
+// validateVDiffUpdateTabletTypes returns an INVALID_ARGUMENT error if any
+// of the given tablet types is not one that a VDiff can pick tablets of
+// (PRIMARY, REPLICA, or RDONLY).
+func validateVDiffUpdateTabletTypes(tabletTypes []topodatapb.TabletType) error {
+	for _, tt := range tabletTypes {
+		switch tt {
+		case topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+		default:
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"invalid tablet type %s: only PRIMARY, REPLICA, and RDONLY are allowed", tt.String())
+		}
+	}
+	return nil
+}
+
+// validateVDiffUpdateCells returns an INVALID_ARGUMENT error if any of the
+// given cells is neither a cell nor a cell alias in the given topology. The
+// kind ("source" or "target") is only used in the error message. The
+// topology is only read when cells are specified.
+func validateVDiffUpdateCells(ctx context.Context, ts *topo.Server, kind string, cells []string) error {
+	if len(cells) == 0 {
+		return nil
+	}
+	cellNames, err := ts.GetCellInfoNames(ctx)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to list cells")
+	}
+	aliases, err := ts.GetCellsAliases(ctx, false)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to list cell aliases")
+	}
+	known := make(map[string]bool, len(cellNames)+len(aliases))
+	for _, cell := range cellNames {
+		known[cell] = true
+	}
+	for alias := range aliases {
+		known[alias] = true
+	}
+	for _, cell := range cells {
+		if !known[cell] {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"invalid %s cell %q: no such cell or cell alias in the topology", kind, cell)
+		}
+	}
+	return nil
+}
+
+func shardResultFromVDiffResponse(shard string, resp *tabletmanagerdatapb.VDiffResponse) *vtctldatapb.VDiffUpdateResponse_ShardResult {
+	result := &vtctldatapb.VDiffUpdateResponse_ShardResult{
+		Shard: shard,
+	}
+	if resp == nil || resp.Output == nil {
+		return result
+	}
+	qr := sqltypes.Proto3ToResult(resp.Output)
+	if row := qr.Named().Row(); row != nil {
+		result.State = strings.ToLower(row.AsString("state", ""))
+	}
+	return result
 }
