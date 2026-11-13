@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"testing"
 
@@ -99,37 +98,17 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
 
+		// Each test starts the tablets' mysqlds itself, in setupTest. The
+		// process handles exist from here on, so that the cluster teardown
+		// works even when no test starts them.
 		primary = localCluster.NewVttabletInstance("replica", 0, "")
 		replica1 = localCluster.NewVttabletInstance("replica", 0, "")
 		replica2 = localCluster.NewVttabletInstance("replica", 0, "")
 		shard.Vttablets = []*cluster.Vttablet{primary, replica1, replica2}
-
-		// Start MySql processes
-		var mysqlProcs []*exec.Cmd
 		for _, tablet := range shard.Vttablets {
-			tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
-			tablet.VttabletProcess.DbPassword = dbPassword
-			tablet.VttabletProcess.ExtraArgs = commonTabletArg
-			tablet.VttabletProcess.SupportsBackup = true
-
-			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
-			if err != nil {
-				return 1, err
-			}
-			tablet.MysqlctlProcess = *mysqlctlProcess
-			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
-			tablet.MysqlctlProcess.ExtraArgs = extraArgs
-			proc, err := tablet.MysqlctlProcess.StartProcess()
-			if err != nil {
-				return 1, err
-			}
-			mysqlProcs = append(mysqlProcs, proc)
-		}
-		for _, proc := range mysqlProcs {
-			if err := proc.Wait(); err != nil {
+			if err := newTabletProcesses(tablet); err != nil {
 				return 1, err
 			}
 		}
@@ -147,4 +126,22 @@ func TestMain(m *testing.M) {
 	} else {
 		os.Exit(exitCode)
 	}
+}
+
+// newTabletProcesses gives the tablet new vttablet and mysqlctl process
+// handles with the package's default settings. It starts nothing.
+func newTabletProcesses(tablet *cluster.Vttablet) error {
+	tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shardName, keyspaceName)
+	tablet.VttabletProcess.DbPassword = dbPassword
+	tablet.VttabletProcess.ExtraArgs = commonTabletArg
+	tablet.VttabletProcess.SupportsBackup = true
+
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+	if err != nil {
+		return err
+	}
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+	tablet.MysqlctlProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
+	return nil
 }
