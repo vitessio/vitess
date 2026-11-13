@@ -45,8 +45,6 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	// field Original *vitess.io/vitess/go/vt/sqlparser.AliasedExpr
 	size += cached.Original.CachedSize(true)
-	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
-	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 
@@ -79,8 +77,6 @@ func (cached *CheckCol) CachedSize(alloc bool) int64 {
 	}
 	// field Type vitess.io/vitess/go/vt/vtgate/evalengine.Type
 	size += cached.Type.CachedSize(false)
-	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
-	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 
@@ -447,8 +443,6 @@ func (cached *GroupByParams) CachedSize(alloc bool) int64 {
 	}
 	// field Type vitess.io/vitess/go/vt/vtgate/evalengine.Type
 	size += cached.Type.CachedSize(false)
-	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
-	size += cached.CollationEnv.CachedSize(true)
 	return size
 }
 
@@ -476,8 +470,6 @@ func (cached *HashJoin) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.ASTPred.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
-	// field CollationEnv *vitess.io/vitess/go/mysql/collations.Environment
-	size += cached.CollationEnv.CachedSize(true)
 	// field Values *vitess.io/vitess/go/vt/vtgate/evalengine.EnumSetValues
 	if cached.Values != nil {
 		size += int64(24)
@@ -1042,10 +1034,8 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field QueryStatement vitess.io/vitess/go/vt/sqlparser.Statement
-	if cc, ok := cached.QueryStatement.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
+	// field WarmingReadQuery string
+	size += hack.RuntimeAllocSize(int64(len(cached.WarmingReadQuery)))
 	// field FieldQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
