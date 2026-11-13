@@ -8,6 +8,7 @@
     - **[Security](#security)**
         - [Legacy vtctld HTTP API removed](#vtctld-http-api-removed)
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
+        - [Backup MANIFESTs no longer store `--xtrabackup-backup-flags` or `--mysql-shell-load-flags`](#backup-manifest-no-engine-flags)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
         - [Query throttler `TABLET_THROTTLER` strategy](#vttablet-query-throttler-tablet-throttler)
@@ -113,6 +114,16 @@ VTAdmin's VExplain API was authorized with the `get` action, but `VEXPLAIN QUERI
 **Migration**: grant the `execute` action on `VExplain` to the actors that should run `VEXPLAIN QUERIES`, `ALL`, `TRACE` or `MYSQLPLAN`. Rules that grant all actions (`*`) and `--no-rbac` already include it.
 
 **Impact**: an actor with only `get` on `VExplain` gets an `unauthorized` error from `VEXPLAIN QUERIES`, `ALL`, `TRACE` and `MYSQLPLAN`.
+
+#### <a id="backup-manifest-no-engine-flags"/>Backup MANIFESTs no longer store `--xtrabackup-backup-flags` or `--mysql-shell-load-flags`</a>
+
+The `xtrabackup` engine no longer writes `--xtrabackup-backup-flags` to the `ExtraCommandLineParams` field of the backup MANIFEST, and the `mysqlshell` engine no longer writes `--mysql-shell-load-flags` to its `Params` field. These flags can hold credentials or encryption keys, such as a `--password`, an `--encrypt-key` or an `azureStorageSasToken`, and the MANIFEST is stored in plain text next to the backup. No version of Vitess reads either field, so restores are unchanged in both directions: new versions restore backups that have the fields, and older versions restore backups that lack them.
+
+**Migration**: backups taken by earlier versions keep the fields. If those flags held secrets, rotate the secrets once every vttablet and vtbackup that takes backups runs v25: one that hasn't been upgraded keeps writing the fields, so a secret rotated before then can end up in a new MANIFEST too. Removing them from an old MANIFEST doesn't remove copies that storage versioning or replication kept. Tooling that read the flags from a MANIFEST must take them from the tablet's configuration instead.
+
+Rotating an `--encrypt-key` protects only the backups taken after the rotation. A backup taken before it stays encrypted with the old key, and its MANIFEST still holds that key, so anyone who can read the MANIFEST can decrypt the backup until the backup is deleted. Restoring that backup still needs the old key in `--xbstream-restore-flags`, because the restore reads the key from there and not from the MANIFEST, so keep the old key until no backup that uses it remains.
+
+**Impact**: new MANIFESTs have neither field. For anyone who builds on the Go packages, the `Params` field of `mysqlctl.MySQLShellBackupManifest` is gone.
 
 ### <a id="new-support"/>New Support</a>
 
