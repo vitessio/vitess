@@ -219,6 +219,7 @@ func (s *planTestSuite) TestDistinctUnionLimitIsPushedIntoLocalRoute() {
 		"select id from user union select id from music limit 10",
 		"select id from user union select 3 limit 10",
 		"select col from user union select col from unsharded limit 5",
+		"select col % 2 from (select col from user union select col from unsharded) dt limit 2",
 	} {
 		plan, err := TestBuilder(query, vw, vw.CurrentDb())
 		s.Require().NoError(err, query)
@@ -251,6 +252,29 @@ func (s *planTestSuite) TestOuterDistinctOverUnionAllDoesNotPushLimitIntoArms() 
 	s.Require().NotEmpty(orderedRoutes)
 	for _, route := range orderedRoutes {
 		s.Require().NotContains(strings.ToLower(route.Query), "limit :__upper_limit")
+	}
+}
+
+// A projection can make route-local distinct rows equal again. The outer
+// DISTINCT must see later rows before its LIMIT, including with ORDER BY.
+func (s *planTestSuite) TestOuterDistinctProjectionOverUnionDoesNotPushLimitIntoArms() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+	for _, query := range []string{
+		"select distinct col % 2 from (select col from user union select col from unsharded) dt limit 2",
+		"select distinct col % 2 as parity from (select col from user union select col from unsharded) dt order by parity limit 2",
+		"select distinct id from (select id, col from user union select id, col from unsharded) dt limit 2",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		routes := routePrimitives(plan.Instructions)
+		s.Require().NotEmpty(routes, query)
+		for _, route := range routes {
+			s.Require().NotContains(strings.ToLower(route.Query), "limit :__upper_limit", query)
+		}
 	}
 }
 

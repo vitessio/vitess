@@ -788,6 +788,12 @@ func hasDistinctBeforeRoute(op Operator) bool {
 }
 
 func unionRoutesDeduplicate(op Operator) bool {
+	// A VTGate projection can collapse distinct input rows by evaluating an
+	// expression or dropping columns. DISTINCT below it does not justify a
+	// route-local LIMIT for a DISTINCT above it.
+	if _, ok := op.(*Projection); ok {
+		return false
+	}
 	if route, ok := op.(*Route); ok {
 		return isDistinct(route.Source)
 	}
