@@ -1240,15 +1240,15 @@ func (s *planTestSuite) TestDMLSubqueryOuterJoinsPreserveRows() {
 	}
 }
 
-// MySQL can perform recursive DISTINCT on one shard. VTGate recursion must
-// reject it until it can deduplicate across levels and shards.
+// A refused merge of a replicated seed cannot fall back to VTGate DISTINCT
+// recursion, which does not deduplicate across levels and shards.
 func (s *planTestSuite) TestRecursiveDistinctRequiresSingleShard() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
 	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
 	s.Require().NoError(err)
 	s.addPKs(vschema, "user", []string{"user"})
-	for _, seed := range []string{"select id from ref", "select 1 as id from dual", "select id from unsharded"} {
+	for _, seed := range []string{"select id from ref", "select 1 as id from dual"} {
 		query := "with recursive c as (" + seed + " union select u.id from user u join c on u.id = c.id) select id from c"
 		_, err := TestBuilder(query, vw, vw.CurrentDb())
 		s.Require().ErrorContains(err, "VT12001", query)
@@ -1264,6 +1264,28 @@ func (s *planTestSuite) TestRecursiveDistinctRequiresSingleShard() {
 		widened, err := TestBuilder(query+" union all select id from user", vw, vw.CurrentDb())
 		s.Require().NoError(err)
 		s.Require().IsType(&engine.Concatenate{}, widened.Instructions, "a merged reference-seeded DISTINCT CTE must not widen under a later UNION ALL")
+	}
+}
+
+// Rejecting unsafe replicated-seed merges must not reject existing recursive
+// DISTINCT plans over sharded tables or an unsharded seed in another keyspace.
+func (s *planTestSuite) TestRecursiveDistinctPreservesExistingPlans() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.addPKs(vschema, "user", []string{"user"})
+	for _, query := range []string{
+		"with recursive c as (select id, manager_id from user where id = 5 union select u.id, u.manager_id from user u join c on u.id = c.manager_id) select * from c",
+		"with recursive cte as (select name, id from user where manager_id is null union select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+		"with recursive c as (select id from unsharded union select u.id from user u join c on u.id = c.id) select id from c",
+	} {
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err, query)
+		s.Require().NotNil(engine.Find(func(p engine.Primitive) bool {
+			_, ok := p.(*engine.RecurseCTE)
+			return ok
+		}, plan.Instructions), query)
 	}
 }
 

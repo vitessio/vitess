@@ -90,7 +90,7 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 	// Evaluate routing with the original recursive predicates on a copy before
 	// committing the merge. A multi-shard route would repeat a replicated seed,
 	// including DISTINCT recursion that only deduplicates within each shard.
-	if in.Distinct || routeContainsSpecialUnionInput(seed) {
+	if routeContainsSpecialUnionInput(seed) {
 		candidate := r.Clone()
 		if routing, ok := candidate.(*ShardedRouting); ok {
 			for i, expr := range routing.SeenPredicates {
@@ -108,6 +108,7 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		}
 		candidate = candidate.resetRoutingLogic(ctx)
 		if !candidate.OpCode().IsSingleShard() {
+			in.SeedMergeRejected = true
 			return nil
 		}
 	}
