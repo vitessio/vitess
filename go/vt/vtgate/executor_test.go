@@ -2110,43 +2110,94 @@ func TestCachedPlanUsesRequestHints(t *testing.T) {
 }
 
 // TestPreparedStatementDirectives checks that the comment directives of a
-// binary protocol prepared statement apply to its prepare and to its
-// execution, whose plan VTGate looks up by the statement's text, and that the
-// session doesn't keep them.
+// prepared statement apply to its execution, and that the session doesn't
+// keep them. VTGate looks up the plan of a binary protocol prepared statement
+// by the statement's text, and plans the prepared text again for each SQL
+// EXECUTE.
 func TestPreparedStatementDirectives(t *testing.T) {
-	executor, sbc1, _, _, ctx := createExecutorEnv(t)
-	session := &vtgatepb.Session{TargetString: "@primary", Autocommit: true}
-	sql := "select /*vt+ WORKLOAD_NAME=report PRIORITY=50 */ id from user where id = :v1"
-	bv := map[string]*querypb.BindVariable{"v1": sqltypes.Int64BindVariable(1)}
+	t.Run("binary protocol", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		session := &vtgatepb.Session{TargetString: "@primary", Autocommit: true}
+		sql := "select /*vt+ WORKLOAD_NAME=report PRIORITY=50 */ id from user where id = :v1"
+		bv := map[string]*querypb.BindVariable{"v1": sqltypes.Int64BindVariable(1)}
 
-	_, _, err := executorPrepare(ctx, executor, session, sql)
-	require.NoError(t, err)
-	options := sbc1.GetOptions()
-	require.Len(t, options, 1)
-	assert.Equal(t, "report", options[0].GetWorkloadName())
-	assert.Equal(t, "50", options[0].GetPriority())
-	require.Eventually(t, func() bool {
-		cached := false
-		executor.ForEachPlan(func(p *engine.Plan) bool {
-			cached = cached || strings.Contains(p.Original, "WORKLOAD_NAME=report")
-			return true
-		})
-		return cached
-	}, 30*time.Second, 10*time.Millisecond)
+		_, _, err := executorPrepare(ctx, executor, session, sql)
+		require.NoError(t, err)
+		options := sbc1.GetOptions()
+		require.Len(t, options, 1)
+		assert.Equal(t, "report", options[0].GetWorkloadName())
+		assert.Equal(t, "50", options[0].GetPriority())
+		require.Eventually(t, func() bool {
+			cached := false
+			executor.ForEachPlan(func(p *engine.Plan) bool {
+				cached = cached || strings.Contains(p.Original, "WORKLOAD_NAME=report")
+				return true
+			})
+			return cached
+		}, 30*time.Second, 10*time.Millisecond)
 
-	logChan := executor.queryLogger.Subscribe("Test")
-	t.Cleanup(func() { executor.queryLogger.Unsubscribe(logChan) })
-	sbc1.ClearOptions()
-	_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, true)
-	require.NoError(t, err)
+		logChan := executor.queryLogger.Subscribe("Test")
+		t.Cleanup(func() { executor.queryLogger.Unsubscribe(logChan) })
+		sbc1.ClearOptions()
+		_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, true)
+		require.NoError(t, err)
 
-	options = sbc1.GetOptions()
-	require.Len(t, options, 1)
-	assert.Equal(t, "report", options[0].GetWorkloadName())
-	assert.Equal(t, "50", options[0].GetPriority())
-	logStats := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
-	assert.True(t, logStats.CachedPlan)
-	assert.Nil(t, session.Options)
+		options = sbc1.GetOptions()
+		require.Len(t, options, 1)
+		assert.Equal(t, "report", options[0].GetWorkloadName())
+		assert.Equal(t, "50", options[0].GetPriority())
+		logStats := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+		assert.True(t, logStats.CachedPlan)
+		assert.Nil(t, session.Options)
+	})
+
+	t.Run("SQL PREPARE and EXECUTE", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+		for _, sql := range []string{
+			"prepare s1 from 'select /*vt+ WORKLOAD_NAME=a PRIORITY=10 QUERY_TIMEOUT_MS=1000 */ id from user where id = 1'",
+			"prepare s2 from 'select /*vt+ WORKLOAD_NAME=b PRIORITY=20 CONSOLIDATOR=enabled */ id from user where id = 1'",
+			"prepare s3 from 'select /*vt+ WORKLOAD_NAME=c */ id from user where id = ?'",
+			"set @id = 1",
+		} {
+			_, err := executorExecSession(ctx, executor, session, sql, nil)
+			require.NoError(t, err)
+		}
+
+		tests := []struct {
+			sql          string
+			stream       bool
+			workloadName string
+			priority     string
+			consolidator querypb.ExecuteOptions_Consolidator
+			timeout      int64
+		}{
+			{sql: "execute s1", workloadName: "a", priority: "10", timeout: 1000},
+			{sql: "execute s2", workloadName: "b", priority: "20", consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED},
+			{sql: "execute s1", workloadName: "a", priority: "10", timeout: 1000},
+			{sql: "execute s3 using @id", workloadName: "c"},
+			{sql: "execute s2", stream: true, workloadName: "b", priority: "20", consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED},
+			{sql: "select id from user where id = 1"},
+		}
+		for _, tc := range tests {
+			sbc1.ClearOptions()
+			var err error
+			if tc.stream {
+				err = executor.StreamExecute(ctx, nil, "TestExecuteStream", session, tc.sql, nil, false, func(*sqltypes.Result) error { return nil })
+			} else {
+				_, err = executorExecSession(ctx, executor, session, tc.sql, nil)
+			}
+			require.NoError(t, err, tc.sql)
+
+			options := sbc1.GetOptions()
+			require.Len(t, options, 1, tc.sql)
+			assert.Equal(t, tc.workloadName, options[0].GetWorkloadName(), tc.sql)
+			assert.Equal(t, tc.priority, options[0].GetPriority(), tc.sql)
+			assert.Equal(t, tc.consolidator, options[0].GetConsolidator(), tc.sql)
+			assert.Equal(t, tc.timeout, options[0].GetAuthoritativeTimeout(), tc.sql)
+		}
+		assert.Nil(t, session.Options)
+	})
 }
 
 func TestPassthroughDDL(t *testing.T) {

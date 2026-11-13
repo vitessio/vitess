@@ -313,7 +313,7 @@ The execute options that the `WORKLOAD_NAME`, `PRIORITY`, `CONSOLIDATOR` and `QU
 
 - A `WORKLOAD_NAME` directive no longer applies to the later statements of the session.
 - `Priority` and `Consolidator` set in a gRPC session's `Options` are now sent to vttablet with the queries of each statement that doesn't override them with a directive, and an earlier statement's directive no longer replaces the session's `WorkloadName`.
-- `EXECUTE` of a statement prepared with SQL `PREPARE` no longer runs with the `WORKLOAD_NAME` of the prepared text, which it used to take from the session.
+- `EXECUTE` of a statement prepared with SQL `PREPARE` runs with all of the prepared text's directives, as a statement prepared over the binary protocol does. It used to get only the text's `WORKLOAD_NAME`.
 - While VTGates of both versions serve the same gRPC client, a session that an older VTGate wrote a directive's value into keeps sending that value until the client starts a new session.
 
 **Migration**: a client that relied on a `WORKLOAD_NAME` directive carrying over to later statements has to repeat the directive on each statement, or, over gRPC, set `WorkloadName` in its session's `Options`.

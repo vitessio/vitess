@@ -1339,6 +1339,10 @@ func (e *Executor) fetchOrCreatePlan(
 		// which may not have been parsed for this request. The key is the
 		// whole text, so the plan's hints and SQL are the request's own.
 		qh, normalized = plan.QueryHints, plan.Original
+	} else if _, ok := stmt.(*sqlparser.ExecuteStmt); ok {
+		// An EXECUTE's plan is built for each request, and holds the hints
+		// of the prepared statement that it runs.
+		qh = plan.QueryHints
 	}
 	e.applyQueryHints(ctx, vcursor, qh)
 
@@ -1549,7 +1553,11 @@ func (e *Executor) buildStatement(
 
 	plan.ParamsCount = paramsCount
 	plan.Warnings = vcursor.GetAndEmptyWarnings()
-	plan.QueryHints = qh
+	// An EXECUTE has no directives of its own: it runs with those of the
+	// prepared statement, which BuildFromStmt gave the plan.
+	if _, ok := stmt.(*sqlparser.ExecuteStmt); !ok {
+		plan.QueryHints = qh
+	}
 
 	err = e.checkThatPlanIsValid(stmt, plan)
 	return plan, err
