@@ -70,6 +70,7 @@
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
         - [Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running](#vttablet-throttler-unprobed-heartbeats)
+        - [New `DDLCommitWait` type in the `Waits` timings](#vttablet-ddl-commit-wait-timings)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -851,6 +852,12 @@ While the throttler on such a tablet is being checked, the tablet now asks the p
 Each tablet decides from its own `--throttle-tablet-types` whether the primary probes it, so set the flag to the same value on the primary and on the other tablets of the keyspace. A tablet that lists its own type while the primary does not would ask for heartbeats only once a minute, as before.
 
 See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
+
+#### <a id="vttablet-ddl-commit-wait-timings"/>New `DDLCommitWait` type in the `Waits` timings</a>
+
+The `Waits` timings have a new `DDLCommitWait` type. Before a VStream reloads the schema at a schema-changing DDL that it has read from the binlog, VTTablet waits up to `--schema-change-reload-timeout` for MySQL to commit the DDL, if the DDL has a MySQL GTID. `DDLCommitWait` times that wait, so a DDL that is slow to commit, such as one held for a semi-sync acknowledgement, shows in `Waits`. VStreams that reach a DDL while it is being waited for share one wait, which is timed once.
+
+See [#21887](https://github.com/vitessio/vitess/pull/21887) for details.
 
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
