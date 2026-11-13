@@ -578,13 +578,16 @@ func countLeaseExpiredWarnings(t *testing.T) *atomic.Int32 {
 // TestLockSurvivesEtcdRestart checks that a lock keeps its lease through an
 // etcd outage longer than the lease's TTL. The etcd client gives up on the
 // lease's KeepAlive during the outage, and the restarted etcd gives the lease a
-// fresh TTL, which must then be renewed.
+// fresh TTL, which must then be renewed until Unlock.
 func TestLockSurvivesEtcdRestart(t *testing.T) {
 	addr, stop, start := startRestartableEtcd(t)
 	s, err := NewServer(addr, "/test")
 	require.NoError(t, err)
 	t.Cleanup(s.Close)
 	warnings := countLeaseExpiredWarnings(t)
+
+	lease := &recordKeepAlive{Lease: s.cli.Lease, ctxs: make(chan context.Context, 8)}
+	s.cli.Lease = lease
 
 	const ttl = 6
 	ld, err := s.lock(t.Context(), "keyspaces/ks", "holder", ttl, true)
@@ -609,26 +612,33 @@ func TestLockSurvivesEtcdRestart(t *testing.T) {
 	}, 2*ttl*time.Second, 250*time.Millisecond, "the lock's lease expired after etcd restarted")
 	require.NoError(t, ld.Unlock(t.Context()))
 	assert.Zero(t, warnings.Load())
+	// Unlock must also stop the KeepAlive started after the outage.
+	require.GreaterOrEqual(t, len(lease.ctxs), 2, "the KeepAlive was not started again after the outage")
+	for len(lease.ctxs) > 0 {
+		require.Error(t, (<-lease.ctxs).Err(), "a KeepAlive is still running after Unlock")
+	}
 }
 
 // TestKeepAliveStops checks that a lock's KeepAlive stops when the lock is
-// released or its acquisition fails. It also checks that keepAlive returns,
-// once the etcd client has given up on the lease's KeepAlive, when the lease is
-// gone (even after a renewal attempt that got no answer), when the lock is
-// released and when the client is closed, and that it warns only about the
-// first.
+// released or its acquisition fails, even if revoking the lease fails. It also
+// checks that keepAlive returns, once the etcd client has given up on the
+// lease's KeepAlive, when the lease is gone (even after a renewal attempt that
+// got no answer), when the lock is released and when the client is closed, and
+// that it warns only about the first.
 func TestKeepAliveStops(t *testing.T) {
 	addr, stop, start := startRestartableEtcd(t)
 	warnings := countLeaseExpiredWarnings(t)
 
 	// lockStopsKeepAlive runs lockFn on a Server whose lease's KeepAlive is
-	// recorded, and checks that the KeepAlive was stopped when lockFn returned.
+	// recorded and whose Revoke fails, and checks that the KeepAlive was stopped
+	// when lockFn returned. A KeepAlive left running after a failed Revoke would
+	// keep the lease, and any lock file under it, for the life of the process.
 	lockStopsKeepAlive := func(t *testing.T, lockFn func(s *Server)) {
 		s, err := NewServer(addr, "/test")
 		require.NoError(t, err)
 		t.Cleanup(s.Close)
 		lease := &recordKeepAlive{Lease: s.cli.Lease, ctxs: make(chan context.Context, 1)}
-		s.cli.Lease = lease
+		s.cli.Lease = failRevoke{lease}
 
 		lockFn(s)
 		select {
@@ -643,7 +653,7 @@ func TestKeepAliveStops(t *testing.T) {
 		lockStopsKeepAlive(t, func(s *Server) {
 			ld, err := s.lock(t.Context(), "keyspaces/released", "holder", 30, true)
 			require.NoError(t, err)
-			require.NoError(t, ld.Unlock(t.Context()))
+			require.Error(t, ld.Unlock(t.Context()))
 		})
 	})
 
@@ -791,6 +801,15 @@ func (l *firstKeepAliveOnceUnanswered) KeepAliveOnce(ctx context.Context, id cli
 		return nil, ctx.Err()
 	}
 	return l.Lease.KeepAliveOnce(ctx, id)
+}
+
+// failRevoke's Revoke fails without reaching etcd.
+type failRevoke struct {
+	clientv3.Lease
+}
+
+func (failRevoke) Revoke(context.Context, clientv3.LeaseID) (*clientv3.LeaseRevokeResponse, error) {
+	return nil, rpctypes.ErrGRPCNoLeader
 }
 
 // leaseNotFoundOnCancel's KeepAliveOnce waits for ctx to end, then reports the
