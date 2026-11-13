@@ -17364,7 +17364,7 @@ type VDiffUpdateResponse_ShardResult struct {
 	Shard string                 `protobuf:"bytes,1,opt,name=shard,proto3" json:"shard,omitempty"`
 	// VDiff state on this shard after the update. The update is persist-only;
 	// lastpk and progress are left untouched. The new picker options take
-	// effect on the next VDiff resume (or retry).
+	// effect on the next VDiff resume.
 	State         string `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
 	Updated       bool   `protobuf:"varint,3,opt,name=updated,proto3" json:"updated,omitempty"`
 	unknownFields protoimpl.UnknownFields

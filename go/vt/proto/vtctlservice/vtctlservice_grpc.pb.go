@@ -625,11 +625,11 @@ type VtctldClient interface {
 	VDiffShow(ctx context.Context, in *vtctldata.VDiffShowRequest, opts ...grpc.CallOption) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(ctx context.Context, in *vtctldata.VDiffStopRequest, opts ...grpc.CallOption) (*vtctldata.VDiffStopResponse, error)
 	// VDiffUpdate merges picker options (tablet types and cells) into an
-	// existing VDiff. If the VDiff is running on an affected shard
-	// (pending/started, or a live controller exists), the update is
-	// rejected and the operator must VDiff stop first. Otherwise the
-	// stored options are updated in place; the new options take effect
-	// on VDiff resume (or retry).
+	// existing VDiff. Only stopped or completed VDiffs can be updated: if
+	// the VDiff is pending/started, in the error state, or has a live
+	// controller on an affected shard, the update is rejected. Otherwise
+	// the stored options are updated in place; the new options take effect
+	// on the next VDiff resume.
 	VDiffUpdate(ctx context.Context, in *vtctldata.VDiffUpdateRequest, opts ...grpc.CallOption) (*vtctldata.VDiffUpdateResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(ctx context.Context, in *vtctldata.WorkflowDeleteRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowDeleteResponse, error)
@@ -2324,11 +2324,11 @@ type VtctldServer interface {
 	VDiffShow(context.Context, *vtctldata.VDiffShowRequest) (*vtctldata.VDiffShowResponse, error)
 	VDiffStop(context.Context, *vtctldata.VDiffStopRequest) (*vtctldata.VDiffStopResponse, error)
 	// VDiffUpdate merges picker options (tablet types and cells) into an
-	// existing VDiff. If the VDiff is running on an affected shard
-	// (pending/started, or a live controller exists), the update is
-	// rejected and the operator must VDiff stop first. Otherwise the
-	// stored options are updated in place; the new options take effect
-	// on VDiff resume (or retry).
+	// existing VDiff. Only stopped or completed VDiffs can be updated: if
+	// the VDiff is pending/started, in the error state, or has a live
+	// controller on an affected shard, the update is rejected. Otherwise
+	// the stored options are updated in place; the new options take effect
+	// on the next VDiff resume.
 	VDiffUpdate(context.Context, *vtctldata.VDiffUpdateRequest) (*vtctldata.VDiffUpdateResponse, error)
 	// WorkflowDelete deletes a vreplication workflow.
 	WorkflowDelete(context.Context, *vtctldata.WorkflowDeleteRequest) (*vtctldata.WorkflowDeleteResponse, error)

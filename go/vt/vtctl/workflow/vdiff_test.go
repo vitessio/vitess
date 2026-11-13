@@ -724,12 +724,12 @@ func TestVDiffUpdate(t *testing.T) {
 				},
 				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID+tabletUIDStep]: {
 					req: expectedReq(),
-					res: shardOutput("error"),
+					res: shardOutput("completed"),
 				},
 			},
 			wantStates: map[string]string{
 				"-80": "stopped",
-				"80-": "error",
+				"80-": "completed",
 			},
 		},
 		{

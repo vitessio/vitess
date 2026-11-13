@@ -644,11 +644,11 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 // VDiffUpdate is part of the vtctlservicepb.VtctldServer interface.
 // It merges picker options (tablet types and cells) into the stored
 // _vt.vdiff.options JSON on each target shard primary. Other options
-// are left unchanged. If the VDiff is running on an affected shard
-// (pending/started, or a live controller exists), that shard rejects
-// the update and the operator must VDiff stop first. Otherwise the
-// stored options are updated in place; lastpk/progress are untouched
-// and the new options take effect on VDiff resume (or retry).
+// are left unchanged. Only stopped or completed VDiffs can be updated:
+// if the VDiff is pending/started, in the error state, or has a live
+// controller on an affected shard, that shard rejects the update.
+// Otherwise the stored options are updated in place; lastpk/progress
+// are untouched and the new options take effect on the next VDiff resume.
 func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRequest) (*vtctldatapb.VDiffUpdateResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffUpdate")
 	defer span.Finish()

@@ -2215,7 +2215,7 @@ message VDiffUpdateResponse {
     string shard = 1;
     // VDiff state on this shard after the update. The update is persist-only;
     // lastpk and progress are left untouched. The new picker options take
-    // effect on the next VDiff resume (or retry).
+    // effect on the next VDiff resume.
     string state = 2;
     bool updated = 3;
   }

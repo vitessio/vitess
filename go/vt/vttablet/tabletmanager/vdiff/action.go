@@ -496,11 +496,11 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 }
 
 // handleUpdateAction merges picker options into an existing VDiff record.
-// If the VDiff is running on this tablet (pending/started, or a live
-// controller exists), the update is rejected so the operator can
-// `VDiff stop` first. Otherwise the merged options are persisted and
-// lastpk/progress are left untouched. The new options take effect on
-// `VDiff resume` (or retry).
+// Only stopped or completed VDiffs can be updated. If the VDiff is
+// pending/started, in the error state, or a live controller exists on
+// this tablet, the update is rejected. Otherwise the merged options are
+// persisted and lastpk/progress are left untouched. The new options take
+// effect on the next `VDiff resume`.
 //
 // The engine mutex is held across the state and options read, the
 // running check, and the write so that a concurrent resume or retry
@@ -598,15 +598,25 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 	return nil
 }
 
-// rejectIfVDiffNotUpdatableLocked returns a FAILED_PRECONDITION error when
-// the VDiff is pending/started or a live controller exists, telling the
-// operator to `VDiff stop` first.
+// rejectIfVDiffNotUpdatableLocked returns a FAILED_PRECONDITION error
+// unless the VDiff is stopped or completed and has no live controller.
 // The engine mutex (mu) must be held by the caller.
 func (vde *Engine) rejectIfVDiffNotUpdatableLocked(id int64, uuid, state string) error {
 	tablet := topoproto.TabletAliasString(vde.thisTablet.Alias)
-	if state == string(PendingState) || state == string(StartedState) {
+	switch VDiffState(state) {
+	case StoppedState, CompletedState:
+	case PendingState, StartedState:
 		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			"vdiff %s is %s on tablet %s; run VDiff stop first, then update, then VDiff resume",
+			uuid, state, tablet)
+	case ErrorState:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vdiff %s is in the error state on tablet %s; only stopped or completed vdiffs can be updated. "+
+				"Run VDiff stop first, then update, then VDiff resume. If VDiff stop does not move it to the stopped state, create a new vdiff instead",
+			uuid, tablet)
+	default:
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"vdiff %s is in the %q state on tablet %s; only stopped or completed vdiffs can be updated",
 			uuid, state, tablet)
 	}
 	if vde.hasLiveControllerLocked(id) {

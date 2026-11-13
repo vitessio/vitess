@@ -268,14 +268,14 @@ The specified picker options are merged into the stored _vt.vdiff.options JSON
 on each target shard primary. Other options (core and report) are left unchanged.
 Progress (lastpk) is left untouched.
 
-If the VDiff is running on an affected shard (pending or started, or a live
-controller exists), the update is rejected. Stop the VDiff first with
-` + "`VDiff stop`" + `, then update, then ` + "`VDiff resume`" + ` (or retry) so the new
-options take effect.
+Only stopped or completed VDiffs can be updated. If the VDiff is pending,
+started, or in the error state on an affected shard, or a live controller
+exists there, the update is rejected. Stop the VDiff first with
+` + "`VDiff stop`" + `, then update, then ` + "`VDiff resume`" + ` so the new options take
+effect.
 
-If the VDiff is stopped, errored, or completed, only the stored options are
-updated. A completed VDiff stays completed; the new options apply the next time
-it is resumed.
+Only the stored options are updated. A completed VDiff stays completed; the new
+options apply the next time it is resumed.
 
 Use --clear-source-cells / --clear-target-cells to reset cells to all cells
 (the same default as create).`,

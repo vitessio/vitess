@@ -523,9 +523,9 @@ func TestHandleUpdateAction(t *testing.T) {
 			wantState: "stopped",
 		},
 		{
-			name:      "merges picker options on error",
-			state:     "error",
-			wantState: "error",
+			name:    "rejects error",
+			state:   "error",
+			wantErr: "only stopped or completed vdiffs can be updated",
 		},
 		{
 			name:            "merges picker options on completed leftover controller",
