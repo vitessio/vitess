@@ -151,8 +151,15 @@ func (uvs *uvstreamer) buildTablePlan() error {
 	uvs.plans = make(map[string]*tablePlan)
 	tableLastPKs := make(map[string]*binlogdatapb.TableLastPK)
 	for _, tablePK := range uvs.inTablePKs {
-		if tablePK != nil && tablePK.Lastpk != nil && len(tablePK.Lastpk.Fields) == 0 {
-			return fmt.Errorf("lastpk for table %s has no fields defined", tablePK.TableName)
+		if tablePK != nil && tablePK.Lastpk != nil {
+			// The lastpk comes from the client, so check it here, before any
+			// table is copied, rather than when the copy reaches its table.
+			if len(tablePK.Lastpk.Fields) == 0 {
+				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lastpk for table %s has no fields defined", tablePK.TableName)
+			}
+			if err := validateLastPKShape(tablePK.Lastpk); err != nil {
+				return vterrors.Wrapf(err, "invalid lastpk for table %s", tablePK.TableName)
+			}
 		}
 		tableLastPKs[tablePK.TableName] = tablePK
 	}

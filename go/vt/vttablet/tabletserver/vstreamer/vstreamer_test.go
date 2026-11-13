@@ -1075,6 +1075,46 @@ func TestVStreamMissingFieldsInLastPK(t *testing.T) {
 	ch := make(chan []*binlogdatapb.VEvent)
 	err := vstream(ctx, t, "", tablePKs, filter, ch, false)
 	require.ErrorContains(t, err, "lastpk for table t1 has no fields defined")
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+}
+
+// TestVStreamMalformedLastPK sends a lastpk whose length runs past its values
+// through a real stream. The stream must fail with INVALID_ARGUMENT rather
+// than panic, and must fail before it copies anything: t1 sorts before t2, so
+// a check that only ran when the copy reached t2 would stream all of t1 first.
+// TestDecodeLastPK covers each malformed shape; this covers the wiring.
+func TestVStreamMalformedLastPK(t *testing.T) {
+	ts := &TestSpec{
+		t: t,
+		ddls: []string{
+			"create table t1(id11 int, id12 int, primary key(id11))",
+			"create table t2(id21 int, id22 int, primary key(id21))",
+		},
+	}
+	ts.Init()
+	defer ts.Close()
+	insertSomeRows(t, 3)
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{
+			{Match: "t1", Filter: "select * from t1"},
+			{Match: "t2", Filter: "select * from t2"},
+		},
+	}
+	tablePKs := []*binlogdatapb.TableLastPK{{
+		TableName: "t2",
+		Lastpk: &querypb.QueryResult{
+			Fields: getTablePK("t2", 2).Lastpk.Fields,
+			Rows:   []*querypb.Row{{Lengths: []int64{10}, Values: []byte("1")}},
+		},
+	}}
+	// Buffered, so that a stream which wrongly copied t1 first would not block
+	// on the send and would leave its events here.
+	ch := make(chan []*binlogdatapb.VEvent, 100)
+	err := vstream(t.Context(), t, "", tablePKs, filter, ch, false)
+	require.ErrorContains(t, err, "invalid lastpk for table t2")
+	assert.Equal(t, vtrpcpb.Code_INVALID_ARGUMENT, vterrors.Code(err))
+	assert.Empty(t, ch, "events were streamed before the lastpk was rejected")
 }
 
 func TestVStreamCopySimpleFlow(t *testing.T) {
