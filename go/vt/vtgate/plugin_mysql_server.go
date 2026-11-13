@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"os"
@@ -932,7 +931,7 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	}
 	err := vh.vtg.CloseSession(ctx, session)
 	if err != nil {
-		log.Error(fmt.Sprintf("Error happened in transaction rollback: %v", err))
+		log.Error("Error happened in transaction rollback", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 	// The reset released the reserved connections, and the temporary tables
 	// and applied session settings died with them — but the session object
@@ -1013,7 +1012,7 @@ func getSpan(ctx context.Context, match []string, newSpan func(context.Context, 
 		if err == nil {
 			return span, ctx
 		}
-		log.Warn("Unable to parse VT_SPAN_CONTEXT: " + err.Error())
+		log.Warn("Unable to parse VT_SPAN_CONTEXT", slog.Any("error", err))
 	}
 	span, ctx = newSpan(ctx, label)
 	return span, ctx
@@ -1744,16 +1743,22 @@ func (vh *vtgateHandler) streamBinlogDumpResponse(c *mysql.Conn, caller string, 
 		// a clean error packet since the client is expecting more data.
 		// Just close the connection.
 		c.MarkForClose()
-		log.Error(fmt.Sprintf("%s: error mid-packet, closing connection: %v", caller, err))
+		log.Error("error mid-packet, closing connection",
+			slog.String("function", caller),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 		return nil
 	}
 
 	// At a message boundary - we can send a proper error packet.
 	if writeErr := c.WriteErrorPacketFromError(err); writeErr != nil {
-		log.Error(fmt.Sprintf("%s: failed to write error packet: %v", caller, writeErr))
+		log.Error("failed to write error packet", slog.String("function", caller), slog.Any("error", writeErr))
 	}
 	c.MarkForClose()
-	log.Error(fmt.Sprintf("%s: %v", caller, err))
+	log.Error("binlog dump stream failed",
+		slog.String("function", caller),
+		slog.Any("error", err),
+		slog.String("error_code", vterrors.Code(err).String()))
 	return nil
 }
 
@@ -1829,7 +1834,7 @@ type mysqlServer struct {
 func initTLSConfig(ctx context.Context, srv *mysqlServer, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA string, mysqlServerRequireSecureTransport bool, mysqlMinTLSVersion uint16) error {
 	serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlMinTLSVersion)
 	if err != nil {
-		log.Error(fmt.Sprintf("grpcutils.TLSServerConfig failed: %v", err))
+		log.Error("vttls.ServerConfig failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		os.Exit(1)
 		return err
 	}
@@ -1845,9 +1850,9 @@ func initTLSConfig(ctx context.Context, srv *mysqlServer, mysqlSslCert, mysqlSsl
 			case <-srv.sigChan:
 				serverConfig, err := vttls.ServerConfig(mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlMinTLSVersion)
 				if err != nil {
-					log.Error(fmt.Sprintf("grpcutils.TLSServerConfig failed: %v", err))
+					log.Error("vttls.ServerConfig failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				} else {
-					log.Info("grpcutils.TLSServerConfig updated")
+					log.Info("vttls.ServerConfig updated")
 					srv.tcpListener.TLSConfig.Store(serverConfig)
 				}
 			}
@@ -1911,7 +1916,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	if mysqlServerPort >= 0 {
 		listener, err := servenv.Listen(mysqlTCPVersion, net.JoinHostPort(mysqlServerBindAddress, strconv.Itoa(mysqlServerPort)))
 		if err != nil {
-			log.Error(fmt.Sprintf("servenv.Listen failed: %v", err))
+			log.Error("servenv.Listen failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 		srv.tcpListener, err = mysql.NewFromListener(
@@ -1927,13 +1932,13 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 			mysqlServerMultiQuery,
 		)
 		if err != nil {
-			log.Error(fmt.Sprintf("mysql.NewFromListener failed: %v", err))
+			log.Error("mysql.NewFromListener failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 		if tlsEnabled {
 			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
-				log.Error(fmt.Sprintf("mysql.NewFromListener failed: %v", err))
+				log.Error("vttls.TLSVersionToNumber failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				os.Exit(1)
 			}
 
@@ -1942,7 +1947,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 		srv.tcpListener.AllowClearTextWithoutTLS.Store(mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold
 		if mysqlSlowConnectWarnThreshold != 0 {
-			log.Info(fmt.Sprintf("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold))
+			log.Info("setting mysql slow connection threshold", slog.Duration("slow_connect_warn_threshold", mysqlSlowConnectWarnThreshold))
 			srv.tcpListener.SlowConnectWarnThreshold.Store(mysqlSlowConnectWarnThreshold.Nanoseconds())
 		}
 		// Start listening for tcp
@@ -1952,7 +1957,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 	if mysqlServerSocketPath != "" {
 		err = setupUnixSocket(srv, authServer, mysqlServerSocketPath)
 		if err != nil {
-			log.Error(fmt.Sprintf("mysql.NewListener failed: %v", err))
+			log.Error("mysql.NewListener failed", slog.Any("error", err))
 			os.Exit(1)
 		}
 	}
@@ -1980,7 +1985,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 	case nil:
 		return listener, nil
 	case *net.OpError:
-		log.Warn(fmt.Sprintf("Found existent socket when trying to create new unix mysql listener: %s, attempting to clean up", address))
+		log.Warn("Found existent socket when trying to create new unix mysql listener, attempting to clean up", slog.String("socket_file", address))
 		// err.Op should never be different from listen, just being extra careful
 		// in case in the future other errors are returned here
 		if err.Op != "listen" {
@@ -1988,12 +1993,12 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		}
 		_, dialErr := net.Dial("unix", address)
 		if dialErr == nil {
-			log.Error(fmt.Sprintf("Existent socket '%s' is still accepting connections, aborting", address))
+			log.Error("Existent socket is still accepting connections, aborting", slog.String("socket_file", address))
 			return nil, err
 		}
 		removeFileErr := os.Remove(address)
 		if removeFileErr != nil {
-			log.Error("Couldn't remove existent socket file: " + address)
+			log.Error("Couldn't remove existent socket file", slog.String("socket_file", address))
 			return nil, err
 		}
 		listener, listenerErr := mysql.NewListener(
@@ -2041,7 +2046,7 @@ func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
 		reported := time.Now()
 		for srv.vtgateHandle.numConnections() > 0 {
 			if time.Since(reported) > 2*time.Second {
-				log.Info(fmt.Sprintf("Still waiting for client connections to drain (%d connected)...", srv.vtgateHandle.numConnections()))
+				log.Info("Still waiting for client connections to drain...", slog.Int("connection_count", srv.vtgateHandle.numConnections()))
 				reported = time.Now()
 			}
 			time.Sleep(1000 * time.Millisecond)
@@ -2053,12 +2058,12 @@ func (srv *mysqlServer) shutdownMysqlProtocolAndDrain() {
 	stopListener(srv.tcpListener, true)
 	setListenerToNil()
 	if busy := srv.vtgateHandle.busyConnections.Load(); busy > 0 {
-		log.Info(fmt.Sprintf("Waiting for all client connections to be idle (%d active)...", busy))
+		log.Info("Waiting for all client connections to be idle...", slog.Int("active_connection_count", int(busy)))
 		start := time.Now()
 		reported := start
 		for busy > 0 {
 			if time.Since(reported) > 2*time.Second {
-				log.Info(fmt.Sprintf("Still waiting for client connections to be idle (%d active)...", busy))
+				log.Info("Still waiting for client connections to be idle...", slog.Int("active_connection_count", int(busy)))
 				reported = time.Now()
 			}
 
@@ -2095,7 +2100,7 @@ func (srv *mysqlServer) rollbackAtShutdown() {
 			defer srv.vtgateHandle.mu.Unlock()
 			for id, c := range srv.vtgateHandle.connections {
 				if c != nil {
-					log.Info(fmt.Sprintf("Rolling back transactions associated with connection ID: %v", id))
+					log.Info("Rolling back transactions associated with connection", slog.Int64("connection_id", int64(id)))
 					c.Close()
 				}
 			}

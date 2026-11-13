@@ -19,7 +19,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"strconv"
@@ -286,7 +286,7 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 	// we only have table_schema to work with
 	destinations, _, err := vcursor.ResolveDestinations(ctx, specifiedKS, nil, []key.ShardDestination{key.DestinationAnyShard{}})
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to route information_schema query to keyspace [%s]", specifiedKS))
+		log.Error("failed to route information_schema query to keyspace", slog.String("table_schema", specifiedKS))
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 		return defaultRoute()
 	}

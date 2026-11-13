@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -163,7 +164,7 @@ func debugEnvHandler(vtg *VTGate, w http.ResponseWriter, r *http.Request) {
 	w.Write(debugEnvHeader)
 	for _, v := range vars {
 		if err := debugEnvRow.Execute(w, v); err != nil {
-			log.Error(fmt.Sprintf("debugenv: couldn't execute template: %v", err))
+			log.Error("debugenv: couldn't execute template", slog.Any("error", err))
 		}
 	}
 	w.Write(endTable)

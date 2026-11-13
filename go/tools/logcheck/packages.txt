@@ -105,6 +105,16 @@ vitess.io/vitess/go/vt/vtctl/workflow
 vitess.io/vitess/go/vt/vtctl/workflow/vexec
 vitess.io/vitess/go/vt/vterrors
 vitess.io/vitess/go/vt/vtexplain
+vitess.io/vitess/go/vt/vtgate
+vitess.io/vitess/go/vt/vtgate/buffer
+vitess.io/vitess/go/vt/vtgate/engine
+vitess.io/vitess/go/vt/vtgate/grpcvtgateservice
+vitess.io/vitess/go/vt/vtgate/planbuilder
+vitess.io/vitess/go/vt/vtgate/schema
+vitess.io/vitess/go/vt/vtgate/simplifier
+vitess.io/vitess/go/vt/vtgate/txresolver
+vitess.io/vitess/go/vt/vtgate/vindexes
+vitess.io/vitess/go/vt/vtgate/vtgateconn
 vitess.io/vitess/go/vt/vtorc/db
 vitess.io/vitess/go/vt/vtorc/inst
 vitess.io/vitess/go/vt/vtorc/process
