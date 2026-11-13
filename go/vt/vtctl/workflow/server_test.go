@@ -2277,6 +2277,10 @@ func TestMoveTablesTrafficSwitching(t *testing.T) {
 			}
 			require.NoError(t, err)
 			require.Equal(t, tc.want.String(), got.String(), "Server.WorkflowSwitchTraffic() = %v, want %v", got, tc.want)
+			// On etcd, a lock with a TTL expires after it even while it is held.
+			calls := env.topoFactory.GetCallStats().Counts()
+			require.NotZero(t, calls["Lock"])
+			require.Zero(t, calls["LockWithTTL"], "SwitchTraffic took a lock with a TTL")
 
 			if tc.wantRefreshWarnings {
 				refreshed := make(map[string]bool)
