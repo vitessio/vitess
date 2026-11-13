@@ -3088,6 +3088,15 @@ func SelectedLiterals(yield Query) {
 	yieldIn(yield, "FROM_UNIXTIME(%s)", elt...)
 	yieldIn(yield, "SEC_TO_TIME(%s)", elt...)
 
+	// A hex or bit literal that does not fit 64 bits is the number 0.
+	yieldIn(yield, "FROM_UNIXTIME(%s)", "0xffffffffffffffffff", "IF(true, 0xffffffffffffffffff, 'x')")
+	yieldIn(yield, "CONV(%s, 16, 10)", "0xffffffffffffffffff")
+
+	// A shift or a bitwise NOT of a binary string returns an ordinary binary
+	// string, also when the string was selected from a hex or bit literal:
+	// ELT(1, 0x62, 'a') >> 1 is '1', which is the number 1.
+	yieldIn(yield, "(%s) + 0", "ELT(1, 0x62, 'a') >> 1", "ELT(1, 0x62, 'a') << 1", "~ELT(1, 0x62, 'a')", "~(CASE WHEN true THEN 0b01100010 END)")
+
 	// 0x30 and 0b110000 are '0' as a string, but 48 as a number.
 	for _, consumer := range []string{"IF(%s, 'T', 'F')", "NOT (%s)", "(%s) IS TRUE", "CASE WHEN %s THEN 'T' ELSE 'F' END"} {
 		yieldIn(yield, consumer,

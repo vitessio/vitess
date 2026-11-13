@@ -677,13 +677,27 @@ func (b *builtinFromUnixtime) eval(env *ExpressionEnv) (eval, error) {
 	case *evalBytes:
 		// The bytes are read as a whole number of seconds: 0x3132 is
 		// second 12594. See decimalFromBytes.
+		var u *evalUint64
+		fits := false
 		if ts.decimalFromBytes() {
-			u, _ := ts.toNumericHex()
+			u, fits = ts.toNumericHex()
+		}
+		switch {
+		case fits:
 			if u.u >= maxUnixtime {
 				return nil, nil
 			}
 			sec = int64(u.u)
-		} else {
+		case ts.isHexOrBitLiteral():
+			// The bytes do not fit 64 bits. MySQL reads the literal as
+			// second 0: FROM_UNIXTIME(0xffffffffffffffffff) is
+			// 1970-01-01 00:00:00.
+			sec = 0
+		default:
+			// This includes a string that IF, CASE or NULLIF selected
+			// from a literal that does not fit 64 bits. MySQL reads it as
+			// the double 0: FROM_UNIXTIME(IF(1, 0xffffffffffffffffff, 'x'))
+			// is 1970-01-01 00:00:00.000000.
 			f, _ := evalToFloat(evalDecimalOperand(ts))
 			if f.f < 0 || f.f >= maxUnixtime {
 				return nil, nil

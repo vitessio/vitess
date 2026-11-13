@@ -169,8 +169,9 @@ func evalIsTruthy(e eval) boolean {
 		if e.flag&flagNumericContext != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
-				// overflow
-				return makeboolean(true)
+				// The bytes do not fit 64 bits. MySQL reads such a value
+				// as the number 0: IF(0xffffffffffffffffff, 1, 0) is 0.
+				return makeboolean(false)
 			}
 			return makeboolean(hex.u != 0)
 		}

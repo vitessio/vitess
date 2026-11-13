@@ -1324,8 +1324,11 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 
 	var u uint64
 	if b, ok := n.(*evalBytes); ok && b.isHexOrBitLiteral() {
-		nh, _ := b.toNumericHex()
-		u = nh.u
+		// A literal that does not fit 64 bits is the number 0 in MySQL:
+		// CONV(0xffffffffffffffffff, 16, 10) is '0'.
+		if nh, ok := b.toNumericHex(); ok {
+			u = nh.u
+		}
 	} else {
 		nStr := evalToBinary(n)
 		i, err := fastparse.ParseInt64(nStr.string(), int(fromBase))

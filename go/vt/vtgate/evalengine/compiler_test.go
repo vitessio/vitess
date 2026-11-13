@@ -977,6 +977,35 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `FLOAT64(12)`,
 		},
 		{
+			// A hex literal that does not fit 64 bits is the number 0, which
+			// is false, also when IF selects it.
+			expression: `IF(IF(column0 > 0, 0xffffffffffffffffff, 0x31), 'T', 'F')`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `VARCHAR("F")`,
+		},
+		{
+			expression: `IF(0xffffffffffffffffff, 'T', 'F')`,
+			result:     `VARCHAR("F")`,
+		},
+		{
+			// A shift or a bitwise NOT of a binary string returns an ordinary
+			// binary string, also when ELT selected the string from a hex
+			// literal.
+			expression: `(ELT(column0, 0x62, 'a') >> 1) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `FLOAT64(1)`,
+		},
+		{
+			expression: `(ELT(column0, 0x62, 'a') << 1) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `FLOAT64(0)`,
+		},
+		{
+			expression: `(~ELT(column0, 0x62, 'a')) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `FLOAT64(0)`,
+		},
+		{
 			// A number is converted to a string in the connection collation,
 			// which is the collation of the result.
 			expression: `REVERSE(column0)`,

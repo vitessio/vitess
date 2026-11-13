@@ -338,6 +338,10 @@ func (asm *assembler) BitShiftLeft_bu() {
 			}
 		}
 		l.bytes = out
+		// The result is an ordinary binary string: a string that IF, CASE,
+		// NULLIF or ELT selected from a hex or bit literal no longer counts
+		// as a number after the shift.
+		l.makePlain()
 
 		env.vm.sp--
 		return 1
@@ -381,6 +385,10 @@ func (asm *assembler) BitShiftRight_bu() {
 			}
 		}
 		l.bytes = out
+		// The result is an ordinary binary string: a string that IF, CASE,
+		// NULLIF or ELT selected from a hex or bit literal no longer counts
+		// as a number after the shift.
+		l.makePlain()
 
 		env.vm.sp--
 		return 1
@@ -410,6 +418,8 @@ func (asm *assembler) BitwiseNot_b() {
 			out[i] = ^a.bytes[i]
 		}
 		a.bytes = out
+		// The result is an ordinary binary string, see BitShiftLeft_bu.
+		a.makePlain()
 		return 1
 	}, "BIT_NOT BINARY(SP-1)")
 }
@@ -2055,7 +2065,13 @@ func (asm *assembler) Fn_CONV_hu(offset int, baseOffset int) {
 			return 1
 		}
 
-		env.vm.stack[env.vm.sp-offset], _ = env.vm.stack[env.vm.sp-offset].(*evalBytes).toNumericHex()
+		// A literal that does not fit 64 bits is the number 0 in MySQL:
+		// CONV(0xffffffffffffffffff, 16, 10) is '0'.
+		if u, ok := env.vm.stack[env.vm.sp-offset].(*evalBytes).toNumericHex(); ok {
+			env.vm.stack[env.vm.sp-offset] = u
+		} else {
+			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalUint64(0)
+		}
 		return 1
 	}, "FN CONV VARBINARY(SP-%d), HEX", offset)
 }
