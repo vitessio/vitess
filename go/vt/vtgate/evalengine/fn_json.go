@@ -347,8 +347,7 @@ func (call *builtinJSONObject) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		_, err = c.compileArgToJSON(val, 1)
-		if err != nil {
+		if err := c.compileArgToJSONOrNull(val); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -379,8 +378,7 @@ func (call *builtinJSONArray) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		_, err = c.compileArgToJSON(tt, 1)
-		if err != nil {
+		if err := c.compileArgToJSONOrNull(tt); err != nil {
 			return ctype{}, err
 		}
 	}
