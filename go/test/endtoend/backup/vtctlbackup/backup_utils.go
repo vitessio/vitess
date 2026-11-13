@@ -20,8 +20,10 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand/v2"
 	"os"
 	"os/exec"
@@ -38,6 +40,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
@@ -104,15 +107,61 @@ type CompressionDetails struct {
 	ManifestExternalDecompressorCmd string
 }
 
-// LaunchCluster : starts the cluster as per given params.
+// tabletConfig is what newVttabletProcess needs to give a tablet a fresh
+// VttabletProcess.
+type tabletConfig struct {
+	tabletType string
+	extraArgs  []string
+}
+
+// tabletConfigs holds each tablet's initial type and vttablet flags, by tablet UID.
+var tabletConfigs map[int]tabletConfig
+
+// LaunchCluster starts the topo, a shard with four tablets and VTOrc. The
+// primary, replica1 and replica2 tablets run, with primary as the shard
+// primary. replica3 has a running mysqld; SetupReplica3Tablet starts its
+// vttablet.
 func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) (int, error) {
+	if err := launchClusterWithoutTablets(setupType, streamMode, stripes, cDetails); err != nil {
+		return 1, err
+	}
+
+	if err := startMySQLs(primary, replica1, replica2, replica3); err != nil {
+		return 1, err
+	}
+	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
+		if err := localCluster.InitTablet(tablet, keyspaceName, shardName); err != nil {
+			return 1, err
+		}
+	}
+	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} { // we don't start replica3 yet
+		if err := tablet.VttabletProcess.Setup(); err != nil {
+			return 1, err
+		}
+	}
+
+	if err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID); err != nil {
+		return 1, err
+	}
+
+	if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
+		return 1, err
+	}
+
+	return 0, nil
+}
+
+// launchClusterWithoutTablets starts the topo and creates the keyspace and
+// the process handles for the four tablets, but starts none of their
+// processes.
+func launchClusterWithoutTablets(setupType int, streamMode string, stripes int, cDetails *CompressionDetails) error {
 	currentSetupType = setupType
 	localCluster = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
 	err := localCluster.StartTopo()
 	if err != nil {
-		return 1, err
+		return err
 	}
 
 	// Start keyspace
@@ -137,12 +186,12 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
 	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
 	if err != nil {
-		return 1, err
+		return err
 	}
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0o666)
 	if err != nil {
-		return 1, err
+		return err
 	}
 
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
@@ -169,7 +218,7 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		mysqlShellBackupLocation := path.Join(localCluster.CurrentVTDATAROOT, "backups-mysqlshell")
 		err = os.MkdirAll(mysqlShellBackupLocation, 0o777)
 		if err != nil {
-			return 0, err
+			return err
 		}
 
 		mysqlShellArgs := []string{
@@ -182,19 +231,9 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 
 	commonTabletArg = append(commonTabletArg, getCompressorArgs(cDetails)...)
 
-	var mysqlProcs []*exec.Cmd
-	tabletTypes := map[int]string{
-		0: "primary",
-		1: "replica",
-		2: "rdonly",
-		3: "spare",
-	}
-
+	tabletConfigs = make(map[int]tabletConfig)
 	createTablet := func(tabletType string) error {
 		tablet := localCluster.NewVttabletInstance(tabletType, 0, cell)
-		tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
-		tablet.VttabletProcess.DbPassword = dbPassword
-		tablet.VttabletProcess.SupportsBackup = true
 
 		// since we spin different mysqld processes, we need to pass exactly the socket of the this particular
 		// one when running mysql shell dump/loads
@@ -207,7 +246,8 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 				),
 			)
 		}
-		tablet.VttabletProcess.ExtraArgs = commonTabletArg
+		tabletConfigs[tablet.TabletUID] = tabletConfig{tabletType: tabletType, extraArgs: slices.Clone(commonTabletArg)}
+		newVttabletProcess(tablet)
 
 		if setupType == Mysqlctld {
 			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
@@ -218,38 +258,22 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 			tablet.MysqlctldProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctldProcess.ExtraArgs = extraArgs
 			tablet.MysqlctldProcess.Password = tablet.VttabletProcess.DbPassword
-			if err := tablet.MysqlctldProcess.Start(); err != nil {
+		} else {
+			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			if err != nil {
 				return err
 			}
-			shard.Vttablets = append(shard.Vttablets, tablet)
-			return nil
+			tablet.MysqlctlProcess = *mysqlctlProcess
+			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+			tablet.MysqlctlProcess.ExtraArgs = extraArgs
 		}
-
-		mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
-		if err != nil {
-			return err
-		}
-		tablet.MysqlctlProcess = *mysqlctlProcess
-		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
-		tablet.MysqlctlProcess.ExtraArgs = extraArgs
-		proc, err := tablet.MysqlctlProcess.StartProcess()
-		if err != nil {
-			return err
-		}
-		mysqlProcs = append(mysqlProcs, proc)
 
 		shard.Vttablets = append(shard.Vttablets, tablet)
 		return nil
 	}
-	for i := range 4 {
-		tabletType := tabletTypes[i]
+	for _, tabletType := range []string{"primary", "replica", "rdonly", "spare"} {
 		if err := createTablet(tabletType); err != nil {
-			return 1, err
-		}
-	}
-	for _, proc := range mysqlProcs {
-		if err := proc.Wait(); err != nil {
-			return 1, err
+			return err
 		}
 	}
 	primary = shard.Vttablets[0]
@@ -257,25 +281,8 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	replica2 = shard.Vttablets[2]
 	replica3 = shard.Vttablets[3]
 
-	if err := localCluster.InitTablet(primary, keyspaceName, shard.Name); err != nil {
-		return 1, err
-	}
-	if err := localCluster.InitTablet(replica1, keyspaceName, shard.Name); err != nil {
-		return 1, err
-	}
-	if err := localCluster.InitTablet(replica2, keyspaceName, shard.Name); err != nil {
-		return 1, err
-	}
-	vtctldClientProcess := cluster.VtctldClientProcessInstance(localCluster.VtctldProcess.GrpcPort, localCluster.TopoPort, "localhost", localCluster.TmpDirectory)
-	_, err = vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
-	if err != nil {
-		return 1, err
-	}
-
-	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} { // we don't start replica3 yet
-		if err := tablet.VttabletProcess.Setup(); err != nil {
-			return 1, err
-		}
+	if err := localCluster.VtctldClientProcess.CreateKeyspace(keyspaceName, sidecar.DefaultName, "semi_sync"); err != nil {
+		return err
 	}
 
 	SetupReplica3Tablet = func(extraArgs []string) (*cluster.Vttablet, error) {
@@ -286,15 +293,40 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		return replica3, nil
 	}
 
-	if err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
-		return 1, err
-	}
+	return nil
+}
 
-	if err := localCluster.StartVTOrc(cell, keyspaceName); err != nil {
-		return 1, err
-	}
+// newVttabletProcess gives the tablet a fresh VttabletProcess with the type
+// and flags that it was created with, dropping what earlier tests changed.
+func newVttabletProcess(tablet *cluster.Vttablet) {
+	config := tabletConfigs[tablet.TabletUID]
+	tablet.Type = config.tabletType
+	tablet.VttabletProcess = localCluster.VtprocessInstanceFromVttablet(tablet, shardName, keyspaceName)
+	tablet.VttabletProcess.DbPassword = dbPassword
+	tablet.VttabletProcess.SupportsBackup = true
+	tablet.VttabletProcess.ExtraArgs = slices.Clone(config.extraArgs)
+}
 
-	return 0, nil
+// startMySQLs initializes and starts the tablets' mysqlds in parallel. It
+// returns only after every start has finished, also when one fails.
+func startMySQLs(tablets ...*cluster.Vttablet) error {
+	errs := make([]error, len(tablets))
+	var wg sync.WaitGroup
+	for i, tablet := range tablets {
+		wg.Go(func() {
+			var err error
+			if tablet.MysqlctldProcess.TabletUID > 0 {
+				err = tablet.MysqlctldProcess.Start()
+			} else {
+				err = tablet.MysqlctlProcess.Start()
+			}
+			if err != nil {
+				errs[i] = fmt.Errorf("starting mysqld for tablet %s: %w", tablet.Alias, err)
+			}
+		})
+	}
+	wg.Wait()
+	return errors.Join(errs...)
 }
 
 func getCompressorArgs(cDetails *CompressionDetails) []string {
@@ -428,14 +460,16 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 		}, //
 	}
 
-	// setup cluster for the testing
-	code, err := LaunchCluster(setupType, streamMode, stripes, cDetails)
-	require.NoErrorf(t, err, "setup failed with status code %d", code)
-
-	// Teardown the cluster
+	// Each test starts its own tablets in startShard, so the cluster starts
+	// only the topo, the keyspace and VTOrc.
+	err = launchClusterWithoutTablets(setupType, streamMode, stripes, cDetails)
+	require.NoError(t, err, "setup failed")
 	defer TearDownCluster()
+	err = localCluster.StartVTOrc(cell, keyspaceName)
+	require.NoError(t, err)
 
 	// Run all the backup tests
+	var failed []string
 	for _, test := range testMethods {
 		if len(runSpecific) > 0 && !isRegistered(test.name, runSpecific) {
 			continue
@@ -444,22 +478,150 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int, cDe
 		if len(runSpecific) == 0 && test.name == "DoNotDemoteNewlyPromotedPrimaryIfReparentingDuringBackup" {
 			continue
 		}
-		if retVal := t.Run(test.name, test.method); !retVal {
-			return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failure: %s", test.name)
+		if !t.Run(test.name, func(t *testing.T) {
+			startShard(t)
+			test.method(t)
+		}) {
+			failed = append(failed, test.name)
 		}
 	}
+	if len(failed) > 0 {
+		return vterrors.Errorf(vtrpc.Code_UNKNOWN, "test failures: %s", strings.Join(failed, ", "))
+	}
+	return nil
+}
 
-	t.Run("check for files created with global permissions", func(t *testing.T) {
-		t.Logf("Confirming that none of the MySQL data directories that we've created have files with global permissions")
-		for _, ks := range localCluster.Keyspaces {
-			for _, shard := range ks.Shards {
-				for _, tablet := range shard.Vttablets {
-					tablet.VttabletProcess.ConfirmDataDirHasNoGlobalPerms(t)
-				}
+// startShard gives the test a shard of its own: primary, replica1 and
+// replica2 get newly initialized mysqlds, and primary and replica1 run, with
+// primary as the shard primary. replica2's vttablet and replica3's mysqld are
+// left for the test to start. All four tablets get fresh VttabletProcess
+// handles. A cleanup stops the shard and removes its backups, also when the
+// test fails.
+func startShard(t *testing.T) {
+	tablets := []*cluster.Vttablet{primary, replica1, replica2, replica3}
+	for _, tablet := range tablets {
+		newVttabletProcess(tablet)
+	}
+	t.Cleanup(func() { stopShard(t, tablets) })
+	// Cleanups run in reverse order, so this one runs first, while the data
+	// still exists. Its assertions can end it early, but not the teardown.
+	t.Cleanup(func() { checkShard(t, tablets) })
+
+	require.NoError(t, startMySQLs(primary, replica1, replica2))
+	setupErrs := make([]error, 2)
+	var wg sync.WaitGroup
+	for i, tablet := range []*cluster.Vttablet{primary, replica1} {
+		wg.Go(func() {
+			if err := localCluster.InitTablet(tablet, keyspaceName, shardName); err != nil {
+				setupErrs[i] = err
+				return
+			}
+			// The shard has no backup yet, so a restore at startup would only
+			// start the tablet empty. It would also run in the background
+			// after Setup returns, with the tablet type set to RESTORE, and an
+			// InitShardPrimary that reads the tablets meanwhile would not
+			// make replica1 a semi-sync replica.
+			tablet.VttabletProcess.SupportsBackup = false
+			setupErrs[i] = tablet.VttabletProcess.Setup()
+			tablet.VttabletProcess.SupportsBackup = true
+		})
+	}
+	wg.Wait()
+	require.NoError(t, errors.Join(setupErrs...))
+	err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
+	require.NoError(t, err)
+}
+
+// checkShard keeps the tablets' logs if the test failed and checks that none
+// of the tablets' data directories has files with global permissions.
+func checkShard(t *testing.T, tablets []*cluster.Vttablet) {
+	if t.Failed() {
+		keepTabletLogs(t, tablets)
+	}
+	for _, tablet := range tablets {
+		tablet.VttabletProcess.ConfirmDataDirHasNoGlobalPerms(t)
+	}
+}
+
+// stopShard stops the tablets in parallel, deletes their data and their topo
+// records, and removes all backups. It keeps going after an error and reports
+// all errors at the end.
+func stopShard(t *testing.T, tablets []*cluster.Vttablet) {
+	// The data is deleted right after, so the tablets stop in parallel.
+	errs := make([]error, len(tablets))
+	var wg sync.WaitGroup
+	for i, tablet := range tablets {
+		wg.Go(func() { errs[i] = stopTablet(tablet) })
+	}
+	wg.Wait()
+
+	for _, tablet := range tablets {
+		// Only the tablets that the test registered have a topo record.
+		if _, err := localCluster.VtctldClientProcess.GetTablet(tablet.Alias); err == nil {
+			errs = append(errs, localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias))
+		}
+	}
+	backups, err := localCluster.ListBackups(shardKsName)
+	errs = append(errs, err)
+	for _, backup := range backups {
+		errs = append(errs, localCluster.VtctldClientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup))
+	}
+	require.NoError(t, errors.Join(errs...))
+}
+
+// keepTabletLogs copies the vttablet and mysqld logs of a failed test to
+// files named after the test. The next test's tablets write to the same
+// vttablet log names, and the mysqld log is in the data directory, which the
+// cleanup deletes.
+func keepTabletLogs(t *testing.T, tablets []*cluster.Vttablet) {
+	suffix := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
+	for _, tablet := range tablets {
+		logs := map[string]string{
+			path.Join(tablet.VttabletProcess.LogDir, tablet.VttabletProcess.TabletPath+"-vttablet-stderr.txt"): "",
+			path.Join(tablet.VttabletProcess.Directory, "error.log"):                                           tablet.VttabletProcess.TabletPath + "-mysqld-error.log",
+		}
+		for src, name := range logs {
+			if name == "" {
+				name = path.Base(src)
+			}
+			dst := path.Join(tablet.VttabletProcess.LogDir, name+"."+suffix)
+			data, err := os.ReadFile(src)
+			if err == nil {
+				err = os.WriteFile(dst, data, 0o644)
+			}
+			if err != nil && !errors.Is(err, fs.ErrNotExist) {
+				t.Logf("Keeping log %s: %v", src, err)
 			}
 		}
-	})
+	}
+}
 
+// stopTablet stops the tablet's vttablet and mysqld and deletes its data
+// directory. When cluster.KillDiscardedMySQL reports true, it kills mysqld
+// instead of shutting it down, because the data is never read again.
+func stopTablet(tablet *cluster.Vttablet) error {
+	vttabletErr := tablet.VttabletProcess.TearDown()
+	var mysqldErr error
+	_, statErr := os.Stat(mysqlctl.MycnfFile(uint32(tablet.TabletUID)))
+	switch {
+	case errors.Is(statErr, fs.ErrNotExist):
+		// The test never started this tablet's mysqld.
+	case tablet.MysqlctldProcess.TabletUID > 0 && cluster.KillDiscardedMySQL():
+		mysqldErr = tablet.MysqlctldProcess.Kill()
+	case tablet.MysqlctldProcess.TabletUID > 0:
+		mysqldErr = tablet.MysqlctldProcess.Stop()
+		if !tablet.MysqlctldProcess.WaitForMysqlCtldShutdown() {
+			mysqldErr = errors.Join(mysqldErr, errors.New("mysqlctld did not exit"))
+		}
+	case cluster.KillDiscardedMySQL():
+		mysqldErr = tablet.MysqlctlProcess.Kill()
+	default:
+		mysqldErr = tablet.MysqlctlProcess.Stop()
+	}
+	tablet.MysqlctlProcess.CleanupFiles(tablet.TabletUID)
+	if err := errors.Join(vttabletErr, mysqldErr); err != nil {
+		return fmt.Errorf("stopping tablet %s: %w", tablet.Alias, err)
+	}
 	return nil
 }
 
@@ -566,7 +728,7 @@ func primaryBackup(t *testing.T) {
 
 	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
 
-	// Re-init the shard -- making the original primary tablet (primary) primary again -- for subsequent tests
+	// Re-init the shard, making the original primary tablet (primary) primary again
 	err = localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
 	require.NoError(t, err)
 
@@ -574,12 +736,6 @@ func primaryBackup(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 1)
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
-	require.NoError(t, err)
-
-	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
-	require.NoError(t, err)
-
-	restartPrimaryAndReplica(t)
 }
 
 // Check that a replica and primary both restored from the same backup
@@ -637,9 +793,6 @@ func primaryReplicaSameBackup(t *testing.T) {
 	verifyRestoreTablet(t, replica1, "SERVING")
 
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 4)
-	err = replica2.VttabletProcess.TearDown()
-	require.NoError(t, err)
-	restartPrimaryAndReplica(t)
 }
 
 // Test a primary and replica from the same backup.
@@ -649,11 +802,6 @@ func primaryReplicaSameBackup(t *testing.T) {
 func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
-
-	// TODO: The following Sleep in introduced as it seems like the previous step doesn't fully complete, causing
-	// this test to be flaky. Sleep seems to solve the problem. Need to fix this in a better way and Wait for
-	// previous test to complete (suspicion: MySQL does not fully start)
-	time.Sleep(5 * time.Second)
 
 	// backup the replica
 	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
@@ -716,9 +864,6 @@ func primaryReplicaSameBackupModifiedCompressionEngine(t *testing.T) {
 	// Force replica2 to restore from backup.
 	verifyRestoreTablet(t, replica2, "SERVING")
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 4)
-	err = replica2.VttabletProcess.TearDown()
-	require.NoError(t, err)
-	restartPrimaryAndReplica(t)
 }
 
 func restoreOldPrimaryByRestart(t *testing.T) {
@@ -741,11 +886,6 @@ func restoreOldPrimaryInPlace(t *testing.T) {
 func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
-
-	// TODO: The following Sleep in introduced as it seems like the previous step doesn't fully complete, causing
-	// this test to be flaky. Sleep seems to solve the problem. Need to fix this in a better way and Wait for
-	// previous test to complete (suspicion: MySQL does not fully start)
-	time.Sleep(5 * time.Second)
 
 	// backup the replica
 	err := localCluster.VtctldClientProcess.ExecuteCommand("Backup", replica1.Alias)
@@ -773,9 +913,6 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
 
 	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
-
-	// teardown
-	restartPrimaryAndReplica(t)
 }
 
 func restoreUsingRestart(t *testing.T, tablet *cluster.Vttablet) {
@@ -789,65 +926,9 @@ func restoreInPlace(t *testing.T, tablet *cluster.Vttablet) {
 	require.NoError(t, err)
 }
 
-func restartPrimaryAndReplica(t *testing.T) {
-	// Stop all primary, replica tablet and mysql instance
-	stopAllTablets()
-
-	// remove all backups
-	localCluster.RemoveAllBackups(t, shardKsName)
-	// start all tablet and mysql instances
-	var mysqlProcs []*exec.Cmd
-	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
-		if tablet.MysqlctldProcess.TabletUID > 0 {
-			err := tablet.MysqlctldProcess.Start()
-			require.NoErrorf(t, err, "error while starting mysqlctld, tabletUID %v", tablet.TabletUID)
-			continue
-		}
-		proc, _ := tablet.MysqlctlProcess.StartProcess()
-		mysqlProcs = append(mysqlProcs, proc)
-	}
-	for _, proc := range mysqlProcs {
-		proc.Wait()
-	}
-	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
-		err := localCluster.InitTablet(tablet, keyspaceName, shardName)
-		require.NoError(t, err)
-		err = tablet.VttabletProcess.Setup()
-		require.NoError(t, err)
-	}
-	err := localCluster.VtctldClientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
-	require.NoError(t, err)
-}
-
-func stopAllTablets() {
-	var mysqlProcs []*exec.Cmd
-	for _, tablet := range []*cluster.Vttablet{primary, replica1, replica2} {
-		tablet.VttabletProcess.TearDown()
-		if tablet.MysqlctldProcess.TabletUID > 0 {
-			tablet.MysqlctldProcess.Stop()
-			localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias)
-			continue
-		}
-		proc, _ := tablet.MysqlctlProcess.StopProcess()
-		mysqlProcs = append(mysqlProcs, proc)
-		localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", "--allow-primary", tablet.Alias)
-	}
-	for _, proc := range mysqlProcs {
-		proc.Wait()
-	}
-	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
-		os.RemoveAll(tablet.VttabletProcess.Directory)
-	}
-}
-
 func terminatedRestore(t *testing.T) {
 	// insert data on primary, wait for replica to get it
 	verifyInitialReplication(t)
-
-	// TODO: The following Sleep in introduced as it seems like the previous step doesn't fully complete, causing
-	// this test to be flaky. Sleep seems to solve the problem. Need to fix this in a better way and Wait for
-	// previous test to complete (suspicion: MySQL does not fully start)
-	time.Sleep(5 * time.Second)
 
 	require.NoError(t, checkTabletType(replica1.Alias, topodata.TabletType_REPLICA))
 	terminateBackup(t, replica1.Alias)
@@ -889,8 +970,6 @@ func terminatedRestore(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
 
 	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
-
-	stopAllTablets()
 }
 
 // checkTabletType returns an error instead of asserting, so callers running in
@@ -1031,13 +1110,6 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	}
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
-	err = replica2.VttabletProcess.TearDown()
-	require.NoError(t, err)
-
-	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
-	require.NoError(t, err)
-	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
-	require.NoError(t, err)
 }
 
 // backupShardWithBinlogs takes a BackupShard --include-binlogs backup and brings up
@@ -1049,9 +1121,6 @@ func backupShardWithBinlogs(t *testing.T) {
 		t.Skip("--include-binlogs is only supported by the builtin backup engine")
 	}
 	verifyInitialReplication(t)
-	// BackupShard picks the backup source itself, and replica2 is still running when
-	// this test runs on its own. Leave replica1 as the only candidate.
-	require.NoError(t, replica2.VttabletProcess.TearDown())
 
 	// The rows inserted from here on are binlogged before the backup's position.
 	streamFrom := replication.Position{GTIDSet: getGTIDSet(t, primary, "gtid_executed")}
@@ -1090,12 +1159,6 @@ func backupShardWithBinlogs(t *testing.T) {
 	verifyVStream(t, replica2, streamFrom, msgs[1:])
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
-	err = replica2.VttabletProcess.TearDown()
-	require.NoError(t, err)
-	err = localCluster.VtctldClientProcess.ExecuteCommand("DeleteTablets", replica2.Alias)
-	require.NoError(t, err)
-	_, err = primary.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
-	require.NoError(t, err)
 }
 
 // backupShardPrefersRdonly runs BackupShard with --tablet-types=rdonly,replica while the shard has replica1 as a REPLICA and replica2 as a RDONLY.
@@ -2097,9 +2160,8 @@ func TestRestoreAllowedBackupEngines(t *testing.T) {
 // This is a regression test for a bug where the hook was launched in a
 // goroutine that was killed by os.Exit(1) before it could complete.
 func testRestoreDoneHookOnFailure(t *testing.T) {
-	// Ensure a clean cluster state — preceding tests (e.g., terminatedRestore)
-	// may have torn down all tablets.
-	restartPrimaryAndReplica(t)
+	// replica3 restores from the backup below, which needs a running mysqld.
+	require.NoError(t, startMySQLs(replica3))
 
 	// 1. Install a vttablet_restore_done hook that writes env vars to a file.
 	vtroot := os.Getenv("VTROOT")
@@ -2178,7 +2240,4 @@ func testRestoreDoneHookOnFailure(t *testing.T) {
 	case MySQLShell:
 		assert.Contains(t, output, "TM_RESTORE_DATA_BACKUP_ENGINE=mysqlshell")
 	}
-
-	// Clean up: remove all backups so other tests aren't affected.
-	localCluster.RemoveAllBackups(t, shardKsName)
 }
