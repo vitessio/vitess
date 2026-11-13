@@ -611,13 +611,64 @@ func TestLockSurvivesEtcdRestart(t *testing.T) {
 	assert.Zero(t, warnings.Load())
 }
 
-// TestKeepAliveStops checks that keepAlive returns, once the etcd client has
-// given up on the lease's KeepAlive, when the lease is gone, when the lock is
-// released and when the client is closed, and that it warns only about the
-// first.
+// TestKeepAliveStops checks that a lock's KeepAlive stops when the lock is
+// released or its acquisition fails. It also checks that keepAlive returns,
+// once the etcd client has given up on the lease's KeepAlive, when the lease is
+// gone, when the lock is released and when the client is closed, and that it
+// warns only about the first.
 func TestKeepAliveStops(t *testing.T) {
 	addr, stop, start := startRestartableEtcd(t)
 	warnings := countLeaseExpiredWarnings(t)
+
+	// lockStopsKeepAlive runs lockFn on a Server whose lease's KeepAlive is
+	// recorded, and checks that the KeepAlive was stopped when lockFn returned.
+	lockStopsKeepAlive := func(t *testing.T, lockFn func(s *Server)) {
+		s, err := NewServer(addr, "/test")
+		require.NoError(t, err)
+		t.Cleanup(s.Close)
+		lease := &recordKeepAlive{Lease: s.cli.Lease, ctxs: make(chan context.Context, 1)}
+		s.cli.Lease = lease
+
+		lockFn(s)
+		select {
+		case ctx := <-lease.ctxs:
+			require.Error(t, ctx.Err(), "the lease's KeepAlive is still running")
+		default:
+			require.FailNow(t, "no KeepAlive was started")
+		}
+	}
+
+	t.Run("lock released", func(t *testing.T) {
+		lockStopsKeepAlive(t, func(s *Server) {
+			ld, err := s.lock(t.Context(), "keyspaces/released", "holder", 30, true)
+			require.NoError(t, err)
+			require.NoError(t, ld.Unlock(t.Context()))
+		})
+	})
+
+	t.Run("lock file not created", func(t *testing.T) {
+		lockStopsKeepAlive(t, func(s *Server) {
+			// The etcd client refuses to send a request this large.
+			_, err := s.lock(t.Context(), "keyspaces/too-large", strings.Repeat("x", 2<<20), 30, true)
+			require.Error(t, err)
+		})
+	})
+
+	t.Run("wait for the lock failed", func(t *testing.T) {
+		holder, err := NewServer(addr, "/test")
+		require.NoError(t, err)
+		t.Cleanup(holder.Close)
+		ld, err := holder.lock(t.Context(), "keyspaces/held", "holder", 30, true)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = ld.Unlock(context.Background()) })
+
+		lockStopsKeepAlive(t, func(s *Server) {
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+			defer cancel()
+			_, err := s.lock(ctx, "keyspaces/held", "waiter", 30, true)
+			require.Error(t, err)
+		})
+	})
 
 	// run starts keepAlive with a KeepAlive the etcd client gave up on.
 	run := func(ctx context.Context, s *Server, cli *clientv3.Client, leaseID clientv3.LeaseID) chan struct{} {
@@ -700,6 +751,17 @@ func TestKeepAliveStops(t *testing.T) {
 		requireReturns(t, returned)
 		assert.Zero(t, warnings.Load())
 	})
+}
+
+// recordKeepAlive sends the context of each KeepAlive it starts to ctxs.
+type recordKeepAlive struct {
+	clientv3.Lease
+	ctxs chan context.Context
+}
+
+func (l *recordKeepAlive) KeepAlive(ctx context.Context, id clientv3.LeaseID) (<-chan *clientv3.LeaseKeepAliveResponse, error) {
+	l.ctxs <- ctx
+	return l.Lease.KeepAlive(ctx, id)
 }
 
 // leaseNotFoundOnCancel's KeepAliveOnce waits for ctx to end, then reports the
