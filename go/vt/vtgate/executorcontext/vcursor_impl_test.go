@@ -266,8 +266,10 @@ func TestFirstSortedKeyspace(t *testing.T) {
 	require.Equal(t, ks3Schema.Keyspace, ks)
 }
 
-// TestSetExecQueryTimeout tests the SetExecQueryTimeout method.
-// Validates the timeout value is set based on override rule.
+// TestSetExecQueryTimeout checks that the statement's timeout is the
+// QUERY_TIMEOUT_MS directive, otherwise the session's or the default query
+// timeout, and that the calls to vttablet send it without the session keeping
+// it.
 func TestSetExecQueryTimeout(t *testing.T) {
 	safeSession := NewSafeSession(nil)
 	vc, err := NewVCursorImpl(safeSession, sqlparser.MarginComments{}, nil, nil, nil, &vindexes.VSchema{}, nil, nil, fakeObserver{}, VCursorConfig{
@@ -276,39 +278,52 @@ func TestSetExecQueryTimeout(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	vc.SetExecQueryTimeout(nil)
+	// sentTimeout applies the directive to the statement and returns the
+	// timeout that its calls to vttablet send.
+	sentTimeout := func(timeout *int) *querypb.ExecuteOptions_AuthoritativeTimeout {
+		t.Helper()
+		vc.SetExecQueryTimeout(timeout)
+		vc.SetStatementOptions(t.Context(), sqlparser.QueryHints{Timeout: timeout})
+		require.Nil(t, safeSession.GetOptions().GetTimeout(), "the session kept the timeout")
+		options := ExecuteOptions(WithStatementOptions(t.Context(), vc.StatementOptions()), safeSession)
+		if options.GetTimeout() == nil {
+			return nil
+		}
+		return options.Timeout.(*querypb.ExecuteOptions_AuthoritativeTimeout)
+	}
+
+	timeout := sentTimeout(nil)
 	require.Equal(t, 20*time.Millisecond, vc.queryTimeout)
-	require.NotNil(t, safeSession.Options.Timeout)
-	require.EqualValues(t, 20, safeSession.Options.GetAuthoritativeTimeout())
+	require.NotNil(t, timeout)
+	require.EqualValues(t, 20, timeout.AuthoritativeTimeout)
 
 	// session timeout
 	safeSession.SetQueryTimeout(40)
-	vc.SetExecQueryTimeout(nil)
+	timeout = sentTimeout(nil)
 	require.Equal(t, 40*time.Millisecond, vc.queryTimeout)
-	require.NotNil(t, safeSession.Options.Timeout)
-	require.EqualValues(t, 40, safeSession.Options.GetAuthoritativeTimeout())
+	require.NotNil(t, timeout)
+	require.EqualValues(t, 40, timeout.AuthoritativeTimeout)
 
 	// query hint timeout
 	timeoutQueryHint := 60
-	vc.SetExecQueryTimeout(&timeoutQueryHint)
+	timeout = sentTimeout(&timeoutQueryHint)
 	require.Equal(t, 60*time.Millisecond, vc.queryTimeout)
-	require.NotNil(t, safeSession.Options.Timeout)
-	require.EqualValues(t, 60, safeSession.Options.GetAuthoritativeTimeout())
+	require.NotNil(t, timeout)
+	require.EqualValues(t, 60, timeout.AuthoritativeTimeout)
 
 	// query hint timeout - infinite
 	timeoutQueryHint = 0
-	vc.SetExecQueryTimeout(&timeoutQueryHint)
+	timeout = sentTimeout(&timeoutQueryHint)
 	require.Equal(t, 0*time.Millisecond, vc.queryTimeout)
-	require.NotNil(t, safeSession.Options.Timeout)
-	require.EqualValues(t, 0, safeSession.Options.GetAuthoritativeTimeout())
+	require.NotNil(t, timeout)
+	require.EqualValues(t, 0, timeout.AuthoritativeTimeout)
 
 	// reset flag timeout
 	vc.config.QueryTimeout = 0
 	safeSession.SetQueryTimeout(0)
-	vc.SetExecQueryTimeout(nil)
+	timeout = sentTimeout(nil)
 	require.Equal(t, 0*time.Millisecond, vc.queryTimeout)
-	// this should be reset.
-	require.Nil(t, safeSession.Options.Timeout)
+	require.Nil(t, timeout)
 }
 
 func TestRecordMirrorStats(t *testing.T) {
@@ -505,7 +520,9 @@ func TestAllowCrossKeyspaceReads(t *testing.T) {
 	}
 }
 
-func TestSetPriority(t *testing.T) {
+// TestSetStatementOptionsPriority checks that the statement's priority is
+// clamped to the valid range, and that the session doesn't keep it.
+func TestSetStatementOptionsPriority(t *testing.T) {
 	tests := []struct {
 		name         string
 		priority     string
@@ -553,24 +570,19 @@ func TestSetPriority(t *testing.T) {
 			vc := &VCursorImpl{
 				SafeSession: NewSafeSession(&vtgatepb.Session{}),
 			}
-			vc.SetPriority(tc.priority)
-			if tc.wantPriority == "" {
-				if vc.SafeSession.Options != nil {
-					require.Empty(t, vc.SafeSession.Options.Priority)
-				}
-			} else {
-				require.Equal(t, tc.wantPriority, vc.SafeSession.Options.Priority)
-			}
+			vc.SetStatementOptions(t.Context(), sqlparser.QueryHints{Priority: tc.priority})
+			require.Equal(t, tc.wantPriority, vc.StatementOptions().Priority)
+			require.Nil(t, vc.SafeSession.Options)
 		})
 	}
 }
 
 func TestGetQueryPriority(t *testing.T) {
 	tests := []struct {
-		name       string
-		options    *querypb.ExecuteOptions
-		wantResult int
-		wantErr    string
+		name              string
+		options           *querypb.ExecuteOptions
+		statementPriority string
+		wantResult        int
 	}{
 		{
 			name:       "nil options",
@@ -608,9 +620,26 @@ func TestGetQueryPriority(t *testing.T) {
 			wantResult: 100,
 		},
 		{
-			name:    "invalid priority",
-			options: &querypb.ExecuteOptions{Priority: "not_a_number"},
-			wantErr: "invalid query priority",
+			name:       "invalid priority is ignored",
+			options:    &querypb.ExecuteOptions{Priority: "not_a_number"},
+			wantResult: 0,
+		},
+		{
+			name:              "statement priority replaces an invalid session priority",
+			options:           &querypb.ExecuteOptions{Priority: "not_a_number"},
+			statementPriority: "30",
+			wantResult:        30,
+		},
+		{
+			name:              "statement priority without session options",
+			statementPriority: "30",
+			wantResult:        30,
+		},
+		{
+			name:              "statement priority replaces the session's",
+			options:           &querypb.ExecuteOptions{Priority: "50"},
+			statementPriority: "30",
+			wantResult:        30,
 		},
 	}
 
@@ -621,13 +650,68 @@ func TestGetQueryPriority(t *testing.T) {
 					Options: tc.options,
 				}),
 			}
+			vc.SetStatementOptions(t.Context(), sqlparser.QueryHints{Priority: tc.statementPriority})
 			result, err := vc.GetQueryPriority()
-			if tc.wantErr != "" {
-				require.ErrorContains(t, err, tc.wantErr)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tc.wantResult, result)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tc.wantResult, result)
+		})
+	}
+}
+
+// TestClonesKeepStatementPriority checks that the vcursors that VTGate clones
+// for a statement's mirrored queries, warming reads and standalone primitives
+// keep the statement's priority, which their own warming reads are weighed by.
+func TestClonesKeepStatementPriority(t *testing.T) {
+	vc := &VCursorImpl{
+		SafeSession: NewSafeSession(&vtgatepb.Session{
+			Options: &querypb.ExecuteOptions{Priority: "50"},
+		}),
+	}
+	vc.SetStatementOptions(t.Context(), sqlparser.QueryHints{Priority: "30"})
+
+	clones := []struct {
+		name string
+		vc   engine.VCursor
+	}{
+		{name: "mirroring", vc: vc.CloneForMirroring(t.Context())},
+		{name: "replica warming", vc: vc.CloneForReplicaWarming(t.Context())},
+		{name: "autocommit", vc: vc.cloneWithAutocommitSession()},
+	}
+	for _, clone := range clones {
+		t.Run(clone.name, func(t *testing.T) {
+			priority, err := clone.vc.GetQueryPriority()
+			require.NoError(t, err)
+			require.Equal(t, 30, priority)
+		})
+	}
+}
+
+// TestClonesKeepRequestDirectives checks that the vcursors that VTGate clones
+// for a statement's mirrored queries, warming reads and standalone primitives
+// put the statement's request-only comment directive blocks back into the
+// queries that they send.
+func TestClonesKeepRequestDirectives(t *testing.T) {
+	const sql = "select /*vt+ WORKLOAD_NAME=w1 PRIORITY=10 */ id from t"
+	stmt, err := sqlparser.NewTestParser().Parse(sql)
+	require.NoError(t, err)
+	vc := &VCursorImpl{SafeSession: NewSafeSession(&vtgatepb.Session{})}
+	vc.SetRequestDirectives(sqlparser.ReplaceRequestDirectives(stmt))
+	query := sqlparser.String(stmt)
+	require.Contains(t, query, sqlparser.DirectiveRequestDirectives)
+
+	clones := []struct {
+		name string
+		vc   engine.VCursor
+	}{
+		{name: "mirroring", vc: vc.CloneForMirroring(t.Context())},
+		{name: "replica warming", vc: vc.CloneForReplicaWarming(t.Context())},
+		{name: "autocommit", vc: vc.cloneWithAutocommitSession()},
+	}
+	for _, clone := range clones {
+		t.Run(clone.name, func(t *testing.T) {
+			got := clone.vc.(*VCursorImpl).outgoingQuery(query)
+			require.Contains(t, got, "select /*vt+ WORKLOAD_NAME=w1 PRIORITY=10 */ id from t")
+			require.NotContains(t, got, sqlparser.DirectiveRequestDirectives)
 		})
 	}
 }

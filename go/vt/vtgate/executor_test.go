@@ -25,6 +25,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -61,12 +62,14 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
+	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
 type fakeResolver struct {
@@ -108,23 +111,23 @@ func TestPlanKey(t *testing.T) {
 
 	tests := []testCase{{
 		targetString:          "",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, RequestDirectives: false",
 	}, {
 		setVarComment:         "sEtVaRcOmMeNt",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: , Query: SELECT 1, SetVarComment: sEtVaRcOmMeNt, Collation: 255, RequestDirectives: false",
 	}, {
 		targetString:          "ks1@replica",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: REPLICA, Destination: , Query: SELECT 1, SetVarComment: , Collation: 255, RequestDirectives: false",
 	}, {
 		targetString:          "ks1:-80",
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: DestinationShard(-80), Query: SELECT 1, SetVarComment: , Collation: 255, RequestDirectives: false",
 	}, {
 		targetString: "ks1[deadbeef]",
 		resolvedShard: []*srvtopo.ResolvedShard{
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "-66"}},
 			{Target: &querypb.Target{Keyspace: "ks1", Shard: "66-"}},
 		},
-		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255",
+		expectedPlanPrefixKey: "CurrentKeyspace: ks1, TabletType: PRIMARY, Destination: -66,66-, Query: SELECT 1, SetVarComment: , Collation: 255, RequestDirectives: false",
 	}}
 	cfg := econtext.VCursorConfig{
 		Collation:         collations.CollationUtf8mb4ID,
@@ -1912,16 +1915,290 @@ func TestGetPlanPriority(t *testing.T) {
 
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
 
-			plan, _, _, err := r.fetchOrCreatePlan(t.Context(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+			plan, vcursor, _, err := r.fetchOrCreatePlan(t.Context(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
 			if testCase.expectedError != nil {
 				assert.ErrorIs(t, err, testCase.expectedError)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, testCase.expectedPriority, plan.QueryHints.Priority)
-				assert.Equal(t, testCase.expectedPriority, session.Options.Priority)
+				assert.Equal(t, testCase.expectedPriority, vcursor.StatementOptions().Priority)
+				assert.Empty(t, session.Options.Priority)
 			}
 		})
 	}
+}
+
+// TestStatementDirectivesApplyToTheirStatement checks that the execute
+// options that a statement's comment directives set apply to that statement
+// only, whether VTGate executes it, streams it or takes an advisory lock for
+// it: the statements before and after it on the session use the session's own
+// options.
+func TestStatementDirectivesApplyToTheirStatement(t *testing.T) {
+	executor, sbc1, _, _, ctx := createExecutorEnv(t)
+	sessionOptions := &querypb.ExecuteOptions{
+		WorkloadName: "app",
+		Priority:     "10",
+		Consolidator: querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
+	}
+	session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary", Options: sessionOptions.CloneVT()})
+
+	tests := []struct {
+		sql          string
+		stream       bool
+		workloadName string
+		priority     string
+		consolidator querypb.ExecuteOptions_Consolidator
+	}{{
+		sql:          "select id from user where id = 1",
+		workloadName: "app",
+		priority:     "10",
+		consolidator: querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
+	}, {
+		sql:          "select /*vt+ WORKLOAD_NAME=report PRIORITY=50 CONSOLIDATOR=enabled */ id from user where id = 1",
+		workloadName: "report",
+		priority:     "50",
+		consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
+	}, {
+		sql:          "select id from user where id = 1",
+		workloadName: "app",
+		priority:     "10",
+		consolidator: querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
+	}, {
+		sql:          "select /*vt+ WORKLOAD_NAME=stream PRIORITY=40 CONSOLIDATOR=enabled */ id from user where id = 1",
+		stream:       true,
+		workloadName: "stream",
+		priority:     "40",
+		consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
+	}, {
+		sql:          "select id from user where id = 1",
+		stream:       true,
+		workloadName: "app",
+		priority:     "10",
+		consolidator: querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
+	}, {
+		sql:          "select /*vt+ WORKLOAD_NAME=lock PRIORITY=60 */ get_lock('lock name', 10) from dual",
+		workloadName: "lock",
+		priority:     "60",
+		consolidator: querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
+	}, {
+		sql:          "select id from user where id = 1",
+		workloadName: "app",
+		priority:     "10",
+		consolidator: querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
+	}}
+	for _, tc := range tests {
+		sbc1.ClearOptions()
+		var err error
+		if tc.stream {
+			err = executor.StreamExecute(ctx, nil, "TestExecuteStream", session, tc.sql, nil, false, func(*sqltypes.Result) error { return nil })
+		} else {
+			_, err = executorExecSession(ctx, executor, session, tc.sql, nil)
+		}
+		require.NoError(t, err)
+
+		options := sbc1.GetOptions()
+		require.Len(t, options, 1, tc.sql)
+		assert.Equal(t, tc.workloadName, options[0].GetWorkloadName(), tc.sql)
+		assert.Equal(t, tc.priority, options[0].GetPriority(), tc.sql)
+		assert.Equal(t, tc.consolidator, options[0].GetConsolidator(), tc.sql)
+	}
+	assert.Truef(t, proto.Equal(sessionOptions, session.Options), "session options changed to %v", session.Options)
+}
+
+// TestNestedStatementsKeepStatementOptions checks that the statements that
+// VTGate runs on a statement's behalf use the statement's execute options, and
+// that they don't change the options of the statement's own queries.
+func TestNestedStatementsKeepStatementOptions(t *testing.T) {
+	tests := []struct {
+		name string
+		// inTransaction runs sql in a transaction, where a DML that reaches
+		// several shards first takes a savepoint.
+		inTransaction bool
+		sql           string
+		// delayShard1 makes the first shard answer after the statement's
+		// timeout, so that VTGate reverts the DML on the other one.
+		delayShard1 bool
+		// failShard1 makes the DML fail on the first shard, so that VTGate
+		// reverts it on the other one on the statement's own context.
+		failShard1 bool
+		// nested is a query that VTGate runs on the statement's behalf.
+		nested string
+		// timeouts are the authoritative timeouts of the queries that start
+		// with each key.
+		timeouts map[string]int64
+	}{{
+		name:   "lookup vindex insert",
+		sql:    "insert /*vt+ WORKLOAD_NAME=load PRIORITY=50 */ into user(id, v, name) values (1, 2, 'myname')",
+		nested: "insert into name_user_map",
+	}, {
+		name:          "savepoint",
+		inTransaction: true,
+		sql:           "update /*vt+ WORKLOAD_NAME=load PRIORITY=50 */ user set a = 2",
+		nested:        "savepoint",
+	}, {
+		name:          "revert after the statement timed out",
+		inTransaction: true,
+		sql:           "update /*vt+ WORKLOAD_NAME=load PRIORITY=50 QUERY_TIMEOUT_MS=50 */ user set a = 2",
+		delayShard1:   true,
+		nested:        "rollback to",
+		// The revert doesn't get the timeout that the statement ran out of.
+		timeouts: map[string]int64{"update": 50, "rollback to": 0},
+	}, {
+		name:          "revert after a shard failed",
+		inTransaction: true,
+		sql:           "update /*vt+ WORKLOAD_NAME=load PRIORITY=50 QUERY_TIMEOUT_MS=10000 */ user set a = 2",
+		failShard1:    true,
+		nested:        "rollback to",
+		// A revert on the statement's own context keeps its timeout, as the
+		// savepoint does.
+		timeouts: map[string]int64{"update": 10000, "savepoint": 10000, "rollback to": 10000},
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			executor, sbc1, sbc2, sbclookup, ctx := createExecutorEnv(t)
+			session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+			if tc.inTransaction {
+				session = econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@primary"})
+				_, err := executorExecSession(ctx, executor, session, "begin", nil)
+				require.NoError(t, err)
+			}
+			if tc.delayShard1 {
+				sbc1.ExecDelayResponse = time.Second
+			}
+			if tc.failShard1 {
+				sbc1.MustFailExecute[sqlparser.StmtUpdate] = 1
+			}
+
+			_, err := executorExecSession(ctx, executor, session, tc.sql, nil)
+			if tc.delayShard1 || tc.failShard1 {
+				require.ErrorContains(t, err, vterrors.RevertedPartialExec)
+			} else {
+				require.NoError(t, err)
+			}
+
+			var queries []string
+			for _, sbc := range []*sandboxconn.SandboxConn{sbc1, sbc2, sbclookup} {
+				options := sbc.GetOptions()
+				require.Len(t, options, len(sbc.GetQueries()))
+				for i, q := range sbc.GetQueries() {
+					queries = append(queries, q.Sql)
+					assert.Equal(t, "load", options[i].GetWorkloadName(), q.Sql)
+					assert.Equal(t, "50", options[i].GetPriority(), q.Sql)
+					for prefix, timeout := range tc.timeouts {
+						if strings.HasPrefix(q.Sql, prefix) {
+							assert.Equal(t, timeout, options[i].GetAuthoritativeTimeout(), q.Sql)
+						}
+					}
+				}
+			}
+			assert.True(t, slices.ContainsFunc(queries, func(q string) bool { return strings.HasPrefix(q, tc.nested) }), "no %q in %v", tc.nested, queries)
+		})
+	}
+}
+
+// TestPreparedStatementDirectives checks that the comment directives of a
+// prepared statement apply to its execution, and that the session doesn't
+// keep them. VTGate looks up the plan of a binary protocol prepared statement
+// by the statement's text, and the execution sends the statement's directive
+// block. VTGate plans the prepared text again for each SQL EXECUTE.
+func TestPreparedStatementDirectives(t *testing.T) {
+	t.Run("binary protocol", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		session := &vtgatepb.Session{TargetString: "@primary", Autocommit: true}
+		sql := "select /*vt+ WORKLOAD_NAME=report PRIORITY=50 */ id from user where id = :v1"
+		bv := map[string]*querypb.BindVariable{"v1": sqltypes.Int64BindVariable(1)}
+
+		_, _, err := executorPrepare(ctx, executor, session, sql)
+		require.NoError(t, err)
+		options := sbc1.GetOptions()
+		require.Len(t, options, 1)
+		assert.Equal(t, "report", options[0].GetWorkloadName())
+		assert.Equal(t, "50", options[0].GetPriority())
+		require.Eventually(t, func() bool {
+			cached := false
+			executor.ForEachPlan(func(p *engine.Plan) bool {
+				cached = cached || strings.Contains(p.Original, "WORKLOAD_NAME=report")
+				return true
+			})
+			return cached
+		}, 30*time.Second, 10*time.Millisecond)
+
+		logChan := executor.queryLogger.Subscribe("Test")
+		t.Cleanup(func() { executor.queryLogger.Unsubscribe(logChan) })
+		sbc1.ClearOptions()
+		sbc1.ClearQueries()
+		_, err = executor.Execute(ctx, nil, "TestExecute", econtext.NewSafeSession(session), sql, bv, true)
+		require.NoError(t, err)
+
+		queries := sbc1.GetQueries()
+		require.Len(t, queries, 1)
+		assert.Contains(t, queries[0].Sql, "/*vt+ WORKLOAD_NAME=report PRIORITY=50 */")
+		assert.NotContains(t, queries[0].Sql, sqlparser.DirectiveRequestDirectives)
+
+		options = sbc1.GetOptions()
+		require.Len(t, options, 1)
+		assert.Equal(t, "report", options[0].GetWorkloadName())
+		assert.Equal(t, "50", options[0].GetPriority())
+		logStats := testQueryLog(t, executor, logChan, "TestExecute", "SELECT", sql, 1)
+		assert.True(t, logStats.CachedPlan)
+		assert.Nil(t, session.Options)
+	})
+
+	t.Run("SQL PREPARE and EXECUTE", func(t *testing.T) {
+		executor, sbc1, _, _, ctx := createExecutorEnv(t)
+		session := econtext.NewAutocommitSession(&vtgatepb.Session{TargetString: "@primary"})
+		for _, sql := range []string{
+			"prepare s1 from 'select /*vt+ WORKLOAD_NAME=a PRIORITY=10 QUERY_TIMEOUT_MS=1000 */ id from user where id = 1'",
+			"prepare s2 from 'select /*vt+ WORKLOAD_NAME=b PRIORITY=20 CONSOLIDATOR=enabled */ id from user where id = 1'",
+			"prepare s3 from 'select /*vt+ WORKLOAD_NAME=c */ id from user where id = ?'",
+			"set @id = 1",
+		} {
+			_, err := executorExecSession(ctx, executor, session, sql, nil)
+			require.NoError(t, err)
+		}
+
+		tests := []struct {
+			sql          string
+			stream       bool
+			workloadName string
+			priority     string
+			consolidator querypb.ExecuteOptions_Consolidator
+			timeout      int64
+		}{
+			{sql: "execute s1", workloadName: "a", priority: "10", timeout: 1000},
+			{sql: "execute s2", workloadName: "b", priority: "20", consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED},
+			{sql: "execute s1", workloadName: "a", priority: "10", timeout: 1000},
+			{sql: "execute s3 using @id", workloadName: "c"},
+			{sql: "execute s2", stream: true, workloadName: "b", priority: "20", consolidator: querypb.ExecuteOptions_CONSOLIDATOR_ENABLED},
+			{sql: "select id from user where id = 1"},
+		}
+		for _, tc := range tests {
+			sbc1.ClearOptions()
+			sbc1.ClearQueries()
+			var err error
+			if tc.stream {
+				err = executor.StreamExecute(ctx, nil, "TestExecuteStream", session, tc.sql, nil, false, func(*sqltypes.Result) error { return nil })
+			} else {
+				_, err = executorExecSession(ctx, executor, session, tc.sql, nil)
+			}
+			require.NoError(t, err, tc.sql)
+
+			queries := sbc1.GetQueries()
+			require.Len(t, queries, 1, tc.sql)
+			if tc.workloadName != "" {
+				assert.Contains(t, queries[0].Sql, "WORKLOAD_NAME="+tc.workloadName, tc.sql)
+			}
+			assert.NotContains(t, queries[0].Sql, sqlparser.DirectiveRequestDirectives, tc.sql)
+
+			options := sbc1.GetOptions()
+			require.Len(t, options, 1, tc.sql)
+			assert.Equal(t, tc.workloadName, options[0].GetWorkloadName(), tc.sql)
+			assert.Equal(t, tc.priority, options[0].GetPriority(), tc.sql)
+			assert.Equal(t, tc.consolidator, options[0].GetConsolidator(), tc.sql)
+			assert.Equal(t, tc.timeout, options[0].GetAuthoritativeTimeout(), tc.sql)
+		}
+		assert.Nil(t, session.Options)
+	})
 }
 
 func TestPassthroughDDL(t *testing.T) {

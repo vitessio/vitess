@@ -186,6 +186,15 @@ type (
 		queryTimeout        time.Duration
 		transactionTimeout  time.Duration
 
+		// statementOptions are the execute options that the statement's comment
+		// directives set.
+		statementOptions *StatementOptions
+
+		// requestDirectives are the statement's request-only comment directive
+		// blocks, which the queries that VTGate generates from the plan carry as
+		// marker blocks.
+		requestDirectives *sqlparser.RequestDirectives
+
 		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 
 		observer ResultsObserver
@@ -330,6 +339,8 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		statementOptions:    vc.statementOptions,
+		requestDirectives:   vc.requestDirectives,
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
 		semTable:            vc.semTable,
@@ -357,6 +368,8 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		statementOptions:    vc.statementOptions,
+		requestDirectives:   vc.requestDirectives,
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
 		semTable:            vc.semTable,
@@ -401,6 +414,9 @@ func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 		vm:         vc.vm,
 		topoServer: vc.topoServer,
 		observer:   vc.observer,
+
+		statementOptions:  vc.statementOptions,
+		requestDirectives: vc.requestDirectives,
 	}
 }
 
@@ -923,7 +939,7 @@ func (vc *VCursorImpl) ExecuteMultiShard(ctx context.Context, primitive engine.P
 		return nil, []error{err}
 	}
 
-	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
+	qr, errs := vc.executor.ExecuteMultiShard(ctx, primitive, rss, vc.outgoingQueries(queries), vc.SafeSession, canAutocommit, vc.ignoreMaxMemoryRows, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 	vc.logShardsQueried(primitive, len(rss))
 	if qr != nil && qr.InsertIDUpdated() {
@@ -946,7 +962,7 @@ func (vc *VCursorImpl) ExecuteMultiShardPerShard(ctx context.Context, primitive 
 	// alias over so each EXPLAIN reaches the same tablet the wrapped query would.
 	standaloneSession := NewAutocommitSession(vc.SafeSession.Session)
 	standaloneSession.SetTargetTabletAlias(vc.SafeSession.GetTargetTabletAlias())
-	results, errs := vc.executor.ExecuteMultiShardPerShard(ctx, primitive, rss, commentedShardQueries(queries, vc.marginComments), standaloneSession, false /* autocommit */, vc.observer, false /* fetchLastInsertID */)
+	results, errs := vc.executor.ExecuteMultiShardPerShard(ctx, primitive, rss, vc.outgoingQueries(queries), standaloneSession, false /* autocommit */, vc.observer, false /* fetchLastInsertID */)
 	vc.logShardsQueried(primitive, len(rss))
 	return results, errs
 }
@@ -962,7 +978,7 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 		return []error{err}
 	}
 
-	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer, fetchLastInsertID)
+	errs := vc.executor.StreamExecuteMulti(ctx, primitive, vc.outgoingQuery(query), rss, bindVars, vc.SafeSession, autocommit, callback, vc.observer, fetchLastInsertID)
 	vc.setRollbackOnPartialExecIfRequired(len(errs) != len(rss), rollbackOnError)
 
 	return errs
@@ -970,7 +986,7 @@ func (vc *VCursorImpl) StreamExecuteMulti(ctx context.Context, primitive engine.
 
 // ExecuteLock is for executing advisory lock statements.
 func (vc *VCursorImpl) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedShard, query *querypb.BoundQuery, lockFuncType sqlparser.LockingFuncType) (*sqltypes.Result, error) {
-	query.Sql = vc.marginComments.Leading + query.Sql + vc.marginComments.Trailing
+	query.Sql = vc.outgoingQuery(query.Sql)
 	return vc.executor.ExecuteLock(ctx, rs, query, vc.SafeSession, lockFuncType)
 }
 
@@ -979,7 +995,7 @@ func (vc *VCursorImpl) ExecuteStandalone(ctx context.Context, primitive engine.P
 	rss := []*srvtopo.ResolvedShard{rs}
 	bqs := []*querypb.BoundQuery{
 		{
-			Sql:           vc.marginComments.Leading + query + vc.marginComments.Trailing,
+			Sql:           vc.outgoingQuery(query),
 			BindVariables: bindVars,
 		},
 	}
@@ -1212,14 +1228,23 @@ func (vc *VCursorImpl) TabletType() topodatapb.TabletType {
 	return vc.tabletType
 }
 
-func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {
-	if marginComments.Leading == "" && marginComments.Trailing == "" {
+// outgoingQuery returns query, which VTGate generated from the plan, as it
+// is sent to vttablet: with the statement's request-only directive blocks in
+// place of their markers, and between the statement's margin comments.
+func (vc *VCursorImpl) outgoingQuery(query string) string {
+	return vc.marginComments.Leading + vc.requestDirectives.Restore(query) + vc.marginComments.Trailing
+}
+
+// outgoingQueries returns shardQueries as they are sent to vttablet, as
+// outgoingQuery does for one query.
+func (vc *VCursorImpl) outgoingQueries(shardQueries []*querypb.BoundQuery) []*querypb.BoundQuery {
+	if vc.marginComments.Leading == "" && vc.marginComments.Trailing == "" && vc.requestDirectives == nil {
 		return shardQueries
 	}
 	newQueries := make([]*querypb.BoundQuery, len(shardQueries))
 	for i, v := range shardQueries {
 		newQueries[i] = &querypb.BoundQuery{
-			Sql:           marginComments.Leading + v.Sql + marginComments.Trailing,
+			Sql:           vc.outgoingQuery(v.Sql),
 			BindVariables: v.BindVariables,
 		}
 	}
@@ -1296,47 +1321,25 @@ func (vc *VCursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.SafeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
-func (vc *VCursorImpl) SetPriority(priority string) {
-	if priority != "" {
-		intPriority, err := strconv.Atoi(priority)
-		if err != nil {
-			// On invalid priority input, clear any existing priority to avoid
-			// unintentionally reusing a previous valid priority.
-			if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
-				vc.SafeSession.Options.Priority = ""
-			}
-			return
-		}
-		intPriority = max(0, min(intPriority, sqlparser.MaxPriorityValue))
-		vc.SafeSession.GetOrCreateOptions().Priority = strconv.Itoa(intPriority)
-	} else if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
-		vc.SafeSession.Options.Priority = ""
+// SetExecQueryTimeout sets the timeout for the statement's execution: the
+// QUERY_TIMEOUT_MS directive if the statement has one, otherwise the
+// session's or the default query timeout.
+func (vc *VCursorImpl) SetExecQueryTimeout(timeout *int) {
+	if execTimeout := vc.execQueryTimeout(timeout); execTimeout != nil {
+		vc.queryTimeout = time.Duration(*execTimeout) * time.Millisecond
 	}
 }
 
-func (vc *VCursorImpl) SetExecQueryTimeout(timeout *int) {
-	// Determine the effective timeout: use passed timeout if non-nil, otherwise use session's query timeout if available
-	var execTimeout *int
+// execQueryTimeout returns timeout if it is set, otherwise the session's or
+// the default query timeout, or nil if there is none.
+func (vc *VCursorImpl) execQueryTimeout(timeout *int) *int {
 	if timeout != nil {
-		execTimeout = timeout
-	} else if sessionTimeout := vc.getQueryTimeout(); sessionTimeout > 0 {
-		execTimeout = &sessionTimeout
+		return timeout
 	}
-
-	// If no effective timeout and no session options, return early
-	if execTimeout == nil {
-		if vc.SafeSession.GetOptions() == nil {
-			return
-		}
-		vc.SafeSession.GetOrCreateOptions().Timeout = nil
-		return
+	if sessionTimeout := vc.getQueryTimeout(); sessionTimeout > 0 {
+		return &sessionTimeout
 	}
-
-	vc.queryTimeout = time.Duration(*execTimeout) * time.Millisecond
-	// Set the authoritative timeout using the determined execTimeout
-	vc.SafeSession.GetOrCreateOptions().Timeout = &querypb.ExecuteOptions_AuthoritativeTimeout{
-		AuthoritativeTimeout: int64(*execTimeout),
-	}
+	return nil
 }
 
 // getQueryTimeout returns timeout based on the priority
@@ -1349,20 +1352,37 @@ func (vc *VCursorImpl) getQueryTimeout() int {
 	return vc.config.QueryTimeout
 }
 
-// SetConsolidator implements the SessionActions interface
-func (vc *VCursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
-	// Avoid creating session Options when they do not yet exist and the
-	// consolidator is unspecified.
-	if consolidator == querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED && vc.SafeSession.GetOptions() == nil {
+// SetStatementOptions sets the execute options of the statement from its
+// comment directives. A statement that VTGate runs on another statement's
+// behalf, such as a lookup vindex query, runs with a ctx that carries the
+// other statement's options, and keeps them.
+func (vc *VCursorImpl) SetStatementOptions(ctx context.Context, qh sqlparser.QueryHints) {
+	if opts, ok := StatementOptionsFromContext(ctx); ok {
+		vc.statementOptions = opts
 		return
 	}
-	vc.SafeSession.GetOrCreateOptions().Consolidator = consolidator
+	opts := &StatementOptions{
+		WorkloadName: qh.Workload,
+		// BuildQueryHints has validated the priority.
+		Priority:     normalizePriority(qh.Priority),
+		Consolidator: qh.Consolidator,
+	}
+	if execTimeout := vc.execQueryTimeout(qh.Timeout); execTimeout != nil {
+		timeout := int64(*execTimeout)
+		opts.timeout = &timeout
+	}
+	vc.statementOptions = opts
 }
 
-func (vc *VCursorImpl) SetWorkloadName(workloadName string) {
-	if workloadName != "" {
-		vc.SafeSession.GetOrCreateOptions().WorkloadName = workloadName
-	}
+// StatementOptions returns the execute options of the statement.
+func (vc *VCursorImpl) StatementOptions() *StatementOptions {
+	return vc.statementOptions
+}
+
+// SetRequestDirectives sets the request-only comment directive blocks that
+// the queries generated from the statement's plan carry as marker blocks.
+func (vc *VCursorImpl) SetRequestDirectives(rd *sqlparser.RequestDirectives) {
+	vc.requestDirectives = rd
 }
 
 // SetFoundRows implements the SessionActions interface
@@ -1764,14 +1784,21 @@ func (vc *VCursorImpl) GetWarmingReadsSemaphore() *semaphore.Weighted {
 }
 
 func (vc *VCursorImpl) GetQueryPriority() (int, error) {
-	if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
-		priority, err := strconv.Atoi(vc.SafeSession.Options.Priority)
-		if err != nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", vc.SafeSession.Options.Priority, err)
-		}
-		return max(0, min(priority, sqlparser.MaxPriorityValue)), nil
+	var priority string
+	if vc.SafeSession.Options != nil {
+		priority = normalizePriority(vc.SafeSession.Options.Priority)
 	}
-	return 0, nil
+	if vc.statementOptions != nil && vc.statementOptions.Priority != "" {
+		priority = vc.statementOptions.Priority
+	}
+	if priority == "" {
+		return 0, nil
+	}
+	intPriority, err := strconv.Atoi(priority)
+	if err != nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", priority, err)
+	}
+	return max(0, min(intPriority, sqlparser.MaxPriorityValue)), nil
 }
 
 // SetForeignKeyCheckState updates the foreign key checks state of the vcursor.
