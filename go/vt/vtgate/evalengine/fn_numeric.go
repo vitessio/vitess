@@ -1013,6 +1013,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 		default:
 			c.asm.Convert_xf(1)
 			c.asm.Fn_ROUND1_f()
+			arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}
 		}
 	} else {
 		round, err := expr.Arguments[1].compile(c)
@@ -1046,7 +1047,9 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 		default:
 			c.asm.Convert_xf(2)
 			c.asm.Fn_ROUND2_f()
+			arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}
 		}
+		arg.Flag |= nullableFlags(round.Flag)
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
@@ -1221,7 +1224,9 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 	default:
 		c.asm.Convert_xf(2)
 		c.asm.Fn_TRUNCATE_f()
+		arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}
 	}
+	arg.Flag |= nullableFlags(round.Flag)
 
 	c.asm.jumpDestination(skip1, skip2)
 	return arg, nil
@@ -1263,7 +1268,7 @@ func (expr *builtinCrc32) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_CRC32()
 	c.asm.jumpDestination(skip)
-	return arg, nil
+	return ctype{Type: sqltypes.Uint64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 }
 
 type builtinConv struct {
