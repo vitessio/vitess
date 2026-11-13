@@ -592,7 +592,7 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 	for _, order := range orderToPush {
 		hasOrderingToPush = hasOrderingToPush || len(order) > 0
 	}
-	if (hasOrdering(in.Source) && !hasOrderingToPush) || hasDistinctBeforeRoute(in.Source) {
+	if (hasOrdering(in.Source) && !hasOrderingToPush) || hasDistinctBeforeRoute(ctx, in.Source) {
 		debugNoRewrite("limit push blocked: VTGate DISTINCT needs all input rows before deduplication")
 		return in, NoRewrite
 	}
@@ -773,25 +773,25 @@ func routesForUnionArm(op Operator) []*Route {
 // hasDistinctBeforeRoute reports whether a DISTINCT operator in VTGate must
 // see all rows before the limit. DISTINCT inside a Route is executed by MySQL
 // before its route-local limit and does not need to block that limit.
-func hasDistinctBeforeRoute(op Operator) bool {
+func hasDistinctBeforeRoute(ctx *plancontext.PlanningContext, op Operator) bool {
 	switch op := op.(type) {
 	case *Route:
 		return false
 	case *Distinct:
-		return (containsUnionAll(op.Source) || hasDistinctUnionOutsideRoute(op.Source)) && !unionRoutesDeduplicate(op.Source)
+		return (containsUnionAll(op.Source) || hasDistinctUnionOutsideRoute(op.Source)) && !unionRoutesDeduplicate(ctx, op.Source)
 	case *Union:
 		if op.distinct {
-			return !unionRoutesDeduplicate(op)
+			return !unionRoutesDeduplicate(ctx, op)
 		}
 	}
-	return slices.ContainsFunc(op.Inputs(), hasDistinctBeforeRoute)
+	return slices.ContainsFunc(op.Inputs(), func(input Operator) bool { return hasDistinctBeforeRoute(ctx, input) })
 }
 
-func unionRoutesDeduplicate(op Operator) bool {
+func unionRoutesDeduplicate(ctx *plancontext.PlanningContext, op Operator) bool {
 	// A VTGate projection can collapse distinct input rows by evaluating an
 	// expression or dropping columns. DISTINCT below it does not justify a
 	// route-local LIMIT for a DISTINCT above it.
-	if _, ok := op.(*Projection); ok {
+	if projection, ok := op.(*Projection); ok && !projectionPreservesDistinct(ctx, projection) {
 		return false
 	}
 	if route, ok := op.(*Route); ok {
@@ -802,11 +802,57 @@ func unionRoutesDeduplicate(op Operator) bool {
 		return false
 	}
 	for _, input := range inputs {
-		if !unionRoutesDeduplicate(input) {
+		if !unionRoutesDeduplicate(ctx, input) {
 			return false
 		}
 	}
 	return true
+}
+
+// projectionPreservesDistinct requires every input column to pass through
+// unchanged. Reordering and aliases are safe; expressions or dropped columns
+// alone cannot establish that distinct inputs remain distinct.
+func projectionPreservesDistinct(ctx *plancontext.PlanningContext, projection *Projection) bool {
+	columns, ok := projection.Columns.(AliasedProjections)
+	if !ok {
+		return false
+	}
+	if len(columns) == 0 {
+		// A derived UNION projection is populated during offset planning. At this
+		// stage it only introduces a namespace; check its consumer's expressions.
+		return projection.DT != nil
+	}
+	exprs := slice.Map(columns, func(col *ProjExpr) sqlparser.Expr { return col.EvalExpr })
+	source := projection.Source
+	for {
+		if derived, ok := source.(*Projection); ok && derived.DT != nil {
+			for i, expr := range exprs {
+				exprs[i] = derived.DT.RewriteExpression(ctx, expr)
+			}
+			if len(derived.GetSelectExprs(ctx)) == 0 {
+				source = derived.Source
+				continue
+			}
+		}
+		inputColumns := source.GetSelectExprs(ctx)
+		if len(inputColumns) == 0 {
+			inputs := source.Inputs()
+			if len(inputs) != 1 {
+				return false
+			}
+			source = inputs[0]
+			continue
+		}
+		for _, column := range inputColumns {
+			ae, ok := column.(*sqlparser.AliasedExpr)
+			if !ok || !slices.ContainsFunc(exprs, func(expr sqlparser.Expr) bool {
+				return ctx.SemTable.EqualsExprWithDeps(expr, ae.Expr)
+			}) {
+				return false
+			}
+		}
+		return true
+	}
 }
 
 func hasDistinctUnionOutsideRoute(op Operator) bool {

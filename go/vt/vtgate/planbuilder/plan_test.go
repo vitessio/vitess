@@ -231,6 +231,37 @@ func (s *planTestSuite) TestDistinctUnionLimitIsPushedIntoLocalRoute() {
 	}
 }
 
+// Plain column projections preserve the UNION's distinct rows, even before
+// the derived projection has populated its requested columns.
+func (s *planTestSuite) TestOuterDistinctPassThroughUnionKeepsArmLimits() {
+	for _, tracked := range []bool{false, true} {
+		env := vtenv.NewTestEnv()
+		vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+		if !tracked {
+			vschema.Keyspaces["user"].Tables["user"].Columns = nil
+		}
+		vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+		s.Require().NoError(err)
+		s.addPKs(vschema, "user", []string{"user"})
+		for _, query := range []string{
+			"select distinct col from (select col from user union select col from unsharded) dt limit 2",
+			"select distinct col from (select col from user union select col from unsharded) dt where col > 5 limit 2",
+			"select distinct x from (select col as x from user union select col from unsharded) dt limit 2",
+			"select distinct col as x from (select col from user union select col from unsharded) dt limit 2",
+			"select distinct col, id from (select id, col from user union select id, col from unsharded) dt limit 2",
+			"select distinct x from (select col as x from (select col from user union select col from unsharded) dt) nested limit 2",
+		} {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err, "tracking=%t query=%s", tracked, query)
+			routes := routePrimitives(plan.Instructions)
+			s.Require().NotEmpty(routes, query)
+			for _, route := range routes {
+				s.Require().Contains(strings.ToLower(route.Query), "limit :__upper_limit", "tracking=%t query=%s route=%s", tracked, query, route.Query)
+			}
+		}
+	}
+}
+
 func (s *planTestSuite) TestOuterDistinctOverUnionAllDoesNotPushLimitIntoArms() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
@@ -267,6 +298,9 @@ func (s *planTestSuite) TestOuterDistinctProjectionOverUnionDoesNotPushLimitInto
 		"select distinct col % 2 from (select col from user union select col from unsharded) dt limit 2",
 		"select distinct col % 2 as parity from (select col from user union select col from unsharded) dt order by parity limit 2",
 		"select distinct id from (select id, col from user union select id, col from unsharded) dt limit 2",
+		"select distinct id, id from (select id, col from user union select id, col from unsharded) dt limit 2",
+		"select distinct x from (select col % 2 as x from (select col from user union select col from unsharded) dt) nested limit 2",
+		"select distinct x % 2 from (select col as x from (select col from user union select col from unsharded) dt) nested limit 2",
 	} {
 		plan, err := TestBuilder(query, vw, vw.CurrentDb())
 		s.Require().NoError(err, query)
@@ -470,10 +504,12 @@ func (s *planTestSuite) TestRecursiveReferenceUnionDoesNotLeaveUnboundCTEBind() 
 	plan, err := TestBuilder("with recursive c as (select id from ref union all select u.id from user u join c on u.id = c.id) select id from c union all select id from user", vw, vw.CurrentDb())
 	s.Require().NoError(err)
 	s.Require().False(hasUnboundCTEReference(plan.Instructions, false), "recursive CTE bind must be owned by the recursive term")
-	s.Require().NotNil(engine.Find(func(primitive engine.Primitive) bool {
+	recurse := engine.Find(func(primitive engine.Primitive) bool {
 		_, ok := primitive.(*engine.RecurseCTE)
 		return ok
-	}, plan.Instructions), "replicated seed must be evaluated once by VTGate")
+	}, plan.Instructions)
+	s.Require().NotNil(recurse, "replicated seed must be evaluated once by VTGate")
+	s.Require().False(recurse.(*engine.RecurseCTE).Distinct)
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
@@ -1306,10 +1342,12 @@ func (s *planTestSuite) TestRecursiveDistinctPreservesExistingPlans() {
 	} {
 		plan, err := TestBuilder(query, vw, vw.CurrentDb())
 		s.Require().NoError(err, query)
-		s.Require().NotNil(engine.Find(func(p engine.Primitive) bool {
+		recurse := engine.Find(func(p engine.Primitive) bool {
 			_, ok := p.(*engine.RecurseCTE)
 			return ok
-		}, plan.Instructions), query)
+		}, plan.Instructions)
+		s.Require().NotNil(recurse, query)
+		s.Require().True(recurse.(*engine.RecurseCTE).Distinct, query)
 	}
 }
 

@@ -35,11 +35,15 @@ type RecurseCTE struct {
 	Seed, Term Primitive
 
 	Vars map[string]int
+
+	// Distinct retains the term-execution cap until VTGate recursion deduplicates rows.
+	Distinct bool
 }
 
 var _ Primitive = (*RecurseCTE)(nil)
 
-// maxRecurseDepth caps recursive expansion levels, regardless of rows per level.
+// maxRecurseDepth caps expansion levels for UNION ALL. UNION DISTINCT retains
+// the existing term-execution cap until recursive results are deduplicated.
 // TODO: This should be controlled with the cte_max_recursion_depth system variable.
 const maxRecurseDepth = 1000
 
@@ -56,16 +60,24 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	// recurseRows contains the rows used in the next recursion
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
-	depth := 0
+	iterations := 0
 	for len(recurseRows) > 0 {
-		depth++
-		if depth > maxRecurseDepth {
-			return nil, vterrors.VT09030("")
+		if !r.Distinct {
+			iterations++
+			if iterations > maxRecurseDepth {
+				return nil, vterrors.VT09030("")
+			}
 		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
 		for _, row := range theseRows {
+			if r.Distinct {
+				iterations++
+				if iterations > maxRecurseDepth {
+					return nil, vterrors.VT09030("")
+				}
+			}
 			for k, col := range r.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(row[col])
 			}
@@ -132,17 +144,25 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// one Term stream is active at a time: recursing inside the Term callback
 	// would nest a live stream per level and exhaust the connection pool.
 	joinVars := make(map[string]*querypb.BindVariable)
-	depth := 0
+	iterations := 0
 	for len(recurseRows) > 0 {
-		depth++
-		if depth > maxRecurseDepth {
-			return vterrors.VT09030("")
+		if !r.Distinct {
+			iterations++
+			if iterations > maxRecurseDepth {
+				return vterrors.VT09030("")
+			}
 		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
 		currentLevelRows = len(theseRows)
 		for _, row := range theseRows {
+			if r.Distinct {
+				iterations++
+				if iterations > maxRecurseDepth {
+					return vterrors.VT09030("")
+				}
+			}
 			for k, col := range r.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(row[col])
 			}

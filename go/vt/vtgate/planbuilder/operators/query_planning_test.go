@@ -234,19 +234,20 @@ func TestRebindUserColumnNamedLikeDerivedUnionOutput(t *testing.T) {
 }
 
 func TestHasDistinctBeforeRoute(t *testing.T) {
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
 	routeLocalDistinct := &Route{unaryOperator: newUnaryOp(&Union{distinct: true})}
-	assert.False(t, hasDistinctBeforeRoute(routeLocalDistinct), "MySQL applies a route-local UNION DISTINCT before its LIMIT")
+	assert.False(t, hasDistinctBeforeRoute(ctx, routeLocalDistinct), "MySQL applies a route-local UNION DISTINCT before its LIMIT")
 
 	vtgateDistinct := &Distinct{unaryOperator: newUnaryOp(&Union{
 		Sources: []Operator{&Route{unaryOperator: newUnaryOp(&Table{})}, &Route{unaryOperator: newUnaryOp(&Table{})}},
 	})}
-	assert.True(t, hasDistinctBeforeRoute(vtgateDistinct), "VTGate DISTINCT over UNION ALL must see all rows")
+	assert.True(t, hasDistinctBeforeRoute(ctx, vtgateDistinct), "VTGate DISTINCT over UNION ALL must see all rows")
 
 	globalUnionDistinct := &Distinct{unaryOperator: newUnaryOp(&Union{
 		Sources:  []Operator{&Route{unaryOperator: newUnaryOp(&Table{})}, &Route{unaryOperator: newUnaryOp(&Table{})}},
 		distinct: true,
 	})}
-	assert.True(t, hasDistinctBeforeRoute(globalUnionDistinct), "VTGate UNION DISTINCT must see all rows")
+	assert.True(t, hasDistinctBeforeRoute(ctx, globalUnionDistinct), "VTGate UNION DISTINCT must see all rows")
 }
 
 func TestTryPushDistinctWithWindow(t *testing.T) {

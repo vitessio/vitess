@@ -180,6 +180,59 @@ func TestRecurseCTERecursionLimit(t *testing.T) {
 	require.Len(t, streamed, 1001)
 }
 
+// Cyclic UNION DISTINCT recursion must retain the existing cap on term
+// executions, since VTGate does not yet deduplicate recursive results.
+func TestRecurseCTEDistinctCycleCapsTermExecutions(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id", "int64")
+	for _, seedRows := range []int{100, 1000} {
+		t.Run(strconv.Itoa(seedRows), func(t *testing.T) {
+			for _, mode := range []string{"execute", "stream", "transaction stream"} {
+				t.Run(mode, func(t *testing.T) {
+					seedResult := &sqltypes.Result{Fields: fields}
+					for i := range seedRows {
+						seedResult.Rows = append(seedResult.Rows, sqltypes.Row{sqltypes.NewInt64(int64(i))})
+					}
+					term := &cyclicRecurseTerm{fakePrimitive: &fakePrimitive{}}
+					cte := &RecurseCTE{
+						Seed:     &fakePrimitive{results: []*sqltypes.Result{seedResult}},
+						Term:     term,
+						Vars:     map[string]int{"id": 0},
+						Distinct: true,
+					}
+					cursor := &recurseMemoryVCursor{noopVCursor: &noopVCursor{inTx: mode == "transaction stream"}, limit: 300000}
+					var err error
+					if mode == "execute" {
+						_, err = cte.TryExecute(t.Context(), cursor, nil, true)
+					} else {
+						err = cte.TryStreamExecute(t.Context(), cursor, nil, true, func(*sqltypes.Result) error { return nil })
+					}
+					require.ErrorContains(t, err, "VT09030")
+					require.Equal(t, maxRecurseDepth, term.calls)
+				})
+			}
+		})
+	}
+}
+
+type cyclicRecurseTerm struct {
+	*fakePrimitive
+	calls int
+}
+
+func (p *cyclicRecurseTerm) TryExecute(_ context.Context, _ VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
+	p.calls++
+	value, err := sqltypes.BindVariableToValue(bindVars["id"])
+	return &sqltypes.Result{Rows: []sqltypes.Row{{value}}}, err
+}
+
+func (p *cyclicRecurseTerm) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	result, err := p.TryExecute(ctx, vcursor, bindVars, wantfields)
+	if err != nil {
+		return err
+	}
+	return callback(result)
+}
+
 // TestRecurseCTEStreamConcurrentDelivery verifies that the streaming path is
 // safe when a source delivers its result chunks concurrently, as a multi-shard
 // scatter does (StreamExecuteMulti fans out one goroutine per shard, each
