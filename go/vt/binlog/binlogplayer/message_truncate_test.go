@@ -27,21 +27,21 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// TestMessageTruncateWithBinaryData documents a known encoding asymmetry
-// between how binary data is encoded into INSERT queries vs how error messages
-// are re-encoded for storage in _vt.vreplication.message (varbinary(1000)).
+// TestMessageTruncateWithBinaryData verifies that binary data (including
+// invalid UTF-8 bytes) survives truncation and SQL encode/decode round-trip
+// without expansion.
 //
-// The INSERT query is built using encodeBytesSQLBytes2 which iterates over
-// []byte (byte-by-byte) and uses WriteByte, preserving raw high bytes (128-255)
-// as single bytes in the Go string. But when the error message is re-encoded by
-// EncodeStringSQL for the UPDATE, it iterates over string (rune-by-rune with
-// UTF-8 decoding) and uses WriteRune. Invalid UTF-8 bytes get expanded to
-// 3-byte U+FFFD replacement characters, causing the stored value to potentially
-// exceed the column limit.
+// Historically there was an encoding asymmetry: encodeBytesSQLBytes2 (used for
+// INSERT queries) iterates []byte byte-by-byte with WriteByte, preserving raw
+// high bytes. But EncodeStringSQL (used for UPDATE messages) used rune-by-rune
+// iteration with WriteRune, causing invalid UTF-8 bytes to expand to 3-byte
+// U+FFFD replacement characters. This could make a truncated message (>950B
+// truncated value) exceed the varbinary(1000) column limit after round-trip.
 //
-// The controller's runBlp() handles this by falling back to a simplified error
-// message when setState() fails, preventing an infinite retry loop.
-// See: controller.go runBlp() and the fail-binary-no-default-value e2e test.
+// That asymmetry was fixed by PR #21248, which changed BufEncodeStringSQL to
+// iterate byte-by-byte and use WriteByte, matching the behavior of
+// encodeBytesSQLBytes2. The round-trip is now perfectly symmetric and
+// truncation to 950 bytes guarantees the stored value fits in varbinary(1000).
 func TestMessageTruncateWithBinaryData(t *testing.T) {
 	// Build a realistic error message. The binary data in the INSERT query
 	// was encoded by encodeBytesSQLBytes2 which preserves raw bytes. So the
@@ -88,16 +88,11 @@ func TestMessageTruncateWithBinaryData(t *testing.T) {
 	decoded, err := sqltypes.DecodeStringSQL(encoded)
 	require.NoError(t, err, "DecodeStringSQL should not error")
 
-	// Document the known asymmetry: EncodeStringSQL iterates the string by
-	// rune (UTF-8 decoding), producing U+FFFD for each invalid byte. WriteRune
-	// then re-encodes U+FFFD as 3 bytes. The round-trip is NOT symmetric for
-	// strings containing invalid UTF-8, so the decoded value is larger than
-	// the input. This can cause the stored value to exceed varbinary(1000).
-	//
-	// The controller handles this gracefully by falling back to a simplified
-	// error message when setState() fails. See controller.go runBlp().
-	assert.Greater(t, len(decoded), len(truncated),
-		"encoding round-trip should expand invalid UTF-8 bytes (known asymmetry)")
-	assert.Greater(t, len(decoded), 1000,
-		"decoded value should exceed varbinary(1000) limit (known asymmetry that controller.runBlp handles)")
+	// With the byte-preserving BufEncodeStringSQL (PR #21248), the round-trip
+	// is perfectly symmetric. Invalid UTF-8 bytes are preserved as raw bytes
+	// instead of being expanded to 3-byte U+FFFD replacement characters.
+	assert.Equal(t, truncated, decoded,
+		"encoding round-trip should preserve binary data exactly (byte-preserving BufEncodeStringSQL)")
+	assert.LessOrEqual(t, len(decoded), 950,
+		"decoded value must not exceed MessageTruncate limit of 950 bytes (and thus fits in varbinary(1000))")
 }
