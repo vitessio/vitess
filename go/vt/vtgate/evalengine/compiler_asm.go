@@ -1222,6 +1222,25 @@ func (asm *assembler) Convert_xu(offset int) {
 	}, "CONV (SP-%d), UINT64", offset)
 }
 
+// Convert_xbin replaces the value at SP-offset with a new VARBINARY that
+// has the same bytes, for the byte-wise instructions of the bit operators.
+//
+// The value is not always a string: COALESCE returns a number that it
+// selects as it is, whatever type it declares.
+func (asm *assembler) Convert_xbin(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset]
+		var raw []byte
+		if b, ok := arg.(*evalBytes); ok {
+			raw = b.bytes
+		} else {
+			raw = arg.ToRawBytes()
+		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBinary(raw)
+		return 1
+	}, "CONV (SP-%d), VARBINARY", offset)
+}
+
 func (asm *assembler) Convert_xD(offset int, allowZero bool) {
 	asm.emit(func(env *ExpressionEnv) int {
 		// Need to explicitly check here or we otherwise

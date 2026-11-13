@@ -1140,6 +1140,13 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(1)`,
 		},
 		{
+			// With two literals, the result of IF is a binary string, which
+			// the bit operators shift byte-wise.
+			expression: `IF(column0 = 1, 0x62, 'x') >> 1`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `VARBINARY("1")`,
+		},
+		{
 			// A text column whose value is NULL keeps its collation, which
 			// makes the result of IFNULL a number for BIT_COUNT.
 			expression: `BIT_COUNT(IFNULL(column0, 0x3132))`,
