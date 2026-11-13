@@ -26,6 +26,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -595,17 +596,36 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 		taken, err := tryLock()
 		return taken && err == nil
 	}
+	// assert.Never and assert.Eventually can return while a probe still runs.
+	// joined's stop waits for that probe and keeps later ones from probing, so
+	// that no probe takes the lock after the unlock or uses the client after
+	// the test closes it.
+	joined := func(probe func() bool) (cond func() bool, stop func()) {
+		var mu sync.Mutex
+		stopped := false
+		cond = func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return !stopped && probe()
+		}
+		stop = func() {
+			mu.Lock()
+			defer mu.Unlock()
+			stopped = true
+		}
+		return cond, stop
+	}
 
 	// Short TTL through topo.Server, which ends the acquisition context once the lock is
 	// acquired: the lease must still be kept alive until the unlock, whether Lock or
-	// TryLock took the lock. assert.Never can return while a probe still runs, and
-	// that probe can take the lock right after the unlock: the non-blocking lock
-	// goes first, because only a blocking lock waits for it.
+	// TryLock took the lock.
 	var unlockErr error
 	for _, lockType := range []topo.LockType{topo.NonBlocking, topo.Blocking} {
 		_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "short ttl, acquisition context ended", topo.WithType(lockType))
 		require.NoError(t, err)
-		assert.Never(t, takenOrFailed, 5*time.Second, 250*time.Millisecond, "the %v lock expired while still held", lockType)
+		cond, stop := joined(takenOrFailed)
+		assert.Never(t, cond, 5*time.Second, 250*time.Millisecond, "the %v lock expired while still held", lockType)
+		stop()
 		unlock(&unlockErr)
 		require.NoError(t, unlockErr)
 	}
@@ -613,7 +633,9 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	// An explicit TTL still releases the lock after it, without an unlock.
 	_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "explicit ttl", topo.WithTTL(time.Second))
 	require.NoError(t, err)
-	assert.Eventually(t, taken, 30*time.Second, 250*time.Millisecond, "the lock with an explicit TTL did not expire")
+	cond, stop := joined(taken)
+	assert.Eventually(t, cond, 30*time.Second, 250*time.Millisecond, "the lock with an explicit TTL did not expire")
+	stop()
 	unlock(&unlockErr)
 }
 
