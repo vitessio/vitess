@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/consul/api/v2"
+	"github.com/hashicorp/consul/api"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/topo"

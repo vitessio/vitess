@@ -20,12 +20,9 @@ import (
 	"path"
 	"strings"
 
-<<<<<<< HEAD
 	"context"
-||||||| parent of 4ce99dc600 (topo: honor ctx in consultopo KV calls, drop closed cell conns, fix read-only races (#21687))
-=======
-	"github.com/hashicorp/consul/api/v2"
->>>>>>> 4ce99dc600 (topo: honor ctx in consultopo KV calls, drop closed cell conns, fix read-only races (#21687))
+
+	"github.com/hashicorp/consul/api"
 
 	"vitess.io/vitess/go/vt/topo"
 )
