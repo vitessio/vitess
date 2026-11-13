@@ -266,7 +266,6 @@ vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --targe
 
 The specified picker options are merged into the stored _vt.vdiff.options JSON
 on each target shard primary. Other options (core and report) are left unchanged.
-Progress (lastpk) is left untouched.
 
 Only stopped or completed VDiffs can be updated. If the VDiff is pending,
 started, or in the error state on an affected shard, or a live controller
@@ -274,8 +273,11 @@ exists there, the update is rejected. Stop the VDiff first with
 ` + "`VDiff stop`" + `, then update, then ` + "`VDiff resume`" + ` so the new options take
 effect.
 
-Only the stored options are updated. A completed VDiff stays completed; the new
-options apply the next time it is resumed.
+Only the stored options are updated; progress (lastpk) is kept. A completed
+VDiff stays completed. Resume and retry continue from the stored progress, so
+the new tablet types and cells only apply to rows that have not been compared
+yet. Rows already compared are not re-checked; to re-compare everything,
+create a new VDiff.
 
 Tablet types must be PRIMARY, REPLICA, or RDONLY, and each cell must be a cell
 or cell alias in the topology.
