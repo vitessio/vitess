@@ -83,6 +83,14 @@ CREATE TABLE multicol_tbl
     PRIMARY KEY (cola, colb)
 );
 
+CREATE TABLE multicol_tbl_child
+(
+    cola        VARCHAR(255),
+    parent_colb VARCHAR(255),
+    id          BIGINT,
+    PRIMARY KEY (cola, parent_colb, id)
+);
+
 CREATE TABLE mixed_tbl
 (
     shard_key VARCHAR(255),

@@ -497,6 +497,17 @@
             }
           ]
         },
+        "multicol_tbl_child": {
+          "column_vindexes": [
+            {
+              "columns": [
+                "cola",
+                "parent_colb"
+              ],
+              "name": "multicolIdx"
+            }
+          ]
+        },
         "name_user_vdx": {
           "column_vindexes": [
             {
