@@ -73,7 +73,7 @@ var (
 // number: 0x62 >> 1 is 49.
 func bitBinaryString(e eval) (*evalBytes, bool) {
 	b, ok := e.(*evalBytes)
-	if !ok || !(b.isBinary() || isBinaryText(b.SQLType(), b.col.Collation)) {
+	if !ok || !(b.isBinary() || isBinaryText(b.SQLType(), b.col)) {
 		return nil, false
 	}
 	return b, true
@@ -82,7 +82,7 @@ func bitBinaryString(e eval) (*evalBytes, bool) {
 // bitBinaryString reports whether the bit operators treat a value of type
 // ct as a binary string. See the function bitBinaryString.
 func (ct *ctype) bitBinaryString() bool {
-	return ct.Type == sqltypes.VarBinary || isBinaryText(ct.Type, ct.Col.Collation)
+	return ct.Type == sqltypes.VarBinary || isBinaryText(ct.Type, ct.Col)
 }
 
 // compileToBitBinary converts the value of type ct to a VARBINARY, which is

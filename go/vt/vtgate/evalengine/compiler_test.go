@@ -1746,6 +1746,56 @@ func TestCompilerUntypedColumnCollation(t *testing.T) {
 	assert.Equal(t, `INT64(1)`, res.String())
 }
 
+// TestUntypedStringColumnIsNotBinary checks that the string of a column
+// without a declared type is read as a character string, in the interpreter
+// and in the compiled program. Its collation is not known, which does not
+// make it a binary string: BIT_COUNT and the bit operators read it as a
+// number, and a conversion to JSON parses it as JSON text.
+func TestUntypedStringColumnIsNotBinary(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`BIT_COUNT(column0)`, `INT64(2)`},
+		{`BIT_COUNT(TRIM(column0))`, `INT64(2)`},
+		{`column0 >> 1`, `UINT64(6)`},
+		{`~column0`, `UINT64(18446744073709551603)`},
+		{`CAST(column0 AS JSON)`, `JSON("12")`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	fields := []*querypb.Field{{Name: "column0"}}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: evalengine.FieldResolver(fields).Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			// The row has no fields: the type of the column comes from
+			// its value, which has no collation.
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, nil))
+			env.Row = []sqltypes.Value{sqltypes.NewVarChar("12")}
+
+			res, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "interpreter")
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "compiled program")
+		})
+	}
+}
+
 // TestCompileFoldedJSONLiteralConcurrency compiles distinct type
 // specialisations of one translated expression concurrently while the
 // interpreter evaluates it concurrently too. Both read the same folded JSON

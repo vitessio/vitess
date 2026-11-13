@@ -126,6 +126,14 @@ func mergeAndCoerceCollations(left, right eval, env *collations.Environment) (ev
 	return left1, right1, mc, nil
 }
 
+// unknownCollation reports whether col is the collation of a string whose
+// collation is not known, such as the string of a column that has no
+// declared type. It is the binary collation with the coercibility of a
+// number, where a binary string has the one of a column or of a literal.
+func unknownCollation(col collations.TypedCollation) bool {
+	return col.Collation == collations.CollationBinaryID && col.Coercibility == collations.CoerceNumeric
+}
+
 type collationAggregation struct {
 	cur collations.TypedCollation
 }

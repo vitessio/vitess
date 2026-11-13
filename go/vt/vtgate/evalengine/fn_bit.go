@@ -47,7 +47,7 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 // BIT_COUNT(_binary 'a') is 3. It converts any other value to a 64-bit
 // integer first: BIT_COUNT('a') is 0, because 'a' is the number 0.
 func bitCount(e eval) int {
-	if b, ok := e.(*evalBytes); ok && (b.isBinary() || isBinaryText(b.SQLType(), b.col.Collation)) && !b.isHexOrBitLiteral() {
+	if b, ok := e.(*evalBytes); ok && (b.isBinary() || isBinaryText(b.SQLType(), b.col)) && !b.isHexOrBitLiteral() {
 		return bitCountBytes(b.bytes)
 	}
 	return bits.OnesCount64(uint64(evalToInt64(e).i))
@@ -66,8 +66,12 @@ func bitCountBytes(raw []byte) int {
 //
 // Several string functions declare that type for a binary string argument,
 // such as REVERSE(_binary 'a'). BIT_COUNT treats it like a binary string.
-func isBinaryText(tt sqltypes.Type, col collations.ID) bool {
-	return sqltypes.IsText(tt) && col == collations.CollationBinaryID
+//
+// The string of a column that has no declared type is not one: its
+// collation is not known, see unknownCollation. BIT_COUNT reads such a
+// string as a number.
+func isBinaryText(tt sqltypes.Type, col collations.TypedCollation) bool {
+	return sqltypes.IsText(tt) && col.Collation == collations.CollationBinaryID && !unknownCollation(col)
 }
 
 func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
@@ -84,7 +88,7 @@ func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
 	}
 
-	if isBinaryText(ct.Type, ct.Col.Collation) && !ct.isHexOrBitLiteral() {
+	if isBinaryText(ct.Type, ct.Col) && !ct.isHexOrBitLiteral() {
 		// The declared type can be wrong here. COALESCE of such a string
 		// and a number declares this type, but returns the argument that
 		// it selects as it is, which can be the number. So BitCount_x
