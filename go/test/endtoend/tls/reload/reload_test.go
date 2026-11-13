@@ -27,6 +27,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -261,4 +263,51 @@ func TestTLSReload(t *testing.T) {
 		}, reloadTimeout, 100*time.Millisecond, "vtgate must serve the new certificates without a SIGHUP")
 		require.NoError(t, reloadErr)
 	})
+
+	t.Run("keeps serving through a failed reload", func(t *testing.T) {
+		errorsBefore := grpcReloadErrors()
+		// The certificate is replaced before its key.
+		require.NoError(t, copyFile(liveFiles.cert, newCerts.ServerCert))
+		t.Cleanup(func() { require.NoError(t, installCerts(oldCerts)) })
+		assert.Eventually(t, func() bool {
+			return grpcReloadErrors() > errorsBefore
+		}, reloadTimeout, 100*time.Millisecond, "the failed reload must be counted")
+		require.NoError(t, servesCerts(t, oldCerts, oldCert), "vtgate must keep serving the files it loaded before")
+	})
+
+	t.Run("refuses a client that a reloaded CRL revokes", func(t *testing.T) {
+		require.NoError(t, servesCerts(t, oldCerts, oldCert))
+		name := func(file string) string { return strings.TrimSuffix(filepath.Base(file), "-cert.pem") }
+		tlstest.RevokeCertAndRegenerateCRL(path.Dir(oldCerts.ClientCA), name(oldCerts.ClientCA), name(oldCerts.ClientCert))
+		require.NoError(t, copyFile(liveFiles.crl, oldCerts.ClientCRL))
+		var grpcErr, mysqlErr error
+		assert.Eventually(t, func() bool {
+			_, grpcErr = grpcServedCert(t, oldCerts)
+			_, mysqlErr = connectMySQL(t, oldCerts)
+			return grpcErr != nil && mysqlErr != nil
+		}, reloadTimeout, 100*time.Millisecond, "vtgate must refuse a client that the reloaded CRL revokes")
+		require.ErrorContains(t, grpcErr, "remote error: tls:")
+		require.ErrorContains(t, mysqlErr, "remote error: tls:")
+	})
+}
+
+// copyFile replaces dst by an atomic rename with a copy of src.
+func copyFile(dst, src string) error {
+	b, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	staged := dst + ".staged"
+	if err := os.WriteFile(staged, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(staged, dst)
+}
+
+// grpcReloadErrors returns vtgate's count of failed reloads of its gRPC
+// server's TLS files.
+func grpcReloadErrors() float64 {
+	counts, _ := clusterInstance.VtgateProcess.GetVars()["TLSReloadErrors"].(map[string]any)
+	count, _ := counts["grpc"].(float64)
+	return count
 }
