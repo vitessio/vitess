@@ -727,10 +727,13 @@ func TestLockSurvivesEtcdRestart(t *testing.T) {
 	start()
 
 	lockKeys := path.Join("/test", "keyspaces/ks", locksPath) + "/"
+	// assert.Never can return before its last probe runs, which may then run
+	// after the cleanup closes s and sets s.cli to nil.
+	cli := s.cli
 	assert.Never(t, func() bool {
 		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
-		resp, err := s.cli.Get(ctx, lockKeys, clientv3.WithPrefix())
+		resp, err := cli.Get(ctx, lockKeys, clientv3.WithPrefix())
 		return err == nil && len(resp.Kvs) == 0
 	}, 2*ttl*time.Second, 250*time.Millisecond, "the lock's lease expired after etcd restarted")
 	require.NoError(t, ld.Unlock(t.Context()))
