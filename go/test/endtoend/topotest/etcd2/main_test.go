@@ -229,6 +229,28 @@ func TestLockingWithTTL(t *testing.T) {
 	require.Error(t, err)
 }
 
+// TestKeyspaceLockOutlivesLeaseTTL checks that a keyspace lock held for longer
+// than its lease's TTL still excludes another process: vtctld waits for it
+// until its own lock timeout.
+func TestKeyspaceLockOutlivesLeaseTTL(t *testing.T) {
+	ts, err := topo.OpenServer(*clusterInstance.TopoFlavorString(), clusterInstance.VtctldClientProcess.TopoGlobalAddress, clusterInstance.VtctldClientProcess.TopoGlobalRoot)
+	require.NoError(t, err)
+	defer ts.Close()
+
+	_, unlock, err := ts.LockKeyspace(t.Context(), KeyspaceName, "TestKeyspaceLockOutlivesLeaseTTL")
+	require.NoError(t, err)
+	defer unlock(&err)
+
+	// vtctld waits for the lock for its default 45s --lock-timeout, longer than
+	// the default 30s --topo-etcd-lease-ttl. The keyspace's durability policy
+	// is already none, so the command changes nothing if it takes the lock.
+	output, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", "--durability-policy=none", KeyspaceName)
+	require.Error(t, err, "vtctld took the keyspace lock while it was held: %s", output)
+	// Only the wait for the lock times out on the lock's path.
+	require.Contains(t, output, "deadline exceeded: ")
+	require.Contains(t, output, "keyspaces/"+KeyspaceName+"/locks")
+}
+
 // TestNamedLocking tests that named locking works as intended.
 func TestNamedLocking(t *testing.T) {
 	// Create topo server connection.
