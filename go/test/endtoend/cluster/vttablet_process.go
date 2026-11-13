@@ -434,6 +434,12 @@ func (vttablet *VttabletProcess) Kill() error {
 	return err
 }
 
+// Exited returns a channel that receives the exit result of the process that
+// Setup started last, and is then closed.
+func (vttablet *VttabletProcess) Exited() <-chan error {
+	return vttablet.exit
+}
+
 // TearDownWithTimeout shuts down the running vttablet service and fails once the given
 // duration has elapsed.
 func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) error {

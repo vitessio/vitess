@@ -202,6 +202,7 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 	}
 
 	rsm := tm.newRestoreStateManager(logger, deleteBeforeRestore)
+	rsm.dryRun = params.DryRun
 
 	if ok, err := rsm.start(ctx); !ok || err != nil {
 		if err != nil {
@@ -257,7 +258,6 @@ func (tm *TabletManager) restoreBackupLocked(ctx context.Context, logger logutil
 			// Reconnect to primary only for "NORMAL" keyspaces
 			replCmd.action = replicationActionStart
 			replCmd.position = &pos
-			replCmd.keepBinlogs = backupManifest.IncludesBinlogs
 		}
 	case err == mysqlctl.ErrNoBackup:
 		// Starting with empty database.
@@ -430,9 +430,12 @@ func (tm *TabletManager) disableReplication(ctx context.Context) error {
 	return nil
 }
 
-func (tm *TabletManager) startReplication(ctx context.Context, pos replication.Position, tabletType topodatapb.TabletType, keepBinlogs bool) error {
-	// The first three steps of stopping replication, and setting the replication position,
-	// we want to do even if the context expires, so we use a background context for these tasks.
+// startReplication connects restored data to the primary. Restore has already
+// set the GTID position to pos, so this only stops and clears the copied
+// replication configuration before initializing replication.
+func (tm *TabletManager) startReplication(ctx context.Context, logger logutil.Logger, pos replication.Position, tabletType topodatapb.TabletType) error {
+	// Stopping and clearing replication cannot revive a receiver, so they do not
+	// need the shard lock. Do them even if the context expires.
 	if err := tm.MysqlDaemon.StopReplication(context.Background(), nil); err != nil {
 		return vterrors.Wrap(err, "failed to stop replication")
 	}
@@ -440,15 +443,7 @@ func (tm *TabletManager) startReplication(ctx context.Context, pos replication.P
 		return vterrors.Wrap(err, "failed to reset replication")
 	}
 
-	// Set the position at which to resume from the primary, unless the restored
-	// binlogs already put gtid_executed there: setting it would RESET them away.
-	if !keepBinlogs {
-		if err := tm.MysqlDaemon.SetReplicationPosition(context.Background(), pos); err != nil {
-			return vterrors.Wrap(err, "failed to set replication position")
-		}
-	}
-
-	primaryPosStr, err := tm.initializeReplication(ctx, tabletType)
+	primaryPosStr, err := tm.initializeReplicationUnlessShardLocked(ctx, logger, tabletType, &pos)
 	// If we ran into an error while initializing replication, then there is no point in waiting for catch-up.
 	// Also, if there is no primary tablet in the shard, we don't need to proceed further.
 	if err != nil || primaryPosStr == "" {
@@ -544,8 +539,6 @@ type replicationCommand struct {
 	action replicationAction
 	// position is used by the replicationActionStart action.
 	position *replication.Position
-	// keepBinlogs is set when the restore installed the backup's binlogs, which setting the position would delete.
-	keepBinlogs bool
 }
 
 // restoreState represents the state of a restoreStateManager.
@@ -566,8 +559,10 @@ const (
 // RESTORE, and setting up replication.
 type restoreStateManager struct {
 	deleteBeforeRestore bool
-	logger              logutil.Logger
-	tm                  *TabletManager
+	// dryRun is set when the restore does not change any data.
+	dryRun bool
+	logger logutil.Logger
+	tm     *TabletManager
 
 	state restoreState
 
@@ -600,6 +595,13 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 		return vterrors.New(vtrpcpb.Code_INTERNAL, "restore cannot be finished in current state")
 	}
 
+	// The restored data replaces what an earlier deferred replication
+	// initialization was for, and replCmd decides replication for it. A dry
+	// run leaves the data, and the deferred initialization, unchanged.
+	if !rt.dryRun {
+		rt.tm.tmState.cancelReplicationInit(ctx)
+	}
+
 	// Perform replication command.
 	switch replCmd.action {
 	case replicationActionDisable:
@@ -608,7 +610,7 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 			return vterrors.Wrap(err, "failed to disable replication")
 		}
 	case replicationActionInitialize:
-		if _, err := rt.tm.initializeReplication(ctx, rt.prevTabletType); err != nil {
+		if _, err := rt.tm.initializeReplicationUnlessShardLocked(ctx, rt.logger, rt.prevTabletType, nil); err != nil {
 			return vterrors.Wrap(err, "failed to initialize replication")
 		}
 	case replicationActionStart:
@@ -616,7 +618,7 @@ func (rt *restoreStateManager) finish(ctx context.Context, replCmd replicationCo
 			return vterrors.New(vtrpcpb.Code_INTERNAL, "cannot start replication with nil position")
 		}
 		rt.logger.Info("Restore: starting replication at position", slog.String("position", replication.EncodePosition(*replCmd.position)))
-		if err := rt.tm.startReplication(ctx, *replCmd.position, rt.prevTabletType, replCmd.keepBinlogs); err != nil {
+		if err := rt.tm.startReplication(ctx, rt.logger, *replCmd.position, rt.prevTabletType); err != nil {
 			return vterrors.Wrapf(err, "failed to start replication with position %q", replCmd.position.String())
 		}
 	}

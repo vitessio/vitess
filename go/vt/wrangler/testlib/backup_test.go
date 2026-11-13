@@ -238,8 +238,6 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"FAKE SET GLOBAL gtid_purged",
 		"STOP REPLICA",
 		"FAKE RESET REPLICA ALL",
-		"FAKE RESET BINARY LOGS AND GTIDS",
-		"FAKE SET GLOBAL gtid_purged",
 		"STOP REPLICA",
 		"FAKE SET SOURCE",
 		"START REPLICA",
@@ -294,8 +292,6 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"FAKE SET GLOBAL gtid_purged",
 		"STOP REPLICA",
 		"FAKE RESET REPLICA ALL",
-		"FAKE RESET BINARY LOGS AND GTIDS",
-		"FAKE SET GLOBAL gtid_purged",
 		"FAKE SET SOURCE",
 		"START REPLICA",
 	}
@@ -493,8 +489,6 @@ func TestBackupRestoreLagged(t *testing.T) {
 		"FAKE SET GLOBAL gtid_purged",
 		"STOP REPLICA",
 		"FAKE RESET REPLICA ALL",
-		"FAKE RESET BINARY LOGS AND GTIDS",
-		"FAKE SET GLOBAL gtid_purged",
 		"STOP REPLICA",
 		"FAKE SET SOURCE",
 		"START REPLICA",
@@ -684,8 +678,6 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		"FAKE SET GLOBAL gtid_purged",
 		"STOP REPLICA",
 		"FAKE RESET REPLICA ALL",
-		"FAKE RESET BINARY LOGS AND GTIDS",
-		"FAKE SET GLOBAL gtid_purged",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
@@ -847,8 +839,6 @@ func TestDisableActiveReparents(t *testing.T) {
 		"FAKE SET GLOBAL gtid_purged",
 		"STOP REPLICA",
 		"FAKE RESET REPLICA ALL",
-		"FAKE RESET BINARY LOGS AND GTIDS",
-		"FAKE SET GLOBAL gtid_purged",
 	}
 	destTablet.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SHOW DATABASES": {},
