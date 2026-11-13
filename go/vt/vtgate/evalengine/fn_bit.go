@@ -47,7 +47,7 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 // BIT_COUNT(_binary 'a') is 3. It converts any other value to a 64-bit
 // integer first: BIT_COUNT('a') is 0, because 'a' is the number 0.
 func bitCount(e eval) int {
-	if b, ok := e.(*evalBytes); ok && (b.isBinary() || isBinaryText(b.SQLType(), b.col)) && !b.isHexOrBitLiteral() {
+	if b, ok := e.(*evalBytes); ok && (isBinaryString(b.SQLType(), b.col.Collation) || isBinaryText(b.SQLType(), b.col)) && !b.isHexOrBitLiteral() {
 		return bitCountBytes(b.bytes)
 	}
 	return bits.OnesCount64(uint64(evalToInt64(e).i))
@@ -59,6 +59,19 @@ func bitCountBytes(raw []byte) int {
 		count += bits.OnesCount8(c)
 	}
 	return count
+}
+
+// isBinaryString reports whether tt and col describe a binary string. A
+// BLOB with the collation of a character string is a TEXT: BIT_COUNT of
+// the TEXT IF(c, i, js) reads it as a number.
+func isBinaryString(tt sqltypes.Type, col collations.ID) bool {
+	switch tt {
+	case sqltypes.VarBinary, sqltypes.Binary:
+		return true
+	case sqltypes.Blob:
+		return col == collations.CollationBinaryID
+	}
+	return false
 }
 
 // isBinaryText reports whether tt and col describe a character string with
@@ -82,18 +95,8 @@ func (expr *builtinBitCount) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(ct)
 
-	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
+	if (isBinaryString(ct.Type, ct.Col.Collation) || isBinaryText(ct.Type, ct.Col)) && !ct.isHexOrBitLiteral() {
 		c.asm.BitCount_b()
-		c.asm.jumpDestination(skip)
-		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
-	}
-
-	if isBinaryText(ct.Type, ct.Col) && !ct.isHexOrBitLiteral() {
-		// The declared type can be wrong here. COALESCE of such a string
-		// and a number declares this type, but returns the argument that
-		// it selects as it is, which can be the number. So BitCount_x
-		// looks at the value when it runs.
-		c.asm.BitCount_x()
 		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.Int64, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
 	}

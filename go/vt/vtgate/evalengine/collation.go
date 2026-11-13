@@ -126,6 +126,16 @@ func mergeAndCoerceCollations(left, right eval, env *collations.Environment) (ev
 	return left1, right1, mc, nil
 }
 
+type collationAggregation struct {
+	cur collations.TypedCollation
+	// unknown is set by addTyped when one of the strings has a collation
+	// that is not known. See unknownCollation.
+	unknown bool
+	// binary is set by addTyped when one of the strings is a binary string
+	// that is not a literal, such as a binary column.
+	binary bool
+}
+
 // unknownCollation reports whether col is the collation of a string whose
 // collation is not known, such as the string of a column that has no
 // declared type. It is the binary collation with the coercibility of a
@@ -134,8 +144,31 @@ func unknownCollation(col collations.TypedCollation) bool {
 	return col.Collation == collations.CollationBinaryID && col.Coercibility == collations.CoerceNumeric
 }
 
-type collationAggregation struct {
-	cur collations.TypedCollation
+// addTyped is add for the collation tc of a value of type tt. It notes
+// when the value is a string whose collation is not known, and when it is
+// a binary string that is not a literal. See unknownResult.
+func (ca *collationAggregation) addTyped(tt sqltypes.Type, tc collations.TypedCollation, env *collations.Environment) error {
+	if tt == sqltypes.Enum || tt == sqltypes.Set || sqltypes.IsTextOrBinary(tt) {
+		switch {
+		case unknownCollation(tc):
+			ca.unknown = true
+		case tc.Collation == collations.CollationBinaryID && tc.Coercibility <= collations.CoerceImplicit:
+			ca.binary = true
+		}
+	}
+	return ca.add(tc, env)
+}
+
+// unknownResult reports whether the collation of the result is not known:
+// one of the strings has a collation that is not known, and no collation
+// won over it.
+//
+// Such a string comes from a column, so it wins over a binary literal as
+// the collation of a column does, and loses to a binary column: with a
+// column s that has no declared type, IFNULL(s, 0x41) has the unknown
+// collation of s.
+func (ca *collationAggregation) unknownResult() bool {
+	return ca.unknown && !ca.binary && ca.cur.Collation == collations.CollationBinaryID
 }
 
 func (ca *collationAggregation) add(tc collations.TypedCollation, env *collations.Environment) error {

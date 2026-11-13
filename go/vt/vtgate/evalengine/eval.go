@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/datetime"
 	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/mysql/format"
@@ -78,12 +79,25 @@ const (
 	// where CAST(IF(1, 0x3132, 'x') AS DECIMAL) is 12594.
 	flagNotDecimal typeFlag = 1 << 13
 
+	// flagJSONBinary and flagJSONText mark the result of COALESCE when the
+	// argument that it selected is a binary string and the result is not,
+	// or the other way around. A conversion to JSON reads such a result
+	// like the selected argument: with a text column sn = '12' and a
+	// binary column vb, CAST(COALESCE(sn, vb) AS JSON) is 12, not a binary
+	// value. Like flagIsNumber, they are only set on an evalBytes value.
+	flagJSONBinary typeFlag = 1 << 14
+	flagJSONText   typeFlag = 1 << 15
+
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 
 	// flagNumericContext are the flags that make a string count as a number
 	// in arithmetic. See (*evalBytes).makePlain.
 	flagNumericContext = flagHex | flagBit | flagIsNumber | flagNotDecimal
+
+	// flagSelected are the flags that a function result does not keep from
+	// its argument. See (*evalBytes).makePlain.
+	flagSelected = flagNumericContext | flagJSONBinary | flagJSONText
 )
 
 func (f typeFlag) Nullable() bool {
@@ -197,7 +211,7 @@ func evalIsTruthy(e eval) boolean {
 func evalPlain(e eval) eval {
 	switch e := e.(type) {
 	case *evalBytes:
-		if e.flag&flagNumericContext != 0 {
+		if e.flag&flagSelected != 0 {
 			b := *e
 			b.makePlain()
 			return &b
@@ -276,6 +290,11 @@ func evalWithCollation(e eval, tc collations.TypedCollation) eval {
 	return &r
 }
 
+// evalCoerce converts e, the value that CASE or COALESCE selected, to the
+// type typ that all their arguments combine to. size and scale are the
+// largest of the arguments: the fractional digits of a temporal value and
+// the digits after the point of a decimal. IFNULL(i, 1.5) is 5.0 when i is
+// the integer 5.
 func evalCoerce(e eval, typ sqltypes.Type, size, scale int32, col collations.ID, now time.Time, allowZero bool) (eval, error) {
 	if e == nil {
 		return nil, nil
@@ -289,33 +308,88 @@ func evalCoerce(e eval, typ sqltypes.Type, size, scale int32, col collations.ID,
 	}
 	if e.SQLType() == typ && e.Size() == size && e.Scale() == scale {
 		// nothing to be done here
-		return e, nil
+		return evalNotJSONSelected(e), nil
 	}
 	switch typ {
 	case sqltypes.Null:
 		return nil, nil
 	case sqltypes.Binary, sqltypes.VarBinary:
-		return evalToBinary(e), nil
+		return evalNotJSONSelected(evalToBinary(e)), nil
+	case sqltypes.Blob, sqltypes.Text:
+		// a BLOB with the collation of a character string is a TEXT
+		var b *evalBytes
+		if col == collations.CollationBinaryID {
+			b = newEvalBinary(evalToBinary(e).bytes)
+		} else {
+			var err error
+			if b, err = evalToVarchar(e, col, false); err != nil {
+				return nil, err
+			}
+		}
+		b.tt = int16(typ)
+		return b, nil
 	case sqltypes.Char, sqltypes.VarChar:
 		panic("unreacheable")
 	case sqltypes.Decimal:
-		return evalToDecimal(e, 0, 0), nil
+		d := evalToDecimal(e, 0, 0)
+		if d.length < scale {
+			// IFNULL(i, 1.5) is 5.0
+			d = newEvalDecimalWithPrec(d.dec, scale)
+		}
+		return d, nil
 	case sqltypes.Float32, sqltypes.Float64:
 		f, _ := evalToFloat(e)
 		return f, nil
-	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
+	case sqltypes.Int8, sqltypes.Int16, sqltypes.Int24, sqltypes.Int32, sqltypes.Int64:
 		return evalToInt64(e), nil
-	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
+	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint24, sqltypes.Uint32, sqltypes.Uint64:
 		return evalToInt64(e).toUint64(), nil
+	case sqltypes.Year:
+		if y, ok := e.(*evalYear); ok {
+			return y, nil
+		}
+		return newEvalYear(evalToInt64(e).i), nil
 	case sqltypes.Date:
 		return evalToDate(e, now, allowZero), nil
 	case sqltypes.Datetime, sqltypes.Timestamp:
-		return evalToDateTime(e, int(size), now, allowZero), nil
+		return evalToDateTime(e, coercePrecision(e, size), now, allowZero), nil
 	case sqltypes.Time:
-		return evalToTime(e, int(size)), nil
+		return evalToTime(e, coercePrecision(e, size)), nil
+	case sqltypes.TypeJSON:
+		return evalToJSON(e)
+	case sqltypes.Bit, sqltypes.Geometry, sqltypes.Enum, sqltypes.Set:
+		// these only combine with themselves
+		return evalNotJSONSelected(e), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", typ.String())
 	}
+}
+
+// coercePrecision returns the fractional digits that evalCoerce gives e
+// when it converts it to a temporal type with size fractional digits. It
+// never removes digits that e has: IFNULL(ndtm, dtm) with a DATETIME(3)
+// column dtm keeps its 3 digits, also when the declared size of dtm is not
+// known and is 0. A size above 6 is not a number of fractional digits.
+func coercePrecision(e eval, size int32) int {
+	if size > datetime.DefaultPrecision {
+		size = 0
+	}
+	if t, ok := e.(*evalTemporal); ok {
+		return int(max(size, int32(t.prec)))
+	}
+	return int(size)
+}
+
+// evalNotJSONSelected returns e without flagJSONBinary and flagJSONText:
+// the result of CASE has the character set of its type, also when it
+// selects the result of COALESCE.
+func evalNotJSONSelected(e eval) eval {
+	if b, ok := e.(*evalBytes); ok && b.flag&(flagJSONBinary|flagJSONText) != 0 {
+		r := *b
+		r.flag &^= flagJSONBinary | flagJSONText
+		return &r
+	}
+	return e
 }
 
 func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type, collation collations.ID, values *EnumSetValues, sqlmode SQLMode) (eval, error) {

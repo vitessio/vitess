@@ -21,9 +21,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -48,6 +50,7 @@ var Cases = []TestCase{
 	{Run: DecimalClamping},
 	{Run: JSONNumberComparison},
 	{Run: JSONStoredNumbers, Schema: JSONStoredNumbers_Schema},
+	{Run: CoalesceColumns, Schema: CoalesceColumns_Schema},
 	{Run: JSONStringComparison},
 	{Run: JSONDoubleConversion},
 	{Run: JSONTextDoubles},
@@ -1014,6 +1017,70 @@ var JSONStoredNumbers_Schema = []*querypb.Field{
 		Type:       sqltypes.TypeJSON,
 		ColumnType: "JSON",
 	},
+}
+
+// CoalesceColumns_Schema has a column of each kind that COALESCE combines.
+// It has no character string column: this test gives the columns no
+// declared type, and then the collation of a string column is not known.
+var CoalesceColumns_Schema = func() []*querypb.Field {
+	kinds := []struct {
+		typ        sqltypes.Type
+		columnType string
+		charset    collations.ID
+	}{
+		{sqltypes.Int64, "BIGINT", collations.CollationBinaryID},
+		{sqltypes.Uint64, "BIGINT UNSIGNED", collations.CollationBinaryID},
+		{sqltypes.Decimal, "DECIMAL(10,0)", collations.CollationBinaryID},
+		{sqltypes.VarBinary, "VARBINARY(10)", collations.CollationBinaryID},
+		{sqltypes.Date, "DATE", collations.CollationBinaryID},
+		{sqltypes.Datetime, "DATETIME", collations.CollationBinaryID},
+	}
+	var fields []*querypb.Field
+	for _, k := range kinds {
+		fields = append(fields, &querypb.Field{
+			Name:       fmt.Sprintf("column%d", len(fields)),
+			Type:       k.typ,
+			ColumnType: k.columnType,
+			Charset:    uint32(k.charset),
+		})
+	}
+	return fields
+}()
+
+// CoalesceColumns checks that COALESCE returns the type that it declares,
+// whichever argument it selects: a number or a date combined with a string
+// is a string, and an integer combined with a decimal is a decimal.
+func CoalesceColumns(yield Query) {
+	row := []sqltypes.Value{
+		sqltypes.NewInt64(5), sqltypes.NewUint64(7), sqltypes.NewDecimal("2"),
+		sqltypes.NewVarBinary("xyz"), sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-02 03:04:05"),
+	}
+	var columns []string
+	for i := range row {
+		columns = append(columns, fmt.Sprintf("column%d", i))
+	}
+	args := append(slices.Clone(columns), "1", "1.5", "'x'", "NULL")
+	consumers := []string{
+		"%s", "(%s) + 0", "-(%s)", "LENGTH(%s)", "CONCAT(%s, 'x')", "BIT_COUNT(%s)", "CAST(%s AS JSON)", "(%s) = '5'",
+	}
+	// MySQL reports the connection collation for a date, where the
+	// evalengine reports the binary collation.
+	temporal := func(arg string) bool {
+		return arg == "column4" || arg == "column5" || arg == "NULL"
+	}
+	for _, a := range columns {
+		for _, b := range args {
+			if a == b {
+				continue
+			}
+			for _, consumer := range consumers {
+				skipCollationCheck := consumer == "%s" && temporal(a) && temporal(b)
+				// the first argument is selected, then the second one
+				yield(fmt.Sprintf(consumer, fmt.Sprintf("COALESCE(%s, %s)", a, b)), row, skipCollationCheck)
+				yield(fmt.Sprintf(consumer, fmt.Sprintf("COALESCE(NULL, %s, %s)", b, a)), row, skipCollationCheck)
+			}
+		}
+	}
 }
 
 // JSONStringComparison pins how JSON strings compare. MySQL compares their

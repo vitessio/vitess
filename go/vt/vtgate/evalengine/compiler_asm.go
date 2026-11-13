@@ -188,24 +188,6 @@ func (asm *assembler) BitCount_b() {
 	}, "BIT_COUNT BINARY(SP-1)")
 }
 
-// BitCount_x is BIT_COUNT for an argument that is declared a binary string,
-// but can be a number when it runs. See builtinBitCount.compile.
-//
-// It counts the bits of every byte of a string, and converts any other
-// value to a 64-bit integer first.
-func (asm *assembler) BitCount_x() {
-	asm.emit(func(env *ExpressionEnv) int {
-		var count int
-		if b, ok := env.vm.stack[env.vm.sp-1].(*evalBytes); ok && !b.isHexOrBitLiteral() {
-			count = bitCountBytes(b.bytes)
-		} else {
-			count = bitCount(env.vm.stack[env.vm.sp-1])
-		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalInt64(int64(count))
-		return 1
-	}, "BIT_COUNT (SP-1)")
-}
-
 func (asm *assembler) BitCount_u() {
 	asm.emit(func(env *ExpressionEnv) int {
 		a := env.vm.stack[env.vm.sp-1].(*evalUint64)
@@ -564,7 +546,7 @@ func (asm *assembler) Cmp_ne_n() {
 	}, "CMPFLAG NE [NULL]")
 }
 
-func (asm *assembler) CmpCase(cases int, hasElse bool, keep typeFlag, tt sqltypes.Type, size, scale int32, cc collations.TypedCollation, allowZeroDate bool) {
+func (asm *assembler) CmpCase(cases int, hasElse bool, keep typeFlag, ifCase bool, tt sqltypes.Type, size, scale int32, cc collations.TypedCollation, allowZeroDate bool) {
 	elseOffset := 0
 	if hasElse {
 		elseOffset = 1
@@ -587,6 +569,7 @@ func (asm *assembler) CmpCase(cases int, hasElse bool, keep typeFlag, tt sqltype
 		}
 	done:
 		res, err := evalCoerce(sel, tt, size, scale, cc.Collation, env.now, allowZeroDate)
+		res = evalTemporalFrom(sel, res, ifCase)
 		env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalWithCollation(evalKeepNumber(sel, res, keep), cc), err
 		env.vm.sp -= stackDepth - 1
 		return 1
@@ -854,26 +837,59 @@ func (asm *assembler) Convert_jB(offset int) {
 	}, "CONV JSON(SP-%d), BOOL", offset)
 }
 
+// Convert_bj converts a binary string to JSON. The string can be the
+// result of COALESCE that selected a character string, which is parsed as
+// JSON text: see flagJSONText.
 func (asm *assembler) Convert_bj(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset] = evalConvert_bj(arg)
+		if arg.flag&flagJSONText == 0 {
+			env.vm.stack[env.vm.sp-offset] = evalConvert_bj(arg)
+		} else {
+			env.vm.stack[env.vm.sp-offset], env.vm.err = evalConvert_cj(arg)
+		}
 		return 1
 	}, "CONV VARBINARY(SP-%d), JSON", offset)
 }
 
+// ConvertArg_bj converts a binary string argument of a JSON function to
+// JSON. See Convert_bj.
+func (asm *assembler) ConvertArg_bj(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		if arg.flag&flagJSONText == 0 {
+			env.vm.stack[env.vm.sp-offset] = evalConvert_bj(arg)
+		} else {
+			env.vm.stack[env.vm.sp-offset], env.vm.err = evalConvertArg_cj(arg)
+		}
+		return 1
+	}, "CONVA VARBINARY(SP-%d), JSON", offset)
+}
+
+// ConvertArg_cj converts a character string argument of a JSON function to
+// a JSON string. The string can be the result of COALESCE that selected a
+// binary string, which becomes an opaque value: see flagJSONBinary.
 func (asm *assembler) ConvertArg_cj(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset], env.vm.err = evalConvertArg_cj(arg)
+		if arg.flag&flagJSONBinary != 0 {
+			env.vm.stack[env.vm.sp-offset] = evalConvert_bj(arg)
+		} else {
+			env.vm.stack[env.vm.sp-offset], env.vm.err = evalConvertArg_cj(arg)
+		}
 		return 1
 	}, "CONVA VARCHAR(SP-%d), JSON", offset)
 }
 
+// Convert_cj parses a character string as JSON. See ConvertArg_cj.
 func (asm *assembler) Convert_cj(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
-		env.vm.stack[env.vm.sp-offset], env.vm.err = evalConvert_cj(arg)
+		if arg.flag&flagJSONBinary != 0 {
+			env.vm.stack[env.vm.sp-offset] = evalConvert_bj(arg)
+		} else {
+			env.vm.stack[env.vm.sp-offset], env.vm.err = evalConvert_cj(arg)
+		}
 		return 1
 	}, "CONV VARCHAR(SP-%d), JSON", offset)
 }
@@ -956,6 +972,24 @@ func (asm *assembler) Convert_Ti(offset int) {
 			return 1
 		}
 		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toInt64())
+		return 1
+	}, "CONV SQLTIME(SP-%d), INT64", offset)
+}
+
+// Convert_Tn is Convert_Ti for DIV and for a comparison with a number. They
+// read a temporal value as a conversion to a decimal does, which differs for
+// a DATE that COALESCE or IFNULL made a DATETIME, see evalTemporalFrom. With
+// a DATE column dt that holds 2020-01-02 and a DATETIME column d0,
+// COALESCE(dt, d0) + 0 is 20200102000000, and COALESCE(dt, d0) DIV 1 is
+// 20200102.
+func (asm *assembler) Convert_Tn(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		v := env.vm.stack[env.vm.sp-offset].(*evalTemporal)
+		if v.prec != 0 {
+			env.vm.err = vterrors.NewErrorf(vtrpc.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "temporal type with non-zero precision")
+			return 1
+		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalInt64(v.toDecimalInt64())
 		return 1
 	}, "CONV SQLTIME(SP-%d), INT64", offset)
 }
@@ -1050,7 +1084,7 @@ func (asm *assembler) Convert_uj(offset int) {
 func (asm *assembler) Convert_dj(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-offset].(*evalDecimal)
-		env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.ToRawBytes()), json.NumberTypeDecimal)
+		env.vm.stack[env.vm.sp-offset] = json.NewNumber(string(arg.dec.FormatMySQL(jsonDecimalDigits(arg))), json.NumberTypeDecimal)
 		return 1
 	}, "CONV DECIMAL(SP-%d), JSON")
 }
@@ -1551,7 +1585,7 @@ func (asm *assembler) Fn_ASCII() {
 func (asm *assembler) Fn_REVERSE() {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		arg.makePlain()
+		arg.makePlainKeepCharset()
 
 		arg.tt = int16(sqltypes.VarChar)
 		arg.bytes = reverse(arg)
@@ -2770,7 +2804,7 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 	if upcase {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-			str.makePlain()
+			str.makePlainKeepCharset()
 
 			coll := colldata.Lookup(str.col.Collation)
 			csa, ok := coll.(colldata.CaseAwareCollation)
@@ -2785,7 +2819,7 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 	} else {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-			str.makePlain()
+			str.makePlainKeepCharset()
 
 			coll := colldata.Lookup(str.col.Collation)
 			csa, ok := coll.(colldata.CaseAwareCollation)
@@ -2947,7 +2981,7 @@ func (asm *assembler) Fn_REPEAT(base sqltypes.Type, fallback sqltypes.Type) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		repeat := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		if len(str.bytes) == 0 {
@@ -2983,7 +3017,7 @@ func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		if length.i <= 0 {
@@ -3015,7 +3049,7 @@ func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		if length.i <= 0 {
@@ -3048,7 +3082,7 @@ func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		length := env.vm.stack[env.vm.sp-2].(*evalInt64)
 		pad := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
@@ -3103,7 +3137,7 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		length := env.vm.stack[env.vm.sp-2].(*evalInt64)
 		pad := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
@@ -3158,7 +3192,7 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 func (asm *assembler) Fn_LTRIM1(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = bytes.TrimLeft(str.bytes, " ")
 		str.col = col
@@ -3169,7 +3203,7 @@ func (asm *assembler) Fn_LTRIM1(col collations.TypedCollation) {
 func (asm *assembler) Fn_RTRIM1(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = bytes.TrimRight(str.bytes, " ")
 		str.col = col
@@ -3180,7 +3214,7 @@ func (asm *assembler) Fn_RTRIM1(col collations.TypedCollation) {
 func (asm *assembler) Fn_TRIM1(col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = bytes.Trim(str.bytes, " ")
 		str.col = col
@@ -3192,7 +3226,7 @@ func (asm *assembler) Fn_LTRIM2(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = trimLeftRepeated(str.bytes, pat.bytes)
@@ -3206,7 +3240,7 @@ func (asm *assembler) Fn_RTRIM2(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = trimRightRepeated(str.bytes, pat.bytes)
@@ -3220,7 +3254,7 @@ func (asm *assembler) Fn_TRIM2(col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
 		str.tt = int16(sqltypes.VarChar)
 		str.bytes = trimRightRepeated(trimLeftRepeated(str.bytes, pat.bytes), pat.bytes)
@@ -3234,7 +3268,7 @@ func (asm *assembler) Fn_SUBSTRING2(tt sqltypes.Type, cs types.Charset, col coll
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		pos := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		end := int64(charset.Length(cs, str.bytes))
@@ -3261,7 +3295,7 @@ func (asm *assembler) Fn_SUBSTRING3(tt sqltypes.Type, cs types.Charset, col coll
 	asm.adjustStack(-2)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-3].(*evalBytes)
-		str.makePlain()
+		str.makePlainKeepCharset()
 		pos := env.vm.stack[env.vm.sp-2].(*evalInt64)
 		ll := env.vm.stack[env.vm.sp-1].(*evalInt64)
 

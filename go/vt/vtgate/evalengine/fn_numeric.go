@@ -990,6 +990,22 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
+// roundScale returns the digits after the point of ROUND or TRUNCATE of a
+// decimal with scale digits after the point, to the number of digits in
+// the expression digits. With a constant it is that number, between 0 and
+// scale: ROUND(1.5, 3) is shown as 1.5 and ROUND(1.5, -1) as 0. Otherwise
+// it is scale.
+func (c *compiler) roundScale(scale int32, digits IR) int32 {
+	if !digits.constant() {
+		return scale
+	}
+	d, err := digits.eval(EmptyExpressionEnv(c.env))
+	if err != nil || d == nil {
+		return scale
+	}
+	return int32(max(0, min(int64(scale), evalToInt64(d).i)))
+}
+
 func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 	arg, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -1011,6 +1027,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// We assume here the most common case here is that
 			// the decimal fits into an integer.
 			c.asm.Fn_ROUND1_d()
+			arg.Scale = 0
 		default:
 			arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 			c.asm.Convert_xf(1)
@@ -1046,6 +1063,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// We assume here the most common case here is that
 			// the decimal fits into an integer.
 			c.asm.Fn_ROUND2_d()
+			arg.Scale = c.roundScale(arg.Scale, expr.Arguments[1])
 		default:
 			arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 			c.asm.Convert_xf(2)
@@ -1224,6 +1242,7 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 		// We assume here the most common case here is that
 		// the decimal fits into an integer.
 		c.asm.Fn_TRUNCATE_d()
+		arg.Scale = c.roundScale(arg.Scale, expr.Arguments[1])
 	default:
 		arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 		c.asm.Convert_xf(2)

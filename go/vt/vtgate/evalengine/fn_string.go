@@ -386,7 +386,7 @@ func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
 			continue
 		}
 
-		tt = concatSQLType(arg.SQLType(), tt)
+		tt = concatSQLType(arg.SQLType(), evalCollation(arg).Collation, tt)
 		err = ca.add(evalCollation(arg), env.collationEnv)
 		if err != nil {
 			return nil, err
@@ -427,7 +427,7 @@ func (call *builtinElt) compile(c *compiler) (ctype, error) {
 			continue
 		}
 
-		tt = concatSQLType(args[i].Type, tt)
+		tt = concatSQLType(args[i].Type, args[i].Col.Collation, tt)
 		err = ca.add(args[i].Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
@@ -590,7 +590,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		} else {
 			newcase = csa.ToLower(nil, e.bytes)
 		}
-		return newEvalText(newcase, e.col), nil
+		return newEvalText(newcase, e.col).withCharsetOf(e), nil
 
 	default:
 		return e, nil
@@ -742,7 +742,7 @@ func (call *builtinReverse) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	return newEvalText(reverse(b), b.col), nil
+	return newEvalText(reverse(b), b.col).withCharsetOf(b), nil
 }
 
 func (call *builtinReverse) compile(c *compiler) (ctype, error) {
@@ -919,7 +919,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	if len(text.bytes) == 0 {
-		return newEvalText(nil, text.col), nil
+		return newEvalText(nil, text.col).withCharsetOf(text), nil
 	}
 
 	repeat := evalToInt64(arg2).i
@@ -937,7 +937,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 		tt = repeatType(env.currentVersion(), tt)
 	}
 
-	return newEvalRaw(tt, b, text.col), nil
+	return newEvalRaw(tt, b, text.col).withCharsetOf(text), nil
 }
 
 func validMaxLength(len, repeat int64) bool {
@@ -1151,7 +1151,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 
 	length := evalToInt64(l).i
 	if length <= 0 {
-		return newEvalText(nil, text.col), nil
+		return newEvalText(nil, text.col).withCharsetOf(text), nil
 	}
 
 	// LEFT / RIGHT operates on characters, not bytes
@@ -1159,7 +1159,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	strLen := charset.Length(cs, text.bytes)
 
 	if strLen <= int(length) {
-		return newEvalText(text.bytes, text.col), nil
+		return newEvalText(text.bytes, text.col).withCharsetOf(text), nil
 	}
 
 	var res []byte
@@ -1168,7 +1168,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	} else {
 		res = charset.Slice(cs, text.bytes, strLen-int(length), strLen)
 	}
-	return newEvalText(res, text.col), nil
+	return newEvalText(res, text.col).withCharsetOf(text), nil
 }
 
 func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
@@ -1244,12 +1244,12 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	if strLen >= int(length) {
 		// If the existing string is longer than the requested padding,
 		// MySQL truncates the string to the requested padding length.
-		return newEvalText(charset.Slice(cs, text.bytes, 0, int(length)), text.col), nil
+		return newEvalText(charset.Slice(cs, text.bytes, 0, int(length)), text.col).withCharsetOf(text), nil
 	}
 
 	runeLen := charset.Length(cs, pad.bytes)
 	if runeLen == 0 {
-		return newEvalText(nil, text.col), nil
+		return newEvalText(nil, text.col).withCharsetOf(text), nil
 	}
 
 	repeat := (int(length) - strLen) / runeLen
@@ -1270,7 +1270,7 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 		res = slices.Concat(text.bytes, padding)
 	}
 
-	return newEvalText(res, text.col), nil
+	return newEvalText(res, text.col).withCharsetOf(text), nil
 }
 
 func (call *builtinPad) compile(c *compiler) (ctype, error) {
@@ -1436,11 +1436,11 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	if len(call.Arguments) == 1 {
 		switch call.trim {
 		case sqlparser.LeadingTrimType:
-			return newEvalText(bytes.TrimLeft(text.bytes, " "), text.col), nil
+			return newEvalText(bytes.TrimLeft(text.bytes, " "), text.col).withCharsetOf(text), nil
 		case sqlparser.TrailingTrimType:
-			return newEvalText(bytes.TrimRight(text.bytes, " "), text.col), nil
+			return newEvalText(bytes.TrimRight(text.bytes, " "), text.col).withCharsetOf(text), nil
 		default:
-			return newEvalText(bytes.Trim(text.bytes, " "), text.col), nil
+			return newEvalText(bytes.Trim(text.bytes, " "), text.col).withCharsetOf(text), nil
 		}
 	}
 
@@ -1462,11 +1462,11 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 
 	switch call.trim {
 	case sqlparser.LeadingTrimType:
-		return newEvalText(trimLeftRepeated(text.bytes, pat.bytes), text.col), nil
+		return newEvalText(trimLeftRepeated(text.bytes, pat.bytes), text.col).withCharsetOf(text), nil
 	case sqlparser.TrailingTrimType:
-		return newEvalText(trimRightRepeated(text.bytes, pat.bytes), text.col), nil
+		return newEvalText(trimRightRepeated(text.bytes, pat.bytes), text.col).withCharsetOf(text), nil
 	default:
-		return newEvalText(trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col), nil
+		return newEvalText(trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col).withCharsetOf(text), nil
 	}
 }
 
@@ -1585,7 +1585,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 
 	pos := evalToInt64(p).i
 	if pos == 0 {
-		return newEvalRaw(tt, nil, text.col), nil
+		return newEvalRaw(tt, nil, text.col).withCharsetOf(text), nil
 	}
 	cs := colldata.Lookup(text.col.Collation).Charset()
 	end := int64(charset.Length(cs, text.bytes))
@@ -1594,13 +1594,13 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		pos += end + 1
 	}
 	if pos < 1 || pos > end {
-		return newEvalRaw(tt, nil, text.col), nil
+		return newEvalRaw(tt, nil, text.col).withCharsetOf(text), nil
 	}
 
 	if len(call.Arguments) > 2 {
 		ll := evalToInt64(l).i
 		if ll < 1 {
-			return newEvalRaw(tt, nil, text.col), nil
+			return newEvalRaw(tt, nil, text.col).withCharsetOf(text), nil
 		}
 		if ll > end-pos+1 {
 			ll = end - pos + 1
@@ -1608,7 +1608,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		end = pos + ll - 1
 	}
 	res := charset.Slice(cs, text.bytes, int(pos-1), int(end))
-	return newEvalRaw(tt, res, text.col), nil
+	return newEvalRaw(tt, res, text.col).withCharsetOf(text), nil
 }
 
 func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
@@ -1760,8 +1760,10 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
 }
 
-func concatSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
-	if arg == sqltypes.TypeJSON {
+func concatSQLType(arg sqltypes.Type, col collations.ID, tt sqltypes.Type) sqltypes.Type {
+	if arg == sqltypes.TypeJSON || arg == sqltypes.Blob && col != collations.CollationBinaryID {
+		// a BLOB with the collation of a character string is a TEXT:
+		// CONCAT(IF(c, i, js), '') is a LONGTEXT in MySQL 8.4
 		return sqltypes.Blob
 	}
 
@@ -1799,7 +1801,7 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		args = append(args, a)
-		tt = concatSQLType(a.SQLType(), tt)
+		tt = concatSQLType(a.SQLType(), evalCollation(a).Collation, tt)
 
 		err = ca.add(evalCollation(a), env.collationEnv)
 		if err != nil {
@@ -1850,7 +1852,7 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 		f |= nullableFlags(a.Flag) | a.Flag&flagExplicitCollation
 		skips = append(skips, c.compileNullCheckArg(a, i))
 		args = append(args, a)
-		tt = concatSQLType(a.Type, tt)
+		tt = concatSQLType(a.Type, a.Col.Collation, tt)
 
 		err = ca.add(a.Col, c.env.CollationEnv())
 		if err != nil {
@@ -1906,7 +1908,7 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 			continue
 		}
 		args = append(args, a)
-		tt = concatSQLType(a.SQLType(), tt)
+		tt = concatSQLType(a.SQLType(), evalCollation(a).Collation, tt)
 
 		err = ca.add(evalCollation(a), env.collationEnv)
 		if err != nil {
@@ -1968,7 +1970,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		tt = concatSQLType(a.Type, tt)
+		tt = concatSQLType(a.Type, a.Col.Collation, tt)
 
 		err = ca.add(a.Col, c.env.CollationEnv())
 		if err != nil {

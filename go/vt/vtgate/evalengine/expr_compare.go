@@ -404,7 +404,7 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 	case compareAsDateAndNumeric(lt.Type, rt.Type):
 		if sqltypes.IsDateOrTime(lt.Type) {
 			if lt.Size == 0 {
-				c.asm.Convert_Ti(2)
+				c.asm.Convert_Tn(2)
 				lt.Type = sqltypes.Int64
 			} else {
 				c.asm.Convert_Tf(2)
@@ -413,7 +413,7 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 		}
 		if sqltypes.IsDateOrTime(rt.Type) {
 			if rt.Size == 0 {
-				c.asm.Convert_Ti(1)
+				c.asm.Convert_Tn(1)
 				rt.Type = sqltypes.Int64
 			} else {
 				c.asm.Convert_Tf(1)

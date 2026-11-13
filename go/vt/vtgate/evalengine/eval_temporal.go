@@ -33,7 +33,71 @@ import (
 type evalTemporal struct {
 	t    sqltypes.Type
 	prec uint8
+	// from is set on a DATETIME or TIMESTAMP that CASE or COALESCE
+	// converted from a DATE or a TIME, see evalTemporalFrom.
+	from temporalFrom
 	dt   datetime.DateTime
+}
+
+// temporalFrom says whose number a conversion of an evalTemporal to a
+// number reads.
+type temporalFrom uint8
+
+const (
+	// fromDate and fromTime: a conversion to a double or a decimal reads
+	// the number of the DATE or the TIME that the value was converted from.
+	fromDate temporalFrom = 1 << iota
+	fromTime
+	// fromInteger: so does a conversion to an integer.
+	fromInteger
+)
+
+// numberType returns the type whose number a conversion of e to a number
+// reads. integer is set for a conversion to an integer.
+func (e *evalTemporal) numberType(integer bool) sqltypes.Type {
+	if integer && e.from&fromInteger == 0 {
+		return e.t
+	}
+	switch {
+	case e.from&fromDate != 0:
+		return sqltypes.Date
+	case e.from&fromTime != 0:
+		return sqltypes.Time
+	}
+	return e.t
+}
+
+// evalTemporalFrom returns res, the DATETIME that CASE or COALESCE made of
+// the DATE or TIME sel that they selected, marked to be read as the number
+// of sel in arithmetic. With a DATE column dt that holds 2020-01-02 and a
+// DATETIME column dtm:
+//
+//   - IF and CASE (ifCase is set) give the number of a DATE or a TIME in
+//     every conversion to a number: CAST(IF(c, dt, dtm) AS SIGNED) is
+//     20200102.
+//   - COALESCE and IFNULL give the number of a DATE in a conversion to a
+//     double or a decimal, -IFNULL(dt, dtm) is -20200102, and the number of
+//     the DATETIME in a conversion to an integer: CAST(IFNULL(dt, dtm) AS
+//     SIGNED) is 20200102000000. They give the number of the DATETIME for a
+//     TIME.
+func evalTemporalFrom(sel, res eval, ifCase bool) eval {
+	s, ok := sel.(*evalTemporal)
+	if !ok {
+		return res
+	}
+	r, ok := res.(*evalTemporal)
+	if !ok || r == s || (r.t != sqltypes.Datetime && r.t != sqltypes.Timestamp) {
+		return res
+	}
+	switch {
+	case s.t == sqltypes.Date && ifCase:
+		r.from = fromDate | fromInteger
+	case s.t == sqltypes.Date:
+		r.from = fromDate
+	case s.t == sqltypes.Time && ifCase:
+		r.from = fromTime | fromInteger
+	}
+	return r
 }
 
 func (e *evalTemporal) Hash(h *vthash.Hasher) {
@@ -67,7 +131,19 @@ func (e *evalTemporal) Scale() int32 {
 }
 
 func (e *evalTemporal) toInt64() int64 {
-	switch e.SQLType() {
+	return e.int64Of(e.numberType(true))
+}
+
+// toDecimalInt64 returns the integer part of toDecimal: the number that DIV
+// and a comparison with a number read. It differs from toInt64 for a DATE
+// that COALESCE or IFNULL made a DATETIME, see evalTemporalFrom.
+func (e *evalTemporal) toDecimalInt64() int64 {
+	return e.int64Of(e.numberType(false))
+}
+
+// int64Of returns e as the integer of a temporal value of type tt.
+func (e *evalTemporal) int64Of(tt sqltypes.Type) int64 {
+	switch tt {
 	case sqltypes.Date:
 		return e.dt.Date.FormatInt64()
 	case sqltypes.Datetime, sqltypes.Timestamp:
@@ -80,7 +156,7 @@ func (e *evalTemporal) toInt64() int64 {
 }
 
 func (e *evalTemporal) toFloat() float64 {
-	switch e.SQLType() {
+	switch e.numberType(false) {
 	case sqltypes.Date:
 		return float64(e.dt.Date.FormatInt64())
 	case sqltypes.Datetime, sqltypes.Timestamp:
@@ -93,7 +169,7 @@ func (e *evalTemporal) toFloat() float64 {
 }
 
 func (e *evalTemporal) toDecimal() decimal.Decimal {
-	switch e.SQLType() {
+	switch e.numberType(false) {
 	case sqltypes.Date:
 		return decimal.NewFromInt(e.dt.Date.FormatInt64())
 	case sqltypes.Datetime, sqltypes.Timestamp:

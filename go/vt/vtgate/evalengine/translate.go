@@ -425,7 +425,7 @@ func (ast *astCompiler) translateUnaryExpr(unary *sqlparser.UnaryExpr) (IR, erro
 
 func (ast *astCompiler) translateCaseExpr(node *sqlparser.CaseExpr) (IR, error) {
 	var err error
-	var result CaseExpr
+	result := CaseExpr{collate: ast.cfg.Collation}
 
 	if node.Else != nil {
 		result.Else, err = ast.translateExpr(node.Else)

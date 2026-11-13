@@ -1180,6 +1180,125 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `CONVERT(_binary'a' USING utf8mb4) = 0x41`,
 			result:     `INT64(1)`,
 		},
+		{
+			// COALESCE of an INT and a decimal is a decimal with the digits
+			// of the decimal.
+			expression: `COALESCE(column0, 1.5)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5)},
+			result:     `DECIMAL(5.0)`,
+		},
+		{
+			// JSON reads the decimal with its own digits.
+			expression: `CAST(COALESCE(column0, 1.5) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5)},
+			result:     `JSON("5")`,
+		},
+		{
+			// IFNULL shows all the digits too, IF does not.
+			expression: `IFNULL(column0, 1.5)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5)},
+			result:     `DECIMAL(5.0)`,
+		},
+		{
+			// COALESCE of an INT and a VARCHAR is the VARCHAR '5'.
+			expression: `LENGTH(COALESCE(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewVarChar("abc")},
+			result:     `INT64(1)`,
+		},
+		{
+			// A number and a date combine to a VARCHAR with the connection
+			// collation, which BIT_COUNT reads as a number.
+			expression: `BIT_COUNT(IFNULL(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewDate("2020-01-02")},
+			result:     `INT64(2)`,
+		},
+		{
+			// The conversion to DATETIME keeps the digits of the value.
+			expression: `IFNULL(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NULL, sqltypes.NewDatetime("2020-01-02 03:04:05.678")},
+			fields: []*querypb.Field{
+				{Name: "column0", Type: sqltypes.Datetime, Charset: uint32(collations.CollationBinaryID)},
+				{Name: "column1", Type: sqltypes.Datetime, Charset: uint32(collations.CollationBinaryID)},
+			},
+			result: `DATETIME("2020-01-02 03:04:05.678")`,
+		},
+		{
+			// A DATE converted to a DATETIME keeps its number in arithmetic.
+			expression: `-IFNULL(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-02 03:04:05")},
+			result:     `FLOAT64(-20200102)`,
+		},
+		{
+			// DIV and a comparison with a number read that number too.
+			expression: `IFNULL(column0, column1) DIV 1`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-02 03:04:05")},
+			result:     `INT64(20200102)`,
+		},
+		{
+			expression: `IFNULL(column0, column1) = 20200102`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-02 03:04:05")},
+			result:     `INT64(1)`,
+		},
+		{
+			// A YEAR column combines with an INT to an INT.
+			expression: `IFNULL(column0, column1) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.MakeTrusted(sqltypes.Year, []byte("2020"))},
+			result:     `INT64(5)`,
+		},
+		{
+			// A VARCHAR column that is NULL and a JSON value combine to a
+			// LONGTEXT in MySQL 8.4.
+			expression: `CAST(IFNULL(column0, column1) AS CHAR)`,
+			values:     []sqltypes.Value{sqltypes.NULL, sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
+			fields: []*querypb.Field{
+				{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)},
+				{Name: "column1", Type: sqltypes.TypeJSON, Charset: uint32(collations.CollationBinaryID)},
+			},
+			result: `TEXT("{\"a\": 1}")`,
+		},
+		{
+			expression: `HEX(COALESCE(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
+			result:     `TEXT("35")`,
+		},
+		{
+			// COALESCE of a text and a binary column is a binary string, but
+			// JSON reads the text that it selected as JSON text.
+			expression: `CAST(COALESCE(column0, column1) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("12"), sqltypes.NewVarBinary("xyz")},
+			result:     `JSON("12")`,
+		},
+		{
+			expression: `JSON_ARRAY(COALESCE(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("12"), sqltypes.NewVarBinary("xyz")},
+			result:     `JSON("[\"12\"]")`,
+		},
+		{
+			// SUBSTRING keeps the character set of the string, CONCAT does not.
+			expression: `CAST(SUBSTRING(COALESCE(column0, column1), 1) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("12"), sqltypes.NewVarBinary("xyz")},
+			result:     `JSON("12")`,
+		},
+		{
+			// It reads a binary string that it selected as a binary value.
+			expression: `CAST(COALESCE(0x41, column0) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `JSON("\"base64:type15:QQ==\"")`,
+		},
+		{
+			// IFNULL does not: its result is a binary string.
+			expression: `CAST(IFNULL(column0, column1) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewVarBinary("xyz")},
+			result:     `JSON("\"base64:type15:NQ==\"")`,
+		},
+		{
+			// An ENUM column has its collation, also in the interpreter.
+			expression: `COALESCE('x', column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte("abc"))},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.Enum, Charset: uint32(collations.CollationUtf8mb4ID)}},
+			result:     `VARCHAR("x")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

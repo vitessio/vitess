@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -31,6 +32,8 @@ import (
 type (
 	builtinCoalesce struct {
 		CallExpr
+		// collate is the connection collation. See caseResult.
+		collate collations.ID
 	}
 
 	multiComparisonFunc func(env *ExpressionEnv, args []eval, cmp, prec int) (eval, error)
@@ -61,47 +64,119 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 	}
+	tt, col := coalesceType(&ta, &ca, b.collate, env.currentVersion())
 	for _, arg := range args {
 		if arg != nil {
-			return coalesceString(evalPlain(arg), caseResultType(&ta, ca.result()), ca.result())
+			return coalesceResult(arg, tt, ta.size, ta.scale, col, env.now, env.sqlmode.AllowZeroDate())
 		}
 	}
 	return nil, nil
 }
 
-// coalesceString converts sel, the argument that COALESCE selected, to the
-// string type tt and the collation col that all the arguments combine to.
+// coalesceType returns the type and the collation of the result of
+// COALESCE, whose arguments have the types in ta and the collations in ca.
+// It is the one of a CASE, see caseResult, except for an ENUM or SET that
+// is the only argument that is not the NULL literal: COALESCE(en, NULL)
+// is an ENUM, where COALESCE(en, en) is a VARCHAR.
+func coalesceType(ta *typeAggregation, ca *collationAggregation, conn collations.ID, version string) (sqltypes.Type, collations.TypedCollation) {
+	switch {
+	case ta.total == 1 && ta.enum == 1:
+		return sqltypes.Enum, ca.result()
+	case ta.total == 1 && ta.set == 1:
+		return sqltypes.Set, ca.result()
+	}
+	return caseResult(ta, ca, conn, version)
+}
+
+// coalesceResult converts sel, the argument that COALESCE selected, to the
+// type tt and the collation col that all the arguments combine to, as CASE
+// does. size and scale are the ones of evalCoerce. With an INT column i that
+// holds 5, COALESCE(i, 1.5) is the decimal 5.0 and COALESCE(i, s) the
+// string '5'.
 //
-// MySQL gives the result of COALESCE one type and one collation, whichever
-// argument is selected. With a text column s and a binary column vb,
-// COALESCE(s, vb) is a binary string, and COALESCE(s, 0x41) has the
-// collation of s.
+// The result is never a hex or bit literal: COALESCE(0x31) + 0 is 1. It
+// keeps the character set of the selected argument for a conversion to
+// JSON, see flagJSONBinary.
+func coalesceResult(sel eval, tt sqltypes.Type, size, scale int32, col collations.TypedCollation, now time.Time, allowZero bool) (eval, error) {
+	var selBinary bool
+	if b, ok := sel.(*evalBytes); ok {
+		selBinary = b.jsonBinary()
+	}
+	sel = evalPlain(sel)
+
+	var (
+		res eval
+		err error
+	)
+	if b, ok := sel.(*evalBytes); ok && isCoalesceString(b.SQLType()) && isCoalesceString(tt) {
+		res, err = coalesceString(b, tt, col)
+	} else {
+		res, err = evalCoerce(sel, tt, size, scale, col.Collation, now, allowZero)
+		res = evalWithCollation(evalTemporalFrom(sel, res, false), col)
+	}
+	r, ok := res.(*evalBytes)
+	if !ok || err != nil {
+		return res, err
+	}
+	if r.jsonBinary() == selBinary {
+		return r, nil
+	}
+	if r == sel {
+		c := *r
+		r = &c
+	}
+	if selBinary {
+		r.flag |= flagJSONBinary
+	} else {
+		r.flag |= flagJSONText
+	}
+	return r, nil
+}
+
+// coalesceString converts the string sel to the string type tt and the
+// collation col. See coalesceResult.
 //
-// It only converts a string to a string. A selected number, date or JSON
-// value is returned as it is.
-func coalesceString(sel eval, tt sqltypes.Type, col collations.TypedCollation) (eval, error) {
-	b, ok := sel.(*evalBytes)
-	if !ok || !isCoalesceString(b.SQLType()) || !isCoalesceString(tt) || col.Collation == collations.Unknown {
+// With a text column s and a binary column vb, COALESCE(s, vb) is a binary
+// string, and COALESCE(s, 0x41) has the collation of s.
+func coalesceString(sel *evalBytes, tt sqltypes.Type, col collations.TypedCollation) (eval, error) {
+	if col.Collation == collations.Unknown {
 		return sel, nil
 	}
 	binary := col.Collation == collations.CollationBinaryID
+	r := sel
 	switch {
-	case b.isBinary() && binary:
-	case b.isBinary():
+	case sel.isBinary() && binary:
+	case sel.isBinary():
 		// the bytes of a binary string are read in the character set of col
-		sel = newEvalText(b.bytes, col)
+		r = newEvalText(sel.bytes, col)
 	case binary && (tt == sqltypes.VarBinary || tt == sqltypes.Binary || tt == sqltypes.Blob):
-		sel = newEvalBinary(b.bytes)
-	case b.col.Collation != col.Collation:
-		t, err := evalToVarchar(b, col.Collation, true)
+		r = newEvalBinary(sel.bytes)
+	case sel.col.Collation == collations.CollationBinaryID && !binary:
+		// the collation of the string is binary or not known: its bytes
+		// are read in the character set of col
+		c := *sel
+		c.col = col
+		r = &c
+	case sel.col.Collation != col.Collation:
+		t, err := evalToVarchar(sel, col.Collation, true)
 		if err != nil {
 			return nil, err
 		}
 		// a TEXT stays a TEXT
-		t.tt = b.tt
-		sel = t
+		t.tt = sel.tt
+		r = t
 	}
-	return evalWithCollation(sel, col), nil
+	if tt == sqltypes.Text || tt == sqltypes.Blob || sqltypes.IsBinary(r.SQLType()) != sqltypes.IsBinary(tt) {
+		// the result is a binary string or a TEXT when COALESCE is, also
+		// when it is the selected string: COALESCE(s, CAST(js AS CHAR)) is
+		// a TEXT
+		if r == sel {
+			c := *r
+			r = &c
+		}
+		r.tt = int16(tt)
+	}
+	return evalWithCollation(r, col), nil
 }
 
 // isCoalesceString reports whether tt is one of the string types that
@@ -129,14 +204,15 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		if !tt.nullable() {
 			f = 0
 		}
-		ta.add(tt.Type, tt.Flag, tt.Size, tt.Scale)
-		if err := ca.add(tt.Col, c.env.CollationEnv()); err != nil {
+		ta.add(c.caseBranchType(arg, tt.Type), tt.Flag, tt.Size, tt.Scale)
+		if err := ca.addTyped(tt.Type, tt.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
 
 	args := len(b.Arguments)
-	tt, col := caseResultType(&ta, ca.result()), ca.result()
+	tt, col := coalesceType(&ta, &ca, b.collate, c.env.MySQLVersion())
+	size, scale, allowZero := ta.size, ta.scale, c.sqlmode.AllowZeroDate()
 	c.asm.adjustStack(-(args - 1))
 	c.asm.emit(func(env *ExpressionEnv) int {
 		var sel eval
@@ -147,7 +223,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 			}
 		}
 		if sel != nil {
-			env.vm.stack[env.vm.sp-args], env.vm.err = coalesceString(evalPlain(sel), tt, col)
+			env.vm.stack[env.vm.sp-args], env.vm.err = coalesceResult(sel, tt, size, scale, col, env.now, allowZero)
 		} else {
 			env.vm.stack[env.vm.sp-args] = nil
 		}
@@ -155,7 +231,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		return 1
 	}, "COALESCE (SP-%d) ... (SP-1)", args)
 
-	return ctype{Type: tt, Flag: f, Col: col}, nil
+	return ctype{Type: tt, Flag: f, Col: col, Size: size, Scale: scale}, nil
 }
 
 func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiComparisonFunc {

@@ -95,7 +95,13 @@ func newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
 	case m == 0:
 		return newEvalDecimalWithPrec(dec, d)
 	default:
-		return newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
+		dec = dec.Clamp(m-d, d)
+		if -dec.Exponent() < d {
+			// the value has the d digits: CAST(5 AS DECIMAL(10,2)) is 5.00
+			// also in JSON, see jsonDecimalDigits
+			dec = dec.Round(d)
+		}
+		return newEvalDecimalWithPrec(dec, d)
 	}
 }
 
