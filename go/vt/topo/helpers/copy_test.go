@@ -18,10 +18,14 @@ package helpers
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -104,6 +108,7 @@ func createSetup(ctx context.Context, t *testing.T) (*topo.Server, *topo.Server)
 func TestBasic(t *testing.T) {
 	ctx := t.Context()
 	fromTS, toTS := createSetup(ctx, t)
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	// check keyspace copy
 	CopyKeyspaces(ctx, fromTS, toTS, sqlparser.NewTestParser())
@@ -139,4 +144,39 @@ func TestBasic(t *testing.T) {
 	require.NoError(t, err)
 	require.Truef(t, len(tablets) == 2 && tablets[0].Uid == 123 && tablets[1].Uid == 234, "unexpected tablets: %v", tablets)
 	CopyTablets(ctx, fromTS, toTS)
+
+	// The second copy of each object logs that it already exists.
+	record := logs.Record(t, "keyspace already exists")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "test_keyspace", record["keyspace"])
+	record = logs.Record(t, "shard already exists")
+	assert.Equal(t, "test_keyspace", record["keyspace"])
+	assert.Equal(t, "0", record["shard"])
+	var updated []any
+	for _, r := range logs.Records(t) {
+		if r["msg"] == "tablet already exists, updating it" {
+			updated = append(updated, r["tablet"])
+		}
+	}
+	assert.Equal(t, []any{"test_cell-0000000123", "test_cell-0000000234"}, updated)
+}
+
+func TestCopyRoutingRulesLogsSaveFailure(t *testing.T) {
+	ctx := t.Context()
+	fromTS := memorytopo.NewServer(ctx, "test_cell")
+	t.Cleanup(fromTS.Close)
+	toTS, toFactory := memorytopo.NewServerAndFactory(ctx, "test_cell")
+	t.Cleanup(toTS.Close)
+	require.NoError(t, fromTS.SaveRoutingRules(ctx, &vschemapb.RoutingRules{
+		Rules: []*vschemapb.RoutingRule{{FromTable: "t1", ToTables: []string{"ks2.t1"}}},
+	}))
+	saveErr := errors.New("save failed")
+	toFactory.AddOperationError(memorytopo.Update, topo.RoutingRulesFile, saveErr)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, CopyRoutingRules(ctx, fromTS, toTS))
+	record := logs.Record(t, "SaveRoutingRules failed")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, map[string]any{"t1": []any{"ks2.t1"}}, record["routing_rules"])
+	assert.Equal(t, "save failed", record["error"])
 }

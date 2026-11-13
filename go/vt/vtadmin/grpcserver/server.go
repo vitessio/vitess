@@ -19,6 +19,7 @@ package grpcserver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -121,7 +122,7 @@ func New(name string, opts Options) *Server {
 	streamInterceptors = append(streamInterceptors, func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		err := handler(srv, ss)
 		if err != nil {
-			log.Error(fmt.Sprintf("%s error: %s", info.FullMethod, err))
+			log.Error("RPC error", slog.String("rpc", info.FullMethod), slog.Any("error", err))
 		}
 
 		return err
@@ -129,7 +130,7 @@ func New(name string, opts Options) *Server {
 	unaryInterceptors = append(unaryInterceptors, func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 		resp, err = handler(ctx, req)
 		if err != nil {
-			log.Error(fmt.Sprintf("%s error: %s", info.FullMethod, err))
+			log.Error("RPC error", slog.String("rpc", info.FullMethod), slog.Any("error", err))
 		}
 
 		return resp, err
@@ -218,9 +219,8 @@ func (s *Server) ListenAndServe() error {
 	// listen for signals
 	go func() {
 		sig := <-signals
-		err := fmt.Errorf("received signal: %v", sig)
-		log.Warn(fmt.Sprint(err))
-		shutdown <- err
+		log.Warn("received signal", slog.String("signal", sig.String()))
+		shutdown <- fmt.Errorf("received signal: %v", sig)
 	}()
 
 	if s.opts.MetricsEndpoint != "" {
@@ -235,24 +235,25 @@ func (s *Server) ListenAndServe() error {
 	// Start the servers
 	go func() {
 		err := s.gRPCServer.Serve(grpcLis)
-		err = fmt.Errorf("grpc server stopped: %w", err)
-		log.Warn(fmt.Sprint(err))
-		shutdown <- err
+		if err != nil {
+			log.Warn("grpc server stopped", slog.Any("error", err))
+		} else {
+			log.Warn("grpc server stopped")
+		}
+		shutdown <- fmt.Errorf("grpc server stopped: %w", err)
 	}()
 
 	go func() {
 		err := http.Serve(anyLis, s.router)
-		err = fmt.Errorf("http server stopped: %w", err)
-		log.Warn(fmt.Sprint(err))
-		shutdown <- err
+		log.Warn("http server stopped", slog.Any("error", err))
+		shutdown <- fmt.Errorf("http server stopped: %w", err)
 	}()
 
 	// Start muxing connections
 	go func() {
 		err := lmux.Serve()
-		err = fmt.Errorf("listener closed: %w", err)
-		log.Warn(fmt.Sprint(err))
-		shutdown <- err
+		log.Warn("listener closed", slog.Any("error", err))
+		shutdown <- fmt.Errorf("listener closed: %w", err)
 	}()
 
 	for service := range s.gRPCServer.GetServiceInfo() {
@@ -260,13 +261,13 @@ func (s *Server) ListenAndServe() error {
 	}
 
 	s.setServing(true)
-	log.Info(fmt.Sprintf("server %s listening on %s", s.name, s.opts.Addr))
+	log.Info("server listening", slog.String("server", s.name), slog.String("address", s.opts.Addr))
 
 	reason := <-shutdown
-	log.Warn(fmt.Sprintf("graceful shutdown triggered by: %v", reason))
+	log.Warn("graceful shutdown triggered", slog.Any("reason", reason))
 
 	if s.opts.LameDuckDuration > 0 {
-		log.Info(fmt.Sprintf("entering lame duck period for %v", s.opts.LameDuckDuration))
+		log.Info("entering lame duck period", slog.Duration("lameduck_period", s.opts.LameDuckDuration))
 		s.healthServer.Shutdown()
 		time.Sleep(s.opts.LameDuckDuration)
 	} else {

@@ -1,10 +1,5 @@
 name: e2e_race
 on:
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
-    tags: '**'
   pull_request:
     branches: '**'
 concurrency:
@@ -69,6 +64,7 @@ jobs:
             - '.github/actions/setup-mysql/action.yml'
             - '.github/actions/tune-os/**'
             - '.github/actions/setup-go/action.yml'
+            - '.github/actions/tool-downloads/**'
 
   build:
     name: End-to-End Test (Race)
@@ -89,7 +85,7 @@ jobs:
       run: exit 1
 
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
       with:
         egress-policy: audit
 
@@ -136,6 +132,10 @@ jobs:
         sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget xz-utils
         
         sudo service etcd stop
+
+    - name: Restore tool downloads
+      if: needs.changes.outputs.end_to_end == 'true'
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make minimaltools
       if: needs.changes.outputs.end_to_end == 'true'

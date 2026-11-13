@@ -18,6 +18,7 @@ package servenv
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"vitess.io/vitess/go/vt/log"
@@ -36,7 +37,7 @@ func init() {
 
 		file, err := os.OpenFile(pidFile, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o666)
 		if err != nil {
-			log.Error(fmt.Sprintf("Unable to create pid file '%s': %v", pidFile, err))
+			log.Error("Unable to create pid file", slog.String("pid_file", pidFile), slog.Any("error", err))
 			return
 		}
 		pidFileCreated = true
@@ -54,7 +55,7 @@ func init() {
 		}
 
 		if err := os.Remove(pidFile); err != nil {
-			log.Error(fmt.Sprintf("Unable to remove pid file '%s': %v", pidFile, err))
+			log.Error("Unable to remove pid file", slog.String("pid_file", pidFile), slog.Any("error", err))
 		}
 	})
 }

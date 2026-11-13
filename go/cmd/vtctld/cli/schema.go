@@ -18,7 +18,7 @@ package cli
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/utils"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/wrangler"
 )
@@ -60,7 +61,7 @@ func initSchema(ctx context.Context) {
 		timer := timer.NewTimer(interval)
 		controllerFactory, err := schemamanager.GetControllerFactory(schemaChangeController)
 		if err != nil {
-			log.Error(fmt.Sprintf("unable to get a controller factory, error: %v", err))
+			log.Error("unable to get a controller factory", slog.Any("error", err))
 			os.Exit(1)
 		}
 
@@ -70,7 +71,7 @@ func initSchema(ctx context.Context) {
 				schemamanager.SchemaChangeUser:    schemaChangeUser,
 			})
 			if err != nil {
-				log.Error(fmt.Sprintf("failed to get controller, error: %v", err))
+				log.Error("failed to get controller", slog.Any("error", err))
 				return
 			}
 			wr := wrangler.New(env, logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
@@ -80,7 +81,7 @@ func initSchema(ctx context.Context) {
 				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout, 0, env.Parser()),
 			)
 			if err != nil {
-				log.Error(fmt.Sprintf("Schema change failed, error: %v", err))
+				log.Error("Schema change failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		})
 		servenv.OnClose(func() { timer.Stop() })

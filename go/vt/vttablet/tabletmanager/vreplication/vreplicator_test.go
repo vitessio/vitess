@@ -49,6 +49,21 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
+// TestSetStateFailureClassified checks that a failed state save is classified
+// by the error that broke it, not by an errno marker in the message it saves,
+// such as a DDL statement's comment.
+func TestSetStateFailureClassified(t *testing.T) {
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClient.ExpectRequestRE("update _vt.vreplication set state='Stopped'", nil, sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction"))
+	stats := binlogplayer.NewStats()
+	t.Cleanup(stats.Stop)
+	vr := &vreplicator{id: 1, dbClient: newVDBClient(dbClient, stats, 0), stats: stats}
+
+	err := vr.setState(binlogdatapb.VReplicationWorkflowState_Stopped, "Stopped at DDL alter table t comment '(errno 1062) (sqlstate 23000)'")
+	require.ErrorContains(t, err, "Lock wait timeout")
+	assert.False(t, isUnrecoverableError(err))
+}
+
 func TestMaxQuerySize(t *testing.T) {
 	makeVR := func(dbClient binlogplayer.DBClient, relayLogMaxSize int) *vreplicator {
 		stats := binlogplayer.NewStats()

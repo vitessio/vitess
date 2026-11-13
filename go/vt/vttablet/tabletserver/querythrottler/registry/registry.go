@@ -18,10 +18,12 @@ package registry
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
 	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -40,7 +42,6 @@ func Register(name querythrottlerpb.ThrottlingStrategy, factory StrategyFactory)
 	}
 
 	factories[name] = factory
-	log.Info(fmt.Sprintf("Registered throttling strategy: %s", name))
 }
 
 // Get retrieves a strategy factory by name.
@@ -55,7 +56,7 @@ func Get(name querythrottlerpb.ThrottlingStrategy) (StrategyFactory, bool) {
 
 // CreateStrategy creates a new strategy instance using the registered factory.
 // Falls back to NoOpStrategy for unknown strategies or factory errors.
-func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
+func CreateStrategy(cfg *querythrottlerpb.Config, deps Deps) ThrottlingStrategyHandler {
 	// If the requested strategy name is unknown or the factory panics/returns error, CreateStrategy() directly constructs &NoOpStrategy{} as its unconditional fallback.
 	// Configuration files or runtime switches never list "NoOp" as a valid strategy choice; they list "TabletThrottler", "Cinnamon", etc.
 	// The design intent is:
@@ -63,13 +64,17 @@ func CreateStrategy(cfg StrategyConfig, deps Deps) ThrottlingStrategyHandler {
 	// NoOpStrategy must always be available—even before any registration happens—so the registry itself can safely fall back on it.
 	factory, ok := Get(cfg.GetStrategy())
 	if !ok {
-		log.Warn(fmt.Sprintf("Unknown strategy %s, using NoOp", cfg.GetStrategy()))
+		log.Warn("Unknown strategy, using NoOp", slog.String("strategy", cfg.GetStrategy().String()))
 		return &NoOpStrategy{}
 	}
 
-	strategy, err := factory.New(deps, cfg)
+	strategy, err := factory.New(deps)
 	if err != nil {
-		log.Error(fmt.Sprintf("Strategy %s failed to init: %v, using NoOp", cfg.GetStrategy(), err))
+		log.Error("Strategy failed to init, using NoOp",
+			slog.String("strategy", cfg.GetStrategy().String()),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 		return &NoOpStrategy{}
 	}
 

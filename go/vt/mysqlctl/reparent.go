@@ -22,14 +22,20 @@ This file contains the reparenting methods for mysqlctl.
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/constants/sidecar"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/replication"
-	"vitess.io/vitess/go/vt/sqlparser"
-
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // GenerateInitialBinlogEntry is used to create a binlog entry when
@@ -72,7 +78,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	for {
 		qr, err := mysqld.FetchSuperQuery(ctx, queryReparentJournal(timeCreatedNS))
 		if err != nil {
-			log.Info(fmt.Sprintf("Error querying reparent journal: %v", err))
+			log.Info("Error querying reparent journal", slog.Any("error", err))
 		}
 		if err == nil && len(qr.Rows) == 1 {
 			// we have the row, we're done
@@ -90,13 +96,62 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	}
 }
 
-// Promote will promote this server to be the new primary.
+// applyReceivedTransactions stops the receiver and waits for received MySQL GTIDs
+// to execute before promotion resets replication. Semi-sync replicas may have
+// acknowledged transactions that are still in the relay log. Each step stops
+// when ctx is done, so a canceled promotion releases the tablet's action lock.
+func (mysqld *Mysqld) applyReceivedTransactions(ctx context.Context, conn *dbconnpool.PooledDBConnection) error {
+	readStatus := func() (status replication.ReplicationStatus, err error) {
+		err = mysqld.executeWithContext(ctx, conn, "SHOW REPLICA STATUS", func() error {
+			var statusErr error
+			status, statusErr = conn.Conn.ShowReplicationStatus()
+			return statusErr
+		})
+		return status, err
+	}
+	status, err := readStatus()
+	if errors.Is(err, mysql.ErrNotReplica) {
+		return nil
+	}
+	if err != nil {
+		return vterrors.Wrap(err, "cannot promote: failed to read replication status")
+	}
+	if status.IOState != replication.ReplicationStateStopped {
+		if err := mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.Conn.StopIOThreadCommand()}); err != nil {
+			return vterrors.Wrap(err, "cannot promote: failed to stop the replication receiver")
+		}
+		if status, err = readStatus(); err != nil {
+			return vterrors.Wrap(err, "cannot promote: failed to read replication status after stopping the receiver")
+		}
+	}
+	if !status.RelayLogPosition.MatchesFlavor(replication.Mysql56FlavorID) || status.Position.AtLeast(status.RelayLogPosition) {
+		return nil
+	}
+	if !status.SQLHealthy() {
+		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+			"cannot promote: the replica received transactions that it has not applied (executed %v, received %v) and its applier is not running",
+			status.Position, status.RelayLogPosition)
+	}
+	err = mysqld.executeWithContext(ctx, conn, "WAIT_FOR_EXECUTED_GTID_SET", func() error {
+		return conn.Conn.WaitUntilPosition(ctx, status.RelayLogPosition)
+	})
+	if err != nil {
+		return vterrors.Wrapf(err, "cannot promote: waiting for the applier to execute the received transactions %v", status.RelayLogPosition)
+	}
+	return nil
+}
+
+// Promote promotes this server to primary.
 func (mysqld *Mysqld) Promote(ctx context.Context, hookExtraEnv map[string]string) (replication.Position, error) {
 	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
 	if err != nil {
 		return replication.Position{}, err
 	}
-	defer conn.Recycle()
+	defer recycle(ctx, conn)
+
+	if err := mysqld.applyReceivedTransactions(ctx, conn); err != nil {
+		return replication.Position{}, err
+	}
 
 	// Since we handle replication, just stop it.
 	cmds := []string{
@@ -113,5 +168,11 @@ func (mysqld *Mysqld) Promote(ctx context.Context, hookExtraEnv map[string]strin
 	if err := mysqld.executeSuperQueryListConn(ctx, conn, cmds); err != nil {
 		return replication.Position{}, err
 	}
-	return conn.Conn.PrimaryPosition()
+	var pos replication.Position
+	err = mysqld.executeWithContext(ctx, conn, "executed position", func() error {
+		var err error
+		pos, err = conn.Conn.PrimaryPosition()
+		return err
+	})
+	return pos, err
 }

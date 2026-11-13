@@ -19,12 +19,13 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"os"
 	"path"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -33,7 +34,7 @@ import (
 func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *topo.Server) {
 	// Create the directory if it doesn't exist.
 	if err := createDirectoryIfNotExists(vschemaPersistenceDir); err != nil {
-		log.Error(fmt.Sprintf("Unable to create vschema persistence directory %v: %v", vschemaPersistenceDir, err))
+		log.Error("Unable to create vschema persistence directory", slog.String("dir", vschemaPersistenceDir), slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -42,7 +43,7 @@ func startVschemaWatcher(ctx context.Context, vschemaPersistenceDir string, ts *
 
 	// Rebuild the SrvVSchema object in case we loaded vschema from file
 	if err := ts.RebuildSrvVSchema(ctx, tpb.Cells); err != nil {
-		log.Error(fmt.Sprintf("RebuildSrvVSchema failed: %v", err))
+		log.Error("RebuildSrvVSchema failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -56,7 +57,7 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 		if _, err := os.Stat(ksFile); err == nil {
 			jsonData, err := os.ReadFile(ksFile)
 			if err != nil {
-				log.Error(fmt.Sprintf("Unable to read keyspace file %v: %v", ksFile, err))
+				log.Error("Unable to read keyspace file", slog.String("path", ksFile), slog.Any("error", err))
 				os.Exit(1)
 			}
 
@@ -66,17 +67,20 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 			}
 			err = json.Unmarshal(jsonData, ksvs.Keyspace)
 			if err != nil {
-				log.Error(fmt.Sprintf("Unable to parse keyspace file %v: %v", ksFile, err))
+				log.Error("Unable to parse keyspace file", slog.String("path", ksFile), slog.Any("error", err))
 				os.Exit(1)
 			}
 
 			_, err = vindexes.BuildKeyspace(ksvs.Keyspace, env.Parser())
 			if err != nil {
-				log.Error(fmt.Sprintf("Invalid keyspace definition: %v", err))
+				log.Error("Invalid keyspace definition",
+					slog.String("keyspace", ks.Name),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()))
 				os.Exit(1)
 			}
 			ts.SaveVSchema(ctx, ksvs)
-			log.Info(fmt.Sprintf("Loaded keyspace %v from %v\n", ks.Name, ksFile))
+			log.Info("Loaded keyspace from path", slog.String("keyspace", ks.Name), slog.String("path", ksFile))
 		}
 	}
 }
@@ -84,19 +88,19 @@ func loadKeyspacesFromDir(ctx context.Context, dir string, ts *topo.Server) {
 func watchSrvVSchema(ctx context.Context, ts *topo.Server, cell string) {
 	data, ch, err := ts.WatchSrvVSchema(ctx, tpb.Cells[0])
 	if err != nil {
-		log.Error(fmt.Sprintf("WatchSrvVSchema failed: %v", err))
+		log.Error("WatchSrvVSchema failed", slog.Any("error", err))
 		os.Exit(1)
 	}
 
 	if data.Err != nil {
-		log.Error(fmt.Sprintf("WatchSrvVSchema could not retrieve initial vschema: %v", data.Err))
+		log.Error("WatchSrvVSchema could not retrieve initial vschema", slog.Any("error", data.Err))
 		os.Exit(1)
 	}
 	persistNewSrvVSchema(data.Value)
 
 	for update := range ch {
 		if update.Err != nil {
-			log.Error(fmt.Sprintf("WatchSrvVSchema returned an error: %v", update.Err))
+			log.Error("WatchSrvVSchema returned an error", slog.Any("error", update.Err))
 		} else {
 			persistNewSrvVSchema(update.Value)
 		}
@@ -107,15 +111,16 @@ func persistNewSrvVSchema(srvVSchema *vschemapb.SrvVSchema) {
 	for ksName, ks := range srvVSchema.Keyspaces {
 		jsonBytes, err := json.MarshalIndent(ks, "", "  ")
 		if err != nil {
-			log.Error(fmt.Sprintf("Error marshaling keyspace: %v", err))
+			log.Error("Error marshaling keyspace", slog.String("keyspace", ksName), slog.Any("error", err))
 			continue
 		}
 
-		err = os.WriteFile(path.Join(vschemaPersistenceDir, ksName+".json"), jsonBytes, 0o644)
+		ksFile := path.Join(vschemaPersistenceDir, ksName+".json")
+		err = os.WriteFile(ksFile, jsonBytes, 0o644)
 		if err != nil {
-			log.Error(fmt.Sprintf("Error writing keyspace file: %v", err))
+			log.Error("Error writing keyspace file", slog.String("keyspace", ksName), slog.String("path", ksFile), slog.Any("error", err))
 		}
-		log.Info(fmt.Sprintf("Persisted keyspace %v to %v", ksName, vschemaPersistenceDir))
+		log.Info("Persisted keyspace to dir", slog.String("keyspace", ksName), slog.String("dir", vschemaPersistenceDir))
 	}
 }
 

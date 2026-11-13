@@ -19,12 +19,15 @@ package pools
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 var (
@@ -355,10 +358,14 @@ func TestReopen(t *testing.T) {
 	expected := `{"Capacity": 5, "Available": 0, "Active": 5, "InUse": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`
 	assert.Equal(t, expected, stats)
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	time.Sleep(650 * time.Millisecond)
 	for i := range 5 {
 		p.Put(resources[i])
 	}
+	record := logs.Wait(t, "Draining and reopening resource pool by request")
+	assert.Equal(t, "INFO", record["level"])
+	assert.EqualValues(t, 5, record["capacity"])
 	time.Sleep(50 * time.Millisecond)
 	stats = p.StatsJSON()
 	expected = `{"Capacity": 5, "Available": 5, "Active": 0, "InUse": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "MaxLifetimeClosed": 0, "Exhausted": 1}`

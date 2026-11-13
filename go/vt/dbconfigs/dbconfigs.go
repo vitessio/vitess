@@ -23,7 +23,7 @@ package dbconfigs
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -434,7 +434,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *
 		if dbcfgs.Charset != "" && cp.Charset == collations.Unknown {
 			ch, err := collationEnv.ParseConnectionCharset(dbcfgs.Charset)
 			if err != nil {
-				log.Warn(fmt.Sprintf("Error parsing charset %s: %v", dbcfgs.Charset, err))
+				log.Warn("Error parsing charset", slog.String("charset", dbcfgs.Charset), slog.Any("error", err))
 				ch = collationEnv.DefaultConnectionCharset()
 			}
 			cp.Charset = ch
@@ -462,7 +462,7 @@ func (dbcfgs *DBConfigs) InitWithSocket(defaultSocketFile string, collationEnv *
 		}
 	}
 
-	log.Info(fmt.Sprintf("DBConfigs: %v\n", dbcfgs.String()))
+	log.Info("DBConfigs", slog.String("db_configs", dbcfgs.String()))
 }
 
 func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnParams) {
@@ -494,7 +494,7 @@ func (dbcfgs *DBConfigs) getParams(userKey string) (*UserConfig, *mysql.ConnPara
 		uc = &dbcfgs.CloneUser
 		cp = &dbcfgs.cloneParams
 	default:
-		log.Error("Invalid db user key requested: " + userKey)
+		log.Error("Invalid db user key requested", slog.String("db_user_key", userKey))
 		os.Exit(1)
 	}
 	return uc, cp

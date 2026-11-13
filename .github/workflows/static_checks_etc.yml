@@ -31,7 +31,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit all outbound calls)
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
         with:
           egress-policy: audit
 
@@ -85,12 +85,17 @@ jobs:
               - 'tools/**/go.mod'
               - 'tools/**/go.sum'
               - '.github/workflows/static_checks_etc.yml'
+            logcheck:
+              - 'go/tools/logcheck/packages.txt'
+              - 'tools/check_logcheck.sh'
+              - 'Makefile'
             parser_changes:
               - 'go/vt/sqlparser/**'
               - 'go.sum'
               - 'go.mod'
               - 'build.env'
               - 'bootstrap.sh'
+              - '.github/actions/tool-downloads/**'
               - 'tools/**'
               - '.github/workflows/static_checks_etc.yml'
             proto_changes:
@@ -154,7 +159,7 @@ jobs:
               - '.github/workflows/static_checks_etc.yml'
 
       - name: Set up Go
-        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true')
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.proto_changes == 'true' || steps.changes.outputs.logcheck == 'true')
         uses: $/.github/actions/setup-go
         with:
           build-cache: build,unit,tools
@@ -172,6 +177,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y make unzip g++ etcd-client etcd-server curl git wget
           sudo service etcd stop
+
+      - name: Restore tool downloads
+        if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
+        uses: $/.github/actions/tool-downloads
 
       - name: Run make minimaltools
         if: (steps.changes.outputs.parser_changes == 'true' || steps.changes.outputs.go_files == 'true')
@@ -238,6 +247,12 @@ jobs:
           lint config verify
           lint run --timeout 10m ./go/...
 
+      - name: Run logcheck
+        if: (steps.changes.outputs.go_files == 'true' || steps.changes.outputs.logcheck == 'true')
+        timeout-minutes: 10
+        run: |
+          make lint-logcheck
+
       - name: Check license headers
         if: steps.changes.outputs.go_files == 'true'
         timeout-minutes: 5
@@ -296,7 +311,7 @@ jobs:
           exit 1
 
       - name: Run zizmor 🌈
-        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        uses: zizmorcore/zizmor-action@53290badfa369cb0bf7ad16342cb62c2fa47ac7b # v0.8.0
         with:
           advanced-security: false
           annotations: true

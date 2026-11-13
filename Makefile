@@ -46,7 +46,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race lint lint-fix minimaltools tools generate-flag-testdata
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race lint lint-fix lint-logcheck minimaltools tools generate-flag-testdata
 
 all: build
 
@@ -243,7 +243,9 @@ site_integration_test:
 	go run test.go -docker=false -tag=site_test
 
 java_test:
-	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
+	# Into the bin/ the tests start it from, with the CGO_ENABLED=0 and
+	# -trimpath of "make build", whose compiled packages this then reuses.
+	CGO_ENABLED=0 go build -trimpath -o ${PWD}/bin/ ./go/cmd/vtgateclienttest
 	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 PROTO_SRCS = $(wildcard proto/*.proto)
@@ -276,7 +278,7 @@ $(PROTO_GO_OUTS): minimaltools proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql80 mysql84 percona80 percona84
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=63
+BOOTSTRAP_VERSION=64
 ensure_bootstrap_version:
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
 
@@ -366,10 +368,16 @@ dependency_check:
 # Checks for formatting and linting errors.
 lint:
 	go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint run ./go/...
+	tools/check_logcheck.sh
 
 # Applies autofixes for formatting and linting errors if supported.
 lint-fix:
 	go run -trimpath -modfile=tools/golangci-lint/go.mod github.com/golangci/golangci-lint/v2/cmd/golangci-lint run --fix ./go/...
+
+# Checks that the packages listed in go/tools/logcheck/packages.txt log
+# constant messages.
+lint-logcheck:
+	tools/check_logcheck.sh
 
 vtadmin_web_install:
 	cd web/vtadmin && npm install

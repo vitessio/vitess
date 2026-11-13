@@ -79,7 +79,7 @@ jobs:
         predicate-quantifier: 'every'
         filters: |
           changed_files:
-            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml,go/**,go.mod,go.sum,Makefile}'
+            - '{.github/workflows/codecov.yml,.github/actions/setup-mysql/action.yml,.github/actions/tune-os/**,.github/actions/setup-go/action.yml,.github/actions/tool-downloads/**,go/**,go.mod,go.sum,Makefile}'
             - '!{go/test/endtoend,go/flags/endtoend,go/mysql/endtoend,go/vt/vtctl/endtoend,go/vt/vtctl/grpcvtctldserver/endtoend,go/vt/vtgate/endtoend,go/vt/vttablet/endtoend}/**/*_test.go'
 
     # Needed by `go list` in the next step.
@@ -112,6 +112,8 @@ jobs:
         # Validate as Go packages and exclude endtoend tests. Only consider
         # paths under go/; anything else (e.g. ".", "changelog", ".github")
         # would expand to ./.../... and pull in the full endtoend suite.
+        # testdata is excluded like ./go/... excludes it in a full run: go list
+        # accepts it when named, but its fixtures need not build.
         PACKAGES=""
         for dir in $PACKAGE_DIRS; do
           case "$dir" in
@@ -120,6 +122,7 @@ jobs:
           esac
           case "$dir" in
             */endtoend*|go/cmd/vttestserver*) continue ;;
+            */testdata|*/testdata/*) continue ;;
           esac
           if go list "./$dir" >/dev/null 2>&1; then
             PACKAGES="${PACKAGES:+$PACKAGES }$dir"
@@ -140,7 +143,7 @@ jobs:
 
     steps:
     - name: Harden the runner (Audit all outbound calls)
-      uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+      uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
       with:
         egress-policy: audit
 
@@ -159,7 +162,7 @@ jobs:
         go-tools: none
 
     - name: Set up python
-      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
 
     - name: Tune the OS
       timeout-minutes: 5
@@ -178,6 +181,9 @@ jobs:
         sudo apt-get update
 
         sudo apt-get install -y make unzip g++ curl git wget
+
+    - name: Restore tool downloads
+      uses: $/.github/actions/tool-downloads
 
     - name: Run make tools
       timeout-minutes: 10
