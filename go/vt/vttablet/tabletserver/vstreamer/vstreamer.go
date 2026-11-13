@@ -428,9 +428,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 						return
 					}
 				}
-				logger.Info("vstreamer throttled",
-					append([]slog.Attr{slog.String("workflow", vs.filter.GetWorkflowName())}, checkResult.LogAttrs()...)...,
-				)
+				attrs := append([]slog.Attr{slog.String("workflow", vs.filter.GetWorkflowName())}, checkResult.LogAttrs()...)
+				logger.Info("vstreamer throttled", attrs...)
 				continue
 			}
 			throttledTime.Store(0) // We are no longer fully throttled
