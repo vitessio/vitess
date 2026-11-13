@@ -121,6 +121,7 @@ func (mp *zkLeaderParticipation) WaitForLeadership() (context.Context, error) {
 		return nil, topo.NewError(topo.Interrupted, "Leadership")
 	default:
 		// something else went wrong
+		deleteProposal(mp.zs.conn, proposal, -1)
 		return nil, err
 	}
 
@@ -144,6 +145,8 @@ func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkCo
 	_, stats, events, err := conn.GetW(ctx, proposal)
 	if err != nil {
 		log.Warn("Cannot watch proposal while being Leader, stopping", slog.Any("error", err))
+		cancel()
+		deleteProposal(conn, proposal, -1)
 		return
 	}
 
@@ -160,6 +163,25 @@ func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkCo
 	case e := <-events:
 		// something happened to our proposal, that can only be bad.
 		log.Warn("Watch on proposal triggered, canceling leadership", slog.String("election_name", mp.name), slog.String("zk_event", fmt.Sprint(e)))
+		if e.Err != nil {
+			// Stop leading before cleaning up, as the cleanup may
+			// take a while.
+			cancel()
+			deleteProposal(conn, proposal, stats.Version)
+		}
+	}
+}
+
+// deleteProposal removes a proposal we gave up on. The proposal is an
+// ephemeral node, but when we close the connection of its session without
+// ending the session cleanly, the server only removes it once the session
+// expires, and the proposal blocks the other participants until then.
+// Deleting it is best effort: the session expiry removes it anyway.
+func deleteProposal(conn *ZkConn, proposal string, version int32) {
+	ctx, cancel := context.WithTimeout(context.Background(), baseTimeout)
+	defer cancel()
+	if err := conn.Delete(ctx, proposal, version); err != nil && err != zk.ErrNoNode {
+		log.Warn("Error deleting our proposal", slog.String("path", proposal), slog.Any("error", err))
 	}
 }
 

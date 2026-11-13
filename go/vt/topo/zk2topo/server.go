@@ -93,7 +93,6 @@ func NewServer(serverAddr, root string) *Server {
 // Close is part of topo.Conn interface.
 func (zs *Server) Close() {
 	zs.conn.Close()
-	zs.conn = nil
 }
 
 func init() {
