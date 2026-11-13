@@ -47,6 +47,17 @@ type (
 		// cte is a map of CTE definitions that are used in the query
 		cte map[string]*CTE
 
+		// cteByNode maps each definition to its CTE, since cte keeps only the
+		// last definition registered for a name
+		cteByNode map[*sqlparser.CommonTableExpr]*CTE
+
+		// deferredMismatch holds column-list violations found while analyzing
+		// a definition's body, keyed by the enclosing definition. MySQL only
+		// validates definitions the executed statement uses, so a violation
+		// surfaces when a use of the recording definition resolves, and stays
+		// silent while it remains unused.
+		deferredMismatch map[*CTE]error
+
 		// lastInsertIdWithArgument is used to signal to later stages that we
 		// need to do special handling of the engine primitive
 		lastInsertIdWithArgument bool
@@ -55,10 +66,12 @@ type (
 
 func newEarlyTableCollector(si SchemaInformation, currentDb string) *earlyTableCollector {
 	return &earlyTableCollector{
-		si:        si,
-		currentDb: currentDb,
-		done:      map[*sqlparser.AliasedTableExpr]TableInfo{},
-		cte:       map[string]*CTE{},
+		si:               si,
+		currentDb:        currentDb,
+		done:             map[*sqlparser.AliasedTableExpr]TableInfo{},
+		cte:              map[string]*CTE{},
+		cteByNode:        map[*sqlparser.CommonTableExpr]*CTE{},
+		deferredMismatch: map[*CTE]error{},
 	}
 }
 
@@ -66,12 +79,14 @@ func (etc *earlyTableCollector) down(cursor *sqlparser.Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.With:
 		for _, cte := range node.CTEs {
-			etc.cte[cte.ID.String()] = &CTE{
+			def := &CTE{
 				Name:      cte.ID.String(),
 				Query:     cte.Subquery,
 				Columns:   cte.Columns,
 				Recursive: node.Recursive,
 			}
+			etc.cte[def.Name] = def
+			etc.cteByNode[cte] = def
 		}
 	case *sqlparser.FuncExpr:
 		if node.Name.EqualString("last_insert_id") && len(node.Exprs) == 1 {
@@ -400,12 +415,34 @@ func (etc *earlyTableCollector) buildRecursiveCTE(node *sqlparser.AliasedTableEx
 			return cteTable, nil
 		}
 	}
+	// a use inside another definition only counts if that definition is
+	// itself used, so the violation is recorded against the enclosing one
+	err := checkColumnListLength(cteDef.Columns, cteDef.Query)
+	if err == nil {
+		err = etc.deferredMismatch[cteDef]
+	}
+	if err != nil {
+		enclosing := etc.enclosingCTE(sc)
+		if enclosing == nil {
+			return nil, err
+		}
+		etc.deferredMismatch[enclosing] = err
+	}
 	return &RealTable{
 		tableName:    node.TableNameString(),
 		ASTNode:      node,
 		CTE:          cteDef,
 		collationEnv: etc.si.Environment().CollationEnv(),
 	}, nil
+}
+
+// enclosingCTE returns the definition whose body is being analyzed at the
+// current scope, or nil when the reference comes from the executed statement.
+func (etc *earlyTableCollector) enclosingCTE(sc *scoper) *CTE {
+	if sc == nil || len(sc.commonTableExprScopes) == 0 {
+		return nil
+	}
+	return etc.cteByNode[sc.commonTableExprScopes[len(sc.commonTableExprScopes)-1]]
 }
 
 func checkValidRecursiveCTE(cteDef *CTE) error {
@@ -435,14 +472,56 @@ func checkValidRecursiveCTE(cteDef *CTE) error {
 }
 
 func (tc *tableCollector) handleDerivedTable(node *sqlparser.AliasedTableExpr, t *sqlparser.DerivedTable) error {
+	columns := node.Columns
+	unpaired := false
+	if err := checkColumnListLength(columns, t.Select); err != nil {
+		enclosing := tc.enclosingCTE(tc.scoper)
+		if enclosing == nil {
+			return err
+		}
+		// while the enclosing definition stays unused, a longer list still
+		// names every select expression, and a shorter one is ignored so the
+		// table keeps the select list names, non-authoritatively
+		tc.deferredMismatch[enclosing] = err
+		if len(columns) < t.Select.GetColumnCount() {
+			columns = nil
+			unpaired = true
+		}
+	}
 	switch sel := t.Select.(type) {
 	case *sqlparser.Select:
-		return tc.addSelectDerivedTable(sel, node, node.Columns, node.As)
+		return tc.addSelectDerivedTable(sel, node, columns, node.As, unpaired)
 	case *sqlparser.Union:
-		return tc.addUnionDerivedTable(sel, node, node.Columns, node.As)
+		return tc.addUnionDerivedTable(sel, node, columns, node.As, unpaired)
 	default:
 		return vterrors.VT13001("[BUG] %T in a derived table", sel)
 	}
+}
+
+// checkColumnListLength validates a declared column list against the select
+// list that defines the table, as MySQL does for derived tables and CTEs.
+func checkColumnListLength(columns sqlparser.Columns, stmt sqlparser.TableStatement) error {
+	if len(columns) == 0 {
+		return nil
+	}
+	firstSelect, err := sqlparser.GetFirstSelect(stmt)
+	if err != nil {
+		return err
+	}
+	selectColumns := firstSelect.GetColumns()
+	if containsStar(selectColumns) {
+		// every star expands to at least one column, so a column list with
+		// fewer names than select expressions is guaranteed not to match;
+		// beyond that we cannot validate against an unexpanded star
+		if len(columns) < len(selectColumns) {
+			return vterrors.VT03033()
+		}
+		return nil
+	}
+	if len(columns) != len(selectColumns) {
+		return vterrors.VT03033()
+	}
+	return nil
 }
 
 func (tc *tableCollector) addSelectDerivedTable(
@@ -450,12 +529,13 @@ func (tc *tableCollector) addSelectDerivedTable(
 	tableExpr *sqlparser.AliasedTableExpr,
 	columns sqlparser.Columns,
 	alias sqlparser.IdentifierCS,
+	unpaired bool,
 ) error {
 	tables := tc.scoper.wScope[sel]
 	size := sel.GetColumnCount()
 	deps := make([]TableSet, size)
 	types := make([]evalengine.Type, size)
-	expanded := true
+	expanded := !unpaired
 	for i, expr := range sel.GetColumns() {
 		ae, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -483,6 +563,7 @@ func (tc *tableCollector) addUnionDerivedTable(
 	node *sqlparser.AliasedTableExpr,
 	columns sqlparser.Columns,
 	alias sqlparser.IdentifierCS,
+	unpaired bool,
 ) error {
 	firstSelect, err := sqlparser.GetFirstSelect(union)
 	if err != nil {
@@ -494,7 +575,7 @@ func (tc *tableCollector) addUnionDerivedTable(
 		return vterrors.VT13001("information about union is not available")
 	}
 
-	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, tc.org, info.isAuthoritative, info.recursive, info.types)
+	tableInfo := createDerivedTableForExpressions(info.exprs, columns, tables.tables, tc.org, info.isAuthoritative && !unpaired, info.recursive, info.types)
 	if err := tableInfo.checkForDuplicates(); err != nil {
 		return err
 	}

@@ -632,6 +632,9 @@ func buildApplyJoin(op *ApplyJoin, qb *queryBuilder) {
 	case qbR.stmt == nil:
 		// do nothing
 	case qb.stmt == nil:
+		if pred != nil {
+			panic(vterrors.VT12001("outer join condition on a recursive CTE reference"))
+		}
 		qb.stmt = qbR.stmt
 	default:
 		qb.joinWith(qbR, pred, op.JoinType)
