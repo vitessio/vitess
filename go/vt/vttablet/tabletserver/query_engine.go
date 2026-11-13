@@ -914,12 +914,24 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	for _, v := range items {
 		var query string
 		if qe.redactUIQuery {
-			query, _ = qe.env.Environment().Parser().RedactSQLQuery(v.Query)
+			query = qe.redactConsolidationKey(v.Query)
 		} else {
 			query = v.Query
 		}
 		fmt.Fprintf(response, "%v: %s\n", v.Count, query)
 	}
+}
+
+// redactConsolidationKey returns key, a consolidation key, redacted for the debug page.
+// RedactSQLQuery keeps comments and the values of SET statements as they are, so it is
+// given the query without the connection settings, which are left out.
+func (qe *QueryEngine) redactConsolidationKey(key string) string {
+	query, hasSettings := splitConsolidationKey(key)
+	query, _ = qe.env.Environment().Parser().RedactSQLQuery(query)
+	if hasSettings {
+		query = "/* settings redacted */ " + query
+	}
+	return query
 }
 
 // unicoded returns a valid UTF-8 string that json won't reject
