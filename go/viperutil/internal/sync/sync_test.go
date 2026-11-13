@@ -154,6 +154,26 @@ func TestWatchConfig(t *testing.T) {
 	wg.Wait()
 }
 
+func TestSetWithConcurrentGetOfOtherKey(t *testing.T) {
+	sv := vipersync.New()
+	getInt := func(v *viper.Viper) func(key string) int { return v.GetInt }
+	getA := vipersync.AdaptGetter("a", getInt, sv)
+	getB := vipersync.AdaptGetter("b", getInt, sv)
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		for i := range 1000 {
+			sv.Set("b", i)
+		}
+	})
+	for range 1000 {
+		getA("a")
+	}
+	wg.Wait()
+
+	require.Equal(t, 999, getB("b"))
+}
+
 func jitter(min, max int) int {
 	return min + rand.IntN(max-min+1)
 }
