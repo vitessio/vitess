@@ -97347,6 +97347,423 @@ export namespace vtctldata {
     }
 
     /**
+     * Properties of a VDiffUpdateRequest.
+     * @deprecated Use vtctldata.VDiffUpdateRequest.$Properties instead.
+     */
+    interface IVDiffUpdateRequest extends vtctldata.VDiffUpdateRequest.$Properties {
+    }
+
+    /** Represents a VDiffUpdateRequest. */
+    class VDiffUpdateRequest {
+
+        /**
+         * Constructs a new VDiffUpdateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.VDiffUpdateRequest.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** VDiffUpdateRequest workflow. */
+        workflow: string;
+
+        /** VDiffUpdateRequest target_keyspace. */
+        target_keyspace: string;
+
+        /** VDiffUpdateRequest uuid. */
+        uuid: string;
+
+        /** VDiffUpdateRequest target_shards. */
+        target_shards: string[];
+
+        /** VDiffUpdateRequest tablet_types. */
+        tablet_types: topodata.TabletType[];
+
+        /** VDiffUpdateRequest tablet_selection_preference. */
+        tablet_selection_preference: tabletmanagerdata.TabletSelectionPreference;
+
+        /** VDiffUpdateRequest source_cells. */
+        source_cells: string[];
+
+        /** VDiffUpdateRequest target_cells. */
+        target_cells: string[];
+
+        /** VDiffUpdateRequest clear_source_cells. */
+        clear_source_cells: boolean;
+
+        /** VDiffUpdateRequest clear_target_cells. */
+        clear_target_cells: boolean;
+
+        /**
+         * Creates a new VDiffUpdateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffUpdateRequest instance
+         */
+        static create(properties: vtctldata.VDiffUpdateRequest.$Shape): vtctldata.VDiffUpdateRequest & vtctldata.VDiffUpdateRequest.$Shape;
+        static create(properties?: vtctldata.VDiffUpdateRequest.$Properties): vtctldata.VDiffUpdateRequest;
+
+        /**
+         * Encodes the specified VDiffUpdateRequest message. Does not implicitly {@link vtctldata.VDiffUpdateRequest.verify|verify} messages.
+         * @param message VDiffUpdateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: vtctldata.VDiffUpdateRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffUpdateRequest message, length delimited. Does not implicitly {@link vtctldata.VDiffUpdateRequest.verify|verify} messages.
+         * @param message VDiffUpdateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: vtctldata.VDiffUpdateRequest.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffUpdateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {vtctldata.VDiffUpdateRequest & vtctldata.VDiffUpdateRequest.$Shape} VDiffUpdateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffUpdateRequest & vtctldata.VDiffUpdateRequest.$Shape;
+
+        /**
+         * Decodes a VDiffUpdateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {vtctldata.VDiffUpdateRequest & vtctldata.VDiffUpdateRequest.$Shape} VDiffUpdateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffUpdateRequest & vtctldata.VDiffUpdateRequest.$Shape;
+
+        /**
+         * Verifies a VDiffUpdateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffUpdateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffUpdateRequest
+         */
+        static fromObject(object: { [k: string]: any }): vtctldata.VDiffUpdateRequest;
+
+        /**
+         * Creates a plain object from a VDiffUpdateRequest message. Also converts values to other types if specified.
+         * @param message VDiffUpdateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: vtctldata.VDiffUpdateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffUpdateRequest to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for VDiffUpdateRequest
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace VDiffUpdateRequest {
+
+        /** Properties of a VDiffUpdateRequest. */
+        interface $Properties {
+
+            /** VDiffUpdateRequest workflow */
+            workflow?: (string|null);
+
+            /** VDiffUpdateRequest target_keyspace */
+            target_keyspace?: (string|null);
+
+            /** VDiffUpdateRequest uuid */
+            uuid?: (string|null);
+
+            /** VDiffUpdateRequest target_shards */
+            target_shards?: (string[]|null);
+
+            /** VDiffUpdateRequest tablet_types */
+            tablet_types?: (topodata.TabletType[]|null);
+
+            /** VDiffUpdateRequest tablet_selection_preference */
+            tablet_selection_preference?: (tabletmanagerdata.TabletSelectionPreference|null);
+
+            /** VDiffUpdateRequest source_cells */
+            source_cells?: (string[]|null);
+
+            /** VDiffUpdateRequest target_cells */
+            target_cells?: (string[]|null);
+
+            /** VDiffUpdateRequest clear_source_cells */
+            clear_source_cells?: (boolean|null);
+
+            /** VDiffUpdateRequest clear_target_cells */
+            clear_target_cells?: (boolean|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a VDiffUpdateRequest. */
+        type $Shape = vtctldata.VDiffUpdateRequest.$Properties;
+    }
+
+    /**
+     * Properties of a VDiffUpdateResponse.
+     * @deprecated Use vtctldata.VDiffUpdateResponse.$Properties instead.
+     */
+    interface IVDiffUpdateResponse extends vtctldata.VDiffUpdateResponse.$Properties {
+    }
+
+    /** Represents a VDiffUpdateResponse. */
+    class VDiffUpdateResponse {
+
+        /**
+         * Constructs a new VDiffUpdateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.VDiffUpdateResponse.$Properties);
+
+        /** Unknown fields preserved while decoding when enabled */
+        $unknowns?: Uint8Array[];
+
+        /** VDiffUpdateResponse results. */
+        results: vtctldata.VDiffUpdateResponse.ShardResult.$Properties[];
+
+        /**
+         * Creates a new VDiffUpdateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns VDiffUpdateResponse instance
+         */
+        static create(properties: vtctldata.VDiffUpdateResponse.$Shape): vtctldata.VDiffUpdateResponse & vtctldata.VDiffUpdateResponse.$Shape;
+        static create(properties?: vtctldata.VDiffUpdateResponse.$Properties): vtctldata.VDiffUpdateResponse;
+
+        /**
+         * Encodes the specified VDiffUpdateResponse message. Does not implicitly {@link vtctldata.VDiffUpdateResponse.verify|verify} messages.
+         * @param message VDiffUpdateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encode(message: vtctldata.VDiffUpdateResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified VDiffUpdateResponse message, length delimited. Does not implicitly {@link vtctldata.VDiffUpdateResponse.verify|verify} messages.
+         * @param message VDiffUpdateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        static encodeDelimited(message: vtctldata.VDiffUpdateResponse.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a VDiffUpdateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns {vtctldata.VDiffUpdateResponse & vtctldata.VDiffUpdateResponse.$Shape} VDiffUpdateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffUpdateResponse & vtctldata.VDiffUpdateResponse.$Shape;
+
+        /**
+         * Decodes a VDiffUpdateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns {vtctldata.VDiffUpdateResponse & vtctldata.VDiffUpdateResponse.$Shape} VDiffUpdateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffUpdateResponse & vtctldata.VDiffUpdateResponse.$Shape;
+
+        /**
+         * Verifies a VDiffUpdateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a VDiffUpdateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns VDiffUpdateResponse
+         */
+        static fromObject(object: { [k: string]: any }): vtctldata.VDiffUpdateResponse;
+
+        /**
+         * Creates a plain object from a VDiffUpdateResponse message. Also converts values to other types if specified.
+         * @param message VDiffUpdateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        static toObject(message: vtctldata.VDiffUpdateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this VDiffUpdateResponse to JSON.
+         * @returns JSON object
+         */
+        toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the type url for VDiffUpdateResponse
+         * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns The type url
+         */
+        static getTypeUrl(prefix?: string): string;
+    }
+
+    namespace VDiffUpdateResponse {
+
+        /** Properties of a VDiffUpdateResponse. */
+        interface $Properties {
+
+            /** VDiffUpdateResponse results */
+            results?: (vtctldata.VDiffUpdateResponse.ShardResult.$Properties[]|null);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+        }
+
+        /** Shape of a VDiffUpdateResponse. */
+        type $Shape = vtctldata.VDiffUpdateResponse.$Properties;
+
+        /**
+         * Properties of a ShardResult.
+         * @deprecated Use vtctldata.VDiffUpdateResponse.ShardResult.$Properties instead.
+         */
+        interface IShardResult extends vtctldata.VDiffUpdateResponse.ShardResult.$Properties {
+        }
+
+        /** Represents a ShardResult. */
+        class ShardResult {
+
+            /**
+             * Constructs a new ShardResult.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.VDiffUpdateResponse.ShardResult.$Properties);
+
+            /** Unknown fields preserved while decoding when enabled */
+            $unknowns?: Uint8Array[];
+
+            /** ShardResult shard. */
+            shard: string;
+
+            /** ShardResult state. */
+            state: string;
+
+            /** ShardResult updated. */
+            updated: boolean;
+
+            /**
+             * Creates a new ShardResult instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns ShardResult instance
+             */
+            static create(properties: vtctldata.VDiffUpdateResponse.ShardResult.$Shape): vtctldata.VDiffUpdateResponse.ShardResult & vtctldata.VDiffUpdateResponse.ShardResult.$Shape;
+            static create(properties?: vtctldata.VDiffUpdateResponse.ShardResult.$Properties): vtctldata.VDiffUpdateResponse.ShardResult;
+
+            /**
+             * Encodes the specified ShardResult message. Does not implicitly {@link vtctldata.VDiffUpdateResponse.ShardResult.verify|verify} messages.
+             * @param message ShardResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            static encode(message: vtctldata.VDiffUpdateResponse.ShardResult.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified ShardResult message, length delimited. Does not implicitly {@link vtctldata.VDiffUpdateResponse.ShardResult.verify|verify} messages.
+             * @param message ShardResult message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            static encodeDelimited(message: vtctldata.VDiffUpdateResponse.ShardResult.$Properties, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a ShardResult message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns {vtctldata.VDiffUpdateResponse.ShardResult & vtctldata.VDiffUpdateResponse.ShardResult.$Shape} ShardResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.VDiffUpdateResponse.ShardResult & vtctldata.VDiffUpdateResponse.ShardResult.$Shape;
+
+            /**
+             * Decodes a ShardResult message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns {vtctldata.VDiffUpdateResponse.ShardResult & vtctldata.VDiffUpdateResponse.ShardResult.$Shape} ShardResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.VDiffUpdateResponse.ShardResult & vtctldata.VDiffUpdateResponse.ShardResult.$Shape;
+
+            /**
+             * Verifies a ShardResult message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a ShardResult message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns ShardResult
+             */
+            static fromObject(object: { [k: string]: any }): vtctldata.VDiffUpdateResponse.ShardResult;
+
+            /**
+             * Creates a plain object from a ShardResult message. Also converts values to other types if specified.
+             * @param message ShardResult
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            static toObject(message: vtctldata.VDiffUpdateResponse.ShardResult, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this ShardResult to JSON.
+             * @returns JSON object
+             */
+            toJSON(): { [k: string]: any };
+
+            /**
+             * Gets the type url for ShardResult
+             * @param [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+             * @returns The type url
+             */
+            static getTypeUrl(prefix?: string): string;
+        }
+
+        namespace ShardResult {
+
+            /** Properties of a ShardResult. */
+            interface $Properties {
+
+                /** ShardResult shard */
+                shard?: (string|null);
+
+                /** ShardResult state */
+                state?: (string|null);
+
+                /** ShardResult updated */
+                updated?: (boolean|null);
+
+                /** Unknown fields preserved while decoding when enabled */
+                $unknowns?: Uint8Array[];
+            }
+
+            /** Shape of a ShardResult. */
+            type $Shape = vtctldata.VDiffUpdateResponse.ShardResult.$Properties;
+        }
+    }
+
+    /**
      * Properties of a WorkflowDeleteRequest.
      * @deprecated Use vtctldata.WorkflowDeleteRequest.$Properties instead.
      */

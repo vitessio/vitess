@@ -258644,6 +258644,1287 @@ export const vtctldata = $root.vtctldata = (() => {
         return VDiffStopResponse;
     })();
 
+    vtctldata.VDiffUpdateRequest = (function() {
+
+        /**
+         * Properties of a VDiffUpdateRequest.
+         * @typedef {Object} vtctldata.VDiffUpdateRequest.$Properties
+         * @property {string|null} [workflow] VDiffUpdateRequest workflow
+         * @property {string|null} [target_keyspace] VDiffUpdateRequest target_keyspace
+         * @property {string|null} [uuid] VDiffUpdateRequest uuid
+         * @property {Array.<string>|null} [target_shards] VDiffUpdateRequest target_shards
+         * @property {Array.<topodata.TabletType>|null} [tablet_types] VDiffUpdateRequest tablet_types
+         * @property {tabletmanagerdata.TabletSelectionPreference|null} [tablet_selection_preference] VDiffUpdateRequest tablet_selection_preference
+         * @property {Array.<string>|null} [source_cells] VDiffUpdateRequest source_cells
+         * @property {Array.<string>|null} [target_cells] VDiffUpdateRequest target_cells
+         * @property {boolean|null} [clear_source_cells] VDiffUpdateRequest clear_source_cells
+         * @property {boolean|null} [clear_target_cells] VDiffUpdateRequest clear_target_cells
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a VDiffUpdateRequest.
+         * @memberof vtctldata
+         * @interface IVDiffUpdateRequest
+         * @augments vtctldata.VDiffUpdateRequest.$Properties
+         * @deprecated Use vtctldata.VDiffUpdateRequest.$Properties instead.
+         */
+
+        /**
+         * Shape of a VDiffUpdateRequest.
+         * @typedef {vtctldata.VDiffUpdateRequest.$Properties} vtctldata.VDiffUpdateRequest.$Shape
+         */
+
+        /**
+         * Constructs a new VDiffUpdateRequest.
+         * @memberof vtctldata
+         * @classdesc Represents a VDiffUpdateRequest.
+         * @constructor
+         * @param {vtctldata.VDiffUpdateRequest.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const VDiffUpdateRequest = function (properties) {
+            this.target_shards = [];
+            this.tablet_types = [];
+            this.source_cells = [];
+            this.target_cells = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * VDiffUpdateRequest workflow.
+         * @member {string} workflow
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.workflow = "";
+
+        /**
+         * VDiffUpdateRequest target_keyspace.
+         * @member {string} target_keyspace
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.target_keyspace = "";
+
+        /**
+         * VDiffUpdateRequest uuid.
+         * @member {string} uuid
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.uuid = "";
+
+        /**
+         * VDiffUpdateRequest target_shards.
+         * @member {Array.<string>} target_shards
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.target_shards = $util.emptyArray;
+
+        /**
+         * VDiffUpdateRequest tablet_types.
+         * @member {Array.<topodata.TabletType>} tablet_types
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.tablet_types = $util.emptyArray;
+
+        /**
+         * VDiffUpdateRequest tablet_selection_preference.
+         * @member {tabletmanagerdata.TabletSelectionPreference} tablet_selection_preference
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.tablet_selection_preference = 0;
+
+        /**
+         * VDiffUpdateRequest source_cells.
+         * @member {Array.<string>} source_cells
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.source_cells = $util.emptyArray;
+
+        /**
+         * VDiffUpdateRequest target_cells.
+         * @member {Array.<string>} target_cells
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.target_cells = $util.emptyArray;
+
+        /**
+         * VDiffUpdateRequest clear_source_cells.
+         * @member {boolean} clear_source_cells
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.clear_source_cells = false;
+
+        /**
+         * VDiffUpdateRequest clear_target_cells.
+         * @member {boolean} clear_target_cells
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         */
+        VDiffUpdateRequest.prototype.clear_target_cells = false;
+
+        /**
+         * Creates a new VDiffUpdateRequest instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {vtctldata.VDiffUpdateRequest.$Properties=} [properties] Properties to set
+         * @returns {vtctldata.VDiffUpdateRequest} VDiffUpdateRequest instance
+         * @type {{
+         *   (properties: vtctldata.VDiffUpdateRequest.$Shape): vtctldata.VDiffUpdateRequest & vtctldata.VDiffUpdateRequest.$Shape;
+         *   (properties?: vtctldata.VDiffUpdateRequest.$Properties): vtctldata.VDiffUpdateRequest;
+         * }}
+         */
+        VDiffUpdateRequest.create = function(properties) {
+            return new VDiffUpdateRequest(properties);
+        };
+
+        /**
+         * Encodes the specified VDiffUpdateRequest message. Does not implicitly {@link vtctldata.VDiffUpdateRequest.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {vtctldata.VDiffUpdateRequest.$Properties} message VDiffUpdateRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VDiffUpdateRequest.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow") && message.workflow !== "")
+                writer.uint32(/* id 1, wireType 2 =*/10).string(message.workflow);
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace") && message.target_keyspace !== "")
+                writer.uint32(/* id 2, wireType 2 =*/18).string(message.target_keyspace);
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid") && message.uuid !== "")
+                writer.uint32(/* id 3, wireType 2 =*/26).string(message.uuid);
+            if (message.target_shards != null && message.target_shards.length)
+                for (let i = 0; i < message.target_shards.length; ++i)
+                    writer.uint32(/* id 4, wireType 2 =*/34).string(message.target_shards[i]);
+            if (message.tablet_types != null && message.tablet_types.length)
+                writer.uint32(/* id 5, wireType 2 =*/42).int32s(message.tablet_types);
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference") && message.tablet_selection_preference !== 0)
+                writer.uint32(/* id 6, wireType 0 =*/48).int32(message.tablet_selection_preference);
+            if (message.source_cells != null && message.source_cells.length)
+                for (let i = 0; i < message.source_cells.length; ++i)
+                    writer.uint32(/* id 7, wireType 2 =*/58).string(message.source_cells[i]);
+            if (message.target_cells != null && message.target_cells.length)
+                for (let i = 0; i < message.target_cells.length; ++i)
+                    writer.uint32(/* id 8, wireType 2 =*/66).string(message.target_cells[i]);
+            if (message.clear_source_cells != null && $Object.hasOwnProperty.call(message, "clear_source_cells") && message.clear_source_cells !== false)
+                writer.uint32(/* id 9, wireType 0 =*/72).bool(message.clear_source_cells);
+            if (message.clear_target_cells != null && $Object.hasOwnProperty.call(message, "clear_target_cells") && message.clear_target_cells !== false)
+                writer.uint32(/* id 10, wireType 0 =*/80).bool(message.clear_target_cells);
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VDiffUpdateRequest message, length delimited. Does not implicitly {@link vtctldata.VDiffUpdateRequest.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {vtctldata.VDiffUpdateRequest.$Properties} message VDiffUpdateRequest message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VDiffUpdateRequest.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a VDiffUpdateRequest message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.VDiffUpdateRequest & vtctldata.VDiffUpdateRequest.$Shape} VDiffUpdateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VDiffUpdateRequest.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message, value;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.vtctldata.VDiffUpdateRequest();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.workflow = value;
+                        else
+                            delete message.workflow;
+                        continue;
+                    }
+                case 2: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.target_keyspace = value;
+                        else
+                            delete message.target_keyspace;
+                        continue;
+                    }
+                case 3: {
+                        if (wireType !== 2)
+                            break;
+                        if ((value = reader.stringVerify()).length)
+                            message.uuid = value;
+                        else
+                            delete message.uuid;
+                        continue;
+                    }
+                case 4: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.target_shards && message.target_shards.length))
+                            message.target_shards = [];
+                        message.target_shards.push(reader.stringVerify());
+                        continue;
+                    }
+                case 5: {
+                        if (wireType === 2) {
+                            if (!(message.tablet_types && message.tablet_types.length))
+                                message.tablet_types = [];
+                            reader.int32s(message.tablet_types);
+                            continue;
+                        }
+                        if (wireType !== 0)
+                            break;
+                        if (!(message.tablet_types && message.tablet_types.length))
+                            message.tablet_types = [];
+                        message.tablet_types.push(reader.int32());
+                        continue;
+                    }
+                case 6: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.int32())
+                            message.tablet_selection_preference = value;
+                        else
+                            delete message.tablet_selection_preference;
+                        continue;
+                    }
+                case 7: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.source_cells && message.source_cells.length))
+                            message.source_cells = [];
+                        message.source_cells.push(reader.stringVerify());
+                        continue;
+                    }
+                case 8: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.target_cells && message.target_cells.length))
+                            message.target_cells = [];
+                        message.target_cells.push(reader.stringVerify());
+                        continue;
+                    }
+                case 9: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.clear_source_cells = value;
+                        else
+                            delete message.clear_source_cells;
+                        continue;
+                    }
+                case 10: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.clear_target_cells = value;
+                        else
+                            delete message.clear_target_cells;
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a VDiffUpdateRequest message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.VDiffUpdateRequest & vtctldata.VDiffUpdateRequest.$Shape} VDiffUpdateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VDiffUpdateRequest.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VDiffUpdateRequest message.
+         * @function verify
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VDiffUpdateRequest.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+                if (!$util.isString(message.workflow))
+                    return "workflow: string expected";
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+                if (!$util.isString(message.target_keyspace))
+                    return "target_keyspace: string expected";
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+                if (!$util.isString(message.uuid))
+                    return "uuid: string expected";
+            if (message.target_shards != null && $Object.hasOwnProperty.call(message, "target_shards")) {
+                if (!$Array.isArray(message.target_shards))
+                    return "target_shards: array expected";
+                for (let i = 0; i < message.target_shards.length; ++i)
+                    if (!$util.isString(message.target_shards[i]))
+                        return "target_shards: string[] expected";
+            }
+            if (message.tablet_types != null && $Object.hasOwnProperty.call(message, "tablet_types")) {
+                if (!$Array.isArray(message.tablet_types))
+                    return "tablet_types: array expected";
+                for (let i = 0; i < message.tablet_types.length; ++i)
+                    if (typeof message.tablet_types[i] !== "number" || (message.tablet_types[i] | 0) !== message.tablet_types[i])
+                        return "tablet_types: enum value[] expected";
+            }
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+                if (typeof message.tablet_selection_preference !== "number" || (message.tablet_selection_preference | 0) !== message.tablet_selection_preference)
+                    return "tablet_selection_preference: enum value expected";
+            if (message.source_cells != null && $Object.hasOwnProperty.call(message, "source_cells")) {
+                if (!$Array.isArray(message.source_cells))
+                    return "source_cells: array expected";
+                for (let i = 0; i < message.source_cells.length; ++i)
+                    if (!$util.isString(message.source_cells[i]))
+                        return "source_cells: string[] expected";
+            }
+            if (message.target_cells != null && $Object.hasOwnProperty.call(message, "target_cells")) {
+                if (!$Array.isArray(message.target_cells))
+                    return "target_cells: array expected";
+                for (let i = 0; i < message.target_cells.length; ++i)
+                    if (!$util.isString(message.target_cells[i]))
+                        return "target_cells: string[] expected";
+            }
+            if (message.clear_source_cells != null && $Object.hasOwnProperty.call(message, "clear_source_cells"))
+                if (typeof message.clear_source_cells !== "boolean")
+                    return "clear_source_cells: boolean expected";
+            if (message.clear_target_cells != null && $Object.hasOwnProperty.call(message, "clear_target_cells"))
+                if (typeof message.clear_target_cells !== "boolean")
+                    return "clear_target_cells: boolean expected";
+            return null;
+        };
+
+        /**
+         * Creates a VDiffUpdateRequest message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.VDiffUpdateRequest} VDiffUpdateRequest
+         */
+        VDiffUpdateRequest.fromObject = function (object, _depth) {
+            if (object instanceof $root.vtctldata.VDiffUpdateRequest)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".vtctldata.VDiffUpdateRequest: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.vtctldata.VDiffUpdateRequest();
+            if (object.workflow != null)
+                if (typeof object.workflow !== "string" || object.workflow.length)
+                    message.workflow = $String(object.workflow);
+            if (object.target_keyspace != null)
+                if (typeof object.target_keyspace !== "string" || object.target_keyspace.length)
+                    message.target_keyspace = $String(object.target_keyspace);
+            if (object.uuid != null)
+                if (typeof object.uuid !== "string" || object.uuid.length)
+                    message.uuid = $String(object.uuid);
+            if (object.target_shards) {
+                if (!$Array.isArray(object.target_shards))
+                    throw $TypeError(".vtctldata.VDiffUpdateRequest.target_shards: array expected");
+                message.target_shards = $Array(object.target_shards.length);
+                for (let i = 0; i < object.target_shards.length; ++i)
+                    message.target_shards[i] = $String(object.target_shards[i]);
+            }
+            if (object.tablet_types) {
+                if (!$Array.isArray(object.tablet_types))
+                    throw $TypeError(".vtctldata.VDiffUpdateRequest.tablet_types: array expected");
+                message.tablet_types = [];
+                for (let i = 0; i < object.tablet_types.length; ++i)
+                    switch (object.tablet_types[i]) {
+                    case "UNKNOWN":
+                    case 0:
+                        message.tablet_types[message.tablet_types.length] = 0;
+                        break;
+                    case "PRIMARY":
+                    case 1:
+                        message.tablet_types[message.tablet_types.length] = 1;
+                        break;
+                    case "MASTER":
+                    case 1:
+                        message.tablet_types[message.tablet_types.length] = 1;
+                        break;
+                    case "REPLICA":
+                    case 2:
+                        message.tablet_types[message.tablet_types.length] = 2;
+                        break;
+                    case "RDONLY":
+                    case 3:
+                        message.tablet_types[message.tablet_types.length] = 3;
+                        break;
+                    case "BATCH":
+                    case 3:
+                        message.tablet_types[message.tablet_types.length] = 3;
+                        break;
+                    case "SPARE":
+                    case 4:
+                        message.tablet_types[message.tablet_types.length] = 4;
+                        break;
+                    case "EXPERIMENTAL":
+                    case 5:
+                        message.tablet_types[message.tablet_types.length] = 5;
+                        break;
+                    case "BACKUP":
+                    case 6:
+                        message.tablet_types[message.tablet_types.length] = 6;
+                        break;
+                    case "RESTORE":
+                    case 7:
+                        message.tablet_types[message.tablet_types.length] = 7;
+                        break;
+                    case "DRAINED":
+                    case 8:
+                        message.tablet_types[message.tablet_types.length] = 8;
+                        break;
+                    default:
+                        if (typeof object.tablet_types[i] === "number" && (object.tablet_types[i] | 0) === object.tablet_types[i])
+                            message.tablet_types[message.tablet_types.length] = object.tablet_types[i];
+                    }
+            }
+            if (object.tablet_selection_preference !== 0 && (typeof object.tablet_selection_preference !== "string" || $root.tabletmanagerdata.TabletSelectionPreference[object.tablet_selection_preference] !== 0))
+                switch (object.tablet_selection_preference) {
+                case "ANY":
+                case 0:
+                    message.tablet_selection_preference = 0;
+                    break;
+                case "INORDER":
+                case 1:
+                    message.tablet_selection_preference = 1;
+                    break;
+                case "UNKNOWN":
+                case 3:
+                    message.tablet_selection_preference = 3;
+                    break;
+                default:
+                    if (typeof object.tablet_selection_preference === "number" && (object.tablet_selection_preference | 0) === object.tablet_selection_preference)
+                        message.tablet_selection_preference = object.tablet_selection_preference;
+                }
+            if (object.source_cells) {
+                if (!$Array.isArray(object.source_cells))
+                    throw $TypeError(".vtctldata.VDiffUpdateRequest.source_cells: array expected");
+                message.source_cells = $Array(object.source_cells.length);
+                for (let i = 0; i < object.source_cells.length; ++i)
+                    message.source_cells[i] = $String(object.source_cells[i]);
+            }
+            if (object.target_cells) {
+                if (!$Array.isArray(object.target_cells))
+                    throw $TypeError(".vtctldata.VDiffUpdateRequest.target_cells: array expected");
+                message.target_cells = $Array(object.target_cells.length);
+                for (let i = 0; i < object.target_cells.length; ++i)
+                    message.target_cells[i] = $String(object.target_cells[i]);
+            }
+            if (object.clear_source_cells != null)
+                if (object.clear_source_cells)
+                    message.clear_source_cells = $Boolean(object.clear_source_cells);
+            if (object.clear_target_cells != null)
+                if (object.clear_target_cells)
+                    message.clear_target_cells = $Boolean(object.clear_target_cells);
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VDiffUpdateRequest message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {vtctldata.VDiffUpdateRequest} message VDiffUpdateRequest
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VDiffUpdateRequest.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults) {
+                object.target_shards = [];
+                object.tablet_types = [];
+                object.source_cells = [];
+                object.target_cells = [];
+            }
+            if (options.defaults) {
+                object.workflow = "";
+                object.target_keyspace = "";
+                object.uuid = "";
+                object.tablet_selection_preference = options.enums === $String ? "ANY" : 0;
+                object.clear_source_cells = false;
+                object.clear_target_cells = false;
+            }
+            if (message.workflow != null && $Object.hasOwnProperty.call(message, "workflow"))
+                object.workflow = message.workflow;
+            if (message.target_keyspace != null && $Object.hasOwnProperty.call(message, "target_keyspace"))
+                object.target_keyspace = message.target_keyspace;
+            if (message.uuid != null && $Object.hasOwnProperty.call(message, "uuid"))
+                object.uuid = message.uuid;
+            if (message.target_shards && message.target_shards.length) {
+                object.target_shards = $Array(message.target_shards.length);
+                for (let j = 0; j < message.target_shards.length; ++j)
+                    object.target_shards[j] = message.target_shards[j];
+            }
+            if (message.tablet_types && message.tablet_types.length) {
+                object.tablet_types = $Array(message.tablet_types.length);
+                for (let j = 0; j < message.tablet_types.length; ++j)
+                    object.tablet_types[j] = options.enums === $String ? $root.topodata.TabletType[message.tablet_types[j]] === $undefined ? message.tablet_types[j] : $root.topodata.TabletType[message.tablet_types[j]] : message.tablet_types[j];
+            }
+            if (message.tablet_selection_preference != null && $Object.hasOwnProperty.call(message, "tablet_selection_preference"))
+                object.tablet_selection_preference = options.enums === $String ? $root.tabletmanagerdata.TabletSelectionPreference[message.tablet_selection_preference] === $undefined ? message.tablet_selection_preference : $root.tabletmanagerdata.TabletSelectionPreference[message.tablet_selection_preference] : message.tablet_selection_preference;
+            if (message.source_cells && message.source_cells.length) {
+                object.source_cells = $Array(message.source_cells.length);
+                for (let j = 0; j < message.source_cells.length; ++j)
+                    object.source_cells[j] = message.source_cells[j];
+            }
+            if (message.target_cells && message.target_cells.length) {
+                object.target_cells = $Array(message.target_cells.length);
+                for (let j = 0; j < message.target_cells.length; ++j)
+                    object.target_cells[j] = message.target_cells[j];
+            }
+            if (message.clear_source_cells != null && $Object.hasOwnProperty.call(message, "clear_source_cells"))
+                object.clear_source_cells = message.clear_source_cells;
+            if (message.clear_target_cells != null && $Object.hasOwnProperty.call(message, "clear_target_cells"))
+                object.clear_target_cells = message.clear_target_cells;
+            return object;
+        };
+
+        /**
+         * Converts this VDiffUpdateRequest to JSON.
+         * @function toJSON
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VDiffUpdateRequest.prototype.toJSON = function() {
+            return VDiffUpdateRequest.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for VDiffUpdateRequest
+         * @function getTypeUrl
+         * @memberof vtctldata.VDiffUpdateRequest
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        VDiffUpdateRequest.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/vtctldata.VDiffUpdateRequest";
+        };
+
+        return VDiffUpdateRequest;
+    })();
+
+    vtctldata.VDiffUpdateResponse = (function() {
+
+        /**
+         * Properties of a VDiffUpdateResponse.
+         * @typedef {Object} vtctldata.VDiffUpdateResponse.$Properties
+         * @property {Array.<vtctldata.VDiffUpdateResponse.ShardResult.$Properties>|null} [results] VDiffUpdateResponse results
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+
+        /**
+         * Properties of a VDiffUpdateResponse.
+         * @memberof vtctldata
+         * @interface IVDiffUpdateResponse
+         * @augments vtctldata.VDiffUpdateResponse.$Properties
+         * @deprecated Use vtctldata.VDiffUpdateResponse.$Properties instead.
+         */
+
+        /**
+         * Shape of a VDiffUpdateResponse.
+         * @typedef {vtctldata.VDiffUpdateResponse.$Properties} vtctldata.VDiffUpdateResponse.$Shape
+         */
+
+        /**
+         * Constructs a new VDiffUpdateResponse.
+         * @memberof vtctldata
+         * @classdesc Represents a VDiffUpdateResponse.
+         * @constructor
+         * @param {vtctldata.VDiffUpdateResponse.$Properties=} [properties] Properties to set
+         * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+         */
+        const VDiffUpdateResponse = function (properties) {
+            this.results = [];
+            if (properties)
+                for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                    if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                        this[keys[i]] = properties[keys[i]];
+        };
+
+        /**
+         * VDiffUpdateResponse results.
+         * @member {Array.<vtctldata.VDiffUpdateResponse.ShardResult.$Properties>} results
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @instance
+         */
+        VDiffUpdateResponse.prototype.results = $util.emptyArray;
+
+        /**
+         * Creates a new VDiffUpdateResponse instance using the specified properties.
+         * @function create
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {vtctldata.VDiffUpdateResponse.$Properties=} [properties] Properties to set
+         * @returns {vtctldata.VDiffUpdateResponse} VDiffUpdateResponse instance
+         * @type {{
+         *   (properties: vtctldata.VDiffUpdateResponse.$Shape): vtctldata.VDiffUpdateResponse & vtctldata.VDiffUpdateResponse.$Shape;
+         *   (properties?: vtctldata.VDiffUpdateResponse.$Properties): vtctldata.VDiffUpdateResponse;
+         * }}
+         */
+        VDiffUpdateResponse.create = function(properties) {
+            return new VDiffUpdateResponse(properties);
+        };
+
+        /**
+         * Encodes the specified VDiffUpdateResponse message. Does not implicitly {@link vtctldata.VDiffUpdateResponse.verify|verify} messages.
+         * @function encode
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {vtctldata.VDiffUpdateResponse.$Properties} message VDiffUpdateResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VDiffUpdateResponse.encode = function (message, writer, _depth) {
+            if (!writer)
+                writer = $Writer.create();
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            if (message.results != null && message.results.length)
+                for (let i = 0; i < message.results.length; ++i)
+                    $root.vtctldata.VDiffUpdateResponse.ShardResult.encode(message.results[i], writer.uint32(/* id 1, wireType 2 =*/10).fork(), _depth + 1).ldelim();
+            if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                for (let i = 0; i < message.$unknowns.length; ++i)
+                    writer.raw(message.$unknowns[i]);
+            return writer;
+        };
+
+        /**
+         * Encodes the specified VDiffUpdateResponse message, length delimited. Does not implicitly {@link vtctldata.VDiffUpdateResponse.verify|verify} messages.
+         * @function encodeDelimited
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {vtctldata.VDiffUpdateResponse.$Properties} message VDiffUpdateResponse message or plain object to encode
+         * @param {$protobuf.Writer} [writer] Writer to encode to
+         * @returns {$protobuf.Writer} Writer
+         */
+        VDiffUpdateResponse.encodeDelimited = function(message, writer) {
+            return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+        };
+
+        /**
+         * Decodes a VDiffUpdateResponse message from the specified reader or buffer.
+         * @function decode
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @param {number} [length] Message length if known beforehand
+         * @returns {vtctldata.VDiffUpdateResponse & vtctldata.VDiffUpdateResponse.$Shape} VDiffUpdateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VDiffUpdateResponse.decode = function (reader, length, _end, _depth, _target) {
+            if (!(reader instanceof $Reader))
+                reader = $Reader.create(reader);
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $Reader.recursionLimit)
+                throw $Error("max depth exceeded");
+            let end, message;
+            if (length === $undefined)
+                end = reader.len;
+            else {
+                end = reader.pos + length;
+                if (end > reader.len)
+                    throw $RangeError("index out of range");
+                length = reader.len;
+                reader.len = end;
+            }
+            message = _target || new $root.vtctldata.VDiffUpdateResponse();
+            while (reader.pos < end) {
+                let start = reader.pos;
+                let tag = reader.tag();
+                if (tag === _end) {
+                    _end = $undefined;
+                    break;
+                }
+                let wireType = tag & 7;
+                switch (tag >>>= 3) {
+                case 1: {
+                        if (wireType !== 2)
+                            break;
+                        if (!(message.results && message.results.length))
+                            message.results = [];
+                        message.results.push($root.vtctldata.VDiffUpdateResponse.ShardResult.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        continue;
+                    }
+                }
+                reader.skipType(wireType, _depth, tag);
+                if (!reader.discardUnknown) {
+                    $util.makeProp(message, "$unknowns", false);
+                    (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                }
+            }
+            if (length !== $undefined) {
+                if (reader.pos !== end)
+                    throw $RangeError("index out of range");
+                reader.len = length;
+            }
+            if (_end !== $undefined)
+                throw $Error("missing end group");
+            return message;
+        };
+
+        /**
+         * Decodes a VDiffUpdateResponse message from the specified reader or buffer, length delimited.
+         * @function decodeDelimited
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+         * @returns {vtctldata.VDiffUpdateResponse & vtctldata.VDiffUpdateResponse.$Shape} VDiffUpdateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        VDiffUpdateResponse.decodeDelimited = function(reader) {
+            if (!(reader instanceof $Reader))
+                reader = new $Reader(reader);
+            return this.decode(reader, reader.uint32());
+        };
+
+        /**
+         * Verifies a VDiffUpdateResponse message.
+         * @function verify
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {Object.<string,*>} message Plain object to verify
+         * @returns {string|null} `null` if valid, otherwise the reason why it is not
+         */
+        VDiffUpdateResponse.verify = function (message, _depth) {
+            if (typeof message !== "object" || message === null)
+                return "object expected";
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                return "max depth exceeded";
+            if (message.results != null && $Object.hasOwnProperty.call(message, "results")) {
+                if (!$Array.isArray(message.results))
+                    return "results: array expected";
+                for (let i = 0; i < message.results.length; ++i) {
+                    let error = $root.vtctldata.VDiffUpdateResponse.ShardResult.verify(message.results[i], _depth + 1);
+                    if (error)
+                        return "results." + error;
+                }
+            }
+            return null;
+        };
+
+        /**
+         * Creates a VDiffUpdateResponse message from a plain object. Also converts values to their respective internal types.
+         * @function fromObject
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {Object.<string,*>} object Plain object
+         * @returns {vtctldata.VDiffUpdateResponse} VDiffUpdateResponse
+         */
+        VDiffUpdateResponse.fromObject = function (object, _depth) {
+            if (object instanceof $root.vtctldata.VDiffUpdateResponse)
+                return object;
+            if (!$util.isObject(object))
+                throw $TypeError(".vtctldata.VDiffUpdateResponse: object expected");
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let message = new $root.vtctldata.VDiffUpdateResponse();
+            if (object.results) {
+                if (!$Array.isArray(object.results))
+                    throw $TypeError(".vtctldata.VDiffUpdateResponse.results: array expected");
+                message.results = $Array(object.results.length);
+                for (let i = 0; i < object.results.length; ++i) {
+                    if (!$util.isObject(object.results[i]))
+                        throw $TypeError(".vtctldata.VDiffUpdateResponse.results: object expected");
+                    message.results[i] = $root.vtctldata.VDiffUpdateResponse.ShardResult.fromObject(object.results[i], _depth + 1);
+                }
+            }
+            return message;
+        };
+
+        /**
+         * Creates a plain object from a VDiffUpdateResponse message. Also converts values to other types if specified.
+         * @function toObject
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {vtctldata.VDiffUpdateResponse} message VDiffUpdateResponse
+         * @param {$protobuf.IConversionOptions} [options] Conversion options
+         * @returns {Object.<string,*>} Plain object
+         */
+        VDiffUpdateResponse.toObject = function (message, options, _depth) {
+            if (!options)
+                options = {};
+            if (_depth === $undefined)
+                _depth = 0;
+            if (_depth > $util.recursionLimit)
+                throw $Error("max depth exceeded");
+            let object = {};
+            if (options.arrays || options.defaults)
+                object.results = [];
+            if (message.results && message.results.length) {
+                object.results = $Array(message.results.length);
+                for (let j = 0; j < message.results.length; ++j)
+                    object.results[j] = $root.vtctldata.VDiffUpdateResponse.ShardResult.toObject(message.results[j], options, _depth + 1);
+            }
+            return object;
+        };
+
+        /**
+         * Converts this VDiffUpdateResponse to JSON.
+         * @function toJSON
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @instance
+         * @returns {Object.<string,*>} JSON object
+         */
+        VDiffUpdateResponse.prototype.toJSON = function() {
+            return VDiffUpdateResponse.toObject(this, $protobuf.util.toJSONOptions);
+        };
+
+        /**
+         * Gets the type url for VDiffUpdateResponse
+         * @function getTypeUrl
+         * @memberof vtctldata.VDiffUpdateResponse
+         * @static
+         * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+         * @returns {string} The type url
+         */
+        VDiffUpdateResponse.getTypeUrl = function(prefix) {
+            if (prefix === $undefined)
+                prefix = "type.googleapis.com";
+            return prefix + "/vtctldata.VDiffUpdateResponse";
+        };
+
+        VDiffUpdateResponse.ShardResult = (function() {
+
+            /**
+             * Properties of a ShardResult.
+             * @typedef {Object} vtctldata.VDiffUpdateResponse.ShardResult.$Properties
+             * @property {string|null} [shard] ShardResult shard
+             * @property {string|null} [state] ShardResult state
+             * @property {boolean|null} [updated] ShardResult updated
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+             */
+
+            /**
+             * Properties of a ShardResult.
+             * @memberof vtctldata.VDiffUpdateResponse
+             * @interface IShardResult
+             * @augments vtctldata.VDiffUpdateResponse.ShardResult.$Properties
+             * @deprecated Use vtctldata.VDiffUpdateResponse.ShardResult.$Properties instead.
+             */
+
+            /**
+             * Shape of a ShardResult.
+             * @typedef {vtctldata.VDiffUpdateResponse.ShardResult.$Properties} vtctldata.VDiffUpdateResponse.ShardResult.$Shape
+             */
+
+            /**
+             * Constructs a new ShardResult.
+             * @memberof vtctldata.VDiffUpdateResponse
+             * @classdesc Represents a ShardResult.
+             * @constructor
+             * @param {vtctldata.VDiffUpdateResponse.ShardResult.$Properties=} [properties] Properties to set
+             * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
+             */
+            const ShardResult = function (properties) {
+                if (properties)
+                    for (let keys = $Object.keys(properties), i = 0; i < keys.length; ++i)
+                        if (properties[keys[i]] != null && keys[i] !== "__proto__")
+                            this[keys[i]] = properties[keys[i]];
+            };
+
+            /**
+             * ShardResult shard.
+             * @member {string} shard
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @instance
+             */
+            ShardResult.prototype.shard = "";
+
+            /**
+             * ShardResult state.
+             * @member {string} state
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @instance
+             */
+            ShardResult.prototype.state = "";
+
+            /**
+             * ShardResult updated.
+             * @member {boolean} updated
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @instance
+             */
+            ShardResult.prototype.updated = false;
+
+            /**
+             * Creates a new ShardResult instance using the specified properties.
+             * @function create
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {vtctldata.VDiffUpdateResponse.ShardResult.$Properties=} [properties] Properties to set
+             * @returns {vtctldata.VDiffUpdateResponse.ShardResult} ShardResult instance
+             * @type {{
+             *   (properties: vtctldata.VDiffUpdateResponse.ShardResult.$Shape): vtctldata.VDiffUpdateResponse.ShardResult & vtctldata.VDiffUpdateResponse.ShardResult.$Shape;
+             *   (properties?: vtctldata.VDiffUpdateResponse.ShardResult.$Properties): vtctldata.VDiffUpdateResponse.ShardResult;
+             * }}
+             */
+            ShardResult.create = function(properties) {
+                return new ShardResult(properties);
+            };
+
+            /**
+             * Encodes the specified ShardResult message. Does not implicitly {@link vtctldata.VDiffUpdateResponse.ShardResult.verify|verify} messages.
+             * @function encode
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {vtctldata.VDiffUpdateResponse.ShardResult.$Properties} message ShardResult message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ShardResult.encode = function (message, writer, _depth) {
+                if (!writer)
+                    writer = $Writer.create();
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    throw $Error("max depth exceeded");
+                if (message.shard != null && $Object.hasOwnProperty.call(message, "shard") && message.shard !== "")
+                    writer.uint32(/* id 1, wireType 2 =*/10).string(message.shard);
+                if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== "")
+                    writer.uint32(/* id 2, wireType 2 =*/18).string(message.state);
+                if (message.updated != null && $Object.hasOwnProperty.call(message, "updated") && message.updated !== false)
+                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.updated);
+                if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
+                    for (let i = 0; i < message.$unknowns.length; ++i)
+                        writer.raw(message.$unknowns[i]);
+                return writer;
+            };
+
+            /**
+             * Encodes the specified ShardResult message, length delimited. Does not implicitly {@link vtctldata.VDiffUpdateResponse.ShardResult.verify|verify} messages.
+             * @function encodeDelimited
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {vtctldata.VDiffUpdateResponse.ShardResult.$Properties} message ShardResult message or plain object to encode
+             * @param {$protobuf.Writer} [writer] Writer to encode to
+             * @returns {$protobuf.Writer} Writer
+             */
+            ShardResult.encodeDelimited = function(message, writer) {
+                return this.encode(message, (writer || $Writer.create()).fork()).ldelim();
+            };
+
+            /**
+             * Decodes a ShardResult message from the specified reader or buffer.
+             * @function decode
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @param {number} [length] Message length if known beforehand
+             * @returns {vtctldata.VDiffUpdateResponse.ShardResult & vtctldata.VDiffUpdateResponse.ShardResult.$Shape} ShardResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ShardResult.decode = function (reader, length, _end, _depth, _target) {
+                if (!(reader instanceof $Reader))
+                    reader = $Reader.create(reader);
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $Reader.recursionLimit)
+                    throw $Error("max depth exceeded");
+                let end, message, value;
+                if (length === $undefined)
+                    end = reader.len;
+                else {
+                    end = reader.pos + length;
+                    if (end > reader.len)
+                        throw $RangeError("index out of range");
+                    length = reader.len;
+                    reader.len = end;
+                }
+                message = _target || new $root.vtctldata.VDiffUpdateResponse.ShardResult();
+                while (reader.pos < end) {
+                    let start = reader.pos;
+                    let tag = reader.tag();
+                    if (tag === _end) {
+                        _end = $undefined;
+                        break;
+                    }
+                    let wireType = tag & 7;
+                    switch (tag >>>= 3) {
+                    case 1: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.shard = value;
+                            else
+                                delete message.shard;
+                            continue;
+                        }
+                    case 2: {
+                            if (wireType !== 2)
+                                break;
+                            if ((value = reader.stringVerify()).length)
+                                message.state = value;
+                            else
+                                delete message.state;
+                            continue;
+                        }
+                    case 3: {
+                            if (wireType !== 0)
+                                break;
+                            if (value = reader.bool())
+                                message.updated = value;
+                            else
+                                delete message.updated;
+                            continue;
+                        }
+                    }
+                    reader.skipType(wireType, _depth, tag);
+                    if (!reader.discardUnknown) {
+                        $util.makeProp(message, "$unknowns", false);
+                        (message.$unknowns || (message.$unknowns = [])).push(reader.raw(start, reader.pos));
+                    }
+                }
+                if (length !== $undefined) {
+                    if (reader.pos !== end)
+                        throw $RangeError("index out of range");
+                    reader.len = length;
+                }
+                if (_end !== $undefined)
+                    throw $Error("missing end group");
+                return message;
+            };
+
+            /**
+             * Decodes a ShardResult message from the specified reader or buffer, length delimited.
+             * @function decodeDelimited
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {$protobuf.Reader|Uint8Array} reader Reader or buffer to decode from
+             * @returns {vtctldata.VDiffUpdateResponse.ShardResult & vtctldata.VDiffUpdateResponse.ShardResult.$Shape} ShardResult
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            ShardResult.decodeDelimited = function(reader) {
+                if (!(reader instanceof $Reader))
+                    reader = new $Reader(reader);
+                return this.decode(reader, reader.uint32());
+            };
+
+            /**
+             * Verifies a ShardResult message.
+             * @function verify
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {Object.<string,*>} message Plain object to verify
+             * @returns {string|null} `null` if valid, otherwise the reason why it is not
+             */
+            ShardResult.verify = function (message, _depth) {
+                if (typeof message !== "object" || message === null)
+                    return "object expected";
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    return "max depth exceeded";
+                if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+                    if (!$util.isString(message.shard))
+                        return "shard: string expected";
+                if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                    if (!$util.isString(message.state))
+                        return "state: string expected";
+                if (message.updated != null && $Object.hasOwnProperty.call(message, "updated"))
+                    if (typeof message.updated !== "boolean")
+                        return "updated: boolean expected";
+                return null;
+            };
+
+            /**
+             * Creates a ShardResult message from a plain object. Also converts values to their respective internal types.
+             * @function fromObject
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {Object.<string,*>} object Plain object
+             * @returns {vtctldata.VDiffUpdateResponse.ShardResult} ShardResult
+             */
+            ShardResult.fromObject = function (object, _depth) {
+                if (object instanceof $root.vtctldata.VDiffUpdateResponse.ShardResult)
+                    return object;
+                if (!$util.isObject(object))
+                    throw $TypeError(".vtctldata.VDiffUpdateResponse.ShardResult: object expected");
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    throw $Error("max depth exceeded");
+                let message = new $root.vtctldata.VDiffUpdateResponse.ShardResult();
+                if (object.shard != null)
+                    if (typeof object.shard !== "string" || object.shard.length)
+                        message.shard = $String(object.shard);
+                if (object.state != null)
+                    if (typeof object.state !== "string" || object.state.length)
+                        message.state = $String(object.state);
+                if (object.updated != null)
+                    if (object.updated)
+                        message.updated = $Boolean(object.updated);
+                return message;
+            };
+
+            /**
+             * Creates a plain object from a ShardResult message. Also converts values to other types if specified.
+             * @function toObject
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {vtctldata.VDiffUpdateResponse.ShardResult} message ShardResult
+             * @param {$protobuf.IConversionOptions} [options] Conversion options
+             * @returns {Object.<string,*>} Plain object
+             */
+            ShardResult.toObject = function (message, options, _depth) {
+                if (!options)
+                    options = {};
+                if (_depth === $undefined)
+                    _depth = 0;
+                if (_depth > $util.recursionLimit)
+                    throw $Error("max depth exceeded");
+                let object = {};
+                if (options.defaults) {
+                    object.shard = "";
+                    object.state = "";
+                    object.updated = false;
+                }
+                if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
+                    object.shard = message.shard;
+                if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
+                    object.state = message.state;
+                if (message.updated != null && $Object.hasOwnProperty.call(message, "updated"))
+                    object.updated = message.updated;
+                return object;
+            };
+
+            /**
+             * Converts this ShardResult to JSON.
+             * @function toJSON
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @instance
+             * @returns {Object.<string,*>} JSON object
+             */
+            ShardResult.prototype.toJSON = function() {
+                return ShardResult.toObject(this, $protobuf.util.toJSONOptions);
+            };
+
+            /**
+             * Gets the type url for ShardResult
+             * @function getTypeUrl
+             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
+             * @static
+             * @param {string} [prefix] Custom type url prefix, defaults to `"type.googleapis.com"`
+             * @returns {string} The type url
+             */
+            ShardResult.getTypeUrl = function(prefix) {
+                if (prefix === $undefined)
+                    prefix = "type.googleapis.com";
+                return prefix + "/vtctldata.VDiffUpdateResponse.ShardResult";
+            };
+
+            return ShardResult;
+        })();
+
+        return VDiffUpdateResponse;
+    })();
+
     vtctldata.WorkflowDeleteRequest = (function() {
 
         /**
