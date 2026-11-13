@@ -54,7 +54,10 @@ const (
 )
 
 var (
-	Actions    = []VDiffAction{CreateAction, ShowAction, StopAction, ResumeAction, DeleteAction, UpdateAction}
+	// Actions lists the actions supported by the legacy vtctl VDiff command.
+	// UpdateAction is intentionally not included as it is only available
+	// through vtctldclient (VDiffUpdate).
+	Actions    = []VDiffAction{CreateAction, ShowAction, StopAction, ResumeAction, DeleteAction}
 	ActionArgs = []string{AllActionArg, LastActionArg}
 
 	// The real zero value has nested nil pointers.
