@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -571,14 +572,18 @@ func TestHandleUpdateAction(t *testing.T) {
 			var leftover *controller
 			if tt.liveController || tt.leftoverDone {
 				done := make(chan struct{})
+				var closeDone sync.Once
 				if tt.leftoverDone {
-					close(done)
+					closeDone.Do(func() { close(done) })
 				}
+				// Like a real controller, cancel causes done to be closed so
+				// that Engine.Close (which stops all controllers) does not
+				// block on a live controller.
 				leftover = &controller{
 					id:     1,
 					uuid:   vduuid,
 					vde:    vdiffenv.vde,
-					cancel: func() {},
+					cancel: func() { closeDone.Do(func() { close(done) }) },
 					done:   done,
 				}
 				vdiffenv.vde.mu.Lock()
