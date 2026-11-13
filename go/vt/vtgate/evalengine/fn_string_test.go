@@ -28,6 +28,35 @@ import (
 	"vitess.io/vitess/go/vt/vtenv"
 )
 
+// TestChangeCaseNumberCharset tests that UPPER of a number compares with a
+// column in another single-byte charset: the number's text is ASCII, so it
+// converts to the column's charset.
+func TestChangeCaseNumberCharset(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	coll := venv.CollationEnv().LookupByName("latin1_swedish_ci")
+	resolver := FieldResolver([]*querypb.Field{
+		{Name: "n", Type: sqltypes.Int64, Charset: collations.CollationBinaryID},
+		{Name: "a", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("ascii_general_ci"))},
+	})
+
+	astExpr, err := venv.Parser().ParseExpr(`upper(n) = a`)
+	require.NoError(t, err)
+	translated, err := Translate(astExpr, &Config{
+		ResolveColumn: resolver.Column,
+		ResolveType:   resolver.Type,
+		Collation:     coll,
+		Environment:   venv,
+	})
+	require.NoError(t, err)
+	require.IsType(t, &CompiledExpr{}, translated)
+
+	env := NewExpressionEnv(t.Context(), nil, NewEmptyVCursor(venv, time.Local))
+	env.Row = []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("1")}
+	res, err := env.Evaluate(translated)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.NewInt64(1), res.Value(coll))
+}
+
 // TestPadPreservesRow tests that LPAD and RPAD leave the input row untouched.
 // The values of a row share one buffer, so every value but the last is followed
 // in memory by the next one: padding that grew its operand in place would write
