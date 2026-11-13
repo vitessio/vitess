@@ -214,9 +214,13 @@ func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
 
 // NewBindVar returns a bind variable
 func NewBindVar(key string, typ Type) *BindVariable {
+	bvarType := typ.Type()
+	if bvarType == sqltypes.TypeJSON {
+		bvarType = sqltypes.VarChar
+	}
 	return &BindVariable{
 		Key:               key,
-		Type:              typ.Type(),
+		Type:              bvarType,
 		Collation:         typ.Collation(),
 		dynamicTypeOffset: -1,
 	}
