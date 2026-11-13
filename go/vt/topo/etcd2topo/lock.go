@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"time"
 
@@ -291,7 +292,7 @@ func (s *Server) keepAlive(ctx context.Context, cli *clientv3.Client, leaseID cl
 				break
 			}
 			if errors.Is(err, rpctypes.ErrLeaseNotFound) {
-				log.Warn(fmt.Sprintf("etcd2topo: lease %x of the lock in %v expired before the lock was released", leaseID, nodePath))
+				log.Warn("lease of the lock expired before the lock was released", slog.Int64("lease_id", int64(leaseID)), slog.String("path", nodePath))
 				return
 			}
 			select {
