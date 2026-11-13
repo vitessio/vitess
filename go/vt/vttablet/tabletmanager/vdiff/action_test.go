@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -668,4 +669,73 @@ func expectUpdateOptionsQueries(t *testing.T, vdiffenv *testVDiffEnv, vduuid, ex
 		singleRowAffected,
 		nil,
 	)
+}
+
+// TestResumeUsesFreshOptions confirms that each resumed controller gets
+// its own options value, so resuming one vdiff does not change the
+// options of a vdiff that was resumed earlier on the same tablet.
+func TestResumeUsesFreshOptions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	vdiffenv := newTestVDiffEnv(t)
+	defer vdiffenv.close()
+
+	resume := func(id int64, tabletTypes string) *controller {
+		vduuid := uuid.New().String()
+		optionsJSON := fmt.Sprintf(`{"picker_options":{"tablet_types":"%s","source_cell":"zone1","target_cell":"zone1"},"core_options":{},"report_options":{}}`, tabletTypes)
+		record := sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(vdiffTestCols, vdiffTestColTypes),
+			// The record is reported as stopped so that the controller's run
+			// loop exits right away without diffing anything.
+			fmt.Sprintf("%d|%s|wf|ks|0|%s|stopped|%s|", id, vduuid, vdiffDBName, optionsJSON),
+		)
+		vdiffenv.dbClient.ExpectRequest(
+			"select id as id from _vt.vdiff where vdiff_uuid = "+encodeString(vduuid)+" and db_name = "+encodeString(vdiffDBName),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"), strconv.FormatInt(id, 10)),
+			nil,
+		)
+		vdiffenv.dbClient.ExpectRequest(
+			fmt.Sprintf(`update _vt.vdiff as vd, _vt.vdiff_table as vdt set vd.started_at = NULL, vd.completed_at = NULL, vd.state = 'pending',
+					vdt.state = 'pending' where vd.vdiff_uuid = %s and vd.db_name = %s and vd.id = vdt.vdiff_id and vd.state in ('completed', 'stopped')
+					and vdt.state in ('completed', 'stopped')`, encodeString(vduuid), encodeString(vdiffDBName)),
+			singleRowAffected,
+			nil,
+		)
+		byIDQuery := fmt.Sprintf("select * from _vt.vdiff where id = %d and db_name = %s", id, encodeString(vdiffDBName))
+		vdiffenv.dbClient.ExpectRequest(byIDQuery, record, nil) // resume
+		vdiffenv.dbClient.ExpectRequest(byIDQuery, record, nil) // controller run
+
+		_, err := vdiffenv.vde.PerformVDiffAction(ctx, &tabletmanagerdatapb.VDiffRequest{
+			Action:    string(ResumeAction),
+			VdiffUuid: vduuid,
+			Keyspace:  "ks",
+			Workflow:  "wf",
+		})
+		require.NoError(t, err)
+		vdiffenv.dbClient.Wait()
+
+		vdiffenv.vde.mu.Lock()
+		defer vdiffenv.vde.mu.Unlock()
+		ct := vdiffenv.vde.controllers[id]
+		require.NotNil(t, ct)
+		select {
+		case <-ct.done:
+		case <-ctx.Done():
+			require.FailNow(t, "timed out waiting for the controller to finish")
+		}
+		return ct
+	}
+
+	ct1 := resume(1, "replica")
+	ct2 := resume(2, "primary")
+	t.Cleanup(func() {
+		globalStats.mu.Lock()
+		defer globalStats.mu.Unlock()
+		delete(globalStats.controllers, ct1.id)
+		delete(globalStats.controllers, ct2.id)
+	})
+
+	require.NotSame(t, ct1.options, ct2.options)
+	require.Equal(t, "replica", ct1.options.GetPickerOptions().GetTabletTypes())
+	require.Equal(t, "primary", ct2.options.GetPickerOptions().GetTabletTypes())
 }

@@ -59,14 +59,19 @@ var (
 	// through vtctldclient (VDiffUpdate).
 	Actions    = []VDiffAction{CreateAction, ShowAction, StopAction, ResumeAction, DeleteAction}
 	ActionArgs = []string{AllActionArg, LastActionArg}
+)
 
-	// The real zero value has nested nil pointers.
-	optionsZeroVal = &tabletmanagerdatapb.VDiffOptions{
+// newZeroVDiffOptions returns a new VDiffOptions value with its nested
+// options initialized (the real zero value has nested nil pointers).
+// A new value is returned on every call so that callers never share
+// options that are later modified or read by a running controller.
+func newZeroVDiffOptions() *tabletmanagerdatapb.VDiffOptions {
+	return &tabletmanagerdatapb.VDiffOptions{
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
 		CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
 	}
-)
+}
 
 func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (resp *tabletmanagerdatapb.VDiffResponse, err error) {
 	defer func() {
@@ -148,7 +153,7 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 func (vde *Engine) fixupOptions(options *tabletmanagerdatapb.VDiffOptions) (*tabletmanagerdatapb.VDiffOptions, error) {
 	// Assign defaults to sourceCell and targetCell if not specified.
 	if options == nil {
-		options = optionsZeroVal
+		options = newZeroVDiffOptions()
 	}
 	sourceCell := options.PickerOptions.SourceCell
 	targetCell := options.PickerOptions.TargetCell
@@ -287,8 +292,10 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 			action, req.VdiffUuid, topoproto.TabletAliasString(vde.thisTablet.Alias), err)
 	}
 	if action == ResumeAction {
-		// Use the existing options from the vdiff record.
-		options = optionsZeroVal
+		// Use the existing options from the vdiff record. Each controller
+		// must get its own options value as they are read throughout the
+		// life of the controller.
+		options = newZeroVDiffOptions()
 		err = protojson.Unmarshal(vdiffRecord.AsBytes("options", []byte("{}")), options)
 		if err != nil {
 			return err
@@ -534,11 +541,7 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 		return err
 	}
 
-	options := &tabletmanagerdatapb.VDiffOptions{
-		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{},
-		CoreOptions:   &tabletmanagerdatapb.VDiffCoreOptions{},
-		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{},
-	}
+	options := newZeroVDiffOptions()
 	if err := protojson.Unmarshal(row.AsBytes("options", []byte("{}")), options); err != nil {
 		return vterrors.Wrapf(err, "failed to unmarshal existing vdiff options for UUID %s", req.VdiffUuid)
 	}
