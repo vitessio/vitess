@@ -17,8 +17,11 @@ limitations under the License.
 package vtgate
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -27,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/test/utils"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
@@ -84,6 +88,65 @@ func TestVTGateExecute(t *testing.T) {
 		if strings.HasPrefix(k, "Prepare") {
 			require.Equal(t, v, counts[k])
 		}
+	}
+}
+
+func TestVTGateExecuteNumericTabsInTextQueryLog(t *testing.T) {
+	vtg, sbc, ctx := createVtgateEnv(t)
+	logChan := vtg.executor.queryLogger.Subscribe(t.Name())
+	t.Cleanup(func() { vtg.executor.queryLogger.Unsubscribe(logChan) })
+
+	const value = "\t42\t"
+	request := &vtgatepb.ExecuteRequest{
+		Session: &vtgatepb.Session{Autocommit: true},
+		Query: &querypb.BoundQuery{
+			Sql:           "select :v",
+			BindVariables: map[string]*querypb.BindVariable{"v": {Type: querypb.Type_INT64, Value: []byte(value)}},
+		},
+	}
+	wire, err := proto.Marshal(request)
+	require.NoError(t, err)
+	var received vtgatepb.ExecuteRequest
+	require.NoError(t, proto.Unmarshal(wire, &received))
+	_, result, err := vtg.Execute(ctx, nil, received.Session, received.Query.Sql, received.Query.BindVariables, false)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, [][]sqltypes.Value{{sqltypes.NewInt64(42)}}, result.Rows)
+	assert.Empty(t, sbc.Queries)
+
+	record := getQueryLog(logChan)
+	require.NotNil(t, record)
+	require.NoError(t, record.Error)
+	require.Zero(t, record.ShardQueries)
+	require.Contains(t, record.BindVariables, "v")
+	assert.Equal(t, value, string(record.BindVariables["v"].Value))
+	record.Config = streamlog.NewQueryLogConfigForTest()
+	record.Config.Format = streamlog.QueryLogFormatText
+
+	for _, tc := range []struct {
+		name   string
+		params url.Values
+	}{
+		{name: "abbreviated"},
+		{name: "full", params: url.Values{"full": {}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			require.NoError(t, streamlog.GetFormatter(vtg.executor.queryLogger)(&out, tc.params, record))
+			assert.Equal(t, 1, strings.Count(out.String(), "\n"))
+			fields := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\t")
+			require.Len(t, fields, 28)
+			assert.Equal(t, "0", fields[14])
+
+			var bindings map[string]struct {
+				Type  string
+				Value json.RawMessage
+			}
+			require.NoError(t, json.Unmarshal([]byte(fields[13]), &bindings))
+			require.Contains(t, bindings, "v")
+			assert.Equal(t, "INT64", bindings["v"].Type)
+			assert.Equal(t, "42", string(bindings["v"].Value))
+		})
 	}
 }
 
