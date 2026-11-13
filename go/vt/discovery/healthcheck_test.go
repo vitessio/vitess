@@ -482,6 +482,7 @@ func TestHealthCheckStreamError(t *testing.T) {
 
 	tablet := createTestTablet(0, "cell", "a")
 	input := make(chan *querypb.StreamHealthResponse)
+	hcErrorCounters.ResetAll()
 	resultChan := hc.Subscribe("TestHealthCheckStreamError")
 	fc := createFakeConn(tablet, input)
 	fc.errCh = make(chan error)
@@ -533,6 +534,8 @@ func TestHealthCheckStreamError(t *testing.T) {
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "wrong result, expected empty list")
+	// a stream error on a live tablet is counted once
+	assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 1))
 }
 
 // TestHealthCheckErrorOnPrimary is the same as TestHealthCheckStreamError except for tablet type
@@ -1113,6 +1116,78 @@ func TestStaleUpdateFromCanceledCheckConn(t *testing.T) {
 			"tablet is serving and streaming health but missing from the healthy list: stale update from the canceled checkConn poisoned the healthy list")
 		assert.True(t, healthy[0].Serving)
 	})
+}
+
+// TestDeliberateTeardownIsNotHealthcheckError checks that removing, replacing
+// or closing a tablet's health check does not count the canceled stream as a
+// HealthcheckErrors stat.
+func TestDeliberateTeardownIsNotHealthcheckError(t *testing.T) {
+	tests := []struct {
+		name     string
+		teardown func(hc *HealthCheckImpl, tablet *topodatapb.Tablet)
+	}{
+		{
+			name: "RemoveTablet",
+			teardown: func(hc *HealthCheckImpl, tablet *topodatapb.Tablet) {
+				hc.RemoveTablet(tablet)
+			},
+		},
+		{
+			name: "ReplaceTablet",
+			teardown: func(hc *HealthCheckImpl, tablet *topodatapb.Tablet) {
+				newTablet := createTestTablet(0, "cell", "a")
+				newTablet.Type = topodatapb.TabletType_REPLICA
+				newTablet.PortMap["vt"] = 5
+				newTablet.PortMap["grpc"] = 6
+				createFakeConn(newTablet, make(chan *querypb.StreamHealthResponse))
+				hc.ReplaceTablet(tablet, newTablet)
+			},
+		},
+		{
+			name: "Close",
+			teardown: func(hc *HealthCheckImpl, tablet *topodatapb.Tablet) {
+				hc.Close()
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ctx := t.Context()
+				ts := memorytopo.NewServer(ctx, "cell")
+				t.Cleanup(func() { ts.Close() })
+				hcErrorCounters.ResetAll()
+				hc := createTestHc(ctx, ts)
+				t.Cleanup(func() { hc.Close() })
+
+				tablet := createTestTablet(0, "cell", "a")
+				tablet.Type = topodatapb.TabletType_REPLICA
+				input := make(chan *querypb.StreamHealthResponse)
+				fc := createFakeConn(tablet, input)
+				// Make the canceled stream return ctx.Err() right away, like a
+				// real gRPC stream does.
+				fc.releaseOnCancel = make(chan struct{})
+				close(fc.releaseOnCancel)
+
+				target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+				hc.AddTablet(tablet)
+				input <- &querypb.StreamHealthResponse{
+					TabletAlias:   tablet.Alias,
+					Target:        target,
+					Serving:       true,
+					RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+				}
+				synctest.Wait()
+				require.Len(t, hc.GetHealthyTabletStats(target), 1, "tablet should be healthy before the teardown")
+
+				tt.teardown(hc, tablet)
+				synctest.Wait()
+
+				require.True(t, fc.isCanceled(), "the tablet's stream should be canceled by the teardown")
+				assert.NoError(t, checkErrorCounter("k", "s", topodatapb.TabletType_REPLICA, 0))
+			})
+		})
+	}
 }
 
 // When an external primary failover is performed,
