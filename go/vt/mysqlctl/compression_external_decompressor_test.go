@@ -29,6 +29,7 @@ func TestResolveExternalDecompressor(t *testing.T) {
 		useManifest          bool
 		manifestDecompressor string
 		expected             string
+		expectedSource       string
 	}{
 		{
 			name:                 "CLI flag takes precedence over manifest",
@@ -36,6 +37,7 @@ func TestResolveExternalDecompressor(t *testing.T) {
 			useManifest:          true,
 			manifestDecompressor: "gzip -d",
 			expected:             "zstd -d",
+			expectedSource:       "--external-decompressor",
 		},
 		{
 			name:                 "CLI flag takes precedence even when use-manifest is false",
@@ -43,6 +45,7 @@ func TestResolveExternalDecompressor(t *testing.T) {
 			useManifest:          false,
 			manifestDecompressor: "gzip -d",
 			expected:             "zstd -d",
+			expectedSource:       "--external-decompressor",
 		},
 		{
 			name:                 "manifest used when use-manifest is true and no CLI flag",
@@ -50,6 +53,7 @@ func TestResolveExternalDecompressor(t *testing.T) {
 			useManifest:          true,
 			manifestDecompressor: "gzip -d",
 			expected:             "gzip -d",
+			expectedSource:       "MANIFEST ExternalDecompressor",
 		},
 		{
 			name:                 "manifest ignored when use-manifest is false",
@@ -86,8 +90,9 @@ func TestResolveExternalDecompressor(t *testing.T) {
 			ExternalDecompressorCmd = tt.cliDecompressorCmd
 			ExternalDecompressorUseManifest = tt.useManifest
 
-			result := resolveExternalDecompressor(tt.manifestDecompressor)
+			result, source := resolveExternalDecompressor(tt.manifestDecompressor)
 			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expectedSource, source)
 		})
 	}
 }

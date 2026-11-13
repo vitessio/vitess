@@ -130,17 +130,17 @@ func getExtensionFromEngine(engine string) (string, error) {
 }
 
 // resolveExternalDecompressor returns the external decompressor command to use
-// at restore time. The CLI flag (--external-decompressor) takes precedence. The
-// backup manifest value is only used when --external-decompressor-use-manifest
-// is explicitly set to true.
-func resolveExternalDecompressor(manifestDecompressor string) string {
+// at restore time, and where it came from for the log line. The CLI flag
+// (--external-decompressor) takes precedence. The backup manifest value is only
+// used when --external-decompressor-use-manifest is explicitly set to true.
+func resolveExternalDecompressor(manifestDecompressor string) (cmd, source string) {
 	if ExternalDecompressorCmd != "" {
-		return ExternalDecompressorCmd
+		return ExternalDecompressorCmd, "--external-decompressor"
 	}
 	if ExternalDecompressorUseManifest && manifestDecompressor != "" {
-		return manifestDecompressor
+		return manifestDecompressor, "MANIFEST ExternalDecompressor"
 	}
-	return ""
+	return "", ""
 }
 
 // Validates if the external decompressor exists and return its path.
@@ -181,9 +181,18 @@ func prepareExternalCmd(ctx context.Context, cmdStr string) (*exec.Cmd, error) {
 	return exec.CommandContext(ctx, cmdPath, cmdArgs[1:]...), nil
 }
 
+// externalCommandString returns the external command line to log: the binary
+// and, if it has arguments, a placeholder for them, since the operator's flag
+// can hold credentials.
+func externalCommandString(cmd *exec.Cmd, flag string) string {
+	if len(cmd.Args) == 1 {
+		return cmd.Path
+	}
+	return fmt.Sprintf("%s <%s>", cmd.Path, flag)
+}
+
 // This returns a writer that writes the compressed output of the external command to the provided writer.
 func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer, logger logutil.Logger) (io.WriteCloser, error) {
-	logger.Info("Compressing using external command", slog.String("exec_cmd", cmdStr))
 	// validate value of compression engine name
 	if err := validateExternalCompressionEngineName(CompressionEngineName); err != nil {
 		return nil, err
@@ -193,6 +202,7 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
+	logger.Info("Compressing using external command", slog.String("exec_cmd", externalCommandString(cmd, "--external-compressor")))
 	compressor := &externalCompressor{cmd: cmd}
 	cmd.Stdout = writer
 	cmdIn, err := cmd.StdinPipe()
@@ -216,13 +226,13 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 
 // This returns a reader that reads the compressed input and passes it to the external command to be decompressed. Calls to its
 // Read() will return the uncompressed data until EOF.
-func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
-	logger.Info("Decompressing using external command", slog.String("exec_cmd", cmdStr))
-
+// source names where cmdStr came from and stands in for its arguments in the log line.
+func newExternalDecompressor(ctx context.Context, cmdStr, source string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
 	cmd, err := prepareExternalCmd(ctx, cmdStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
+	logger.Info("Decompressing using external command", slog.String("exec_cmd", externalCommandString(cmd, source)))
 	decompressor := &externalDecompressor{cmd: cmd}
 	cmd.Stdin = reader
 	cmdOut, err := cmd.StdoutPipe()
