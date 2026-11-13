@@ -3,15 +3,42 @@ description: 'Provision a single-node MicroCeph with an S3-compatible RGW for us
 runs:
   using: "composite"
   steps:
+    # The Snap Store often doesn't answer GitHub's runners, so jobs install the
+    # snaps from a cache entry instead. Jobs only restore. The go_cache_warm
+    # workflow is the only writer: on a push to main or a release branch it
+    # saves what download-snaps.sh downloads, unless an entry with this key
+    # exists. The key holds the script's hash, so a change to it starts a new
+    # entry; the microceph-snaps job there uses the same key.
+    - name: Restore the MicroCeph snaps
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: dist/microceph-snaps
+        key: microceph-snaps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/actions/setup-microceph/download-snaps.sh') }}
+
+    # Without an entry (after a change to the script, until a push to the base
+    # branch saves one, or in vitess-security, where go_cache_warm doesn't run),
+    # download them from the Snap Store.
+    - name: Download the MicroCeph snaps
+      if: steps.restore.outputs.cache-hit != 'true'
+      shell: bash -e {0}
+      run: '"${GITHUB_ACTION_PATH}/download-snaps.sh" dist/microceph-snaps'
+
     - name: Install MicroCeph
       shell: bash -e {0}
       run: |
-        # Pin the Ceph release. The store's default track is squid (Ceph 19);
-        # latest/stable currently still points at reef (Ceph 18). Bumping this is
-        # a deliberate change, as the MinIO package version was before.
-        sudo snap install microceph --channel=squid/stable
-        # Hold the snap so an automatic refresh cannot restart Ceph mid-job.
-        sudo snap refresh --hold microceph
+        # With their assertions acknowledged, snaps install from files as they
+        # would from the store, without contacting it. The snapd snap goes
+        # first, then MicroCeph's base.
+        for snap in snapd core24 microceph; do
+          sudo snap ack "dist/microceph-snaps/${snap}.assert"
+        done
+        for snap in snapd core24 microceph; do
+          sudo snap install "dist/microceph-snaps/${snap}.snap"
+        done
+        # Hold every snap's automatic refreshes, so that none can restart snapd
+        # or Ceph mid-job: the cached snaps can be older than the store's.
+        sudo snap refresh --hold
 
     - name: Bootstrap a single-node cluster with loop-file OSDs
       shell: bash -e {0}

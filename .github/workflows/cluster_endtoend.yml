@@ -110,7 +110,7 @@ jobs:
               - '.github/actions/tune-os/**'
               - '.github/actions/setup-go/action.yml'
               - '.github/actions/tool-downloads/**'
-              - '.github/actions/setup-microceph/action.yml'
+              - '.github/actions/setup-microceph/**'
 
   test:
     needs: generate-matrix
@@ -225,7 +225,10 @@ jobs:
 
       - name: Install MicroCeph
         if: needs.generate-matrix.outputs.end_to_end == 'true' && contains(matrix.needs, 'microceph')
-        timeout-minutes: 10
+        # More time for the action to download the snaps from the Snap Store when
+        # the cache has no entry for them. It retries each download, and this
+        # timeout is what bounds those retries in all.
+        timeout-minutes: 15
         uses: $/.github/actions/setup-microceph
 
       # 'consul' is the only need that triggers `make tools`, which installs both Consul and ZooKeeper.
