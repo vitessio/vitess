@@ -605,24 +605,37 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 		c.asm.Convert_uj(offset)
 	case sqltypes.Decimal:
 		c.asm.Convert_dj(offset)
-	case sqltypes.VarChar:
-		c.asm.Convert_cj(offset)
-	case sqltypes.VarBinary:
-		c.asm.Convert_bj(offset)
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
 	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:
 		c.asm.Convert_Tj(offset)
 	default:
-		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+		// Like evalToJSON, every binary string is converted as a VARBINARY
+		// and every character string as a VARCHAR.
+		switch {
+		case sqltypes.IsBinary(doct.Type):
+			c.asm.Convert_bj(offset)
+		case sqltypes.IsText(doct.Type):
+			c.asm.Convert_cj(offset)
+		default:
+			return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+		}
 	}
 	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
 }
 
+// compileArgToJSON converts the argument of a JSON function to JSON. Unlike
+// compileToJSON, it is not preceded by a NULL check: like argToJSON, it
+// converts a NULL of any type to the JSON null literal.
 func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
+	var skip *jump
+	if doct.nullable() && doct.Type != sqltypes.Null {
+		skip = c.asm.jumpFrom()
+		c.asm.NullCheckArgToJSON(skip, offset)
+	}
+
 	switch doct.Type {
 	case sqltypes.TypeJSON:
-		return doct, nil
 	case sqltypes.Float64:
 		c.asm.Convert_fj(offset)
 	case sqltypes.Int64:
@@ -631,17 +644,24 @@ func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
 		c.asm.Convert_uj(offset)
 	case sqltypes.Decimal:
 		c.asm.Convert_dj(offset)
-	case sqltypes.VarChar:
-		c.asm.ConvertArg_cj(offset)
-	case sqltypes.VarBinary:
-		c.asm.Convert_bj(offset)
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
 	case sqltypes.Date, sqltypes.Datetime, sqltypes.Timestamp, sqltypes.Time:
 		c.asm.Convert_Tj(offset)
 	default:
-		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+		// Like argToJSON, every binary string is converted as a VARBINARY
+		// and every character string as a VARCHAR.
+		switch {
+		case sqltypes.IsBinary(doct.Type):
+			c.asm.Convert_bj(offset)
+		case sqltypes.IsText(doct.Type):
+			c.asm.ConvertArg_cj(offset)
+		default:
+			return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+		}
 	}
+
+	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
 }
 
@@ -655,7 +675,11 @@ func (c *compiler) compileToJSONKey(key ctype) error {
 	if key.Type == sqltypes.VarBinary {
 		return nil
 	}
+	// A key that is NULL when it runs is not converted: JSON_OBJECT
+	// rejects it.
+	skip := c.compileNullCheck1(key)
 	c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+	c.asm.jumpDestination(skip)
 	return nil
 }
 

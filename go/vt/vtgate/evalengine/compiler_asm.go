@@ -3658,6 +3658,18 @@ func (asm *assembler) NullCheckArg(j *jump, offset int) {
 	}, "NULLCHECK SP-1 [argument %d]", offset)
 }
 
+// NullCheckArgToJSON replaces a NULL argument of a JSON function with the
+// JSON null literal and jumps over its conversion to JSON.
+func (asm *assembler) NullCheckArgToJSON(j *jump, offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if env.vm.stack[env.vm.sp-offset] == nil {
+			env.vm.stack[env.vm.sp-offset] = json.ValueNull
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-%d, JSON", offset)
+}
+
 func (asm *assembler) NullCheckOffset(j *jump, offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
 		if env.vm.stack[env.vm.sp-offset] == nil {

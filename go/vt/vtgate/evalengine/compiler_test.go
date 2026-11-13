@@ -1059,6 +1059,34 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `UINT64(2212294583)`,
 			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, false, 0, 0, nil),
 		},
+		{
+			// A TEXT converts to JSON like a VARCHAR.
+			expression: `JSON_ARRAY(CAST(column0 AS CHAR(70000)))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `JSON("[\"abc\"]")`,
+		},
+		{
+			expression: `JSON_OBJECT('k', CAST(column0 AS CHAR(70000)))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `JSON("{\"k\": \"abc\"}")`,
+		},
+		{
+			expression: `CAST(CAST(column0 AS CHAR(70000)) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("1")},
+			result:     `JSON("1")`,
+		},
+		{
+			// A NULL argument of a JSON function is the JSON null, whatever
+			// its type.
+			expression: `JSON_ARRAY(NULLIF(column0, 'a'))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `JSON("[null]")`,
+		},
+		{
+			expression: `JSON_OBJECT('k', NULLIF(column0, 1))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `JSON("{\"k\": null}")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")

@@ -280,6 +280,12 @@ func JSONArray(yield Query) {
 		yield(fmt.Sprintf("JSON_ARRAY('a', %s)", b), nil, false)
 	}
 	yield("JSON_ARRAY()", nil, false)
+
+	// An argument that is NULL without being the NULL literal.
+	yieldIn(yield, "JSON_ARRAY(%s)", "NULLIF(1.5, 1.5)", "NULLIF(DATE'2020-01-02', DATE'2020-01-02')", "ELT(5, 'a', 'b')", "FROM_BASE64('!')")
+
+	// A TEXT argument.
+	yieldIn(yield, "JSON_ARRAY(%s)", "CAST('abc' AS CHAR(70000))")
 }
 
 func JSONObject(yield Query) {
@@ -292,6 +298,13 @@ func JSONObject(yield Query) {
 		yield(fmt.Sprintf("JSON_OBJECT('k', %s)", b), nil, false)
 	}
 	yield("JSON_OBJECT()", nil, false)
+
+	// A value or a key that is NULL without being the NULL literal.
+	yieldIn(yield, "JSON_OBJECT('k', %s)", "NULLIF(1.5, 1.5)", "ELT(5, 'a', 'b')")
+	yieldIn(yield, "JSON_OBJECT(%s, 1)", "NULLIF(1.5, 1.5)")
+
+	// A TEXT value.
+	yieldIn(yield, "JSON_OBJECT('k', %s)", "CAST('abc' AS CHAR(70000))")
 }
 
 func CharsetConversionOperators(yield Query) {
