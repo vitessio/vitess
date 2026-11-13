@@ -34,9 +34,10 @@ limitations under the License.
 //
 //   - error, cause, parked_error, reason, grpc_message, lock_contents,
 //     last_sql_error, last_io_error and partial_refresh_details
-//   - query, queries, schema_diff, alter, where, select_table, filter,
-//     expression, schema, vschema, fields, field_event, request, result and
-//     throttler_config
+//   - query, queries, schema_diff, simplified_query, alter, where,
+//     select_table, filter, expression, simplified_expression,
+//     full_expression, schema, vschema, fields, field_event, request, result
+//     and throttler_config
 //   - last_pk, row, row_range, values, next_value, last_value, event,
 //     journal, task_result, transaction, message, packet, stage and panic
 //   - exec_cmd, args, process_name, stdout, stderr and error_log

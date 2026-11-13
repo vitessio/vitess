@@ -253,36 +253,42 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 
 	var result []*ResolvedShard
 	var values [][]*querypb.Value
+	var currentID *querypb.Value
 	resolved := make(map[string]int)
-	for i, destination := range destinations {
-		if err := destination.Resolve(allShards, func(shard string) error {
-			s, ok := resolved[shard]
-			if !ok {
-				target := &querypb.Target{
-					Keyspace:   keyspace,
-					Shard:      shard,
-					TabletType: tabletType,
-					Cell:       r.localCell,
-				}
-				// Right now we always set the Cell to ""
-				// Later we can fallback to another cell if needed.
-				// We would then need to read the SrvKeyspace there too.
-				target.Cell = ""
-				s = len(result)
-				result = append(result, &ResolvedShard{
-					Target:  target,
-					Gateway: r.gateway,
-				})
-				if ids != nil {
-					values = append(values, nil)
-				}
-				resolved[shard] = s
+	addShard := func(shard string) error {
+		s, ok := resolved[shard]
+		if !ok {
+			target := &querypb.Target{
+				Keyspace:   keyspace,
+				Shard:      shard,
+				TabletType: tabletType,
+				Cell:       r.localCell,
 			}
+			// Right now we always set the Cell to ""
+			// Later we can fallback to another cell if needed.
+			// We would then need to read the SrvKeyspace there too.
+			target.Cell = ""
+			s = len(result)
+			result = append(result, &ResolvedShard{
+				Target:  target,
+				Gateway: r.gateway,
+			})
 			if ids != nil {
-				values[s] = append(values[s], ids[i])
+				values = append(values, nil)
 			}
-			return nil
-		}); err != nil {
+			resolved[shard] = s
+		}
+		if ids != nil {
+			values[s] = append(values[s], currentID)
+		}
+		return nil
+	}
+	// Resolve calls addShard synchronously, so we can reuse currentID for each destination.
+	for i, destination := range destinations {
+		if ids != nil {
+			currentID = ids[i]
+		}
+		if err := destination.Resolve(allShards, addShard); err != nil {
 			return nil, nil, err
 		}
 	}

@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"time"
@@ -193,7 +194,11 @@ func (e *Executor) newExecute(
 		// Retry if needed.
 		rootCause := vterrors.RootCause(err)
 		if rootCause != nil && strings.Contains(rootCause.Error(), "enforce denied tables") {
-			log.V(2).Info(fmt.Sprintf("Retry: %d, will retry query %s due to %v", try, sql, err))
+			log.V(2).Info("Retry: will retry query due to error",
+				slog.Int("attempt", try),
+				slog.String("query", sql),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			if try == 0 { // We are going to retry at least once
 				defer func() {
 					// Prevent any plan cache pollution from queries planned against the wrong keyspace during a MoveTables

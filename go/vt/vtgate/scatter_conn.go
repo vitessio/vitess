@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"io"
+	"log/slog"
 	"runtime/debug"
 	"sync"
 	"sync/atomic"
@@ -367,7 +368,7 @@ func (stc *ScatterConn) runLockQuery(ctx context.Context, session *econtext.Safe
 	query := &querypb.BoundQuery{Sql: "select 1", BindVariables: nil}
 	_, lockErr := stc.ExecuteLock(ctx, rs, query, session, sqlparser.IsUsedLock)
 	if lockErr != nil {
-		log.Warn("Locking heartbeat failed, held locks might be released: " + lockErr.Error())
+		log.Warn("Locking heartbeat failed, held locks might be released", slog.Any("error", lockErr))
 	}
 }
 
@@ -806,7 +807,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		}
 		wg.Wait()
 		if pr, ok := panicRecord.Load().(*panicData); ok {
-			log.Error("caught a panic during parallel execution:\n" + string(pr.trace))
+			log.Error("caught a panic during parallel execution", slog.String("stack", string(pr.trace)))
 			panic(pr.p) // rethrow the captured panic in the main thread
 		}
 	}
