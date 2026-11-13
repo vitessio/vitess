@@ -649,6 +649,10 @@ func (s *Server) VDiffStop(ctx context.Context, req *vtctldatapb.VDiffStopReques
 // controller on an affected shard, that shard rejects the update.
 // Otherwise the stored options are updated in place; lastpk/progress
 // are untouched and the new options take effect on the next VDiff resume.
+//
+// If a shard rejects the update, an error is returned and other shards
+// may already have been updated. Rerunning the update after stopping
+// the remaining shards is safe.
 func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRequest) (*vtctldatapb.VDiffUpdateResponse, error) {
 	span, ctx := trace.NewSpan(ctx, "workflow.Server.VDiffUpdate")
 	defer span.Finish()
@@ -766,8 +770,7 @@ func allTopoCells(ctx context.Context, ts *topo.Server) (string, error) {
 
 func shardResultFromVDiffResponse(shard string, resp *tabletmanagerdatapb.VDiffResponse) *vtctldatapb.VDiffUpdateResponse_ShardResult {
 	result := &vtctldatapb.VDiffUpdateResponse_ShardResult{
-		Shard:   shard,
-		Updated: resp != nil,
+		Shard: shard,
 	}
 	if resp == nil || resp.Output == nil {
 		return result
@@ -775,9 +778,6 @@ func shardResultFromVDiffResponse(shard string, resp *tabletmanagerdatapb.VDiffR
 	qr := sqltypes.Proto3ToResult(resp.Output)
 	if row := qr.Named().Row(); row != nil {
 		result.State = strings.ToLower(row.AsString("state", ""))
-		if updated, err := row.ToBool("updated"); err == nil {
-			result.Updated = updated
-		}
 	}
 	return result
 }

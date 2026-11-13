@@ -695,8 +695,8 @@ func TestVDiffUpdate(t *testing.T) {
 			Id:        1,
 			VdiffUuid: vduuid,
 			Output: sqltypes.ResultToProto3(sqltypes.MakeTestResult(
-				sqltypes.MakeTestFields("state|updated", "varbinary|int64"),
-				state+"|1",
+				sqltypes.MakeTestFields("state", "varbinary"),
+				state,
 			)),
 		}
 	}
@@ -854,7 +854,6 @@ func TestVDiffUpdate(t *testing.T) {
 			require.Len(t, got.Results, len(tt.wantStates))
 			for _, result := range got.Results {
 				require.Equal(t, tt.wantStates[result.Shard], result.State)
-				require.True(t, result.Updated)
 			}
 			env.tmc.confirmVDiffRequests(t)
 		})

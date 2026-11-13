@@ -2217,7 +2217,6 @@ message VDiffUpdateResponse {
     // lastpk and progress are left untouched. The new picker options take
     // effect on the next VDiff resume.
     string state = 2;
-    bool updated = 3;
   }
   repeated ShardResult results = 1;
 }

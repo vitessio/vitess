@@ -97658,9 +97658,6 @@ export namespace vtctldata {
             /** ShardResult state. */
             state: string;
 
-            /** ShardResult updated. */
-            updated: boolean;
-
             /**
              * Creates a new ShardResult instance using the specified properties.
              * @param [properties] Properties to set
@@ -97750,9 +97747,6 @@ export namespace vtctldata {
 
                 /** ShardResult state */
                 state?: (string|null);
-
-                /** ShardResult updated */
-                updated?: (boolean|null);
 
                 /** Unknown fields preserved while decoding when enabled */
                 $unknowns?: Uint8Array[];

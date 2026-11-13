@@ -588,11 +588,9 @@ func (vde *Engine) handleUpdateAction(ctx context.Context, dbClient binlogplayer
 	resp.Output = sqltypes.ResultToProto3(&sqltypes.Result{
 		Fields: []*query.Field{
 			{Name: "state", Type: sqltypes.VarBinary},
-			{Name: "updated", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewVarBinary(state),
-			sqltypes.NewInt64(1),
 		}},
 	})
 	return nil

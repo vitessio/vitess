@@ -259595,7 +259595,6 @@ export const vtctldata = $root.vtctldata = (() => {
              * @typedef {Object} vtctldata.VDiffUpdateResponse.ShardResult.$Properties
              * @property {string|null} [shard] ShardResult shard
              * @property {string|null} [state] ShardResult state
-             * @property {boolean|null} [updated] ShardResult updated
              * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
              */
 
@@ -259644,14 +259643,6 @@ export const vtctldata = $root.vtctldata = (() => {
             ShardResult.prototype.state = "";
 
             /**
-             * ShardResult updated.
-             * @member {boolean} updated
-             * @memberof vtctldata.VDiffUpdateResponse.ShardResult
-             * @instance
-             */
-            ShardResult.prototype.updated = false;
-
-            /**
              * Creates a new ShardResult instance using the specified properties.
              * @function create
              * @memberof vtctldata.VDiffUpdateResponse.ShardResult
@@ -259687,8 +259678,6 @@ export const vtctldata = $root.vtctldata = (() => {
                     writer.uint32(/* id 1, wireType 2 =*/10).string(message.shard);
                 if (message.state != null && $Object.hasOwnProperty.call(message, "state") && message.state !== "")
                     writer.uint32(/* id 2, wireType 2 =*/18).string(message.state);
-                if (message.updated != null && $Object.hasOwnProperty.call(message, "updated") && message.updated !== false)
-                    writer.uint32(/* id 3, wireType 0 =*/24).bool(message.updated);
                 if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                     for (let i = 0; i < message.$unknowns.length; ++i)
                         writer.raw(message.$unknowns[i]);
@@ -259764,15 +259753,6 @@ export const vtctldata = $root.vtctldata = (() => {
                                 delete message.state;
                             continue;
                         }
-                    case 3: {
-                            if (wireType !== 0)
-                                break;
-                            if (value = reader.bool())
-                                message.updated = value;
-                            else
-                                delete message.updated;
-                            continue;
-                        }
                     }
                     reader.skipType(wireType, _depth, tag);
                     if (!reader.discardUnknown) {
@@ -259827,9 +259807,6 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
                     if (!$util.isString(message.state))
                         return "state: string expected";
-                if (message.updated != null && $Object.hasOwnProperty.call(message, "updated"))
-                    if (typeof message.updated !== "boolean")
-                        return "updated: boolean expected";
                 return null;
             };
 
@@ -259857,9 +259834,6 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (object.state != null)
                     if (typeof object.state !== "string" || object.state.length)
                         message.state = $String(object.state);
-                if (object.updated != null)
-                    if (object.updated)
-                        message.updated = $Boolean(object.updated);
                 return message;
             };
 
@@ -259883,14 +259857,11 @@ export const vtctldata = $root.vtctldata = (() => {
                 if (options.defaults) {
                     object.shard = "";
                     object.state = "";
-                    object.updated = false;
                 }
                 if (message.shard != null && $Object.hasOwnProperty.call(message, "shard"))
                     object.shard = message.shard;
                 if (message.state != null && $Object.hasOwnProperty.call(message, "state"))
                     object.state = message.state;
-                if (message.updated != null && $Object.hasOwnProperty.call(message, "updated"))
-                    object.updated = message.updated;
                 return object;
             };
 

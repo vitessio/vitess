@@ -17366,7 +17366,6 @@ type VDiffUpdateResponse_ShardResult struct {
 	// lastpk and progress are left untouched. The new picker options take
 	// effect on the next VDiff resume.
 	State         string `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
-	Updated       bool   `protobuf:"varint,3,opt,name=updated,proto3" json:"updated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -17413,13 +17412,6 @@ func (x *VDiffUpdateResponse_ShardResult) GetState() string {
 		return x.State
 	}
 	return ""
-}
-
-func (x *VDiffUpdateResponse_ShardResult) GetUpdated() bool {
-	if x != nil {
-		return x.Updated
-	}
-	return false
 }
 
 type WorkflowDeleteResponse_TabletInfo struct {
@@ -18933,13 +18925,12 @@ const file_vtctldata_proto_rawDesc = "" +
 	"\ftarget_cells\x18\b \x03(\tR\vtargetCells\x12,\n" +
 	"\x12clear_source_cells\x18\t \x01(\bR\x10clearSourceCells\x12,\n" +
 	"\x12clear_target_cells\x18\n" +
-	" \x01(\bR\x10clearTargetCells\"\xb0\x01\n" +
+	" \x01(\bR\x10clearTargetCells\"\x96\x01\n" +
 	"\x13VDiffUpdateResponse\x12D\n" +
-	"\aresults\x18\x01 \x03(\v2*.vtctldata.VDiffUpdateResponse.ShardResultR\aresults\x1aS\n" +
+	"\aresults\x18\x01 \x03(\v2*.vtctldata.VDiffUpdateResponse.ShardResultR\aresults\x1a9\n" +
 	"\vShardResult\x12\x14\n" +
 	"\x05shard\x18\x01 \x01(\tR\x05shard\x12\x14\n" +
-	"\x05state\x18\x02 \x01(\tR\x05state\x12\x18\n" +
-	"\aupdated\x18\x03 \x01(\bR\aupdated\"\xa7\x02\n" +
+	"\x05state\x18\x02 \x01(\tR\x05state\"\xa7\x02\n" +
 	"\x15WorkflowDeleteRequest\x12\x1a\n" +
 	"\bkeyspace\x18\x01 \x01(\tR\bkeyspace\x12\x1a\n" +
 	"\bworkflow\x18\x02 \x01(\tR\bworkflow\x12 \n" +

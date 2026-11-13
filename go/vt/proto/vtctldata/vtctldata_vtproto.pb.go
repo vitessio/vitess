@@ -5688,7 +5688,6 @@ func (m *VDiffUpdateResponse_ShardResult) CloneVT() *VDiffUpdateResponse_ShardRe
 	r := new(VDiffUpdateResponse_ShardResult)
 	r.Shard = m.Shard
 	r.State = m.State
-	r.Updated = m.Updated
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -21731,16 +21730,6 @@ func (m *VDiffUpdateResponse_ShardResult) MarshalToSizedBufferVT(dAtA []byte) (i
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if m.Updated {
-		i--
-		if m.Updated {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i--
-		dAtA[i] = 0x18
-	}
 	if len(m.State) > 0 {
 		i -= len(m.State)
 		copy(dAtA[i:], m.State)
@@ -28859,9 +28848,6 @@ func (m *VDiffUpdateResponse_ShardResult) SizeVT() (n int) {
 	l = len(m.State)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
-	}
-	if m.Updated {
-		n += 2
 	}
 	n += len(m.unknownFields)
 	return n
@@ -67771,26 +67757,6 @@ func (m *VDiffUpdateResponse_ShardResult) UnmarshalVT(dAtA []byte) error {
 			}
 			m.State = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 3:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Updated", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return protohelpers.ErrIntOverflow
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= int(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.Updated = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := protohelpers.Skip(dAtA[iNdEx:])

@@ -856,6 +856,7 @@ func TestUpdateCommandFlags(t *testing.T) {
 	require.Contains(t, update.Flags().Lookup("tablet-types").Usage, "RDONLY")
 	require.NotContains(t, update.Long, "stopped and resumed")
 	require.Contains(t, update.Long, "Only stopped or completed VDiffs can be updated")
+	require.Contains(t, update.Long, "safe to rerun the update after stopping the remaining")
 
 	t.Run("invalid uuid", func(t *testing.T) {
 		err := update.PreRunE(update, []string{"not-a-uuid"})

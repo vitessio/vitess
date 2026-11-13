@@ -277,6 +277,10 @@ effect.
 Only the stored options are updated. A completed VDiff stays completed; the new
 options apply the next time it is resumed.
 
+If a shard rejects the update, the command fails and other shards may already
+have been updated. It is safe to rerun the update after stopping the remaining
+shards.
+
 Use --clear-source-cells / --clear-target-cells to reset cells to all cells
 (the same default as create).`,
 		Example:               `vtctldclient --server localhost:15999 vdiff --workflow commerce2customer --target-keyspace customer update a037a9e2-5628-11ee-8c99-0242ac120002 --tablet-types PRIMARY --tablet-types-in-preference-order`,
@@ -819,11 +823,7 @@ func displayUpdateResponse(out io.Writer, format string, resp *vtctldatapb.VDiff
 		if state == "" {
 			state = "unknown"
 		}
-		updated := "updated"
-		if !result.Updated {
-			updated = "unchanged"
-		}
-		fmt.Fprintf(out, "Shard %s: %s (state: %s)\n", result.Shard, updated, state)
+		fmt.Fprintf(out, "Shard %s: updated (state: %s)\n", result.Shard, state)
 	}
 	return nil
 }

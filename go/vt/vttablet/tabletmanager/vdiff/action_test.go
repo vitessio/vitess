@@ -622,9 +622,6 @@ func TestHandleUpdateAction(t *testing.T) {
 				require.Equal(t, int64(1), got.Id)
 				require.Equal(t, vduuid, got.VdiffUuid)
 				require.Equal(t, tt.wantState, sqltypes.Proto3ToResult(got.Output).Named().Row().AsString("state", ""))
-				updated, uerr := sqltypes.Proto3ToResult(got.Output).Named().Row().ToBool("updated")
-				require.NoError(t, uerr)
-				require.True(t, updated)
 			}
 
 			vdiffenv.vde.mu.Lock()
