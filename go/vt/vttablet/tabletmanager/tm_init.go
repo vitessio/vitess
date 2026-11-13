@@ -49,6 +49,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/semaphore"
+	"golang.org/x/sync/singleflight"
 
 	"vitess.io/vitess/go/constants/sidecar"
 	"vitess.io/vitess/go/flagutil"
@@ -236,6 +237,9 @@ type TabletManager struct {
 	// (not tm.mutex) so reads never contend with unrelated TabletManager
 	// operations. See getMySQLVersionString for why this is cached.
 	mysqlVersion mysqlVersionCache
+
+	// fullStatusGroup consolidates multiple in-flight FullStatus collections, but does not cache them.
+	fullStatusGroup singleflight.Group
 }
 
 // BuildTabletFromInput builds a tablet record from input parameters.
@@ -386,6 +390,10 @@ func validateFlags() error {
 	if demotePrimaryLockWaitTimeout < 0 {
 		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
 			"--demote-primary-lock-wait-timeout cannot be negative, got %v", demotePrimaryLockWaitTimeout)
+	}
+	if fullStatusQueryTimeout <= 0 {
+		return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION,
+			"--full-status-query-timeout must be positive, got %v", fullStatusQueryTimeout)
 	}
 
 	return nil

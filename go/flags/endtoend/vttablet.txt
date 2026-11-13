@@ -164,6 +164,7 @@ Flags:
       --file-backup-storage-root string                                  Root directory for the file backup storage.
       --filecustomrules string                                           file based custom rule path
       --filecustomrules-watch                                            set up a watch on the target file and reload query rules when it changes
+      --full-status-query-timeout duration                               Timeout for the MySQL queries of a FullStatus collection, which concurrent FullStatus RPCs share. Each caller's own deadline still applies. (default 15s)
       --gc-check-interval duration                                       Interval between garbage collection checks (default 1h0m0s)
       --gc-purge-check-interval duration                                 Interval between purge discovery checks (default 1m0s)
       --gcs-backup-storage-bucket string                                 Google Cloud Storage bucket to use for backups.

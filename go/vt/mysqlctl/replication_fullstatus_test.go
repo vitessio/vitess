@@ -18,7 +18,9 @@ package mysqlctl
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -26,8 +28,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -122,8 +126,8 @@ func TestCollectFullStatusData(t *testing.T) {
 	// costing their own queries.
 	assert.Zero(t, db.GetQueryCalledNum("SELECT @@global.gtid_purged"))
 	assert.Zero(t, db.GetQueryCalledNum("select @@global.replica_net_timeout"))
-	assert.Len(t, strings.Split(db.QueryLog(), ";"), 7)
-	assert.Equal(t, selectOneCalls+1, db.GetQueryCalledNum("SELECT 1"))
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 6)
+	assert.Equal(t, selectOneCalls, db.GetQueryCalledNum("SELECT 1"))
 
 	db.AddQuery("SHOW REPLICA STATUS", &sqltypes.Result{})
 	db.AddQuery("SELECT * FROM performance_schema.replication_connection_configuration", sqltypes.MakeTestResult(
@@ -137,7 +141,7 @@ func TestCollectFullStatusData(t *testing.T) {
 	assert.Nil(t, status.ReplicationStatus)
 	assert.Nil(t, status.ReplicationConfiguration)
 	// A primary reads the same batch, so the query count does not move.
-	assert.Len(t, strings.Split(db.QueryLog(), ";"), 7)
+	assert.Len(t, strings.Split(db.QueryLog(), ";"), 6)
 }
 
 func newCollectFullStatusDataTestMysqld(t *testing.T) (*fakesqldb.DB, *Mysqld) {
@@ -181,6 +185,208 @@ func TestCollectFullStatusDataStopsAfterCancellation(t *testing.T) {
 	assert.Nil(t, result)
 	assert.Zero(t, db.GetQueryCalledNum("SHOW BINARY LOG STATUS"))
 	assert.Zero(t, db.GetQueryCalledNum("SELECT * FROM performance_schema.replication_connection_configuration"))
+}
+
+func TestCollectFullStatusDataCancelsBlockedQuery(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		retry bool
+	}{
+		{name: "variables"},
+		{name: "replication status", query: "SHOW REPLICA STATUS"},
+		{name: "primary status", query: "SHOW BINARY LOG STATUS"},
+		{name: "semi-sync variables", query: fullStatusSemiSyncQuery(t, fullStatusGlobalVariablesQuery, fullStatusSemiSyncVariables)},
+		{name: "semi-sync status", query: fullStatusSemiSyncQuery(t, fullStatusGlobalStatusQuery, fullStatusSemiSyncStatuses)},
+		{name: "replication configuration", query: "SELECT * FROM performance_schema.replication_connection_configuration"},
+		{name: "replication status after reconnect", query: "SHOW REPLICA STATUS", retry: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mysqld := newCollectFullStatusDataTestMysqld(t)
+			recorder := &queryConnRecorder{QueryHandler: db.Handler, conns: map[string]uint32{}}
+			db.Handler = recorder
+			var killed atomic.Pointer[string]
+			db.AddQueryPatternWithCallback(`kill \d+`, &sqltypes.Result{}, func(q string) { killed.Store(&q) })
+			require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), 1))
+			conn, err := mysqld.GetDbaConnection(t.Context())
+			require.NoError(t, err)
+			t.Cleanup(conn.Close)
+			query := tc.query
+			if query == "" {
+				query = conn.FullStatusVariablesQuery()
+			}
+			qr, err := conn.ExecuteFetch(query, 100, true)
+			require.NoError(t, err)
+			conn.Close()
+			db.AddQuery(query, qr)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			t.Cleanup(cancel)
+			release := make(chan struct{})
+			finished := make(chan struct{})
+			// Unblock the fake server and drain the collection before later cleanups close the pool.
+			t.Cleanup(func() { close(release); <-finished })
+			var calls atomic.Int32
+			blockedCall := int32(1)
+			if tc.retry {
+				blockedCall = 2
+			}
+			db.SetBeforeFunc(query, func() {
+				call := calls.Add(1)
+				if tc.retry && call == 1 {
+					db.CloseAllConnections()
+					return
+				}
+				if call == blockedCall {
+					cancel()
+					<-release
+				}
+			})
+
+			var status *replicationdatapb.FullStatus
+			var collectionErr error
+			go func() {
+				status, collectionErr = mysqld.CollectFullStatusData(ctx)
+				close(finished)
+			}()
+			require.Eventually(t, func() bool {
+				select {
+				case <-finished:
+					return true
+				default:
+					return false
+				}
+			}, 30*time.Second, time.Millisecond, "collection must return before MySQL answers")
+			require.ErrorIs(t, collectionErr, context.Canceled)
+			assert.Nil(t, status)
+			assert.Equal(t, blockedCall, calls.Load(), "cancellation must not retry")
+
+			// Closing the socket doesn't stop the statement on the server, so the
+			// collection must kill it too.
+			wantKill := fmt.Sprintf("kill %d", recorder.connID(query))
+			assert.Eventually(t, func() bool {
+				got := killed.Load()
+				return got != nil && *got == wantKill
+			}, 30*time.Second, time.Millisecond, "the blocked query must be killed")
+
+			// The cancelled connection must release the sole pool slot even while
+			// the old server-side query is still blocked.
+			nextCtx, nextCancel := context.WithTimeout(t.Context(), 30*time.Second)
+			t.Cleanup(nextCancel)
+			status, err = mysqld.CollectFullStatusData(nextCtx)
+			require.NoError(t, err)
+			require.NotNil(t, status)
+			assert.Equal(t, uint32(42), status.ServerId)
+		})
+	}
+}
+
+// queryConnRecorder records the connection each query last arrived on.
+type queryConnRecorder struct {
+	fakesqldb.QueryHandler
+	mu    sync.Mutex
+	conns map[string]uint32
+}
+
+func (r *queryConnRecorder) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	r.mu.Lock()
+	r.conns[query] = c.ConnectionID
+	r.mu.Unlock()
+	return r.QueryHandler.HandleQuery(c, query, callback)
+}
+
+func (r *queryConnRecorder) connID(query string) uint32 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.conns[query]
+}
+
+// stallingSessionSetupHandler withholds the session setup of new connections once
+// stall is set, like a mysqld that accepts sockets but never finishes setting them up.
+type stallingSessionSetupHandler struct {
+	fakesqldb.QueryHandler
+	stall   atomic.Bool
+	once    sync.Once
+	stalled chan struct{}
+	release chan struct{}
+}
+
+func (h *stallingSessionSetupHandler) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+	if h.stall.Load() && sqlmode.IsSessionSetupQuery(query) {
+		h.once.Do(func() { close(h.stalled) })
+		<-h.release
+	}
+	return h.QueryHandler.HandleQuery(c, query, callback)
+}
+
+// TestCollectFullStatusDataDoesNotWaitForReplacementConnection covers a cancelled
+// collection returning its closed connection to the pool. The pool dials the
+// replacement with no deadline by default, so the collection must not wait for a
+// stalled replacement.
+func TestCollectFullStatusDataDoesNotWaitForReplacementConnection(t *testing.T) {
+	db, mysqld := newCollectFullStatusDataTestMysqld(t)
+	require.NoError(t, mysqld.dbaPool.SetCapacity(t.Context(), 1))
+	handler := &stallingSessionSetupHandler{
+		QueryHandler: db.Handler,
+		stalled:      make(chan struct{}),
+		release:      make(chan struct{}),
+	}
+	db.Handler = handler
+	releaseSetup := sync.OnceFunc(func() { close(handler.release) })
+	t.Cleanup(releaseSetup)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	t.Cleanup(cancel)
+	releaseQuery := make(chan struct{})
+	releaseBlockedQuery := sync.OnceFunc(func() { close(releaseQuery) })
+	t.Cleanup(releaseBlockedQuery)
+	var calls atomic.Int32
+	db.SetBeforeFunc("SHOW REPLICA STATUS", func() {
+		if calls.Add(1) == 1 {
+			handler.stall.Store(true)
+			cancel()
+			<-releaseQuery
+		}
+	})
+
+	var collectionErr error
+	finished := make(chan struct{})
+	go func() {
+		_, collectionErr = mysqld.CollectFullStatusData(ctx)
+		close(finished)
+	}()
+	// Release both stalls before draining the collector, so a regression fails
+	// the test rather than hanging it.
+	t.Cleanup(func() { releaseSetup(); releaseBlockedQuery(); <-finished })
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-handler.stalled:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond, "the cancelled connection must be replaced")
+	require.Eventually(t, func() bool {
+		select {
+		case <-finished:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond, "collection must not wait for the replacement connection")
+	require.ErrorIs(t, collectionErr, context.Canceled)
+
+	// The replacement still holds the pool's only slot, so the next collection
+	// gets it once MySQL finishes the setup.
+	releaseSetup()
+	nextCtx, nextCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	t.Cleanup(nextCancel)
+	status, err := mysqld.CollectFullStatusData(nextCtx)
+	require.NoError(t, err)
+	require.NotNil(t, status)
+	assert.Equal(t, uint32(42), status.ServerId)
 }
 
 func TestCollectFullStatusDataRetriesLostConnectionOnce(t *testing.T) {
@@ -425,7 +631,7 @@ func TestCollectFullStatusDataOmitsGTIDPurgedForFilePos(t *testing.T) {
 	assert.Equal(t, uint32(42), status.ServerId)
 }
 
-func TestFetchFullStatusVariablesHonorsCanceledContext(t *testing.T) {
+func TestRunFullStatusQueryHonorsCanceledContext(t *testing.T) {
 	db := fakesqldb.New(t)
 	t.Cleanup(db.Close)
 
@@ -445,7 +651,10 @@ func TestFetchFullStatusVariablesHonorsCanceledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
-	_, err = testMysqld.fetchFullStatusVariables(ctx, conn)
+	err = testMysqld.runFullStatusQuery(ctx, conn, "variables", func() error {
+		_, err := conn.Conn.ExecuteFetch(query, 1, true)
+		return err
+	})
 
 	require.ErrorIs(t, err, context.Canceled)
 	assert.Zero(t, db.GetQueryCalledNum(query))
