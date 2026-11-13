@@ -21,7 +21,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/hashicorp/consul/api/v2"
+	"github.com/hashicorp/consul/api"
 
 	"vitess.io/vitess/go/vt/topo"
 )
