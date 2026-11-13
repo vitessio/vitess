@@ -17,9 +17,11 @@ limitations under the License.
 package emergencyreparent
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,14 +30,206 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	endtoendutils "vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil/policy"
+	"vitess.io/vitess/go/vt/vttablet/grpctmclient"
 
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+// TestPrepareEmergencyReparent checks that PrepareEmergencyReparent waits for
+// the relay logs present when the caller stopped the I/O thread to apply, and
+// only then reads the reparent journal, so a journal row still in the relay
+// logs is counted.
+func TestPrepareEmergencyReparent(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+
+	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilityNone)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	primary := tablets[0]
+	replica := tablets[1]
+
+	utils.ConfirmReplication(t, primary, tablets[1:])
+
+	client := grpctmclient.NewClient()
+	t.Cleanup(client.Close)
+	primaryTablet, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+	replicaTablet, err := clusterInstance.VtctldClientProcess.GetTablet(replica.Alias)
+	require.NoError(t, err)
+
+	journalResult := utils.RunSQL(t.Context(), t, "SELECT COUNT(*) FROM _vt.reparent_journal", replica)
+	require.Len(t, journalResult.Rows, 1)
+	journalLength, err := journalResult.Rows[0][0].ToInt32()
+	require.NoError(t, err)
+
+	// Leave a new journal row in the replica's relay logs, unapplied.
+	position, err := client.PrimaryPosition(t.Context(), primaryTablet)
+	require.NoError(t, err)
+	replicaMySQLConn, err := utils.GetMySQLConn(t.Context(), replica)
+	require.NoError(t, err)
+	t.Cleanup(replicaMySQLConn.Close)
+	_, err = replicaMySQLConn.ExecuteFetch(replicaMySQLConn.StopSQLThreadCommand(), 0, false)
+	require.NoError(t, err)
+	err = client.PopulateReparentJournal(t.Context(), primaryTablet, time.Unix(1700000000, 123).UnixNano(), "PrepareEmergencyReparent", primaryTablet.Alias, position)
+	require.NoError(t, err)
+	primaryGTIDs := strings.ReplaceAll(utils.RunSQL(t.Context(), t, "SELECT @@global.gtid_executed", primary).Rows[0][0].ToString(), "\n", "")
+	waitForReceivedPosition(t, replica, primaryGTIDs)
+
+	// The caller stops the I/O thread, as ERS does, and passes the relay log position.
+	stopStatus, err := client.StopReplicationAndGetStatus(t.Context(), replicaTablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
+	require.NoError(t, err)
+	require.NotNil(t, stopStatus.After)
+	require.NotEmpty(t, stopStatus.After.RelayLogPosition)
+	t.Cleanup(func() {
+		assert.NoError(t, client.StartReplication(context.WithoutCancel(t.Context()), replicaTablet, false))
+	})
+
+	type prepareResult struct {
+		response *tabletmanagerdatapb.PrepareEmergencyReparentResponse
+		err      error
+	}
+	resultCh := make(chan prepareResult, 1)
+	go func() {
+		response, err := client.PrepareEmergencyReparent(t.Context(), replicaTablet, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
+			WaitPosition:           stopStatus.After.RelayLogPosition,
+			WaitForPositionTimeout: protoutil.DurationToProto(60 * time.Second),
+		})
+		resultCh <- prepareResult{response: response, err: err}
+	}()
+
+	// Start the SQL thread only once the RPC is waiting, so the journal row can't
+	// be applied before the wait begins. The wait can only finish once it is.
+	require.Eventually(t, func() bool {
+		qr := utils.RunSQL(t.Context(), t, "SELECT COUNT(*) FROM information_schema.processlist WHERE info LIKE 'SELECT WAIT_FOR_EXECUTED_GTID_SET(%'", replica)
+		waiting, err := qr.Rows[0][0].ToInt64()
+		return err == nil && waiting > 0
+	}, 30*time.Second, 100*time.Millisecond)
+	_, err = replicaMySQLConn.ExecuteFetch(replicaMySQLConn.StartSQLThreadCommand(), 0, false)
+	require.NoError(t, err)
+
+	var result prepareResult
+	require.Eventually(t, func() bool {
+		select {
+		case result = <-resultCh:
+			return true
+		default:
+			return false
+		}
+	}, 60*time.Second, 100*time.Millisecond)
+	require.NoError(t, result.err)
+	require.NotNil(t, result.response)
+	assert.Equal(t, journalLength+1, result.response.ReparentJournalLength)
+	assert.Nil(t, result.response.WaitForPositionError)
+	assert.Nil(t, result.response.ReadReparentJournalError)
+	// The tablet leaves the I/O thread stopped; restarting it is the caller's job.
+	assert.Equal(t, "No", replicaStatusField(t, replica, "Replica_IO_Running"))
+}
+
+// TestPromoteReplicaAndJournal checks that PromoteReplicaAndJournal promotes a
+// replica and writes a journal row that reaches a replica repointed while the
+// promotion runs, as ERS repoints them. Under semi-sync the journal write can
+// only finish once that replica ACKs it.
+func TestPromoteReplicaAndJournal(t *testing.T) {
+	endtoendutils.SkipIfBinaryIsBelowVersion(t, 25, "vttablet")
+
+	for _, durability := range []string{policy.DurabilityNone, policy.DurabilitySemiSync} {
+		t.Run(durability, func(t *testing.T) {
+			testPromoteReplicaAndJournal(t, durability)
+		})
+	}
+}
+
+func testPromoteReplicaAndJournal(t *testing.T, durability string) {
+	clusterInstance := utils.SetupReparentCluster(t, durability)
+	t.Cleanup(func() { utils.TeardownCluster(clusterInstance) })
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	primary := tablets[0]
+	replica := tablets[1]
+	otherReplica := tablets[2]
+	semiSync := durability == policy.DurabilitySemiSync
+
+	utils.ConfirmReplication(t, primary, tablets[1:])
+
+	client := grpctmclient.NewClient()
+	t.Cleanup(client.Close)
+	primaryTablet, err := clusterInstance.VtctldClientProcess.GetTablet(primary.Alias)
+	require.NoError(t, err)
+	replicaTablet, err := clusterInstance.VtctldClientProcess.GetTablet(replica.Alias)
+	require.NoError(t, err)
+	otherReplicaTablet, err := clusterInstance.VtctldClientProcess.GetTablet(otherReplica.Alias)
+	require.NoError(t, err)
+
+	demotedStatus, err := client.DemotePrimary(t.Context(), primaryTablet, false)
+	require.NoError(t, err)
+	require.NotEmpty(t, demotedStatus.Position)
+	waitCtx, waitCancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer waitCancel()
+	require.NoError(t, client.WaitForPosition(waitCtx, replicaTablet, demotedStatus.Position))
+
+	type promoteResult struct {
+		response *tabletmanagerdatapb.PromoteReplicaAndJournalResponse
+		err      error
+	}
+	timeCreated := time.Unix(1700000000, 123).UTC()
+	resultCh := make(chan promoteResult, 1)
+	go func() {
+		response, err := client.PromoteReplicaAndJournal(t.Context(), replicaTablet, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+			SemiSync:                       semiSync,
+			TimeCreated:                    protoutil.TimeToProto(timeCreated),
+			ActionName:                     "PlannedReparentShard",
+			PopulateReparentJournalTimeout: protoutil.DurationToProto(60 * time.Second),
+		})
+		resultCh <- promoteResult{response: response, err: err}
+	}()
+
+	// Repoint the other replica while the promotion runs, as ERS does.
+	require.NoError(t, client.SetReplicationSource(t.Context(), otherReplicaTablet, replicaTablet.Alias, 0, "", true, semiSync, 0))
+
+	var result promoteResult
+	require.Eventually(t, func() bool {
+		select {
+		case result = <-resultCh:
+			return true
+		default:
+			return false
+		}
+	}, 90*time.Second, 100*time.Millisecond)
+	require.NoError(t, result.err)
+	require.NotNil(t, result.response)
+	assert.NotEmpty(t, result.response.Position)
+	assert.Nil(t, result.response.PromoteReplicaError)
+	assert.Nil(t, result.response.PopulateReparentJournalError)
+
+	promotedTablet, err := clusterInstance.VtctldClientProcess.GetTablet(replica.Alias)
+	require.NoError(t, err)
+	assert.Equal(t, topodatapb.TabletType_PRIMARY, promotedTablet.Type)
+
+	readOnlyResult := utils.RunSQL(t.Context(), t, "SELECT @@global.read_only, @@global.super_read_only", replica)
+	require.Len(t, readOnlyResult.Rows, 1)
+	assert.Equal(t, "0", readOnlyResult.Rows[0][0].ToString())
+	assert.Equal(t, "0", readOnlyResult.Rows[0][1].ToString())
+
+	journalQuery := fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM _vt.reparent_journal WHERE time_created_ns = %d", timeCreated.UnixNano())
+	journalResult := utils.RunSQL(t.Context(), t, journalQuery, replica)
+	require.Len(t, journalResult.Rows, 1)
+	assert.Equal(t, "PlannedReparentShard", journalResult.Rows[0][0].ToString())
+	assert.Equal(t, topoproto.TabletAliasString(replicaTablet.Alias), journalResult.Rows[0][1].ToString())
+	assert.Equal(t, result.response.Position, journalResult.Rows[0][2].ToString())
+
+	// The journal row reaches the repointed replica.
+	require.Eventually(t, func() bool {
+		return len(utils.RunSQL(t.Context(), t, journalQuery, otherReplica).Rows) == 1
+	}, 30*time.Second, time.Second)
+}
 
 func TestTrivialERS(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, policy.DurabilitySemiSync)
