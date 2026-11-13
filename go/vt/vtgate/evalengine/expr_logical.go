@@ -703,7 +703,14 @@ func caseBranchType(expr IR, tt sqltypes.Type) sqltypes.Type {
 // also knows the type of a column that has no declared type.
 func (c *compiler) caseBranchType(expr IR, tt sqltypes.Type) sqltypes.Type {
 	if col, ok := expr.(*Column); ok && !col.typed() {
-		if c.dynamicTypes != nil && c.dynamicTypes[col.dynamicTypeOffset].Type == sqltypes.Year {
+		var typ ctype
+		switch {
+		case c.dynamicTypes != nil:
+			typ = c.dynamicTypes[col.dynamicTypeOffset]
+		case c.typeEnv != nil:
+			typ, _ = col.typeof(c.typeEnv)
+		}
+		if typ.Type == sqltypes.Year {
 			return sqltypes.Uint16
 		}
 	}

@@ -121,6 +121,11 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 		typ.Col = typedCoercionCollation(bvar.Type, collations.CollationForType(bvar.Type, bvar.Collation))
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[bvar.dynamicTypeOffset]
+	} else if c.typeEnv != nil {
+		var err error
+		if typ, err = bvar.typeof(c.typeEnv); err != nil {
+			return ctype{}, err
+		}
 	} else {
 		return ctype{}, c.unsupported(bvar)
 	}

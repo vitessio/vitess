@@ -1401,6 +1401,11 @@ func CollationOperations(yield Query) {
 		"COLLATION(_utf8mb4 'foobar' COLLATE utf8mb4_general_ci)",
 		"COLLATION('foobar' COLLATE utf8mb4_general_ci)",
 		"COLLATION(_latin1 'foobar' COLLATE utf8mb4_general_ci)",
+		"COLLATION(NULLIF('A', 'A'))",
+		"COLLATION(NULLIF(_latin1 'x', _latin1 'X'))",
+		"COLLATION(CONCAT(_latin1 'x', NULL))",
+		"COLLATION(CONCAT(LEFT(NULL, 1), _latin1 'x'))",
+		"COLLATION(UPPER(NULL + 1))",
 	}
 
 	for _, expr := range cases {

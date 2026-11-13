@@ -85,7 +85,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinCollation{CallExpr: call}, nil
+		return &builtinCollation{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "bit_count":
 		if len(args) != 1 {
 			return nil, argError(method)

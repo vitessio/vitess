@@ -2196,10 +2196,17 @@ func (asm *assembler) Fn_CONV_uc(t sqltypes.Type, col collations.TypedCollation)
 	}, "FN CONV VARCHAR(SP-3) INT64(SP-2) INT64(SP-1)")
 }
 
-func (asm *assembler) Fn_COLLATION(collationEnv *collations.Environment, col collations.TypedCollation) {
+// Fn_COLLATION replaces the value at SP-1 with the name of its collation.
+// A NULL value has none: it gets the name of null, the collation that the
+// argument is declared with.
+func (asm *assembler) Fn_COLLATION(collationEnv *collations.Environment, null collations.ID, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
-		v := evalCollation(env.vm.stack[env.vm.sp-1])
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText([]byte(collationEnv.LookupName(v.Collation)), col)
+		arg := env.vm.stack[env.vm.sp-1]
+		v := null
+		if arg != nil {
+			v = evalCollation(arg).Collation
+		}
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText([]byte(collationEnv.LookupName(v)), col)
 		return 1
 	}, "FN COLLATION (SP-1)")
 }

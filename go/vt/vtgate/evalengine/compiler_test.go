@@ -1299,6 +1299,46 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `VARCHAR("x")`,
 			collation:  collations.CollationUtf8mb4ID,
 		},
+		{
+			// COLLATION() of a NULL value is the collation that its
+			// expression is declared with: NULLIF returns NULL here, with
+			// the collation of the column.
+			expression: `COLLATION(NULLIF(column0, 0x41))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// A text column whose value is NULL keeps its collation.
+			expression: `COLLATION(column0)`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationLatin1Swedish)}},
+			result:     `VARCHAR("latin1_swedish_ci")`,
+		},
+		{
+			expression: `COLLATION(GREATEST(column0, NULL))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4BinID)}},
+			result:     `VARCHAR("utf8mb4_bin")`,
+		},
+		{
+			// A NULL number becomes a string with the default collation.
+			expression: `COLLATION(LEFT(column0, 1))`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.Int64, Charset: uint32(collations.CollationBinaryID)}},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			expression: `COLLATION(UPPER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.Int64, Charset: uint32(collations.CollationBinaryID)}},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// LEFT(NULL, 1) has the collation of NULL, which loses to the
+			// one of the latin1 literal.
+			expression: `COLLATION(CONCAT(LEFT(NULL, 1), _latin1'x'))`,
+			result:     `VARCHAR("latin1_swedish_ci")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -1863,6 +1903,77 @@ func TestCompilerUntypedColumnCollation(t *testing.T) {
 	// The column has the implicit coercibility, which wins over the hex
 	// literal: they compare with the column's collation.
 	assert.Equal(t, `INT64(1)`, res.String())
+}
+
+// TestCollationOfNullUntyped checks COLLATION() of a NULL value whose
+// expression has columns and bind variables without a static type, in the
+// interpreter and in the compiled program. Their types come from the fields
+// of the row, or from the row and the bind variables when there are no
+// fields.
+func TestCollationOfNullUntyped(t *testing.T) {
+	latin1 := []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationLatin1Swedish)}}
+	testCases := []struct {
+		expression string
+		row        []sqltypes.Value
+		fields     []*querypb.Field
+		bindVars   map[string]*querypb.BindVariable
+		result     string
+	}{
+		{
+			expression: `COLLATION(column0)`,
+			row:        []sqltypes.Value{sqltypes.NULL},
+			fields:     latin1,
+			result:     `VARCHAR("latin1_swedish_ci")`,
+		},
+		{
+			expression: `COLLATION(NULLIF(column0, 'A'))`,
+			row:        []sqltypes.Value{sqltypes.NewVarChar("a")},
+			fields:     latin1,
+			result:     `VARCHAR("latin1_swedish_ci")`,
+		},
+		{
+			// Without fields, the type comes from the value: CONCAT makes
+			// a string with the default collation of the number.
+			expression: `COLLATION(NULLIF(CONCAT(column0, ''), '1'))`,
+			row:        []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			expression: `COLLATION(NULLIF(:v, 'A'))`,
+			bindVars:   map[string]*querypb.BindVariable{"v": sqltypes.StringBindVariable("a")},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: evalengine.FieldResolver(latin1).Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.NewExpressionEnv(t.Context(), tc.bindVars, evalengine.NewEmptyVCursor(venv, nil))
+			env.Row = tc.row
+			env.Fields = tc.fields
+
+			res, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "interpreter")
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "compiled program")
+		})
+	}
 }
 
 // TestUntypedStringColumnIsNotBinary checks that the string of a column
