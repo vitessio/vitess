@@ -113,9 +113,10 @@ func init() {
 // the abilities of the underlying vttablets.
 type (
 	ExecutorConfig struct {
-		Name       string
-		Normalize  bool
-		StreamSize int
+		Name                   string
+		Normalize              bool
+		StripPriorityDirective bool
+		StreamSize             int
 		// AllowScatter will fail planning if set to false and a plan contains any scatter queries
 		AllowScatter bool
 		// PreventCrossKeyspaceReads will fail planning if set to true and a plan contains any cross-keyspace joins or UNIONs.
@@ -1294,6 +1295,7 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 	query, comments := e.env.Parser().SplitMarginComments(queryString)
 	vcursor, _ = e.newVCursor(safeSession, comments, logStats)
+	priority := ""
 
 	var setVarComment string
 	if e.vConfig.SetVarEnabled {
@@ -1307,7 +1309,7 @@ func (e *Executor) fetchOrCreatePlan(
 	}
 
 	if plan == nil {
-		plan, logStats.CachedPlan, stmt, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
+		plan, logStats.CachedPlan, stmt, priority, err = e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, false)
 		if err != nil && preparedPlan && isExecutePath {
 			// The baseline plan failed to build, try to build an optimized plan
 			plan, err = e.tryOptimizedPlan(ctx, vcursor, bindVars, query, setVarComment, parameterize, planKey, plan, err)
@@ -1319,7 +1321,7 @@ func (e *Executor) fetchOrCreatePlan(
 
 	if shouldOptimizePlan(preparedPlan, isExecutePath, plan) {
 		vcursor.SetBindVars(bindVars)
-		optimizedPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
+		optimizedPlan, _, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, query, bindVars, setVarComment, parameterize, planKey, true)
 		if err == nil {
 			if sp, ok := optimizedPlan.Instructions.(*engine.PlanSwitcher); ok {
 				sp.Baseline = plan.Instructions
@@ -1330,8 +1332,12 @@ func (e *Executor) fetchOrCreatePlan(
 		}
 	}
 
+	if preparedPlan {
+		priority = plan.QueryHints.Priority
+	}
+
 	// Apply query hints
-	e.applyQueryHints(vcursor, plan)
+	e.applyQueryHints(vcursor, plan, priority)
 
 	logStats.SQL = comments.Leading + plan.Original + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
@@ -1355,7 +1361,7 @@ func (e *Executor) tryOptimizedPlan(
 	prevErr error,
 ) (*engine.Plan, error) {
 	vcursor.SetBindVars(bindVars)
-	sPlan, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
+	sPlan, _, _, _, err := e.getCachedOrBuildPlan(ctx, vcursor, baseQuery, bindVars, setVarComment, parameterize, planKey, true)
 	if err == nil {
 		if sp, ok := sPlan.Instructions.(*engine.PlanSwitcher); ok {
 			sp.BaselineErr = prevErr
@@ -1381,12 +1387,12 @@ func shouldOptimizePlan(preparedPlan, isExecutePath bool, plan *engine.Plan) boo
 }
 
 // applyQueryHints applies query hints to the vcursor
-func (e *Executor) applyQueryHints(vcursor *econtext.VCursorImpl, plan *engine.Plan) {
+func (e *Executor) applyQueryHints(vcursor *econtext.VCursorImpl, plan *engine.Plan, priority string) {
 	qh := plan.QueryHints
 	vcursor.SetIgnoreMaxMemoryRows(qh.IgnoreMaxMemoryRows)
 	vcursor.SetConsolidator(qh.Consolidator)
 	vcursor.SetWorkloadName(qh.Workload)
-	vcursor.SetPriority(qh.Priority)
+	vcursor.SetPriority(priority)
 	vcursor.SetExecQueryTimeout(qh.Timeout)
 }
 
@@ -1399,10 +1405,10 @@ func (e *Executor) getCachedOrBuildPlan(
 	parameterize bool,
 	planKey engine.PlanKey,
 	ignoreCache bool,
-) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, err error) {
+) (plan *engine.Plan, cached bool, stmt sqlparser.Statement, priority string, err error) {
 	stmt, reservedVars, err := parseAndValidateQuery(query, e.env.Parser())
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, "", err
 	}
 
 	preparedPlan := planKey.Query != ""
@@ -1418,7 +1424,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		// statement with NULL field types.
 		switch stmt.(type) {
 		case *sqlparser.PrepareStmt, *sqlparser.ExecuteStmt, *sqlparser.DeallocateStmt:
-			return nil, false, nil, vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
+			return nil, false, nil, "", vterrors.NewErrorf(vtrpcpb.Code_UNIMPLEMENTED, vterrors.UnsupportedPS, "This command is not supported in the prepared statement protocol yet")
 		}
 	}
 
@@ -1430,7 +1436,17 @@ func (e *Executor) getCachedOrBuildPlan(
 
 	qh, err := sqlparser.BuildQueryHints(stmt)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, "", err
+	}
+	priority = qh.Priority
+	if e.config.StripPriorityDirective && priority != "" && !preparedPlan {
+		commented := stmt.(sqlparser.Commented)
+		strippedQuery, strippedComments, removed := e.env.Parser().RemoveDirective(query, commented.GetParsedComments(), sqlparser.DirectivePriority)
+		if removed {
+			query = strippedQuery
+			commented.SetComments(strippedComments)
+			qh.Priority = ""
+		}
 	}
 
 	if qh.ForeignKeyChecks == nil {
@@ -1461,7 +1477,7 @@ func (e *Executor) getCachedOrBuildPlan(
 		vcursor,
 	)
 	if err != nil {
-		return nil, false, nil, err
+		return nil, false, nil, "", err
 	}
 	stmt = rewriteASTResult.AST
 	bindVarNeeds := rewriteASTResult.BindVarNeeds
@@ -1478,10 +1494,10 @@ func (e *Executor) getCachedOrBuildPlan(
 		plan, cached, err = e.plans.GetOrLoad(planKey.Hash(), e.epoch.Load(), func() (*engine.Plan, error) {
 			return e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
 		})
-		return plan, cached, stmt, err
+		return plan, cached, stmt, priority, err
 	}
 	plan, err = e.buildStatement(ctx, vcursor, query, stmt, reservedVars, bindVarNeeds, qh, paramsCount)
-	return plan, false, stmt, err
+	return plan, false, stmt, priority, err
 }
 
 func buildPlanKey(ctx context.Context, vcursor *econtext.VCursorImpl, query string, setVarComment string) engine.PlanKey {

@@ -761,6 +761,161 @@ func (c *ParsedComments) Prepend(comment string) Comments {
 	return comments
 }
 
+// RemoveDirective removes the named execution directive from a query and its parsed comments.
+func (p *Parser) RemoveDirective(query string, c *ParsedComments, key string) (string, Comments, bool) {
+	if c == nil {
+		return query, nil, false
+	}
+
+	tokenizer := p.NewStringTokenizer(query)
+	var rewritten strings.Builder
+	var newComments Comments
+	last := 0
+	commentIndex := 0
+	removed := false
+	depth := 0
+	statementDepth := -1
+	for commentIndex < len(c.comments) {
+		token, comment := tokenizer.Scan()
+		if token == 0 || token == LEX_ERROR {
+			break
+		}
+		switch token {
+		case '(':
+			depth++
+			continue
+		case ')':
+			depth--
+			continue
+		}
+		if statementDepth < 0 && token != COMMENT {
+			statementDepth = depth
+		}
+		if token != COMMENT || depth != statementDepth || comment != c.comments[commentIndex] {
+			continue
+		}
+
+		replacement, changed := removeDirectiveFromComment(comment, key)
+		if !changed {
+			if removed {
+				newComments = append(newComments, comment)
+			}
+			commentIndex++
+			continue
+		}
+
+		if !removed {
+			rewritten.Grow(len(query))
+			newComments = make(Comments, 0, len(c.comments))
+			newComments = append(newComments, c.comments[:commentIndex]...)
+			removed = true
+		}
+		if replacement != "" {
+			newComments = append(newComments, replacement)
+		}
+
+		start := tokenizer.Pos - len(comment)
+		queryReplacement := replacement
+		if replacement == "" && start > last && tokenizer.Pos < len(query) {
+			leftSpace := IsSQLSpace(query[start-1])
+			rightSpace := IsSQLSpace(query[tokenizer.Pos])
+			if query[start-1] == ' ' && rightSpace {
+				start--
+			} else if !leftSpace && !rightSpace {
+				queryReplacement = " "
+			}
+		}
+		rewritten.WriteString(query[last:start])
+		rewritten.WriteString(queryReplacement)
+		last = tokenizer.Pos
+		commentIndex++
+	}
+	if commentIndex != len(c.comments) {
+		return query, c.comments, false
+	}
+	if !removed {
+		return query, c.comments, false
+	}
+	rewritten.WriteString(query[last:])
+	if len(newComments) == 0 {
+		newComments = nil
+	}
+	return rewritten.String(), newComments, true
+}
+
+func removeDirectiveFromComment(comment, key string) (string, bool) {
+	if !strings.HasPrefix(comment, commentDirectivePreamble) {
+		return comment, false
+	}
+	fields := strings.Fields(comment)
+	if len(fields) < 3 {
+		return comment, false
+	}
+
+	hasDirective := false
+	hasOtherDirective := false
+	for _, field := range fields[1 : len(fields)-1] {
+		directive, _, _ := strings.Cut(field, "=")
+		if strings.EqualFold(directive, key) {
+			hasDirective = true
+		} else {
+			hasOtherDirective = true
+		}
+	}
+	if !hasDirective {
+		return comment, false
+	}
+	if !hasOtherDirective {
+		return "", true
+	}
+
+	type span struct {
+		start int
+		end   int
+	}
+	spans := make([]span, len(fields))
+	offset := 0
+	for i, field := range fields {
+		start := strings.Index(comment[offset:], field)
+		if start < 0 {
+			return comment, false
+		}
+		start += offset
+		spans[i] = span{start: start, end: start + len(field)}
+		offset = spans[i].end
+	}
+
+	var removals []span
+	for i, field := range fields[1 : len(fields)-1] {
+		fieldIndex := i + 1
+		directive, _, _ := strings.Cut(field, "=")
+		if !strings.EqualFold(directive, key) {
+			continue
+		}
+
+		removal := spans[fieldIndex]
+		if fieldIndex == len(fields)-2 {
+			removal.start = spans[fieldIndex-1].end
+		} else {
+			removal.end = spans[fieldIndex+1].start
+		}
+		if len(removals) > 0 && removal.start <= removals[len(removals)-1].end {
+			removals[len(removals)-1].end = max(removals[len(removals)-1].end, removal.end)
+		} else {
+			removals = append(removals, removal)
+		}
+	}
+	var rewritten strings.Builder
+	rewritten.Grow(len(comment))
+	last := 0
+	for _, removal := range removals {
+		rewritten.WriteString(comment[last:removal.start])
+		last = removal.end
+	}
+	rewritten.WriteString(comment[last:])
+	return rewritten.String(), true
+}
+
 // IsSet checks the directive map for the named directive and returns
 // true if the directive is set and has a true/false or 0/1 value
 func (d *CommentDirectives) IsSet(key string) bool {

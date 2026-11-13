@@ -1865,37 +1865,129 @@ func TestGetPlanNormalized(t *testing.T) {
 }
 
 func TestGetPlanPriority(t *testing.T) {
-	testCases := []struct {
-		name             string
-		sql              string
-		expectedPriority string
-		expectedError    error
-	}{
-		{name: "Invalid priority", sql: "select /*vt+ PRIORITY=something */ * from music_user_map", expectedPriority: "", expectedError: sqlparser.ErrInvalidPriority},
-		{name: "Valid priority", sql: "select /*vt+ PRIORITY=33 */ * from music_user_map", expectedPriority: "33", expectedError: nil},
-		{name: "empty priority", sql: "select * from music_user_map", expectedPriority: "", expectedError: nil},
-	}
-
+	config := createExecutorConfigWithNormalizer()
+	config.StripPriorityDirective = true
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, config)
 	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
 
-	for _, aTestCase := range testCases {
-		testCase := aTestCase
-
+	var cachedPlan *engine.Plan
+	for _, testCase := range []struct {
+		name     string
+		sql      string
+		priority string
+	}{
+		{name: "first priority", sql: "select /*vt+ priority=50 */ * from music_user_map", priority: "50"},
+		{name: "second priority", sql: "select /*vt+ PrIoRiTy=49 */ * from music_user_map", priority: "49"},
+		{name: "no priority", sql: "select * from music_user_map"},
+	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
-
 			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
-
-			plan, _, _, err := r.fetchOrCreatePlan(t.Context(), session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
-			if testCase.expectedError != nil {
-				assert.ErrorIs(t, err, testCase.expectedError)
+			plan, _, _, err := r.fetchOrCreatePlan(ctx, session, testCase.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+			require.NoError(t, err)
+			assert.Empty(t, plan.QueryHints.Priority)
+			assert.Equal(t, testCase.priority, session.Options.Priority)
+			assert.Equal(t, "select * from music_user_map", plan.Original)
+			planJSON, err := json.Marshal(plan)
+			require.NoError(t, err)
+			assert.NotContains(t, string(planJSON), sqlparser.DirectivePriority)
+			if cachedPlan == nil {
+				cachedPlan = plan
 			} else {
-				require.NoError(t, err)
-				assert.Equal(t, testCase.expectedPriority, plan.QueryHints.Priority)
-				assert.Equal(t, testCase.expectedPriority, session.Options.Priority)
+				assert.Same(t, cachedPlan, plan)
+				assert.True(t, logStats.CachedPlan)
 			}
 		})
 	}
+	assertCacheSize(t, r.plans, 1)
+
+	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
+	_, _, _, err := r.fetchOrCreatePlan(ctx, session, "select /*vt+ pRiOrItY=something */ * from music_user_map", map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+	assert.ErrorIs(t, err, sqlparser.ErrInvalidPriority)
+}
+
+func TestGetPlanPriorityStrippingDisabled(t *testing.T) {
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
+	queries := []struct {
+		sql      string
+		priority string
+	}{
+		{sql: "select /*vt+ PRIORITY=50 */ * from music_user_map", priority: "50"},
+		{sql: "select /*vt+ PRIORITY=49 */ * from music_user_map", priority: "49"},
+	}
+
+	var plans []*engine.Plan
+	for _, query := range queries {
+		logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
+		plan, _, _, err := r.fetchOrCreatePlan(ctx, session, query.sql, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+		require.NoError(t, err)
+		assert.Equal(t, query.sql, plan.Original)
+		assert.Equal(t, query.priority, plan.QueryHints.Priority)
+		assert.Equal(t, query.priority, session.Options.Priority)
+		planJSON, err := json.Marshal(plan)
+		require.NoError(t, err)
+		assert.Contains(t, string(planJSON), sqlparser.DirectivePriority)
+		plans = append(plans, plan)
+	}
+	assert.NotSame(t, plans[0], plans[1])
+	assertCacheSize(t, r.plans, 2)
+}
+
+func TestGetPlanPriorityPreservesSiblingDirectives(t *testing.T) {
+	config := createExecutorConfigWithNormalizer()
+	config.StripPriorityDirective = true
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, config)
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
+	query := "select /*vt+ WORKLOAD_NAME=online */ /*vt+ PRIORITY=50 */ /*vt+ QUERY_TIMEOUT_MS=100 */ * from music_user_map"
+	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
+	plan, _, _, err := r.fetchOrCreatePlan(ctx, session, query, map[string]*querypb.BindVariable{}, r.config.Normalize, false, logStats, true)
+	require.NoError(t, err)
+	assert.Equal(t, "50", session.Options.Priority)
+	assert.Equal(t, "online", session.Options.WorkloadName)
+	assert.Equal(t, int64(100), session.Options.GetAuthoritativeTimeout())
+	assert.Equal(t, "select /*vt+ WORKLOAD_NAME=online */ /*vt+ QUERY_TIMEOUT_MS=100 */ * from music_user_map", plan.Original)
+}
+
+func TestGetPreparedPlanPriority(t *testing.T) {
+	r, _, _, _, ctx := createExecutorEnvWithConfig(t, createExecutorConfigWithNormalizer())
+	session := econtext.NewSafeSession(&vtgatepb.Session{TargetString: "@unknown", Options: &querypb.ExecuteOptions{}})
+
+	var plans []*engine.Plan
+	for _, testCase := range []struct {
+		name     string
+		sql      string
+		priority string
+	}{
+		{name: "first priority", sql: "select /*vt+ priority=50 */ * from music_user_map", priority: "50"},
+		{name: "second priority", sql: "select /*vt+ PrIoRiTy=49 */ * from music_user_map", priority: "49"},
+		{name: "no priority", sql: "select * from music_user_map"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
+			plan, _, _, err := r.fetchOrCreatePlan(ctx, session, testCase.sql, map[string]*querypb.BindVariable{}, false, true, logStats, false)
+			require.NoError(t, err)
+			assert.Equal(t, testCase.priority, plan.QueryHints.Priority)
+			assert.Equal(t, testCase.priority, session.Options.Priority)
+			assert.Equal(t, testCase.sql, plan.Original)
+			assert.False(t, logStats.CachedPlan)
+			plans = append(plans, plan)
+		})
+	}
+	assert.NotSame(t, plans[0], plans[1])
+	assert.NotSame(t, plans[0], plans[2])
+	assert.NotSame(t, plans[1], plans[2])
+	assertCacheSize(t, r.plans, 3)
+
+	logStats := logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
+	plan, _, _, err := r.fetchOrCreatePlan(ctx, session, "select /*vt+ priority=50 */ * from music_user_map", map[string]*querypb.BindVariable{}, false, true, logStats, false)
+	require.NoError(t, err)
+	assert.Same(t, plans[0], plan)
+	assert.True(t, logStats.CachedPlan)
+	assert.Equal(t, "50", session.Options.Priority)
+
+	logStats = logstats.NewLogStats(ctx, "Test", "", "", nil, streamlog.NewQueryLogConfigForTest())
+	_, _, _, err = r.fetchOrCreatePlan(ctx, session, "select /*vt+ pRiOrItY=something */ * from music_user_map", map[string]*querypb.BindVariable{}, false, true, logStats, false)
+	assert.ErrorIs(t, err, sqlparser.ErrInvalidPriority)
 }
 
 func TestPassthroughDDL(t *testing.T) {
