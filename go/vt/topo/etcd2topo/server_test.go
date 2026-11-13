@@ -721,7 +721,7 @@ func TestLockSurvivesEtcdRestart(t *testing.T) {
 }
 
 // TestKeepAliveStops checks that a lock's KeepAlive stops when the lock is
-// released or its acquisition fails, even if revoking the lease fails. It also
+// released or its acquisition fails, also when revoking the lease fails. It also
 // checks that keepAlive returns, once the etcd client has given up on the
 // lease's KeepAlive, when the lease is gone (even after a renewal attempt that
 // got no answer), when the lock is released and when the client is closed, and
@@ -731,15 +731,20 @@ func TestKeepAliveStops(t *testing.T) {
 	warnings := countLeaseExpiredWarnings(t)
 
 	// lockStopsKeepAlive runs lockFn on a Server whose lease's KeepAlive is
-	// recorded and whose Revoke fails, and checks that the KeepAlive was stopped
-	// when lockFn returned. A KeepAlive left running after a failed Revoke would
-	// keep the lease, and any lock file under it, for the life of the process.
-	lockStopsKeepAlive := func(t *testing.T, lockFn func(s *Server)) {
+	// recorded, and whose Revoke fails if revokeFails, and checks that the
+	// KeepAlive was stopped when lockFn returned. A KeepAlive left running after
+	// a failed Revoke would keep the lease, and any lock file under it, for the
+	// life of the process; after a successful one, it would warn that the lease
+	// expired.
+	lockStopsKeepAlive := func(t *testing.T, revokeFails bool, lockFn func(s *Server)) {
 		s, err := NewServer(addr, "/test")
 		require.NoError(t, err)
 		t.Cleanup(s.Close)
 		lease := &recordKeepAlive{Lease: s.cli.Lease, ctxs: make(chan context.Context, 1)}
-		s.cli.Lease = failRevoke{lease}
+		s.cli.Lease = lease
+		if revokeFails {
+			s.cli.Lease = failRevoke{lease}
+		}
 
 		lockFn(s)
 		select {
@@ -751,7 +756,7 @@ func TestKeepAliveStops(t *testing.T) {
 	}
 
 	t.Run("lock released", func(t *testing.T) {
-		lockStopsKeepAlive(t, func(s *Server) {
+		lockStopsKeepAlive(t, true /*revokeFails*/, func(s *Server) {
 			ld, err := s.lock(t.Context(), "keyspaces/released", "holder", 30, true /*wait*/, true /*untilUnlock*/)
 			require.NoError(t, err)
 			require.Error(t, ld.Unlock(t.Context()))
@@ -759,7 +764,7 @@ func TestKeepAliveStops(t *testing.T) {
 	})
 
 	t.Run("lock file not created", func(t *testing.T) {
-		lockStopsKeepAlive(t, func(s *Server) {
+		lockStopsKeepAlive(t, true /*revokeFails*/, func(s *Server) {
 			// The etcd client refuses to send a request this large.
 			_, err := s.lock(t.Context(), "keyspaces/too-large", strings.Repeat("x", 2<<20), 30, true /*wait*/, true /*untilUnlock*/)
 			require.Error(t, err)
@@ -774,12 +779,19 @@ func TestKeepAliveStops(t *testing.T) {
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = ld.Unlock(context.Background()) })
 
-		lockStopsKeepAlive(t, func(s *Server) {
-			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
-			defer cancel()
-			_, err := s.lock(ctx, "keyspaces/held", "waiter", 30, true /*wait*/, true /*untilUnlock*/)
-			require.Error(t, err)
-		})
+		// Without wait, as for TryLock, the acquisition gives up at once.
+		for _, wait := range []bool{true, false} {
+			for _, revokeFails := range []bool{true, false} {
+				t.Run(fmt.Sprintf("wait %v, revoke fails %v", wait, revokeFails), func(t *testing.T) {
+					lockStopsKeepAlive(t, revokeFails, func(s *Server) {
+						ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+						defer cancel()
+						_, err := s.lock(ctx, "keyspaces/held", "waiter", 30, wait, true /*untilUnlock*/)
+						require.Error(t, err)
+					})
+				})
+			}
+		}
 	})
 
 	// run starts keepAlive with a KeepAlive the etcd client gave up on.
