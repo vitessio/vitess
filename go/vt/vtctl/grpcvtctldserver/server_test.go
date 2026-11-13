@@ -14920,6 +14920,17 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 		ForceSetShardPrimary: true,
 		SkipShardCreation:    false,
 	}, tablets...)
+	require.NoError(t, ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{
+		Name: "ks2",
+		Keyspace: &vschemapb.Keyspace{
+			Tables: map[string]*vschemapb.Table{
+				"not_in_vschema": {},
+				"t1":             {},
+				"t2":             {},
+				"t3":             {},
+			},
+		},
+	}))
 
 	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &tmc, func(ts *topo.Server) vtctlservicepb.VtctldServer {
 		return NewVtctldServer(vtenv.NewTestEnv(), ts)
@@ -15104,6 +15115,82 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 				}, schema1)
 			},
 		},
+		{
+			name: "include-vschema: no primary",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace:       "ks2",
+				IncludeVschema: true,
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{"no primary in shard ks2/-80"},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-80": {Results: []string{"no primary in shard ks2/-80"}},
+					"80-": {Results: []string{}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				}, schema1)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  201,
+				}, schema1)
+			},
+		},
+		{
+			name: "include-vschema: skip-no-primary",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace:       "ks2",
+				IncludeVschema: true,
+				SkipNoPrimary:  true,
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-80": {Results: []string{}},
+					"80-": {Results: []string{}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				}, schema1)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  201,
+				}, schema1)
+			},
+		},
+		{
+			name: "include-vschema: no primary and a schema difference in another shard",
+			req: &vtctldatapb.ValidateSchemaKeyspaceRequest{
+				Keyspace:       "ks2",
+				IncludeVschema: true,
+			},
+			expected: &vtctldatapb.ValidateSchemaKeyspaceResponse{
+				Results: []string{
+					"no primary in shard ks2/-80",
+					"zone1-0000000103 has an extra table named not_in_vschema",
+				},
+				ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+					"-80": {Results: []string{"no primary in shard ks2/-80"}},
+					"80-": {Results: []string{"zone1-0000000103 has an extra table named not_in_vschema"}},
+				},
+			},
+			setup: func() {
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone1",
+					Uid:  103,
+				}, schema1)
+				setupSchema(&topodatapb.TabletAlias{
+					Cell: "zone2",
+					Uid:  201,
+				}, schema2)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -15116,6 +15203,8 @@ func TestValidateSchemaKeyspace(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			// Shards are checked concurrently, so their results can arrive in any order.
+			slices.Sort(resp.Results)
 			utils.MustMatch(t, tt.expected, resp)
 		})
 	}
@@ -15197,6 +15286,34 @@ func TestValidateVSchema(t *testing.T) {
 			}, resp)
 		})
 	}
+}
+
+func TestValidateVSchemaShardWithoutPrimary(t *testing.T) {
+	ctx := t.Context()
+	ts := memorytopo.NewServer(ctx, "zone1")
+	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{}))
+	require.NoError(t, ts.SaveVSchema(ctx, &topo.KeyspaceVSchemaInfo{Name: "ks", Keyspace: &vschemapb.Keyspace{}}))
+	// The shard has a replica but no primary.
+	testutil.AddTablets(ctx, t, ts, nil, &topodatapb.Tablet{
+		Keyspace: "ks",
+		Shard:    "-80",
+		Type:     topodatapb.TabletType_REPLICA,
+		Alias:    &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+	})
+	vtctld := testutil.NewVtctldServerWithTabletManagerClient(t, ts, &testutil.TabletManagerClient{}, func(ts *topo.Server) vtctlservicepb.VtctldServer {
+		return NewVtctldServer(vtenv.NewTestEnv(), ts)
+	})
+
+	resp, err := vtctld.ValidateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{Keyspace: "ks", Shards: []string{"-80"}})
+	require.NoError(t, err)
+
+	result := "no primary in shard ks/-80"
+	utils.MustMatch(t, &vtctldatapb.ValidateVSchemaResponse{
+		Results: []string{result},
+		ResultsByShard: map[string]*vtctldatapb.ValidateShardResponse{
+			"-80": {Results: []string{result}},
+		},
+	}, resp)
 }
 
 func TestValidateVersionKeyspace(t *testing.T) {

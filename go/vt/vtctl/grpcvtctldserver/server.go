@@ -5088,12 +5088,14 @@ func (s *VtctldServer) ValidateSchemaKeyspace(ctx context.Context, req *vtctldat
 	}
 
 	if req.IncludeVschema {
-		results, err2 := s.ValidateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{
+		// The schema check below reports a shard without a primary, or skips it
+		// with SkipNoPrimary, so the vschema check leaves that shard to it.
+		results, err2 := s.validateVSchema(ctx, &vtctldatapb.ValidateVSchemaRequest{
 			Keyspace:      keyspace,
 			Shards:        shards,
 			ExcludeTables: req.ExcludeTables,
 			IncludeViews:  req.IncludeViews,
-		})
+		}, true)
 		if err2 != nil {
 			err = err2
 			return nil, err
@@ -5554,6 +5556,14 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	defer span.Finish()
 
 	defer panicHandler(&err)
+	return s.validateVSchema(ctx, req, false)
+}
+
+// validateVSchema does the work of ValidateVSchema. It reads each shard's schema
+// from the shard's primary, so it can't check a shard that has no primary. It
+// reports such a shard, unless ignoreNoPrimary is set, for callers that handle
+// shards without a primary themselves.
+func (s *VtctldServer) validateVSchema(ctx context.Context, req *vtctldatapb.ValidateVSchemaRequest, ignoreNoPrimary bool) (resp *vtctldatapb.ValidateVSchemaResponse, err error) {
 	keyspace := req.Keyspace
 	// Validate each shard once, even if the request repeats it.
 	shards := slices.Compact(slices.Sorted(slices.Values(req.Shards)))
@@ -5593,6 +5603,17 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 				shardResult.Results = append(shardResult.Results, errorMessage)
 				m.Lock()
 				resp.Results = append(resp.Results, errorMessage)
+				resp.ResultsByShard[shard] = &shardResult
+				m.Unlock()
+				return
+			}
+			if !si.HasPrimary() {
+				m.Lock()
+				if !ignoreNoPrimary {
+					errorMessage := fmt.Sprintf("no primary in shard %v/%v", keyspace, shard)
+					shardResult.Results = append(shardResult.Results, errorMessage)
+					resp.Results = append(resp.Results, errorMessage)
+				}
 				resp.ResultsByShard[shard] = &shardResult
 				m.Unlock()
 				return
