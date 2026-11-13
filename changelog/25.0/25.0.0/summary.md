@@ -121,6 +121,8 @@ The `xtrabackup` engine no longer writes `--xtrabackup-backup-flags` to the `Ext
 
 **Migration**: backups taken by earlier versions keep the fields. If those flags held secrets, rotate the secrets. Removing them from an old MANIFEST doesn't remove copies that storage versioning or replication kept. Tooling that read the flags from a MANIFEST must take them from the tablet's configuration instead.
 
+Rotating an `--encrypt-key` protects only the backups taken after the rotation. A backup taken before it stays encrypted with the old key, and its MANIFEST still holds that key, so anyone who can read the MANIFEST can decrypt the backup until the backup is deleted. Restoring that backup still needs the old key in `--xbstream-restore-flags`, because the restore reads the key from there and not from the MANIFEST, so keep the old key until no backup that uses it remains.
+
 **Impact**: new MANIFESTs have neither field. For anyone who builds on the Go packages, the `Params` field of `mysqlctl.MySQLShellBackupManifest` is gone.
 
 ### <a id="new-support"/>New Support</a>
