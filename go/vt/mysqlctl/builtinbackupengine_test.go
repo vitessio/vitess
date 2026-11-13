@@ -53,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -744,7 +745,7 @@ func newBackupTestMysqld(t *testing.T) *FakeMysqlDaemon {
 // impose.
 func TestBackupRestoreWithManyChunks(t *testing.T) {
 	backupRoot := t.TempDir()
-	bm := backupRestoreWithManyChunks(t, backupRoot)
+	bm := backupRestoreWithManyChunks(t, backupRoot, logutil.NewMemoryLogger())
 
 	// A backup without binlogs restores none and writes no binlog index.
 	assert.False(t, bm.IncludesBinlogs)
@@ -752,11 +753,12 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 }
 
 // backupRestoreWithManyChunks backs up a 16MiB file in 256 chunks to file backup storage under
-// backupRoot, restores it, checks that the restored file matches and returns the manifest.
-func backupRestoreWithManyChunks(t *testing.T, backupRoot string) *BackupManifest {
+// backupRoot, restores it logging to logger, checks that the restored file matches and returns
+// the manifest.
+func backupRestoreWithManyChunks(t *testing.T, backupRoot string, logger logutil.Logger) *BackupManifest {
 	filePath, originalChecksum := backupWithManyChunks(t, backupRoot)
 
-	bm, err := restoreWithManyChunks(t, backupRoot)
+	bm, err := restoreWithManyChunks(t, backupRoot, logger)
 	require.NoError(t, err)
 	require.NotNil(t, bm)
 
@@ -840,8 +842,8 @@ func backupWithManyChunks(t *testing.T, backupRoot string) (string, uint32) {
 	return filePath, originalChecksum
 }
 
-// restoreWithManyChunks restores the backup taken by backupWithManyChunks.
-func restoreWithManyChunks(t *testing.T, backupRoot string) (*BackupManifest, error) {
+// restoreWithManyChunks restores the backup taken by backupWithManyChunks, logging to logger.
+func restoreWithManyChunks(t *testing.T, backupRoot string, logger logutil.Logger) (*BackupManifest, error) {
 	// Restore: read back all 256 chunks and reassemble into the original file.
 	restoreBh := filebackupstorage.NewBackupHandle(nil, "", "", true)
 	mysqld2 := newBackupTestMysqld(t)
@@ -857,7 +859,7 @@ func restoreWithManyChunks(t *testing.T, backupRoot string) (*BackupManifest, er
 			RelayLogIndexPath:     path.Join(backupRoot, "relaylogindex"),
 			RelayLogInfoPath:      path.Join(backupRoot, "relayloginfo"),
 		},
-		Logger:               logutil.NewMemoryLogger(),
+		Logger:               logger,
 		Mysqld:               mysqld2,
 		Concurrency:          4,
 		HookExtraEnv:         map[string]string{},
@@ -1231,6 +1233,65 @@ func TestHasErrorCode(t *testing.T) {
 
 func TestRestoreWriteModeDefaultsToBuffered(t *testing.T) {
 	assert.Equal(t, restoreWriteModeBuffered, builtinBackupRestoreWriteMode.String())
+}
+
+// TestLogDirectRestore checks that a restore in direct write mode logs how many files it restores
+// with O_DIRECT, and warns when the backup has no chunked files, so that direct write mode has no
+// effect.
+func TestLogDirectRestore(t *testing.T) {
+	chunked := func(n int) []FileChunk { return make([]FileChunk, n) }
+	tests := []struct {
+		name          string
+		fes           []FileEntry
+		expectInfo    string
+		expectWarning string
+	}{
+		{
+			name: "some files are chunked",
+			fes: []FileEntry{
+				{Name: "vt_test/t1.ibd", Chunks: chunked(3)},
+				{Name: "vt_test/t2.ibd"},
+				{Name: "ibdata1", Chunks: chunked(2)},
+			},
+			expectInfo: "Restoring 2 of 3 files with O_DIRECT, in 5 chunks",
+		},
+		{
+			name: "no file is chunked",
+			fes: []FileEntry{
+				{Name: "vt_test/t1.ibd"},
+				{Name: "ibdata1"},
+			},
+			expectWarning: "--builtinbackup-restore-write-mode=direct has no effect: none of the 2 files of the backup is chunked",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			logger := logutil.NewMemoryLogger()
+			logDirectRestore(logger, tt.fes)
+
+			infos, warnings := loggedAt(logger, logutilpb.Level_INFO), loggedAt(logger, logutilpb.Level_WARNING)
+			if tt.expectWarning != "" {
+				require.Len(t, warnings, 1)
+				assert.Contains(t, warnings[0], tt.expectWarning)
+				assert.Empty(t, infos)
+				return
+			}
+			assert.Empty(t, warnings)
+			require.Len(t, infos, 1)
+			assert.Contains(t, infos[0], tt.expectInfo)
+		})
+	}
+}
+
+// loggedAt returns the messages that were logged to logger at level.
+func loggedAt(logger *logutil.MemoryLogger, level logutilpb.Level) []string {
+	var messages []string
+	for _, e := range logger.LogEvents() {
+		if e.Level == level {
+			messages = append(messages, e.Value)
+		}
+	}
+	return messages
 }
 
 // setRestoreWriteMode sets --builtinbackup-restore-write-mode for the duration of the test.

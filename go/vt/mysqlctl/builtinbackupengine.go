@@ -1389,9 +1389,11 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	// A restore that can't be done in direct write mode fails here, while mysqld and its data
 	// are still in place.
 	if restoreWithDirectIO(bm) {
-		if err := checkDirectRestore(params.Cnf, append(slices.Clip(bm.FileEntries), bm.BinlogFileEntries...)); err != nil {
+		fes := append(slices.Clip(bm.FileEntries), bm.BinlogFileEntries...)
+		if err := checkDirectRestore(params.Cnf, fes); err != nil {
 			return nil, err
 		}
+		logDirectRestore(params.Logger, fes)
 	}
 
 	// mark restore as in progress
@@ -1575,6 +1577,23 @@ func createChunkedDestinations(ctx context.Context, fes []FileEntry, cnf *Mycnf,
 		}
 	}
 	return nil
+}
+
+// logDirectRestore logs how many of the files in fes are restored with O_DIRECT. Only chunked files
+// are, so direct write mode has no effect on a backup without them, which it warns about.
+func logDirectRestore(logger logutil.Logger, fes []FileEntry) {
+	var files, chunks int
+	for _, fe := range fes {
+		if len(fe.Chunks) > 0 {
+			files++
+			chunks += len(fe.Chunks)
+		}
+	}
+	if files == 0 {
+		logger.Warningf("--builtinbackup-restore-write-mode=direct has no effect: none of the %d files of the backup is chunked, so they are all written buffered", len(fes))
+		return
+	}
+	logger.Infof("Restoring %d of %d files with O_DIRECT, in %d chunks; the other files are written buffered", files, len(fes), chunks)
 }
 
 // checkDirectRestore checks that the chunked files in fes can be restored in direct write mode,

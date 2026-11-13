@@ -534,11 +534,13 @@ func TestBackupRestoreWithManyChunksDirect(t *testing.T) {
 		return oldFallocate(f, size)
 	}
 
-	backupRestoreWithManyChunks(t, backupRoot)
+	logger := logutil.NewMemoryLogger()
+	backupRestoreWithManyChunks(t, backupRoot, logger)
 
 	assert.Zero(t, bufferedOpens.Load(), "no chunk may be written without O_DIRECT")
 	assert.GreaterOrEqual(t, directOpens.Load(), int32(256), "each of the 256 chunks must be written with O_DIRECT")
 	assert.Contains(t, preallocatedSizes, int64(16*1024*1024), "the 16MiB chunked file must be preallocated to its full size")
+	assert.Contains(t, logger.String(), "Restoring 1 of 1 files with O_DIRECT, in 256 chunks", "the restore must log what it writes with O_DIRECT")
 }
 
 // TestExecuteRestoreDirectChecksBeforeRemovingData checks that a restore that can't be done in
@@ -558,7 +560,7 @@ func TestExecuteRestoreDirectChecksBeforeRemovingData(t *testing.T) {
 		return oldOpenFile(name, flag, perm)
 	}
 
-	_, err := restoreWithManyChunks(t, backupRoot)
+	_, err := restoreWithManyChunks(t, backupRoot, logutil.NewMemoryLogger())
 	require.ErrorContains(t, err, "O_DIRECT is not supported")
 	assert.Equal(t, vtrpcpb.Code_FAILED_PRECONDITION, vterrors.Code(err), "the restore must not be retried")
 
