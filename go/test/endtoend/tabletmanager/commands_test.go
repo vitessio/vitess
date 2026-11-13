@@ -17,10 +17,12 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -156,6 +158,55 @@ func TestTabletCommands(t *testing.T) {
 	got = fmt.Sprintf("%v", qr.Rows)
 	want = "[[VARCHAR(\"read_only\") VARCHAR(\"OFF\")]]"
 	assert.Equal(t, want, got)
+
+	t.Run("DemotePrimary serving state across refresh and recovery", func(t *testing.T) {
+		t.Cleanup(func() {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			_ = tmClient.UndoDemotePrimary(cleanupCtx, getTablet(primaryTablet.GrpcPort), false)
+			_ = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
+			_ = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias)
+			_ = primaryTablet.VttabletProcess.WaitForTabletStatus("SERVING")
+		})
+
+		// 1. Demote primary and verify it transitions to NOT_SERVING.
+		_, err := tmClient.DemotePrimary(ctx, getTablet(primaryTablet.GrpcPort), true)
+		require.NoError(t, err)
+		err = primaryTablet.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
+		require.NoError(t, err)
+
+		// RefreshState must not bring query service back while demoted.
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias)
+		require.NoError(t, err)
+		assert.Equal(t, "NOT_SERVING", primaryTablet.VttabletProcess.GetTabletStatus())
+
+		// Verify recovery path 1: UndoDemotePrimary brings query service back to SERVING.
+		err = tmClient.UndoDemotePrimary(ctx, getTablet(primaryTablet.GrpcPort), false)
+		require.NoError(t, err)
+		err = primaryTablet.VttabletProcess.WaitForTabletStatus("SERVING")
+		require.NoError(t, err)
+		assert.Equal(t, "SERVING", primaryTablet.VttabletProcess.GetTabletStatus())
+
+		// 2. Demote primary again and verify it transitions to NOT_SERVING.
+		_, err = tmClient.DemotePrimary(ctx, getTablet(primaryTablet.GrpcPort), true)
+		require.NoError(t, err)
+		err = primaryTablet.VttabletProcess.WaitForTabletStatus("NOT_SERVING")
+		require.NoError(t, err)
+
+		// RefreshState must again keep it NOT_SERVING.
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias)
+		require.NoError(t, err)
+		assert.Equal(t, "NOT_SERVING", primaryTablet.VttabletProcess.GetTabletStatus())
+
+		// Verify recovery path 2: SetWritable followed by RefreshState brings it back to SERVING.
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("SetWritable", primaryTablet.Alias, "true")
+		require.NoError(t, err)
+		err = clusterInstance.VtctldClientProcess.ExecuteCommand("RefreshState", primaryTablet.Alias)
+		require.NoError(t, err)
+		err = primaryTablet.VttabletProcess.WaitForTabletStatus("SERVING")
+		require.NoError(t, err)
+		assert.Equal(t, "SERVING", primaryTablet.VttabletProcess.GetTabletStatus())
+	})
 
 	err = clusterInstance.VtctldClientProcess.ExecuteCommand("Validate")
 	require.NoError(t, err, "error should be Nil")

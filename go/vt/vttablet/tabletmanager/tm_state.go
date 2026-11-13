@@ -73,16 +73,17 @@ type tmState struct {
 	// Because mu can be held for long, we publish the current state
 	// of these variables into displayState, which can be accessed
 	// more freely even while tmState is busy transitioning.
-	mu              sync.Mutex
-	isOpen          bool
-	isOpening       bool
-	isResharding    bool
-	isInSrvKeyspace bool
-	isShardServing  map[topodatapb.TabletType]bool
-	tabletControls  map[topodatapb.TabletType]bool
-	deniedTables    map[topodatapb.TabletType][]string
-	tablet          *topodatapb.Tablet
-	isPublishing    bool
+	mu               sync.Mutex
+	isOpen           bool
+	isOpening        bool
+	isResharding     bool
+	isInSrvKeyspace  bool
+	isShardServing   map[topodatapb.TabletType]bool
+	tabletControls   map[topodatapb.TabletType]bool
+	deniedTables     map[topodatapb.TabletType][]string
+	tablet           *topodatapb.Tablet
+	isPublishing     bool
+	isPrimaryDemoted bool
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -269,9 +270,11 @@ func (ts *tmState) updateTypeAndPublish(ctx context.Context, tabletType topodata
 
 		ts.tablet.Type = tabletType
 		ts.tablet.PrimaryTermStartTime = primaryTermStartTime
+		ts.isPrimaryDemoted = false
 	} else {
 		ts.tablet.Type = tabletType
 		ts.tablet.PrimaryTermStartTime = nil
+		ts.isPrimaryDemoted = false
 	}
 
 	s := topoproto.TabletTypeLString(tabletType)
@@ -402,6 +405,9 @@ func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY && ts.isResharding {
 		return "primary tablet with filtered replication on"
+	}
+	if tabletType == topodatapb.TabletType_PRIMARY && ts.isPrimaryDemoted {
+		return "primary demoted"
 	}
 	return ""
 }
@@ -566,4 +572,22 @@ func (ts *tmState) KeyRange() *topodatapb.KeyRange {
 	ts.displayState.mu.Lock()
 	defer ts.displayState.mu.Unlock()
 	return ts.displayState.tablet.KeyRange
+}
+
+func (ts *tmState) SetPrimaryDemoted(demoted bool) {
+	if ts == nil {
+		return
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.isPrimaryDemoted = demoted
+}
+
+func (ts *tmState) IsPrimaryDemoted() bool {
+	if ts == nil {
+		return false
+	}
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	return ts.isPrimaryDemoted
 }
