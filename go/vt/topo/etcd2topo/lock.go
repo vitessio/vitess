@@ -310,7 +310,7 @@ func (s *Server) keepAlive(ctx context.Context, cli *clientv3.Client, leaseID cl
 		}
 		var err error
 		if leaseKA, err = cli.KeepAlive(ctx, leaseID); err != nil {
-			// Only a closed client or an ended ctx fail it.
+			// Only a closed client fails it.
 			return
 		}
 	}
