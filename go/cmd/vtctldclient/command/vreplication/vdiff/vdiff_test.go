@@ -898,4 +898,17 @@ func TestUpdateCommandFlags(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "cannot specify both --source-cells and --clear-source-cells")
 	})
+
+	t.Run("tablet types in preference order requires tablet types", func(t *testing.T) {
+		require.NoError(t, update.Flags().Set("tablet-types-in-preference-order", "true"))
+		require.NoError(t, update.Flags().Set("clear-target-cells", "true"))
+		t.Cleanup(func() {
+			update.Flags().Lookup("tablet-types-in-preference-order").Changed = false
+			require.NoError(t, update.Flags().Set("clear-target-cells", "false"))
+			update.Flags().Lookup("clear-target-cells").Changed = false
+			updateOptions.ClearTargetCells = false
+		})
+		err := update.PreRunE(update, []string{"a037a9e2-5628-11ee-8c99-0242ac120002"})
+		require.EqualError(t, err, "--tablet-types-in-preference-order requires --tablet-types")
+	})
 }

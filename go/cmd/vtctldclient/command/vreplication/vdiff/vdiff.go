@@ -321,6 +321,9 @@ Use --clear-source-cells / --clear-target-cells to reset cells to all cells
 			if hasTargetCells && hasClearTarget {
 				return errors.New("cannot specify both --target-cells and --clear-target-cells")
 			}
+			if cmd.Flags().Lookup("tablet-types-in-preference-order").Changed && !hasTabletTypes {
+				return errors.New("--tablet-types-in-preference-order requires --tablet-types")
+			}
 			if !hasTabletTypes && !hasSourceCells && !hasTargetCells && !hasClearSource && !hasClearTarget {
 				return errors.New("no picker options specified to update; provide --tablet-types, --source-cells, --target-cells, --clear-source-cells, and/or --clear-target-cells")
 			}
