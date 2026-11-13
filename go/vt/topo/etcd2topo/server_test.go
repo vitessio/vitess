@@ -498,16 +498,19 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 	}
 
 	// Short TTL through topo.Server, which ends the acquisition context once the lock is
-	// acquired: the lease must still be kept alive until the unlock.
-	_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "short ttl, acquisition context ended")
-	require.NoError(t, err)
-	assert.Never(t, takenOrFailed, 5*time.Second, 250*time.Millisecond, "the lock expired while still held")
+	// acquired: the lease must still be kept alive until the unlock, whether Lock or
+	// TryLock took the lock.
 	var unlockErr error
-	unlock(&unlockErr)
-	require.NoError(t, unlockErr)
+	for _, lockType := range []topo.LockType{topo.Blocking, topo.NonBlocking} {
+		_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "short ttl, acquisition context ended", topo.WithType(lockType))
+		require.NoError(t, err)
+		assert.Never(t, takenOrFailed, 5*time.Second, 250*time.Millisecond, "the %v lock expired while still held", lockType)
+		unlock(&unlockErr)
+		require.NoError(t, unlockErr)
+	}
 
 	// An explicit TTL still releases the lock after it, without an unlock.
-	_, unlock, err = ts.LockKeyspace(ctx, "test_keyspace", "explicit ttl", topo.WithTTL(time.Second))
+	_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "explicit ttl", topo.WithTTL(time.Second))
 	require.NoError(t, err)
 	assert.Eventually(t, taken, 30*time.Second, 250*time.Millisecond, "the lock with an explicit TTL did not expire")
 	unlock(&unlockErr)
