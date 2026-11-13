@@ -721,7 +721,8 @@ func TestLockSurvivesEtcdRestart(t *testing.T) {
 }
 
 // TestKeepAliveStops checks that a lock's KeepAlive stops when the lock is
-// released or its acquisition fails, also when revoking the lease fails. It also
+// released or its acquisition fails, also when revoking the lease fails, and
+// that a named lock's stops when its caller's context ends. It also
 // checks that keepAlive returns, once the etcd client has given up on the
 // lease's KeepAlive, when the lease is gone (even after a renewal attempt that
 // got no answer), when the lock is released and when the client is closed, and
@@ -792,6 +793,16 @@ func TestKeepAliveStops(t *testing.T) {
 				})
 			}
 		}
+	})
+
+	t.Run("named lock's caller context ended", func(t *testing.T) {
+		lockStopsKeepAlive(t, false /*revokeFails*/, func(s *Server) {
+			ctx, cancel := context.WithCancel(t.Context())
+			ld, err := s.LockName(ctx, "keyspaces/named", "holder")
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = ld.Unlock(context.Background()) })
+			cancel()
+		})
 	})
 
 	// run starts keepAlive with a KeepAlive the etcd client gave up on.
