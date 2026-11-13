@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -35,6 +36,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSortedTableSummaries(t *testing.T) {
@@ -710,6 +712,7 @@ func TestVDiffUpdate(t *testing.T) {
 		req                   *vtctldatapb.VDiffUpdateRequest
 		expectedVDiffRequests map[*topodatapb.Tablet]*vdiffRequestResponse
 		wantErr               string
+		wantCode              vtrpcpb.Code
 		wantStates            map[string]string
 	}{
 		{
@@ -767,6 +770,27 @@ func TestVDiffUpdate(t *testing.T) {
 				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
 			},
 			wantErr: "specified target shard 0 not a valid target for workflow " + workflow,
+		},
+		{
+			// A target tablet older than v25 does not know the update action
+			// and returns an untyped error, which reaches vtctld as UNKNOWN.
+			name: "target tablet does not support update",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetKeyspace:            targetKeyspace.KeyspaceName,
+				TargetShards:              targetKeyspace.ShardNames[:1],
+				Workflow:                  workflow,
+				Uuid:                      vduuid,
+				TabletTypes:               []topodatapb.TabletType{topodatapb.TabletType_PRIMARY},
+				TabletSelectionPreference: tabletmanagerdatapb.TabletSelectionPreference_INORDER,
+			},
+			expectedVDiffRequests: map[*topodatapb.Tablet]*vdiffRequestResponse{
+				env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]: {
+					req: expectedReq(),
+					err: vterrors.New(vtrpcpb.Code_UNKNOWN, "rpc error: code = Unknown desc = action update not supported"),
+				},
+			},
+			wantErr:  "target tablet cell-0000000200 for shard targetks/-80 does not support VDiff update: the target tablets must run v25 or later",
+			wantCode: vtrpcpb.Code_FAILED_PRECONDITION,
 		},
 		{
 			name: "no picker options",
@@ -912,6 +936,9 @@ func TestVDiffUpdate(t *testing.T) {
 			if tt.wantErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.wantErr)
+				if tt.wantCode != vtrpcpb.Code_OK {
+					require.Equal(t, tt.wantCode, vterrors.Code(err))
+				}
 				return
 			}
 			require.NoError(t, err)

@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
@@ -753,6 +754,11 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 	}
 	output.err = ts.ForAllTargets(func(target *MigrationTarget) error {
 		resp, err := s.tmc.VDiff(ctx, target.GetPrimary().Tablet, tabletreq)
+		if isVDiffUpdateUnsupportedError(err) {
+			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
+				"target tablet %s for shard %s/%s does not support VDiff update: the target tablets must run v25 or later",
+				topoproto.TabletAliasString(target.GetPrimary().Alias), target.GetShard().Keyspace(), target.GetShard().ShardName())
+		}
 		output.mu.Lock()
 		defer output.mu.Unlock()
 		output.responses[target.GetShard().ShardName()] = resp
@@ -774,6 +780,14 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 		results = append(results, shardResultFromVDiffResponse(shard, output.responses[shard]))
 	}
 	return &vtctldatapb.VDiffUpdateResponse{Results: results}, nil
+}
+
+// isVDiffUpdateUnsupportedError returns true if the error is the untyped
+// "action update not supported" error that a vttablet older than v25, which
+// does not know the update action, returns for a VDiff update request.
+func isVDiffUpdateUnsupportedError(err error) bool {
+	return err != nil && vterrors.Code(err) == vtrpcpb.Code_UNKNOWN &&
+		strings.Contains(err.Error(), "action "+string(vdiff.UpdateAction)+" not supported")
 }
 
 // allTopoCells returns every cell in the topology as a comma-separated
