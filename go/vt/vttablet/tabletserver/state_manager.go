@@ -174,6 +174,8 @@ type (
 		AcceptReadOnly()
 		Close()
 		RollbackPrepared()
+		SetClusterAction(ClusterActionState)
+		TerminateActiveCommits()
 	}
 
 	subComponent interface {
@@ -512,6 +514,9 @@ func (sm *stateManager) unservePrimary() error {
 }
 
 func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) error {
+	sm.markClusterAction(ClusterActionInProgress)
+	defer sm.markClusterAction(ClusterActionNotInProgress)
+
 	// We are likely transitioning from primary. We have to honor
 	// the shutdown grace period.
 	cancel := sm.terminateAllQueries(nil)
@@ -618,18 +623,31 @@ func (sm *stateManager) handleShutdownGracePeriod(wg *sync.WaitGroup) {
 	}
 }
 
-func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) {
+// terminateAllQueries starts a goroutine that, after the shutdown grace period,
+// rejects new queries and COMMITs, kills running queries and COMMITs, and rolls
+// back prepared transactions. The returned function stops the goroutine if the
+// grace period has not ended. If the cleanup has started, the function waits
+// until the cleanup is complete.
+func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) func() {
 	if sm.shutdownGracePeriod == 0 {
 		return func() {}
 	}
 	ctx, cancel := context.WithCancel(context.TODO())
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		if wg != nil {
 			defer wg.Done()
 		}
 		if err := timer.SleepContext(ctx, sm.shutdownGracePeriod); err != nil {
 			return
 		}
+
+		// Stop if the transition ended as the grace period expired.
+		if ctx.Err() != nil {
+			return
+		}
+
 		// Prevent any new queries from being added before we kill all the queries in the list.
 		sm.markClusterAction(ClusterActionNoQueries)
 		log.Info("Grace Period exceeded. Killing all OLTP queries.", slog.Duration("shutdown_grace_period", sm.shutdownGracePeriod))
@@ -637,6 +655,10 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		log.Info("Killed all stateless OLTP queries.")
 		sm.statefulql.TerminateAll()
 		log.Info("Killed all OLTP queries.")
+
+		sm.te.TerminateActiveCommits()
+		log.Info("Killed all active COMMIT statements.")
+
 		// We can rollback prepared transactions only after we have killed all the write queries in progress.
 		// This is essential because when we rollback a prepared transaction, it lets go of the locks it was holding.
 		// If there were some other conflicting write in progress that hadn't been killed, then it could potentially go through
@@ -644,7 +666,10 @@ func (sm *stateManager) terminateAllQueries(wg *sync.WaitGroup) (cancel func()) 
 		sm.te.RollbackPrepared()
 		log.Info("Rollbacked all prepared transactions")
 	}()
-	return cancel
+	return func() {
+		cancel()
+		<-done
+	}
 }
 
 func (sm *stateManager) closeAll() {
@@ -901,4 +926,5 @@ func (sm *stateManager) markClusterAction(ca ClusterActionState) {
 	sm.statefulql.SetClusterAction(ca)
 	sm.statelessql.SetClusterAction(ca)
 	sm.olapql.SetClusterAction(ca)
+	sm.te.SetClusterAction(ca)
 }
