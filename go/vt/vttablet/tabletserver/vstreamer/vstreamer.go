@@ -145,10 +145,10 @@ type streamerPlan struct {
 func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, stopPos string,
 	filter *binlogdatapb.Filter, vschema *localVSchema, throttlerApp throttlerapp.Name,
 	send func([]*binlogdatapb.VEvent) error, phase string, vse *Engine, options *binlogdatapb.VStreamOptions,
-) *vstreamer {
+) (*vstreamer, error) {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		return nil
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid VStream options: %v", err)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
@@ -168,7 +168,7 @@ func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine
 		vse:          vse,
 		options:      options,
 		config:       config,
-	}
+	}, nil
 }
 
 // SetVSchema updates the vstreamer against the new vschema.

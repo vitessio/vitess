@@ -380,8 +380,37 @@ func testFKCancel(t *testing.T, vc *VitessCluster) {
 		},
 		sourceKeyspace: sourceKeyspace,
 		atomicCopy:     true,
+		// The atomic copy must forward the workflow's config overrides to the source on VStreamTables. With a
+		// fixed 1 byte packet every row closes a packet, which the source's counters show; without the
+		// overrides the tablets' --vstream-packet-size=256 applies and these small tables go out in their
+		// final partial packet, which RowStreamerNumPackets doesn't count.
+		createFlags: []string{"--config-overrides", "vstream-dynamic-packet-size=false,vstream-packet-size=1"},
 	}, testWorkflowFlavor)
+
+	source := vc.getPrimaryTablet(t, sourceKeyspace, "0")
+	packetsBefore, rowsBefore := getRowStreamerCounts(t, source)
+
 	mt.Create()
 	require.NoError(t, waitForWorkflowState(vc, ksWorkflow, binlogdatapb.VReplicationWorkflowState_Running.String()))
+
+	packetsAfter, rowsAfter := getRowStreamerCounts(t, source)
+	require.Greater(t, rowsAfter, rowsBefore, "the atomic copy should have streamed rows from the source")
+	require.Equal(t, rowsAfter-rowsBefore, packetsAfter-packetsBefore,
+		"with the workflow's 1 byte packet size every row should close its own packet on the source")
+
 	mt.Cancel()
+}
+
+// getRowStreamerCounts reads the source tablet's row streamer counters: packets sent, and rows sent.
+func getRowStreamerCounts(t *testing.T, tablet *cluster.VttabletProcess) (packets, rows int64) {
+	for _, c := range []struct {
+		name string
+		dst  *int64
+	}{{"RowStreamerNumPackets", &packets}, {"RowStreamerNumRows", &rows}} {
+		val, err := getDebugVar(t, tablet.Port, []string{c.name})
+		require.NoError(t, err)
+		*c.dst, err = strconv.ParseInt(val, 10, 64)
+		require.NoError(t, err, c.name)
+	}
+	return packets, rows
 }

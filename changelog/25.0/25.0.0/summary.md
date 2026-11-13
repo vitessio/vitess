@@ -34,6 +34,7 @@
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
         - [Copied tables whose statistics aren't recalculated automatically are analyzed](#vreplication-analyze-stats-auto-recalc)
+        - [Bounded memory for VStreamRows streams](#vreplication-vstream-memory-bounds)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -409,6 +410,14 @@ At the end of each copy cycle of a workflow or Online DDL migration, the target 
 - Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
 
 See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
+
+#### <a id="vreplication-vstream-memory-bounds"/>Bounded memory for VStreamRows streams</a>
+
+The row streams behind VReplication copies and VDiffs (`VStreamRows`, `VStreamTables`) reuse one set of rows across packets on both the source and the receiving tablet. Each reused row only ever grew to the largest value it had held, so a long stream retained the sum of those high-water marks until it ended, and its dynamically sized packets had no upper bound. Both ends now drop the reused rows when they retain more than about four times the live packet, and dynamic packet sizing stops growing at 16 times `--vstream-packet-size`.
+
+This is controlled by the new `vttablet` flag `--vstream-memory-bounds`, on by default. `--vstream-memory-bounds=false` restores the previous behavior. On the source side it can also be set per workflow with `Workflow update --config-overrides vstream-memory-bounds=false`; a workflow that benefited from packets above 16 times the base can instead raise `vstream-packet-size` the same way. A workflow's config overrides are sent to every tablet it streams from and to, and a tablet rejects a key it does not know: a source on an earlier release fails the copy or the replication with an error naming the key (on v24 and earlier that surfaces as an "uncaught panic" error from the nil streamer). So set `vstream-memory-bounds` only once every source and target tablet runs a release that has it. A VDiff does not carry the workflow's overrides: its streams follow the tablets' `--vstream-memory-bounds` and `--vstream-packet-size` alone. The same goes for the copy phase of a VTGate `VStream`, which copies each table through the same row streamer and so also gets the sender's trim and the cap; VTGate sends no config overrides, so only the source tablets' flags apply to it.
+
+See [#20954](https://github.com/vitessio/vitess/issues/20954) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 

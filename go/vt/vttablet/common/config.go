@@ -61,6 +61,8 @@ type VReplicationConfig struct {
 	VStreamDynamicPacketSizeOverride       bool
 	VStreamBinlogRotationThreshold         int64
 	VStreamBinlogRotationThresholdOverride bool
+	VStreamMemoryBounds                    bool
+	VStreamMemoryBoundsOverride            bool
 
 	// Overrides is a map of user-provided configuration values that override the default configuration.
 	Overrides map[string]string
@@ -103,6 +105,8 @@ func GetVReplicationConfigDefaults(useCached bool) *VReplicationConfig {
 		VStreamDynamicPacketSize:               VStreamerUseDynamicPacketSize,
 		VStreamBinlogRotationThresholdOverride: false,
 		VStreamBinlogRotationThreshold:         VStreamerBinlogRotationThreshold,
+		VStreamMemoryBoundsOverride:            false,
+		VStreamMemoryBounds:                    VStreamerMemoryBounds,
 
 		Overrides: make(map[string]string),
 	}
@@ -244,6 +248,14 @@ func NewVReplicationConfig(overrides map[string]string) (*VReplicationConfig, er
 				c.VStreamBinlogRotationThresholdOverride = true
 				c.VStreamBinlogRotationThreshold = value
 			}
+		case "vstream-memory-bounds", "vstream_memory_bounds":
+			value, err := strconv.ParseBool(v)
+			if err != nil {
+				errors = append(errors, getError(k, v))
+			} else {
+				c.VStreamMemoryBoundsOverride = true
+				c.VStreamMemoryBounds = value
+			}
 		case "max-row-json-bytes":
 			value, err := strconv.ParseInt(v, 10, 64)
 			if err != nil || value < 0 {
@@ -285,6 +297,8 @@ func (c VReplicationConfig) Map() map[string]string {
 		"vstream-dynamic-packet-size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_dynamic_packet_size":             strconv.FormatBool(c.VStreamDynamicPacketSize),
 		"vstream_binlog_rotation_threshold":       strconv.FormatInt(c.VStreamBinlogRotationThreshold, 10),
+		"vstream-memory-bounds":                   strconv.FormatBool(c.VStreamMemoryBounds),
+		"vstream_memory_bounds":                   strconv.FormatBool(c.VStreamMemoryBounds),
 		"max-row-json-bytes":                      strconv.FormatInt(c.MaxRowJSONBytes, 10),
 	}
 }

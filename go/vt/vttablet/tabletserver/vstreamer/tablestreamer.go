@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -67,10 +69,10 @@ type tableStreamer struct {
 
 func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, vschema *localVSchema,
 	send func(response *binlogdatapb.VStreamTablesResponse) error, vse *Engine, options *binlogdatapb.VStreamOptions,
-) *tableStreamer {
+) (*tableStreamer, error) {
 	config, err := GetVReplicationConfig(options)
 	if err != nil {
-		return nil
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid VStream options: %v", err)
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	return &tableStreamer{
@@ -83,7 +85,7 @@ func newTableStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.En
 		vse:     vse,
 		options: options,
 		config:  config,
-	}
+	}, nil
 }
 
 func (ts *tableStreamer) Cancel() {
@@ -174,8 +176,11 @@ func (ts *tableStreamer) newRowStreamer(ctx context.Context, query string, lastp
 	vse.mu.Lock()
 	defer vse.mu.Unlock()
 
-	rowStreamer := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema,
+	rowStreamer, err := newRowStreamer(ctx, vse.env.Config().DB.FilteredWithDB(), vse.se, query, lastpk, vse.lvschema,
 		send, vse, RowStreamerModeAllTables, ts.snapshotConn, ts.options)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	idx := vse.streamIdx
 	vse.rowStreamers[idx] = rowStreamer
