@@ -399,11 +399,11 @@ func TestCheckDirectRestore(t *testing.T) {
 		name          string
 		chunkSize     int64
 		rejectODirect bool
-		// rejectDirectWrite makes writes with O_DIRECT fail with EINVAL, as on a device whose logical
-		// blocks are larger than directIOAlignment.
-		rejectDirectWrite bool
-		fallocateErr      error
-		expectErr         string
+		// deviceBlockSize, when set, makes writes with O_DIRECT fail with EINVAL unless their length
+		// and offset are multiples of it, as on a device with logical blocks of that size.
+		deviceBlockSize int
+		fallocateErr    error
+		expectErr       string
 	}{
 		{
 			name:      "aligned chunks on a filesystem that supports O_DIRECT and fallocate",
@@ -421,10 +421,10 @@ func TestCheckDirectRestore(t *testing.T) {
 			expectErr:     "O_DIRECT is not supported",
 		},
 		{
-			name:              "O_DIRECT writes are rejected",
-			chunkSize:         1024 * 1024,
-			rejectDirectWrite: true,
-			expectErr:         "O_DIRECT writes of 4096 bytes are not supported",
+			name:            "O_DIRECT writes are rejected by a device with 8KiB logical blocks",
+			chunkSize:       1024 * 1024,
+			deviceBlockSize: 8192,
+			expectErr:       "O_DIRECT writes of 4096 bytes are not supported",
 		},
 		{
 			name:         "fallocate is unsupported",
@@ -436,7 +436,7 @@ func TestCheckDirectRestore(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := t.TempDir()
-			if tt.expectErr == "" || tt.rejectDirectWrite || tt.fallocateErr != nil {
+			if tt.expectErr == "" || tt.deviceBlockSize > 0 || tt.fallocateErr != nil {
 				requireDirectIO(t, root)
 			}
 			if tt.expectErr == "" {
@@ -464,7 +464,7 @@ func TestCheckDirectRestore(t *testing.T) {
 			}
 			probeWriteAt = func(f *os.File, b []byte, off int64) (int, error) {
 				probeWrites.Add(1)
-				if tt.rejectDirectWrite {
+				if bs := tt.deviceBlockSize; bs > 0 && (len(b)%bs != 0 || off%int64(bs) != 0) {
 					return 0, &os.PathError{Op: "write", Path: f.Name(), Err: syscall.EINVAL}
 				}
 				return oldProbeWriteAt(f, b, off)
