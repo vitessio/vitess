@@ -312,6 +312,72 @@ func TestRecurseCTEDepthDoesNotCountRows(t *testing.T) {
 	}
 }
 
+// A small frontier does not bound cumulative work: every row can drive another
+// Term query at every level. Stop cyclic streaming recursion at the row budget.
+func TestRecurseCTEStreamCycleHonorsTermBudget(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id", "int64")
+	const limit = 2500
+	for _, seedRows := range []int{100, 1000} {
+		t.Run(strconv.Itoa(seedRows), func(t *testing.T) {
+			seedResult := &sqltypes.Result{Fields: fields}
+			for i := range seedRows {
+				seedResult.Rows = append(seedResult.Rows, sqltypes.Row{sqltypes.NewInt64(int64(i))})
+			}
+			term := &cyclicRecurseTerm{fakePrimitive: &fakePrimitive{}}
+			cte := &RecurseCTE{Seed: &fakePrimitive{results: []*sqltypes.Result{seedResult}}, Term: term, Vars: map[string]int{"id": 0}}
+			cursor := &recurseMemoryVCursor{noopVCursor: &noopVCursor{}, limit: limit}
+			err := cte.TryStreamExecute(t.Context(), cursor, nil, true, func(*sqltypes.Result) error { return nil })
+			require.Equal(t, limit, term.calls, "stop before starting an over-budget Term query")
+			require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 2500")
+			require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+		})
+	}
+}
+
+// Finite streams may use the full Term budget; its override must still permit
+// more work, independently of the small current/next frontier memory budget.
+func TestRecurseCTEStreamTermBudgetBoundaryAndOverride(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id", "int64")
+	const limit = 3
+	for _, tc := range []struct {
+		name   string
+		calls  int
+		ignore bool
+	}{
+		{name: "at budget", calls: limit},
+		{name: "over budget", calls: limit + 1},
+		{name: "override", calls: limit + 1, ignore: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			term := &fakePrimitive{noLog: true}
+			for i := range tc.calls {
+				result := sqltypes.MakeTestResult(fields)
+				if i < tc.calls-1 {
+					result = sqltypes.MakeTestResult(fields, strconv.Itoa(i+2))
+				}
+				term.results = append(term.results, result)
+			}
+			cte := &RecurseCTE{Seed: &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1")}}, Term: term, Vars: map[string]int{"id": 0}}
+			cursor := &recurseMemoryVCursor{noopVCursor: &noopVCursor{}, limit: limit, ignore: tc.ignore}
+			delivered := 0
+			err := cte.TryStreamExecute(t.Context(), cursor, nil, true, func(result *sqltypes.Result) error {
+				delivered += len(result.Rows)
+				return nil
+			})
+			if tc.calls > limit && !tc.ignore {
+				require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 3")
+				require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+				require.Equal(t, limit, term.curResult)
+				require.Equal(t, limit+1, delivered)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tc.calls, term.curResult)
+			require.Equal(t, tc.calls, delivered)
+		})
+	}
+}
+
 // Use per-cursor budgets so resource-limit tests do not change shared globals.
 type recurseMemoryVCursor struct {
 	*noopVCursor
@@ -340,7 +406,7 @@ func TestRecurseCTEMemoryRows(t *testing.T) {
 		{name: "seed at budget", seed: 3, terms: []int{0, 0, 0}, limit: 3},
 		{name: "term over budget", seed: 1, terms: []int{3, 0, 0, 0}, limit: 3, bufferedError: true, streamError: true},
 		{name: "term at budget", seed: 1, terms: []int{2, 0, 0}, limit: 3},
-		{name: "completed streaming levels released", seed: 1, terms: []int{1, 1, 0}, limit: 2, bufferedError: true},
+		{name: "completed levels within cumulative budget", seed: 1, terms: []int{1, 1, 0}, limit: 3},
 		{name: "branching levels", seed: 1, terms: []int{2, 2, 2, 0, 0, 0, 0}, limit: 5, bufferedError: true, streamError: true},
 		{name: "override seed budget", seed: 4, terms: []int{0, 0, 0, 0}, limit: 3, ignore: true},
 		{name: "override branching budget", seed: 1, terms: []int{2, 2, 2, 0, 0, 0, 0}, limit: 5, ignore: true},

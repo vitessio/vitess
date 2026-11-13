@@ -145,6 +145,8 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// would nest a live stream per level and exhaust the connection pool.
 	joinVars := make(map[string]*querypb.BindVariable)
 	iterations := 0
+	// Releasing completed levels must not reset the cumulative Term budget.
+	termExecutions := 0
 	for len(recurseRows) > 0 {
 		if !r.Distinct {
 			iterations++
@@ -169,6 +171,10 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			// check if the context is done - we might be in a long running recursion
 			if err := ctx.Err(); err != nil {
 				return err
+			}
+			termExecutions++
+			if vcursor.ExceedsMaxMemoryRows(termExecutions) {
+				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "recursive term execution count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, collect)
 			if err != nil {

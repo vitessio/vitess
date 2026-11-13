@@ -17,6 +17,7 @@ limitations under the License.
 package union
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -392,6 +393,45 @@ func TestRecursiveReferenceBranchingHonorsMemoryLimit(t *testing.T) {
 			utils.CompareVitessAndMySQLResults(mcmp.AsT(), override, mcmp.VtConn, result, expected, utils.CompareOptions{})
 			require.Len(mcmp.AsT(), result.Rows, 4095)
 		})
+	}
+}
+
+// A finite recursive query with three rows per level stays below the live
+// frontier budget, but its cumulative Term queries must honor max-memory-rows.
+// Verify SQL workload selection and IGNORE_MAX_MEMORY_ROWS reach that guard.
+func TestRecursiveStreamingWorkBudget(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (1), (2), (3)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (1), (2), (3)", keyspaceName, true)
+		require.NoError(t, err)
+	}
+	// Keep the fixture below the row budget so normal DML cleanup fits.
+	values := make([]string, 1998)
+	for i := range values {
+		values[i] = fmt.Sprintf("(%d,%d)", i+1, i+4)
+	}
+	mcmp.Exec("insert into t1(id1,id2) values " + strings.Join(values, ","))
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	query := "with recursive c as (select id from ref union all select u.id2 from t1 u join c on u.id1 = c.id) select id from c"
+	_, err := mcmp.VtConn.ExecuteFetch(query, 10000, true)
+	require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 2000")
+	// 1998 rows/Term calls fit without an override; 2001 require the override.
+	for _, tc := range []struct {
+		query string
+		rows  int
+	}{
+		{strings.Replace(query, "u.id1 = c.id", "u.id1 = c.id where u.id1 <= 1995", 1), 1998},
+		{strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1), 2001},
+	} {
+		result, err := mcmp.VtConn.ExecuteFetch(tc.query, 10000, true)
+		require.NoError(t, err)
+		expected, err := mcmp.MySQLConn.ExecuteFetch(tc.query, 10000, true)
+		require.NoError(t, err)
+		utils.CompareVitessAndMySQLResults(t, tc.query, mcmp.VtConn, result, expected, utils.CompareOptions{})
+		require.Len(t, result.Rows, tc.rows)
 	}
 }
 
