@@ -18,6 +18,7 @@ package topo
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/semaphore"
@@ -50,9 +51,10 @@ const readOnlyErrorStrFormat = "cannot perform %s on %s as the topology server c
 
 // The StatsConn is a wrapper for a Conn that emits stats for every operation
 type StatsConn struct {
-	cell     string
-	conn     Conn
-	readOnly bool
+	cell string
+	conn Conn
+	// readOnly is a pointer so that the connections of a Server can share one read-only state.
+	readOnly *atomic.Bool
 	readSem  *semaphore.Weighted
 }
 
@@ -61,7 +63,7 @@ func NewStatsConn(cell string, conn Conn, readSem *semaphore.Weighted) *StatsCon
 	return &StatsConn{
 		cell:     cell,
 		conn:     conn,
-		readOnly: false,
+		readOnly: new(atomic.Bool),
 		readSem:  readSem,
 	}
 }
@@ -88,7 +90,7 @@ func (st *StatsConn) ListDir(ctx context.Context, dirPath string, full bool) ([]
 // Create is part of the Conn interface
 func (st *StatsConn) Create(ctx context.Context, filePath string, contents []byte) (Version, error) {
 	statsKey := []string{"Create", st.cell}
-	if st.readOnly {
+	if st.readOnly.Load() {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], filePath)
 	}
 	startTime := time.Now()
@@ -104,7 +106,7 @@ func (st *StatsConn) Create(ctx context.Context, filePath string, contents []byt
 // Update is part of the Conn interface
 func (st *StatsConn) Update(ctx context.Context, filePath string, contents []byte, version Version) (Version, error) {
 	statsKey := []string{"Update", st.cell}
-	if st.readOnly {
+	if st.readOnly.Load() {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], filePath)
 	}
 	startTime := time.Now()
@@ -177,7 +179,7 @@ func (st *StatsConn) List(ctx context.Context, filePathPrefix string) ([]KVInfo,
 // Delete is part of the Conn interface
 func (st *StatsConn) Delete(ctx context.Context, filePath string, version Version) error {
 	statsKey := []string{"Delete", st.cell}
-	if st.readOnly {
+	if st.readOnly.Load() {
 		return vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], filePath)
 	}
 	startTime := time.Now()
@@ -219,7 +221,7 @@ func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string,
 	case ttl != 0:
 		statsKey[0] = "LockWithTTL"
 	}
-	if st.readOnly {
+	if st.readOnly.Load() {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], dirPath)
 	}
 	startTime := time.Now()
@@ -283,10 +285,10 @@ func (st *StatsConn) Close() {
 
 // SetReadOnly with true prevents any write operations from being made on the topo connection
 func (st *StatsConn) SetReadOnly(readOnly bool) {
-	st.readOnly = readOnly
+	st.readOnly.Store(readOnly)
 }
 
 // IsReadOnly allows you to check the access type for the topo connection
 func (st *StatsConn) IsReadOnly() bool {
-	return st.readOnly
+	return st.readOnly.Load()
 }
