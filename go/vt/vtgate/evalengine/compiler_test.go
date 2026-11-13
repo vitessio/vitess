@@ -1628,3 +1628,102 @@ func TestJSONColumnDecimals(t *testing.T) {
 		})
 	}
 }
+
+// TestCompareTimeWithSessionDate verifies that a TIME compared with a date or
+// datetime is placed on the session's current date, as in MySQL, not on the
+// current date in VTGate's own time zone.
+func TestCompareTimeWithSessionDate(t *testing.T) {
+	// At 22:00 UTC on 2023-10-24 it is already 2023-10-25 at +14:00.
+	tz := time.FixedZone("+14:00", 14*60*60)
+	now := time.Date(2023, 10, 24, 22, 0, 0, 0, time.UTC)
+
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`column0 = column1`, `INT64(1)`},
+		{`column0 <=> column1`, `INT64(1)`},
+		{`column0 = column2`, `INT64(0)`},
+		{`column0 > column2`, `INT64(1)`},
+		{`column0 IN (column2, column1)`, `INT64(1)`},
+		{`(column0, 1) = (column1, 1)`, `INT64(1)`},
+		{`column3 = column4`, `INT64(1)`},
+	}
+
+	values := []sqltypes.Value{
+		sqltypes.NewTime("12:00:00"),
+		sqltypes.NewDatetime("2023-10-25 12:00:00"),
+		sqltypes.NewDatetime("2023-10-24 12:00:00"),
+		sqltypes.NewTime("00:00:00"),
+		sqltypes.NewDate("2023-10-25"),
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			evaluateWithClock(t, tc.expression, values, tz, now, tc.result)
+		})
+	}
+}
+
+// TestCompareTimeInDaylightSavingGap verifies that a TIME placed on the
+// session's current date keeps its hour when that hour doesn't exist in the
+// session's time zone, as in MySQL.
+func TestCompareTimeInDaylightSavingGap(t *testing.T) {
+	ny, err := time.LoadLocation("America/New_York")
+	require.NoError(t, err)
+	// Clocks in New York moved from 02:00 to 03:00 on 2026-03-08.
+	now := time.Date(2026, 3, 8, 17, 0, 0, 0, time.UTC)
+
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`column0 = column1`, `INT64(1)`},
+		{`column0 > column2`, `INT64(1)`},
+		{`column0 IN (column2, column1)`, `INT64(1)`},
+	}
+
+	values := []sqltypes.Value{
+		sqltypes.NewTime("02:30:00"),
+		sqltypes.NewDatetime("2026-03-08 02:30:00"),
+		sqltypes.NewDatetime("2026-03-08 02:00:00"),
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			evaluateWithClock(t, tc.expression, values, ny, now, tc.result)
+		})
+	}
+}
+
+// evaluateWithClock evaluates expression over values in a session in time zone
+// tz at time now, through both the interpreter and the compiled path, and
+// checks that both return result.
+func evaluateWithClock(t *testing.T, expression string, values []sqltypes.Value, tz *time.Location, now time.Time, result string) {
+	t.Helper()
+	venv := vtenv.NewTestEnv()
+	expr, err := venv.Parser().ParseExpr(expression)
+	require.NoError(t, err)
+
+	fields := evalengine.FieldResolver(makeFields(values))
+	cfg := &evalengine.Config{
+		ResolveColumn: fields.Column,
+		ResolveType:   fields.Type,
+		Collation:     collations.CollationUtf8mb4ID,
+		Environment:   venv,
+	}
+	converted, err := evalengine.Translate(expr, cfg)
+	require.NoError(t, err)
+
+	env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, tz))
+	env.SetTime(now)
+	env.Row = values
+
+	interpreted, err := env.EvaluateAST(converted)
+	require.NoError(t, err)
+	require.Equal(t, result, interpreted.String())
+
+	compiled, err := env.Evaluate(converted)
+	require.NoError(t, err)
+	require.Equal(t, result, compiled.String())
+}
