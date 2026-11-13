@@ -18,10 +18,14 @@ package mysql
 
 import (
 	"context"
+	"fmt"
 	"math/rand/v2"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
+
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // Override the default here to test with different values.
@@ -145,4 +149,140 @@ func BenchmarkParallelMediumQueriesWithReadBufferPooling(b *testing.B) {
 
 func BenchmarkParallelRandomQueriesWithReadBufferPooling(b *testing.B) {
 	benchmarkQuery(b, 10, "", mkReadBufferPoolingCfg)
+}
+
+// BenchmarkParseRow compares the per-row copy against the copy per value it replaces.
+// The saving scales with column count, so the sweep goes wide enough to show it: a
+// 2-column row understates it by roughly 3x. The NULL-heavy and zero-length shapes are
+// here because they take different branches through the copy.
+func BenchmarkParseRow(b *testing.B) {
+	shapes := []struct {
+		name   string
+		values [][]byte
+	}{
+		{"1col", benchRowValues(1, benchValueNormal)},
+		{"2col", benchRowValues(2, benchValueNormal)},
+		{"5col", benchRowValues(5, benchValueNormal)},
+		{"20col", benchRowValues(20, benchValueNormal)},
+		{"50col", benchRowValues(50, benchValueNormal)},
+		{"20col-narrow", benchRowValues(20, benchValueNarrow)},
+		{"20col-null-heavy", benchRowValues(20, benchValueNull)},
+		{"20col-empty-heavy", benchRowValues(20, benchValueEmpty)},
+	}
+
+	var sink []sqltypes.Value
+	c := &Conn{}
+
+	for _, shape := range shapes {
+		data := rowPacket(b, shape.values)
+		fields := varcharFields(len(shape.values))
+
+		b.Run(shape.name+"/per-value-copy", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				sink, _ = c.parseRow(data, fields, readLenEncStringAsBytesCopy, nil)
+			}
+		})
+
+		b.Run(shape.name+"/per-row-copy", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				sink, _ = c.parseRowCopy(data, fields)
+			}
+		})
+	}
+
+	_ = sink
+}
+
+type benchValueKind int
+
+const (
+	// benchValueNormal is a 7-8 byte value, which happens to land in the same size
+	// class either way, so these shapes isolate the allocation count.
+	benchValueNormal benchValueKind = iota
+	// benchValueNarrow is a 1-2 byte value, where per-value size-class rounding is
+	// most of the waste _(a 1-byte `pk` occupies an 8-byte class)_ and the per-row
+	// copy wins on bytes as well as allocations.
+	benchValueNarrow
+	benchValueNull
+	benchValueEmpty
+)
+
+// lobstersRows are real row shapes taken from `go/vt/sqlparser/testdata/lobsters.sql.gz`,
+// a 44k-statement trace of the Lobsters Rails app. Each entry is the per-column wire
+// length of that table's median INSERT, converted to how MySQL's text protocol would
+// send it back _(numbers as decimal text, booleans as one byte)_, so the shapes are
+// what a `SELECT *` on that table actually parses rather than a round number someone
+// picked. Ordered by how often the trace hits each table
+//
+// Two things these shapes capture that a uniform sweep does not: real widths cluster
+// at 5-9 columns, not 20-50, and the value lengths inside one row are wildly uneven —
+// `comments` carries two ~275-byte bodies next to six values under 20 bytes
+//
+// Widths are a floor. INSERTs omit columns with defaults, so a true `SELECT *` is at
+// least this wide and the shapes understate the saving if anything
+var lobstersRows = []struct {
+	name string
+	lens []int
+}{
+	{"select-1", []int{1}},                                // SELECT 1 AS one, 2121 hits
+	{"keystores", []int{25, 1}},                           // 2379 hits
+	{"votes", []int{2, 3, 4, 1, 19}},                      // 1433 hits
+	{"stories", []int{19, 2, 30, 21, 6, 14, 3}},           // 5017 hits, the hottest
+	{"users", []int{17, 25, 60, 19, 60, 60, 10, 227}},     // 4319 hits
+	{"comments", []int{19, 19, 6, 3, 2, 4, 272, 18, 280}}, // 2290 hits
+}
+
+// BenchmarkParseRowLobsters runs the same comparison as BenchmarkParseRow over real row
+// shapes rather than a synthetic width sweep, so the numbers can be read as what the
+// change is worth on a workload somebody actually ran.
+func BenchmarkParseRowLobsters(b *testing.B) {
+	var sink []sqltypes.Value
+	c := &Conn{}
+
+	for _, shape := range lobstersRows {
+		values := make([][]byte, len(shape.lens))
+		for i, n := range shape.lens {
+			values[i] = []byte(strings.Repeat("x", n))
+		}
+		data := rowPacket(b, values)
+		fields := varcharFields(len(values))
+
+		b.Run(shape.name+"/per-value-copy", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				sink, _ = c.parseRow(data, fields, readLenEncStringAsBytesCopy, nil)
+			}
+		})
+
+		b.Run(shape.name+"/per-row-copy", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				sink, _ = c.parseRowCopy(data, fields)
+			}
+		})
+	}
+
+	_ = sink
+}
+
+// benchRowValues builds a row of n columns. The NULL and empty kinds make every third
+// column a NULL or zero-length value respectively, since those take different branches
+// through the copy.
+func benchRowValues(n int, kind benchValueKind) [][]byte {
+	values := make([][]byte, n)
+	for i := range values {
+		switch {
+		case kind == benchValueNull && i%3 == 0:
+			values[i] = nil
+		case kind == benchValueEmpty && i%3 == 0:
+			values[i] = []byte{}
+		case kind == benchValueNarrow:
+			values[i] = []byte(strconv.Itoa(i))
+		default:
+			values[i] = []byte(fmt.Sprintf("value-%d", i))
+		}
+	}
+	return values
 }
