@@ -160,6 +160,26 @@ func (e *evalBytes) string() string {
 	return hack.String(e.bytes)
 }
 
+// numericText returns the characters MySQL reads when it converts this value to
+// a number. For a character set whose smallest character is wider than one byte
+// (the UTF-16 variants, UCS-2 and UTF-32) MySQL decodes the text through latin1
+// before reading the number: my_strntod, my_strntoull10rnd and str2my_decimal
+// all go through latin1, so the characters are decoded rather than read as raw
+// bytes, and one with no latin1 form becomes '?', which ends the number. For
+// every other character set the raw bytes are already what MySQL reads, so the
+// interleaved NUL bytes of fixed-width text do not stop the parse at the first
+// byte.
+func (e *evalBytes) numericText() string {
+	raw := e.bytes
+	if col := colldata.Lookup(e.col.Collation); col != nil {
+		switch cs := col.Charset(); cs.(type) {
+		case charset.Charset_utf16, charset.Charset_utf16le, charset.Charset_ucs2, charset.Charset_utf32:
+			raw, _ = charset.Convert(nil, charset.Charset_latin1{}, raw, cs)
+		}
+	}
+	return hack.String(raw)
+}
+
 func (e *evalBytes) withCollation(col collations.TypedCollation) *evalBytes {
 	return newEvalRaw(e.SQLType(), e.bytes, col)
 }
