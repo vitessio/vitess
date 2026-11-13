@@ -598,9 +598,11 @@ func testKeyspaceLock(t *testing.T, ts *topo.Server) {
 
 	// Short TTL through topo.Server, which ends the acquisition context once the lock is
 	// acquired: the lease must still be kept alive until the unlock, whether Lock or
-	// TryLock took the lock.
+	// TryLock took the lock. assert.Never can return while a probe still runs, and
+	// that probe can take the lock right after the unlock: the non-blocking lock
+	// goes first, because only a blocking lock waits for it.
 	var unlockErr error
-	for _, lockType := range []topo.LockType{topo.Blocking, topo.NonBlocking} {
+	for _, lockType := range []topo.LockType{topo.NonBlocking, topo.Blocking} {
 		_, unlock, err := ts.LockKeyspace(ctx, "test_keyspace", "short ttl, acquisition context ended", topo.WithType(lockType))
 		require.NoError(t, err)
 		assert.Never(t, takenOrFailed, 5*time.Second, 250*time.Millisecond, "the %v lock expired while still held", lockType)
