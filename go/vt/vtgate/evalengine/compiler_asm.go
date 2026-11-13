@@ -587,7 +587,7 @@ func (asm *assembler) CmpCase(cases int, hasElse bool, keep typeFlag, tt sqltype
 		}
 	done:
 		res, err := evalCoerce(sel, tt, size, scale, cc.Collation, env.now, allowZeroDate)
-		env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalKeepNumber(sel, res, keep), err
+		env.vm.stack[env.vm.sp-stackDepth], env.vm.err = evalWithCollation(evalKeepNumber(sel, res, keep), cc), err
 		env.vm.sp -= stackDepth - 1
 		return 1
 	}, "CASE [%d cases, else = %v]", cases, hasElse)
@@ -1114,6 +1114,15 @@ func (asm *assembler) Convert_xb(offset int, t sqltypes.Type, length *int) {
 			return 1
 		}, "CONV (SP-%d), VARBINARY", offset)
 	}
+}
+
+// SetCollation gives the string at SP-offset the coercibility of tc. See
+// evalWithCollation.
+func (asm *assembler) SetCollation(offset int, tc collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp-offset] = evalWithCollation(env.vm.stack[env.vm.sp-offset], tc)
+		return 1
+	}, "SET COLLATION (SP-%d), %d", offset, tc.Collation)
 }
 
 func (asm *assembler) Convert_xc(offset int, t sqltypes.Type, collation collations.ID, length *int) {

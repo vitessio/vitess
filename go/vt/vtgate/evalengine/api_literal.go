@@ -238,7 +238,7 @@ func NewColumn(offset int, typ Type, original sqlparser.Expr) *Column {
 		Type:              typ.Type(),
 		Size:              typ.size,
 		Scale:             typ.scale,
-		Collation:         typedCoercionCollation(typ.Type(), typ.Collation()),
+		Collation:         typedColumnCollation(typ.Type(), typ.Collation()),
 		Original:          original,
 		Nullable:          typ.nullable,
 		Values:            typ.values,

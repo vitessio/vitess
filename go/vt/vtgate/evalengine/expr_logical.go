@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -609,8 +610,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		ta.addEval(then)
-		if err := ca.add(evalCollation(then), env.collationEnv); err != nil {
+		if err := addCaseBranch(&ta, &ca, whenThen.then, then, env); err != nil {
 			return nil, err
 		}
 
@@ -624,8 +624,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		ta.addEval(e)
-		if err := ca.add(evalCollation(e), env.collationEnv); err != nil {
+		if err := addCaseBranch(&ta, &ca, c.Else, e, env); err != nil {
 			return nil, err
 		}
 		if !matched {
@@ -639,8 +638,43 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 	// TRUE and FALSE become the integers 1 and 0. A selected hex or bit
 	// literal still counts as a number: see evalKeepNumber.
-	res, err := evalCoerce(evalNotBoolean(result), ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
-	return evalKeepNumber(result, res, c.numberFlags()), err
+	res, err := evalCoerce(evalNotBoolean(result), caseResultType(&ta, ca.result()), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
+	return evalWithCollation(evalKeepNumber(result, res, c.numberFlags()), ca.result()), err
+}
+
+// addCaseBranch adds one branch of a CASE to the type and the collation of
+// its result. expr is the branch and e is its value.
+//
+// A NULL value has no type and no collation, but a string column that is
+// NULL still has both. They count as they do in the compiled program:
+// IFNULL(col, 0x3132) has the collation of col also when col is NULL.
+func addCaseBranch(ta *typeAggregation, ca *collationAggregation, expr IR, e eval, env *ExpressionEnv) error {
+	if col, ok := expr.(*Column); ok && e == nil && col.typed() && sqltypes.IsTextOrBinary(col.Type) {
+		switch {
+		case sqltypes.IsBinary(col.Type):
+			ta.add(sqltypes.VarBinary, flagNullable, col.Size, col.Scale)
+			return ca.add(collationBinaryImplicit, env.collationEnv)
+		case sqltypes.IsText(col.Type) && col.Type != sqltypes.HexNum && col.Type != sqltypes.HexVal && col.Type != sqltypes.BitNum:
+			ta.add(sqltypes.VarChar, flagNullable, col.Size, col.Scale)
+			return ca.add(col.Collation, env.collationEnv)
+		}
+	}
+	ta.addEval(e)
+	return ca.add(evalCollation(e), env.collationEnv)
+}
+
+// caseResultType returns the type of the result of a CASE whose branches
+// have the types in ta and combine to the collation col.
+//
+// Character and binary strings together give a binary string only if the
+// collation is binary. IF(c, s, _binary'A') with a text column s is a
+// character string, because the collation of s wins over the literal.
+func caseResultType(ta *typeAggregation, col collations.TypedCollation) sqltypes.Type {
+	t := ta.result()
+	if t == sqltypes.VarBinary && col.Collation != collations.CollationBinaryID && ta.char > 0 {
+		return sqltypes.VarChar
+	}
+	return t
 }
 
 // numberFlags returns the flags to pass to evalKeepNumber:
@@ -731,7 +765,7 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	if ta.nullable || cs.Else == nil {
 		f |= flagNullable
 	}
-	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
+	ct := ctype{Type: caseResultType(&ta, ca.result()), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
 	c.asm.CmpCase(len(cs.cases), cs.Else != nil, cs.numberFlags(), ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }

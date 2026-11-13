@@ -57,7 +57,13 @@ func (c *Column) IsExpr() {}
 
 // eval implements the expression interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.Collation, c.Values)
+	e, err := valueToEval(env.Row[c.Offset], c.Collation, c.Values)
+	if b, ok := e.(*evalBytes); ok && b.isBinary() && b.flag&(flagHex|flagBit) == 0 {
+		// valueToEval gives a binary string the literal's coercibility:
+		// a binary column has the implicit one, like a text column.
+		b.col = collationBinaryImplicit
+	}
+	return e, err
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
@@ -78,7 +84,7 @@ func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 
 		return ctype{
 			Type:  field.Type,
-			Col:   typedCoercionCollation(field.Type, collations.ID(field.Charset)),
+			Col:   typedColumnCollation(field.Type, collations.ID(field.Charset)),
 			Flag:  f,
 			Size:  int32(field.ColumnLength),
 			Scale: int32(field.Decimals),
@@ -148,6 +154,7 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 	case sqltypes.IsBinary(tt):
 		c.asm.PushColumn_bin(column.Offset)
 		typ.Type = sqltypes.VarBinary
+		typ.Col = collationBinaryImplicit
 	case sqltypes.IsNull(tt):
 		c.asm.PushNull()
 	case tt == sqltypes.TypeJSON:

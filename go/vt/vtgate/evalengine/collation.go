@@ -39,6 +39,25 @@ func typedCoercionCollation(typ sqltypes.Type, id collations.ID) collations.Type
 	}
 }
 
+// typedColumnCollation returns the collation of a column of type typ.
+//
+// It differs from typedCoercionCollation in the coercibility of a string
+// column, which is implicit where the one of a literal is coercible. When
+// the two meet, the collation of the column wins: with a text column s,
+// s = 0x41 compares with the collation of s, not byte by byte.
+func typedColumnCollation(typ sqltypes.Type, id collations.ID) collations.TypedCollation {
+	tc := typedCoercionCollation(typ, id)
+	switch typ {
+	case sqltypes.HexNum, sqltypes.HexVal, sqltypes.BitNum:
+		// these types only describe literals
+	default:
+		if tc.Coercibility == collations.CoerceCoercible {
+			tc.Coercibility = collations.CoerceImplicit
+		}
+	}
+	return tc
+}
+
 func evalCollation(e eval) collations.TypedCollation {
 	switch e := e.(type) {
 	case nil:

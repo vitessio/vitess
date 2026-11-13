@@ -43,6 +43,15 @@ var collationBinary = collations.TypedCollation{
 	Repertoire:   collations.RepertoireASCII,
 }
 
+// collationBinaryImplicit is the binary collation with the coercibility of
+// a column. A binary string column and CAST(... AS BINARY) have it. A binary
+// literal has collationBinary, which is weaker.
+var collationBinaryImplicit = collations.TypedCollation{
+	Collation:    collations.CollationBinaryID,
+	Coercibility: collations.CoerceImplicit,
+	Repertoire:   collations.RepertoireASCII,
+}
+
 var collationJSON = collations.TypedCollation{
 	Collation:    46, // utf8mb4_bin
 	Coercibility: collations.CoerceImplicit,

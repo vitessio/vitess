@@ -90,7 +90,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 			b.truncateInPlace(*c.Length)
 		}
 		b.tt = int16(c.convertToBinaryType(e.SQLType()))
-		return b, nil
+		return evalWithCollation(b, collationBinaryImplicit), nil
 
 	case "CHAR", "NCHAR":
 		t, err := evalToVarchar(e, c.Collation, true)
@@ -102,7 +102,8 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 			t.truncateInPlace(*c.Length)
 		}
 		t.tt = int16(c.convertToCharType(e.SQLType()))
-		return t, nil
+		// the result of CAST has the implicit coercibility, like a column
+		return evalWithCollation(t, typedColumnCollation(sqltypes.VarChar, t.col.Collation)), nil
 	case "DECIMAL":
 		m, d := c.decimalPrecision()
 		return evalToDecimal(e, m, d), nil
@@ -188,15 +189,18 @@ func (conv *ConvertExpr) compile(c *compiler) (ctype, error) {
 
 	switch conv.Type {
 	case "BINARY":
-		convt = ctype{Type: conv.convertToBinaryType(arg.Type), Col: collationBinary}
+		convt = ctype{Type: conv.convertToBinaryType(arg.Type), Col: collationBinaryImplicit}
 		c.asm.Convert_xb(1, convt.Type, conv.Length)
+		c.asm.SetCollation(1, convt.Col)
 
 	case "CHAR", "NCHAR":
+		// the result of CAST has the implicit coercibility, like a column
 		convt = ctype{
 			Type: conv.convertToCharType(arg.Type),
-			Col:  collations.TypedCollation{Collation: conv.Collation},
+			Col:  typedColumnCollation(sqltypes.VarChar, conv.Collation),
 		}
 		c.asm.Convert_xc(1, convt.Type, convt.Col.Collation, conv.Length)
+		c.asm.SetCollation(1, convt.Col)
 
 	case "DECIMAL":
 		m, d := conv.decimalPrecision()
@@ -266,12 +270,13 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
-	e, err = evalToVarchar(e, c.Collation, true)
+	t, err := evalToVarchar(e, c.Collation, true)
 	if err != nil {
 		// return NULL instead of error
 		return nil, nil
 	}
-	return e, nil
+	// the result of CONVERT has the implicit coercibility, like a column
+	return evalWithCollation(t, typedColumnCollation(sqltypes.VarChar, c.Collation)), nil
 }
 
 func (conv *ConvertUsingExpr) compile(c *compiler) (ctype, error) {
@@ -281,13 +286,11 @@ func (conv *ConvertUsingExpr) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck1(ct)
+	// the result of CONVERT has the implicit coercibility, like a column
+	col := typedColumnCollation(sqltypes.VarChar, conv.Collation)
 	c.asm.Convert_xc(1, sqltypes.VarChar, conv.Collation, nil)
+	c.asm.SetCollation(1, col)
 	c.asm.jumpDestination(skip)
 
-	col := collations.TypedCollation{
-		Collation:    conv.Collation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
 	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }

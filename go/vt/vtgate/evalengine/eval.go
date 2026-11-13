@@ -256,6 +256,26 @@ func evalKeepNumber(sel, res eval, keep typeFlag) eval {
 	return &r
 }
 
+// evalWithCollation returns the string e with the coercibility of tc.
+//
+// The coercibility says how strongly a string holds on to its collation
+// when it meets another string: the collation of a column wins over the one
+// of a literal. A conversion such as evalCoerce gives its result the
+// coercibility of a literal. The result of CASE or CAST needs the one of
+// its declared type instead, which this function sets.
+//
+// It only acts when e already has the collation of tc. It does not change
+// e: it returns a copy if something has to change.
+func evalWithCollation(e eval, tc collations.TypedCollation) eval {
+	b, ok := e.(*evalBytes)
+	if !ok || b.col.Collation != tc.Collation || b.col == tc {
+		return e
+	}
+	r := *b
+	r.col = tc
+	return &r
+}
+
 func evalCoerce(e eval, typ sqltypes.Type, size, scale int32, col collations.ID, now time.Time, allowZero bool) (eval, error) {
 	if e == nil {
 		return nil, nil

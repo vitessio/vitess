@@ -52,12 +52,66 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
+	var (
+		ta typeAggregation
+		ca collationAggregation
+	)
+	for i, arg := range args {
+		if err := addCaseBranch(&ta, &ca, b.Arguments[i], arg, env); err != nil {
+			return nil, err
+		}
+	}
 	for _, arg := range args {
 		if arg != nil {
-			return evalPlain(arg), nil
+			return coalesceString(evalPlain(arg), caseResultType(&ta, ca.result()), ca.result())
 		}
 	}
 	return nil, nil
+}
+
+// coalesceString converts sel, the argument that COALESCE selected, to the
+// string type tt and the collation col that all the arguments combine to.
+//
+// MySQL gives the result of COALESCE one type and one collation, whichever
+// argument is selected. With a text column s and a binary column vb,
+// COALESCE(s, vb) is a binary string, and COALESCE(s, 0x41) has the
+// collation of s.
+//
+// It only converts a string to a string. A selected number, date or JSON
+// value is returned as it is.
+func coalesceString(sel eval, tt sqltypes.Type, col collations.TypedCollation) (eval, error) {
+	b, ok := sel.(*evalBytes)
+	if !ok || !isCoalesceString(b.SQLType()) || !isCoalesceString(tt) || col.Collation == collations.Unknown {
+		return sel, nil
+	}
+	binary := col.Collation == collations.CollationBinaryID
+	switch {
+	case b.isBinary() && binary:
+	case b.isBinary():
+		// the bytes of a binary string are read in the character set of col
+		sel = newEvalText(b.bytes, col)
+	case binary && (tt == sqltypes.VarBinary || tt == sqltypes.Binary || tt == sqltypes.Blob):
+		sel = newEvalBinary(b.bytes)
+	case b.col.Collation != col.Collation:
+		t, err := evalToVarchar(b, col.Collation, true)
+		if err != nil {
+			return nil, err
+		}
+		// a TEXT stays a TEXT
+		t.tt = b.tt
+		sel = t
+	}
+	return evalWithCollation(sel, col), nil
+}
+
+// isCoalesceString reports whether tt is one of the string types that
+// coalesceString converts from and to.
+func isCoalesceString(tt sqltypes.Type) bool {
+	switch tt {
+	case sqltypes.VarChar, sqltypes.Char, sqltypes.VarBinary, sqltypes.Binary, sqltypes.Text, sqltypes.Blob:
+		return true
+	}
+	return false
 }
 
 func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
@@ -82,19 +136,26 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 	}
 
 	args := len(b.Arguments)
+	tt, col := caseResultType(&ta, ca.result()), ca.result()
 	c.asm.adjustStack(-(args - 1))
 	c.asm.emit(func(env *ExpressionEnv) int {
+		var sel eval
 		for sp := env.vm.sp - args; sp < env.vm.sp; sp++ {
 			if env.vm.stack[sp] != nil {
-				env.vm.stack[env.vm.sp-args] = evalPlain(env.vm.stack[sp])
+				sel = env.vm.stack[sp]
 				break
 			}
+		}
+		if sel != nil {
+			env.vm.stack[env.vm.sp-args], env.vm.err = coalesceString(evalPlain(sel), tt, col)
+		} else {
+			env.vm.stack[env.vm.sp-args] = nil
 		}
 		env.vm.sp -= args - 1
 		return 1
 	}, "COALESCE (SP-%d) ... (SP-1)", args)
 
-	return ctype{Type: ta.result(), Flag: f, Col: ca.result()}, nil
+	return ctype{Type: tt, Flag: f, Col: col}, nil
 }
 
 func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiComparisonFunc {

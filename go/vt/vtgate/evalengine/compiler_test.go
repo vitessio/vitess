@@ -217,6 +217,9 @@ func TestCompilerSingle(t *testing.T) {
 		result     string
 		collation  collations.ID
 		typeWanted evalengine.Type
+		// fields describes the columns, when makeFields cannot: the type
+		// of a NULL value is not the one of its column.
+		fields []*querypb.Field
 	}{
 		{
 			expression: "1 + column0",
@@ -1088,6 +1091,88 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `UINT64(2212294583)`,
 			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, false, 0, 0, nil),
 		},
+		{
+			// A column has the implicit coercibility, which wins over the
+			// one of a hex literal: they compare with the column's collation.
+			expression: `column0 = 0x41`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `INT64(1)`,
+		},
+		{
+			// The collation of the column wins over the binary literal, and
+			// the result of IF is a character string.
+			expression: `COLLATION(IF(column0 = 1, column1, _binary'A'))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// A binary column and CAST(... AS CHAR) both have the implicit
+			// coercibility: they compare as binary strings.
+			expression: `CAST(column0 AS CHAR) = column1`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a"), sqltypes.NewVarBinary("A")},
+			result:     `INT64(0)`,
+		},
+		{
+			// So does CAST(... AS BINARY).
+			expression: `CAST(column0 AS BINARY) = CAST(column1 AS CHAR)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a"), sqltypes.NewVarChar("A")},
+			result:     `INT64(0)`,
+		},
+		{
+			// CAST(... AS CHAR) wins over a binary literal.
+			expression: `CAST(_binary'a' AS CHAR) = 0x41`,
+			result:     `INT64(1)`,
+		},
+		{
+			// IN compares the values with the collation they carry.
+			expression: `CAST(_binary'a' AS CHAR) IN (0x41, 'zz')`,
+			result:     `INT64(1)`,
+		},
+		{
+			// The result of IF has the coercibility of the column it selects.
+			expression: `IF(column0 = 1, column1, 'x') = 0x41`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `IF(column0 = 1, column1, 'x') IN (0x41, 'zz')`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")},
+			result:     `INT64(1)`,
+		},
+		{
+			// A text column whose value is NULL keeps its collation, which
+			// makes the result of IFNULL a number for BIT_COUNT.
+			expression: `BIT_COUNT(IFNULL(column0, 0x3132))`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)}},
+			result:     `INT64(2)`,
+		},
+		{
+			// COALESCE gives the argument it selects the collation that its
+			// arguments aggregate to: the column's, over the hex literal.
+			expression: `COLLATION(COALESCE(0x41, column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// A text and a binary column aggregate to a binary string.
+			expression: `COLLATION(COALESCE(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a"), sqltypes.NewVarBinary("b")},
+			result:     `VARCHAR("binary")`,
+		},
+		{
+			// A text column whose value is NULL keeps its collation.
+			expression: `COLLATION(COALESCE(column0, 0x41))`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)}},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// CONVERT(... USING ...) has the implicit coercibility, which
+			// wins over a binary literal.
+			expression: `CONVERT(_binary'a' USING utf8mb4) = 0x41`,
+			result:     `INT64(1)`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -1097,7 +1182,11 @@ func TestCompilerSingle(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
 			require.NoError(t, err)
 
-			fields := evalengine.FieldResolver(makeFields(tc.values))
+			schema := tc.fields
+			if schema == nil {
+				schema = makeFields(tc.values)
+			}
+			fields := evalengine.FieldResolver(schema)
 			cfg := &evalengine.Config{
 				ResolveColumn:     fields.Column,
 				ResolveType:       fields.Type,
@@ -1618,6 +1707,36 @@ func TestCompiledJSONInList(t *testing.T) {
 			require.Equal(t, tc.result, res.String())
 		})
 	}
+}
+
+// TestCompilerUntypedColumnCollation checks the collation that a compiled
+// expression gives a column whose type comes from the fields of the row.
+func TestCompilerUntypedColumnCollation(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	values := []sqltypes.Value{sqltypes.NewVarChar("a")}
+	fields := makeFields(values)
+
+	expr, err := venv.Parser().ParseExpr("column0 = 0x41")
+	require.NoError(t, err)
+	translated, err := evalengine.Translate(expr, &evalengine.Config{
+		ResolveColumn: evalengine.FieldResolver(fields).Column,
+		Collation:     collations.CollationUtf8mb4ID,
+		Environment:   venv,
+	})
+	require.NoError(t, err)
+	untyped, ok := translated.(*evalengine.UntypedExpr)
+	require.True(t, ok)
+
+	env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, nil))
+	env.Row = values
+	env.Fields = fields
+	compiled, err := untyped.Compile(env)
+	require.NoError(t, err)
+	res, err := env.EvaluateVM(compiled)
+	require.NoError(t, err)
+	// The column has the implicit coercibility, which wins over the hex
+	// literal: they compare with the column's collation.
+	assert.Equal(t, `INT64(1)`, res.String())
 }
 
 // TestCompileFoldedJSONLiteralConcurrency compiles distinct type
