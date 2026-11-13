@@ -142,7 +142,7 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 		if checker, err = newCRLCheckerFrom(crls, files.caCertificates); err != nil {
 			return nil, err
 		}
-		watchCRL(crl, body)
+		watchCRL(crlWatch{crl: crl, files: k}, body)
 	}
 
 	// The modes that build the peer's chain themselves verify it

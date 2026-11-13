@@ -47,6 +47,13 @@ type clientFiles struct {
 	digest         [sha256.Size]byte
 }
 
+// crlWatch identifies a CRL file and the configuration whose CA its CRLs
+// are validated under.
+type crlWatch struct {
+	crl   string
+	files clientFilesKey
+}
+
 // clientFileContents are the contents of the files of a clientFilesKey.
 type clientFileContents struct {
 	cert, key, ca []byte
@@ -60,8 +67,10 @@ var (
 	// loadingClientFiles maps each clientFilesKey to the *sync.Mutex
 	// that its first load holds, so that it is read once.
 	loadingClientFiles sync.Map
-	// watchedCRLs maps the CRL files that ClientConfig read to the
-	// SHA-256 digest of their contents when last seen.
+	// watchedCRLs maps the crlWatch of each CRL file that ClientConfig
+	// read to the SHA-256 digest of its contents when last seen by
+	// ReloadCachedFiles, or to the zero digest once ClientConfig read
+	// contents that ReloadCachedFiles has not seen.
 	watchedCRLs sync.Map
 
 	reloadMu              sync.Mutex
@@ -153,11 +162,18 @@ func (c clientFileContents) parse(k clientFilesKey) (*clientFiles, error) {
 	return f, nil
 }
 
-// watchCRL records the digest of the contents of the CRL file crl that
-// a config was just built from, so that ReloadCachedFiles counts any
-// other contents it finds there as a change.
-func watchCRL(crl string, body []byte) {
-	watchedCRLs.Store(crl, sha256.Sum256(body))
+// watchCRL has ReloadCachedFiles watch the CRL file of w, whose
+// contents body a config was just built from. When those contents are
+// not the ones ReloadCachedFiles last saw, the next reload counts a
+// change whatever it finds, so that the configs built from either the
+// contents it saw or these are built again: keeping the digest it saw
+// would miss a file that changes back, and storing this one would miss
+// a change that only ClientConfig has read.
+func watchCRL(w crlWatch, body []byte) {
+	digest := sha256.Sum256(body)
+	if seen, loaded := watchedCRLs.LoadOrStore(w, digest); loaded && seen != digest {
+		watchedCRLs.Store(w, [sha256.Size]byte{})
+	}
 }
 
 // ReloadCachedFiles reads again the certificate, key, CA and CRL files
@@ -165,9 +181,9 @@ func watchCRL(crl string, body []byte) {
 // builds from then on use what the files now hold. The files of a
 // config are loaded together, from one read: when any of them cannot
 // be loaded, the config keeps all that was loaded before, and the
-// error is returned. A CRL file that cannot be read or parsed is
-// reported, and does not count as a change; ClientConfig fails while
-// it stays that way. ReloadCachedFiles reports whether any file
+// error is returned. A CRL file that cannot be read or parsed, or that
+// the CA of its configuration does not validate, is reported, and does
+// not count as a change; ClientConfig fails while it stays that way. ReloadCachedFiles reports whether any file
 // changed.
 func ReloadCachedFiles() (changed bool, err error) {
 	reloadMu.Lock()
@@ -193,19 +209,30 @@ func ReloadCachedFiles() (changed bool, err error) {
 		return true
 	})
 
-	watchedCRLs.Range(func(crl, seen any) bool {
-		body, err := os.ReadFile(crl.(string))
+	// The CRLs are validated under the CAs that the loop above
+	// published, as ClientConfig validates them.
+	watchedCRLs.Range(func(w, seen any) bool {
+		watch := w.(crlWatch)
+		body, err := os.ReadFile(watch.crl)
+		var crls []*x509.RevocationList
 		if err == nil {
-			_, err = parseCRLSet(crl.(string), body)
+			crls, err = parseCRLSet(watch.crl, body)
+		}
+		if err == nil {
+			var issuers []*x509.Certificate
+			if f, ok := cachedClientFiles.Load(watch.files); ok {
+				issuers = f.(*clientFiles).caCertificates
+			}
+			_, err = newCRLCheckerFrom(crls, issuers)
 		}
 		if err != nil {
-			errs = append(errs, vterrors.Wrapf(err, "failed to load crl file: %s", crl))
+			errs = append(errs, vterrors.Wrapf(err, "failed to load crl file: %s", watch.crl))
 			return true
 		}
 		if digest := sha256.Sum256(body); digest != seen.([sha256.Size]byte) {
-			// A config built meanwhile may have stored its own
-			// digest, which a later reload then compares with.
-			watchedCRLs.CompareAndSwap(crl, seen, digest)
+			// A config built meanwhile may have stored the zero
+			// digest, which the next reload then counts as a change.
+			watchedCRLs.CompareAndSwap(w, seen, digest)
 			changed = true
 		}
 		return true
