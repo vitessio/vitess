@@ -583,7 +583,6 @@ func TestGetQueryPriority(t *testing.T) {
 		options           *querypb.ExecuteOptions
 		statementPriority string
 		wantResult        int
-		wantErr           string
 	}{
 		{
 			name:       "nil options",
@@ -621,9 +620,15 @@ func TestGetQueryPriority(t *testing.T) {
 			wantResult: 100,
 		},
 		{
-			name:    "invalid priority",
-			options: &querypb.ExecuteOptions{Priority: "not_a_number"},
-			wantErr: "invalid query priority",
+			name:       "invalid priority is ignored",
+			options:    &querypb.ExecuteOptions{Priority: "not_a_number"},
+			wantResult: 0,
+		},
+		{
+			name:              "statement priority replaces an invalid session priority",
+			options:           &querypb.ExecuteOptions{Priority: "not_a_number"},
+			statementPriority: "30",
+			wantResult:        30,
 		},
 		{
 			name:              "statement priority without session options",
@@ -647,12 +652,8 @@ func TestGetQueryPriority(t *testing.T) {
 			}
 			vc.SetStatementOptions(t.Context(), sqlparser.QueryHints{Priority: tc.statementPriority})
 			result, err := vc.GetQueryPriority()
-			if tc.wantErr != "" {
-				require.ErrorContains(t, err, tc.wantErr)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tc.wantResult, result)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tc.wantResult, result)
 		})
 	}
 }

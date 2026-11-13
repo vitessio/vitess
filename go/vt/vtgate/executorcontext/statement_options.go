@@ -18,8 +18,10 @@ package executorcontext
 
 import (
 	"context"
+	"strconv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // StatementOptions are the execute options of a statement: those that its
@@ -72,6 +74,9 @@ func ExecuteOptions(ctx context.Context, session *SafeSession) *querypb.ExecuteO
 	//nolint:staticcheck // QF1008
 	if session != nil && session.Session != nil && session.Session.Options != nil {
 		options = session.Session.Options.CloneVT()
+		// A gRPC client sets its session's options, so VTGate validates
+		// their priority as it does a PRIORITY directive's.
+		options.Priority = normalizePriority(options.Priority)
 	}
 	opts, ok := StatementOptionsFromContext(ctx)
 	if !ok {
@@ -97,4 +102,20 @@ func ExecuteOptions(ctx context.Context, session *SafeSession) *querypb.ExecuteO
 		options.Timeout = &querypb.ExecuteOptions_AuthoritativeTimeout{AuthoritativeTimeout: *opts.timeout}
 	}
 	return options
+}
+
+// normalizePriority returns priority clamped to the range that vttablet
+// accepts, or "" if it can't be parsed as an int.
+func normalizePriority(priority string) string {
+	if priority == "" {
+		return ""
+	}
+	p, err := strconv.Atoi(priority)
+	if err != nil {
+		return ""
+	}
+	if clamped := max(0, min(p, sqlparser.MaxPriorityValue)); clamped != p {
+		return strconv.Itoa(clamped)
+	}
+	return priority
 }

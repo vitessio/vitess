@@ -81,6 +81,29 @@ func TestExecuteOptions(t *testing.T) {
 			},
 		},
 		{
+			name:           "session priority above the range",
+			sessionOptions: &querypb.ExecuteOptions{Priority: "500"},
+			want:           &querypb.ExecuteOptions{Priority: "100"},
+		},
+		{
+			name:           "session priority below the range",
+			sessionOptions: &querypb.ExecuteOptions{Priority: "-5"},
+			stmtOptions:    &StatementOptions{},
+			want:           &querypb.ExecuteOptions{Priority: "0"},
+		},
+		{
+			name:           "session priority that isn't a number",
+			sessionOptions: &querypb.ExecuteOptions{WorkloadName: "session", Priority: "high"},
+			stmtOptions:    &StatementOptions{},
+			want:           &querypb.ExecuteOptions{WorkloadName: "session"},
+		},
+		{
+			name:           "statement priority replaces a session priority that isn't a number",
+			sessionOptions: &querypb.ExecuteOptions{Priority: "high"},
+			stmtOptions:    &StatementOptions{Priority: "50"},
+			want:           &querypb.ExecuteOptions{Priority: "50"},
+		},
+		{
 			name:           "options that the statement doesn't set keep the session's, except the timeout",
 			sessionOptions: sessionOptions,
 			stmtOptions:    &StatementOptions{},

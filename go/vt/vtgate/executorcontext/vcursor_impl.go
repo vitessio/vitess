@@ -1346,13 +1346,9 @@ func (vc *VCursorImpl) SetStatementOptions(ctx context.Context, qh sqlparser.Que
 	}
 	opts := &StatementOptions{
 		WorkloadName: qh.Workload,
-		Consolidator: qh.Consolidator,
-	}
-	if qh.Priority != "" {
 		// BuildQueryHints has validated the priority.
-		if priority, err := strconv.Atoi(qh.Priority); err == nil {
-			opts.Priority = strconv.Itoa(max(0, min(priority, sqlparser.MaxPriorityValue)))
-		}
+		Priority:     normalizePriority(qh.Priority),
+		Consolidator: qh.Consolidator,
 	}
 	if execTimeout := vc.execQueryTimeout(qh.Timeout); execTimeout != nil {
 		timeout := int64(*execTimeout)
@@ -1767,7 +1763,7 @@ func (vc *VCursorImpl) GetWarmingReadsSemaphore() *semaphore.Weighted {
 func (vc *VCursorImpl) GetQueryPriority() (int, error) {
 	var priority string
 	if vc.SafeSession.Options != nil {
-		priority = vc.SafeSession.Options.Priority
+		priority = normalizePriority(vc.SafeSession.Options.Priority)
 	}
 	if vc.statementOptions != nil && vc.statementOptions.Priority != "" {
 		priority = vc.statementOptions.Priority
