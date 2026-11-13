@@ -130,17 +130,17 @@ func getExtensionFromEngine(engine string) (string, error) {
 }
 
 // resolveExternalDecompressor returns the external decompressor command to use
-// at restore time. The CLI flag (--external-decompressor) takes precedence. The
-// backup manifest value is only used when --external-decompressor-use-manifest
-// is explicitly set to true.
-func resolveExternalDecompressor(manifestDecompressor string) string {
+// at restore time, and where it came from for the log line. The CLI flag
+// (--external-decompressor) takes precedence. The backup manifest value is only
+// used when --external-decompressor-use-manifest is explicitly set to true.
+func resolveExternalDecompressor(manifestDecompressor string) (cmd, source string) {
 	if ExternalDecompressorCmd != "" {
-		return ExternalDecompressorCmd
+		return ExternalDecompressorCmd, "--external-decompressor"
 	}
 	if ExternalDecompressorUseManifest && manifestDecompressor != "" {
-		return manifestDecompressor
+		return manifestDecompressor, "MANIFEST ExternalDecompressor"
 	}
-	return ""
+	return "", ""
 }
 
 // Validates if the external decompressor exists and return its path.
@@ -226,12 +226,13 @@ func newExternalCompressor(ctx context.Context, cmdStr string, writer io.Writer,
 
 // This returns a reader that reads the compressed input and passes it to the external command to be decompressed. Calls to its
 // Read() will return the uncompressed data until EOF.
-func newExternalDecompressor(ctx context.Context, cmdStr string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
+// source names where cmdStr came from and stands in for its arguments in the log line.
+func newExternalDecompressor(ctx context.Context, cmdStr, source string, reader io.Reader, logger logutil.Logger) (io.ReadCloser, error) {
 	cmd, err := prepareExternalCmd(ctx, cmdStr)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "unable to start external command")
 	}
-	logger.Info("Decompressing using external command", slog.String("exec_cmd", externalCommandString(cmd, "--external-decompressor")))
+	logger.Info("Decompressing using external command", slog.String("exec_cmd", externalCommandString(cmd, source)))
 	decompressor := &externalDecompressor{cmd: cmd}
 	cmd.Stdin = reader
 	cmdOut, err := cmd.StdoutPipe()

@@ -1732,14 +1732,14 @@ func createDecompressor(ctx context.Context, bm builtinBackupManifest, reader io
 		deCompressionEngine = PgzipCompressor
 	}
 
-	externalDecompressorCmd := resolveExternalDecompressor(bm.ExternalDecompressor)
+	externalDecompressorCmd, externalDecompressorSource := resolveExternalDecompressor(bm.ExternalDecompressor)
 
 	var decompressor io.ReadCloser
 	var err error
 	if externalDecompressorCmd != "" {
 		if deCompressionEngine == ExternalCompressor {
 			deCompressionEngine = externalDecompressorCmd
-			decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
+			decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, externalDecompressorSource, reader, params.Logger)
 		} else {
 			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
 		}

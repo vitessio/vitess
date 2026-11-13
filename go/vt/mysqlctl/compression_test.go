@@ -326,7 +326,7 @@ func TestExternalCompressors(t *testing.T) {
 			require.NoError(t, err)
 
 			compressor.Close()
-			decompressor, err := newExternalDecompressor(ctx, tt.decompress, &compressed, logger)
+			decompressor, err := newExternalDecompressor(ctx, tt.decompress, "--external-decompressor", &compressed, logger)
 			require.NoError(t, err)
 
 			_, err = io.Copy(&decompressed, decompressor)
@@ -355,7 +355,16 @@ func TestExternalCompressorLogOmitsFlags(t *testing.T) {
 		return newExternalCompressor(ctx, cmdStr, io.Discard, logger)
 	}
 	decompress := func(ctx context.Context, cmdStr string, logger logutil.Logger) (io.Closer, error) {
-		return newExternalDecompressor(ctx, cmdStr, strings.NewReader(""), logger)
+		return newExternalDecompressor(ctx, cmdStr, "--external-decompressor", strings.NewReader(""), logger)
+	}
+	origCmd, origUseManifest := ExternalDecompressorCmd, ExternalDecompressorUseManifest
+	t.Cleanup(func() {
+		ExternalDecompressorCmd, ExternalDecompressorUseManifest = origCmd, origUseManifest
+	})
+	ExternalDecompressorCmd, ExternalDecompressorUseManifest = "", true
+	decompressFromManifest := func(ctx context.Context, cmdStr string, logger logutil.Logger) (io.Closer, error) {
+		cmd, source := resolveExternalDecompressor(cmdStr)
+		return newExternalDecompressor(ctx, cmd, source, strings.NewReader(""), logger)
 	}
 
 	tests := []struct {
@@ -364,6 +373,7 @@ func TestExternalCompressorLogOmitsFlags(t *testing.T) {
 	}{
 		{"compressor", withArgs, "Compressing using external command", "--password=" + secret + "\n-k\n" + secret + " 2\n", binary + " <--external-compressor>", compress},
 		{"decompressor", withArgs, "Decompressing using external command", "--password=" + secret + "\n-k\n" + secret + " 2\n", binary + " <--external-decompressor>", decompress},
+		{"decompressor from manifest", withArgs, "Decompressing using external command", "--password=" + secret + "\n-k\n" + secret + " 2\n", binary + " <MANIFEST ExternalDecompressor>", decompressFromManifest},
 		{"no arguments", strconv.Quote(binary), "Compressing using external command", "\n", binary, compress},
 	}
 	for _, tt := range tests {
