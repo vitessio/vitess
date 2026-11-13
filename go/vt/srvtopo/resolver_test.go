@@ -18,6 +18,7 @@ package srvtopo
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -246,5 +247,82 @@ func TestResolveDestinations(t *testing.T) {
 		}
 		assert.Lenf(t, values, len(rss), "%v: len(values) != len(rss): %v != %v", testCase.name, len(values), len(rss))
 		assert.True(t, ValuesEqual(values, testCase.expectedValues), "values != testCase.expectedValues: got values=%v", values)
+	}
+}
+
+// BenchmarkResolveDestinations includes the warm serving-topology cache lookup,
+// keyspace ID resolution and grouping of IN-list values by shard, but no RPCs.
+func BenchmarkResolveDestinations(b *testing.B) {
+	for _, shardCount := range []int{1, 8, 64} {
+		b.Run(fmt.Sprintf("shards=%d", shardCount), func(b *testing.B) {
+			ctx := b.Context()
+			ts := memorytopo.NewServer(ctx, "cell")
+			b.Cleanup(ts.Close)
+			shards := make([]*topodatapb.ShardReference, shardCount)
+			for i := range shards {
+				kr, err := key.EvenShardsKeyRange(i, shardCount)
+				require.NoError(b, err)
+				shards[i] = &topodatapb.ShardReference{Name: key.KeyRangeString(kr), KeyRange: kr}
+			}
+			require.NoError(b, ts.UpdateSrvKeyspace(ctx, "cell", "ks", &topodatapb.SrvKeyspace{
+				Partitions: []*topodatapb.SrvKeyspace_KeyspacePartition{{
+					ServedType:      topodatapb.TabletType_PRIMARY,
+					ShardReferences: shards,
+				}},
+			}))
+			counts := stats.NewCountersWithSingleLabel("", "", "type")
+			server := NewResilientServer(ctx, ts, counts)
+			resolver := NewResolver(server, nil, "cell")
+			_, err := server.GetSrvKeyspace(ctx, "cell", "ks")
+			require.NoError(b, err)
+
+			for _, tc := range []struct {
+				name       string
+				valueCount int
+				groupIDs   bool
+			}{
+				{name: "equal", valueCount: 1},
+				{name: "in=16", valueCount: 16, groupIDs: true},
+				{name: "in=256", valueCount: 256, groupIDs: true},
+			} {
+				b.Run(tc.name, func(b *testing.B) {
+					ctx := b.Context()
+					ids := make([]*querypb.Value, tc.valueCount)
+					destinations := make([]key.ShardDestination, tc.valueCount)
+					expected := make(map[string][]*querypb.Value)
+					for i := range ids {
+						// Walk the keyspace rather than measuring only the first shard.
+						ksid := byte(128 + i*37)
+						ids[i] = sqltypes.ValueToProto(sqltypes.NewInt64(int64(i)))
+						destinations[i] = key.DestinationKeyspaceID{ksid}
+						shard := shards[int(ksid)*shardCount/256].Name
+						expected[shard] = append(expected[shard], ids[i])
+					}
+					if !tc.groupIDs {
+						ids = nil
+					}
+					var resolved []*ResolvedShard
+					var values [][]*querypb.Value
+					var err error
+					b.ReportAllocs()
+					for b.Loop() {
+						resolved, values, err = resolver.ResolveDestinations(ctx, "ks", topodatapb.TabletType_PRIMARY, ids, destinations)
+						if err != nil {
+							b.Fatal(err)
+						}
+					}
+					require.Len(b, resolved, len(expected))
+					if tc.groupIDs {
+						require.Len(b, values, len(expected))
+						for i, shard := range resolved {
+							require.Equal(b, expected[shard.Target.Shard], values[i])
+						}
+					} else {
+						require.Nil(b, values)
+						require.Contains(b, expected, resolved[0].Target.Shard)
+					}
+				})
+			}
+		})
 	}
 }
