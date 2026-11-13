@@ -212,3 +212,64 @@ func TestClientConfigRecoversFromAFailedFirstLoad(t *testing.T) {
 	require.NoError(t, res.clientErr)
 	require.NoError(t, res.serverErr)
 }
+
+// TestReloadCachedFilesCountsACRLThatOnlyClientConfigRead checks that a
+// CRL change that ClientConfig reads before ReloadCachedFiles does
+// still counts as a change on the next reload, whichever way the file
+// changes, so that the gRPC credentials built before it, or from it,
+// are built again.
+func TestReloadCachedFilesCountsACRLThatOnlyClientConfigRead(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newLiveClientFiles(t)
+	files.install(certs)
+	_, err := files.clientConfig(certs.ServerName)
+	require.NoError(t, err)
+
+	for _, crl := range []string{certs.CombinedCRL, certs.ServerCRL} {
+		copyFile(t, files.crl, crl)
+		_, err = files.clientConfig(certs.ServerName)
+		require.NoError(t, err)
+
+		generation := CachedFilesGeneration()
+		changed, err := ReloadCachedFiles()
+		requireNoErrorFor(t, err, path.Dir(files.cert))
+		require.True(t, changed, "a CRL that a config was built from before the reload must count as changed")
+		require.NotEqual(t, generation, CachedFilesGeneration())
+	}
+
+	// A config built from contents that change back before the reload
+	// is built again as well.
+	copyFile(t, files.crl, certs.CombinedCRL)
+	_, err = files.clientConfig(certs.ServerName)
+	require.NoError(t, err)
+	copyFile(t, files.crl, certs.ServerCRL)
+	changed, err := ReloadCachedFiles()
+	requireNoErrorFor(t, err, path.Dir(files.cert))
+	require.True(t, changed, "a config built from contents the reload did not see must be built again")
+}
+
+// TestReloadCachedFilesValidatesCRLsUnderTheirCA checks that a CRL that
+// parses, but that the CA of its configuration does not validate, is
+// reported by ReloadCachedFiles rather than counted as a change.
+func TestReloadCachedFilesValidatesCRLsUnderTheirCA(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newLiveClientFiles(t)
+	files.install(certs)
+	_, err := files.clientConfig(certs.ServerName)
+	require.NoError(t, err)
+
+	// A CRL without an authority key identifier, as openssl ca writes
+	// by default, under the configured CA's name but signed by another
+	// key.
+	serverCA := loadOneCert(t, certs.ServerCA)
+	other, otherKey := selfSignedCA(t, 1, "", serverCA.RawSubject)
+	copyFile(t, files.crl, crlFile(t, crlWithoutExtensions(t, other, otherKey)))
+	_, err = files.clientConfig(certs.ServerName)
+	require.Error(t, err, "the CA must not validate the CRL for this test to be meaningful")
+
+	generation := CachedFilesGeneration()
+	changed, err := ReloadCachedFiles()
+	require.ErrorContains(t, err, files.crl)
+	require.False(t, changed)
+	require.Equal(t, generation, CachedFilesGeneration(), "the gRPC credentials must not be rebuilt from a CRL that its CA does not validate")
+}
