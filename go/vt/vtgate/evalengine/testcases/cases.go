@@ -1924,6 +1924,16 @@ func FnSubstr(yield Query) {
 			}
 		}
 	}
+
+	// SUBSTRING of a TEXT is a VARCHAR when a constant position or length
+	// limits the result to the length of a VARCHAR.
+	yieldIn(yield, "SUBSTRING(%s, 1, 1)", `REGEXP_REPLACE('abc', 'b', 'x')`)
+	yieldIn(yield, "SUBSTRING(%s, 2, 16382)", `REGEXP_REPLACE('abc', 'b', 'x')`)
+	yieldIn(yield, "SUBSTR(%s, -2)", `REGEXP_REPLACE('abc', 'b', 'x')`)
+	yieldIn(yield, "MID(%s, 0, 5)", `REGEXP_REPLACE('abc', 'b', 'x')`)
+	yieldIn(yield, "SUBSTRING(%s, 2)", `REGEXP_REPLACE('abc', 'b', 'x')`)
+	yieldIn(yield, "SUBSTRING(%s, 1, 16384)", `REGEXP_REPLACE('abc', 'b', 'x')`)
+	yieldIn(yield, "SUBSTRING(%s, -16384)", `REGEXP_REPLACE('abc', 'b', 'x')`)
 }
 
 func FnLocate(yield Query) {
@@ -2928,6 +2938,15 @@ func RegexpSubstr(yield Query) {
 	}
 
 	yieldNested(yield, `REGEXP_SUBSTR('abc', 'x')`, `REGEXP_SUBSTR('dog cat dog', 'DOG', 1, 1, 'c')`)
+
+	// The result is a string, whatever the arguments are.
+	yieldIn(yield, "(%s) + 1", `REGEXP_SUBSTR('a15c', '[0-9]+')`, `REGEXP_SUBSTR(1234, 23)`)
+	yieldIn(yield, "-(%s)", `REGEXP_SUBSTR('a1c', '[0-9]')`)
+	yieldIn(yield, "(%s) = '1'", `REGEXP_SUBSTR('a1c', '[0-9]')`)
+	yieldIn(yield, "HEX(%s)", `REGEXP_SUBSTR('abc', 'b')`)
+	yieldIn(yield, "CAST(%s AS JSON)", `REGEXP_SUBSTR('a1c', '[0-9]')`)
+	yieldIn(yield, "JSON_ARRAY(%s)", `REGEXP_SUBSTR('abc', 'b')`, `REGEXP_SUBSTR('abc', 'x')`)
+	yieldIn(yield, "JSON_OBJECT('k', %s)", `REGEXP_SUBSTR('abc', 'x')`)
 }
 
 func RegexpReplace(yield Query) {
@@ -3008,6 +3027,14 @@ func RegexpReplace(yield Query) {
 	for _, q := range mysqlDocSamples {
 		yield(q, nil, false)
 	}
+
+	// The result is a string, whatever the arguments are.
+	yieldIn(yield, "(%s) + 1", `REGEXP_REPLACE('a15c', '[a-z]', '')`, `REGEXP_REPLACE(1234, 23, 5)`)
+	yieldIn(yield, "-(%s)", `REGEXP_REPLACE('a1c', '[a-z]', '')`)
+	yieldIn(yield, "(%s) = '1'", `REGEXP_REPLACE('a1c', '[a-z]', '')`)
+	yieldIn(yield, "CAST(%s AS JSON)", `REGEXP_REPLACE('a1c', '[a-z]', '')`)
+	yieldIn(yield, "JSON_ARRAY(%s)", `REGEXP_REPLACE('abc', 'b', 'x')`)
+	yieldIn(yield, "JSON_OBJECT('k', %s)", `REGEXP_REPLACE('abc', 'b', 'x')`)
 }
 
 // FunctionResultLiterals checks that the result of a function is an ordinary

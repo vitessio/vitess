@@ -1060,6 +1060,95 @@ func TestCompilerSingle(t *testing.T) {
 			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, false, 0, 0, nil),
 		},
 		{
+			// REGEXP_SUBSTR returns a VARCHAR and REGEXP_REPLACE a TEXT,
+			// whatever their arguments are and whether the pattern is
+			// constant or not.
+			expression: `REGEXP_SUBSTR(column0, '[0-9]+')`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a15c")},
+			result:     `VARCHAR("15")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: `REGEXP_SUBSTR(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a15c"), sqltypes.NewVarChar("[0-9]+")},
+			result:     `VARCHAR("15")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: `REGEXP_SUBSTR(column0, 23)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1234)},
+			result:     `VARCHAR("23")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationLatin1Swedish, true, 0, 0, nil),
+		},
+		{
+			expression: `REGEXP_REPLACE(column0, '[a-z]', '')`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a15c")},
+			result:     `TEXT("15")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Text, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: `REGEXP_REPLACE(column0, column1, '')`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a15c"), sqltypes.NewVarChar("[a-z]")},
+			result:     `TEXT("15")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Text, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			// What uses the result is compiled for a string.
+			expression: `REGEXP_SUBSTR(column0, '[0-9]+') + 1`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a15c")},
+			result:     `FLOAT64(16)`,
+		},
+		{
+			expression: `-REGEXP_REPLACE(column0, column1, '')`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a15c"), sqltypes.NewVarChar("[a-z]")},
+			result:     `FLOAT64(-15)`,
+		},
+		{
+			// SUBSTRING of a TEXT is a VARCHAR when a constant position or
+			// length limits the result to the length of a VARCHAR.
+			expression: `SUBSTRING(REGEXP_REPLACE(column0, 'b', 'x'), column1, 1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.NewInt64(1)},
+			result:     `VARCHAR("a")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: `SUBSTRING(CAST(column0 AS CHAR(70000)), 1, 16383)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("abc")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: `SUBSTR(REGEXP_REPLACE(column0, 'b', 'x'), -2)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `VARCHAR("xc")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			// It stays a TEXT when the result can be longer than a VARCHAR
+			// or when the length is not constant.
+			expression: `SUBSTRING(REGEXP_REPLACE(column0, 'b', 'x'), 1, 16384)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `TEXT("axc")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Text, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: `SUBSTRING(REGEXP_REPLACE(column0, 'b', 'x'), 1, column1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.NewInt64(1)},
+			result:     `TEXT("a")`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Text, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			// The JSON functions take the result as a string.
+			expression: `JSON_ARRAY(REGEXP_REPLACE(column0, 'b', 'x'))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},
+			result:     `JSON("[\"axc\"]")`,
+		},
+		{
+			expression: `CAST(REGEXP_REPLACE(column0, '[a-z]', '') AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a1c")},
+			result:     `JSON("1")`,
+		},
+		{
 			// A TEXT converts to JSON like a VARCHAR.
 			expression: `JSON_ARRAY(CAST(column0 AS CHAR(70000)))`,
 			values:     []sqltypes.Value{sqltypes.NewVarChar("abc")},

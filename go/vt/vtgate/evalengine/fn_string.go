@@ -1554,6 +1554,91 @@ func (call *builtinTrim) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }
 
+// maxVarcharLength is the largest length of a VARCHAR in bytes. MySQL types
+// a string result that can be longer as a TEXT.
+const maxVarcharLength = 65535
+
+// resultType returns the type of the result of SUBSTRING for an argument
+// of type tt in collation col.
+//
+// SUBSTRING keeps the type of its argument, with one exception that MySQL
+// makes: SUBSTRING of a TEXT is a VARCHAR when constant arguments limit
+// the result to the length of a VARCHAR. SUBSTRING(t, 1, 16383) is a
+// VARCHAR and SUBSTRING(t, 1, 16384) a TEXT for a utf8mb4 TEXT t, which
+// can take four bytes per character.
+//
+// pos and length are the values of the position and the length. They are
+// only used if the arguments are constant; length is nil without a length.
+func (call *builtinSubstring) resultType(tt sqltypes.Type, col collations.ID, pos, length eval) sqltypes.Type {
+	if tt != sqltypes.Text {
+		return tt
+	}
+	chars, ok := call.maxLength(pos, length)
+	if !ok || chars > uint64(maxVarcharLength/colldata.Lookup(col).Charset().MaxWidth()) {
+		return tt
+	}
+	return sqltypes.VarChar
+}
+
+// maxLength returns the largest number of characters that SUBSTRING can
+// return, computed like MySQL does from the position and the length when
+// they are constant. It returns false if they do not limit the result.
+//
+// A negative position -n leaves at most n characters, a position of 0
+// none, and a length n at most n.
+func (call *builtinSubstring) maxLength(pos, length eval) (uint64, bool) {
+	var chars uint64
+	var limited bool
+
+	if call.Arguments[1].constant() {
+		if pos == nil {
+			return 0, false
+		}
+		switch p := evalToInt64(pos).i; {
+		case p == 0:
+			return 0, true
+		case p < 0:
+			chars, limited = uint64(-(p+1))+1, true
+		}
+	}
+
+	if len(call.Arguments) < 3 || !call.Arguments[2].constant() {
+		return chars, limited
+	}
+	if length == nil {
+		return chars, limited
+	}
+	l := evalToInt64(length).i
+	if l <= 0 {
+		return 0, true
+	}
+	if !limited || uint64(l) < chars {
+		chars, limited = uint64(l), true
+	}
+	return chars, limited
+}
+
+// staticArgs returns the values of the position and the length of
+// SUBSTRING if they are constant, and nil for one that is not.
+func (call *builtinSubstring) staticArgs(c *compiler) (pos, length eval) {
+	staticEnv := EmptyExpressionEnv(c.env)
+	value := func(arg IR) eval {
+		if !arg.constant() {
+			return nil
+		}
+		v, err := arg.eval(staticEnv)
+		if err != nil {
+			return nil
+		}
+		return v
+	}
+	pos = value(call.Arguments[1])
+	if len(call.Arguments) > 2 {
+		length = value(call.Arguments[2])
+	}
+	return pos, length
+}
+
 func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 	str, err := call.Arguments[0].eval(env)
 	if err != nil || str == nil {
@@ -1582,6 +1667,8 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 	}
+
+	tt = call.resultType(tt, text.col.Collation, p, l)
 
 	pos := evalToInt64(p).i
 	if pos == 0 {
@@ -1633,6 +1720,8 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 		tt = sqltypes.VarChar
 		c.asm.Convert_xc(2, tt, col.Collation, nil)
 	}
+	pos, length := call.staticArgs(c)
+	tt = call.resultType(tt, col.Collation, pos, length)
 	_ = c.compileToInt64(p, 1)
 
 	cs := colldata.Lookup(str.Col.Collation).Charset()

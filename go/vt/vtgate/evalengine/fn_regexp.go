@@ -679,7 +679,7 @@ func (r *builtinRegexpSubstr) compileSlow(c *compiler, input, pat, pos, occ, mat
 
 	c.asm.Fn_REGEXP_SUBSTR_slow(merged, flags, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag|pat.Flag|pos.Flag|occ.Flag|matchType.Flag) | flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: resultCollation(merged), Flag: nullableFlags(input.Flag|pat.Flag|pos.Flag|occ.Flag|matchType.Flag) | flagNullable}, nil
 }
 
 func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
@@ -749,7 +749,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_REGEXP_SUBSTR(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag|pat.Flag|pos.Flag|occ.Flag|matchType.Flag) | flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: resultCollation(merged), Flag: nullableFlags(input.Flag|pat.Flag|pos.Flag|occ.Flag|matchType.Flag) | flagNullable}, nil
 }
 
 var _ IR = (*builtinRegexpSubstr)(nil)
@@ -913,7 +913,7 @@ func (r *builtinRegexpReplace) compileSlow(c *compiler, input, pat, repl, pos, o
 
 	c.asm.Fn_REGEXP_REPLACE_slow(merged, flags, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag)}, nil
+	return ctype{Type: sqltypes.Text, Col: resultCollation(merged), Flag: nullableFlags(input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag)}, nil
 }
 
 func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
@@ -993,7 +993,7 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_REGEXP_REPLACE(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: nullableFlags(input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag)}, nil
+	return ctype{Type: sqltypes.Text, Col: resultCollation(merged), Flag: nullableFlags(input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag)}, nil
 }
 
 var _ IR = (*builtinRegexpReplace)(nil)
