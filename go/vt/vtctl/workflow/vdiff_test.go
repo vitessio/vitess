@@ -26,8 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vdiff"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -917,6 +920,142 @@ func TestVDiffUpdate(t *testing.T) {
 			for _, result := range got.Results {
 				require.Equal(t, tt.wantStates[result.Shard], result.State)
 			}
+			env.tmc.confirmVDiffRequests(t)
+		})
+	}
+}
+
+// TestVDiffUpdateExternalSourceCells confirms that, for a workflow whose
+// source is an external Vitess cluster (Mount/Migrate), source cells are
+// validated against and cleared to the cells of the external topology,
+// while target cells still come from the local topology.
+func TestVDiffUpdateExternalSourceCells(t *testing.T) {
+	ctx := t.Context()
+	sourceKeyspace := &testKeyspace{
+		KeyspaceName: "sourceks",
+		ShardNames:   []string{"0"},
+	}
+	targetKeyspace := &testKeyspace{
+		KeyspaceName: "targetks",
+		ShardNames:   []string{"0"},
+	}
+	workflow := "testwf"
+	vduuid := uuid.New().String()
+	env := newTestEnv(t, ctx, defaultCellName, sourceKeyspace, targetKeyspace)
+	defer env.close()
+	env.tmc.strict = true
+
+	// Set up the external cluster's topology, with its own cells and the
+	// source keyspace, and register it as a mounted external cluster.
+	externalCluster := "ext"
+	externalKeyspace := "extks"
+	externalTopo, externalFactory := memorytopo.NewServerAndFactory(ctx, "extcell1", "extcell2")
+	defer externalTopo.Close()
+	externalTopoType := "memorytopo-vdiff-update-" + uuid.NewString()
+	topo.RegisterFactory(externalTopoType, externalFactory)
+	require.NoError(t, env.ts.CreateExternalVitessCluster(ctx, externalCluster, &topodatapb.ExternalVitessCluster{
+		TopoConfig: &topodatapb.TopoConfig{TopoType: externalTopoType},
+	}))
+	externalPrimary := &topodatapb.Tablet{
+		Alias:    &topodatapb.TabletAlias{Cell: "extcell1", Uid: 500},
+		Keyspace: externalKeyspace,
+		Shard:    "0",
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_PRIMARY,
+	}
+	require.NoError(t, externalTopo.InitTablet(ctx, externalPrimary, false, true, false))
+	_, err := externalTopo.UpdateShardFields(ctx, externalKeyspace, "0", func(si *topo.ShardInfo) error {
+		si.PrimaryAlias = externalPrimary.Alias
+		return nil
+	})
+	require.NoError(t, err)
+
+	env.tmc.expectReadVReplicationWorkflowRequestOnTargetTablets(&readVReplicationWorkflowRequestResponse{
+		req: &tabletmanagerdatapb.ReadVReplicationWorkflowRequest{Workflow: workflow},
+		res: &tabletmanagerdatapb.ReadVReplicationWorkflowResponse{
+			Workflow:     workflow,
+			WorkflowType: binlogdatapb.VReplicationWorkflowType_Migrate,
+			Streams: []*tabletmanagerdatapb.ReadVReplicationWorkflowResponse_Stream{{
+				Id: 1,
+				Bls: &binlogdatapb.BinlogSource{
+					Keyspace:        externalKeyspace,
+					Shard:           "0",
+					ExternalCluster: externalCluster,
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: "select * from t1"}},
+					},
+				},
+			}},
+		},
+	})
+
+	targetTablet := env.tablets[targetKeyspace.KeyspaceName][startingTargetTabletUID]
+	expectedReq := func(sourceCell, targetCell string) *tabletmanagerdatapb.VDiffRequest {
+		return &tabletmanagerdatapb.VDiffRequest{
+			Keyspace:  targetKeyspace.KeyspaceName,
+			Workflow:  workflow,
+			Action:    string(vdiff.UpdateAction),
+			VdiffUuid: vduuid,
+			Options: &tabletmanagerdatapb.VDiffOptions{
+				PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
+					SourceCell: sourceCell,
+					TargetCell: targetCell,
+				},
+			},
+		}
+	}
+
+	tests := []struct {
+		name        string
+		req         *vtctldatapb.VDiffUpdateRequest
+		expectedReq *tabletmanagerdatapb.VDiffRequest
+		wantErr     string
+	}{
+		{
+			name: "external source cell and local target cell",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				SourceCells: []string{"extcell2"},
+				TargetCells: []string{defaultCellName},
+			},
+			expectedReq: expectedReq("extcell2", defaultCellName),
+		},
+		{
+			name: "local cell is not a valid source cell",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				SourceCells: []string{defaultCellName},
+			},
+			wantErr: `invalid source cell "cell": no such cell or cell alias in the topology`,
+		},
+		{
+			name: "external cell is not a valid target cell",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				TargetCells: []string{"extcell1"},
+			},
+			wantErr: `invalid target cell "extcell1": no such cell or cell alias in the topology`,
+		},
+		{
+			name: "clear source and target cells",
+			req: &vtctldatapb.VDiffUpdateRequest{
+				ClearSourceCells: true,
+				ClearTargetCells: true,
+			},
+			expectedReq: expectedReq("extcell1,extcell2", defaultCellName),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.req.TargetKeyspace = targetKeyspace.KeyspaceName
+			tt.req.Workflow = workflow
+			tt.req.Uuid = vduuid
+			if tt.expectedReq != nil {
+				env.tmc.expectVDiffRequest(targetTablet, &vdiffRequestResponse{req: tt.expectedReq})
+			}
+			_, err := env.ws.VDiffUpdate(ctx, tt.req)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
 			env.tmc.confirmVDiffRequests(t)
 		})
 	}

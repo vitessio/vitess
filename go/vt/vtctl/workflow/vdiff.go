@@ -684,7 +684,28 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 	if err := validateVDiffUpdateTabletTypes(req.TabletTypes); err != nil {
 		return nil, err
 	}
-	if err := validateVDiffUpdateCells(ctx, s.ts, req.SourceCells, req.TargetCells); err != nil {
+	if len(req.TabletTypes) == 0 && len(req.SourceCells) == 0 && !req.ClearSourceCells &&
+		len(req.TargetCells) == 0 && !req.ClearTargetCells {
+		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update")
+	}
+
+	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
+	if err != nil {
+		return nil, err
+	}
+
+	// For Mount/Migrate workflows the source tablets live in an external
+	// cluster with its own topology, so source cells are validated against,
+	// and cleared to the cells of, that topology. Target cells always come
+	// from our own topology.
+	sourceTopo := s.ts
+	if ts.ExternalTopo() != nil {
+		sourceTopo = ts.ExternalTopo()
+	}
+	if err := validateVDiffUpdateCells(ctx, sourceTopo, "source", req.SourceCells); err != nil {
+		return nil, err
+	}
+	if err := validateVDiffUpdateCells(ctx, s.ts, "target", req.TargetCells); err != nil {
 		return nil, err
 	}
 
@@ -693,7 +714,7 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 		picker.TabletTypes = discovery.BuildTabletTypesString(req.TabletTypes, req.TabletSelectionPreference)
 	}
 	if req.ClearSourceCells {
-		cells, err := allTopoCells(ctx, s.ts)
+		cells, err := allTopoCells(ctx, sourceTopo)
 		if err != nil {
 			return nil, err
 		}
@@ -710,9 +731,6 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 	} else if len(req.TargetCells) > 0 {
 		picker.TargetCell = strings.Join(req.TargetCells, ",")
 	}
-	if picker.TabletTypes == "" && picker.SourceCell == "" && picker.TargetCell == "" {
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "no picker options specified to update")
-	}
 
 	tabletreq := &tabletmanagerdatapb.VDiffRequest{
 		Keyspace:  req.TargetKeyspace,
@@ -722,11 +740,6 @@ func (s *Server) VDiffUpdate(ctx context.Context, req *vtctldatapb.VDiffUpdateRe
 		Options: &tabletmanagerdatapb.VDiffOptions{
 			PickerOptions: picker,
 		},
-	}
-
-	ts, err := s.buildTrafficSwitcher(ctx, req.TargetKeyspace, req.Workflow)
-	if err != nil {
-		return nil, err
 	}
 
 	if len(targetShards) > 0 {
@@ -793,10 +806,11 @@ func validateVDiffUpdateTabletTypes(tabletTypes []topodatapb.TabletType) error {
 }
 
 // validateVDiffUpdateCells returns an INVALID_ARGUMENT error if any of the
-// given source or target cells is neither a cell nor a cell alias in the
-// topology. The topology is only read when cells are specified.
-func validateVDiffUpdateCells(ctx context.Context, ts *topo.Server, sourceCells, targetCells []string) error {
-	if len(sourceCells) == 0 && len(targetCells) == 0 {
+// given cells is neither a cell nor a cell alias in the given topology. The
+// kind ("source" or "target") is only used in the error message. The
+// topology is only read when cells are specified.
+func validateVDiffUpdateCells(ctx context.Context, ts *topo.Server, kind string, cells []string) error {
+	if len(cells) == 0 {
 		return nil
 	}
 	cellNames, err := ts.GetCellInfoNames(ctx)
@@ -814,18 +828,10 @@ func validateVDiffUpdateCells(ctx context.Context, ts *topo.Server, sourceCells,
 	for alias := range aliases {
 		known[alias] = true
 	}
-	for _, check := range []struct {
-		kind  string
-		cells []string
-	}{
-		{"source", sourceCells},
-		{"target", targetCells},
-	} {
-		for _, cell := range check.cells {
-			if !known[cell] {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
-					"invalid %s cell %q: no such cell or cell alias in the topology", check.kind, cell)
-			}
+	for _, cell := range cells {
+		if !known[cell] {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT,
+				"invalid %s cell %q: no such cell or cell alias in the topology", kind, cell)
 		}
 	}
 	return nil
