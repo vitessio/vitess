@@ -63,17 +63,7 @@ func (a *analyzer) checkSubqueryColumns(parent sqlparser.SQLNode, subq *sqlparse
 	if !ok {
 		return nil
 	}
-	var otherSide sqlparser.Expr
-	if cmp.Left == subq {
-		otherSide = cmp.Right
-	} else {
-		otherSide = cmp.Left
-	}
 
-	cols := 1
-	if tuple, ok := otherSide.(sqlparser.ValTuple); ok {
-		cols = len(tuple)
-	}
 	columns := subq.Select.GetColumns()
 	for _, expr := range columns {
 		_, ok := expr.(*sqlparser.StarExpr)
@@ -84,10 +74,60 @@ func (a *analyzer) checkSubqueryColumns(parent sqlparser.SQLNode, subq *sqlparse
 			return nil
 		}
 	}
+
+	if list, ok := inValueList(cmp, subq); ok {
+		return checkInValueListColumns(list, len(columns))
+	}
+
+	var otherSide sqlparser.Expr
+	if cmp.Left == subq {
+		otherSide = cmp.Right
+	} else {
+		otherSide = cmp.Left
+	}
+
+	cols := columnCount(otherSide)
 	if len(columns) != cols {
 		return &SubqueryColumnCountError{Expected: cols}
 	}
 	return nil
+}
+
+// inValueList returns the value list of an IN or NOT IN comparison that has
+// the subquery on its left side. In that shape, the subquery is compared to
+// each value in the list, and not to the list as a whole.
+func inValueList(cmp *sqlparser.ComparisonExpr, subq *sqlparser.Subquery) (sqlparser.ValTuple, bool) {
+	if cmp.Left != subq {
+		return nil, false
+	}
+
+	if cmp.Operator != sqlparser.InOp && cmp.Operator != sqlparser.NotInOp {
+		return nil, false
+	}
+
+	list, ok := cmp.Right.(sqlparser.ValTuple)
+	return list, ok
+}
+
+// checkInValueListColumns checks that every value in an IN list has as many
+// columns as the subquery it is compared to. The error reports the subquery
+// column count, which matches MySQL.
+func checkInValueListColumns(list sqlparser.ValTuple, subqueryColumns int) error {
+	for _, value := range list {
+		if columnCount(value) != subqueryColumns {
+			return &SubqueryColumnCountError{Expected: subqueryColumns}
+		}
+	}
+	return nil
+}
+
+// columnCount returns the number of columns in a row value. A tuple has one
+// column per element, and any other expression has a single column.
+func columnCount(expr sqlparser.Expr) int {
+	if tuple, ok := expr.(sqlparser.ValTuple); ok {
+		return len(tuple)
+	}
+	return 1
 }
 
 func checkDerived(node *sqlparser.DerivedTable) error {
