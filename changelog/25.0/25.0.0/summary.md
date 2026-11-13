@@ -22,6 +22,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
+        - [Log messages are becoming constant, with values in attributes](#log-constant-messages)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -303,6 +304,27 @@ MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` on
 **Migration**: before upgrading, replace a qualified `tbl.*` selected from a `JOIN ... USING` with an explicit column list wherever its columns or their order matter, since an explicit list returns the same columns before and after the upgrade.
 
 See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
+
+#### <a id="log-constant-messages"/>Log messages are becoming constant, with values in attributes</a>
+
+Log messages across Vitess are being converted to constant messages, with the values they used to contain, such as tablet aliases, keyspaces, tables, positions, queries and errors, in structured attributes ([#21323](https://github.com/vitessio/vitess/issues/21323)). This keeps row data and query text out of the message itself. Some components are converted in this release, and others will follow.
+
+With the default JSON log format, each attribute is a field next to `msg`. With `--log-format=text`, attributes follow the message as `key=value` pairs.
+
+Converted lines follow these conventions:
+
+- The message is a fixed sentence, and every value is in an attribute.
+- Errors are under `error`. Many lines that log a Vitess error also log its code, such as `INVALID_ARGUMENT`, under `error_code`.
+- Lines from a throttled logger carry the logger's name under `logger`, where it used to prefix the message. Their report of skipped lines is `skipped log messages`, with `logger` and `skipped`.
+- With the JSON format, durations are integer nanoseconds. The text format prints durations such as `1.5s`. With `--log-err-stacks` set, errors from `vterrors.New`, `Errorf`, `Wrap` and the like still include their stack traces when logged as attributes, in both formats; with the JSON format, `error` is then the error's text followed by its stack traces.
+
+When a converted line logs a MySQL error under `error`, the record also gets `mysql_errno`, MySQL's error number as an integer, so you can filter and alert on it without parsing `error` ([#21982](https://github.com/vitessio/vitess/pull/21982)). `mysql_errno` holds only the number. MySQL's error text is still logged under `error`. The glog backend (`--log-structured=false`) doesn't add it. If an error passed between Vitess components as plain text, the number is read back out of that text. A client can influence that text, so the number can sometimes be wrong or missing. Use it for filtering and alerts, not as proof.
+
+Some attributes can contain user data, such as query text, row values, column definitions or error messages. If you send Vitess logs somewhere others can read them, consider dropping or redacting keys like `error`, `query`, `row`, `values`, `alter`, `stderr` and `message`. More examples are listed in the doc comment of `go/tools/logcheck/logcheck.go`. That list isn't complete either, so if you filter logs, keeping only keys you know are safe is safer than trying to block every unsafe one. `tablet` and `error_code` don't carry user data. `keyspace` and `shard` don't carry row or query data, but they can contain names a client sent.
+
+**Impact**: alerts, dashboards, log searches, log-based rules and redaction rules that match on a line's old message text, or on a value inside it, stop matching once that line is converted. For example, `Error applying event for table <table> while processing position <position>: <error>` is now `Error applying event`, with `table`, `processing_position` and `error` attributes.
+
+**Migration**: if you search or alert on a log line's text, match on its new constant message and filter on its attributes instead. For example, search for the message `Error applying event` with `table` set to `users`, rather than for the text `Error applying event for table users`. The pull requests linked from [#21323](https://github.com/vitessio/vitess/issues/21323) list, in their Deployment Notes, the changed lines you're most likely to be matching on.
 
 ### <a id="deprecations"/>Deprecations</a>
 
