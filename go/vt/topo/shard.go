@@ -591,6 +591,13 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 	span.Annotate("shard", shard)
 	span.Annotate("num_cells", len(cells))
 	defer span.Finish()
+
+	return ts.findAllTabletAliasesInShardByCell(ctx, keyspace, shard, cells, ts.connReaderForCell)
+}
+
+// findAllTabletAliasesInShardByCell is FindAllTabletAliasesInShardByCell reading each cell's replication graph
+// through the connection connFor returns for the cell.
+func (ts *Server) findAllTabletAliasesInShardByCell(ctx context.Context, keyspace, shard string, cells []string, connFor cellReaderFunc) ([]*topodatapb.TabletAlias, error) {
 	var err error
 
 	// The caller intents to all cells
@@ -623,7 +630,7 @@ func (ts *Server) FindAllTabletAliasesInShardByCell(ctx context.Context, keyspac
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
-			sri, err := ts.GetShardReplication(ctx, cell, keyspace, shard)
+			sri, err := getShardReplication(ctx, cell, keyspace, shard, connFor)
 			switch {
 			case err == nil:
 				mutex.Lock()

@@ -232,7 +232,12 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 
 // GetShardReplication returns the ShardReplicationInfo object.
 func (ts *Server) GetShardReplication(ctx context.Context, cell, keyspace, shard string) (*ShardReplicationInfo, error) {
-	conn, err := ts.ConnForCell(ctx, cell)
+	return getShardReplication(ctx, cell, keyspace, shard, ts.connReaderForCell)
+}
+
+// getShardReplication reads the ShardReplication record through the connection connFor returns for the cell.
+func getShardReplication(ctx context.Context, cell, keyspace, shard string, connFor cellReaderFunc) (*ShardReplicationInfo, error) {
+	conn, err := connFor(ctx, cell)
 	if err != nil {
 		return nil, err
 	}
