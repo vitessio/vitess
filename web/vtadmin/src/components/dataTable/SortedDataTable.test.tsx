@@ -32,7 +32,7 @@ describe('SortedDataTable', () => {
         ];
 
         render(
-            <MemoryRouter initialEntries={[{ pathname: '/schemas', totalPages: 10, pageQueryKey: 'page' }]}>
+            <MemoryRouter initialEntries={[{ pathname: '/schemas' }]}>
                 <SortedDataTable
                     columns={columnProps}
                     data={testData}
