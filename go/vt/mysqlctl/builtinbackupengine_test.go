@@ -440,7 +440,7 @@ func TestRestoreChunkedRetryPreservesData(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 
 	// Pre-create and pre-size destination files, as restoreFiles() would.
-	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger()))
 
 	// First pass: chunk 0-1 will fail.
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
@@ -583,7 +583,7 @@ func TestRestoreCloseErrorIsFatal(t *testing.T) {
 	}
 
 	be := &BuiltinBackupEngine{}
-	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger()))
 
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
 	require.Error(t, err)
@@ -604,6 +604,23 @@ func TestExecuteBackupRejectsOversizedChunkSize(t *testing.T) {
 	be := &BuiltinBackupEngine{}
 	_, err := be.ExecuteBackup(t.Context(), BackupParams{Logger: logutil.NewMemoryLogger()}, nil)
 	require.ErrorContains(t, err, "exceeds maximum allowed value")
+}
+
+func TestExecuteBackupRejectsUnalignedChunkSize(t *testing.T) {
+	oldThreshold := backupFileChunkThreshold
+	oldSize := backupFileChunkSize
+	t.Cleanup(func() {
+		backupFileChunkThreshold = oldThreshold
+		backupFileChunkSize = oldSize
+	})
+
+	// Above the minimum chunk size, but not a multiple of the O_DIRECT alignment.
+	backupFileChunkThreshold = 2_000_000_000
+	backupFileChunkSize = 1_000_000_000
+
+	be := &BuiltinBackupEngine{}
+	_, err := be.ExecuteBackup(t.Context(), BackupParams{Logger: logutil.NewMemoryLogger()}, nil)
+	require.ErrorContains(t, err, "must be a multiple of 4096")
 }
 
 func TestShouldDrainForBackupBuiltIn(t *testing.T) {
@@ -845,6 +862,33 @@ func newBackupTestMysqld(t *testing.T) *FakeMysqlDaemon {
 // fan-out without requiring the large file sizes that the 4MiB minimum would
 // impose.
 func TestBackupRestoreWithManyChunks(t *testing.T) {
+	backupRoot := t.TempDir()
+	bm := backupRestoreWithManyChunks(t, backupRoot)
+
+	// A backup without binlogs restores none and writes no binlog index.
+	assert.False(t, bm.IncludesBinlogs)
+	assert.NoFileExists(t, path.Join(backupRoot, "binlog.index"))
+}
+
+// backupRestoreWithManyChunks backs up a 16MiB file in 256 chunks to file backup storage under
+// backupRoot, restores it, checks that the restored file matches and returns the manifest.
+func backupRestoreWithManyChunks(t *testing.T, backupRoot string) *BackupManifest {
+	filePath, originalChecksum := backupWithManyChunks(t, backupRoot)
+
+	bm, err := restoreWithManyChunks(t, backupRoot)
+	require.NoError(t, err)
+	require.NotNil(t, bm)
+
+	// Verify restored file matches the original.
+	restoredData, err := os.ReadFile(filePath)
+	require.NoError(t, err)
+	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
+	return bm
+}
+
+// backupWithManyChunks backs up a 16MiB file of random data in 256 chunks to file backup storage
+// under backupRoot, and returns the path and checksum of the file.
+func backupWithManyChunks(t *testing.T, backupRoot string) (string, uint32) {
 	ctx := context.Background()
 
 	const (
@@ -867,7 +911,6 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 	minBackupFileChunkSize = chunkSize
 
 	// Create a single 16MiB file filled with random (incompressible) data.
-	backupRoot := t.TempDir()
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "innodb"), 0o755))
 	require.NoError(t, os.MkdirAll(path.Join(backupRoot, "log"), 0o755))
@@ -913,12 +956,17 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, BackupUsable, backupResult)
+	return filePath, originalChecksum
+}
 
+// restoreWithManyChunks restores the backup taken by backupWithManyChunks.
+func restoreWithManyChunks(t *testing.T, backupRoot string) (*BackupManifest, error) {
 	// Restore: read back all 256 chunks and reassemble into the original file.
 	restoreBh := filebackupstorage.NewBackupHandle(nil, "", "", true)
 	mysqld2 := newBackupTestMysqld(t)
 
-	bm, err := be.ExecuteRestore(ctx, RestoreParams{
+	be := &BuiltinBackupEngine{}
+	return be.ExecuteRestore(context.Background(), RestoreParams{
 		Cnf: &Mycnf{
 			InnodbDataHomeDir:     path.Join(backupRoot, "innodb"),
 			InnodbLogGroupHomeDir: path.Join(backupRoot, "log"),
@@ -943,18 +991,6 @@ func TestBackupRestoreWithManyChunks(t *testing.T) {
 		Stats:                backupstats.NoStats(),
 		MysqlShutdownTimeout: time.Minute,
 	}, restoreBh)
-
-	require.NoError(t, err)
-	require.NotNil(t, bm)
-
-	// Verify restored file matches the original.
-	restoredData, err := os.ReadFile(filePath)
-	require.NoError(t, err)
-	assert.Equal(t, originalChecksum, crc32.ChecksumIEEE(restoredData))
-
-	// A backup without binlogs restores none and writes no binlog index.
-	assert.False(t, bm.IncludesBinlogs)
-	assert.NoFileExists(t, path.Join(backupRoot, "binlog.index"))
 }
 
 // TestBackupRestoreWithBinlogs backs up a source with binlogs and checks that
@@ -1133,7 +1169,7 @@ func TestCreateChunkedDestinationsRejectsBadStorageName(t *testing.T) {
 		},
 	}
 
-	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger())
 	require.ErrorContains(t, err, "unexpected storage name")
 	require.ErrorContains(t, err, `got "wrong-name"`)
 	require.ErrorContains(t, err, `expected "0-1"`)
@@ -1170,7 +1206,7 @@ func TestRestoreFileChunkRejectsDecompressedSizeMismatch(t *testing.T) {
 	}
 
 	be := &BuiltinBackupEngine{}
-	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger()))
+	require.NoError(t, createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger()))
 
 	err := be.restoreFileEntries(t.Context(), fes, bh, bm, params, "")
 	require.ErrorContains(t, err, "decompressed size mismatch")
@@ -1192,7 +1228,7 @@ func TestCreateChunkedDestinationsRejectsGap(t *testing.T) {
 		},
 	}
 
-	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger())
 	require.ErrorContains(t, err, "gap/overlap")
 	require.ErrorContains(t, err, "expected offset 10, got 20")
 }
@@ -1212,7 +1248,7 @@ func TestCreateChunkedDestinationsRejectsOverlap(t *testing.T) {
 		},
 	}
 
-	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger())
 	require.ErrorContains(t, err, "gap/overlap")
 	require.ErrorContains(t, err, "expected offset 15, got 10")
 }
@@ -1235,7 +1271,7 @@ func TestCreateChunkedDestinationsAcceptsOutOfOrderChunks(t *testing.T) {
 		},
 	}
 
-	err := createChunkedDestinations(t.Context(), fes, cnf, "", logutil.NewConsoleLogger())
+	err := createChunkedDestinations(t.Context(), fes, cnf, "", false, logutil.NewConsoleLogger())
 	require.NoError(t, err)
 }
 
@@ -1310,4 +1346,16 @@ func TestHasErrorCode(t *testing.T) {
 			assert.Equal(t, tc.expected, hasErrorCode(tc.err, tc.code))
 		})
 	}
+}
+
+func TestRestoreWriteModeDefaultsToBuffered(t *testing.T) {
+	assert.Equal(t, restoreWriteModeBuffered, builtinBackupRestoreWriteMode.String())
+}
+
+// setRestoreWriteMode sets --builtinbackup-restore-write-mode for the duration of the test.
+func setRestoreWriteMode(t *testing.T, mode string) {
+	t.Helper()
+	old := builtinBackupRestoreWriteMode.String()
+	t.Cleanup(func() { require.NoError(t, builtinBackupRestoreWriteMode.Set(old)) })
+	require.NoError(t, builtinBackupRestoreWriteMode.Set(mode))
 }
