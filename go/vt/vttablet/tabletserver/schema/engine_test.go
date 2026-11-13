@@ -2250,3 +2250,45 @@ func TestMarshalMinimalSchemaEnumSetColumnTypes(t *testing.T) {
 		})
 	}
 }
+
+// TestReleaseSequenceCaches verifies that a primary returns the unused part of
+// its cached sequence range to the backing table, so that the next primary does
+// not skip those values.
+func TestReleaseSequenceCaches(t *testing.T) {
+	db := fakesqldb.New(t)
+	t.Cleanup(db.Close)
+	schematest.AddDefaultQueries(db)
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+	})
+	AddFakeInnoDBReadRowsResult(db, 0)
+	se := newEngine(10*time.Second, 10*time.Second, 0, db, nil)
+	require.NoError(t, se.Open())
+	t.Cleanup(se.Close)
+
+	newSequence := func(name string, nextVal, lastVal int64) *Table {
+		seq := NewTable(name, Sequence)
+		seq.SequenceInfo = &SequenceInfo{NextVal: nextVal, LastVal: lastVal}
+		se.SetTableForTests(seq)
+		return seq
+	}
+	partlyUsed := newSequence("seq_partly_used", 5, 10)
+	fullyUsed := newSequence("seq_fully_used", 10, 10)
+	uncached := newSequence("seq_uncached", 0, 0)
+	failing := newSequence("seq_failing", 7, 20)
+
+	const returnQuery = "update seq_partly_used set next_id = 5 where id = 0 and next_id = 10"
+	db.AddQuery(returnQuery, &sqltypes.Result{RowsAffected: 1})
+	db.AddRejectedQuery("update seq_failing set next_id = 7 where id = 0 and next_id = 20", errors.New("read-only"))
+	db.RejectQueryPattern("update seq_(fully_used|uncached) .*", "a sequence without unused cached values must not be written")
+
+	se.ReleaseSequenceCaches()
+
+	assert.Equal(t, 1, db.GetQueryCalledNum(returnQuery))
+	// Every cache is cleared, including one whose values could not be returned,
+	// so that the next primary term reloads the sequence from the table.
+	for _, seq := range []*Table{partlyUsed, fullyUsed, uncached, failing} {
+		assert.Zero(t, seq.SequenceInfo.NextVal, seq.Name.String())
+		assert.Zero(t, seq.SequenceInfo.LastVal, seq.Name.String())
+	}
+}
