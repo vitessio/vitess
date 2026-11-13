@@ -84,6 +84,14 @@
           "name": "hash"
         }
       ]
+    },
+    "cte_text": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
     }
   }
 }

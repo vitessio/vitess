@@ -41,7 +41,7 @@ func start(t *testing.T) (utils.MySQLCompare, func()) {
 	require.NoError(t, err)
 
 	deleteAll := func() {
-		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "tbl_enum_set", "uks.unsharded", "all_types"}
+		tables := []string{"t1", "tbl", "unq_idx", "nonunq_idx", "tbl_enum_set", "uks.unsharded", "all_types", "cte_text"}
 		for _, table := range tables {
 			_, _ = mcmp.ExecAndIgnore("delete from " + table)
 		}
@@ -1042,4 +1042,216 @@ func TestOlapErrorAfterFields(t *testing.T) {
 
 	// The error ended the result set cleanly, so the connection stays usable.
 	utils.AssertMatches(t, mcmp.VtConn, "select 1", "[[INT64(1)]]")
+}
+
+// requireRecurseCTE checks that vtgate evaluates the recursive CTEs itself. A CTE that is merged into
+// one route is deduplicated by MySQL, so it would pass the comparison without testing vtgate.
+func requireRecurseCTE(t *testing.T, mcmp *utils.MySQLCompare, queries ...string) {
+	t.Helper()
+	for _, query := range queries {
+		require.Contains(t, mcmp.VExplain(query), "RecurseCTE", query)
+	}
+}
+
+// TestRecursiveCTEUnionDistinct checks that an unmerged UNION DISTINCT
+// recursive CTE deduplicates like MySQL, including on cyclic data.
+func TestRecursiveCTEUnionDistinct(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// id1 -> id2: 1 -> 2 -> 3 -> 1 is a cycle, 4 -> 1 reaches 1 twice, 5 and 6 lead to NULL.
+	mcmp.Exec("insert into t1(id1, id2) values (1, 2), (2, 3), (3, 1), (4, 1), (5, null), (6, null)")
+
+	queries := []string{
+		`with recursive cte as (select id1 as node from t1 where id1 in (1, 4)
+			union select t.id2 from t1 t inner join cte on t.id1 = cte.node)
+			select node from cte order by node`,
+		`with recursive cte as (select id2 as node from t1 where id1 in (5, 6)
+			union select t.id2 from t1 t inner join cte on t.id1 = cte.node)
+			select node from cte`,
+	}
+
+	requireRecurseCTE(t, &mcmp, queries...)
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			for _, query := range queries {
+				mcmp.Exec(query)
+			}
+		})
+	}
+}
+
+// TestRecursiveCTEUnionDistinctParents checks that an unmerged UNION DISTINCT
+// recursive CTE doesn't spend a LIMIT on duplicates, and that it gives its
+// parent only its own columns.
+func TestRecursiveCTEUnionDistinctParents(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// The seed reads 2 twice, so a limit pushed to the routes could miss 3.
+	mcmp.Exec("insert into t1(id1, id2) values (1, 2), (4, 2), (5, 3)")
+
+	queries := []string{
+		`with recursive cte as (select id2 as node from t1
+			union select t.id2 from t1 t inner join cte on t.id1 = cte.node)
+			select node from cte limit 2`,
+		`with recursive cte as (select id2 as node from t1
+			union select t.id2 from t1 t inner join cte on t.id1 = cte.node)
+			select node from cte union all select id1 from t1`,
+	}
+
+	requireRecurseCTE(t, &mcmp, queries...)
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			for _, query := range queries {
+				mcmp.Exec(query)
+			}
+		})
+	}
+}
+
+// TestRecursiveCTEUnionDistinctCollations checks that an unmerged UNION DISTINCT recursive CTE
+// compares text in the collation of the CTE's columns, like MySQL does. With the table's types
+// loaded, vtgate compares the columns in their collation. It can't type quote(), so that
+// column is compared by its weight strings.
+func TestRecursiveCTEUnionDistinctCollations(t *testing.T) {
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "cte_text", clusterInstance.VtgateProcess.ReadVSchema))
+	mcmp, closer := start(t)
+	defer closer()
+
+	// ids 1 and 2 differ in case only, and ids 3 and 4 in case and accents, so whether they
+	// are duplicates depends on the collation. Ids 1 and 2 link to 2, and ids 3 and 4 to 4.
+	mcmp.Exec(`insert into cte_text(id, nxt, ci, bin, lat) values
+		(1, 2, 'a', 'a', 'a'), (2, 2, 'A', 'A', 'A'),
+		(3, 4, 'é', 'é', 'e'), (4, 4, 'E', 'E', 'E')`)
+
+	queries := map[string]string{
+		// the term selects the table's column
+		"table column": `with recursive cte as (select nxt, %[1]s from cte_text where id = %[2]d
+			union select t.nxt, t.%[1]s from cte_text t join cte on t.id = cte.nxt)
+			select nxt, %[1]s from cte`,
+		// the term only passes on the CTE's column, and the parent orders by it
+		"pass through": `with recursive cte as (select nxt, %[1]s from cte_text where id = %[2]d
+			union select t.nxt, cte.%[1]s from cte_text t join cte on t.id = cte.nxt)
+			select nxt from cte order by %[1]s`,
+		// the same without a type, so the term takes the weight string of the previous row
+		"untyped pass through": `with recursive cte as (select nxt, quote(%[1]s) as s from cte_text where id = %[2]d
+			union select t.nxt, cte.s from cte_text t join cte on t.id = cte.nxt)
+			select nxt, s from cte`,
+	}
+
+	for name, query := range queries {
+		requireRecurseCTE(t, &mcmp, fmt.Sprintf(query, "ci", 1))
+		// only a column without a type takes the weight string of the previous row
+		plan := mcmp.VExplain(fmt.Sprintf(query, "ci", 1))
+		if name == "untyped pass through" {
+			assert.Contains(t, plan, "TermFromCTE", name)
+		} else {
+			assert.NotContains(t, plan, "TermFromCTE", name)
+		}
+	}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			for _, column := range []string{"ci", "bin", "lat"} {
+				for _, seed := range []int{1, 3} {
+					for name, query := range queries {
+						mcmp.Run(fmt.Sprintf("%s %s %d", column, name, seed), func(mcmp *utils.MySQLCompare) {
+							mcmp.Exec(fmt.Sprintf(query, column, seed))
+						})
+					}
+				}
+			}
+		})
+	}
+}
+
+// TestRecursiveCTEUnionDistinctInsert checks that an INSERT from an unmerged UNION DISTINCT recursive
+// CTE inserts only the CTE's own columns, without the weight string that deduplicates quote(),
+// which vtgate can't type.
+func TestRecursiveCTEUnionDistinctInsert(t *testing.T) {
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "cte_text", clusterInstance.VtgateProcess.ReadVSchema))
+	mcmp, closer := start(t)
+	defer closer()
+
+	// id 1 links to 2, and 2 to itself, so the term reads id 2 twice
+	mcmp.Exec("insert into cte_text(id, nxt, ci) values (1, 2, 'a'), (2, 2, 'A')")
+
+	query := `insert into cte_text(id, nxt, ci)
+		with recursive cte as (select id + 10 as id, nxt, quote(ci) as s from cte_text where id = 1
+			union select t.id + 10, t.nxt, cte.s from cte_text t join cte on t.id = cte.nxt)
+		select id, nxt, s from cte`
+	plan := mcmp.VExplain(query)
+	require.Contains(t, plan, "RecurseCTE")
+	require.Contains(t, plan, "weight_string(dt.c2)")
+
+	mcmp.Exec(query)
+	mcmp.Exec("select id, nxt, ci from cte_text order by id")
+}
+
+// TestRecursiveCTEUnionDistinctTypes checks that an unmerged UNION DISTINCT recursive CTE
+// deduplicates BIT and GEOMETRY values, which are compared by their bytes, and values that MySQL
+// converts to the type of the CTE's column, like MySQL does.
+func TestRecursiveCTEUnionDistinctTypes(t *testing.T) {
+	require.NoError(t, utils.WaitForAuthoritative(t, keyspaceName, "cte_text", clusterInstance.VtgateProcess.ReadVSchema))
+	mcmp, closer := start(t)
+	defer closer()
+
+	// ids 1 and 2 have the same values and link to 2, so the CTE's rows repeat
+	mcmp.Exec(`insert into cte_text(id, nxt, bt, bt2, pt) values
+		(1, 2, b'1', b'10', ST_GeomFromText('POINT(1 1)')), (2, 2, b'1', b'10', ST_GeomFromText('POINT(1 1)'))`)
+
+	columnQueries := map[string]string{
+		"table column": `with recursive cte as (select nxt, %[1]s from cte_text where id = 1
+			union select t.nxt, t.%[1]s from cte_text t join cte on t.id = cte.nxt)
+			select nxt, %[1]s from cte`,
+		"pass through": `with recursive cte as (select nxt, %[1]s from cte_text where id = 1
+			union select t.nxt, cte.%[1]s from cte_text t join cte on t.id = cte.nxt)
+			select nxt, %[1]s from cte`,
+		"under union all": `with recursive cte as (select nxt, %[1]s from cte_text where id = 1
+			union select t.nxt, t.%[1]s from cte_text t join cte on t.id = cte.nxt)
+			select nxt, %[1]s from cte union all select nxt, %[1]s from cte_text`,
+	}
+	queries := map[string]string{
+		// the term repeats a column and the seed doesn't
+		"repeated in the term": `with recursive cte as (select nxt, bt, bt2 from cte_text where id = 1
+			union select t.nxt, t.bt, t.bt from cte_text t join cte on t.id = cte.nxt)
+			select nxt, bt, bt2 from cte`,
+		// MySQL stores 2.5 as 3 in the CTE's integer column
+		"rounded value": `with recursive cte as (select nxt from cte_text where id = 1
+			union select t.nxt + 0.5 from cte_text t join cte on t.id = cte.nxt)
+			select nxt from cte`,
+		"rounded text": `with recursive cte as (select nxt from cte_text where id = 1
+			union select concat(t.nxt, '.5') from cte_text t join cte on t.id = cte.nxt)
+			select nxt from cte`,
+	}
+	for _, column := range []string{"bt", "pt"} {
+		for name, query := range columnQueries {
+			queries[column+" "+name] = fmt.Sprintf(query, column)
+		}
+	}
+
+	for _, query := range queries {
+		requireRecurseCTE(t, &mcmp, query)
+	}
+
+	for _, workload := range []string{"olap", "oltp"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			_, err := mcmp.VtConn.ExecuteFetch("set workload = "+workload, 1, false)
+			require.NoError(t, err)
+			for name, query := range queries {
+				mcmp.Run(name, func(mcmp *utils.MySQLCompare) {
+					mcmp.Exec(query)
+				})
+			}
+		})
+	}
 }

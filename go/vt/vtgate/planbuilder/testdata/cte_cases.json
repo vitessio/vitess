@@ -2178,6 +2178,493 @@
     }
   },
   {
+    "comment": "Recursive CTE with UNION DISTINCT that cannot be merged",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, id from user where manager_id is null union select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 1
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as `name`, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select `name`, id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as `name`, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select `name`, id from `user` where manager_id is null) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.`name`, e.id, weight_string(e.`name`), weight_string(e.id) from `user` as e where 1 != 1",
+                "Query": "select e.`name`, e.id, weight_string(e.`name`), weight_string(e.id) from `user` as e where e.manager_id = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT under UNION ALL keeps its own columns",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name, id from cte union all select name, id from user",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, id from user where manager_id is null union select e.name, e.id from user e inner join cte on e.manager_id = cte.id) select name, id from cte union all select name, id from user",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 1
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as `name`, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select `name`, id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as `name`, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select `name`, id from `user` where manager_id is null) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.`name`, e.id, weight_string(e.`name`), weight_string(e.id) from `user` as e where 1 != 1",
+                "Query": "select e.`name`, e.id, weight_string(e.`name`), weight_string(e.id) from `user` as e where e.manager_id = :cte_id"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select `name`, id from `user` where 1 != 1",
+            "Query": "select `name`, id from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT and a term that repeats an expression",
+    "query": "with recursive cte as (select id, name, a from user where a = 1 union select e.id, e.name, e.name from user e join cte on e.a = cte.id) select id from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, name, a from user where a = 1 union select e.id, e.name, e.name from user e join cte on e.a = cte.id) select id from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:3)",
+              "(1:4)",
+              "(2:5)"
+            ],
+            "JoinVars": {
+              "cte_id": 0
+            },
+            "ResultColumns": 3,
+            "TermCollations": [
+              "(0:3)",
+              "(1:4)",
+              "(2:2)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, dt.c2 as a, weight_string(dt.c0), weight_string(dt.c1), weight_string(dt.c2) from (select id, `name`, a from `user` where 1 != 1) as dt(c0, c1, c2) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as `name`, dt.c2 as a, weight_string(dt.c0), weight_string(dt.c1), weight_string(dt.c2) from (select id, `name`, a from `user` where a = 1) as dt(c0, c1, c2)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, e.`name`, e.`name`, weight_string(e.id), weight_string(e.`name`) from `user` as e where 1 != 1",
+                "Query": "select e.id, e.`name`, e.`name`, weight_string(e.id), weight_string(e.`name`) from `user` as e where e.a = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT and a seed that repeats an expression",
+    "query": "with recursive cte as (select distinct id as a, id as b from user where manager_id is null union select e.id, e.id from user e join cte on e.manager_id = cte.a) select a from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select distinct id as a, id as b from user where manager_id is null union select e.id, e.id from user e join cte on e.manager_id = cte.a) select a from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:a"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:2)"
+            ],
+            "JoinVars": {
+              "cte_a": 0
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:2)",
+              "(1:2)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Distinct",
+                "Collations": [
+                  "(0:2)",
+                  "(1:2)",
+                  "2"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select id as a, id as b, weight_string(id) from `user` where 1 != 1",
+                    "Query": "select distinct id as a, id as b, weight_string(id) from `user` where manager_id is null"
+                  }
+                ]
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, e.id, weight_string(e.id) from `user` as e where 1 != 1",
+                "Query": "select e.id, e.id, weight_string(e.id) from `user` as e where e.manager_id = :cte_a"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT and a term that repeats a literal",
+    "query": "with recursive cte as (select id, name from user where manager_id is null union select 'x', 'x' from user e join cte on e.manager_id = cte.id) select id from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, name from user where manager_id is null union select 'x', 'x' from user e join cte on e.manager_id = cte.id) select id from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 0
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:0)",
+              "(1:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` where manager_id is null) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select 'x', 'x' from `user` as e where 1 != 1",
+                "Query": "select 'x', 'x' from `user` as e where e.manager_id = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT and a term that repeats a CTE column",
+    "query": "with recursive cte as (select id, manager_id from user where manager_id is null union select cte.id, cte.id from user e join cte on e.manager_id = cte.id) select id from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, manager_id from user where manager_id is null union select cte.id, cte.id from user e join cte on e.manager_id = cte.id) select id from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 0
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:2)",
+              "(1:2)"
+            ],
+            "TermFromCTE": {
+              "0": 0,
+              "1": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as manager_id, weight_string(dt.c0), weight_string(dt.c1) from (select id, manager_id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as manager_id, weight_string(dt.c0), weight_string(dt.c1) from (select id, manager_id from `user` where manager_id is null) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :cte_id as id, :cte_id as id, weight_string(:cte_id) from `user` as e where 1 != 1",
+                "Query": "select :cte_id as id, :cte_id as id, weight_string(:cte_id) from `user` as e where e.manager_id = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT does not push the limit to its routes",
+    "query": "with recursive cte as (select id as node from user where manager_id is null union select e.id from user e join cte on e.manager_id = cte.node) select node from cte limit 2",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id as node from user where manager_id is null union select e.id from user e join cte on e.manager_id = cte.node) select node from cte limit 2",
+      "Instructions": {
+        "OperatorType": "Limit",
+        "Count": "2",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:1)"
+            ],
+            "JoinVars": {
+              "cte_node": 0
+            },
+            "ResultColumns": 1,
+            "TermCollations": [
+              "(0:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as node, weight_string(dt.c0) from (select id as node from `user` where 1 != 1) as dt(c0) where 1 != 1",
+                "Query": "select dt.c0 as node, weight_string(dt.c0) from (select id as node from `user` where manager_id is null) as dt(c0)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, weight_string(e.id) from `user` as e where 1 != 1",
+                "Query": "select e.id, weight_string(e.id) from `user` as e where e.manager_id = :cte_node"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT deduplicates only on its own columns",
+    "query": "with recursive cte as (select intcol, textcol1, id from user where id = 1 union select e.intcol, cte.textcol1, e.id from user e join cte on e.intcol = cte.id) select intcol from cte order by textcol1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select intcol, textcol1, id from user where id = 1 union select e.intcol, cte.textcol1, e.id from user e join cte on e.intcol = cte.id) select intcol from cte order by textcol1",
+      "Instructions": {
+        "OperatorType": "Sort",
+        "Variant": "Memory",
+        "OrderBy": "(1|3) ASC",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "0",
+              "1: latin1_swedish_ci",
+              "(2:4)"
+            ],
+            "JoinVars": {
+              "cte_id": 2,
+              "cte_textcol1": 1
+            },
+            "ResultColumns": 4,
+            "TermCollations": [
+              "0",
+              "1: latin1_swedish_ci",
+              "(2:4)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as intcol, dt.c1 as textcol1, dt.c2 as id, weight_string(dt.c1), weight_string(dt.c2) from (select intcol, textcol1, id from `user` where 1 != 1) as dt(c0, c1, c2) where 1 != 1",
+                "Query": "select dt.c0 as intcol, dt.c1 as textcol1, dt.c2 as id, weight_string(dt.c1), weight_string(dt.c2) from (select intcol, textcol1, id from `user` where id = 1) as dt(c0, c1, c2)",
+                "Values": [
+                  "1"
+                ],
+                "Vindex": "user_index"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.intcol, :cte_textcol1 as textcol1, e.id, weight_string(:cte_textcol1), weight_string(e.id) from `user` as e where 1 != 1",
+                "Query": "select e.intcol, :cte_textcol1 as textcol1, e.id, weight_string(:cte_textcol1), weight_string(e.id) from `user` as e where e.intcol = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
     "comment": "Merge into a single dual route",
     "query": "WITH RECURSIVE cte AS (SELECT 1 as n UNION ALL SELECT n + 1 FROM cte WHERE n < 5) SELECT n FROM cte",
     "plan": {
@@ -2509,6 +2996,711 @@
         "FieldQuery": "select a from (select 1 from dual where 1 != 1 union all select 2 from dual where 1 != 1) as dt(a) where 1 != 1",
         "Query": "select a from (select 1 from dual union all select 2 from dual) as dt(a) where exists (with recursive qn as (select a * 0 as b from dual union all select b + 1 from qn where b = 0) select 1 from qn where b = a)"
       }
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT in an INSERT keeps truncating its weight strings",
+    "query": "insert into user_extra(user_id, extra_id) with recursive cte as (select id, name from user where manager_id is null union select e.id, e.name from user e inner join cte on e.manager_id = cte.id) select id, name from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, extra_id) with recursive cte as (select id, name from user where manager_id is null union select e.id, e.name from user e inner join cte on e.manager_id = cte.id) select id, name from cte",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 0
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` where manager_id is null) as dt(c0, c1) lock in share mode"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, e.`name`, weight_string(e.id), weight_string(e.`name`) from `user` as e where 1 != 1",
+                "Query": "select e.id, e.`name`, weight_string(e.id), weight_string(e.`name`) from `user` as e where e.manager_id = :cte_id lock in share mode"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT and a UNION ALL seed",
+    "query": "with recursive cte as (select id, name from user union all select id, name from user_extra union select e.id, e.name from user e join cte on e.id = cte.id) select id from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, name from user union all select id, name from user_extra union select e.id, e.name from user e join cte on e.id = cte.id) select id from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 0
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:0)",
+              "(1:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` where 1 != 1 union all select id, `name` from user_extra where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` union all select id, `name` from user_extra) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, e.`name` from `user` as e where 1 != 1",
+                "Query": "select e.id, e.`name` from `user` as e where e.id = :cte_id",
+                "Values": [
+                  ":cte_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT and a UNION ALL seed under a limit",
+    "query": "with recursive cte as (select id, name from user union all select id, name from user_extra union select e.id, e.name from user e join cte on e.id = cte.id) select id from cte limit 2",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, name from user union all select id, name from user_extra union select e.id, e.name from user e join cte on e.id = cte.id) select id from cte limit 2",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "Limit",
+            "Count": "2",
+            "Inputs": [
+              {
+                "OperatorType": "RecurseCTE",
+                "Collations": [
+                  "(0:2)",
+                  "(1:3)"
+                ],
+                "JoinVars": {
+                  "cte_id": 0
+                },
+                "ResultColumns": 2,
+                "TermCollations": [
+                  "(0:0)",
+                  "(1:1)"
+                ],
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` where 1 != 1 union all select id, `name` from user_extra where 1 != 1) as dt(c0, c1) where 1 != 1",
+                    "Query": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` union all select id, `name` from user_extra) as dt(c0, c1)"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "EqualUnique",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select e.id, e.`name` from `user` as e where 1 != 1",
+                    "Query": "select e.id, e.`name` from `user` as e where e.id = :cte_id",
+                    "Values": [
+                      ":cte_id"
+                    ],
+                    "Vindex": "user_index"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT passing on a CTE column that the join predicate does not read",
+    "query": "with recursive cte as (select name, id from user where manager_id is null union select cte.name, e.id from user e join cte on e.manager_id = cte.id) select name from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, id from user where manager_id is null union select cte.name, e.id from user e join cte on e.manager_id = cte.id) select name from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 1,
+              "cte_name": 0
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "TermFromCTE": {
+              "0": 0
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as `name`, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select `name`, id from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as `name`, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select `name`, id from `user` where manager_id is null) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :cte_name as `name`, e.id, weight_string(:cte_name), weight_string(e.id) from `user` as e where 1 != 1",
+                "Query": "select :cte_name as `name`, e.id, weight_string(:cte_name), weight_string(e.id) from `user` as e where e.manager_id = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT passing on a CTE column that has no weight string",
+    "query": "with recursive cte as (select name, intcol from user where manager_id is null union select cte.intcol, e.intcol from user e join cte on e.manager_id = cte.intcol) select name from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name, intcol from user where manager_id is null union select cte.intcol, e.intcol from user e join cte on e.manager_id = cte.intcol) select name from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:name"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "1"
+            ],
+            "JoinVars": {
+              "cte_intcol": 1
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:2)",
+              "1"
+            ],
+            "TermFromCTE": {
+              "0": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as `name`, dt.c1 as intcol, weight_string(dt.c0) from (select `name`, intcol from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as `name`, dt.c1 as intcol, weight_string(dt.c0) from (select `name`, intcol from `user` where manager_id is null) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select :cte_intcol as intcol, e.intcol, weight_string(:cte_intcol) from `user` as e where 1 != 1",
+                "Query": "select :cte_intcol as intcol, e.intcol, weight_string(:cte_intcol) from `user` as e where e.manager_id = :cte_intcol"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT compares a term expression over a CTE column by its bytes",
+    "query": "with recursive cte as (select name from user where manager_id is null union select concat(cte.name, 'x') from user e join cte on e.manager_id = cte.name) select name from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name from user where manager_id is null union select concat(cte.name, 'x') from user e join cte on e.manager_id = cte.name) select name from cte",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "Collations": [
+          "(0:1)"
+        ],
+        "JoinVars": {
+          "cte_name": 0
+        },
+        "ResultColumns": 1,
+        "TermCollations": [
+          "(0:0)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as `name`, weight_string(dt.c0) from (select `name` from `user` where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as `name`, weight_string(dt.c0) from (select `name` from `user` where manager_id is null) as dt(c0)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select concat(:cte_name, 'x') as `concat(cte.name, 'x')` from `user` as e where 1 != 1",
+            "Query": "select concat(:cte_name, 'x') as `concat(cte.name, 'x')` from `user` as e where e.manager_id = :cte_name"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT compares a term column of another table by its bytes",
+    "query": "with recursive cte as (select name from user where manager_id is null union select e.col from user_extra e join cte on e.extra_id = cte.name) select name from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name from user where manager_id is null union select e.col from user_extra e join cte on e.extra_id = cte.name) select name from cte",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "Collations": [
+          "(0:1)"
+        ],
+        "JoinVars": {
+          "cte_name": 0
+        },
+        "ResultColumns": 1,
+        "TermCollations": [
+          "(0:0)"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as `name`, weight_string(dt.c0) from (select `name` from `user` where 1 != 1) as dt(c0) where 1 != 1",
+            "Query": "select dt.c0 as `name`, weight_string(dt.c0) from (select `name` from `user` where manager_id is null) as dt(c0)"
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select e.col from user_extra as e where 1 != 1",
+            "Query": "select e.col from user_extra as e where e.extra_id = :cte_name"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT in an INSERT keeps the weight string of a passed on column",
+    "query": "insert into user_extra(user_id, extra_id) with recursive cte as (select id, name from user where manager_id is null union select e.id, cte.name from user e inner join cte on e.manager_id = cte.id) select id, name from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "INSERT",
+      "Original": "insert into user_extra(user_id, extra_id) with recursive cte as (select id, name from user where manager_id is null union select e.id, cte.name from user e inner join cte on e.manager_id = cte.id) select id, name from cte",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Select",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "AutoIncrement": "select next :n /* INT64 */ values from seq:Offset(1)",
+        "VindexOffsetFromSelect": {
+          "user_index": "[0]"
+        },
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 0,
+              "cte_name": 1
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "TermFromCTE": {
+              "1": 1
+            },
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select id, `name` from `user` where manager_id is null) as dt(c0, c1) lock in share mode"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, :cte_name as `name`, weight_string(e.id), weight_string(:cte_name) from `user` as e where 1 != 1",
+                "Query": "select e.id, :cte_name as `name`, weight_string(e.id), weight_string(:cte_name) from `user` as e where e.manager_id = :cte_id lock in share mode"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT whose seed swaps its column names reads the column that the outer query asks for",
+    "query": "with recursive cte as (select name as id, id as name from user union all select id, name from user_extra union select e.id, e.name from user e join cte on e.id = cte.id) select id from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select name as id, id as name from user union all select id, name from user_extra union select e.id, e.name from user e join cte on e.id = cte.id) select id from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:id"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_id": 0
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:0)",
+              "(1:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select `name` as id, id as `name` from `user` where 1 != 1 union all select id, `name` from user_extra where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as id, dt.c1 as `name`, weight_string(dt.c0), weight_string(dt.c1) from (select `name` as id, id as `name` from `user` union all select id, `name` from user_extra) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "EqualUnique",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, e.`name` from `user` as e where 1 != 1",
+                "Query": "select e.id, e.`name` from `user` as e where e.id = :cte_id",
+                "Values": [
+                  ":cte_id"
+                ],
+                "Vindex": "user_index"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT whose seed renames a column to the name of another reads the column that the outer query asks for",
+    "query": "with recursive cte as (select id as x, name as id from user union all select id, name from user_extra union select e.id, e.name from user e join cte on e.name = cte.x) select x from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id as x, name as id from user union all select id, name from user_extra union select e.id, e.name from user e join cte on e.name = cte.x) select x from cte",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "ColumnNames": [
+          "0:x"
+        ],
+        "Columns": "0",
+        "Inputs": [
+          {
+            "OperatorType": "RecurseCTE",
+            "Collations": [
+              "(0:2)",
+              "(1:3)"
+            ],
+            "JoinVars": {
+              "cte_x": 0
+            },
+            "ResultColumns": 2,
+            "TermCollations": [
+              "(0:0)",
+              "(1:1)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select dt.c0 as x, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id as x, `name` as id from `user` where 1 != 1 union all select id, `name` from user_extra where 1 != 1) as dt(c0, c1) where 1 != 1",
+                "Query": "select dt.c0 as x, dt.c1 as id, weight_string(dt.c0), weight_string(dt.c1) from (select id as x, `name` as id from `user` union all select id, `name` from user_extra) as dt(c0, c1)"
+              },
+              {
+                "OperatorType": "VindexLookup",
+                "Variant": "Equal",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "Values": [
+                  ":cte_x"
+                ],
+                "Vindex": "name_user_map",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "IN",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `name`, keyspace_id from name_user_vdx where 1 != 1",
+                    "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
+                    "Values": [
+                      "::name"
+                    ],
+                    "Vindex": "user_index"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "ByDestination",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select e.id, e.`name` from `user` as e where 1 != 1",
+                    "Query": "select e.id, e.`name` from `user` as e where e.`name` = :cte_x"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Recursive CTE with UNION DISTINCT checks a weight_string column that the CTE selects itself",
+    "query": "with recursive cte as (select id, weight_string(name) as w from user where costly is null union select e.id, weight_string(e.name) from user e join cte on e.costly = cte.id) select id, w from cte",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "with recursive cte as (select id, weight_string(name) as w from user where costly is null union select e.id, weight_string(e.name) from user e join cte on e.costly = cte.id) select id, w from cte",
+      "Instructions": {
+        "OperatorType": "RecurseCTE",
+        "Collations": [
+          "(0:2)",
+          "1"
+        ],
+        "JoinVars": {
+          "cte_id": 0
+        },
+        "ResultColumns": 2,
+        "TermCollations": [
+          "(0:2)",
+          "1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select dt.c0 as id, dt.c1 as w, weight_string(dt.c0) from (select id, weight_string(`name`) as w from `user` where 1 != 1) as dt(c0, c1) where 1 != 1",
+            "Query": "select dt.c0 as id, dt.c1 as w, weight_string(dt.c0) from (select id, weight_string(`name`) as w from `user` where costly is null) as dt(c0, c1)"
+          },
+          {
+            "OperatorType": "VindexLookup",
+            "Variant": "Equal",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "Values": [
+              ":cte_id"
+            ],
+            "Vindex": "costly_map",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select costly, keyspace_id from costly_map where 1 != 1",
+                "Query": "select costly, keyspace_id from costly_map where costly in ::costly"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "ByDestination",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select e.id, weight_string(e.`name`), weight_string(e.id) from `user` as e where 1 != 1",
+                "Query": "select e.id, weight_string(e.`name`), weight_string(e.id) from `user` as e where e.costly = :cte_id"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
     }
   }
 ]

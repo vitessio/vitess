@@ -950,7 +950,7 @@ func (cached *RecurseCTE) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(112)
 	}
 	// field Seed vitess.io/vitess/go/vt/vtgate/engine.Primitive
 	if cc, ok := cached.Seed.(cachedObject); ok {
@@ -966,6 +966,24 @@ func (cached *RecurseCTE) CachedSize(alloc bool) int64 {
 		for k := range cached.Vars {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 		}
+	}
+	// field CheckCols []vitess.io/vitess/go/vt/vtgate/engine.CheckCol
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(48))
+		for _, elem := range cached.CheckCols {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field TermCheckCols []vitess.io/vitess/go/vt/vtgate/engine.CheckCol
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.TermCheckCols)) * int64(48))
+		for _, elem := range cached.TermCheckCols {
+			size += elem.CachedSize(false)
+		}
+	}
+	// field TermFromCTE map[int]int
+	if cached.TermFromCTE != nil {
+		size += hack.RuntimeMapSize(cached.TermFromCTE)
 	}
 	return size
 }
