@@ -37,12 +37,38 @@ import (
 4. 'ListAllTablets' should return all the new tablets.
 */
 func TestVtctldListAllTablets(t *testing.T) {
-	healthCheckURL := fmt.Sprintf("http://%s:%d/debug/health", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
-	testURL(t, healthCheckURL, "vtctld health check url")
+	testURL(t, vtctldHealthCheckURL(), "vtctld health check url")
 
 	testListAllTablets(t)
+	testFailedRepoint(t)
 	deleteCell(t)
 	addCellback(t)
+}
+
+func vtctldHealthCheckURL() string {
+	return fmt.Sprintf("http://%s:%d/debug/health", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
+}
+
+// testFailedRepoint points cell2 at an address that refuses connections, as a typo in UpdateCellInfo would, and
+// checks that vtctld's reads of the cell fail rather than crash it, and that once the cell is pointed back,
+// vtctld serves it again. Before topo.Server.ConnForCell kept the cached connection when connecting to the new
+// address failed, the second read closed an already closed connection and vtctld panicked.
+func testFailedRepoint(t *testing.T) {
+	vtctld := clusterInstance.VtctldClientProcess
+	// Nothing listens on port 1, so the connection is refused, and etcd2topo's Create reports that.
+	err := vtctld.ExecuteCommand("UpdateCellInfo", "--server-address", "127.0.0.1:1", cell2)
+	require.NoError(t, err)
+
+	for range 2 {
+		_, err = vtctld.ExecuteCommandWithOutput("GetTablets", "--cell", cell2)
+		require.Error(t, err, "GetTablets found tablets in a cell whose topo server is unreachable")
+	}
+	// Stop here if vtctld died, rather than retry the commands below against it until the test times out.
+	require.Equal(t, 200, getStatusForURL(vtctldHealthCheckURL()), "vtctld did not answer its health check after the failed re-point")
+
+	err = vtctld.ExecuteCommand("UpdateCellInfo", "--server-address", vtctld.TopoServerAddress, cell2)
+	require.NoError(t, err)
+	testListAllTablets(t)
 }
 
 func testListAllTablets(t *testing.T) {
