@@ -107,6 +107,10 @@ func TestUnionAll(t *testing.T) {
 			mcmp.AssertMatchesNoOrder("select tbl2.id1 FROM  ((select id1 from t1 order by id1 limit 5) union all (select id1 from t1 order by id1 desc limit 5)) as tbl1 INNER JOIN t1 as tbl2  ON tbl1.id1 = tbl2.id1",
 				"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]")
 
+			// join pushed into a derived union all of dual selects
+			mcmp.AssertMatchesNoOrder("select t1.id2 from t1 join (select 1 as c from dual union all select 2 from dual) as sub on t1.id1 = sub.c",
+				"[[INT64(1)] [INT64(2)]]")
+
 			// this test is quite good at uncovering races in the Concatenate engine primitive. make it run many times
 			// see: https://github.com/vitessio/vitess/issues/15434
 			for range 100 {
