@@ -17,8 +17,9 @@ limitations under the License.
 package throttle
 
 import (
-	"errors"
+	"context"
 	"log/slog"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -71,7 +72,7 @@ func TestCheckResultSummary(t *testing.T) {
 // TestCheckResultLogAttrs checks that reason is the response code name and
 // that the values Summary formats into its text are in their own attributes.
 func TestCheckResultLogAttrs(t *testing.T) {
-	err := errors.New("metric probe failed")
+	err := context.DeadlineExceeded
 	tcases := []struct {
 		name        string
 		checkResult *CheckResult
@@ -107,13 +108,14 @@ func TestCheckResultLogAttrs(t *testing.T) {
 				slog.String("reason", "INTERNAL_ERROR"),
 				slog.String("app", "test"),
 				slog.Any("error", err),
-				slog.String("error_code", "UNKNOWN"),
+				slog.String("error_code", "DEADLINE_EXCEEDED"),
 			},
 		},
 	}
 	for _, tcase := range tcases {
 		t.Run(tcase.name, func(t *testing.T) {
-			assert.Equal(t, tcase.attrs, tcase.checkResult.LogAttrs())
+			got := tcase.checkResult.LogAttrs()
+			assert.True(t, slices.EqualFunc(got, tcase.attrs, slog.Attr.Equal), "got %v, want %v", got, tcase.attrs)
 		})
 	}
 }
