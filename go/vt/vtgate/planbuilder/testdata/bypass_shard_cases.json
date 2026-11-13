@@ -237,8 +237,7 @@
           "Sharded": false
         },
         "TargetDestination": "Shard(-80)",
-        "Query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from `user`",
-        "QueryTimeout": 100
+        "Query": "select /*vt+ QUERY_TIMEOUT_MS=100 */ count(*), col from `user`"
       }
     }
   },
@@ -257,8 +256,7 @@
         },
         "TargetDestination": "Shard(-80)",
         "IsDML": true,
-        "Query": "update /*vt+ QUERY_TIMEOUT_MS=100 */ `user` set val = 1 where id = 1",
-        "QueryTimeout": 100
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=100 */ `user` set val = 1 where id = 1"
       }
     }
   },
@@ -277,8 +275,7 @@
         },
         "TargetDestination": "Shard(-80)",
         "IsDML": true,
-        "Query": "delete /*vt+ QUERY_TIMEOUT_MS=100 */ from `USER` where ID = 42",
-        "QueryTimeout": 100
+        "Query": "delete /*vt+ QUERY_TIMEOUT_MS=100 */ from `USER` where ID = 42"
       }
     }
   },
@@ -297,8 +294,7 @@
         },
         "TargetDestination": "Shard(-80)",
         "IsDML": true,
-        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=100 */ into `USER`(ID, `NAME`) values (42, 'ms X')",
-        "QueryTimeout": 100
+        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=100 */ into `USER`(ID, `NAME`) values (42, 'ms X')"
       }
     }
   },

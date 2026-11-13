@@ -58,9 +58,6 @@ type DML struct {
 	// to use single round trip autocommit.
 	MultiShardAutocommit bool
 
-	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-	QueryTimeout int
-
 	PreventAutoCommit bool
 
 	FetchLastInsertID bool

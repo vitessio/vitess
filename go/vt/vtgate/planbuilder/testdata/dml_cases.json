@@ -1715,7 +1715,6 @@
         },
         "AutoIncrement": "select next :n /* INT64 */ values from seq:Values::(1, 2)",
         "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into `user`(id, `Name`, Costly) values (:_Id_0, :_Name_0, :_Costly_0), (:_Id_1, :_Name_1, :_Costly_1)",
-        "QueryTimeout": 1,
         "VindexValues": {
           "costly_map": "null, null",
           "name_user_map": "null, null",
@@ -2161,8 +2160,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
-        "QueryTimeout": 1
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -2453,8 +2451,7 @@
           "Name": "user",
           "Sharded": true
         },
-        "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'",
-        "QueryTimeout": 1
+        "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where `name` = 'jose'"
       },
       "TablesUsed": [
         "user.user_extra"
@@ -4718,8 +4715,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1",
-        "QueryTimeout": 1
+        "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ unsharded set val = 1"
       },
       "TablesUsed": [
         "main.unsharded"
@@ -4741,8 +4737,7 @@
           "Name": "main",
           "Sharded": false
         },
-        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()",
-        "QueryTimeout": 1
+        "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into unsharded values ()"
       },
       "TablesUsed": [
         "main.unsharded"
