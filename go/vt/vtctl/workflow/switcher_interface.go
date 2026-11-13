@@ -20,13 +20,11 @@ import (
 	"context"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 type iswitcher interface {
-	lockKeyspace(ctx context.Context, keyspace, action string, opts ...topo.LockOption) (context.Context, func(*error), error)
+	lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error)
 	cancelMigration(ctx context.Context, sm *StreamMigrator) error
 	stopStreams(ctx context.Context, sm *StreamMigrator) ([]string, error)
 	stopSourceWrites(ctx context.Context) error

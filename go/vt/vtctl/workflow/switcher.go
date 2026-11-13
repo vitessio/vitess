@@ -20,8 +20,6 @@ import (
 	"context"
 	"time"
 
-	"vitess.io/vitess/go/vt/topo"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -128,8 +126,8 @@ func (r *switcher) cancelMigration(ctx context.Context, sm *StreamMigrator) erro
 	return r.ts.cancelMigration(ctx, sm)
 }
 
-func (r *switcher) lockKeyspace(ctx context.Context, keyspace, action string, opts ...topo.LockOption) (context.Context, func(*error), error) {
-	return r.s.ts.LockKeyspace(ctx, keyspace, action, opts...)
+func (r *switcher) lockKeyspace(ctx context.Context, keyspace, action string) (context.Context, func(*error), error) {
+	return r.s.ts.LockKeyspace(ctx, keyspace, action)
 }
 
 func (r *switcher) freezeTargetVReplication(ctx context.Context) error {
