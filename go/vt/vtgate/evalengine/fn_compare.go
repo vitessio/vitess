@@ -198,6 +198,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 	)
 
 	f := flagNullable
+	types := make([]ctype, 0, len(b.Arguments))
 	for _, arg := range b.Arguments {
 		tt, err := arg.compile(c)
 		if err != nil {
@@ -207,7 +208,12 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 			f = 0
 		}
 		ta.add(c.caseBranchType(arg, tt.Type, true), tt.Flag, tt.Size, tt.Scale)
-		if err := ca.addTyped(tt.Type, tt.Col, c.env.CollationEnv()); err != nil {
+		types = append(types, tt)
+	}
+
+	cols := operandCollations(b.Arguments, types)
+	for i, tt := range types {
+		if err := ca.addTyped(tt.Type, cols[i], c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -615,9 +621,10 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype, jumps []*jump) (ctype, error) {
 	var ca collationAggregation
 	var f typeFlag
-	for _, arg := range args {
+	cols := operandCollations(call.Arguments, args)
+	for i, arg := range args {
 		f |= nullableFlags(arg.Flag)
-		if err := ca.addTyped(arg.Type, arg.Col, c.env.CollationEnv()); err != nil {
+		if err := ca.addTyped(arg.Type, cols[i], c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -765,8 +772,8 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		return ctype{Type: typ, Flag: f, Col: collationBinary}, nil
 	} else if temporal > 0 {
 		var ca collationAggregation
-		for _, arg := range args {
-			if err := ca.add(arg.Col, c.env.CollationEnv()); err != nil {
+		for _, col := range operandCollations(call.Arguments, args) {
+			if err := ca.add(col, c.env.CollationEnv()); err != nil {
 				return ctype{}, err
 			}
 		}

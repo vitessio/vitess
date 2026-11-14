@@ -899,6 +899,8 @@ func (c *CaseExpr) simplify(env *ExpressionEnv) error {
 func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 	var ca collationAggregation
 	var ta typeAggregation
+	var branches []IR
+	var types []ctype
 
 	for _, wt := range cs.cases {
 		when, err := wt.when.compile(c)
@@ -916,9 +918,8 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(c.caseBranchType(wt.then, then.Type, cs.plain), then.Flag, then.Size, then.Scale)
-		if err := ca.addTyped(then.Type, then.Col, c.env.CollationEnv()); err != nil {
-			return ctype{}, err
-		}
+		branches = append(branches, wt.then)
+		types = append(types, then)
 	}
 
 	if cs.Else != nil {
@@ -928,7 +929,14 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 		}
 
 		ta.add(c.caseBranchType(cs.Else, els.Type, cs.plain), els.Flag, els.Size, els.Scale)
-		if err := ca.addTyped(els.Type, els.Col, c.env.CollationEnv()); err != nil {
+		branches = append(branches, cs.Else)
+		types = append(types, els)
+	}
+
+	// a NULL column counts here, as it did on main: see caseBranchCollations
+	cols := caseBranchCollations(branches, types)
+	for i, t := range types {
+		if err := ca.addTyped(t.Type, cols[i], c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}

@@ -58,6 +58,70 @@ func typedColumnCollation(typ sqltypes.Type, id collations.ID) collations.TypedC
 	return tc
 }
 
+// operandCollations returns the collations with which the compiled program
+// merges the operands args, of types types. These are the collations of the
+// types, except for a hex or bit literal that is a bind variable next to a
+// string whose collation is not known: that bind variable counts with the
+// connection collation, as it did on main.
+//
+// With a column s that holds 'abc' and has no declared type, s = 0x414243
+// is 1 in MySQL and was 1 on main. With the binary collation of the bind
+// variable it is compared byte by byte and is 0.
+//
+// This keeps a behaviour of main that is right only for a column in the
+// connection collation: the real collation of the column is not known.
+func operandCollations(args []IR, types []ctype) []collations.TypedCollation {
+	cols := make([]collations.TypedCollation, len(types))
+	unknown := false
+	for i, t := range types {
+		cols[i] = t.Col
+		if (t.Type == sqltypes.Enum || t.Type == sqltypes.Set || sqltypes.IsTextOrBinary(t.Type)) && unknownCollation(t.Col) {
+			unknown = true
+		}
+	}
+	if unknown {
+		hexBindVarCollations(args, cols)
+	}
+	return cols
+}
+
+// caseBranchCollations is operandCollations for the branches of an IF, an
+// IFNULL or a CASE. A branch that is a column without a declared type that
+// holds NULL counts here as a string whose collation is not known.
+//
+// With such a column ns, IFNULL(ns, 0x3132) is a VARCHAR in MySQL when ns
+// is a text column, and was a VARCHAR on main. COALESCE(ni, 0x41) was a
+// VARBINARY on main, so COALESCE does not do the same.
+//
+// This keeps a behaviour of main that is right only for a text column in
+// the connection collation: the type of the column is not known, and for a
+// column of another type MySQL returns a VARBINARY.
+func caseBranchCollations(branches []IR, types []ctype) []collations.TypedCollation {
+	cols := operandCollations(branches, types)
+	for _, t := range types {
+		if t.Type == sqltypes.Null && unknownCollation(t.Col) {
+			hexBindVarCollations(branches, cols)
+			break
+		}
+	}
+	return cols
+}
+
+// hexBindVarCollations sets in cols the collation that a hex or bit literal
+// in args that is a bind variable had on main: the connection collation.
+func hexBindVarCollations(args []IR, cols []collations.TypedCollation) {
+	for i, arg := range args {
+		bvar, ok := arg.(*BindVariable)
+		if !ok || !bvar.typed() {
+			continue
+		}
+		switch bvar.Type {
+		case sqltypes.HexNum, sqltypes.HexVal, sqltypes.BitNum:
+			cols[i] = typedCoercionCollation(bvar.Type, collations.CollationForType(bvar.Type, bvar.Collation))
+		}
+	}
+}
+
 func evalCollation(e eval) collations.TypedCollation {
 	switch e := e.(type) {
 	case nil:

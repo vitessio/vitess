@@ -394,6 +394,8 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 	case compareAsDates(lt.Type, rt.Type):
 		c.asm.CmpDates()
 	case compareAsStrings(lt.Type, rt.Type):
+		cols := operandCollations([]IR{expr.Left, expr.Right}, []ctype{lt, rt})
+		lt.Col, rt.Col = cols[0], cols[1]
 		if err := c.compareAsStrings(lt, rt); err != nil {
 			return ctype{}, err
 		}
@@ -659,6 +661,8 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 
 	skip2 := c.compileNullCheck1(rt)
 
+	cols := operandCollations([]IR{expr.Left, expr.Right}, []ctype{lt, rt})
+	lt.Col, rt.Col = cols[0], cols[1]
 	leftCol, rightCol := lt.Col, rt.Col
 	if !lt.isTextual() {
 		lt.Col = c.likeOperandCollation(lt.Type, leftCol, rightCol)

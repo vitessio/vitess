@@ -1636,6 +1636,65 @@ func TestIntroducerOnBindVariable(t *testing.T) {
 	}
 }
 
+// TestHexBindVariableNextToUnknownCollation checks a hex literal that the
+// normalizer turned into a bind variable, next to a text column without a
+// declared type, whose collation is not known. The compiled program gives
+// the bind variable the connection collation, as it did on main: with
+// column0 = 'abc', column0 = 0x414243 is 1 in MySQL for a column in the
+// connection collation. This is right only for such a column.
+//
+// The interpreter is not checked: it compares byte by byte here, as it does
+// on main.
+func TestHexBindVariableNextToUnknownCollation(t *testing.T) {
+	text := []sqltypes.Value{sqltypes.NewVarChar("abc")}
+	null := []sqltypes.Value{sqltypes.NULL}
+
+	testCases := []struct {
+		expression string
+		row        []sqltypes.Value
+		result     string
+		collation  collations.ID
+	}{
+		{expression: `column0 = 0x414243`, row: text, result: `INT64(1)`, collation: collations.CollationBinaryID},
+		{expression: `IFNULL(column0, 0x41)`, row: text, result: `VARCHAR("abc")`, collation: collations.CollationUtf8mb4ID},
+		{expression: `GREATEST(column0, 0x414243)`, row: text, result: `VARCHAR("ABC")`, collation: collations.CollationUtf8mb4ID},
+		// A NULL column0 can be of any type. IF, IFNULL and CASE count it
+		// as a string, as main did: IFNULL(ns, 0x3132) is a VARCHAR in
+		// MySQL for a text column ns.
+		{expression: `IFNULL(column0, 0x3132)`, row: null, result: `VARCHAR("12")`, collation: collations.CollationUtf8mb4ID},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, bindVars := normalizedExpr(t, venv, tc.expression)
+
+			fields := evalengine.FieldResolver(makeFields(tc.row))
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     fields.Column,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+			untyped, ok := converted.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			// no fields: the collation of column0 is not known
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = bindVars
+			env.Row = tc.row
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+			assert.Equal(t, tc.collation, res.Collation())
+		})
+	}
+}
+
 // TestBindVarLiteralMalformed pins that a malformed hex bind variable evaluated
 // by the engine — which decodes the payload itself, with no SQL encoder
 // involved — returns an error and never panics, in both the AST evaluator and

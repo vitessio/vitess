@@ -306,7 +306,7 @@ func (call *builtinField) compile(c *compiler) (ctype, error) {
 	// If the arguments contain both integral and string values
 	// MySQL converts all the arguments to DOUBLE
 	tt := strs[0].Type
-	col := strs[0].Col
+	col := operandCollations(call.Arguments, strs)[0]
 
 	for _, str := range strs {
 		tt = fieldSQLType(str.Type, tt)
@@ -420,12 +420,13 @@ func (call *builtinElt) compile(c *compiler) (ctype, error) {
 
 		if i == 0 {
 			skip = c.compileNullCheck1(args[i])
-			continue
 		}
+	}
 
-		tt = concatSQLType(args[i].Type, args[i].Col.Collation, tt)
-		err = ca.addTyped(args[i].Type, args[i].Col, c.env.CollationEnv())
-		if err != nil {
+	cols := operandCollations(call.Arguments[1:], args[1:])
+	for i, arg := range args[1:] {
+		tt = concatSQLType(arg.Type, cols[i].Collation, tt)
+		if err := ca.addTyped(arg.Type, cols[i], c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -1448,6 +1449,8 @@ func (expr *builtinStrcmp) compile(c *compiler) (ctype, error) {
 	skip2 := c.compileNullCheck1r(rt)
 	var mcol collations.TypedCollation
 
+	cols := operandCollations(expr.Arguments, []ctype{lt, rt})
+	lt.Col, rt.Col = cols[0], cols[1]
 	if sqltypes.IsNumber(lt.Type) || sqltypes.IsNumber(rt.Type) {
 		mcol = collationNumeric
 	} else {
@@ -1772,6 +1775,8 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 	skip2 := c.compileNullCheck1r(str)
 	var skip3 *jump
 
+	cols := operandCollations(call.Arguments[:2], []ctype{substr, str})
+	substr.Col, str.Col = cols[0], cols[1]
 	if !str.isTextual() {
 		c.asm.Convert_xce(1, sqltypes.VarChar, c.collation)
 		str.Col = collations.TypedCollation{
@@ -1905,10 +1910,12 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 		f |= nullableFlags(a.Flag) | a.Flag&flagExplicitCollation
 		skips = append(skips, c.compileNullCheckArg(a, i))
 		args = append(args, a)
-		tt = concatSQLType(a.Type, a.Col.Collation, tt)
+	}
 
-		err = ca.addTyped(a.Type, a.Col, c.env.CollationEnv())
-		if err != nil {
+	cols := operandCollations(call.Arguments, args)
+	for i, a := range args {
+		tt = concatSQLType(a.Type, cols[i].Collation, tt)
+		if err := ca.addTyped(a.Type, cols[i], c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -2013,18 +2020,18 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		tt = concatSQLType(a.Type, a.Col.Collation, tt)
-
-		err = ca.addTyped(a.Type, a.Col, c.env.CollationEnv())
-		if err != nil {
-			return ctype{}, err
-		}
-
 		args = append(args, a)
 
 		if i == 0 {
 			skip = c.compileNullCheck1(a)
-			continue
+		}
+	}
+
+	cols := operandCollations(call.Arguments, args)
+	for i, a := range args {
+		tt = concatSQLType(a.Type, cols[i].Collation, tt)
+		if err := ca.addTyped(a.Type, cols[i], c.env.CollationEnv()); err != nil {
+			return ctype{}, err
 		}
 	}
 
