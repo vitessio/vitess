@@ -17,7 +17,6 @@ limitations under the License.
 package colldata
 
 import (
-	"bytes"
 	"encoding/binary"
 	"math/bits"
 
@@ -229,14 +228,19 @@ func (c *Collation_utf8mb4_uca_0900) Wildcard(pat []byte, matchOne rune, matchMa
 	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, c.uca.WeightsEqual, nil, pat, matchOne, matchMany, escape)
 }
 
+// ToLower appends the lower case of src to dst. The utf8mb4_0900 collations
+// all convert case in one way in MySQL, by Unicode 9.0.0, also the Turkish
+// ones: the lower case of "I" is "i" in utf8mb4_tr_0900_ai_ci.
+//
+// MySQL does not return a result that is longer than the input, see
+// changeCaseInPlace: LOWER('ȺBC') is "ⱥ" (E2 B1 A5) without the "bc".
 func (c *Collation_utf8mb4_uca_0900) ToLower(dst, src []byte) []byte {
-	dst = append(dst, bytes.ToLower(src)...)
-	return dst
+	return unicaseInfo_unicode900.changeCase(dst, src, charset.Charset_utf8mb4{}, false)
 }
 
+// ToUpper appends the upper case of src to dst. See ToLower.
 func (c *Collation_utf8mb4_uca_0900) ToUpper(dst, src []byte) []byte {
-	dst = append(dst, bytes.ToUpper(src)...)
-	return dst
+	return unicaseInfo_unicode900.changeCase(dst, src, charset.Charset_utf8mb4{}, true)
 }
 
 type Collation_utf8mb4_0900_bin struct{}
@@ -287,14 +291,14 @@ func (c *Collation_utf8mb4_0900_bin) Wildcard(pat []byte, matchOne rune, matchMa
 	return newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
+// ToLower appends the lower case of src to dst. See Collation_utf8mb4_uca_0900.
 func (c *Collation_utf8mb4_0900_bin) ToLower(dst, src []byte) []byte {
-	dst = append(dst, bytes.ToLower(src)...)
-	return dst
+	return unicaseInfo_unicode900.changeCase(dst, src, charset.Charset_utf8mb4{}, false)
 }
 
+// ToUpper appends the upper case of src to dst. See ToLower.
 func (c *Collation_utf8mb4_0900_bin) ToUpper(dst, src []byte) []byte {
-	dst = append(dst, bytes.ToUpper(src)...)
-	return dst
+	return unicaseInfo_unicode900.changeCase(dst, src, charset.Charset_utf8mb4{}, true)
 }
 
 type Collation_uca_legacy struct {

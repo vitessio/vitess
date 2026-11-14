@@ -214,9 +214,9 @@ var inputStrings = []string{
 }
 
 // inputCaseConversions are strings for UPPER and LOWER in collations of the
-// multi-byte character sets other than the utf8mb4_0900 ones. MySQL converts
-// these with its own case tables: in utf8mb4_bin, the upper case of "ÿ" is
-// "Ÿ", and "ß" and the Georgian "ა" have no upper case.
+// multi-byte character sets. MySQL does not convert these as Go does: in
+// utf8mb4_bin, the upper case of "ÿ" is "Ÿ", and "ß" and the Georgian "ა"
+// have no upper case.
 var inputCaseConversions = []string{
 	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ' COLLATE utf8mb4_bin",
 	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ' COLLATE utf8mb4_general_ci",
@@ -261,6 +261,18 @@ var inputCaseConversions = []string{
 	"_utf8mb3 'aɐb' COLLATE utf8mb3_unicode_520_ci",
 	"_utf8mb3 'ȺBC' COLLATE utf8mb3_unicode_520_ci",
 	"_utf8mb4 'aɐb ȺBC' COLLATE utf8mb4_unicode_ci",
+
+	// The utf8mb4_0900 collations use the Unicode 9.0.0 table, also the
+	// Turkish ones. The table has no upper case for the Georgian "ა", and
+	// the length of the result is limited as it is for the Unicode 5.2.0
+	// collations.
+	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ 𐐨 𐐀 ƛ ꭰ Ꭰ' COLLATE utf8mb4_0900_ai_ci",
+	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ 𐐨 𐐀 ƛ ꭰ Ꭰ' COLLATE utf8mb4_0900_bin",
+	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ 𐐨 𐐀 ƛ ꭰ Ꭰ' COLLATE utf8mb4_tr_0900_ai_ci",
+	"_utf8mb4 'aɐb' COLLATE utf8mb4_0900_ai_ci",
+	"_utf8mb4 'ɐ' COLLATE utf8mb4_0900_as_cs",
+	"_utf8mb4 'ȺBC' COLLATE utf8mb4_0900_bin",
+	"'aɐb ა'",
 
 	// The multi-byte character sets that are not Unicode have a case
 	// table each, for the full-width Latin, Greek and Cyrillic letters.
