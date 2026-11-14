@@ -343,7 +343,17 @@ func (g *Generator) printCollationUnicode(meta *CollationMetadata) {
 	g.P(meta.Number, ": &", collation, "{")
 	g.P("id: ", meta.Number, ",")
 	g.P("name: ", strconv.Quote(meta.Name), ",")
-	if !meta.Flags.Binary {
+	// The case table is the MY_UNICASE_INFO that the collation points at
+	// in the MySQL source, and for utf8mb3_tolower_ci the default table
+	// with the MY_CS_LOWER_SORT flag of that collation. The dump has
+	// neither.
+	switch {
+	case meta.Flags.Binary:
+	case strings.HasSuffix(meta.Name, "_general_mysql500_ci"):
+		g.P("unicase: unicaseInfo_mysql500,")
+	case meta.Name == "utf8mb3_tolower_ci":
+		g.P("unicase: unicaseInfo_tolower,")
+	default:
 		g.P("unicase: unicaseInfo_default,")
 	}
 	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
@@ -429,7 +439,9 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 			g.printCollationUnicode(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
-		case strings.HasSuffix(meta.Name, "_general_ci"):
+		case strings.HasSuffix(meta.Name, "_general_ci"),
+			strings.HasSuffix(meta.Name, "_general_mysql500_ci"),
+			meta.Name == "utf8mb3_tolower_ci":
 			g.printCollationUnicode(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
