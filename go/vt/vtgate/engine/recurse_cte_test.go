@@ -216,13 +216,22 @@ func TestRecurseCTEDistinctCycleCapsTermExecutions(t *testing.T) {
 
 type cyclicRecurseTerm struct {
 	*fakePrimitive
-	calls int
+	calls     int
+	branching bool
+	stopAfter int
 }
 
 func (p *cyclicRecurseTerm) TryExecute(_ context.Context, _ VCursor, bindVars map[string]*querypb.BindVariable, _ bool) (*sqltypes.Result, error) {
 	p.calls++
+	if p.stopAfter > 0 && p.calls >= p.stopAfter {
+		return nil, errors.New("test term limit")
+	}
 	value, err := sqltypes.BindVariableToValue(bindVars["id"])
-	return &sqltypes.Result{Rows: []sqltypes.Row{{value}}}, err
+	rows := []sqltypes.Row{{value}}
+	if p.branching {
+		rows = append(rows, sqltypes.Row{value})
+	}
+	return &sqltypes.Result{Rows: rows}, err
 }
 
 func (p *cyclicRecurseTerm) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
@@ -330,13 +339,14 @@ func TestRecurseCTEStreamCycleHonorsTermBudget(t *testing.T) {
 			require.Equal(t, limit, term.calls, "stop before starting an over-budget Term query")
 			require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 2500")
 			require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+			require.Equal(t, vterrors.NetPacketTooLarge, vterrors.ErrState(err))
 		})
 	}
 }
 
-// Finite streams may use the full Term budget; its override must still permit
-// more work, independently of the small current/next frontier memory budget.
-func TestRecurseCTEStreamTermBudgetBoundaryAndOverride(t *testing.T) {
+// Finite streams may use the full Term budget, but a client row-memory
+// override must not bypass the operator-controlled work cap.
+func TestRecurseCTEStreamTermBudgetCannotBeOverridden(t *testing.T) {
 	fields := sqltypes.MakeTestFields("id", "int64")
 	const limit = 3
 	for _, tc := range []struct {
@@ -364,9 +374,10 @@ func TestRecurseCTEStreamTermBudgetBoundaryAndOverride(t *testing.T) {
 				delivered += len(result.Rows)
 				return nil
 			})
-			if tc.calls > limit && !tc.ignore {
+			if tc.calls > limit {
 				require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 3")
 				require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+				require.Equal(t, vterrors.NetPacketTooLarge, vterrors.ErrState(err))
 				require.Equal(t, limit, term.curResult)
 				require.Equal(t, limit+1, delivered)
 				return
@@ -374,6 +385,33 @@ func TestRecurseCTEStreamTermBudgetBoundaryAndOverride(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.calls, term.curResult)
 			require.Equal(t, tc.calls, delivered)
+		})
+	}
+}
+
+// A branching UNION ALL must retain a work cap even when the client disables
+// row-memory checks. Keep the primitive bounded if that guard is removed.
+func TestRecurseCTETermBudgetWithRowOverride(t *testing.T) {
+	const limit = 2500
+	for _, mode := range []string{"execute", "stream", "transaction stream"} {
+		t.Run(mode, func(t *testing.T) {
+			seed := sqltypes.MakeTestResult(sqltypes.MakeTestFields("id", "int64"))
+			for range 100 {
+				seed.Rows = append(seed.Rows, sqltypes.Row{sqltypes.NewInt64(1)})
+			}
+			term := &cyclicRecurseTerm{fakePrimitive: &fakePrimitive{}, branching: true, stopAfter: limit + 1}
+			cte := &RecurseCTE{Seed: &fakePrimitive{results: []*sqltypes.Result{seed}}, Term: term, Vars: map[string]int{"id": 0}}
+			cursor := &recurseMemoryVCursor{noopVCursor: &noopVCursor{inTx: mode == "transaction stream"}, limit: limit, ignore: true}
+			var err error
+			if mode == "execute" {
+				_, err = cte.TryExecute(t.Context(), cursor, nil, true)
+			} else {
+				err = cte.TryStreamExecute(t.Context(), cursor, nil, true, func(*sqltypes.Result) error { return nil })
+			}
+			require.Equal(t, limit, term.calls)
+			require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 2500")
+			require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+			require.Equal(t, vterrors.NetPacketTooLarge, vterrors.ErrState(err))
 		})
 	}
 }
@@ -401,6 +439,7 @@ func TestRecurseCTEMemoryRows(t *testing.T) {
 		limit                      int
 		ignore                     bool
 		bufferedError, streamError bool
+		workError                  bool
 	}{
 		{name: "seed over budget", seed: 4, terms: []int{0, 0, 0, 0}, limit: 3, bufferedError: true, streamError: true},
 		{name: "seed at budget", seed: 3, terms: []int{0, 0, 0}, limit: 3},
@@ -408,8 +447,8 @@ func TestRecurseCTEMemoryRows(t *testing.T) {
 		{name: "term at budget", seed: 1, terms: []int{2, 0, 0}, limit: 3},
 		{name: "completed levels within cumulative budget", seed: 1, terms: []int{1, 1, 0}, limit: 3},
 		{name: "branching levels", seed: 1, terms: []int{2, 2, 2, 0, 0, 0, 0}, limit: 5, bufferedError: true, streamError: true},
-		{name: "override seed budget", seed: 4, terms: []int{0, 0, 0, 0}, limit: 3, ignore: true},
-		{name: "override branching budget", seed: 1, terms: []int{2, 2, 2, 0, 0, 0, 0}, limit: 5, ignore: true},
+		{name: "override seed budget", seed: 4, terms: []int{0, 0, 0, 0}, limit: 3, ignore: true, bufferedError: true, streamError: true, workError: true},
+		{name: "override branching budget", seed: 1, terms: []int{2, 2, 2, 0, 0, 0, 0}, limit: 5, ignore: true, bufferedError: true, streamError: true, workError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, mode := range []string{"execute", "stream", "transaction stream"} {
@@ -445,8 +484,13 @@ func TestRecurseCTEMemoryRows(t *testing.T) {
 						wantError = tc.streamError
 					}
 					if wantError {
-						require.ErrorContains(t, err, "in-memory row count exceeded allowed limit")
+						message := "in-memory row count exceeded allowed limit"
+						if tc.workError {
+							message = "recursive term execution count exceeded allowed limit"
+						}
+						require.ErrorContains(t, err, message)
 						require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+						require.Equal(t, vterrors.NetPacketTooLarge, vterrors.ErrState(err))
 						if tc.name == "seed over budget" {
 							require.Zero(t, term.curResult, "do not expand an oversized seed")
 						}
@@ -489,6 +533,7 @@ func TestRecurseCTEConcurrentMemoryRows(t *testing.T) {
 			})
 			require.ErrorContains(t, err, "in-memory row count exceeded allowed limit")
 			require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+			require.Equal(t, vterrors.NetPacketTooLarge, vterrors.ErrState(err))
 			require.LessOrEqual(t, delivered, 3, "reject over-budget chunks before forwarding them")
 		})
 	}
@@ -543,4 +588,36 @@ func TestRecurseCTEStreamStopsOnError(t *testing.T) {
 			})
 		}
 	}
+}
+
+// Scatter can aggregate errors from multiple shard callbacks and lose their
+// MySQL state. Recursion must return its original latched callback error.
+func TestRecurseCTEStreamPreservesCallbackErrorState(t *testing.T) {
+	fields := sqltypes.MakeTestFields("id", "int64")
+	for _, source := range []string{"seed", "term"} {
+		t.Run(source, func(t *testing.T) {
+			oversized := &aggregateRecurseCallbackErrors{fakePrimitive: &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1", "2", "3", "4")}}}
+			var seed, term Primitive = oversized, &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields)}}
+			if source == "term" {
+				seed = &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(fields, "1")}}
+				term = oversized
+			}
+			cte := &RecurseCTE{Seed: seed, Term: term, Vars: map[string]int{"id": 0}}
+			cursor := &recurseMemoryVCursor{noopVCursor: &noopVCursor{}, limit: 3}
+			err := cte.TryStreamExecute(t.Context(), cursor, nil, true, func(*sqltypes.Result) error { return nil })
+			require.ErrorContains(t, err, "in-memory row count exceeded allowed limit")
+			require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+			require.Equal(t, vterrors.NetPacketTooLarge, vterrors.ErrState(err))
+		})
+	}
+}
+
+type aggregateRecurseCallbackErrors struct{ *fakePrimitive }
+
+func (p *aggregateRecurseCallbackErrors) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	err := p.fakePrimitive.TryStreamExecute(ctx, vcursor, bindVars, wantfields, callback)
+	if err == nil {
+		return nil
+	}
+	return vterrors.Aggregate([]error{err, err})
 }

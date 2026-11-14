@@ -440,3 +440,32 @@ func TestOuterJoinDMLExemptionIsLocalToTargets(t *testing.T) {
 		}
 	}
 }
+
+// An aggregate may report a helper offset that its truncated output does not
+// expose. Return a planner error rather than indexing outside that output.
+func TestUnionRejectsUnavailableWeightStringOffsets(t *testing.T) {
+	columns := []*sqlparser.AliasedExpr{aeWrap(sqlparser.NewIntLiteral("1")), aeWrap(sqlparser.NewIntLiteral("2"))}
+	for _, offset := range []int{-1, 2} {
+		union := &Union{Sources: []Operator{
+			&unavailableWeightStringSource{columns: columns, offset: offset},
+			&unavailableWeightStringSource{columns: columns, offset: 1},
+		}}
+		var err error
+		assert.NotPanics(t, func() { _, err = union.addWeightStringToOffset(&plancontext.PlanningContext{}, 0, true) })
+		assert.ErrorContains(t, err, "VT13001")
+	}
+}
+
+type unavailableWeightStringSource struct {
+	Operator
+	columns []*sqlparser.AliasedExpr
+	offset  int
+}
+
+func (s *unavailableWeightStringSource) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return s.columns
+}
+
+func (s *unavailableWeightStringSource) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
+	return s.offset
+}

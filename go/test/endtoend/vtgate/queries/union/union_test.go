@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
 	"github.com/stretchr/testify/assert"
@@ -147,13 +148,43 @@ from (
 	})
 }
 
+// Ordered split UNIONs must preserve sort helpers and avoid treating arm-local
+// constants as ORDER BY column positions, in both execution modes.
 func TestUnionAllOrderedLimitPushdown(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	mcmp, closer := start(t)
-	defer closer()
+	t.Cleanup(closer)
 
 	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2), (20, 20), (21, 21), (22, 22), (23, 23), (24, 24), (25, 25)")
 	mcmp.Exec("insert into t2(id3, id4) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10)")
+
+	require.NoError(t, utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, "t1", "name"))
+	mcmp.Exec("update t1 set name = case id1 when 1 then 'abcdefghijklmnopq_z' when 2 then 'abcdefghijklmnopq_a' else 'm' end")
+	for _, workload := range []string{"oltp", "olap"} {
+		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
+			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+			mcmp.Exec("select name as x from t1 where id1 = 1 union all select name from t1 where id1 = 2 order by x limit 3")
+			mcmp.Exec("select 1 as c from dual union all select count(*) from t1 order by c limit 3")
+			// Split literal arms can report INT32 where MySQL's native UNION
+			// reports INT64. Compare ordered numeric values for these rank keys.
+			for _, query := range []string{
+				"select 0 as ord, id1 as id from t1 where id1 = 1 union all select 1, id3 from t2 where id3 = 3 order by ord limit 3",
+				"select 0 as ord, id1 as id from t1 where id1 = 1 union all select 1, id3 from t2 order by ord, id limit 3",
+				"select 100 as ord, id1 as id from t1 where id1 = 1 union all select 1, id3 from t2 order by ord, id limit 3",
+			} {
+				actual := utils.Exec(t, mcmp.VtConn, query)
+				expected := utils.Exec(t, mcmp.MySQLConn, query)
+				require.Len(mcmp.AsT(), actual.Rows, len(expected.Rows))
+				for i, row := range actual.Rows {
+					require.Len(mcmp.AsT(), row, len(expected.Rows[i]))
+					for j, value := range row {
+						require.Equal(mcmp.AsT(), expected.Rows[i][j].ToString(), value.ToString())
+					}
+				}
+			}
+		})
+	}
+	utils.Exec(t, mcmp.VtConn, "set workload = oltp")
 
 	mcmp.AssertMatches(
 		"select id1 as id from t1 union all select id3 from t2 order by id limit 3",
@@ -362,7 +393,7 @@ func TestRecursiveReferenceSeedLargerThanDepthLimit(t *testing.T) {
 }
 
 // Branching reference-seeded recursion must honor VTGate's configured row
-// budget in both modes, while the explicit override still permits the result.
+// budget in both modes; the row override must not lift the Term work cap.
 func TestRecursiveReferenceBranchingHonorsMemoryLimit(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	mcmp, closer := start(t)
@@ -386,12 +417,13 @@ func TestRecursiveReferenceBranchingHonorsMemoryLimit(t *testing.T) {
 			_, err := mcmp.VtConn.ExecuteFetch(query, 10000, true)
 			require.ErrorContains(mcmp.AsT(), err, "in-memory row count exceeded allowed limit of 2000")
 			override := strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1)
-			result, err := mcmp.VtConn.ExecuteFetch(override, 10000, true)
-			require.NoError(mcmp.AsT(), err)
-			expected, err := mcmp.MySQLConn.ExecuteFetch(query, 10000, true)
-			require.NoError(mcmp.AsT(), err)
-			utils.CompareVitessAndMySQLResults(mcmp.AsT(), override, mcmp.VtConn, result, expected, utils.CompareOptions{})
-			require.Len(mcmp.AsT(), result.Rows, 4095)
+			var mysqlErr *sqlerror.SQLError
+			require.ErrorAs(mcmp.AsT(), err, &mysqlErr)
+			require.Equal(mcmp.AsT(), sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+			_, err = mcmp.VtConn.ExecuteFetch(override, 10000, true)
+			require.ErrorContains(mcmp.AsT(), err, "recursive term execution count exceeded allowed limit of 2000")
+			require.ErrorAs(mcmp.AsT(), err, &mysqlErr)
+			require.Equal(mcmp.AsT(), sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
 		})
 	}
 }
@@ -416,22 +448,21 @@ func TestRecursiveStreamingWorkBudget(t *testing.T) {
 	mcmp.Exec("insert into t1(id1,id2) values " + strings.Join(values, ","))
 	utils.Exec(t, mcmp.VtConn, "set workload = olap")
 	query := "with recursive c as (select id from ref union all select u.id2 from t1 u join c on u.id1 = c.id) select id from c"
-	_, err := mcmp.VtConn.ExecuteFetch(query, 10000, true)
-	require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 2000")
-	// 1998 rows/Term calls fit without an override; 2001 require the override.
-	for _, tc := range []struct {
-		query string
-		rows  int
-	}{
-		{strings.Replace(query, "u.id1 = c.id", "u.id1 = c.id where u.id1 <= 1995", 1), 1998},
-		{strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1), 2001},
-	} {
-		result, err := mcmp.VtConn.ExecuteFetch(tc.query, 10000, true)
+	for _, workload := range []string{"oltp", "olap"} {
+		utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
+		override := strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1)
+		_, err := mcmp.VtConn.ExecuteFetch(override, 10000, true)
+		require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 2000")
+		var mysqlErr *sqlerror.SQLError
+		require.ErrorAs(t, err, &mysqlErr)
+		require.Equal(t, sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+		allowed := strings.Replace(query, "u.id1 = c.id", "u.id1 = c.id where u.id1 <= 1995", 1)
+		result, err := mcmp.VtConn.ExecuteFetch(allowed, 10000, true)
 		require.NoError(t, err)
-		expected, err := mcmp.MySQLConn.ExecuteFetch(tc.query, 10000, true)
+		expected, err := mcmp.MySQLConn.ExecuteFetch(allowed, 10000, true)
 		require.NoError(t, err)
-		utils.CompareVitessAndMySQLResults(t, tc.query, mcmp.VtConn, result, expected, utils.CompareOptions{})
-		require.Len(t, result.Rows, tc.rows)
+		utils.CompareVitessAndMySQLResults(t, allowed, mcmp.VtConn, result, expected, utils.CompareOptions{})
+		require.Len(t, result.Rows, 1998)
 	}
 }
 

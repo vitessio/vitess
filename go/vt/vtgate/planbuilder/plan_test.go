@@ -205,6 +205,67 @@ func hasUnboundCTEReference(root engine.Primitive, insideRecursiveTerm bool) boo
 	return false
 }
 
+// The outer sort needs each arm's helper columns until after concatenation.
+func (s *planTestSuite) TestOrderedUnionLimitKeepsHelperColumns() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["user"].Tables["user"].Columns = append(vschema.Keyspaces["user"].Tables["user"].Columns, vindexes.Column{Name: sqlparser.NewIdentifierCI("textcol"), Type: sqltypes.VarChar, CollationName: "utf8mb4_bin"})
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, query := range []string{
+		"select textcol as x from user where id = 1 union all select textcol from user where id = 3 order by x limit 3",
+		"select 1 as c from dual union all select count(*) from user order by c limit 3",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			sort := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions)
+			s.Require().NotNil(sort)
+			for _, order := range sort.(*engine.MemorySort).OrderBy {
+				for _, route := range routePrimitives(plan.Instructions) {
+					if route.TruncateColumnCount > 0 {
+						s.Require().Greater(route.TruncateColumnCount, order.WeightStringCol, route.Query)
+					}
+				}
+			}
+		})
+	}
+}
+
+// Integer constants in a select list must not become ordinal ORDER BY keys.
+func (s *planTestSuite) TestUnionArmOrderingSkipsLiteralKeys() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, query := range []string{
+		"select 0 as ord, id from unsharded union all select 1, id from user order by ord limit 10",
+		"select 100 as ord, id from unsharded union all select 1, id from user order by ord limit 10",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			for _, route := range routePrimitives(plan.Instructions) {
+				s.Require().Contains(route.Query, "limit :__upper_limit")
+				s.Require().NotContains(route.Query, "order by 0")
+				s.Require().NotContains(route.Query, "order by 100")
+			}
+		})
+	}
+}
+
+// Aggregation and UNION helper normalization must plan without a panic.
+func (s *planTestSuite) TestUnionAggregateHelperOffsetDoesNotPanic() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	s.Require().NotPanics(func() {
+		_, err = TestBuilder("select count(*) as c, name from user group by name union all select 1, 'a' from dual order by c limit 3", vw, vw.CurrentDb())
+	})
+	s.Require().NoError(err)
+}
+
 func (s *planTestSuite) TestDistinctUnionLimitIsPushedIntoLocalRoute() {
 	env := vtenv.NewTestEnv()
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)

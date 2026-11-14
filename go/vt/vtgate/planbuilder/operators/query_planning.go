@@ -588,10 +588,9 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 		debugNoRewrite("limit push blocked: UNION requires all rows or ordering mapped to each arm")
 		return in, NoRewrite
 	}
-	hasOrderingToPush := false
-	for _, order := range orderToPush {
-		hasOrderingToPush = hasOrderingToPush || len(order) > 0
-	}
+	// A mapped UNION ordering may contain only arm-local constants, in which
+	// case every arm is already ordered without adding an ORDER BY clause.
+	hasOrderingToPush := len(orderToPush) > 0
 	if (hasOrdering(in.Source) && !hasOrderingToPush) || hasDistinctBeforeRoute(ctx, in.Source) {
 		debugNoRewrite("limit push blocked: VTGate DISTINCT needs all input rows before deduplication")
 		return in, NoRewrite
@@ -616,11 +615,6 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
 			src := op.Source
 			if order, ok := orderToPush[op]; ok && len(order) > 0 {
-				if hasUnionOperator(in.Source) && op.ResultColumns == 0 {
-					// The route-local ordering may add helper columns. Trim them
-					// before Concatenate combines this UNION arm with its peers.
-					op.setTruncateColumnCount(len(op.GetColumns(ctx)))
-				}
 				src = newOrdering(src, order)
 			}
 			op.Source = newLimit(src, ast, false)
@@ -665,7 +659,7 @@ func findOrderingInSourceChain(ctx *plancontext.PlanningContext, op Operator) (m
 			if window {
 				return map[*Route][]OrderBy{src: order}, true
 			}
-			return map[*Route][]OrderBy{src: nil}, true
+			return nil, true
 		}
 		inputs := op.Inputs()
 		if len(inputs) != 1 {
@@ -692,7 +686,7 @@ func mapUnionArmOrdering(ctx *plancontext.PlanningContext, union *Union, order [
 	var commonTypes []string
 	for sourceIdx, source := range union.Sources {
 		columns := source.GetColumns(ctx)
-		armOrder := make([]OrderBy, len(order))
+		armOrder := make([]OrderBy, 0, len(order))
 		for i, offset := range outputOffsets {
 			if offset >= len(columns) {
 				return nil, false
@@ -710,10 +704,16 @@ func mapUnionArmOrdering(ctx *plancontext.PlanningContext, union *Union, order [
 			} else if commonTypes[i] != typeKey {
 				return nil, false
 			}
-			armOrder[i] = order[i]
-			armOrder[i].Inner = sqlparser.Clone(order[i].Inner)
-			armOrder[i].Inner.Expr = sqlparser.Clone(expr)
-			armOrder[i].SimplifiedExpr = sqlparser.Clone(expr)
+			// A literal is constant within its arm. MySQL treats an integer
+			// ORDER BY literal as a column ordinal, so omit that key locally.
+			if sqlparser.IsLiteral(expr) {
+				continue
+			}
+			mapped := order[i]
+			mapped.Inner = sqlparser.Clone(order[i].Inner)
+			mapped.Inner.Expr = sqlparser.Clone(expr)
+			mapped.SimplifiedExpr = sqlparser.Clone(expr)
+			armOrder = append(armOrder, mapped)
 		}
 		armRoutes := routesForUnionArm(source)
 		if len(armRoutes) != 1 {

@@ -54,13 +54,14 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	}
 
 	if vcursor.ExceedsMaxMemoryRows(len(res.Rows)) {
-		return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 	}
 
 	// recurseRows contains the rows used in the next recursion
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
 	iterations := 0
+	termExecutions := 0
 	for len(recurseRows) > 0 {
 		if !r.Distinct {
 			iterations++
@@ -85,12 +86,16 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
+			termExecutions++
+			if termExecutions > vcursor.MaxMemoryRows() {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "recursive term execution count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
 				return nil, err
 			}
 			if vcursor.ExceedsMaxMemoryRows(len(res.Rows) + len(rresult.Rows)) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 			}
 			recurseRows = append(recurseRows, rresult.Rows...)
 			res.Rows = append(res.Rows, rresult.Rows...)
@@ -128,7 +133,7 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			return callbackErr
 		}
 		if vcursor.ExceedsMaxMemoryRows(currentLevelRows + len(recurseRows) + len(result.Rows)) {
-			callbackErr = vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+			callbackErr = vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 			return callbackErr
 		}
 		recurseRows = append(recurseRows, result.Rows...)
@@ -137,6 +142,11 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	}
 	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, collect)
 	if err != nil {
+		mu.Lock()
+		defer mu.Unlock()
+		if callbackErr != nil {
+			return callbackErr
+		}
 		return err
 	}
 
@@ -173,11 +183,16 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 				return err
 			}
 			termExecutions++
-			if vcursor.ExceedsMaxMemoryRows(termExecutions) {
-				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "recursive term execution count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+			if termExecutions > vcursor.MaxMemoryRows() {
+				return vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "recursive term execution count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, collect)
 			if err != nil {
+				mu.Lock()
+				defer mu.Unlock()
+				if callbackErr != nil {
+					return callbackErr
+				}
 				return err
 			}
 		}

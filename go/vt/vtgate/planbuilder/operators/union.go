@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -57,6 +58,26 @@ func (u *Union) Clone(inputs []Operator) Operator {
 	newOp.Sources = inputs
 	newOp.Selects = slices.Clone(u.Selects)
 	return &newOp
+}
+
+// Parent offset planning has requested the helpers needed above this UNION.
+// Trim only helpers subsequently added by an arm's own route ordering.
+func (u *Union) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	for _, source := range u.Sources {
+		route, ok := source.(*Route)
+		if !ok || route.ResultColumns != 0 || len(route.GetOrdering(ctx)) == 0 {
+			continue
+		}
+		limit, ok := route.Source.(*Limit)
+		if !ok {
+			continue
+		}
+		arg, ok := limit.AST.Rowcount.(*sqlparser.Argument)
+		if ok && arg.Name == engine.UpperLimitStr {
+			route.setTruncateColumnCount(len(route.GetColumns(ctx)))
+		}
+	}
+	return nil
 }
 
 func (u *Union) GetOrdering(*plancontext.PlanningContext) []OrderBy {
@@ -323,6 +344,9 @@ func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx
 	// requiring those route-local offsets to match.
 	for i, src := range u.Sources {
 		columns := src.GetColumns(ctx)
+		if offsets[i] < 0 || offsets[i] >= len(columns) {
+			return 0, vterrors.VT13001("weight_string offsets did not line up for UNION")
+		}
 		projection := newAliasedProjection(src)
 		for col := 0; col < columnCount; col++ {
 			if col < len(columns) {
