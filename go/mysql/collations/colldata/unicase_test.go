@@ -66,6 +66,7 @@ func TestUnicaseTablesMatchMySQL(t *testing.T) {
 		{"default", unicaseInfo_default},
 		{"turkish", unicaseInfo_turkish},
 		{"unicode520", unicaseInfo_unicode520},
+		{"unicode900", unicaseInfo_unicode900},
 	}
 
 	for _, table := range tables {
