@@ -727,6 +727,32 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	expectResult(t, result, &sqltypes.Result{})
 }
 
+// A no-destination IN fallback must bind the values used by its shard query.
+func TestSelectINNoRouteBindsFallbackValues(t *testing.T) {
+	vindex, err := vindexes.CreateVindex("lookup_unique", "", map[string]string{"table": "lkp", "from": "from", "to": "toc"})
+	require.NoError(t, err)
+	route := NewRoute(IN, &vindexes.Keyspace{Name: "ks", Sharded: true}, "dummy_select", "dummy_select_field")
+	route.Vindex = vindex.(vindexes.SingleColumn)
+	route.Values = []evalengine.Expr{evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)}}
+	route.NoRoutesSpecialHandling = true
+	for _, stream := range []bool{false, true} {
+		t.Run(strconv.FormatBool(stream), func(t *testing.T) {
+			cursor := &loggingVCursor{shards: []string{"-20", "20-"}}
+			bindVars := map[string]*querypb.BindVariable{"kept": sqltypes.Int64BindVariable(7)}
+			if stream {
+				_, err = wrapStreamExecute(route, cursor, bindVars, false)
+			} else {
+				_, err = route.TryExecute(t.Context(), cursor, bindVars, false)
+			}
+			require.NoError(t, err)
+			require.NotContains(t, bindVars, ListVarName, "do not mutate caller bind variables")
+			require.NotEmpty(t, cursor.log)
+			require.Contains(t, cursor.log[len(cursor.log)-1], "__vals: "+fmt.Sprint(tupleBindVariable([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})), "fallback query must receive the evaluated IN tuple")
+			require.Contains(t, cursor.log[len(cursor.log)-1], "kept: "+fmt.Sprint(sqltypes.Int64BindVariable(7)))
+		})
+	}
+}
+
 func TestINUnique(t *testing.T) {
 	vindex, _ := vindexes.CreateVindex("hash", "", nil)
 	sel := NewRoute(
