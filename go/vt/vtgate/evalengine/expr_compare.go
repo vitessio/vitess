@@ -593,6 +593,26 @@ func (expr *InExpr) compile(c *compiler) (ctype, error) {
 	}
 }
 
+// likeOperandCollation returns the collation of the string that LIKE
+// converts an operand of type tt to that is not a string. col is the
+// collation of the operand and other the one of the other operand.
+//
+// The operand becomes a string in the connection collation, like a literal.
+// An ENUM or SET column keeps its collation when the other operand is a
+// binary literal, and wins over it as a text column does: with an ENUM
+// column en that holds 'abc' in a case-insensitive collation,
+// en LIKE 0x414243 is 1 in MySQL.
+func (c *compiler) likeOperandCollation(tt sqltypes.Type, col, other collations.TypedCollation) collations.TypedCollation {
+	if enumCollationWins(tt, col, other) {
+		return col
+	}
+	return collations.TypedCollation{
+		Collation:    c.collation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+}
+
 func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 	if l.Match != nil && l.MatchCollation == coll {
 		return l.Match.Match(left)
@@ -639,22 +659,15 @@ func (expr *LikeExpr) compile(c *compiler) (ctype, error) {
 
 	skip2 := c.compileNullCheck1(rt)
 
+	leftCol, rightCol := lt.Col, rt.Col
 	if !lt.isTextual() {
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
-		lt.Col = collations.TypedCollation{
-			Collation:    c.collation,
-			Coercibility: collations.CoerceCoercible,
-			Repertoire:   collations.RepertoireASCII,
-		}
+		lt.Col = c.likeOperandCollation(lt.Type, leftCol, rightCol)
+		c.asm.Convert_xc(2, sqltypes.VarChar, lt.Col.Collation, nil)
 	}
 
 	if !rt.isTextual() {
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
-		rt.Col = collations.TypedCollation{
-			Collation:    c.collation,
-			Coercibility: collations.CoerceCoercible,
-			Repertoire:   collations.RepertoireASCII,
-		}
+		rt.Col = c.likeOperandCollation(rt.Type, rightCol, leftCol)
+		c.asm.Convert_xc(1, sqltypes.VarChar, rt.Col.Collation, nil)
 	}
 
 	var merged collations.TypedCollation

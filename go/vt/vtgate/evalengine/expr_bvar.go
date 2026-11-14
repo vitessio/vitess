@@ -143,18 +143,25 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushBVar_d(bvar.Key)
 	case sqltypes.IsText(tt):
+		// A hex or bit literal is a binary string. Its type counts as a
+		// text type, so typ.Col is the connection collation above, which
+		// the value does not have: with the literals as bind variables,
+		// CONCAT(0x4142, 'x') was declared a VARCHAR and is a VARBINARY.
 		switch tt {
 		case sqltypes.HexNum:
 			c.asm.PushBVar_hexnum(bvar.Key)
 			typ.Type = sqltypes.VarBinary
+			typ.Col = collationBinary
 			typ.Flag |= flagHex
 		case sqltypes.HexVal:
 			c.asm.PushBVar_hexval(bvar.Key)
 			typ.Type = sqltypes.VarBinary
+			typ.Col = collationBinary
 			typ.Flag |= flagHex
 		case sqltypes.BitNum:
 			c.asm.PushBVar_bitnum(bvar.Key)
 			typ.Type = sqltypes.VarBinary
+			typ.Col = collationBinary
 			typ.Flag |= flagBit
 		default:
 			typ.Type = sqltypes.VarChar

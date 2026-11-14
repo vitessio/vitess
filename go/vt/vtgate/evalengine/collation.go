@@ -82,9 +82,15 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type, env
 	rt := sqltypes.IsTextOrBinary(t2)
 	if !lt || !rt {
 		if lt {
+			if enumCollationWins(t2, c2, c1) {
+				return c2, nil, nil, nil
+			}
 			return c1, nil, nil, nil
 		}
 		if rt {
+			if enumCollationWins(t1, c1, c2) {
+				return c1, nil, nil, nil
+			}
 			return c2, nil, nil, nil
 		}
 		return collationBinary, nil, nil, nil
@@ -94,6 +100,23 @@ func mergeCollations(c1, c2 collations.TypedCollation, t1, t2 sqltypes.Type, env
 		ConvertToSuperset:   true,
 		ConvertWithCoercion: true,
 	})
+}
+
+// enumCollationWins reports whether the collation enum of an ENUM or SET
+// column of type tt wins over the collation str of the string that it is
+// compared with. It does over a binary literal, as the collation of a text
+// column does: with an ENUM column en that holds 'abc' in a case-insensitive
+// collation, en = 0x414243 is 1 in MySQL.
+//
+// Any other string keeps deciding the collation, as before. An ENUM value
+// without a declared collation has the binary one and never wins.
+func enumCollationWins(tt sqltypes.Type, enum, str collations.TypedCollation) bool {
+	if tt != sqltypes.Enum && tt != sqltypes.Set {
+		return false
+	}
+	return enum.Collation != collations.CollationBinaryID &&
+		str.Collation == collations.CollationBinaryID &&
+		enum.Coercibility < str.Coercibility
 }
 
 func mergeAndCoerceCollations(left, right eval, env *collations.Environment) (eval, eval, collations.TypedCollation, error) {

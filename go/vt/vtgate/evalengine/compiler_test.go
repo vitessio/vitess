@@ -1506,6 +1506,83 @@ func TestBindVarLiteral(t *testing.T) {
 	}
 }
 
+// TestHexBindVariableIsBinary checks a hex or bit literal that the
+// normalizer turned into a bind variable, as vtgate does before it plans a
+// query. The literal is a binary string for the compiled program, as it is
+// for the interpreter, and the collation of an ENUM column wins over it.
+func TestHexBindVariableIsBinary(t *testing.T) {
+	enum := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte("abc"))}
+	enumField := []*querypb.Field{{Name: "column0", Type: sqltypes.Enum, Charset: uint32(collations.CollationUtf8mb4ID)}}
+
+	testCases := []struct {
+		expression string
+		values     []sqltypes.Value
+		fields     []*querypb.Field
+		result     string
+		// binary is set when the result is a string with the binary
+		// collation. LPAD and LEFT return a VARCHAR with that collation
+		// for a binary string, where MySQL returns a VARBINARY.
+		binary bool
+		// compiledOnly is set when the interpreter does not return result:
+		// it compares the value of an ENUM column byte by byte, as it does
+		// on main.
+		compiledOnly bool
+	}{
+		{expression: `CONCAT(0x4142, 'x')`, result: `VARBINARY("ABx")`, binary: true},
+		{expression: `LPAD(x'4142', 5, 'x')`, result: `VARCHAR("xxxAB")`, binary: true},
+		{expression: `LEFT(b'0100000101000010', 1)`, result: `VARCHAR("A")`, binary: true},
+		// The ENUM value is 'abc': the comparison is not byte by byte.
+		{expression: `column0 = 0x414243`, values: enum, fields: enumField, result: `INT64(1)`, compiledOnly: true},
+		{expression: `column0 LIKE 0x414243`, values: enum, fields: enumField, result: `INT64(1)`, compiledOnly: true},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			stmt, known, err := venv.Parser().Parse2("select " + tc.expression + " from dual")
+			require.NoError(t, err)
+			bindVars := map[string]*querypb.BindVariable{}
+			_, err = sqlparser.Normalize(stmt, sqlparser.NewReservedVars("vtg", known), bindVars, true, "", 0, "", nil, nil, nil)
+			require.NoError(t, err)
+			require.NotEmpty(t, bindVars)
+			expr := stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr
+
+			fields := evalengine.FieldResolver(tc.fields)
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     fields.Column,
+				ResolveType:       fields.Type,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+			compiled, ok := converted.(*evalengine.CompiledExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = bindVars
+			env.Row = tc.values
+
+			check := func(path string, res evalengine.EvalResult) {
+				assert.Equal(t, tc.result, res.String(), path)
+				if tc.binary {
+					assert.Equal(t, collations.ID(collations.CollationBinaryID), res.Collation(), path)
+				}
+			}
+
+			if !tc.compiledOnly {
+				expected, err := env.EvaluateAST(converted)
+				require.NoError(t, err)
+				check("interpreter", expected)
+			}
+
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			check("compiled program", res)
+		})
+	}
+}
+
 // TestBindVarLiteralMalformed pins that a malformed hex bind variable evaluated
 // by the engine — which decodes the payload itself, with no SQL encoder
 // involved — returns an error and never panics, in both the AST evaluator and
