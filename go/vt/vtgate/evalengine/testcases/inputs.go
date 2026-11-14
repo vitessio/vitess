@@ -214,7 +214,7 @@ var inputStrings = []string{
 }
 
 // inputCaseConversions are strings for UPPER and LOWER in collations of the
-// Unicode character sets other than the utf8mb4_0900 ones. MySQL converts
+// multi-byte character sets other than the utf8mb4_0900 ones. MySQL converts
 // these with its own case tables: in utf8mb4_bin, the upper case of "ÿ" is
 // "Ÿ", and "ß" and the Georgian "ა" have no upper case.
 var inputCaseConversions = []string{
@@ -261,6 +261,21 @@ var inputCaseConversions = []string{
 	"_utf8mb3 'aɐb' COLLATE utf8mb3_unicode_520_ci",
 	"_utf8mb3 'ȺBC' COLLATE utf8mb3_unicode_520_ci",
 	"_utf8mb4 'aɐb ȺBC' COLLATE utf8mb4_unicode_ci",
+
+	// The multi-byte character sets that are not Unicode have a case
+	// table each, for the full-width Latin, Greek and Cyrillic letters.
+	"CONVERT('aBc ａＡ дЖ αΣ' USING sjis)",
+	"CONVERT('aBc ａＡ дЖ αΣ' USING sjis) COLLATE sjis_bin",
+	"CONVERT('aBc ａＡ дЖ αΣ ⅰⅠ' USING cp932)",
+	"CONVERT('aBc ａＡ дЖ αΣ ⅰⅠ' USING cp932) COLLATE cp932_bin",
+	"CONVERT('aBc ａＡ дЖ αΣ åÅ' USING ujis)",
+	"CONVERT('aBc ａＡ дЖ αΣ åÅ' USING ujis) COLLATE ujis_bin",
+	"CONVERT('aBc ａＡ дЖ αΣ åÅ ⅰⅠ' USING eucjpms)",
+	"CONVERT('aBc ａＡ дЖ αΣ åÅ ⅰⅠ' USING eucjpms) COLLATE eucjpms_bin",
+	"CONVERT('aBc ａＡ дЖ αΣ ıI ⅰⅠ' USING euckr)",
+	"CONVERT('aBc ａＡ дЖ αΣ ıI ⅰⅠ' USING euckr) COLLATE euckr_bin",
+	"CONVERT('aBc ａＡ дЖ αΣ' USING gb2312)",
+	"CONVERT('aBc ａＡ дЖ αΣ' USING gb2312) COLLATE gb2312_bin",
 }
 
 var insertStrings = []string{

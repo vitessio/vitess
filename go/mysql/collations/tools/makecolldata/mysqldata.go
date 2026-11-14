@@ -362,6 +362,8 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 		g.P("sort: &", tableSortOrder, ",")
 	}
 	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
+	// The dump has no case table of the character set.
+	g.P("caseinfo: multibyteCase_", meta.Charset, ",")
 	g.P("},")
 }
 

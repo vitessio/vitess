@@ -148,6 +148,9 @@ func TestCaseConversionMalformedInput(t *testing.T) {
 		// The result of a Turkish collation can be longer than the input.
 		// It also ends before the incomplete character.
 		{"utf8mb4_turkish_ci", "i\xC3", "\xC4\xB0"},
+		// The lead byte 82 has no second byte. It is a single byte, and
+		// a single byte above 7F does not change.
+		{"sjis_japanese_ci", "a\x82", "A\x82"},
 	}
 
 	for _, tc := range testcases {
