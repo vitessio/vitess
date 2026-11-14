@@ -97404,7 +97404,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.wait_for_position_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_for_position_timeout);
+                        message.wait_for_position_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.wait_for_position_timeout);
                         continue;
                     }
                 }
@@ -97437,7 +97437,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PrepareEmergencyReparentRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -97721,13 +97721,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.wait_for_position_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_for_position_error);
+                        message.wait_for_position_error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.wait_for_position_error);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.read_reparent_journal_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.read_reparent_journal_error);
+                        message.read_reparent_journal_error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.read_reparent_journal_error);
                         continue;
                     }
                 }
@@ -97760,7 +97760,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PrepareEmergencyReparentResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -98618,7 +98618,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.time_created = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_created);
+                        message.time_created = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.time_created);
                         continue;
                     }
                 case 3: {
@@ -98633,7 +98633,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.populate_reparent_journal_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.populate_reparent_journal_timeout);
+                        message.populate_reparent_journal_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.populate_reparent_journal_timeout);
                         continue;
                     }
                 }
@@ -98666,7 +98666,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PromoteReplicaAndJournalRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -98972,13 +98972,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.promote_replica_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.promote_replica_error);
+                        message.promote_replica_error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.promote_replica_error);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.populate_reparent_journal_error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.populate_reparent_journal_error);
+                        message.populate_reparent_journal_error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.populate_reparent_journal_error);
                         continue;
                     }
                 }
@@ -99011,7 +99011,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PromoteReplicaAndJournalResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
