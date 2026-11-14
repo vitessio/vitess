@@ -18,6 +18,7 @@ package servenv
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -27,7 +28,6 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/utils"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -114,7 +114,7 @@ func reloadClientTLSFiles() {
 	changed, err := vttls.ReloadCachedFiles()
 	if err != nil {
 		tlsReloadErrors.Add(clientTLSReloadName, 1)
-		log.Error(vterrors.Wrapf(err, "cannot reload some of the TLS files of the process's clients; each of those keeps what was loaded from it before").Error())
+		log.Error("Cannot reload some of the TLS files of the process's clients; each of those keeps what was loaded from it before", slog.Any("error", err))
 	} else {
 		tlsReloadSuccessTimestamp.Set(clientTLSReloadName, time.Now().Unix())
 	}

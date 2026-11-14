@@ -22,7 +22,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
-	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"sync"
@@ -194,7 +194,11 @@ func (r *TLSReloader) Reload(force bool) error {
 	tlsReloadSuccessTimestamp.Set(r.name, now.Unix())
 	if leaf := leafCertificate(config); leaf != nil {
 		tlsCertNotAfter.Set(r.name, leaf.NotAfter.Unix())
-		log.Info(fmt.Sprintf("Loaded the %s server's TLS config: certificate %q, serial %s, valid until %s", r.name, leaf.Subject, leaf.SerialNumber, leaf.NotAfter.Format(time.RFC3339)))
+		log.Info("Loaded a server's TLS config",
+			slog.String("server", r.name),
+			slog.String("subject", leaf.Subject.String()),
+			slog.String("serial", leaf.SerialNumber.String()),
+			slog.Time("not_after", leaf.NotAfter))
 	}
 	return nil
 }
@@ -202,7 +206,7 @@ func (r *TLSReloader) Reload(force bool) error {
 func (r *TLSReloader) failed(err error) error {
 	tlsReloadErrors.Add(r.name, 1)
 	err = vterrors.Wrapf(err, "cannot load the %s server's TLS config from cert %s, key %s, ca %s, crl %s, server-ca %s; the previous config stays in place", r.name, r.files.Cert, r.files.Key, r.files.CA, r.files.CRL, r.files.ServerCA)
-	log.Error(err.Error())
+	log.Error("Cannot load a server's TLS config; the previous config stays in place", slog.String("server", r.name), slog.Any("error", err))
 	return err
 }
 

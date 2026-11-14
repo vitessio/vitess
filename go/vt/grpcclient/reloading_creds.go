@@ -19,6 +19,7 @@ package grpcclient
 import (
 	"context"
 	"crypto/tls"
+	"log/slog"
 	"net"
 	"sync"
 
@@ -69,7 +70,7 @@ func (c *reloadingCreds) current() credentials.TransportCredentials {
 		if err != nil {
 			if c.failedGeneration != generation {
 				c.failedGeneration = generation
-				log.Error(vterrors.Wrapf(err, "cannot build the gRPC client's TLS config from the reloaded files; its connections keep using the previous one, and building it is tried again on their next handshake").Error())
+				log.Error("Cannot build the gRPC client's TLS config from the reloaded files; its connections keep using the previous one, and building it is tried again on their next handshake", slog.Any("error", err))
 			}
 		} else {
 			c.creds = credentials.NewTLS(config)
