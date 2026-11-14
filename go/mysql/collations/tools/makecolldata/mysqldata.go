@@ -116,6 +116,19 @@ func (g *Generator) printCollationUcaLegacy(meta *CollationMetadata) {
 		or(tableContractions, "nil"), ",",
 		maxCodepoint, "),",
 	)
+
+	// The case table is the MY_UNICASE_INFO that the collation points at
+	// in the MySQL source. The dump does not have it. The Turkish
+	// collations use my_unicase_turkish, the Unicode 5.2.0 collations use
+	// my_unicase_unicode520 and the others use my_unicase_default.
+	switch {
+	case strings.Contains(meta.Name, "_turkish_"):
+		g.P("unicase: unicaseInfo_turkish,")
+	case meta.UCAVersion == 520:
+		g.P("unicase: unicaseInfo_unicode520,")
+	default:
+		g.P("unicase: unicaseInfo_default,")
+	}
 	g.P("},")
 }
 

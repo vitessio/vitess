@@ -64,6 +64,8 @@ func TestUnicaseTablesMatchMySQL(t *testing.T) {
 		info *UnicaseInfo
 	}{
 		{"default", unicaseInfo_default},
+		{"turkish", unicaseInfo_turkish},
+		{"unicode520", unicaseInfo_unicode520},
 	}
 
 	for _, table := range tables {
@@ -101,8 +103,9 @@ func TestUnicaseTablesMatchMySQL(t *testing.T) {
 
 // TestCaseConversionMatchesMySQL converts strings to upper and lower case in
 // every collation that testdata/mysql_case_conversion.txt lists, and compares
-// the result with what MySQL returned. For utf8mb4_bin, the upper case of
-// "aɐb" (61 C9 90 62) is "AɐB" (41 C9 90 42).
+// the result with what MySQL returned. The upper case of "aɐb" (61 C9 90 62)
+// is "AɐB" (41 C9 90 42) in utf8mb4_bin and "AⱯ" (41 E2 B1 AF) in
+// utf8mb4_unicode_520_ci, where the three bytes of "Ɐ" overwrite the "b".
 func TestCaseConversionMatchesMySQL(t *testing.T) {
 	decode := func(column string) []byte {
 		if column == "-" {
@@ -142,6 +145,9 @@ func TestCaseConversionMalformedInput(t *testing.T) {
 		{"utf16_bin", "\x00a\xD8\x00\x00b", "\x00A\xD8\x00\x00b"},
 		// The last character is two bytes short.
 		{"utf32_general_ci", "\x00\x00\x00a\x00\x00", "\x00\x00\x00A\x00\x00"},
+		// The Turkish collations convert to a second buffer. The result
+		// also ends before the incomplete character.
+		{"utf8mb4_turkish_ci", "i\xC3", "\xC4\xB0"},
 	}
 
 	for _, tc := range testcases {

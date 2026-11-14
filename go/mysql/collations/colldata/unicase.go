@@ -17,7 +17,7 @@ limitations under the License.
 package colldata
 
 import (
-	"unicode/utf8"
+	"slices"
 
 	"vitess.io/vitess/go/mysql/collations/charset"
 )
@@ -30,6 +30,13 @@ type UnicaseInfo struct {
 	MaxChar   rune
 	Page      []*[]UnicaseChar
 	LowerSort bool
+
+	// CaseGrows is true when MySQL converts utf8mb3 and utf8mb4 text with
+	// this table into a buffer that is twice as long as the input. This is
+	// the Turkish table: the upper case of "i" (69) is "İ" (C4 B0). With
+	// every other table the result is never longer than the input, see
+	// changeCaseInPlace.
+	CaseGrows bool
 }
 
 func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
@@ -72,6 +79,33 @@ func (info *UnicaseInfo) toLower(codepoint rune) rune {
 	return codepoint
 }
 
+// toUpperLowPage and toLowerLowPage are toUpper and toLower as MySQL has
+// them for gb18030_unicode_520_ci. MySQL looks up the page of a code point by
+// the second-lowest byte alone, so a code point above U+FFFF gets the entry
+// of a code point in the Basic Multilingual Plane: the upper case of U+10061
+// is U+0041, "A", because the upper case of U+0061, "a", is. Other
+// collations with the same table do not do this. MySQL 8.0.46 and 8.4.13
+// both behave this way.
+func (info *UnicaseInfo) toUpperLowPage(codepoint rune) rune {
+	if codepoint < 0 || codepoint > info.MaxChar {
+		return codepoint
+	}
+	if page := info.Page[(int(codepoint)>>8)&0xFF]; page != nil {
+		return (*page)[int(codepoint)&0xFF].ToUpper
+	}
+	return codepoint
+}
+
+func (info *UnicaseInfo) toLowerLowPage(codepoint rune) rune {
+	if codepoint < 0 || codepoint > info.MaxChar {
+		return codepoint
+	}
+	if page := info.Page[(int(codepoint)>>8)&0xFF]; page != nil {
+		return (*page)[int(codepoint)&0xFF].ToLower
+	}
+	return codepoint
+}
+
 // changeCase appends src to dst with every character converted to upper or
 // lower case, the way UPPER() and LOWER() do it in MySQL for a collation
 // that uses this table. src is text in the character set cs.
@@ -86,14 +120,23 @@ func (info *UnicaseInfo) changeCase(dst, src []byte, cs charset.Charset, upper b
 	}
 	switch cs.(type) {
 	case charset.Charset_utf8mb3, charset.Charset_utf8mb4:
-		return changeCaseUTF8(dst, src, cs, convert)
+		if info.CaseGrows {
+			return changeCaseGrowing(dst, src, cs, convert)
+		}
+		return changeCaseInPlace(dst, src, cs, convert)
+	case charset.Charset_gb18030:
+		convert = info.toLowerLowPage
+		if upper {
+			convert = info.toUpperLowPage
+		}
+		return changeCaseGrowing(dst, src, cs, convert)
 	default:
 		return changeCaseFixedWidth(dst, src, cs, convert)
 	}
 }
 
-// changeCaseUTF8 converts utf8mb3 and utf8mb4 text. MySQL converts these in
-// place, in a buffer that is as long as the input, and this function does
+// changeCaseInPlace converts utf8mb3 and utf8mb4 text. MySQL converts these
+// in place, in a buffer that is as long as the input, and this function does
 // the same on a copy of src.
 //
 // A converted character can be shorter than the original: the lower case of
@@ -105,28 +148,57 @@ func (info *UnicaseInfo) changeCase(dst, src []byte, cs charset.Charset, upper b
 // can be longer than the original, the longer character overwrites the
 // start of the next one before it is read: in utf8mb4_unicode_520_ci,
 // UPPER('aɐb') is "AⱯ" (41 E2 B1 AF) because the upper case of "ɐ" (C9 90)
-// is three bytes long and overwrites the "b".
-func changeCaseUTF8(dst, src []byte, cs charset.Charset, convert func(rune) rune) []byte {
+// is three bytes long and overwrites the "b", and UPPER('ɐ') is the empty
+// string because three bytes do not fit in two.
+func changeCaseInPlace(dst, src []byte, cs charset.Charset, convert func(rune) rune) []byte {
 	start := len(dst)
 	dst = append(dst, src...)
 	buf := dst[start:]
 
+	var encoded [4]byte
 	var read, write int
 	for read < len(buf) {
 		codepoint, width, ok := cs.DecodeRune(buf[read:])
 		if !ok {
 			break
 		}
-		codepoint = convert(codepoint)
-		converted := utf8.RuneLen(codepoint)
-		if converted < 0 || converted > cs.MaxWidth() || write+converted > len(buf) {
+		converted := cs.EncodeRune(encoded[:], convert(codepoint))
+		if converted <= 0 || write+converted > len(buf) {
 			break
 		}
-		cs.EncodeRune(buf[write:], codepoint)
+		copy(buf[write:], encoded[:converted])
 		read += width
 		write += converted
 	}
 	return dst[:start+write]
+}
+
+// changeCaseGrowing converts text for the collations where MySQL writes the
+// result to a second buffer that is twice as long as the input: the Turkish
+// utf8mb3 and utf8mb4 collations, and gb18030_unicode_520_ci. In
+// utf8mb4_turkish_ci, UPPER('i') is "İ" (C4 B0), one byte longer than the
+// input.
+//
+// The conversion stops at the first byte sequence that is not valid in cs,
+// and at a converted character that does not fit in the buffer. The result
+// ends there, as it does in MySQL.
+func changeCaseGrowing(dst, src []byte, cs charset.Charset, convert func(rune) rune) []byte {
+	limit := len(dst) + 2*len(src)
+
+	var encoded [4]byte
+	for len(src) > 0 {
+		codepoint, width, ok := cs.DecodeRune(src)
+		if !ok {
+			break
+		}
+		converted := cs.EncodeRune(encoded[:], convert(codepoint))
+		if converted <= 0 || len(dst)+converted > limit {
+			break
+		}
+		dst = append(dst, encoded[:converted]...)
+		src = src[width:]
+	}
+	return dst
 }
 
 // changeCaseFixedWidth converts ucs2, utf16, utf16le and utf32 text. The
@@ -3047,4 +3119,29 @@ var unicasePages_default = []*[]UnicaseChar{
 var unicaseInfo_default = &UnicaseInfo{
 	MaxChar: 0xFFFF,
 	Page:    unicasePages_default,
+}
+
+// plane00_turkish is plane00 with the Turkish dotted and dotless i: the lower
+// case of "I" is "ı" (U+0131) and the upper case of "i" is "İ" (U+0130). The
+// sort value of "ß" also differs. This is turk00 in MySQL.
+var plane00_turkish = func() []UnicaseChar {
+	plane := slices.Clone(plane00)
+	plane[0x49] = UnicaseChar{0x0049, 0x0131, 0x0049}
+	plane[0x69] = UnicaseChar{0x0130, 0x0069, 0x0049}
+	plane[0xDF] = UnicaseChar{0x00DF, 0x00DF, 0x00DF}
+	return plane
+}()
+
+// unicasePages_turkish is unicasePages_default with plane00_turkish as the
+// first page. This is my_unicase_pages_turkish in MySQL.
+var unicasePages_turkish = func() []*[]UnicaseChar {
+	pages := slices.Clone(unicasePages_default)
+	pages[0x00] = &plane00_turkish
+	return pages
+}()
+
+var unicaseInfo_turkish = &UnicaseInfo{
+	MaxChar:   0xFFFF,
+	Page:      unicasePages_turkish,
+	CaseGrows: true,
 }

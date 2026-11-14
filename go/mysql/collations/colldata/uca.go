@@ -301,6 +301,10 @@ type Collation_uca_legacy struct {
 	name string
 	id   collations.ID
 	uca  *uca.CollationLegacy
+
+	// unicase is the MySQL case table of the collation, for ToUpper and
+	// ToLower. Sorting does not use it.
+	unicase *UnicaseInfo
 }
 
 func (c *Collation_uca_legacy) ID() collations.ID {
@@ -317,6 +321,19 @@ func (c *Collation_uca_legacy) Charset() charset.Charset {
 
 func (c *Collation_uca_legacy) IsBinary() bool {
 	return false
+}
+
+// ToUpper appends the upper case of src to dst. MySQL has three case tables
+// for these collations, and the result depends on the table: UPPER('i') is
+// "I" in utf8mb4_unicode_ci and "İ" in utf8mb4_turkish_ci, and UPPER('𐐨')
+// is "𐐀" in utf8mb4_unicode_520_ci and "𐐨" in the other two.
+func (c *Collation_uca_legacy) ToUpper(dst, src []byte) []byte {
+	return c.unicase.changeCase(dst, src, c.uca.Charset(), true)
+}
+
+// ToLower appends the lower case of src to dst. See ToUpper.
+func (c *Collation_uca_legacy) ToLower(dst, src []byte) []byte {
+	return c.unicase.changeCase(dst, src, c.uca.Charset(), false)
 }
 
 func (c *Collation_uca_legacy) Collate(left, right []byte, isPrefix bool) int {
