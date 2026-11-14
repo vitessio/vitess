@@ -29,6 +29,5 @@ func ResetCachedFilesForTest() {
 	reloadMu.Lock()
 	defer reloadMu.Unlock()
 	cachedClientFiles.Clear()
-	loadingClientFiles.Clear()
 	watchedCRLs.Clear()
 }

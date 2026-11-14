@@ -131,18 +131,10 @@ func ClientConfig(mode SslMode, cert, key, ca, crl, name string, minTLSVersion u
 
 	var checker *crlChecker
 	if crl != "" {
-		body, err := os.ReadFile(crl)
-		if err != nil {
+		var err error
+		if checker, err = loadClientCRL(crlWatch{crl: crl, files: k}, files.caCertificates); err != nil {
 			return nil, err
 		}
-		crls, err := parseCRLSet(crl, body)
-		if err != nil {
-			return nil, err
-		}
-		if checker, err = newCRLCheckerFrom(crls, files.caCertificates); err != nil {
-			return nil, err
-		}
-		watchCRL(crlWatch{crl: crl, files: k}, body)
 	}
 
 	// The modes that build the peer's chain themselves verify it

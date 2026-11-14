@@ -20,7 +20,9 @@ import (
 	"crypto/tls"
 	"os"
 	"path"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -317,6 +319,86 @@ func TestReloadCachedFilesReadsAConfigConsistently(t *testing.T) {
 	res := handshake(t, serverRequiringClientsOf(t, newCerts), config)
 	require.NoError(t, res.clientErr, "the client must trust the new CA")
 	require.NoError(t, res.serverErr, "the client must present the new certificate along with the new CA")
+}
+
+// reloadDuringRead has readFile, on its read number nth of the file at
+// path, call rotate and start a ReloadCachedFiles, which it waits a
+// second for: a reload that does not wait for the first load reading
+// the files finishes within it. It returns a function that waits for
+// the reload to finish.
+func reloadDuringRead(t *testing.T, path string, nth int32, rotate func()) (wait func()) {
+	var (
+		reads     atomic.Int32
+		reloadErr error
+	)
+	done := make(chan struct{})
+	t.Cleanup(func() { readFile = os.ReadFile })
+	readFile = func(name string) ([]byte, error) {
+		b, err := os.ReadFile(name)
+		if name == path && reads.Add(1) == nth {
+			rotate()
+			go func() {
+				defer close(done)
+				_, reloadErr = ReloadCachedFiles()
+			}()
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+			}
+		}
+		return b, err
+	}
+	return func() {
+		select {
+		case <-done:
+			requireNoErrorFor(t, reloadErr, path)
+		case <-time.After(30 * time.Second):
+			require.Fail(t, "the reload did not finish")
+		}
+	}
+}
+
+// TestReloadCachedFilesDoesNotPassByAFirstLoad checks that a reload
+// that runs while a client's files are read for the first time, after
+// a rotation that lands between the reads, loads the rotated files: it
+// must not skip the files that are not cached yet and leave the first
+// load to cache what they held before the rotation.
+func TestReloadCachedFilesDoesNotPassByAFirstLoad(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newLiveClientFiles(t)
+	files.install(oldCerts)
+
+	// The rotation and the reload land after the first load's second,
+	// and last, read of the CA, before it caches what it read.
+	wait := reloadDuringRead(t, files.ca, 2, func() { files.install(newCerts) })
+	_, err := files.clientConfig(oldCerts.ServerName)
+	require.NoError(t, err)
+	wait()
+
+	config, err := files.clientConfig(newCerts.ServerName)
+	require.NoError(t, err)
+	res := handshake(t, serverRequiringClientsOf(t, newCerts), config)
+	require.NoError(t, res.clientErr, "the client must trust the new CA after the reload")
+	require.NoError(t, res.serverErr, "the client must present the new certificate after the reload")
+}
+
+// TestReloadCachedFilesDoesNotPassByAFirstCRLRead checks that a reload
+// that runs while a CRL file is read for the first time, after it
+// changed, counts the change: it must not skip the file that is not
+// watched yet and leave the gRPC credentials built from what it held
+// before.
+func TestReloadCachedFilesDoesNotPassByAFirstCRLRead(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newLiveClientFiles(t)
+	files.install(certs)
+
+	generation := CachedFilesGeneration()
+	wait := reloadDuringRead(t, files.crl, 1, func() { copyFile(t, files.crl, certs.CombinedCRL) })
+	_, err := files.clientConfig(certs.ServerName)
+	require.NoError(t, err)
+	wait()
+	require.NotEqual(t, generation, CachedFilesGeneration(), "the reload must count the CRL change that a config was built before")
 }
 
 // TestReloadCachedFilesKeepsAConfigWhoseFilesKeepChanging checks that a

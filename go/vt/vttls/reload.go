@@ -64,20 +64,23 @@ var (
 	// loaded to its *clientFiles. A load that fails is not cached, so
 	// the next call tries again.
 	cachedClientFiles sync.Map
-	// loadingClientFiles maps each clientFilesKey to the *sync.Mutex
-	// that its first load holds, so that it is read once.
-	loadingClientFiles sync.Map
 	// watchedCRLs maps the crlWatch of each CRL file that ClientConfig
 	// read to the SHA-256 digest of its contents when last seen by
 	// ReloadCachedFiles, or to the zero digest once ClientConfig read
 	// contents that ReloadCachedFiles has not seen.
 	watchedCRLs sync.Map
 
+	// reloadMu is held by ReloadCachedFiles, and by the first load of
+	// the files of a clientFilesKey or of a CRL file until it is cached
+	// or watched, so that a reload either waits for it and then reads
+	// the files again, or has finished before it reads them: a reload
+	// cannot pass by a first load that then caches files from before a
+	// rotation the reload saw.
 	reloadMu              sync.Mutex
 	cachedFilesGeneration atomic.Uint64
 
-	// readFile reads the certificate, key and CA files. Tests replace it
-	// to change the files between two reads.
+	// readFile reads the certificate, key, CA and CRL files. Tests
+	// replace it to change the files between two reads.
 	readFile = os.ReadFile
 )
 
@@ -100,9 +103,8 @@ func loadClientFiles(k clientFilesKey) (*clientFiles, error) {
 	if f, ok := cachedClientFiles.Load(k); ok {
 		return f.(*clientFiles), nil
 	}
-	mu, _ := loadingClientFiles.LoadOrStore(k, &sync.Mutex{})
-	mu.(*sync.Mutex).Lock()
-	defer mu.(*sync.Mutex).Unlock()
+	reloadMu.Lock()
+	defer reloadMu.Unlock()
 	if f, ok := cachedClientFiles.Load(k); ok {
 		return f.(*clientFiles), nil
 	}
@@ -195,6 +197,30 @@ func (c clientFileContents) parse(k clientFilesKey) (*clientFiles, error) {
 	return f, nil
 }
 
+// loadClientCRL returns the checker of the CRLs that the CRL file of w
+// holds, validated under issuers, the CA certificates of w's
+// configuration, and has ReloadCachedFiles watch the file.
+func loadClientCRL(w crlWatch, issuers []*x509.Certificate) (*crlChecker, error) {
+	if _, watched := watchedCRLs.Load(w); !watched {
+		reloadMu.Lock()
+		defer reloadMu.Unlock()
+	}
+	body, err := readFile(w.crl)
+	if err != nil {
+		return nil, err
+	}
+	crls, err := parseCRLSet(w.crl, body)
+	if err != nil {
+		return nil, err
+	}
+	checker, err := newCRLCheckerFrom(crls, issuers)
+	if err != nil {
+		return nil, err
+	}
+	watchCRL(w, body)
+	return checker, nil
+}
+
 // watchCRL has ReloadCachedFiles watch the CRL file of w, whose
 // contents body a config was just built from. When those contents are
 // not the ones ReloadCachedFiles last saw, the next reload counts a
@@ -247,7 +273,7 @@ func ReloadCachedFiles() (changed bool, err error) {
 	// published, as ClientConfig validates them.
 	watchedCRLs.Range(func(w, seen any) bool {
 		watch := w.(crlWatch)
-		body, err := os.ReadFile(watch.crl)
+		body, err := readFile(watch.crl)
 		var crls []*x509.RevocationList
 		if err == nil {
 			crls, err = parseCRLSet(watch.crl, body)
