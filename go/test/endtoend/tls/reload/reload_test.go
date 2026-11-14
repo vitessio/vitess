@@ -333,7 +333,10 @@ func TestTLSReload(t *testing.T) {
 		staleClient.ClientCert, staleClient.ClientKey = oldCerts.ClientCert, oldCerts.ClientKey
 		_, err = grpcServedCert(t, staleClient)
 		require.ErrorContains(t, err, "remote error: tls:")
-		_, err = connectMySQL(t, staleClient)
+		staleConn, err := connectMySQL(t, staleClient)
+		if err == nil {
+			staleConn.Close()
+		}
 		requireMySQLRefused(t, err)
 
 		// The connection established before the reload keeps working.
@@ -374,7 +377,10 @@ func TestTLSReload(t *testing.T) {
 		var grpcErr, mysqlErr error
 		assert.Eventually(t, func() bool {
 			_, grpcErr = grpcServedCert(t, oldCerts)
-			_, mysqlErr = connectMySQL(t, oldCerts)
+			var conn *mysql.Conn
+			if conn, mysqlErr = connectMySQL(t, oldCerts); mysqlErr == nil {
+				conn.Close()
+			}
 			return grpcErr != nil && mysqlErr != nil
 		}, reloadTimeout, 100*time.Millisecond, "vtgate must refuse a client that the reloaded CRL revokes")
 		require.ErrorContains(t, grpcErr, "remote error: tls:")
