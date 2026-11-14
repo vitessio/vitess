@@ -94,7 +94,7 @@ func (fn countFn) apply(str *strLen, args []constInt, version string) *strLen {
 func symbolicCount(fn countFn, str *strLen, args ...constInt) *strLen {
 	symbolic := str != nil && str.op != strLenConst
 	for _, arg := range args {
-		symbolic = symbolic || arg.bv != nil
+		symbolic = symbolic || arg.expr != nil
 	}
 	if !symbolic {
 		return nil
@@ -159,7 +159,7 @@ func (l *strLen) equal(other *strLen) bool {
 	}
 	for i, arg := range l.args {
 		o := other.args[i]
-		if arg.n != o.n || arg.null != o.null || arg.ok != o.ok || !sameBindVar(arg.bv, o.bv) {
+		if arg.n != o.n || arg.null != o.null || arg.ok != o.ok || !sameArg(arg.expr, o.expr) {
 			return false
 		}
 	}
@@ -171,6 +171,17 @@ func sameBindVar(a, b *BindVariable) bool {
 		return a == b
 	}
 	return a.Key == b.Key
+}
+
+// sameArg compares the expressions of two symbolic integer arguments: a bind
+// variable by its key, any other expression by identity.
+func sameArg(a, b IR) bool {
+	abv, aok := a.(*BindVariable)
+	bbv, bok := b.(*BindVariable)
+	if aok && bok {
+		return sameBindVar(abv, bbv)
+	}
+	return a == b
 }
 
 // resolve returns the length against the bind variables of env: a constant,
@@ -192,7 +203,7 @@ func (l *strLen) resolve(env *ExpressionEnv) *strLen {
 	case strLenSub:
 		return strLenDiff(l.l.resolve(env), l.r.resolve(env))
 	case strLenBindVar:
-		value, ok := bindVarValue(env, l.bv)
+		value, ok := exprValue(env, l.bv)
 		if !ok {
 			return nil
 		}
@@ -200,11 +211,11 @@ func (l *strLen) resolve(env *ExpressionEnv) *strLen {
 	case strLenCount:
 		args := make([]constInt, len(l.args))
 		for i, arg := range l.args {
-			if arg.bv == nil {
+			if arg.expr == nil {
 				args[i] = arg
 				continue
 			}
-			value, ok := bindVarValue(env, arg.bv)
+			value, ok := exprValue(env, arg.expr)
 			if !ok {
 				return nil
 			}
@@ -233,20 +244,85 @@ func (env *ExpressionEnv) resolveStrLen(l *strLen) *strLen {
 	return resolved
 }
 
-// bindVarValue returns the value of a bind variable, and NULL when env has
-// no value for it. ok is false when env has no bind variables at all.
-func bindVarValue(env *ExpressionEnv, bv *BindVariable) (eval, bool) {
+// exprValue returns the value of an expression that depends only on bind
+// variables, such as :n or -:n, evaluated with the interpreter. A bind
+// variable missing from env.BindVars makes it NULL, as an error does. ok is
+// false when env has no bind variables at all.
+func exprValue(env *ExpressionEnv, expr IR) (eval, bool) {
 	if env == nil || env.BindVars == nil {
 		return nil, false
 	}
-	if _, ok := env.BindVars[bv.Key]; !ok {
-		return nil, true
-	}
-	value, err := bv.eval(env)
+	value, err := expr.eval(env)
 	if err != nil {
 		return nil, true
 	}
 	return value, true
+}
+
+// constantWithBindVars returns whether an expression is a constant once its
+// bind variables are known: it has no column and no function that the
+// evalengine does not take as a constant, such as NOW(). MySQL takes such an
+// expression as a constant, since the normalizer turned its literals into
+// bind variables: REPEAT(s, :n * :m) is REPEAT(s, 2*800) for MySQL. The walk
+// follows constant(), which takes every bind variable as not constant; the
+// functions whose constant() is false whatever their arguments are listed.
+func constantWithBindVars(e IR) bool {
+	if e.constant() {
+		return true
+	}
+	switch e := e.(type) {
+	case *BindVariable:
+		return e.Type != sqltypes.Tuple
+	case *builtinNow, *builtinSysdate, *builtinCurdate, *builtinUtcDate, *builtinUUID,
+		*builtinUser, *builtinDatabase, *builtinLastInsertID, *builtinRandomBytes:
+		return false
+	case *builtinUnixTimestamp:
+		return len(e.Arguments) > 0 && constantWithBindVars(e.Arguments[0])
+	case *ConvertExpr:
+		return constantWithBindVars(e.Inner)
+	case *ConvertUsingExpr:
+		return constantWithBindVars(e.Inner)
+	case *NegateExpr:
+		return constantWithBindVars(e.Inner)
+	case *CollateExpr:
+		return constantWithBindVars(e.Inner)
+	case *IntroducerExpr:
+		return constantWithBindVars(e.Inner)
+	case *IsExpr:
+		return constantWithBindVars(e.Inner)
+	case *BitwiseNotExpr:
+		return constantWithBindVars(e.Inner)
+	case *NotExpr:
+		return constantWithBindVars(e.Inner)
+	case *ArithmeticExpr:
+		return constantWithBindVars(e.Left) && constantWithBindVars(e.Right)
+	case *LogicalExpr:
+		return constantWithBindVars(e.Left) && constantWithBindVars(e.Right)
+	case *BitwiseExpr:
+		return constantWithBindVars(e.Left) && constantWithBindVars(e.Right)
+	case *LikeExpr:
+		return constantWithBindVars(e.Left) && constantWithBindVars(e.Right)
+	case *ComparisonExpr:
+		return constantWithBindVars(e.Left) && constantWithBindVars(e.Right)
+	case *CaseExpr:
+		if e.Else != nil && !constantWithBindVars(e.Else) {
+			return false
+		}
+		for _, c := range e.cases {
+			if !constantWithBindVars(c.when) || !constantWithBindVars(c.then) {
+				return false
+			}
+		}
+		return true
+	case callable:
+		for _, arg := range e.callable() {
+			if !constantWithBindVars(arg) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 // strLenSum returns a + b: CONCAT(s, 'x') is 10 + 1. A sum with a long
@@ -567,19 +643,19 @@ func (r *strResult) eval(env *ExpressionEnv, b []byte, col collations.TypedColla
 
 // constInt is the value of an integer argument that is a constant, such as
 // the 3 in REPEAT(s, 3) or the -1 in LEFT(s, -1). ok is false when the
-// argument is not a constant, and null is true when it is NULL. A bind
-// variable is a constant whose value is known at execution: bv is set and
-// n and null are not.
+// argument is not a constant, and null is true when it is NULL. An argument
+// that depends only on bind variables, such as :n or -:n, is a constant
+// whose value is known at execution: expr is set and n and null are not.
 type constInt struct {
 	n        int64
 	null, ok bool
-	bv       *BindVariable
+	expr     IR
 }
 
 // newConstInt returns the value of arg, which evaluates to value, when arg
-// is a constant or a bind variable.
+// is a constant once its bind variables are known.
 func newConstInt(arg IR, value eval) constInt {
-	if _, ok := arg.(*BindVariable); !ok && !arg.constant() {
+	if !constantWithBindVars(arg) {
 		return constInt{}
 	}
 	return constIntOf(value)
@@ -604,10 +680,10 @@ func constIntOf(value eval) constInt {
 // compile time. Without constant folding, the -1 in LEFT(s, -1) is a
 // negation of the literal 1, so it is evaluated here.
 func (c *compiler) constInt(arg IR) constInt {
-	if bv, ok := arg.(*BindVariable); ok && bv.Type != sqltypes.Tuple {
-		return constInt{ok: true, bv: bv}
-	}
 	if !arg.constant() {
+		if constantWithBindVars(arg) {
+			return constInt{ok: true, expr: arg}
+		}
 		return constInt{}
 	}
 	value, err := arg.eval(EmptyExpressionEnv(c.env))

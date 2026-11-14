@@ -1110,8 +1110,9 @@ func TestCompilerSingle(t *testing.T) {
 // together.
 func TestCompilerBindVarLength(t *testing.T) {
 	type execution struct {
-		bindVar *querypb.BindVariable
+		bindVar *querypb.BindVariable // :n
 		want    sqltypes.Type
+		other   *querypb.BindVariable // :m
 	}
 	testCases := []struct {
 		expression string
@@ -1123,16 +1124,16 @@ func TestCompilerBindVarLength(t *testing.T) {
 			expression: `REPEAT(column0, :n)`,
 			bindType:   sqltypes.Int64,
 			executions: []execution{
-				{sqltypes.Int64BindVariable(2), sqltypes.VarChar},
-				{sqltypes.Int64BindVariable(1639), sqltypes.Text},
+				{bindVar: sqltypes.Int64BindVariable(2), want: sqltypes.VarChar},
+				{bindVar: sqltypes.Int64BindVariable(1639), want: sqltypes.Text},
 			},
 		},
 		{
 			expression: `CONCAT(column0, :n)`,
 			bindType:   sqltypes.VarChar,
 			executions: []execution{
-				{sqltypes.StringBindVariable("xyz"), sqltypes.VarChar},
-				{sqltypes.StringBindVariable(strings.Repeat("x", 16380)), sqltypes.Text},
+				{bindVar: sqltypes.StringBindVariable("xyz"), want: sqltypes.VarChar},
+				{bindVar: sqltypes.StringBindVariable(strings.Repeat("x", 16380)), want: sqltypes.Text},
 			},
 		},
 		{
@@ -1140,8 +1141,8 @@ func TestCompilerBindVarLength(t *testing.T) {
 			expression: `LEFT(column1, :n)`,
 			bindType:   sqltypes.Int64,
 			executions: []execution{
-				{sqltypes.Int64BindVariable(5), sqltypes.VarChar},
-				{sqltypes.Int64BindVariable(20000), sqltypes.Text},
+				{bindVar: sqltypes.Int64BindVariable(5), want: sqltypes.VarChar},
+				{bindVar: sqltypes.Int64BindVariable(20000), want: sqltypes.Text},
 			},
 		},
 		{
@@ -1150,25 +1151,59 @@ func TestCompilerBindVarLength(t *testing.T) {
 			expression: `LEFT(column1, :n)`,
 			bindType:   sqltypes.VarChar,
 			executions: []execution{
-				{sqltypes.StringBindVariable("3"), sqltypes.VarChar},
-				{sqltypes.StringBindVariable("abc"), sqltypes.VarChar},
-				{sqltypes.StringBindVariable("20000"), sqltypes.Text},
+				{bindVar: sqltypes.StringBindVariable("3"), want: sqltypes.VarChar},
+				{bindVar: sqltypes.StringBindVariable("abc"), want: sqltypes.VarChar},
+				{bindVar: sqltypes.StringBindVariable("20000"), want: sqltypes.Text},
 			},
 		},
 		{
 			expression: `SPACE(:n)`,
 			bindType:   sqltypes.Int64,
 			executions: []execution{
-				{sqltypes.Int64BindVariable(3), sqltypes.VarChar},
-				{sqltypes.Int64BindVariable(16384), sqltypes.Text},
+				{bindVar: sqltypes.Int64BindVariable(3), want: sqltypes.VarChar},
+				{bindVar: sqltypes.Int64BindVariable(16384), want: sqltypes.Text},
 			},
 		},
 		{
 			expression: `LPAD(column0, :n, 'x')`,
 			bindType:   sqltypes.Int64,
 			executions: []execution{
-				{sqltypes.Int64BindVariable(5), sqltypes.VarChar},
-				{sqltypes.Int64BindVariable(16384), sqltypes.Text},
+				{bindVar: sqltypes.Int64BindVariable(5), want: sqltypes.VarChar},
+				{bindVar: sqltypes.Int64BindVariable(16384), want: sqltypes.Text},
+			},
+		},
+		{
+			// The normalizer turns REPEAT(s, 2*800) into this. A count that
+			// depends only on bind variables is a constant for MySQL.
+			expression: `REPEAT(column0, :n * :m)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{bindVar: sqltypes.Int64BindVariable(2), want: sqltypes.VarChar, other: sqltypes.Int64BindVariable(800)},
+				{bindVar: sqltypes.Int64BindVariable(2), want: sqltypes.Text, other: sqltypes.Int64BindVariable(820)},
+			},
+		},
+		{
+			// SUBSTRING(tx, -3) is 3 characters.
+			expression: `SUBSTRING(column1, -:n)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{bindVar: sqltypes.Int64BindVariable(3), want: sqltypes.VarChar},
+			},
+		},
+		{
+			// SPACE(-1) is empty.
+			expression: `SPACE(-:n)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{bindVar: sqltypes.Int64BindVariable(1), want: sqltypes.VarChar},
+			},
+		},
+		{
+			// A count that depends on a column is not a constant.
+			expression: `REPEAT(column0, column2 + :n)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{bindVar: sqltypes.Int64BindVariable(1), want: sqltypes.Text},
 			},
 		},
 	}
@@ -1177,8 +1212,9 @@ func TestCompilerBindVarLength(t *testing.T) {
 	fields := evalengine.FieldResolver{
 		lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID),
 		lengthField("column1", sqltypes.Text, 262140, collations.CollationUtf8mb4ID),
+		lengthField("column2", sqltypes.Int32, 11, collations.CollationBinaryID),
 	}
-	row := []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.MakeTrusted(sqltypes.Text, []byte("tx"))}
+	row := []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.MakeTrusted(sqltypes.Text, []byte("tx")), sqltypes.NewInt32(1)}
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
@@ -1209,7 +1245,11 @@ func TestCompilerBindVarLength(t *testing.T) {
 			require.IsType(t, &evalengine.CompiledExpr{}, compiled)
 
 			for _, exec := range tc.executions {
-				env := evalengine.NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{"n": exec.bindVar}, evalengine.NewEmptyVCursor(venv, time.UTC))
+				bindVars := map[string]*querypb.BindVariable{"n": exec.bindVar}
+				if exec.other != nil {
+					bindVars["m"] = exec.other
+				}
+				env := evalengine.NewExpressionEnv(t.Context(), bindVars, evalengine.NewEmptyVCursor(venv, time.UTC))
 				env.Row = row
 
 				typ, err := env.TypeOf(compiled)
