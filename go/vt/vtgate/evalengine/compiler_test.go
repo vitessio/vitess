@@ -2079,6 +2079,46 @@ func TestUntypedStringColumnWinsOverLiteral(t *testing.T) {
 	}
 }
 
+// TestCompilerFoldedTemporalNumber checks the number of a DATETIME that
+// CASE or COALESCE made of a DATE or a TIME, when constant folding made
+// their result a literal of the compiled program. Arithmetic reads the
+// number of the DATE or the TIME, as it does without folding.
+func TestCompilerFoldedTemporalNumber(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`IFNULL(DATE'2020-01-02', TIMESTAMP'2020-01-03 00:00:00') DIV column0`, `INT64(20200102)`},
+		{`IF(TRUE, DATE'2020-01-02', TIMESTAMP'2020-01-03 00:00:00') + column0`, `INT64(20200103)`},
+		{`CASE WHEN TRUE THEN TIME'10:11:12' ELSE TIMESTAMP'2020-01-03 00:00:00' END + column0`, `INT64(101113)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	row := []sqltypes.Value{sqltypes.NewInt64(1)}
+	fields := evalengine.FieldResolver(makeFields(row))
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: fields.Column,
+				ResolveType:   fields.Type,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			_, compiled := translated.(*evalengine.CompiledExpr)
+			require.True(t, compiled)
+
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, time.UTC))
+			env.Row = row
+			res, err := env.Evaluate(translated)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+		})
+	}
+}
+
 // TestCompileFoldedJSONLiteralConcurrency compiles distinct type
 // specialisations of one translated expression concurrently while the
 // interpreter evaluates it concurrently too. Both read the same folded JSON

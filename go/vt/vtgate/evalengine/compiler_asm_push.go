@@ -595,7 +595,11 @@ func (asm *assembler) PushLiteral(lit eval) error {
 		}, "PUSH VARCHAR(%q)", lit.ToRawBytes())
 	case *evalTemporal:
 		asm.emit(func(env *ExpressionEnv) int {
-			env.vm.stack[env.vm.sp] = env.vm.arena.newTemporal(lit.t, lit.dt, lit.prec)
+			t := env.vm.arena.newTemporal(lit.t, lit.dt, lit.prec)
+			// a folded CASE or COALESCE can have made the literal from a
+			// DATE or a TIME: see evalTemporalFrom
+			t.from = lit.from
+			env.vm.stack[env.vm.sp] = t
 			env.vm.sp++
 			return 1
 		}, "PUSH TIME|DATETIME|DATE(%q)", lit.ToRawBytes())
