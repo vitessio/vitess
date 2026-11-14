@@ -29,6 +29,10 @@ type Collation_multibyte struct {
 	name    string
 	sort    *[256]byte
 	charset charset.Charset
+
+	// caseinfo is the MySQL case table of the character set, for ToUpper
+	// and ToLower.
+	caseinfo *multibyteCase
 }
 
 func (c *Collation_multibyte) ID() collations.ID {
@@ -45,6 +49,19 @@ func (c *Collation_multibyte) Charset() charset.Charset {
 
 func (c *Collation_multibyte) IsBinary() bool {
 	return c.sort == nil
+}
+
+// ToUpper appends the upper case of src to dst. MySQL converts ASCII, and
+// the full-width Latin, Greek and Cyrillic letters and a few more characters
+// with a table for each character set: in sjis_japanese_ci, the upper case of
+// "aｂд" is "AＢД".
+func (c *Collation_multibyte) ToUpper(dst, src []byte) []byte {
+	return c.caseinfo.changeCase(dst, src, true)
+}
+
+// ToLower appends the lower case of src to dst. See ToUpper.
+func (c *Collation_multibyte) ToLower(dst, src []byte) []byte {
+	return c.caseinfo.changeCase(dst, src, false)
 }
 
 func (c *Collation_multibyte) Collate(left, right []byte, isPrefix bool) int {

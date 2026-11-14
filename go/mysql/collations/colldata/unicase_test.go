@@ -128,8 +128,8 @@ func TestCaseConversionMatchesMySQL(t *testing.T) {
 
 // TestCaseConversionMalformedInput converts strings that are not valid in the
 // character set of the collation. MySQL rejects such a string in a query, so
-// the expected values come from the MySQL source (my_caseup_utf8mb4 and
-// my_caseup_utf16 in strings/), not from a measurement.
+// the expected values come from the MySQL source (my_caseup_utf8mb4,
+// my_caseup_utf16 and my_caseup_mb in strings/), not from a measurement.
 func TestCaseConversionMalformedInput(t *testing.T) {
 	testcases := []struct {
 		collation string
@@ -148,6 +148,9 @@ func TestCaseConversionMalformedInput(t *testing.T) {
 		// The Turkish collations convert to a second buffer. The result
 		// also ends before the incomplete character.
 		{"utf8mb4_turkish_ci", "i\xC3", "\xC4\xB0"},
+		// The lead byte 82 has no second byte. It is a single byte, and
+		// a single byte above 7F does not change.
+		{"sjis_japanese_ci", "a\x82", "A\x82"},
 	}
 
 	for _, tc := range testcases {

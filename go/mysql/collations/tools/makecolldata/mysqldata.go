@@ -363,6 +363,9 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 		g.P("sort: &", tableSortOrder, ",")
 	}
 	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
+	// The case table of the character set, my_caseinfo_<charset> in the
+	// MySQL source. The dump does not have it.
+	g.P("caseinfo: multibyteCase_", meta.Charset, ",")
 	g.P("},")
 }
 
