@@ -1081,6 +1081,21 @@ func CoalesceColumns(yield Query) {
 			}
 		}
 	}
+
+	// A NULLIF of a date is a string for COALESCE and IFNULL: the DATE is
+	// not converted to a DATETIME.
+	nullifs := []string{
+		"COALESCE(NULLIF(column4, 5), column5)",
+		"COALESCE(NULLIF(column5, column5), column4)",
+		"COALESCE(column5, NULLIF(column4, 5))",
+		"IFNULL(NULLIF(column4, 5), column5)",
+		"COALESCE(IF(column0 = 5, NULLIF(column4, 5), NULL), column5)",
+	}
+	for _, expr := range nullifs {
+		for _, consumer := range consumers {
+			yield(fmt.Sprintf(consumer, expr), row, false)
+		}
+	}
 }
 
 // JSONStringComparison pins how JSON strings compare. MySQL compares their

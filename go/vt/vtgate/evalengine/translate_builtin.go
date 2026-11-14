@@ -1199,6 +1199,7 @@ func builtinNullIfRewrite(args []IR, collate collations.ID) (IR, error) {
 			then: NullExpr,
 		}},
 		Else:    args[0],
+		nullif:  true,
 		collate: collate,
 	}, nil
 }

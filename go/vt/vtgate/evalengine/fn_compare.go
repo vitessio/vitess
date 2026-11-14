@@ -62,7 +62,7 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 		ca collationAggregation
 	)
 	for i, arg := range args {
-		if err := addCaseBranch(&ta, &ca, b.Arguments[i], arg, env); err != nil {
+		if err := addCaseBranch(&ta, &ca, b.Arguments[i], arg, env, true); err != nil {
 			return nil, err
 		}
 	}
@@ -206,7 +206,7 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		if !tt.nullable() {
 			f = 0
 		}
-		ta.add(c.caseBranchType(arg, tt.Type), tt.Flag, tt.Size, tt.Scale)
+		ta.add(c.caseBranchType(arg, tt.Type, true), tt.Flag, tt.Size, tt.Scale)
 		if err := ca.addTyped(tt.Type, tt.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}

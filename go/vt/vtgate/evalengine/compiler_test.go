@@ -1240,6 +1240,32 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(1)`,
 		},
 		{
+			// COALESCE counts a NULLIF of a date as a string: the DATE is not
+			// converted to a DATETIME.
+			expression: `COALESCE(NULLIF(column0, 5), column1)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `VARCHAR("2020-01-02")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
+		{
+			// Also when the NULLIF is NULL: it counts with the type of its
+			// column.
+			expression: `COALESCE(NULLIF(column1, column1), column0)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `VARCHAR("2020-01-02")`,
+		},
+		{
+			expression: `IFNULL(NULLIF(column0, 5), column1)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `VARCHAR("2020-01-02")`,
+		},
+		{
+			// So does an IF with a NULLIF in a branch.
+			expression: `COALESCE(IF(column2 = 1, NULLIF(column0, 5), NULL), column1)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-03 04:05:06.789"), sqltypes.NewInt64(1)},
+			result:     `VARCHAR("2020-01-02")`,
+		},
+		{
 			// A DATETIME with fractional seconds and no declared precision
 			// is compared with a number as a double.
 			expression: `column0 > 1`,
