@@ -1685,12 +1685,23 @@ func FnLower(yield Query) {
 		yield(fmt.Sprintf("LOWER(%s)", str), nil, false)
 		yield(fmt.Sprintf("LCASE(%s)", str), nil, false)
 	}
+	// HEX shows the result in the character set of the collation. MySQL
+	// sends the string itself in the character set of the connection.
+	for _, str := range inputCaseConversions {
+		yield(fmt.Sprintf("HEX(LOWER(%s))", str), nil, false)
+		yield(fmt.Sprintf("COLLATION(LOWER(%s))", str), nil, false)
+	}
 }
 
 func FnUpper(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("UPPER(%s)", str), nil, false)
 		yield(fmt.Sprintf("UCASE(%s)", str), nil, false)
+	}
+	// See FnLower for the reason for HEX.
+	for _, str := range inputCaseConversions {
+		yield(fmt.Sprintf("HEX(UPPER(%s))", str), nil, false)
+		yield(fmt.Sprintf("COLLATION(UPPER(%s))", str), nil, false)
 	}
 }
 
