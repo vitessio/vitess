@@ -3382,9 +3382,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select cast(id as signed) as id, weight_string(cast(id as signed)) from `user` where 1 != 1",
+                    "FieldQuery": "select cast(`user`.id as signed) as id, weight_string(cast(`user`.id as signed)) from `user` where 1 != 1",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select cast(id as signed) as id, weight_string(cast(id as signed)) from `user` order by cast(id as signed) asc limit :__upper_limit",
+                    "Query": "select cast(`user`.id as signed) as id, weight_string(cast(`user`.id as signed)) from `user` order by cast(`user`.id as signed) asc limit :__upper_limit",
                     "ResultColumns": 1
                   },
                   {
@@ -3394,8 +3394,8 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select cast(id as signed) as id from unsharded where 1 != 1",
-                    "Query": "select cast(id as signed) as id from unsharded order by cast(id as signed) asc limit :__upper_limit",
+                    "FieldQuery": "select cast(unsharded.id as signed) as id from unsharded where 1 != 1",
+                    "Query": "select cast(unsharded.id as signed) as id from unsharded order by cast(unsharded.id as signed) asc limit :__upper_limit",
                     "ResultColumns": 1
                   }
                 ]

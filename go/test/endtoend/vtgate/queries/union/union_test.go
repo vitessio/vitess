@@ -155,7 +155,7 @@ func TestUnionAllOrderedLimitPushdown(t *testing.T) {
 	mcmp, closer := start(t)
 	t.Cleanup(closer)
 
-	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2), (20, 20), (21, 21), (22, 22), (23, 23), (24, 24), (25, 25)")
+	mcmp.Exec("insert into t1(id1, id2) values (1, -1), (2, -2), (20, -20), (21, -21), (22, -22), (23, -23), (24, -24), (25, -25)")
 	mcmp.Exec("insert into t2(id3, id4) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10)")
 	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100), (101), (102)")
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
@@ -170,6 +170,11 @@ func TestUnionAllOrderedLimitPushdown(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.Exec("select name as x from t1 where id1 = 1 union all select name from t1 where id1 = 2 order by x limit 3")
 			mcmp.Exec("select 1 as c from dual union all select count(*) from t1 order by c limit 3")
+			mcmp.Exec("select * from (select count(*) c from t1 union all select count(*) from t2) t order by c limit 10")
+			mcmp.Exec("select * from (select count(*) c from t1 union all select 7 from dual) t order by c limit 10")
+			for _, second := range []string{"id2", "5"} {
+				mcmp.Exec("select id1 as a, " + second + " as id1 from t1 union all select id3, id4 from t2 order by a limit 3")
+			}
 			// The outer ordering must not change which rows an arm's LIMIT selects.
 			for _, query := range []string{
 				"(select id1 as id from t1 order by id1 desc limit 2) union all (select id3 from t2) order by id limit 3",
@@ -398,12 +403,18 @@ func TestSerializedUnionStreamMemoryLimit(t *testing.T) {
 	utils.Exec(t, mcmp.VtConn, "set workload = olap")
 	mcmp.Exec("begin")
 	t.Cleanup(func() { mcmp.Exec("rollback") })
+	mcmp.Exec("insert into t1(id1, id2) values (2001, 2001)")
 	query := "select id from ref union all select id1 from t1"
 	_, err := mcmp.VtConn.ExecuteFetch(query, count*2, true)
 	require.ErrorContains(t, err, "in-memory row count exceeded allowed limit of 2000")
 	var mysqlErr *sqlerror.SQLError
 	require.ErrorAs(t, err, &mysqlErr)
 	require.Equal(t, sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+	// The failed SELECT must preserve both the transaction and earlier writes.
+	mcmp.AssertMatches("select id2 from t1 where id1 = 2001", "[[INT64(2001)]]")
+	mcmp.Exec("commit")
+	mcmp.AssertMatches("select id2 from t1 where id1 = 2001", "[[INT64(2001)]]")
+	mcmp.Exec("delete from t1 where id1 = 2001")
 	mcmp.Exec("rollback")
 	mcmp.Exec("begin")
 	override := strings.Replace(query, "select id", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id", 1)
@@ -444,9 +455,10 @@ func TestRecursiveReferenceSeedLargerThanDepthLimit(t *testing.T) {
 	}
 }
 
-// Branching reference-seeded recursion must honor VTGate's configured row
-// budget in both modes; the row override must not lift the Term work cap.
-func TestRecursiveReferenceBranchingHonorsMemoryLimit(t *testing.T) {
+// Branching reference-seeded recursion must honor the row and work bounds.
+// Buffered rows reach the memory limit first; streaming reaches the work cap.
+// The row override must not lift that independent work cap.
+func TestRecursiveReferenceBranchingHonorsResourceLimits(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	mcmp, closer := start(t)
 	t.Cleanup(closer)
@@ -467,22 +479,24 @@ func TestRecursiveReferenceBranchingHonorsMemoryLimit(t *testing.T) {
 		mcmp.Run(workload, func(mcmp *utils.MySQLCompare) {
 			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			_, err := mcmp.VtConn.ExecuteFetch(query, 10000, true)
-			require.ErrorContains(mcmp.AsT(), err, "in-memory row count exceeded allowed limit of 2000")
+			if workload == "oltp" {
+				require.ErrorContains(mcmp.AsT(), err, "in-memory row count exceeded allowed limit of 2000")
+				var mysqlErr *sqlerror.SQLError
+				require.ErrorAs(mcmp.AsT(), err, &mysqlErr)
+				require.Equal(mcmp.AsT(), sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+			} else {
+				require.ErrorContains(mcmp.AsT(), err, "VT09030")
+			}
 			override := strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1)
-			var mysqlErr *sqlerror.SQLError
-			require.ErrorAs(mcmp.AsT(), err, &mysqlErr)
-			require.Equal(mcmp.AsT(), sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
 			_, err = mcmp.VtConn.ExecuteFetch(override, 10000, true)
-			require.ErrorContains(mcmp.AsT(), err, "recursive term execution count exceeded allowed limit of 2000")
-			require.ErrorAs(mcmp.AsT(), err, &mysqlErr)
-			require.Equal(mcmp.AsT(), sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+			require.ErrorContains(mcmp.AsT(), err, "VT09030")
 		})
 	}
 }
 
-// A finite recursive query with three rows per level stays below the live
-// frontier budget, but its cumulative Term queries must honor max-memory-rows.
-// Verify SQL workload selection and IGNORE_MAX_MEMORY_ROWS reach that guard.
+// A finite recursive query with four rows per level stays below the live
+// frontier budget, but must honor the work bound scaled to its three seed rows.
+// The row-memory override cannot bypass that independent 3000-term bound.
 func TestRecursiveStreamingWorkBudget(t *testing.T) {
 	utils.SkipIfBinaryIsBelowVersion(t, 25, "vtgate")
 	mcmp, closer := start(t)
@@ -493,28 +507,27 @@ func TestRecursiveStreamingWorkBudget(t *testing.T) {
 		require.NoError(t, err)
 	}
 	// Keep the fixture below the row budget so normal DML cleanup fits.
-	values := make([]string, 1998)
-	for i := range values {
-		values[i] = fmt.Sprintf("(%d,%d)", i+1, i+4)
+	values := make([]string, 1001)
+	for i := range 1000 {
+		values[i] = fmt.Sprintf("(%d,%d)", i+1, i+1)
 	}
-	mcmp.Exec("insert into t1(id1,id2) values " + strings.Join(values, ","))
+	// One extra edge branches the first seed, then the frontier stays at four.
+	values[1000] = "(1001,1)"
+	mcmp.Exec("insert into t2(id3,id4) values " + strings.Join(values, ","))
 	utils.Exec(t, mcmp.VtConn, "set workload = olap")
-	query := "with recursive c as (select id from ref union all select u.id2 from t1 u join c on u.id1 = c.id) select id from c"
+	query := "with recursive c as (select id from ref union all select u.id4+1 from t2 u join c on u.id4 = c.id) select id from c"
 	for _, workload := range []string{"oltp", "olap"} {
 		utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 		override := strings.Replace(query, "select id from c", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id from c", 1)
 		_, err := mcmp.VtConn.ExecuteFetch(override, 10000, true)
-		require.ErrorContains(t, err, "recursive term execution count exceeded allowed limit of 2000")
-		var mysqlErr *sqlerror.SQLError
-		require.ErrorAs(t, err, &mysqlErr)
-		require.Equal(t, sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
-		allowed := strings.Replace(query, "u.id1 = c.id", "u.id1 = c.id where u.id1 <= 1995", 1)
+		require.ErrorContains(t, err, "VT09030")
+		allowed := strings.Replace(override, "u.id4 = c.id", "u.id4 = c.id where u.id4 <= 750", 1)
 		result, err := mcmp.VtConn.ExecuteFetch(allowed, 10000, true)
 		require.NoError(t, err)
 		expected, err := mcmp.MySQLConn.ExecuteFetch(allowed, 10000, true)
 		require.NoError(t, err)
 		utils.CompareVitessAndMySQLResults(t, allowed, mcmp.VtConn, result, expected, utils.CompareOptions{})
-		require.Len(t, result.Rows, 1998)
+		require.Len(t, result.Rows, 3000)
 	}
 }
 

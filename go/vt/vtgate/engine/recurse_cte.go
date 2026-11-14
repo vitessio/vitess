@@ -38,6 +38,10 @@ type RecurseCTE struct {
 
 	// Distinct retains the term-execution cap until VTGate recursion deduplicates rows.
 	Distinct bool
+
+	// ScaleWorkLimitBySeed applies only to replicated seeds newly split out of
+	// a route. Existing VTGate recursion retains its 1000-term work bound.
+	ScaleWorkLimitBySeed bool
 }
 
 var _ Primitive = (*RecurseCTE)(nil)
@@ -62,6 +66,7 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	joinVars := make(map[string]*querypb.BindVariable)
 	iterations := 0
 	termExecutions := 0
+	termLimit := r.termExecutionLimit(len(recurseRows))
 	for len(recurseRows) > 0 {
 		if !r.Distinct {
 			iterations++
@@ -87,8 +92,8 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 				return nil, err
 			}
 			termExecutions++
-			if termExecutions > vcursor.MaxMemoryRows() {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "recursive term execution count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+			if termExecutions > termLimit {
+				return nil, vterrors.VT09030("")
 			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
@@ -157,6 +162,7 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	iterations := 0
 	// Releasing completed levels must not reset the cumulative Term budget.
 	termExecutions := 0
+	termLimit := r.termExecutionLimit(len(recurseRows))
 	for len(recurseRows) > 0 {
 		if !r.Distinct {
 			iterations++
@@ -183,8 +189,8 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 				return err
 			}
 			termExecutions++
-			if termExecutions > vcursor.MaxMemoryRows() {
-				return vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "recursive term execution count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+			if termExecutions > termLimit {
+				return vterrors.VT09030("")
 			}
 			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, collect)
 			if err != nil {
@@ -198,6 +204,16 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		}
 	}
 	return nil
+}
+
+// Keep work independent of memory policy and its per-query override. A newly
+// split replicated seed gets the same work allowance per seed row, while the
+// depth guard still caps expansion at 1000 levels.
+func (r *RecurseCTE) termExecutionLimit(seedRows int) int {
+	if r.ScaleWorkLimitBySeed && !r.Distinct {
+		return maxRecurseDepth * max(1, seedRows)
+	}
+	return maxRecurseDepth
 }
 
 func (r *RecurseCTE) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

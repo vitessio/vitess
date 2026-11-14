@@ -115,7 +115,7 @@ Flags:
       --log-queries-to-file string                                       Enable query logging to the specified file
       --log-rotate-max-size uint                                         size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --log-structured                                                   enable structured JSON logging (default true)
-      --max-memory-rows int                                              Maximum number of rows held in memory for intermediate and final results; also caps cumulative recursive CTE term executions, independently of IGNORE_MAX_MEMORY_ROWS. (default 300000)
+      --max-memory-rows int                                              Maximum number of rows held in memory for intermediate and final results. (default 300000)
       --max-payload-size int                                             The threshold for query payloads in bytes. A payload greater than this threshold will result in a failure to handle the query.
       --max-stack-size int                                               configure the maximum stack size in bytes (default 67108864)
       --message-stream-grace-period duration                             the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)

@@ -232,6 +232,45 @@ func (s *planTestSuite) TestOrderedUnionLimitKeepsHelperColumns() {
 	}
 }
 
+// MySQL resolves a bare ORDER BY column against select aliases first.
+func (s *planTestSuite) TestUnionArmOrderingQualifiesColumns() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, second := range []string{"intcol", "5"} {
+		query := "select col as a, " + second + " as col from user union all select col41, col41 from unsharded_fk_allow.u_tbl4 order by a limit 5"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		found := false
+		for _, route := range routePrimitives(plan.Instructions) {
+			if strings.Contains(route.Query, "from `user`") {
+				found = true
+				s.Require().Contains(route.Query, "order by `user`.col asc")
+				s.Require().Contains(route.Query, "limit :__upper_limit")
+			}
+		}
+		s.Require().True(found)
+	}
+}
+
+// A scalar aggregate above a route must not leak a route-local sort helper.
+func (s *planTestSuite) TestDerivedUnionScalarAggregateArmWidth() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, second := range []string{"count(*) from unsharded", "7 from dual"} {
+		query := "select * from (select count(*) c from user union all select " + second + ") t order by c limit 10"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		aggregate := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.ScalarAggregate); return ok }, plan.Instructions)
+		s.Require().NotNil(aggregate)
+		for _, route := range routePrimitives(aggregate) {
+			s.Require().NotContains(route.Query, "weight_string(count(*))")
+			s.Require().Empty(route.OrderBy)
+		}
+	}
+}
+
 // A single-shard arm can retain its LIMIT in an unexpanded Horizon.
 func (s *planTestSuite) TestReferenceUnionArmKeepsLocalLimit() {
 	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
@@ -698,6 +737,7 @@ func (s *planTestSuite) TestRecursiveReferenceUnionDoesNotLeaveUnboundCTEBind() 
 	}, plan.Instructions)
 	s.Require().NotNil(recurse, "replicated seed must be evaluated once by VTGate")
 	s.Require().False(recurse.(*engine.RecurseCTE).Distinct)
+	s.Require().True(recurse.(*engine.RecurseCTE).ScaleWorkLimitBySeed)
 }
 
 // TestForeignKeyPlanning tests the planning of foreign keys in a managed mode by Vitess.
@@ -1536,6 +1576,30 @@ func (s *planTestSuite) TestRecursiveDistinctPreservesExistingPlans() {
 		}, plan.Instructions)
 		s.Require().NotNil(recurse, query)
 		s.Require().True(recurse.(*engine.RecurseCTE).Distinct, query)
+	}
+}
+
+// Existing VTGate recursive plans keep a fixed work bound; newly split
+// reference and dual seeds get an allowance per seed row.
+func (s *planTestSuite) TestRecursiveWorkLimitPolicy() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, tc := range []struct {
+		seed  string
+		scale bool
+	}{
+		{"select id from ref", true},
+		{"select 1 as id from dual", true},
+		{"select id from unsharded", false},
+		{"select id from user", false},
+	} {
+		query := "with recursive c as (" + tc.seed + " union all select u.id from user u join c on u.col = c.id) select id from c"
+		plan, err := TestBuilder(query, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		recurse := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.RecurseCTE); return ok }, plan.Instructions)
+		s.Require().NotNil(recurse, query)
+		s.Require().Equal(tc.scale, recurse.(*engine.RecurseCTE).ScaleWorkLimitBySeed, query)
 	}
 }
 

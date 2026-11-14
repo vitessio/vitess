@@ -274,6 +274,7 @@ func TestConcatenateSequentialStreamMemoryLimit(t *testing.T) {
 					require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
 					require.Equal(t, sqlerror.ERNetPacketTooLarge, sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError).Number())
 					require.Empty(t, rows, "a failed buffered union must not deliver partial results")
+					require.False(t, cursor.rollback.Load(), "a local row buffer error must not roll back the caller's transaction")
 					if tc.limit == 1 || tc.async {
 						require.Zero(t, right.curResult, "stop before starting another arm")
 					}
@@ -299,6 +300,7 @@ type concatenateMemoryVCursor struct {
 	noopVCursor
 	limit              int
 	ignore, wrapErrors bool
+	rollback           atomic.Bool
 }
 
 func (c *concatenateMemoryVCursor) MaxMemoryRows() int { return c.limit }
@@ -307,7 +309,14 @@ func (c *concatenateMemoryVCursor) ExceedsMaxMemoryRows(rows int) bool {
 }
 
 func (c *concatenateMemoryVCursor) StreamExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool, callback func(*sqltypes.Result) error) error {
-	err := c.noopVCursor.StreamExecutePrimitive(ctx, p, vars, fields, callback)
+	err := c.noopVCursor.StreamExecutePrimitive(ctx, p, vars, fields, func(result *sqltypes.Result) error {
+		err := callback(result)
+		// ScatterConn.endAction marks these shard errors for rollback.
+		if code := vterrors.Code(err); code == vtrpcpb.Code_RESOURCE_EXHAUSTED || code == vtrpcpb.Code_ABORTED {
+			c.rollback.Store(true)
+		}
+		return err
+	})
 	if err != nil && c.wrapErrors {
 		return fmt.Errorf("aggregated stream error: %v", err)
 	}

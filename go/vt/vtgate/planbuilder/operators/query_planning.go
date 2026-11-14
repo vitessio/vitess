@@ -715,8 +715,26 @@ func mapUnionArmOrdering(ctx *plancontext.PlanningContext, union *Union, order [
 			}
 			mapped := order[i]
 			mapped.Inner = sqlparser.Clone(order[i].Inner)
-			mapped.Inner.Expr = sqlparser.Clone(expr)
-			mapped.SimplifiedExpr = sqlparser.Clone(expr)
+			// ORDER BY resolves bare names against select aliases first. Preserve
+			// the expression's table binding when an arm aliases another column
+			// to that name.
+			mapped.Inner.Expr = ctx.SemTable.Clone(expr).(sqlparser.Expr)
+			err := sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+				col, ok := node.(*sqlparser.ColName)
+				if !ok || !col.Qualifier.IsEmpty() {
+					return true, nil
+				}
+				table, err := ctx.SemTable.TableInfoForExpr(col)
+				if err != nil {
+					return false, err
+				}
+				col.Qualifier, err = table.Name()
+				return false, err
+			}, mapped.Inner.Expr)
+			if err != nil {
+				return nil, false
+			}
+			mapped.SimplifiedExpr = mapped.Inner.Expr
 			armOrder = append(armOrder, mapped)
 		}
 		armRoutes := routesForUnionArm(source)
@@ -773,6 +791,11 @@ func knownNumericCastType(expr sqlparser.Expr) (string, bool) {
 func routesForUnionArm(op Operator) []*Route {
 	if route, ok := op.(*Route); ok {
 		return []*Route{route}
+	}
+	if _, ok := op.(*Aggregator); ok {
+		// Aggregation owns its output shape; route-only helpers cannot pass
+		// through unchanged. A scalar aggregate consumes one row per shard.
+		return nil
 	}
 	if _, ok := op.(*Join); ok {
 		return nil
