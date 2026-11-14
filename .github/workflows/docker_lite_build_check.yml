@@ -3,10 +3,6 @@ name: Docker Lite Build Check
 on:
   pull_request:
     branches: '**'
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Docker Lite Build Check')

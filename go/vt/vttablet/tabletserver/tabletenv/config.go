@@ -82,6 +82,7 @@ var (
 	transitionGracePeriod               time.Duration
 	enableReplicationReporter           bool
 	queryThrottlerConfigRefreshInterval time.Duration
+	queryThrottlerCacheUpdateInterval   time.Duration
 )
 
 func init() {
@@ -222,10 +223,12 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
-	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
+	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics, and the query throttler's metrics, include a label that identifies the workload")
 	fs.BoolVar(&currentConfig.SkipUserMetrics, "skip-user-metrics", defaultConfig.SkipUserMetrics, "If true, user based stats are not recorded.")
 
-	fs.DurationVar(&queryThrottlerConfigRefreshInterval, "query-throttler-config-refresh-interval", time.Minute, "How frequently to refresh configuration for the query throttler")
+	fs.DurationVar(&queryThrottlerConfigRefreshInterval, "query-throttler-config-refresh-interval", time.Minute, "(DEPRECATED) This flag is a no-op: the query throttler now receives configuration changes through a SrvKeyspace watch instead of polling.")
+	_ = fs.MarkDeprecated("query-throttler-config-refresh-interval", "this flag is a no-op and will be removed in v26")
+	fs.DurationVar(&queryThrottlerCacheUpdateInterval, "query-throttler-cache-update-interval", 10*time.Second, "How frequently to refresh throttle check results for the query throttler TABLET_THROTTLER strategy")
 
 	fs.BoolVar(&currentConfig.Unmanaged, "unmanaged", false, "Indicates an unmanaged tablet, i.e. using an external mysql-compatible database")
 }
@@ -291,6 +294,7 @@ func Init() {
 	currentConfig.SemiSyncMonitor.Interval = semiSyncMonitorInterval
 
 	currentConfig.QueryThrottlerConfigRefreshInterval = queryThrottlerConfigRefreshInterval
+	currentConfig.QueryThrottlerCacheUpdateInterval = queryThrottlerCacheUpdateInterval
 
 	logFormat := streamlog.GetQueryLogConfig().Format
 	switch logFormat {
@@ -393,6 +397,7 @@ type TabletConfig struct {
 	EnablePerWorkloadTableMetrics       bool          `json:"-"`
 	SkipUserMetrics                     bool          `json:"-"`
 	QueryThrottlerConfigRefreshInterval time.Duration `json:"-"`
+	QueryThrottlerCacheUpdateInterval   time.Duration `json:"-"`
 }
 
 func (cfg *TabletConfig) MarshalJSON() ([]byte, error) {

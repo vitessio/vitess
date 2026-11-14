@@ -29,6 +29,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -379,17 +380,28 @@ func (r *resolver) watch() {
 		case nil:
 			switch len(state.Addresses) {
 			case 0:
-				log.Warn(fmt.Sprintf("%s: found no %ss (cluster %s); updating grpc clientconn state anyway", logPrefix, r.component, r.cluster))
+				log.Warn(logPrefix+": found no addresses; updating grpc clientconn state anyway",
+					slog.String("component", r.component),
+					slog.String("cluster_id", r.cluster))
 			default:
-				log.Info(fmt.Sprintf("%s: found %d %ss (cluster %s)", logPrefix, len(state.Addresses), r.component, r.cluster))
+				log.Info(logPrefix+": found addresses",
+					slog.Int("address_count", len(state.Addresses)),
+					slog.String("component", r.component),
+					slog.String("cluster_id", r.cluster))
 			}
 
 			if updateErr := r.cc.UpdateState(*state); updateErr != nil {
-				log.Error(fmt.Sprintf("%s: failed to update %ss addresses (cluster %s): %s", logPrefix, r.component, r.cluster, updateErr))
+				log.Error(logPrefix+": failed to update addresses",
+					slog.String("component", r.component),
+					slog.String("cluster_id", r.cluster),
+					slog.Any("error", updateErr))
 				err = updateErr
 			}
 		default:
-			log.Error(fmt.Sprintf("%s: failed to resolve new addresses for %s (cluster %s): %s", logPrefix, r.component, r.cluster, err))
+			log.Error(logPrefix+": failed to resolve new addresses",
+				slog.String("component", r.component),
+				slog.String("cluster_id", r.cluster),
+				slog.Any("error", err))
 			r.cc.ReportError(err)
 		}
 
@@ -434,7 +446,7 @@ func (r *resolver) resolve() (*grpcresolver.State, error) {
 	span.Annotate("cluster_id", r.cluster)
 	span.Annotate("component", r.component)
 
-	log.Info(fmt.Sprintf("%s: resolving %ss (cluster %s)", logPrefix, r.component, r.cluster))
+	log.Info(logPrefix+": resolving addresses", slog.String("component", r.component), slog.String("cluster_id", r.cluster))
 
 	ctx, cancel := context.WithTimeout(ctx, r.opts.DiscoveryTimeout)
 	defer cancel()

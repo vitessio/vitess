@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"log/slog"
 	"maps"
 	"math"
 	"slices"
@@ -83,12 +84,13 @@ func getTablesInKeyspace(ctx context.Context, ts *topo.Server, tmc tmclient.Tabl
 	if err != nil {
 		return nil, err
 	}
-	log.Info(fmt.Sprintf("got table schemas: %+v from source primary %v.", schema, primary))
-
-	var sourceTables []string
+	sourceTables := make([]string, 0, len(schema.TableDefinitions))
 	for _, td := range schema.TableDefinitions {
 		sourceTables = append(sourceTables, td.Name)
 	}
+	log.Info("got table schemas from source primary",
+		slog.Any("tables", sourceTables),
+		slog.String("primary_tablet", topoproto.TabletAliasString(primary)))
 	return sourceTables, nil
 }
 
@@ -156,7 +158,11 @@ func createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.Materia
 		if srr[fromSource] == "" && srr[fromTarget] == "" {
 			srr[fromTarget] = ms.SourceKeyspace
 			changed = true
-			log.Info(fmt.Sprintf("Added default shard routing rule from %q to %q", fromTarget, fromSource))
+			log.Info("Added default shard routing rule",
+				slog.String("workflow", ms.Workflow),
+				slog.String("from_keyspace", ms.TargetKeyspace),
+				slog.String("to_keyspace", ms.SourceKeyspace),
+				slog.String("shard", si.ShardName()))
 		}
 	}
 	if changed {

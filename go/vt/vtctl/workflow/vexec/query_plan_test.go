@@ -17,6 +17,8 @@ limitations under the License.
 package vexec
 
 import (
+	"context"
+	"log/slog"
 	"testing"
 
 	"vitess.io/vitess/go/test/utils"
@@ -24,6 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
@@ -172,6 +175,50 @@ func TestQueryPlanExecute(t *testing.T) {
 			utils.MustMatch(t, tt.expected, qr)
 		})
 	}
+}
+
+func TestQueryPlanExecuteLogsError(t *testing.T) {
+	plan := FixedQueryPlan{
+		ParsedQuery: &sqlparser.ParsedQuery{Query: "SELECT id FROM _vt.vreplication"},
+		workflow:    "wf",
+		tmc: &testutil.TabletManagerClient{
+			VReplicationExecResults: map[string]map[string]struct {
+				Result *querypb.QueryResult
+				Error  error
+			}{
+				"zone1-0000000100": {"select id from _vt.vreplication": {Error: assert.AnError}},
+			},
+		},
+	}
+	target := &topo.TabletInfo{Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	_, err := plan.Execute(t.Context(), target)
+	require.Error(t, err)
+	record := logs.Record(t, "Result on tablet")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "wf", record["workflow"])
+	assert.Equal(t, "zone1-0000000100", record["tablet"])
+	assert.Equal(t, assert.AnError.Error(), record["error"])
+	assert.Equal(t, "UNKNOWN", record["error_code"])
+}
+
+func TestExecCallbackLogsNilResult(t *testing.T) {
+	vx := &VExec{
+		workflow:  "wf",
+		primaries: []*topo.TabletInfo{{Tablet: &topodatapb.Tablet{Alias: &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}}}},
+	}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	results, err := vx.execCallback(t.Context(), func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error) {
+		return nil, nil
+	})
+	require.NoError(t, err)
+	assert.Empty(t, results)
+	record := logs.Record(t, "Callback returned nil result for tablet")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "wf", record["workflow"])
+	assert.Equal(t, "zone1-0000000100", record["tablet"])
 }
 
 func TestQueryPlanExecuteScatter(t *testing.T) {

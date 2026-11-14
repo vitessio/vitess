@@ -19,6 +19,7 @@ package reparentutil
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -41,6 +42,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sets"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
@@ -10749,6 +10751,7 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 		},
 	}
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	candidates, starved, err := erp.findErrantGTIDs(t.Context(), validCandidates, statusMap, tabletMap, 10*time.Second, nil, false, nil)
 	require.NoError(t, err)
 	require.Contains(t, candidates, "zone1-0000000101")
@@ -10758,6 +10761,12 @@ func TestEmergencyReparenterFindErrantGTIDs_EmptyPrimaryErrantReplica(t *testing
 	assert.NotContains(t, candidates, "zone1-0000000100")
 	// both replicas had a peer to compare against, so nobody was accepted blindly
 	assert.Empty(t, starved)
+
+	record := logs.Record(t, "skipping tablet because we detected errant GTIDs")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.Equal(t, "zone1-0000000102", record["tablet"])
+	assert.Equal(t, "MySQL56/"+u1+":1-100,"+u3+":1", record["relay_log_position"])
+	assert.Equal(t, u3+":1", record["errant_gtids"])
 }
 
 // findErrantGTIDsWipedShardFixture returns a two-tablet fixture (a demoted primary and

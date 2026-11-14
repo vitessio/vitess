@@ -19,6 +19,7 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math"
 	"math/rand/v2"
 	"os"
@@ -35,6 +36,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/testfiles"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/etcd2topo"
@@ -186,6 +188,7 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 				Cell:         "zone1",
 				SourceShards: tc.sourceKeyspace.ShardNames,
 			}
+			logs := logtest.Capture(t, slog.LevelInfo)
 			err := createDefaultShardRoutingRules(ctx, ms, env.ts)
 			require.NoError(t, err)
 			rules, err := topotools.GetShardRoutingRules(ctx, env.ts)
@@ -193,6 +196,19 @@ func TestCreateDefaultShardRoutingRules(t *testing.T) {
 			require.Len(t, rules, len(tc.shards))
 			want := getExpectedRules(tc.sourceKeyspace, tc.targetKeyspace)
 			require.Equal(t, want, rules)
+
+			var loggedShards []string
+			for _, record := range logs.Records(t) {
+				if record["msg"] != "Added default shard routing rule" {
+					continue
+				}
+				assert.Equal(t, "INFO", record["level"])
+				assert.Equal(t, "wf1", record["workflow"])
+				assert.Equal(t, tc.targetKeyspace.KeyspaceName, record["from_keyspace"])
+				assert.Equal(t, tc.sourceKeyspace.KeyspaceName, record["to_keyspace"])
+				loggedShards = append(loggedShards, record["shard"].(string))
+			}
+			assert.ElementsMatch(t, tc.shards, loggedShards)
 		})
 	}
 }

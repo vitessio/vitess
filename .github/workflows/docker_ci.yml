@@ -1,10 +1,5 @@
 name: docker_ci
 on:
-  push:
-    branches:
-      - "main"
-      - "release-[0-9]+.[0-9]"
-    tags: "**"
   pull_request:
     branches: "**"
 concurrency:
@@ -133,7 +128,6 @@ jobs:
         with:
           bootstrap-version: ${{ env.BOOTSTRAP_VERSION }}
           bootstrap-flavor: ${{ env.BOOTSTRAP_FLAVOR }}
-          cache-export: ${{ matrix.shard == 'java' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')) }}
 
       - name: Set up Go
         if: needs.changes.outputs.end_to_end == 'true'

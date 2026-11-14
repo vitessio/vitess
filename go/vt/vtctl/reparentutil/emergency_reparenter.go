@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"slices"
 	"strings"
@@ -1628,7 +1629,10 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, nil, err
 		}
 		if errantGTIDs != nil {
-			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", candidate, afterStatus.RelayLogPosition.GTIDSet, errantGTIDs))
+			log.Error("skipping tablet because we detected errant GTIDs",
+				slog.String("tablet", candidate),
+				slog.String("relay_log_position", replication.EncodePosition(afterStatus.RelayLogPosition)),
+				slog.String("errant_gtids", errantGTIDs.String()))
 			continue
 		}
 		maxLenPositions = append(maxLenPositions, candidatePositions.Combined)
@@ -1669,7 +1673,11 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 			return nil, nil, err
 		}
 		if errantGTIDs != nil {
-			log.Error(fmt.Sprintf("skipping %v with GTIDSet:%v because we detected errant GTIDs - %v", alias, candidatePositions, errantGTIDs))
+			log.Error("skipping tablet because we detected errant GTIDs",
+				slog.String("tablet", alias),
+				slog.String("relay_log_position", replication.EncodePosition(candidatePositions.Combined)),
+				slog.String("executed_position", replication.EncodePosition(candidatePositions.Executed)),
+				slog.String("errant_gtids", errantGTIDs.String()))
 			continue
 		}
 		updatedValidCandidates[alias] = candidatePositions
