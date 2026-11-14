@@ -613,7 +613,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 			newcase = csa.ToLower(nil, e.bytes)
 		}
 		sr := newStrResult(e.SQLType(), argStrLen(env, call.Arguments[0], e), e.col.Collation)
-		return sr.eval(newcase, e.col), nil
+		return sr.eval(env, newcase, e.col), nil
 
 	default:
 		return e, nil
@@ -772,7 +772,7 @@ func (call *builtinReverse) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	sr := newStrResult(sqltypes.VarChar, argStrLen(env, call.Arguments[0], arg), b.col.Collation)
-	return sr.eval(reverse(b), b.col), nil
+	return sr.eval(env, reverse(b), b.col), nil
 }
 
 func (call *builtinReverse) compile(c *compiler) (ctype, error) {
@@ -822,13 +822,16 @@ func (call *builtinSpace) eval(env *ExpressionEnv) (eval, error) {
 	}
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	sr := newStrResult(sqltypes.VarChar, spaceLen(newConstInt(call.Arguments[0], arg)), col.Collation)
-	return sr.eval(space(num), col), nil
+	return sr.eval(env, space(num), col), nil
 }
 
 // spaceLen returns the length of SPACE(n): n when it is a constant, 0 when n
 // is negative or NULL, and the longest a string can be when n is not a
 // constant. SPACE(3) is 3 and SPACE(i) is a LONGTEXT.
 func spaceLen(n constInt) *strLen {
+	if l := symbolicCount(countSpace, nil, n); l != nil {
+		return l
+	}
 	switch {
 	case !n.ok:
 		return strLenLong
@@ -933,6 +936,9 @@ const maxRepeatLength = 1073741824
 // For a negative constant count, MySQL 8.0 declares 0 and MySQL 8.4 reads
 // the count as a huge unsigned number: REPEAT(s, -1) is a LONGTEXT there.
 func repeatLen(str *strLen, count constInt, version string) *strLen {
+	if l := symbolicCount(countRepeat, str, count); l != nil {
+		return l
+	}
 	switch {
 	case !count.ok || count.null:
 		return strLenLong
@@ -969,7 +975,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	sr := newStrResult(tt, length, text.col.Collation)
 
 	if len(text.bytes) == 0 {
-		return sr.eval(nil, text.col), nil
+		return sr.eval(env, nil, text.col), nil
 	}
 
 	repeat := max(evalToInt64(arg2).i, 0)
@@ -978,7 +984,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	b := bytes.Repeat(text.bytes, int(repeat))
-	return sr.eval(b, text.col), nil
+	return sr.eval(env, b, text.col), nil
 }
 
 func validMaxLength(len, repeat int64) bool {
@@ -1194,7 +1200,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	sr := newStrResult(sqltypes.VarChar, leftRightLen(argStrLen(env, call.Arguments[0], str), newConstInt(call.Arguments[1], l)), text.col.Collation)
 	length := evalToInt64(l).i
 	if length <= 0 {
-		return sr.eval(nil, text.col), nil
+		return sr.eval(env, nil, text.col), nil
 	}
 
 	// LEFT / RIGHT operates on characters, not bytes
@@ -1202,7 +1208,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	strLen := charset.Length(cs, text.bytes)
 
 	if strLen <= int(length) {
-		return sr.eval(text.bytes, text.col), nil
+		return sr.eval(env, text.bytes, text.col), nil
 	}
 
 	var res []byte
@@ -1211,7 +1217,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	} else {
 		res = charset.Slice(cs, text.bytes, strLen-int(length), strLen)
 	}
-	return sr.eval(res, text.col), nil
+	return sr.eval(env, res, text.col), nil
 }
 
 // leftRightLen returns the length of LEFT(str, n) and RIGHT(str, n): the
@@ -1219,6 +1225,9 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 // str when it is not. LEFT(tx, 5) on a TEXT column is 5 and LEFT(tx, i) is
 // as long as tx.
 func leftRightLen(str *strLen, n constInt) *strLen {
+	if l := symbolicCount(countLeftRight, str, n); l != nil {
+		return l
+	}
 	switch {
 	case !n.ok || n.null || n.n > maxInt32:
 		return str
@@ -1306,12 +1315,12 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	if strLen >= int(length) {
 		// If the existing string is longer than the requested padding,
 		// MySQL truncates the string to the requested padding length.
-		return sr.eval(charset.Slice(cs, text.bytes, 0, int(length)), text.col), nil
+		return sr.eval(env, charset.Slice(cs, text.bytes, 0, int(length)), text.col), nil
 	}
 
 	runeLen := charset.Length(cs, pad.bytes)
 	if runeLen == 0 {
-		return sr.eval(nil, text.col), nil
+		return sr.eval(env, nil, text.col), nil
 	}
 
 	repeat := (int(length) - strLen) / runeLen
@@ -1332,7 +1341,7 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 		res = slices.Concat(text.bytes, padding)
 	}
 
-	return sr.eval(res, text.col), nil
+	return sr.eval(env, res, text.col), nil
 }
 
 // padLen returns the length of LPAD(str, n, pad) and RPAD(str, n, pad): n
@@ -1340,6 +1349,9 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 // when it is negative or NULL. LPAD(s, 5, 'x') is 5 and LPAD(s, i, 'x') is a
 // LONGTEXT.
 func padLen(n constInt) *strLen {
+	if l := symbolicCount(countPad, nil, n); l != nil {
+		return l
+	}
 	if !n.ok || n.null || n.n < 0 {
 		return strLenLong
 	}
@@ -1515,11 +1527,11 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	if len(call.Arguments) == 1 {
 		switch call.trim {
 		case sqlparser.LeadingTrimType:
-			return sr.eval(bytes.TrimLeft(text.bytes, " "), text.col), nil
+			return sr.eval(env, bytes.TrimLeft(text.bytes, " "), text.col), nil
 		case sqlparser.TrailingTrimType:
-			return sr.eval(bytes.TrimRight(text.bytes, " "), text.col), nil
+			return sr.eval(env, bytes.TrimRight(text.bytes, " "), text.col), nil
 		default:
-			return sr.eval(bytes.Trim(text.bytes, " "), text.col), nil
+			return sr.eval(env, bytes.Trim(text.bytes, " "), text.col), nil
 		}
 	}
 
@@ -1541,11 +1553,11 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 
 	switch call.trim {
 	case sqlparser.LeadingTrimType:
-		return sr.eval(trimLeftRepeated(text.bytes, pat.bytes), text.col), nil
+		return sr.eval(env, trimLeftRepeated(text.bytes, pat.bytes), text.col), nil
 	case sqlparser.TrailingTrimType:
-		return sr.eval(trimRightRepeated(text.bytes, pat.bytes), text.col), nil
+		return sr.eval(env, trimRightRepeated(text.bytes, pat.bytes), text.col), nil
 	default:
-		return sr.eval(trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col), nil
+		return sr.eval(env, trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col), nil
 	}
 }
 
@@ -1675,7 +1687,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 	sr := newStrResult(tt, length, text.col.Collation)
 	pos := evalToInt64(p).i
 	if pos == 0 {
-		return sr.eval(nil, text.col), nil
+		return sr.eval(env, nil, text.col), nil
 	}
 	cs := colldata.Lookup(text.col.Collation).Charset()
 	end := int64(charset.Length(cs, text.bytes))
@@ -1684,13 +1696,13 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		pos += end + 1
 	}
 	if pos < 1 || pos > end {
-		return sr.eval(nil, text.col), nil
+		return sr.eval(env, nil, text.col), nil
 	}
 
 	if len(call.Arguments) > 2 {
 		ll := evalToInt64(l).i
 		if ll < 1 {
-			return sr.eval(nil, text.col), nil
+			return sr.eval(env, nil, text.col), nil
 		}
 		if ll > end-pos+1 {
 			ll = end - pos + 1
@@ -1698,7 +1710,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		end = pos + ll - 1
 	}
 	res := charset.Slice(cs, text.bytes, int(pos-1), int(end))
-	return sr.eval(res, text.col), nil
+	return sr.eval(env, res, text.col), nil
 }
 
 // substringLen returns the length of SUBSTRING(str, pos) and of
@@ -1707,6 +1719,9 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 // SUBSTRING(s, -3) is 3, and SUBSTRING(tx, i, 3) is 3. When pos is not a
 // constant, only a constant len shortens it.
 func substringLen(str *strLen, pos, n constInt) *strLen {
+	if l := symbolicCount(countSubstring, str, pos, n); l != nil {
+		return l
+	}
 	length := str
 	switch {
 	case pos.null:
@@ -1989,7 +2004,7 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	return sr.eval(buf, tc), nil
+	return sr.eval(env, buf, tc), nil
 }
 
 func (call *builtinConcat) compile(c *compiler) (ctype, error) {
@@ -2125,7 +2140,7 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	return sr.eval(buf, tc), nil
+	return sr.eval(env, buf, tc), nil
 }
 
 // concatWsLen returns the length of CONCAT_WS(sep, arg...) from the lengths

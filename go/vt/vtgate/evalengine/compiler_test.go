@@ -1103,6 +1103,131 @@ func TestCompilerSingle(t *testing.T) {
 	}
 }
 
+// TestCompilerBindVarLength checks that a string function whose length
+// depends on a bind variable is typed from its value at each execution, as
+// MySQL types the literal the bind variable stands for. One compiled program
+// serves every value: its declared type and the type of its value change
+// together.
+func TestCompilerBindVarLength(t *testing.T) {
+	type execution struct {
+		bindVar *querypb.BindVariable
+		want    sqltypes.Type
+	}
+	testCases := []struct {
+		expression string
+		bindType   sqltypes.Type
+		executions []execution
+	}{
+		{
+			// 1639 copies of a utf8mb4 VARCHAR(10) can take 65,560 bytes.
+			expression: `REPEAT(column0, :n)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{sqltypes.Int64BindVariable(2), sqltypes.VarChar},
+				{sqltypes.Int64BindVariable(1639), sqltypes.Text},
+			},
+		},
+		{
+			expression: `CONCAT(column0, :n)`,
+			bindType:   sqltypes.VarChar,
+			executions: []execution{
+				{sqltypes.StringBindVariable("xyz"), sqltypes.VarChar},
+				{sqltypes.StringBindVariable(strings.Repeat("x", 16380)), sqltypes.Text},
+			},
+		},
+		{
+			// column1 is a utf8mb4 TEXT.
+			expression: `LEFT(column1, :n)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{sqltypes.Int64BindVariable(5), sqltypes.VarChar},
+				{sqltypes.Int64BindVariable(20000), sqltypes.Text},
+			},
+		},
+		{
+			// A string count is read as a number, as MySQL reads
+			// LEFT(tx, '3'): 3, and 0 for 'abc'.
+			expression: `LEFT(column1, :n)`,
+			bindType:   sqltypes.VarChar,
+			executions: []execution{
+				{sqltypes.StringBindVariable("3"), sqltypes.VarChar},
+				{sqltypes.StringBindVariable("abc"), sqltypes.VarChar},
+				{sqltypes.StringBindVariable("20000"), sqltypes.Text},
+			},
+		},
+		{
+			expression: `SPACE(:n)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{sqltypes.Int64BindVariable(3), sqltypes.VarChar},
+				{sqltypes.Int64BindVariable(16384), sqltypes.Text},
+			},
+		},
+		{
+			expression: `LPAD(column0, :n, 'x')`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{sqltypes.Int64BindVariable(5), sqltypes.VarChar},
+				{sqltypes.Int64BindVariable(16384), sqltypes.Text},
+			},
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	fields := evalengine.FieldResolver{
+		lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID),
+		lengthField("column1", sqltypes.Text, 262140, collations.CollationUtf8mb4ID),
+	}
+	row := []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.MakeTrusted(sqltypes.Text, []byte("tx"))}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			// The normalizer gives the bind variable the type of its literal.
+			expr = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+				if arg, ok := cursor.Node().(*sqlparser.Argument); ok {
+					cursor.Replace(sqlparser.NewTypedArgument(arg.Name, tc.bindType))
+				}
+				return true
+			}, nil).(sqlparser.Expr)
+
+			cfg := &evalengine.Config{
+				ResolveColumn: fields.Column,
+				ResolveType: func(expr sqlparser.Expr) (evalengine.Type, bool) {
+					for _, f := range fields {
+						if col, ok := expr.(*sqlparser.ColName); ok && col.CompliantName() == f.Name {
+							return evalengine.NewTypeFromField(f), true
+						}
+					}
+					return evalengine.Type{}, false
+				},
+				Collation:   collations.CollationUtf8mb4ID,
+				Environment: venv,
+			}
+			compiled, err := evalengine.Translate(expr, cfg)
+			require.NoError(t, err)
+			require.IsType(t, &evalengine.CompiledExpr{}, compiled)
+
+			for _, exec := range tc.executions {
+				env := evalengine.NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{"n": exec.bindVar}, evalengine.NewEmptyVCursor(venv, time.UTC))
+				env.Row = row
+
+				typ, err := env.TypeOf(compiled)
+				require.NoError(t, err)
+				assert.Equal(t, exec.want, typ.Type(), "declared type")
+
+				res, err := env.Evaluate(compiled)
+				require.NoError(t, err)
+				assert.Equal(t, exec.want, res.Value(collations.CollationUtf8mb4ID).Type(), "type of the value")
+
+				res, err = env.EvaluateAST(compiled)
+				require.NoError(t, err)
+				assert.Equal(t, exec.want, res.Value(collations.CollationUtf8mb4ID).Type(), "type of the interpreter's value")
+			}
+		})
+	}
+}
+
 func TestBindVarLiteral(t *testing.T) {
 	testCases := []struct {
 		expression string

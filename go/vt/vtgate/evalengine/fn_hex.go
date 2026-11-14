@@ -56,7 +56,7 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	length := hexLen(argStrLen(env, call.Arguments[0], arg), evalCollation(arg).Collation, numeric)
 	col := typedCoercionCollation(tt, call.collate)
 	sr := newStrResult(tt, length, col.Collation)
-	return sr.eval(encoded, col), nil
+	return sr.eval(env, encoded, col), nil
 }
 
 // hexLen returns the length of HEX(arg): two digits for each byte of a

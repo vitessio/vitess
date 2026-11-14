@@ -177,6 +177,11 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 	default:
 		return ctype{}, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}
+	if typ.Type != sqltypes.Tuple {
+		// The length of a bind variable is the length of its value, which
+		// is known at execution.
+		typ.StrLen = &strLen{op: strLenBindVar, bv: bvar}
+	}
 	return typ, nil
 }
 

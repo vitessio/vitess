@@ -19,6 +19,7 @@ package evalengine
 import (
 	"errors"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vthash"
 )
@@ -52,8 +53,25 @@ func (c *CompiledExpr) IR() IR {
 
 func (c *CompiledExpr) IsExpr() {}
 
-func (p *CompiledExpr) typeof(*ExpressionEnv) (ctype, error) {
-	return p.typed, nil
+// typeof returns the type of the expression. When the expression is a string
+// whose length depends on bind variables, its type is decided from their
+// values in env: REPEAT(s, :n) is a VARCHAR for n = 2 and a TEXT for
+// n = 1639 on a utf8mb4 VARCHAR(10).
+func (p *CompiledExpr) typeof(env *ExpressionEnv) (ctype, error) {
+	// A bind variable by itself is a literal for MySQL, and a literal is
+	// typed from its own type whatever its length: only the string functions
+	// build a length from it.
+	ct := p.typed
+	if ct.StrLen == nil || ct.StrLen.op == strLenConst || ct.StrLen.op == strLenBindVar || !sqltypes.IsTextOrBinary(ct.Type) {
+		return ct, nil
+	}
+	if length := env.resolveStrLen(ct.StrLen); length != nil {
+		if _, ok := length.constant(); ok {
+			ct.Type = stringType(ct.Type, length, ct.Col.Collation)
+			ct.StrLen = length
+		}
+	}
+	return ct, nil
 }
 
 func (p *CompiledExpr) eval(env *ExpressionEnv) (eval, error) {

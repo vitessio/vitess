@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"math"
+	"reflect"
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -30,12 +31,16 @@ import (
 // way MySQL declares it: CONCAT(s, 'x') on a VARCHAR(10) column s is 11.
 // A nil *strLen means that the length is unknown.
 //
-// Every length is a constant for now. The operations are kept as a tree so
-// that a length that depends on a bind variable can be resolved at execution.
+// A length that depends on a bind variable is kept as a tree and resolved at
+// execution, because MySQL sees the literal the bind variable stands for:
+// CONCAT(s, :v) is 10 + the length of the value of v.
 type strLen struct {
 	op   strLenOp
-	n    int64   // the value of a strLenConst
-	l, r *strLen // the operands of the other operations
+	n    int64         // the value of a strLenConst
+	l, r *strLen       // the operands of the other operations
+	bv   *BindVariable // the bind variable of a strLenBindVar
+	fn   countFn       // the function of a strLenCount
+	args []constInt    // the integer arguments of a strLenCount
 }
 
 type strLenOp uint8
@@ -47,7 +52,55 @@ const (
 	strLenMin
 	// strLenSub is l - r, and 0 when r is larger.
 	strLenSub
+	// strLenBindVar is the length of the value of a bind variable.
+	strLenBindVar
+	// strLenCount is the length of the result of a function that takes an
+	// integer argument from a bind variable, such as REPEAT(s, :n), from the
+	// length l of its string argument.
+	strLenCount
 )
+
+// countFn is a function whose length depends on an integer argument.
+type countFn uint8
+
+const (
+	countRepeat countFn = iota
+	countSpace
+	countLeftRight
+	countSubstring
+	countPad
+)
+
+// apply returns the length of the result of the function from the length of
+// its string argument and its integer arguments, none of them symbolic.
+func (fn countFn) apply(str *strLen, args []constInt, version string) *strLen {
+	switch fn {
+	case countRepeat:
+		return repeatLen(str, args[0], version)
+	case countSpace:
+		return spaceLen(args[0])
+	case countLeftRight:
+		return leftRightLen(str, args[0])
+	case countSubstring:
+		return substringLen(str, args[0], args[1])
+	default:
+		return padLen(args[0])
+	}
+}
+
+// symbolicCount returns the length of a function whose integer arguments or
+// string argument depend on a bind variable, to be resolved at execution:
+// REPEAT(s, :n). It returns nil when they do not.
+func symbolicCount(fn countFn, str *strLen, args ...constInt) *strLen {
+	symbolic := str != nil && str.op != strLenConst
+	for _, arg := range args {
+		symbolic = symbolic || arg.bv != nil
+	}
+	if !symbolic {
+		return nil
+	}
+	return &strLen{op: strLenCount, fn: fn, l: str, args: args}
+}
 
 const (
 	// maxStrLen is the length of the longest string MySQL declares, a
@@ -94,11 +147,106 @@ func (l *strLen) isLong() bool {
 	return ok && n == maxStrLen
 }
 
+// equal compares two lengths. A bind variable is compared by its key, not
+// its value, so that one compiled program serves every value.
 func (l *strLen) equal(other *strLen) bool {
 	if l == nil || other == nil {
 		return l == other
 	}
-	return l.op == other.op && l.n == other.n && l.l.equal(other.l) && l.r.equal(other.r)
+	if l.op != other.op || l.n != other.n || l.fn != other.fn || len(l.args) != len(other.args) ||
+		!sameBindVar(l.bv, other.bv) || !l.l.equal(other.l) || !l.r.equal(other.r) {
+		return false
+	}
+	for i, arg := range l.args {
+		o := other.args[i]
+		if arg.n != o.n || arg.null != o.null || arg.ok != o.ok || !sameBindVar(arg.bv, o.bv) {
+			return false
+		}
+	}
+	return true
+}
+
+func sameBindVar(a, b *BindVariable) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Key == b.Key
+}
+
+// resolve returns the length against the bind variables of env: a constant,
+// or nil when it cannot be known. REPEAT(s, :n) with n = 3 on a VARCHAR(10)
+// is 30. A bind variable missing from env.BindVars is taken as NULL, as its
+// literal would be; when env has no bind variables at all, as when the
+// planner asks for a type, the length is unknown.
+func (l *strLen) resolve(env *ExpressionEnv) *strLen {
+	if l == nil || l.op == strLenConst {
+		return l
+	}
+	switch l.op {
+	case strLenAdd:
+		return strLenSum(l.l.resolve(env), l.r.resolve(env))
+	case strLenMul:
+		return strLenProduct(l.l.resolve(env), l.r.resolve(env))
+	case strLenMin:
+		return strLenLeast(l.l.resolve(env), l.r.resolve(env))
+	case strLenSub:
+		return strLenDiff(l.l.resolve(env), l.r.resolve(env))
+	case strLenBindVar:
+		value, ok := bindVarValue(env, l.bv)
+		if !ok {
+			return nil
+		}
+		return evalStrLen(value)
+	case strLenCount:
+		args := make([]constInt, len(l.args))
+		for i, arg := range l.args {
+			if arg.bv == nil {
+				args[i] = arg
+				continue
+			}
+			value, ok := bindVarValue(env, arg.bv)
+			if !ok {
+				return nil
+			}
+			args[i] = constIntOf(value)
+		}
+		return l.fn.apply(l.l.resolve(env), args, env.currentVersion())
+	}
+	return nil
+}
+
+// resolveStrLen returns l.resolve(env), resolving it once for the bind
+// variables of env.
+func (env *ExpressionEnv) resolveStrLen(l *strLen) *strLen {
+	if env == nil || l == nil || l.op == strLenConst {
+		return l
+	}
+	if env.strLens == nil || reflect.ValueOf(env.strLensVars).UnsafePointer() != reflect.ValueOf(env.BindVars).UnsafePointer() {
+		env.strLens = make(map[*strLen]*strLen)
+		env.strLensVars = env.BindVars
+	}
+	resolved, ok := env.strLens[l]
+	if !ok {
+		resolved = l.resolve(env)
+		env.strLens[l] = resolved
+	}
+	return resolved
+}
+
+// bindVarValue returns the value of a bind variable, and NULL when env has
+// no value for it. ok is false when env has no bind variables at all.
+func bindVarValue(env *ExpressionEnv, bv *BindVariable) (eval, bool) {
+	if env == nil || env.BindVars == nil {
+		return nil, false
+	}
+	if _, ok := env.BindVars[bv.Key]; !ok {
+		return nil, true
+	}
+	value, err := bv.eval(env)
+	if err != nil {
+		return nil, true
+	}
+	return value, true
 }
 
 // strLenSum returns a + b: CONCAT(s, 'x') is 10 + 1. A sum with a long
@@ -207,8 +355,16 @@ func strLenIn(l *strLen, from, to collations.ID) *strLen {
 // is a TEXT. The same 16,390 characters in latin1 are a VARCHAR.
 func stringType(base sqltypes.Type, length *strLen, col collations.ID) sqltypes.Type {
 	n, ok := length.constant()
+	if !ok {
+		return base
+	}
+	return stringTypeOf(base, n, col)
+}
+
+// stringTypeOf is stringType for a length that is known.
+func stringTypeOf(base sqltypes.Type, n int64, col collations.ID) sqltypes.Type {
 	width := charsetWidth(col)
-	if !ok || width == 0 {
+	if width == 0 {
 		return base
 	}
 	long := n > maxVarcharBytes/width
@@ -371,9 +527,11 @@ func argStrLen(env *ExpressionEnv, arg IR, e eval) *strLen {
 
 // strResult is how a string function types its result. When the length of
 // the result is known, the type is decided once, at compile time. When it
-// is not, the type is decided for each value from its own length, the way
-// the interpreter does: REPEAT(dt, 1639) on a DATE column whose length is
-// not known is a TEXT, because each value is 16,390 characters.
+// depends on bind variables, it is decided for each execution from their
+// values. When it is not known, it is decided for each value from its own
+// length, the way the interpreter does: REPEAT(dt, 1639) on a DATE column
+// whose length is not known is a TEXT, because each value is 16,390
+// characters.
 type strResult struct {
 	base   sqltypes.Type
 	tt     sqltypes.Type // the type, when fixed
@@ -388,44 +546,49 @@ func newStrResult(base sqltypes.Type, length *strLen, col collations.ID) strResu
 }
 
 // typeOf returns the type of a result value.
-func (r *strResult) typeOf(value []byte) sqltypes.Type {
+func (r *strResult) typeOf(env *ExpressionEnv, value []byte) sqltypes.Type {
 	if r.fixed {
 		return r.tt
+	}
+	if n, ok := env.resolveStrLen(r.length).constant(); ok {
+		return stringTypeOf(r.base, n, r.col)
 	}
 	n, ok := valueCharLength(value, r.col)
 	if !ok {
 		return r.base
 	}
-	return stringType(r.base, newStrLenConst(n), r.col)
-}
-
-// stringValueType returns the type of a result value computed by the
-// interpreter, see strResult.
-func stringValueType(base sqltypes.Type, length *strLen, col collations.ID, value []byte) sqltypes.Type {
-	r := newStrResult(base, length, col)
-	return r.typeOf(value)
+	return stringTypeOf(r.base, n, r.col)
 }
 
 // eval returns a result value of the interpreter, typed from its length.
-func (r *strResult) eval(b []byte, col collations.TypedCollation) *evalBytes {
-	return newEvalRaw(r.typeOf(b), b, col)
+func (r *strResult) eval(env *ExpressionEnv, b []byte, col collations.TypedCollation) *evalBytes {
+	return newEvalRaw(r.typeOf(env, b), b, col)
 }
 
 // constInt is the value of an integer argument that is a constant, such as
 // the 3 in REPEAT(s, 3) or the -1 in LEFT(s, -1). ok is false when the
-// argument is not a constant, and null is true when it is NULL.
+// argument is not a constant, and null is true when it is NULL. A bind
+// variable is a constant whose value is known at execution: bv is set and
+// n and null are not.
 type constInt struct {
 	n        int64
 	null, ok bool
+	bv       *BindVariable
 }
 
 // newConstInt returns the value of arg, which evaluates to value, when arg
-// is a constant. An unsigned value above the largest int64 becomes the
-// largest int64, so it stays positive.
+// is a constant or a bind variable.
 func newConstInt(arg IR, value eval) constInt {
-	if !arg.constant() {
+	if _, ok := arg.(*BindVariable); !ok && !arg.constant() {
 		return constInt{}
 	}
+	return constIntOf(value)
+}
+
+// constIntOf returns a constant integer argument from its value, the way
+// MySQL reads it: '3' is 3 and 'abc' is 0. An unsigned value above the
+// largest int64 becomes the largest int64, so it stays positive.
+func constIntOf(value eval) constInt {
 	switch v := value.(type) {
 	case nil:
 		return constInt{null: true, ok: true}
@@ -441,6 +604,9 @@ func newConstInt(arg IR, value eval) constInt {
 // compile time. Without constant folding, the -1 in LEFT(s, -1) is a
 // negation of the literal 1, so it is evaluated here.
 func (c *compiler) constInt(arg IR) constInt {
+	if bv, ok := arg.(*BindVariable); ok && bv.Type != sqltypes.Tuple {
+		return constInt{ok: true, bv: bv}
+	}
 	if !arg.constant() {
 		return constInt{}
 	}
@@ -448,7 +614,7 @@ func (c *compiler) constInt(arg IR) constInt {
 	if err != nil {
 		return constInt{}
 	}
-	return newConstInt(arg, value)
+	return constIntOf(value)
 }
 
 // strLen returns the length of a value of the type as a string: its

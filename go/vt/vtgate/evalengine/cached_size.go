@@ -2198,6 +2198,19 @@ func (cached *builtinYearWeek) CachedSize(alloc bool) int64 {
 	return size
 }
 
+func (cached *constInt) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field bv *vitess.io/vitess/go/vt/vtgate/evalengine.BindVariable
+	size += cached.bv.CachedSize(true)
+	return size
+}
+
 func (cached *ctype) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2358,12 +2371,21 @@ func (cached *strLen) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(80)
 	}
 	// field l *vitess.io/vitess/go/vt/vtgate/evalengine.strLen
 	size += cached.l.CachedSize(true)
 	// field r *vitess.io/vitess/go/vt/vtgate/evalengine.strLen
 	size += cached.r.CachedSize(true)
+	// field bv *vitess.io/vitess/go/vt/vtgate/evalengine.BindVariable
+	size += cached.bv.CachedSize(true)
+	// field args []vitess.io/vitess/go/vt/vtgate/evalengine.constInt
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.args)) * int64(24))
+		for _, elem := range cached.args {
+			size += elem.CachedSize(false)
+		}
+	}
 	return size
 }
 
