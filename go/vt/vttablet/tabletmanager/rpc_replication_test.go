@@ -2189,9 +2189,13 @@ func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
 
 			// Wait until it blocks, which can only be on the held action lock.
 			synctest.Wait()
+			cancelled := time.Now()
 			cancel()
 
 			result := <-resultCh
+			// The fake clock jumps ahead once everything blocks, so a lock wait that
+			// only stopped at its own timeout would still return Canceled.
+			assert.Zero(t, time.Since(cancelled), "the lock wait must stop when the caller cancels")
 			assert.Nil(t, result.response)
 			require.ErrorIs(t, result.err, context.Canceled)
 		})
