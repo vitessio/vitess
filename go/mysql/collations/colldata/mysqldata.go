@@ -5402,6 +5402,16 @@ var collationsById = [...]Collation{
 		id:   0xf7,
 		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_vietnamese_ci, nil, 0xffff),
 	},
+	0xf8: &Collation_gb18030_chinese_ci{
+		id:   0xf8,
+		name: "gb18030_chinese_ci",
+		sort: &toupper_ascii_general_ci,
+	},
+	0xf9: &Collation_multibyte{
+		id:      0xf9,
+		name:    "gb18030_bin",
+		charset: charset.Charset_gb18030{},
+	},
 	0xfa: &Collation_uca_legacy{
 		name: "gb18030_unicode_520_ci",
 		id:   0xfa,

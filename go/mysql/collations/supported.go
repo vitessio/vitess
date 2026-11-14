@@ -231,6 +231,8 @@ var supported = [...]string{
 	0xf5:  "utf8mb4_croatian_ci",
 	0xf6:  "utf8mb4_unicode_520_ci",
 	0xf7:  "utf8mb4_vietnamese_ci",
+	0xf8:  "gb18030_chinese_ci",
+	0xf9:  "gb18030_bin",
 	0xfa:  "gb18030_unicode_520_ci",
 	0xff:  "utf8mb4_0900_ai_ci",
 	0x100: "utf8mb4_de_pb_0900_ai_ci",
