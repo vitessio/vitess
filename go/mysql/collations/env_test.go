@@ -40,8 +40,8 @@ func TestParseConnectionCharset(t *testing.T) {
 	}
 
 	// A client can ask for any collation in its handshake, including ones Vitess
-	// does not implement, such as gbk_chinese_ci and tis620_thai_ci.
-	for id, want := range map[ID]string{Unknown: "", CollationUtf8mb4ID: "utf8mb4", CollationBinaryID: "binary", 8 /* latin1_swedish_ci */ : "latin1", 18 /* tis620_thai_ci */ : "tis620"} {
+	// does not implement, such as tis620_thai_nopad_ci, which only MariaDB has.
+	for id, want := range map[ID]string{Unknown: "", CollationUtf8mb4ID: "utf8mb4", CollationBinaryID: "binary", 8 /* latin1_swedish_ci */ : "latin1", 18 /* tis620_thai_ci */ : "tis620", 1042 /* tis620_thai_nopad_ci */ : "tis620"} {
 		charset, ok := env.ConnectionCharset(id)
 		require.True(t, ok, "collation %d", id)
 		require.Equal(t, want, charset, "collation %d", id)
