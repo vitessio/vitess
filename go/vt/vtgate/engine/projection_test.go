@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -263,5 +264,77 @@ func TestFieldConversion(t *testing.T) {
 			assert.Equal(t, testCase.typ, qr.Fields[0].Type)
 			assert.Equal(t, testCase.collation, collations.ID(qr.Fields[0].Charset))
 		})
+	}
+}
+
+// TestProjectionBindVarLength checks that a string function whose length
+// depends on a bind variable has the same type in its field and in its
+// values, and that both change with the value of the bind variable:
+// REPEAT(col, :n) on a utf8mb4 VARCHAR(10) is a VARCHAR for n = 2 and a TEXT
+// for n = 1639.
+func TestProjectionBindVarLength(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	field := &querypb.Field{Name: "col", Type: sqltypes.VarChar, ColumnLength: 40, Charset: uint32(collations.CollationUtf8mb4ID)}
+	translate := func(expression string, bindType sqltypes.Type) evalengine.Expr {
+		expr, err := venv.Parser().ParseExpr(expression)
+		require.NoError(t, err)
+		// The normalizer gives the bind variable the type of its literal.
+		expr = sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
+			if arg, ok := cursor.Node().(*sqlparser.Argument); ok {
+				cursor.Replace(sqlparser.NewTypedArgument(arg.Name, bindType))
+			}
+			return true
+		}, nil).(sqlparser.Expr)
+		e, err := evalengine.Translate(expr, &evalengine.Config{
+			ResolveColumn: evalengine.FieldResolver{field}.Column,
+			ResolveType: func(sqlparser.Expr) (evalengine.Type, bool) {
+				return evalengine.NewTypeFromField(field), true
+			},
+			Collation:   collations.CollationUtf8mb4ID,
+			Environment: venv,
+		})
+		require.NoError(t, err)
+		return e
+	}
+	proj := &Projection{
+		Cols:  []string{"r", "c"},
+		Exprs: []evalengine.Expr{translate("REPEAT(col, :n)", sqltypes.Int64), translate("CONCAT(col, :v)", sqltypes.VarChar)},
+	}
+	executions := []struct {
+		bindVars map[string]*querypb.BindVariable
+		want     sqltypes.Type
+	}{
+		{map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(2), "v": sqltypes.StringBindVariable("xyz")}, sqltypes.VarChar},
+		{map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(1639), "v": sqltypes.StringBindVariable(strings.Repeat("x", 16380))}, sqltypes.Text},
+	}
+	run := map[string]func(wantfields bool, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error){
+		"TryExecute": func(wantfields bool, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+			return proj.TryExecute(t.Context(), &noopVCursor{}, bindVars, wantfields)
+		},
+		"TryStreamExecute": func(wantfields bool, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+			return wrapStreamExecute(proj, &noopVCursor{}, bindVars, wantfields)
+		},
+	}
+	for name, execute := range run {
+		for _, wantfields := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/wantfields=%v", name, wantfields), func(t *testing.T) {
+				for _, exec := range executions {
+					proj.Input = &fakePrimitive{results: []*sqltypes.Result{{
+						Fields: []*querypb.Field{field},
+						Rows:   []sqltypes.Row{{sqltypes.NewVarChar("abc")}},
+					}}}
+					qr, err := execute(wantfields, exec.bindVars)
+					require.NoError(t, err)
+					require.Len(t, qr.Rows, 1)
+					for i := range proj.Exprs {
+						assert.Equal(t, exec.want, qr.Rows[0][i].Type(), "type of the value of %s", proj.Cols[i])
+						if wantfields {
+							require.Len(t, qr.Fields, len(proj.Exprs))
+							assert.Equal(t, exec.want, qr.Fields[i].Type, "type of the field %s", proj.Cols[i])
+						}
+					}
+				}
+			})
+		}
 	}
 }

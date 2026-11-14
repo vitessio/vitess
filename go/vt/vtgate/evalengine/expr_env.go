@@ -54,12 +54,6 @@ type (
 		user         *querypb.VTGateCallerID
 		sqlmode      SQLMode
 		collationEnv *collations.Environment
-
-		// strLens caches the lengths resolved against strLensVars, the
-		// BindVars of an execution, so that a string function whose length
-		// depends on a bind variable resolves it once, not for every row.
-		strLens     map[*strLen]optLen
-		strLensVars map[string]*querypb.BindVariable
 	}
 )
 

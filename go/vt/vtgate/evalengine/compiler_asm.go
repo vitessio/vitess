@@ -2845,17 +2845,17 @@ func (asm *assembler) Fn_MULTICMP_temporal_fallback(f multiComparisonFunc, args 
 	}, "FN MULTICMP_FALLBACK TEMPORAL(SP-%d)...TEMPORAL(SP-1)", args)
 }
 
-// Fn_STRING_TYPE types the string at SP-1, for a string function whose length
-// is not known at compile time: from the bind variables its length depends
-// on, or from its own length. It emits nothing when the length is known: the
-// function's instruction has typed the result.
+// Fn_STRING_TYPE types the string at SP-1 from its own length, for a string
+// function whose length is not known. It emits nothing when the length is a
+// constant or depends on bind variables: the function's instruction has
+// typed the result.
 func (asm *assembler) Fn_STRING_TYPE(r strResult) {
 	if r.fixed {
 		return
 	}
 	asm.emit(func(env *ExpressionEnv) int {
 		if str, ok := env.vm.stack[env.vm.sp-1].(*evalBytes); ok {
-			str.tt = int16(r.typeOf(env, str.bytes))
+			str.tt = int16(r.typeOf(str.bytes))
 		}
 		return 1
 	}, "TYPE STRING(SP-1)")

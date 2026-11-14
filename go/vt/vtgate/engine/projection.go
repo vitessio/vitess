@@ -47,24 +47,33 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	}
 
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
+	var types []evalengine.Type
+	if wantfields || len(result.Rows) > 0 {
+		types, err = p.exprTypes(env, result.Fields, result.Rows, wantfields)
+		if err != nil {
+			return nil, err
+		}
+	}
+	stamp := stampTypes(types)
 	var resultRows []sqltypes.Row
 	for _, row := range result.Rows {
 		resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 		env.Row = row
-		for _, exp := range p.Exprs {
+		for i, exp := range p.Exprs {
 			c, err := env.Evaluate(exp)
 			if err != nil {
 				return nil, err
 			}
-			resultRow = append(resultRow, c.Value(vcursor.ConnCollation()))
+			v := c.Value(vcursor.ConnCollation())
+			if stamp != nil {
+				v = evalengine.StampFieldType(v, stamp[i])
+			}
+			resultRow = append(resultRow, v)
 		}
 		resultRows = append(resultRows, resultRow)
 	}
 	if wantfields {
-		result.Fields, err = p.evalFields(env, result.Fields, vcursor.ConnCollation())
-		if err != nil {
-			return nil, err
-		}
+		result.Fields = p.fields(types, vcursor.ConnCollation())
 	}
 	result.Rows = resultRows
 	return result, nil
@@ -75,6 +84,8 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var once sync.Once
 	var fields []*querypb.Field
+	var typed bool
+	var stamp []sqltypes.Type
 	var mu sync.Mutex
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		var err error
@@ -82,10 +93,13 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		defer mu.Unlock()
 		if wantfields {
 			once.Do(func() {
-				fields, err = p.evalFields(env, qr.Fields, vcursor.ConnCollation())
+				var types []evalengine.Type
+				types, err = p.exprTypes(env, qr.Fields, qr.Rows, true)
 				if err != nil {
 					return
 				}
+				typed, stamp = true, stampTypes(types)
+				fields = p.fields(types, vcursor.ConnCollation())
 				err = callback(&sqltypes.Result{Fields: fields})
 				if err != nil {
 					return
@@ -96,16 +110,24 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		if err != nil {
 			return err
 		}
+		if !typed && len(qr.Rows) > 0 {
+			types, _ := p.exprTypes(env, qr.Fields, qr.Rows, false)
+			typed, stamp = true, stampTypes(types)
+		}
 		resultRows := make([]sqltypes.Row, 0, len(qr.Rows))
 		for _, r := range qr.Rows {
 			resultRow := make(sqltypes.Row, 0, len(p.Exprs))
 			env.Row = r
-			for _, exp := range p.Exprs {
+			for i, exp := range p.Exprs {
 				c, err := env.Evaluate(exp)
 				if err != nil {
 					return err
 				}
-				resultRow = append(resultRow, c.Value(vcursor.ConnCollation()))
+				v := c.Value(vcursor.ConnCollation())
+				if stamp != nil {
+					v = evalengine.StampFieldType(v, stamp[i])
+				}
+				resultRow = append(resultRow, v)
 			}
 			resultRows = append(resultRows, resultRow)
 		}
@@ -129,16 +151,62 @@ func (p *Projection) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 }
 
 func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field, coll collations.ID) ([]*querypb.Field, error) {
+	types, err := p.exprTypes(env, infields, nil, true)
+	if err != nil {
+		return nil, err
+	}
+	return p.fields(types, coll), nil
+}
+
+// exprTypes returns the type of each expression for one execution, from the
+// fields of the input and its first row. The type of a string function
+// whose length depends on bind variables is decided here: REPEAT(s, :n) is
+// a VARCHAR for n = 2 and a TEXT for n = 1639. When the types are not
+// needed for the fields, an error is not one of the query, and no types are
+// returned.
+func (p *Projection) exprTypes(env *evalengine.ExpressionEnv, infields []*querypb.Field, rows []sqltypes.Row, needed bool) ([]evalengine.Type, error) {
 	// TODO: once the evalengine becomes smart enough, we should be able to remove the
 	// dependency on these fields altogether
 	env.Fields = infields
+	if len(rows) > 0 {
+		env.Row = rows[0]
+	}
 
+	types := make([]evalengine.Type, 0, len(p.Exprs))
+	for _, expr := range p.Exprs {
+		typ, err := env.TypeOf(expr)
+		if err != nil {
+			if needed {
+				return nil, err
+			}
+			return nil, nil
+		}
+		types = append(types, typ)
+	}
+	return types, nil
+}
+
+// stampTypes returns the type of each field when a value must be given the
+// type of its field, a TEXT or a BLOB, and nil when none must.
+func stampTypes(types []evalengine.Type) []sqltypes.Type {
+	var stamp []sqltypes.Type
+	for i, typ := range types {
+		if tt := typ.Type(); tt == sqltypes.Text || tt == sqltypes.Blob {
+			if stamp == nil {
+				stamp = make([]sqltypes.Type, len(types))
+			}
+			stamp[i] = tt
+		}
+	}
+	return stamp
+}
+
+// fields returns the fields of the projection from the types of its
+// expressions.
+func (p *Projection) fields(types []evalengine.Type, coll collations.ID) []*querypb.Field {
 	var fields []*querypb.Field
 	for i, col := range p.Cols {
-		typ, err := env.TypeOf(p.Exprs[i])
-		if err != nil {
-			return nil, err
-		}
+		typ := types[i]
 		fl := mysql.FlagsForColumn(typ.Type(), typ.Collation())
 		if !sqltypes.IsNull(typ.Type()) && !typ.Nullable() {
 			fl |= uint32(querypb.MySqlFlag_NOT_NULL_FLAG)
@@ -157,7 +225,7 @@ func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*query
 			Flags:        fl,
 		})
 	}
-	return fields, nil
+	return fields
 }
 
 // Inputs implements the Primitive interface

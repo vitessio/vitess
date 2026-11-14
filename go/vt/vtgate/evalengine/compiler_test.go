@@ -1106,13 +1106,16 @@ func TestCompilerSingle(t *testing.T) {
 // TestCompilerBindVarLength checks that a string function whose length
 // depends on a bind variable is typed from its value at each execution, as
 // MySQL types the literal the bind variable stands for. One compiled program
-// serves every value: its declared type and the type of its value change
-// together.
+// serves every value: its declared type and the type of its value, once the
+// Projection has given it the type of its field, change together.
 func TestCompilerBindVarLength(t *testing.T) {
 	type execution struct {
 		bindVar *querypb.BindVariable // :n
 		want    sqltypes.Type
 		other   *querypb.BindVariable // :m
+		// declared is the declared type, when it is not want: the length of
+		// a DATE without a declared length is not known.
+		declared sqltypes.Type
 	}
 	testCases := []struct {
 		expression string
@@ -1206,6 +1209,32 @@ func TestCompilerBindVarLength(t *testing.T) {
 				{bindVar: sqltypes.Int64BindVariable(1), want: sqltypes.Text},
 			},
 		},
+		{
+			// The CONCAT is a TEXT, the SUBSTRING of it is 3 characters.
+			expression: `SUBSTRING(CONCAT(column0, column1), :n, :m)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{bindVar: sqltypes.Int64BindVariable(2), want: sqltypes.VarChar, other: sqltypes.Int64BindVariable(3)},
+			},
+		},
+		{
+			// The CONCAT is a BLOB, the REPEAT of it 0 times is empty.
+			expression: `REPEAT(CONCAT(column3, column4), :n)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{bindVar: sqltypes.Int64BindVariable(0), want: sqltypes.VarBinary},
+			},
+		},
+		{
+			// column5 is a DATE without a declared length: each value
+			// decides, as it would without a bind variable.
+			expression: `REPEAT(column5, :n)`,
+			bindType:   sqltypes.Int64,
+			executions: []execution{
+				{bindVar: sqltypes.Int64BindVariable(2), want: sqltypes.VarChar},
+				{bindVar: sqltypes.Int64BindVariable(1639), want: sqltypes.Text, declared: sqltypes.VarChar},
+			},
+		},
 	}
 
 	venv := vtenv.NewTestEnv()
@@ -1213,8 +1242,15 @@ func TestCompilerBindVarLength(t *testing.T) {
 		lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID),
 		lengthField("column1", sqltypes.Text, 262140, collations.CollationUtf8mb4ID),
 		lengthField("column2", sqltypes.Int32, 11, collations.CollationBinaryID),
+		lengthField("column3", sqltypes.VarBinary, 10, collations.CollationBinaryID),
+		lengthField("column4", sqltypes.Blob, 65535, collations.CollationBinaryID),
+		lengthField("column5", sqltypes.Date, 0, collations.CollationBinaryID),
 	}
-	row := []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.MakeTrusted(sqltypes.Text, []byte("tx")), sqltypes.NewInt32(1)}
+	row := []sqltypes.Value{
+		sqltypes.NewVarChar("abc"), sqltypes.MakeTrusted(sqltypes.Text, []byte("tx")), sqltypes.NewInt32(1),
+		sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("vb")), sqltypes.MakeTrusted(sqltypes.Blob, []byte("bl")),
+		sqltypes.MakeTrusted(sqltypes.Date, []byte("2020-01-02")),
+	}
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
@@ -1254,15 +1290,22 @@ func TestCompilerBindVarLength(t *testing.T) {
 
 				typ, err := env.TypeOf(compiled)
 				require.NoError(t, err)
-				assert.Equal(t, exec.want, typ.Type(), "declared type")
+				declared := exec.want
+				if exec.declared != sqltypes.Null {
+					declared = exec.declared
+				}
+				assert.Equal(t, declared, typ.Type(), "declared type")
 
+				// The Projection gives each value the type of its field.
 				res, err := env.Evaluate(compiled)
 				require.NoError(t, err)
-				assert.Equal(t, exec.want, res.Value(collations.CollationUtf8mb4ID).Type(), "type of the value")
+				value := evalengine.StampFieldType(res.Value(collations.CollationUtf8mb4ID), typ.Type())
+				assert.Equal(t, exec.want, value.Type(), "type of the value")
 
 				res, err = env.EvaluateAST(compiled)
 				require.NoError(t, err)
-				assert.Equal(t, exec.want, res.Value(collations.CollationUtf8mb4ID).Type(), "type of the interpreter's value")
+				value = evalengine.StampFieldType(res.Value(collations.CollationUtf8mb4ID), typ.Type())
+				assert.Equal(t, exec.want, value.Type(), "type of the interpreter's value")
 			}
 		})
 	}

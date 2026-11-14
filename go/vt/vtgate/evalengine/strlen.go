@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"math"
-	"reflect"
 	"strconv"
 
 	"vitess.io/vitess/go/hack"
@@ -253,12 +252,18 @@ func applyLen(rule func(x, y optLen) optLen, a, b *strLen) *strLen {
 }
 
 // countLen returns the length of a function that takes integer arguments,
-// such as REPEAT(s, 3), from rule, the length of its string argument and its
-// integer arguments a and b: now when they are all known, and at execution
-// when one depends on bind variables, such as REPEAT(s, :n).
-func countLen(rule func(str optLen, a, b constInt, version string) optLen, str *strLen, a, b constInt, version string) *strLen {
+// such as REPEAT(s, 3), from rule, the length of its string argument str
+// when the rule takes one, and its integer arguments a and b: now when they
+// are all known, and at execution when one depends on bind variables, such
+// as REPEAT(s, :n). When the rule takes a string whose length is not known,
+// the length stays unknown, so that each value decides from its own length:
+// REPEAT(dt, :n) on a DATE column whose length is not known.
+func countLen(rule func(str optLen, a, b constInt, version string) optLen, takesStr bool, str *strLen, a, b constInt, version string) *strLen {
 	if !str.symbolic() && a.expr == nil && b.expr == nil {
 		return rule(str.get(nil), a, b, version).strLen()
+	}
+	if takesStr && str == nil {
+		return nil
 	}
 	return &strLen{resolve: func(env *ExpressionEnv) (int64, bool) {
 		ra, aok := a.resolve(env)
@@ -269,25 +274,6 @@ func countLen(rule func(str optLen, a, b constInt, version string) optLen, str *
 		r := rule(str.get(env), ra, rb, env.currentVersion())
 		return r.n, r.ok
 	}}
-}
-
-// resolveStrLen returns the length of l against the bind variables of env,
-// resolving it once for the bind variables of env.
-func (env *ExpressionEnv) resolveStrLen(l *strLen) (int64, bool) {
-	if !l.symbolic() {
-		r := l.get(env)
-		return r.n, r.ok
-	}
-	if env.strLens == nil || reflect.ValueOf(env.strLensVars).UnsafePointer() != reflect.ValueOf(env.BindVars).UnsafePointer() {
-		env.strLens = make(map[*strLen]optLen)
-		env.strLensVars = env.BindVars
-	}
-	r, ok := env.strLens[l]
-	if !ok {
-		r = l.get(env)
-		env.strLens[l] = r
-	}
-	return r.n, r.ok
 }
 
 // bindVarStrLen returns the length of a bind variable by itself: the length
@@ -645,31 +631,42 @@ func argStrLen(env *ExpressionEnv, arg IR, e eval) *strLen {
 
 // strResult is how a string function types its result. When the length of
 // the result is known, the type is decided once, at compile time. When it
-// depends on bind variables, it is decided for each execution from their
-// values. When it is not known, it is decided for each value from its own
-// length, the way the interpreter does: REPEAT(dt, 1639) on a DATE column
-// whose length is not known is a TEXT, because each value is 16,390
-// characters.
+// depends on bind variables, the value keeps the base type: the type of the
+// field is decided from the bind variables, once per execution, and the
+// Projection gives it to the values, see StampFieldType. When the length is
+// not known, the type is decided for each value from its own length, the
+// way the interpreter does: REPEAT(dt, 1639) on a DATE column whose length
+// is not known is a TEXT, because each value is 16,390 characters.
 type strResult struct {
-	base   sqltypes.Type
-	tt     sqltypes.Type // the type, when fixed
-	length *strLen
-	col    collations.ID
-	fixed  bool
+	base sqltypes.Type
+	// declared is the type the function declares at compile time: its base
+	// type when its length is not a constant.
+	declared sqltypes.Type
+	// tt is the type of its values, when fixed. For a length that depends on
+	// bind variables, it is the shorter type of the family, VARCHAR or
+	// VARBINARY, whatever the type of the argument: StampFieldType only
+	// raises a value to the type of its field.
+	tt    sqltypes.Type
+	col   collations.ID
+	fixed bool
 }
 
 func newStrResult(base sqltypes.Type, length *strLen, col collations.ID) strResult {
-	_, fixed := length.constant()
-	return strResult{base: base, tt: stringType(base, length, col), length: length, col: col, fixed: fixed || charsetWidth(col) == 0}
+	r := strResult{base: base, declared: stringType(base, length, col), col: col}
+	r.tt, r.fixed = r.declared, length != nil || charsetWidth(col) == 0
+	if length.symbolic() {
+		r.tt = sqltypes.VarChar
+		if sqltypes.IsBinary(base) {
+			r.tt = sqltypes.VarBinary
+		}
+	}
+	return r
 }
 
 // typeOf returns the type of a result value.
-func (r *strResult) typeOf(env *ExpressionEnv, value []byte) sqltypes.Type {
+func (r *strResult) typeOf(value []byte) sqltypes.Type {
 	if r.fixed {
 		return r.tt
-	}
-	if n, ok := env.resolveStrLen(r.length); ok {
-		return stringTypeOf(r.base, n, r.col)
 	}
 	n, ok := valueCharLength(value, r.col)
 	if !ok {
@@ -679,8 +676,25 @@ func (r *strResult) typeOf(env *ExpressionEnv, value []byte) sqltypes.Type {
 }
 
 // eval returns a result value of the interpreter, typed from its length.
-func (r *strResult) eval(env *ExpressionEnv, b []byte, col collations.TypedCollation) *evalBytes {
-	return newEvalRaw(r.typeOf(env, b), b, col)
+func (r *strResult) eval(b []byte, col collations.TypedCollation) *evalBytes {
+	return newEvalRaw(r.typeOf(b), b, col)
+}
+
+// StampFieldType returns a string value with the type of its field, when
+// the field is the longer type of the same kind: a VARCHAR or CHAR value of
+// a TEXT field becomes a TEXT, and a VARBINARY or BINARY value of a BLOB
+// field a BLOB, with the same bytes. Any other value is returned as is.
+// REPEAT(s, :n) is a TEXT field for n = 1639 on a utf8mb4 VARCHAR(10), but
+// the compiled program gives its values the type VARCHAR: the type of a
+// length that depends on bind variables is decided once per execution, for
+// the field.
+func StampFieldType(v sqltypes.Value, field sqltypes.Type) sqltypes.Value {
+	switch tt := v.Type(); {
+	case field == sqltypes.Text && (tt == sqltypes.VarChar || tt == sqltypes.Char),
+		field == sqltypes.Blob && (tt == sqltypes.VarBinary || tt == sqltypes.Binary):
+		return sqltypes.MakeTrusted(field, v.Raw())
+	}
+	return v
 }
 
 // constInt is the value of an integer argument that is a constant, such as

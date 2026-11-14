@@ -65,9 +65,9 @@ func (p *CompiledExpr) typeof(env *ExpressionEnv) (ctype, error) {
 	if !ct.StrLen.symbolic() || ct.StrLen.bv != nil || !sqltypes.IsTextOrBinary(ct.Type) {
 		return ct, nil
 	}
-	if n, ok := env.resolveStrLen(ct.StrLen); ok {
-		ct.Type = stringTypeOf(ct.Type, n, ct.Col.Collation)
-		ct.StrLen = newStrLenConst(n)
+	if r := ct.StrLen.get(env); r.ok {
+		ct.Type = stringTypeOf(ct.Type, r.n, ct.Col.Collation)
+		ct.StrLen = newStrLenConst(r.n)
 	}
 	return ct, nil
 }

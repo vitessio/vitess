@@ -613,7 +613,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 			newcase = csa.ToLower(nil, e.bytes)
 		}
 		sr := newStrResult(e.SQLType(), argStrLen(env, call.Arguments[0], e), e.col.Collation)
-		return sr.eval(env, newcase, e.col), nil
+		return sr.eval(newcase, e.col), nil
 
 	default:
 		return e, nil
@@ -635,7 +635,7 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 		ct.StrLen = str.stringLen()
 		sr = newStrResult(str.Type, ct.StrLen, str.Col.Collation)
-		ct.Type = sr.tt
+		ct.Type = sr.declared
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
 	}
@@ -772,7 +772,7 @@ func (call *builtinReverse) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	sr := newStrResult(sqltypes.VarChar, argStrLen(env, call.Arguments[0], arg), b.col.Collation)
-	return sr.eval(env, reverse(b), b.col), nil
+	return sr.eval(reverse(b), b.col), nil
 }
 
 func (call *builtinReverse) compile(c *compiler) (ctype, error) {
@@ -783,20 +783,22 @@ func (call *builtinReverse) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(arg)
 
+	col := arg.Col
 	switch {
 	case arg.isTextual():
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
 	}
 
 	// REVERSE is as long as its argument.
 	length := arg.stringLen()
-	sr := newStrResult(sqltypes.VarChar, length, arg.Col.Collation)
+	sr := newStrResult(sqltypes.VarChar, length, col.Collation)
 	tt := sr.tt
 	c.asm.Fn_REVERSE(tt)
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: tt, Col: arg.Col, Flag: flagNullable, StrLen: length}, nil
+	return ctype{Type: sr.declared, Col: col, Flag: flagNullable, StrLen: length}, nil
 }
 
 func space(num int64) []byte {
@@ -822,7 +824,7 @@ func (call *builtinSpace) eval(env *ExpressionEnv) (eval, error) {
 	}
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
 	sr := newStrResult(sqltypes.VarChar, spaceStrLen(newConstInt(call.Arguments[0], arg)), col.Collation)
-	return sr.eval(env, space(num), col), nil
+	return sr.eval(space(num), col), nil
 }
 
 // spaceLen returns the length of SPACE(n): n when it is a constant, 0 when n
@@ -839,7 +841,7 @@ func spaceLen(n constInt) optLen {
 }
 
 func spaceStrLen(n constInt) *strLen {
-	return countLen(func(_ optLen, n, _ constInt, _ string) optLen { return spaceLen(n) }, nil, n, constInt{}, "")
+	return countLen(func(_ optLen, n, _ constInt, _ string) optLen { return spaceLen(n) }, false, nil, n, constInt{}, "")
 }
 
 func (call *builtinSpace) compile(c *compiler) (ctype, error) {
@@ -859,7 +861,7 @@ func (call *builtinSpace) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_SPACE(tt, col)
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: tt, Col: col, Flag: flagNullable, StrLen: length}, nil
+	return ctype{Type: sr.declared, Col: col, Flag: flagNullable, StrLen: length}, nil
 }
 
 func charOrd(b []byte, coll collations.ID) int64 {
@@ -950,7 +952,7 @@ func repeatLen(str optLen, count constInt, version string) optLen {
 }
 
 func repeatStrLen(str *strLen, count constInt, version string) *strLen {
-	return countLen(func(str optLen, count, _ constInt, version string) optLen { return repeatLen(str, count, version) }, str, count, constInt{}, version)
+	return countLen(func(str optLen, count, _ constInt, version string) optLen { return repeatLen(str, count, version) }, true, str, count, constInt{}, version)
 }
 
 func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
@@ -977,7 +979,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	sr := newStrResult(tt, length, text.col.Collation)
 
 	if len(text.bytes) == 0 {
-		return sr.eval(env, nil, text.col), nil
+		return sr.eval(nil, text.col), nil
 	}
 
 	repeat := max(evalToInt64(arg2).i, 0)
@@ -986,7 +988,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	b := bytes.Repeat(text.bytes, int(repeat))
-	return sr.eval(env, b, text.col), nil
+	return sr.eval(b, text.col), nil
 }
 
 func validMaxLength(len, repeat int64) bool {
@@ -1014,23 +1016,23 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck2(str, repeat)
 
 	tt := sqltypes.VarChar
-	col := str.Col.Collation
+	col := str.Col
 	switch {
 	case str.isTextual():
 		tt = str.Type
 	default:
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
-		col = c.collation
+		col = typedCoercionCollation(sqltypes.VarChar, c.collation)
 	}
 	_ = c.compileToInt64(repeat, 1)
 
 	length := repeatStrLen(str.stringLen(), c.constInt(expr.Arguments[1]), c.env.MySQLVersion())
-	sr := newStrResult(tt, length, col)
+	sr := newStrResult(tt, length, col.Collation)
 	tt = sr.tt
 	c.asm.Fn_REPEAT(tt)
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: tt, Col: str.Col, Flag: flagNullable, StrLen: length}, nil
+	return ctype{Type: sr.declared, Col: col, Flag: flagNullable, StrLen: length}, nil
 }
 
 func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
@@ -1202,7 +1204,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	sr := newStrResult(sqltypes.VarChar, leftRightStrLen(argStrLen(env, call.Arguments[0], str), newConstInt(call.Arguments[1], l)), text.col.Collation)
 	length := evalToInt64(l).i
 	if length <= 0 {
-		return sr.eval(env, nil, text.col), nil
+		return sr.eval(nil, text.col), nil
 	}
 
 	// LEFT / RIGHT operates on characters, not bytes
@@ -1210,7 +1212,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	strLen := charset.Length(cs, text.bytes)
 
 	if strLen <= int(length) {
-		return sr.eval(env, text.bytes, text.col), nil
+		return sr.eval(text.bytes, text.col), nil
 	}
 
 	var res []byte
@@ -1219,7 +1221,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	} else {
 		res = charset.Slice(cs, text.bytes, strLen-int(length), strLen)
 	}
-	return sr.eval(env, res, text.col), nil
+	return sr.eval(res, text.col), nil
 }
 
 // leftRightLen returns the length of LEFT(str, n) and RIGHT(str, n): the
@@ -1237,7 +1239,7 @@ func leftRightLen(str optLen, n constInt) optLen {
 }
 
 func leftRightStrLen(str *strLen, n constInt) *strLen {
-	return countLen(func(str optLen, n, _ constInt, _ string) optLen { return leftRightLen(str, n) }, str, n, constInt{}, "")
+	return countLen(func(str optLen, n, _ constInt, _ string) optLen { return leftRightLen(str, n) }, true, str, n, constInt{}, "")
 }
 
 func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
@@ -1272,7 +1274,7 @@ func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: tt, Col: col, Flag: flagNullable, StrLen: length}, nil
+	return ctype{Type: sr.declared, Col: col, Flag: flagNullable, StrLen: length}, nil
 }
 
 func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
@@ -1318,12 +1320,12 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	if strLen >= int(length) {
 		// If the existing string is longer than the requested padding,
 		// MySQL truncates the string to the requested padding length.
-		return sr.eval(env, charset.Slice(cs, text.bytes, 0, int(length)), text.col), nil
+		return sr.eval(charset.Slice(cs, text.bytes, 0, int(length)), text.col), nil
 	}
 
 	runeLen := charset.Length(cs, pad.bytes)
 	if runeLen == 0 {
-		return sr.eval(env, nil, text.col), nil
+		return sr.eval(nil, text.col), nil
 	}
 
 	repeat := (int(length) - strLen) / runeLen
@@ -1344,7 +1346,7 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 		res = slices.Concat(text.bytes, padding)
 	}
 
-	return sr.eval(env, res, text.col), nil
+	return sr.eval(res, text.col), nil
 }
 
 // padLen returns the length of LPAD(str, n, pad) and RPAD(str, n, pad): n
@@ -1359,7 +1361,7 @@ func padLen(n constInt) optLen {
 }
 
 func padStrLen(n constInt) *strLen {
-	return countLen(func(_ optLen, n, _ constInt, _ string) optLen { return padLen(n) }, nil, n, constInt{}, "")
+	return countLen(func(_ optLen, n, _ constInt, _ string) optLen { return padLen(n) }, false, nil, n, constInt{}, "")
 }
 
 func (call *builtinPad) compile(c *compiler) (ctype, error) {
@@ -1410,7 +1412,7 @@ func (call *builtinPad) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip)
-	return ctype{Type: tt, Flag: flagNullable, Col: col, StrLen: length}, nil
+	return ctype{Type: sr.declared, Flag: flagNullable, Col: col, StrLen: length}, nil
 }
 
 func strcmpCollate(left, right []byte, col collations.ID) int64 {
@@ -1531,11 +1533,11 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	if len(call.Arguments) == 1 {
 		switch call.trim {
 		case sqlparser.LeadingTrimType:
-			return sr.eval(env, bytes.TrimLeft(text.bytes, " "), text.col), nil
+			return sr.eval(bytes.TrimLeft(text.bytes, " "), text.col), nil
 		case sqlparser.TrailingTrimType:
-			return sr.eval(env, bytes.TrimRight(text.bytes, " "), text.col), nil
+			return sr.eval(bytes.TrimRight(text.bytes, " "), text.col), nil
 		default:
-			return sr.eval(env, bytes.Trim(text.bytes, " "), text.col), nil
+			return sr.eval(bytes.Trim(text.bytes, " "), text.col), nil
 		}
 	}
 
@@ -1557,11 +1559,11 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 
 	switch call.trim {
 	case sqlparser.LeadingTrimType:
-		return sr.eval(env, trimLeftRepeated(text.bytes, pat.bytes), text.col), nil
+		return sr.eval(trimLeftRepeated(text.bytes, pat.bytes), text.col), nil
 	case sqlparser.TrailingTrimType:
-		return sr.eval(env, trimRightRepeated(text.bytes, pat.bytes), text.col), nil
+		return sr.eval(trimRightRepeated(text.bytes, pat.bytes), text.col), nil
 	default:
-		return sr.eval(env, trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col), nil
+		return sr.eval(trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col), nil
 	}
 }
 
@@ -1619,7 +1621,7 @@ func (call *builtinTrim) compile(c *compiler) (ctype, error) {
 		}
 		c.asm.Fn_STRING_TYPE(sr)
 		c.asm.jumpDestination(skip1)
-		return ctype{Type: tt, Flag: nullableFlags(str.Flag), Col: col, StrLen: length}, nil
+		return ctype{Type: sr.declared, Flag: nullableFlags(str.Flag), Col: col, StrLen: length}, nil
 	}
 
 	pat, err := call.Arguments[1].compile(c)
@@ -1651,7 +1653,7 @@ func (call *builtinTrim) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: tt, Flag: flagNullable, Col: col, StrLen: length}, nil
+	return ctype{Type: sr.declared, Flag: flagNullable, Col: col, StrLen: length}, nil
 }
 
 func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
@@ -1691,7 +1693,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 	sr := newStrResult(tt, length, text.col.Collation)
 	pos := evalToInt64(p).i
 	if pos == 0 {
-		return sr.eval(env, nil, text.col), nil
+		return sr.eval(nil, text.col), nil
 	}
 	cs := colldata.Lookup(text.col.Collation).Charset()
 	end := int64(charset.Length(cs, text.bytes))
@@ -1700,13 +1702,13 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		pos += end + 1
 	}
 	if pos < 1 || pos > end {
-		return sr.eval(env, nil, text.col), nil
+		return sr.eval(nil, text.col), nil
 	}
 
 	if len(call.Arguments) > 2 {
 		ll := evalToInt64(l).i
 		if ll < 1 {
-			return sr.eval(env, nil, text.col), nil
+			return sr.eval(nil, text.col), nil
 		}
 		if ll > end-pos+1 {
 			ll = end - pos + 1
@@ -1714,7 +1716,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		end = pos + ll - 1
 	}
 	res := charset.Slice(cs, text.bytes, int(pos-1), int(end))
-	return sr.eval(env, res, text.col), nil
+	return sr.eval(res, text.col), nil
 }
 
 // substringLen returns the length of SUBSTRING(str, pos) and of
@@ -1748,7 +1750,7 @@ func substringLen(str optLen, pos, n constInt) optLen {
 }
 
 func substringStrLen(str *strLen, pos, n constInt) *strLen {
-	return countLen(func(str optLen, pos, n constInt, _ string) optLen { return substringLen(str, pos, n) }, str, pos, n, "")
+	return countLen(func(str optLen, pos, n constInt, _ string) optLen { return substringLen(str, pos, n) }, true, str, pos, n, "")
 }
 
 func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
@@ -1799,7 +1801,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: tt, Col: col, Flag: flagNullable, StrLen: length}, nil
+	return ctype{Type: sr.declared, Col: col, Flag: flagNullable, StrLen: length}, nil
 }
 
 func (call *builtinLocate) eval(env *ExpressionEnv) (eval, error) {
@@ -2007,7 +2009,7 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	return sr.eval(env, buf, tc), nil
+	return sr.eval(buf, tc), nil
 }
 
 func (call *builtinConcat) compile(c *compiler) (ctype, error) {
@@ -2068,7 +2070,7 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skips...)
 
-	return ctype{Type: tt, Flag: f, Col: tc, StrLen: length}, nil
+	return ctype{Type: sr.declared, Flag: f, Col: tc, StrLen: length}, nil
 }
 
 func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
@@ -2143,7 +2145,7 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	return sr.eval(env, buf, tc), nil
+	return sr.eval(buf, tc), nil
 }
 
 // concatWsLen returns the length of CONCAT_WS(sep, arg...) from the lengths
@@ -2229,7 +2231,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: tt, Flag: args[0].Flag, Col: tc, StrLen: length}, nil
+	return ctype{Type: sr.declared, Flag: args[0].Flag, Col: tc, StrLen: length}, nil
 }
 
 func (call *builtinChar) eval(env *ExpressionEnv) (eval, error) {
