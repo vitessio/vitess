@@ -243,6 +243,24 @@ func (e *InvalidColumnInKeyError) Error() string {
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Key), sqlescape.EscapeID(e.Table))
 }
 
+type UnsupportedNullableSerialColumnError struct {
+	Table  string
+	Column string
+}
+
+func (e *UnsupportedNullableSerialColumnError) Error() string {
+	return fmt.Sprintf("unsupported nullable SERIAL column %s in table %s", sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Table))
+}
+
+type NullablePrimaryKeyColumnError struct {
+	Table  string
+	Column string
+}
+
+func (e *NullablePrimaryKeyColumnError) Error() string {
+	return fmt.Sprintf("primary key column %s in table %s is declared NULL", sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Table))
+}
+
 type InvalidColumnInGeneratedColumnError struct {
 	Table           string
 	Column          string

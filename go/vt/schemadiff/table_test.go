@@ -77,21 +77,14 @@ func TestCreateTableDiff(t *testing.T) {
 			to:   "create table t (id bigint unsigned not null auto_increment, x int, unique key id (id), unique key id_2 (id, x))",
 		},
 		{
-			// named keys keep their names
-			name: "serial with a key named like the column is identical to its expansion",
-			from: "create table t (x int, unique key id (x), id serial)",
-			to:   "create table t (x int, id bigint unsigned not null auto_increment, unique key id (x), unique key id_2 (id))",
-		},
-		{
-			// an explicit NULL after SERIAL wins, as in MySQL
-			name: "nullable serial is identical to its expansion",
-			from: "create table t (id serial null)",
-			to:   "create table t (id bigint unsigned auto_increment, unique key id (id))",
-		},
-		{
 			name: "serial primary key is identical to its expansion",
 			from: "create table t (id serial primary key)",
 			to:   "create table t (id bigint unsigned not null auto_increment, primary key (id), unique key id (id))",
+		},
+		{
+			name: "serial default value is identical to its expansion",
+			from: "create table t (id int serial default value)",
+			to:   "create table t (id int not null auto_increment, unique key id (id))",
 		},
 		{
 			name: "identical 2",
@@ -2834,6 +2827,44 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, s bigint unsigned not null auto_increment, unique key s (s), constraint f foreign key (s) references parent(id))",
 		},
 		{
+			// SERIAL DEFAULT VALUE's implicit unique key is added with its column
+			name:  "add serial default value column",
+			from:  "create table t (id int primary key)",
+			alter: "alter table t add column s int serial default value",
+			to:    "create table t (id int primary key, s int not null auto_increment, unique key s (s))",
+		},
+		{
+			name:      "add nullable serial default value column",
+			from:      "create table t (id int primary key)",
+			alter:     "alter table t add column s int serial default value null",
+			expectErr: &UnsupportedNullableSerialColumnError{Table: "t", Column: "s"},
+		},
+		{
+			name:      "modify primary key column to null serial default value",
+			from:      "create table t (id int primary key)",
+			alter:     "alter table t modify column id int null serial default value",
+			expectErr: &NullablePrimaryKeyColumnError{Table: "t", Column: "id"},
+		},
+		{
+			// MySQL names the new key s_2
+			name:  "add serial default value column named like a key",
+			from:  "create table t (id int primary key, x int, key s (x))",
+			alter: "alter table t add column s int serial default value",
+			to:    "create table t (id int primary key, x int, s int not null auto_increment, unique key s_2 (s), key s (x))",
+		},
+		{
+			name:  "add serial column named like a key",
+			from:  "create table t (id int primary key, x int, key s (x))",
+			alter: "alter table t add column s serial",
+			to:    "create table t (id int primary key, x int, s bigint unsigned not null auto_increment, unique key s_2 (s), key s (x))",
+		},
+		{
+			name:  "modify column to serial default value on its own key",
+			from:  "create table t (id int primary key, s int, key s (s))",
+			alter: "alter table t modify column s int serial default value",
+			to:    "create table t (id int primary key, s int not null auto_increment, unique key s_2 (s), key s (s))",
+		},
+		{
 			name:      "add multiple keys, multi columns, missing column",
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx((IF(i3 IS NULL, i2, i3)), i2), add key i21_idx(i2, i1)",
@@ -3510,15 +3541,27 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
 		},
 		{
-			// an explicit NULL after SERIAL wins, as in MySQL
-			name: "normalize nullable serial",
-			from: "create table t (id serial null)",
-			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
-		},
-		{
 			name: "normalize serial primary key",
 			from: "create table t (id serial primary key)",
 			to:   "CREATE TABLE `t` (\n\t`id` bigint unsigned NOT NULL AUTO_INCREMENT,\n\tPRIMARY KEY (`id`),\n\tUNIQUE KEY `id` (`id`)\n)",
+		},
+		{
+			// SERIAL DEFAULT VALUE is an alias for NOT NULL AUTO_INCREMENT UNIQUE,
+			// and the column keeps its own type
+			name: "normalize serial default value",
+			from: "create table t (id int serial default value)",
+			to:   "CREATE TABLE `t` (\n\t`id` int NOT NULL AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
+		},
+		{
+			// SERIAL DEFAULT VALUE overrides an earlier NULL, as in MySQL
+			name: "normalize serial default value after null",
+			from: "create table t (id int null serial default value)",
+			to:   "CREATE TABLE `t` (\n\t`id` int NOT NULL AUTO_INCREMENT,\n\tUNIQUE KEY `id` (`id`)\n)",
+		},
+		{
+			name: "normalize serial default value primary key",
+			from: "create table t (id int serial default value primary key)",
+			to:   "CREATE TABLE `t` (\n\t`id` int NOT NULL AUTO_INCREMENT,\n\tPRIMARY KEY (`id`),\n\tUNIQUE KEY `id` (`id`)\n)",
 		},
 		{
 			name: "normalize text types with length information: implicit utf8mb4",
@@ -3679,6 +3722,55 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 				indexesNames = append(indexesNames, index.Info.Name.String())
 			}
 			assert.Equal(t, ts.indexes, indexesNames)
+		})
+	}
+}
+
+// TestValidateSerialColumns tests that invalid or unsupported SERIAL columns are rejected.
+func TestValidateSerialColumns(t *testing.T) {
+	tt := []struct {
+		name      string
+		from      string
+		expectErr error
+	}{
+		{
+			name:      "nullable serial default value",
+			from:      "create table t (id int serial default value null)",
+			expectErr: &UnsupportedNullableSerialColumnError{Table: "t", Column: "id"},
+		},
+		{
+			name:      "nullable serial",
+			from:      "create table t (id serial null)",
+			expectErr: &UnsupportedNullableSerialColumnError{Table: "t", Column: "id"},
+		},
+		{
+			// MySQL error 1171
+			name:      "null serial default value primary key",
+			from:      "create table t (id int null serial default value primary key)",
+			expectErr: &NullablePrimaryKeyColumnError{Table: "t", Column: "id"},
+		},
+		{
+			name:      "null serial default value in table primary key",
+			from:      "create table t (id int null serial default value, primary key (id))",
+			expectErr: &NullablePrimaryKeyColumnError{Table: "t", Column: "id"},
+		},
+		{
+			// MySQL error 1061
+			name:      "serial default value with a key named like the column",
+			from:      "create table t (id int serial default value, unique key id (id))",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "id"},
+		},
+		{
+			name:      "serial with a key named like the column",
+			from:      "create table t (x int, unique key ID (x), id serial)",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "ID"},
+		},
+	}
+	env := NewTestEnv()
+	for _, ts := range tt {
+		t.Run(ts.name, func(t *testing.T) {
+			_, err := NewCreateTableEntityFromSQL(env, ts.from)
+			assert.Equal(t, ts.expectErr, err)
 		})
 	}
 }

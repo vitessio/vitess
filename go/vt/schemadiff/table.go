@@ -461,6 +461,9 @@ func NewCreateTableEntity(env *Environment, c *sqlparser.CreateTable) (*CreateTa
 		return nil, &NotFullyParsedError{Entity: c.Table.Name.String(), Statement: sqlparser.CanonicalString(c)}
 	}
 	entity := &CreateTableEntity{CreateTable: c, Env: env}
+	if err := entity.validateSerialColumns(true); err != nil {
+		return nil, err
+	}
 	entity.normalize()
 	return entity, nil
 }
@@ -849,13 +852,59 @@ func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlp
 	return index
 }
 
+// validateSerialColumns rejects SERIAL columns that MySQL rejects, or that
+// normalizeSerialColumns cannot expand without changing their nullability.
+// checkKeyNames is false for an ALTER, where MySQL renames the SERIAL key
+// instead of rejecting a name the table already has.
+func (c *CreateTableEntity) validateSerialColumns(checkKeyNames bool) error {
+	for _, col := range c.TableSpec.Columns {
+		opts := col.Type.Options
+		serialDefaultValue := opts != nil && opts.SerialDefaultValue
+		if !strings.EqualFold(col.Type.Type, "serial") && !serialDefaultValue {
+			continue
+		}
+		if opts != nil && opts.Null != nil && *opts.Null {
+			return &UnsupportedNullableSerialColumnError{Table: c.Name(), Column: col.Name.String()}
+		}
+		if serialDefaultValue && opts.NullBeforeSerialDefaultValue && c.isPrimaryKeyColumn(col) {
+			return &NullablePrimaryKeyColumnError{Table: c.Name(), Column: col.Name.String()}
+		}
+		for _, key := range c.TableSpec.Indexes {
+			if checkKeyNames && key.Info.Name.Equal(col.Name) {
+				return &DuplicateKeyNameError{Table: c.Name(), Key: key.Info.Name.String()}
+			}
+		}
+	}
+	return nil
+}
+
+// isPrimaryKeyColumn returns true when the column is part of the primary key.
+func (c *CreateTableEntity) isPrimaryKeyColumn(col *sqlparser.ColumnDefinition) bool {
+	if col.Type.Options != nil && col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+		return true
+	}
+	for _, key := range c.TableSpec.Indexes {
+		if key.Info.Type != sqlparser.IndexTypePrimary {
+			continue
+		}
+		for _, keyCol := range key.Columns {
+			if keyCol.Column.Equal(col.Name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // normalizeSerialColumns expands a SERIAL column into what MySQL stores for it.
 // SERIAL is an alias for BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE, and MySQL
 // keeps its unique key as a key of the table, so `create table t (id serial)`
 // turns into `create table t (id bigint unsigned not null auto_increment, unique
-// key (id))`, where the key is named like any other unnamed key. An inline UNIQUE
-// on the column is the same key, so it is folded into it; any other inline key,
-// such as a PRIMARY KEY, is kept and normalized as usual.
+// key (id))`, where the key is named like any other unnamed key. The SERIAL
+// DEFAULT VALUE attribute, an alias for NOT NULL AUTO_INCREMENT UNIQUE, is
+// expanded the same way but keeps the column's own type. An inline UNIQUE on the
+// column is the same key, so it is folded into it; any other inline key, such as
+// a PRIMARY KEY, is kept and normalized as usual.
 //
 // MySQL adds SERIAL's key where the column is defined, so when the table's own
 // keys are written after its columns, SERIAL's keys come first and are named
@@ -865,18 +914,21 @@ func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlp
 func (c *CreateTableEntity) normalizeSerialColumns() {
 	var serialKeys []*sqlparser.IndexDefinition
 	for _, col := range c.TableSpec.Columns {
-		if !strings.EqualFold(col.Type.Type, "serial") {
+		serialType := strings.EqualFold(col.Type.Type, "serial")
+		serialDefaultValue := col.Type.Options != nil && col.Type.Options.SerialDefaultValue
+		if !serialType && !serialDefaultValue {
 			continue
 		}
-		col.Type.Type = "bigint"
-		col.Type.Unsigned = true
+		if serialType {
+			col.Type.Type = "bigint"
+			col.Type.Unsigned = true
+		}
 		if col.Type.Options == nil {
 			col.Type.Options = &sqlparser.ColumnTypeOptions{}
 		}
-		if col.Type.Options.Null == nil {
-			// an explicit NULL after SERIAL wins in MySQL
-			col.Type.Options.Null = new(false)
-		}
+		col.Type.Options.SerialDefaultValue = false
+		col.Type.Options.NullBeforeSerialDefaultValue = false
+		col.Type.Options.Null = new(false)
 		col.Type.Options.Autoincrement = true
 		if col.Type.Options.KeyOpt == sqlparser.ColKeyUnique || col.Type.Options.KeyOpt == sqlparser.ColKeyUniqueKey {
 			col.Type.Options.KeyOpt = sqlparser.ColKeyNone
@@ -2634,6 +2686,9 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 func (c *CreateTableEntity) postApplyNormalize() error {
 	// an added or modified SERIAL column brings its unique key, which the
 	// validation and the implicit foreign key keys below must see
+	if err := c.validateSerialColumns(false); err != nil {
+		return err
+	}
 	c.normalizeSerialColumns()
 
 	// reduce or remove keys based on existing column list

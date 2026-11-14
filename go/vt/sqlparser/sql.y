@@ -1933,6 +1933,16 @@ column_attribute_list_opt:
     $1.OnUpdate = $4
     $$ = $1
   }
+| column_attribute_list_opt SERIAL DEFAULT VALUE
+  {
+    // MySQL rejects an earlier NULL in a primary key, so it is kept.
+    if $1.Null != nil && *$1.Null {
+      $1.Null = nil
+      $1.NullBeforeSerialDefaultValue = true
+    }
+    $1.SerialDefaultValue = true
+    $$ = $1
+  }
 | column_attribute_list_opt AUTO_INCREMENT
   {
     $1.Autoincrement = true
@@ -1945,7 +1955,7 @@ column_attribute_list_opt:
   }
 | column_attribute_list_opt keys
   {
-    $1.KeyOpt = $2
+    $1.KeyOpt = $1.KeyOpt.withInlineKey($2)
     $$ = $1
   }
 | column_attribute_list_opt COLLATE STRING
@@ -2043,7 +2053,7 @@ generated_column_attribute_list_opt:
   }
 | generated_column_attribute_list_opt keys
   {
-    $1.KeyOpt = $2
+    $1.KeyOpt = $1.KeyOpt.withInlineKey($2)
     $$ = $1
   }
 | generated_column_attribute_list_opt SRID INTEGRAL
