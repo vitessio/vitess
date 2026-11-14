@@ -30,6 +30,7 @@ func TestIsMultibyteByName(t *testing.T) {
 	}{
 		{"euckr", true},
 		{"gb2312", true},
+		{"gbk", true},
 		{"sjis", true},
 		{"cp932", true},
 		{"eucjpms", true},
@@ -120,6 +121,7 @@ func TestDecodeRuneWidthContract(t *testing.T) {
 		Charset_utf32{},
 		Charset_gb18030{},
 		Charset_gb2312{},
+		Charset_gbk{},
 		Charset_ujis{},
 		Charset_sjis{},
 		Charset_cp932{},
@@ -245,6 +247,12 @@ func TestDecodeRuneValidity(t *testing.T) {
 		{"gb2312 aliasing trail", Charset_gb2312{}, []byte{0xA1, 0x21}, RuneError, 1, false},
 		{"gb2312 invalid trail", Charset_gb2312{}, []byte{0xA1, 0x20}, RuneError, 1, false},
 		{"gb2312 invalid lead", Charset_gb2312{}, []byte{0xF8, 0xA1}, RuneError, 1, false},
+		{"gbk two byte", Charset_gbk{}, []byte{0xD6, 0xD0}, 0x4E2D, 2, true},
+		{"gbk invalid lead 0x80", Charset_gbk{}, []byte{0x80, 0x41}, RuneError, 1, false},
+		{"gbk invalid trail", Charset_gbk{}, []byte{0x81, 0x7F}, RuneError, 1, false},
+		{"gbk truncated", Charset_gbk{}, []byte{0xD6}, RuneError, 1, false},
+		{"gbk unassigned pair", Charset_gbk{}, []byte{0xA2, 0xA0}, RuneError, 2, false},
+		{"gbk euro sign of gb18030", Charset_gbk{}, []byte{0xA2, 0xE3}, RuneError, 2, false},
 		{"ujis invalid", Charset_ujis{}, []byte{0xFF}, RuneError, 1, false},
 		{"ujis kana invalid trail", Charset_ujis{}, []byte{0x8E, 0xE5}, RuneError, 1, false},
 		{"ujis plane2 invalid trail", Charset_ujis{}, []byte{0x8F, 0xA1, 0x20}, RuneError, 1, false},
@@ -271,4 +279,21 @@ func TestDecodeRuneValidity(t *testing.T) {
 			require.Equal(t, tc.wantOK, gotOK)
 		})
 	}
+}
+
+// TestGBKEncode checks characters that gb18030 has as two bytes and gbk does
+// not. MySQL 8.4.13 and 8.0.46 convert the euro sign to "?" for gbk, and to
+// A2 E3 for gb18030.
+func TestGBKEncode(t *testing.T) {
+	var buf [4]byte
+
+	require.Equal(t, 2, Charset_gbk{}.EncodeRune(buf[:], '中'))
+	assert.Equal(t, []byte{0xD6, 0xD0}, buf[:2])
+
+	assert.Equal(t, -1, Charset_gbk{}.EncodeRune(buf[:], '€'))
+	require.Equal(t, 2, Charset_gb18030{}.EncodeRune(buf[:], '€'))
+	assert.Equal(t, []byte{0xA2, 0xE3}, buf[:2])
+
+	// U+2E81 is FE 50 in gb18030, one of the characters GB18030 added.
+	assert.Equal(t, -1, Charset_gbk{}.EncodeRune(buf[:], 0x2E81))
 }

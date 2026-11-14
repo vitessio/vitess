@@ -367,6 +367,28 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 	g.P("},")
 }
 
+// printCollationChineseCI prints gbk_chinese_ci. The dump has its sort table
+// for single bytes. The order of two-byte characters is in
+// colldata/gbk_order.go.
+func (g *Generator) printCollationChineseCI(meta *CollationMetadata) {
+	tableSortOrder := g.Tables.printSlice("sortorder", meta.Name, codegen.Array8(meta.SortOrder))
+
+	g.P(meta.Number, ": &Collation_chinese_ci{")
+	g.P("id: ", meta.Number, ",")
+	g.P("name: ", codegen.Quote(meta.Name), ",")
+	g.P("sort: &", tableSortOrder, ",")
+	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
+	switch meta.Charset {
+	case "gbk":
+		g.P("charLen: charLenGBK,")
+		g.P("order: gbkSortOrder,")
+		g.P("weight: gbkSortOrder,")
+	default:
+		g.Fail("no order for " + meta.Charset)
+	}
+	g.P("},")
+}
+
 // printCollationGB18030 prints gb18030_chinese_ci. The dump has its sort
 // table for single bytes. The weights of multi-byte characters are in
 // colldata/gb18030_data.go.
@@ -430,6 +452,10 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 
 		case meta.Name == "gb18030_unicode_520_ci":
 			g.printCollationUcaLegacy(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
+
+		case meta.Name == "gbk_chinese_ci":
+			g.printCollationChineseCI(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
 		case meta.Name == "gb18030_chinese_ci":
