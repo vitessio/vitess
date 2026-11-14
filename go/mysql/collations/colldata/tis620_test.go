@@ -1,0 +1,98 @@
+/*
+Copyright 2026 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package colldata
+
+import (
+	"encoding/hex"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/mysql/collations/charset"
+)
+
+// TestTIS620ThaiCI checks tis620_thai_ci against values measured on MySQL
+// 8.4.13 and 8.0.46 with a tis620_thai_ci column: WEIGHT_STRING('เก') is
+// A1 E0, the consonant before the leading vowel.
+func TestTIS620ThaiCI(t *testing.T) {
+	coll := testcollation(t, "tis620_thai_ci")
+	tis620 := func(s string) []byte {
+		converted, err := charset.ConvertFromUTF8(nil, coll.Charset(), []byte(s))
+		require.NoError(t, err)
+		return converted
+	}
+
+	t.Run("weight string", func(t *testing.T) {
+		for input, weights := range map[string]string{
+			"กา": "A1D2",
+			// The leading vowel changes places with the consonant.
+			"เก": "A1E0",
+			// The tone mark moves to the end.
+			"ก่า": "A1D2F3",
+			"ก้า": "A1D2F4",
+			"ไก่": "A1E4FB",
+		} {
+			expected, err := hex.DecodeString(weights)
+			require.NoError(t, err)
+			assert.Equal(t, expected, coll.WeightString(nil, tis620(input), 0), "WEIGHT_STRING(%q)", input)
+		}
+
+		// WEIGHT_STRING(X'A6A2E85FC1CEE3' AS CHAR(5)) cuts the string to
+		// five characters first: the weight of the mark E8 is the last
+		// byte, in the place of C1.
+		input, err := hex.DecodeString("A6A2E85FC1CEE3")
+		require.NoError(t, err)
+		expected, err := hex.DecodeString("A6A25FC1EB")
+		require.NoError(t, err)
+		assert.Equal(t, expected, coll.WeightString(nil, input, 5))
+	})
+
+	t.Run("comparison", func(t *testing.T) {
+		for _, tc := range []struct {
+			left, right string
+			cmp         int
+		}{
+			{"เก", "กา", 1},
+			{"เก", "แก", -1},
+			{"ก่า", "กา", 1},
+			{"ก่า", "ก้า", -1},
+			{"ไก่", "แก", 1},
+			{"ก่า", "แก", -1},
+		} {
+			got := coll.Collate(tis620(tc.left), tis620(tc.right), false)
+			assert.Equal(t, tc.cmp, min(max(got, -1), 1), "%q <=> %q", tc.left, tc.right)
+		}
+	})
+
+	t.Run("like", func(t *testing.T) {
+		for _, tc := range []struct {
+			input, pattern string
+			match          bool
+		}{
+			// A pattern is not rewritten: the tone mark is a
+			// character at its place.
+			{"ก่า", "ก_า", true},
+			{"ก่า", "กา", false},
+			{"กา", "กา", true},
+			{"เก", "ก_า", false},
+		} {
+			pattern := coll.Wildcard(tis620(tc.pattern), 0, 0, 0)
+			assert.Equal(t, tc.match, pattern.Match(tis620(tc.input)), "%q LIKE %q", tc.input, tc.pattern)
+		}
+	})
+}
