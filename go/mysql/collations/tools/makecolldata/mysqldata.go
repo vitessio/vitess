@@ -295,9 +295,14 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 	}
 
 	var collation string
-	if meta.Flags.Binary {
+	switch {
+	case meta.Flags.Binary:
 		collation = "Collation_8bit_bin"
-	} else {
+	case meta.Name == "latin1_german2_ci":
+		// The collation has the tables of an 8-bit collation, and
+		// its own comparison in the MySQL source.
+		collation = "Collation_latin1_german2_ci"
+	default:
 		collation = "Collation_8bit_simple_ci"
 	}
 
@@ -423,7 +428,7 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 			g.printCollationUca900(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
-		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci":
+		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci" || meta.Name == "latin1_german2_ci":
 			g.printCollation8bit(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
