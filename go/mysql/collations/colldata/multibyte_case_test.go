@@ -44,6 +44,7 @@ func TestMultibyteCaseTablesMatchMySQL(t *testing.T) {
 		{"eucjpms", []string{"eucjpms_bin", "eucjpms_japanese_ci"}, multibyteCase_eucjpms},
 		{"euckr", []string{"euckr_bin", "euckr_korean_ci"}, multibyteCase_euckr},
 		{"gb2312", []string{"gb2312_bin", "gb2312_chinese_ci"}, multibyteCase_gb2312},
+		{"gbk", []string{"gbk_bin", "gbk_chinese_ci"}, multibyteCase_gbk},
 	}
 
 	for _, table := range tables {
