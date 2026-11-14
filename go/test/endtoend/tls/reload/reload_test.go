@@ -26,6 +26,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -197,7 +198,7 @@ func servesCerts(t *testing.T, certs tlstest.ClientServerKeyPairs, cert []byte) 
 		return fmt.Errorf("the gRPC server: %v", err)
 	}
 	if !bytes.Equal(served, cert) {
-		return fmt.Errorf("the gRPC server presents a different certificate")
+		return errors.New("the gRPC server presents a different certificate")
 	}
 	conn, err := connectMySQL(t, certs)
 	if err != nil {
