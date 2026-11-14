@@ -183,8 +183,8 @@ func watchCRL(w crlWatch, body []byte) {
 // be loaded, the config keeps all that was loaded before, and the
 // error is returned. A CRL file that cannot be read or parsed, or that
 // the CA of its configuration does not validate, is reported, and does
-// not count as a change; ClientConfig fails while it stays that way. ReloadCachedFiles reports whether any file
-// changed.
+// not count as a change; ClientConfig fails while it stays that way.
+// ReloadCachedFiles reports whether any file changed.
 func ReloadCachedFiles() (changed bool, err error) {
 	reloadMu.Lock()
 	defer reloadMu.Unlock()
