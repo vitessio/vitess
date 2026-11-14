@@ -563,6 +563,17 @@ func (expr *InExpr) compile(c *compiler) (ctype, error) {
 		return ctype{}, nil
 	}
 
+	// IN compares the values when it runs, and the value of an ENUM or SET
+	// column has no collation. An ENUM or SET with a declared collation
+	// becomes a string in that collation, with the strength of a column,
+	// so that its collation wins over a binary string in the list: with an
+	// ENUM column en that holds 'abc' in a case-insensitive collation,
+	// en IN (0x414243, 'zz') is 1 in MySQL.
+	if (lhs.Type == sqltypes.Enum || lhs.Type == sqltypes.Set) && lhs.Col.Collation != collations.CollationBinaryID && lhs.Col.Collation != collations.Unknown {
+		c.asm.Convert_Ec(1, lhs.Col)
+		lhs = ctype{Type: sqltypes.VarChar, Flag: lhs.Flag, Col: lhs.Col}
+	}
+
 	switch rhs := expr.Right.(type) {
 	case TupleExpr:
 		var rt ctype

@@ -1695,6 +1695,68 @@ func TestHexBindVariableNextToUnknownCollation(t *testing.T) {
 	}
 }
 
+// TestEnumInList checks an ENUM or SET column on the left of IN in the
+// compiled program. Its collation wins over a binary string in the list,
+// as the collation of a text column does: with column0 = 'abc' in a
+// case-insensitive collation, column0 IN (0x414243, 'zz') is 1 in MySQL.
+// Each expression is checked with its literals kept and with the literals
+// turned into bind variables, as vtgate's normalizer does.
+//
+// The interpreter is not checked: it compares the value of an ENUM column
+// with a binary string byte by byte, as it does on main.
+func TestEnumInList(t *testing.T) {
+	testCases := []struct {
+		expression string
+		typ        sqltypes.Type
+		result     string
+	}{
+		{expression: `column0 IN (0x414243, 'zz')`, typ: sqltypes.Enum, result: `INT64(1)`},
+		{expression: `column0 IN (_binary'ABC', 'zz')`, typ: sqltypes.Enum, result: `INT64(1)`},
+		{expression: `column0 IN (IF(true, 'ABC', 0x414243), 'zz')`, typ: sqltypes.Enum, result: `INT64(1)`},
+		{expression: `column0 NOT IN (0x414243, 'zz')`, typ: sqltypes.Enum, result: `INT64(0)`},
+		{expression: `column0 IN (IF(true, 'ABC', 0x414243), 'zz')`, typ: sqltypes.Set, result: `INT64(1)`},
+		{expression: `column0 IN ('ABC', 'zz')`, typ: sqltypes.Enum, result: `INT64(1)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		row := []sqltypes.Value{sqltypes.MakeTrusted(tc.typ, []byte("abc"))}
+		fields := []*querypb.Field{{Name: "column0", Type: tc.typ, Charset: uint32(collations.CollationUtf8mb4ID)}}
+		for _, normalized := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s %s normalized=%v", tc.typ, tc.expression, normalized), func(t *testing.T) {
+				var expr sqlparser.Expr
+				var bindVars map[string]*querypb.BindVariable
+				if normalized {
+					expr, bindVars = normalizedExpr(t, venv, tc.expression)
+				} else {
+					var err error
+					expr, err = venv.Parser().ParseExpr(tc.expression)
+					require.NoError(t, err)
+				}
+
+				resolver := evalengine.FieldResolver(fields)
+				converted, err := evalengine.Translate(expr, &evalengine.Config{
+					ResolveColumn:     resolver.Column,
+					ResolveType:       resolver.Type,
+					Collation:         collations.CollationUtf8mb4ID,
+					Environment:       venv,
+					NoConstantFolding: true,
+				})
+				require.NoError(t, err)
+				compiled, ok := converted.(*evalengine.CompiledExpr)
+				require.True(t, ok)
+
+				env := evalengine.EmptyExpressionEnv(venv)
+				env.BindVars = bindVars
+				env.Row = row
+				res, err := env.EvaluateVM(compiled)
+				require.NoError(t, err)
+				assert.Equal(t, tc.result, res.String())
+			})
+		}
+	}
+}
+
 // TestBindVarLiteralMalformed pins that a malformed hex bind variable evaluated
 // by the engine — which decodes the payload itself, with no SQL encoder
 // involved — returns an error and never panics, in both the AST evaluator and

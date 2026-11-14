@@ -3357,6 +3357,17 @@ func (asm *assembler) Fn_WEIGHT_STRING(typ sqltypes.Type, length int) {
 	}, "FN WEIGHT_STRING (SP-1)")
 }
 
+// Convert_Ec converts the value of an ENUM or SET column to a string with
+// the collation tc of the column. See InExpr.compile.
+func (asm *assembler) Convert_Ec(offset int, tc collations.TypedCollation) {
+	asm.emit(func(env *ExpressionEnv) int {
+		if arg := env.vm.stack[env.vm.sp-offset]; arg != nil {
+			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalText(arg.ToRawBytes(), tc)
+		}
+		return 1
+	}, "CONV ENUM|SET(SP-%d), VARCHAR")
+}
+
 func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {
 	if not {
 		asm.emit(func(env *ExpressionEnv) int {
