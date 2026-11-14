@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 	"sync"
@@ -346,7 +347,10 @@ func (mz *materializer) deploySchema() error {
 			}
 			mu.Unlock()
 			if err != nil {
-				log.Error("Error getting DDLs of source tables: " + err.Error())
+				log.Error("Error getting DDLs of source tables",
+					slog.String("workflow", mz.ms.Workflow),
+					slog.Any("error", err),
+					slog.String("error_code", vterrors.Code(err).String()))
 				return err
 			}
 
@@ -447,10 +451,15 @@ func (mz *materializer) deploySchema() error {
 				env := schemadiff.NewEnv(mz.env, mz.env.CollationEnv().DefaultConnectionCharset())
 				schema, err := schemadiff.NewSchemaFromQueries(env, applyDDLs)
 				if err != nil {
-					log.Error(fmt.Sprint(vterrors.Wrapf(err, "AtomicCopy: failed to normalize schema via schemadiff")))
+					log.Error("AtomicCopy: failed to normalize schema via schemadiff",
+						slog.String("workflow", mz.ms.Workflow),
+						slog.Any("error", err),
+						slog.String("error_code", vterrors.Code(err).String()))
 				} else {
 					applyDDLs = schema.ToQueries()
-					log.Info(fmt.Sprintf("AtomicCopy used, and schema was normalized via schemadiff. %v queries normalized", len(applyDDLs)))
+					log.Info("AtomicCopy used, and schema was normalized via schemadiff",
+						slog.String("workflow", mz.ms.Workflow),
+						slog.Int("query_count", len(applyDDLs)))
 				}
 			}
 			sql := strings.Join(applyDDLs, ";\n")

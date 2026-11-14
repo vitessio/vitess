@@ -20,53 +20,42 @@ import (
 	"log/slog"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestGlogger(t *testing.T) {
 	gl := glogger{}
-
-	origWarnDepth := log.WarnDepth
-	t.Cleanup(func() { log.WarnDepth = origWarnDepth })
-
-	var logMessage string
-	log.WarnDepth = func(_ int, msg string, _ ...slog.Attr) {
-		logMessage = msg
-	}
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	gl.Warning("warning")
-	require.Contains(t, logMessage, "warning")
-
-	logMessage = ""
 	gl.Warningln("warningln")
-	require.Contains(t, logMessage, "warningln")
-
-	logMessage = ""
 	gl.Warningf("formatted %s", "warning")
-	require.Contains(t, logMessage, "formatted warning")
+
+	records := logs.Records(t)
+	require.Len(t, records, 3)
+	for i, want := range []string{"warning", "warningln", "formatted warning"} {
+		assert.Equal(t, "gRPC warning", records[i]["msg"])
+		assert.Equal(t, "WARN", records[i]["level"])
+		assert.Equal(t, want, records[i]["grpc_message"])
+	}
 }
 
 func TestGloggerError(t *testing.T) {
 	gl := glogger{}
-
-	origErrorDepth := log.ErrorDepth
-	t.Cleanup(func() { log.ErrorDepth = origErrorDepth })
-
-	var logMessage string
-	log.ErrorDepth = func(_ int, msg string, _ ...slog.Attr) {
-		logMessage = msg
-	}
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	gl.Error("error message")
-	require.Contains(t, logMessage, "error message")
-
-	logMessage = ""
 	gl.Errorln("error message line")
-	require.Contains(t, logMessage, "error message line")
-
-	logMessage = ""
 	gl.Errorf("this is a %s error message", "formatted")
-	require.Contains(t, logMessage, "this is a formatted error message")
+
+	records := logs.Records(t)
+	require.Len(t, records, 3)
+	for i, want := range []string{"error message", "error message line", "this is a formatted error message"} {
+		assert.Equal(t, "gRPC error", records[i]["msg"])
+		assert.Equal(t, "ERROR", records[i]["level"])
+		assert.Equal(t, want, records[i]["grpc_message"])
+	}
 }

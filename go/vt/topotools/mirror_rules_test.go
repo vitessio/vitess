@@ -18,11 +18,13 @@ package topotools
 
 import (
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
@@ -47,6 +49,12 @@ func TestMirrorRulesRoundTrip(t *testing.T) {
 	require.NoError(t, err, "could not fetch mirror rules from topo")
 
 	assert.Equal(t, rules, roundtripRules)
+
+	logs := logtest.Capture(t, slog.Level(-2))
+	require.NoError(t, SaveMirrorRules(ctx, ts, nil))
+	record := logs.Record(t, "Saving mirror rules")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, map[string]any{}, record["mirror_rules"])
 }
 
 func TestMirrorRulesErrors(t *testing.T) {

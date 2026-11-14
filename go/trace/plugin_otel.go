@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -94,10 +95,10 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 
 	rate := samplingRate.Get()
 	if rate < 0.0 {
-		log.Warn(fmt.Sprintf("tracing sampling rate %f is below 0.0; clamping to 0.0", rate))
+		log.Warn("tracing sampling rate is below 0.0; clamping to 0.0", slog.Float64("sampling_rate", rate))
 		rate = 0.0
 	} else if rate > 1.0 {
-		log.Warn(fmt.Sprintf("tracing sampling rate %f is above 1.0; clamping to 1.0", rate))
+		log.Warn("tracing sampling rate is above 1.0; clamping to 1.0", slog.Float64("sampling_rate", rate))
 		rate = 1.0
 	}
 
@@ -115,7 +116,7 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 
 	if enableLogging.Get() {
 		otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
-			log.Error(fmt.Sprintf("OpenTelemetry error: %v", err))
+			log.Error("OpenTelemetry error", slog.Any("error", err))
 		}))
 	}
 
@@ -123,7 +124,7 @@ func newOTelTracer(serviceName string) (tracingService, io.Closer, error) {
 	if endpoint == "" {
 		endpoint = "(OTEL_EXPORTER_OTLP_ENDPOINT or default localhost:4317)"
 	}
-	log.Info(fmt.Sprintf("OpenTelemetry tracing enabled for %s, exporting to %s", serviceName, endpoint))
+	log.Info("OpenTelemetry tracing enabled", slog.String("tracing_service", serviceName), slog.String("otel_endpoint", endpoint))
 
 	tracer := tp.Tracer("vitess.io/vitess")
 

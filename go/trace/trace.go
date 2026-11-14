@@ -23,6 +23,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -30,7 +32,6 @@ import (
 
 	"vitess.io/vitess/go/viperutil"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Span represents a unit of work within a trace. After creating a Span with
@@ -170,30 +171,30 @@ func StartTracing(serviceName string) io.Closer {
 	tracingBackend := tracingServer.Get()
 	factory, ok := tracingBackendFactories[tracingBackend]
 	if !ok {
-		return fail(serviceName)
+		return fail(serviceName, tracingBackend)
 	}
 
 	tracer, closer, err := factory(serviceName)
 	if err != nil {
-		log.Error(fmt.Sprint(vterrors.Wrapf(err, "failed to create a %s tracer", tracingBackend)))
+		log.Error("failed to create tracer", slog.String("tracing_backend", tracingBackend), slog.Any("error", err))
 		return &nilCloser{}
 	}
 
 	currentTracer = tracer
 	if tracingBackend != "noop" {
-		log.Info(fmt.Sprintf("successfully started tracing with [%s]", tracingBackend))
+		log.Info("successfully started tracing", slog.String("tracing_backend", tracingBackend))
 	}
 
 	return closer
 }
 
-func fail(serviceName string) io.Closer {
+func fail(serviceName, tracingBackend string) io.Closer {
 	options := make([]string, 0, len(tracingBackendFactories))
 	for k := range tracingBackendFactories {
 		options = append(options, k)
 	}
-	altStr := strings.Join(options, ", ")
-	log.Error(fmt.Sprintf("no such [%s] tracing service found. alternatives are: %v", serviceName, altStr))
+	slices.Sort(options)
+	log.Error("no such tracing backend found", slog.String("tracing_service", serviceName), slog.String("tracing_backend", tracingBackend), slog.String("tracing_backends", strings.Join(options, ",")))
 	return &nilCloser{}
 }
 

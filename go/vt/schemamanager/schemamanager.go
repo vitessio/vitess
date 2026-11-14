@@ -20,10 +20,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
@@ -93,13 +95,13 @@ type ShardResult struct {
 // Run applies schema changes on Vitess through VtGate.
 func Run(ctx context.Context, controller Controller, executor Executor) (execResult *ExecuteResult, err error) {
 	if err := controller.Open(ctx); err != nil {
-		log.Error(fmt.Sprintf("failed to open data sourcer: %v", err))
+		log.Error("failed to open data sourcer", slog.Any("error", err))
 		return execResult, err
 	}
 	defer controller.Close()
 	sqls, err := controller.Read(ctx)
 	if err != nil {
-		log.Error(fmt.Sprintf("failed to read data from data sourcer: %v", err))
+		log.Error("failed to read data from data sourcer", slog.Any("error", err))
 		controller.OnReadFail(ctx, err)
 		return execResult, err
 	}
@@ -109,12 +111,12 @@ func Run(ctx context.Context, controller Controller, executor Executor) (execRes
 	}
 	keyspace := controller.Keyspace()
 	if err := executor.Open(ctx, keyspace); err != nil {
-		log.Error(fmt.Sprintf("failed to open executor: %v", err))
+		log.Error("failed to open executor", slog.Any("error", err))
 		return execResult, err
 	}
 	defer executor.Close()
 	if err := executor.Validate(ctx, sqls); err != nil {
-		log.Error(fmt.Sprintf("validation fail: %v", err))
+		log.Error("validation fail", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		controller.OnValidationFail(ctx, err)
 		return execResult, err
 	}

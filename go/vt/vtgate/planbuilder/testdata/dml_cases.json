@@ -1768,7 +1768,7 @@
     "query": "replace into unsharded values(1, 2)",
     "plan": {
       "Type": "Passthrough",
-      "QueryType": "INSERT",
+      "QueryType": "REPLACE",
       "Original": "replace into unsharded values(1, 2)",
       "Instructions": {
         "OperatorType": "Insert",
@@ -1790,7 +1790,7 @@
     "query": "replace into unsharded select id from unsharded_auto",
     "plan": {
       "Type": "Passthrough",
-      "QueryType": "INSERT",
+      "QueryType": "REPLACE",
       "Original": "replace into unsharded select id from unsharded_auto",
       "Instructions": {
         "OperatorType": "Insert",
@@ -1813,7 +1813,7 @@
     "query": "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
     "plan": {
       "Type": "Passthrough",
-      "QueryType": "INSERT",
+      "QueryType": "REPLACE",
       "Original": "replace into unsharded_auto(id, val) values(18446744073709551616, 'aa')",
       "Instructions": {
         "OperatorType": "Insert",
@@ -1836,7 +1836,7 @@
     "query": "replace into unsharded_auto(id, val) values(1, 'aa')",
     "plan": {
       "Type": "Passthrough",
-      "QueryType": "INSERT",
+      "QueryType": "REPLACE",
       "Original": "replace into unsharded_auto(id, val) values(1, 'aa')",
       "Instructions": {
         "OperatorType": "Insert",
@@ -1859,7 +1859,7 @@
     "query": "replace into unsharded_auto(val) values('aa')",
     "plan": {
       "Type": "Passthrough",
-      "QueryType": "INSERT",
+      "QueryType": "REPLACE",
       "Original": "replace into unsharded_auto(val) values('aa')",
       "Instructions": {
         "OperatorType": "Insert",
@@ -1882,7 +1882,7 @@
     "query": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
     "plan": {
       "Type": "Passthrough",
-      "QueryType": "INSERT",
+      "QueryType": "REPLACE",
       "Original": "replace into unsharded_auto(id, val) values(1, 'aa'), (null, 'bb')",
       "Instructions": {
         "OperatorType": "Insert",

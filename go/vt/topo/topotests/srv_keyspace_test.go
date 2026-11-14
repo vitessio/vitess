@@ -18,6 +18,8 @@ package topotests
 
 import (
 	"context"
+	"errors"
+	"path"
 	"reflect"
 	"sort"
 	"strings"
@@ -33,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
+	querythrottlerpb "vitess.io/vitess/go/vt/proto/querythrottler"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -1114,4 +1117,119 @@ func TestValidateSrvKeyspace(t *testing.T) {
 	require.EqualError(t, err, errMsg)
 	err = ts.ValidateSrvKeyspace(ctx, keyspace, "")
 	require.EqualError(t, err, errMsg)
+}
+
+func TestUpdateSrvKeyspaceQueryThrottlerConfig(t *testing.T) {
+	const (
+		cell     = "cell1"
+		cell2    = "cell2"
+		keyspace = "ks1"
+	)
+	// setup creates the keyspace with a SrvKeyspace in each of srvKeyspaceCells, carrying an
+	// enabled dry-run config, and returns the topo and a context holding the keyspace lock.
+	setup := func(t *testing.T, srvKeyspaceCells ...string) (*topo.Server, context.Context) {
+		ctx := t.Context()
+		ts := memorytopo.NewServer(ctx, cell, cell2)
+		t.Cleanup(ts.Close)
+		require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
+		for _, c := range srvKeyspaceCells {
+			require.NoError(t, ts.UpdateSrvKeyspace(ctx, c, keyspace, &topodatapb.SrvKeyspace{
+				QueryThrottlerConfig: &querythrottlerpb.Config{Enabled: true, DryRun: true},
+			}))
+		}
+		lockedCtx, unlock, err := ts.LockKeyspace(ctx, keyspace, "Locking for tests")
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			var err error
+			unlock(&err)
+			assert.NoError(t, err)
+		})
+		return ts, lockedCtx
+	}
+	disableDryRun := func(cfg *querythrottlerpb.Config) *querythrottlerpb.Config {
+		cfg = proto.Clone(cfg).(*querythrottlerpb.Config)
+		cfg.DryRun = false
+		return cfg
+	}
+	getConfig := func(t *testing.T, ts *topo.Server, c string) *querythrottlerpb.Config {
+		srvKeyspace, err := ts.GetSrvKeyspace(t.Context(), c, keyspace)
+		require.NoError(t, err)
+		return srvKeyspace.GetQueryThrottlerConfig()
+	}
+
+	t.Run("updates only the given cells, from their existing config", func(t *testing.T) {
+		ts, ctx := setup(t, cell, cell2)
+		updated, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, keyspace, []string{cell}, disableDryRun)
+		require.NoError(t, err)
+		require.Equal(t, []string{cell}, updated)
+		assert.True(t, proto.Equal(&querythrottlerpb.Config{Enabled: true}, getConfig(t, ts, cell)))
+		assert.True(t, getConfig(t, ts, cell2).GetDryRun(), "a cell that was not asked for must be left untouched")
+	})
+
+	t.Run("no cells means every cell", func(t *testing.T) {
+		ts, ctx := setup(t, cell, cell2)
+		updated, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, keyspace, nil, disableDryRun)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []string{cell, cell2}, updated)
+		assert.False(t, getConfig(t, ts, cell).GetDryRun())
+		assert.False(t, getConfig(t, ts, cell2).GetDryRun())
+	})
+
+	t.Run("skips a cell without a SrvKeyspace", func(t *testing.T) {
+		ts, ctx := setup(t, cell)
+		updated, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, keyspace, nil, disableDryRun)
+		require.NoError(t, err)
+		require.Equal(t, []string{cell}, updated)
+		assert.False(t, getConfig(t, ts, cell).GetDryRun())
+		_, err = ts.GetSrvKeyspace(t.Context(), cell2, keyspace)
+		assert.True(t, topo.IsErrType(err, topo.NoNode), "a cell without a SrvKeyspace must not get one created")
+	})
+
+	t.Run("does not report a cell whose write failed", func(t *testing.T) {
+		ctx := t.Context()
+		ts, factory := memorytopo.NewServerAndFactory(ctx, cell, cell2)
+		t.Cleanup(ts.Close)
+		require.NoError(t, ts.CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}))
+		for _, c := range []string{cell, cell2} {
+			require.NoError(t, ts.UpdateSrvKeyspace(ctx, c, keyspace, &topodatapb.SrvKeyspace{
+				QueryThrottlerConfig: &querythrottlerpb.Config{Enabled: true, DryRun: true},
+			}))
+		}
+		lockedCtx, unlock, err := ts.LockKeyspace(ctx, keyspace, "Locking for tests")
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			var err error
+			unlock(&err)
+			assert.NoError(t, err)
+		})
+		// The path within a cell is the same in every cell, so both writes fail.
+		factory.AddOperationError(memorytopo.Update, topo.SrvKeyspaceFile+"$", errors.New("write failed"))
+		updated, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(lockedCtx, keyspace, nil, disableDryRun)
+		require.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
+		require.ErrorContains(t, err, "write failed")
+		require.Empty(t, updated)
+	})
+
+	t.Run("reports a cell it could not read as a partial result", func(t *testing.T) {
+		ts, ctx := setup(t, cell, cell2)
+		// memorytopo's injected errors match on the path within a cell, which is the same in every
+		// cell, so cell2 fails through a SrvKeyspace that doesn't unmarshal instead.
+		conn, err := ts.ConnForCell(ctx, cell2)
+		require.NoError(t, err)
+		_, err = conn.Update(ctx, path.Join(topo.KeyspacesPath, keyspace, topo.SrvKeyspaceFile), []byte{0xff}, nil)
+		require.NoError(t, err)
+
+		updated, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(ctx, keyspace, nil, disableDryRun)
+		require.True(t, topo.IsErrType(err, topo.PartialResult), "got %v", err)
+		require.ErrorContains(t, err, "SrvKeyspace unmarshal failed")
+		require.Equal(t, []string{cell}, updated)
+		assert.False(t, getConfig(t, ts, cell).GetDryRun(), "a readable cell must still be updated")
+	})
+
+	t.Run("requires the keyspace lock", func(t *testing.T) {
+		ts, _ := setup(t, cell)
+		_, err := ts.UpdateSrvKeyspaceQueryThrottlerConfig(t.Context(), keyspace, nil, disableDryRun)
+		require.ErrorContains(t, err, "is not locked")
+		assert.True(t, getConfig(t, ts, cell).GetDryRun())
+	})
 }

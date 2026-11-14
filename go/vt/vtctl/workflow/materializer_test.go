@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"slices"
 	"strings"
@@ -33,6 +34,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -621,6 +623,99 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 	}
 }
 
+// TestDeploySchemaLogs tests that the schema deployment logs carry the workflow.
+func TestDeploySchemaLogs(t *testing.T) {
+	testCases := []struct {
+		name            string
+		createDDL       string
+		atomicCopy      bool
+		noSourcePrimary bool
+		wantErr         string
+		wantLog         string
+		wantLogAttrs    map[string]any
+	}{
+		{
+			name:            "source DDLs can't be read",
+			createDDL:       createDDLAsCopy,
+			noSourcePrimary: true,
+			wantErr:         "shard must have a primary for copying schema: 0",
+			wantLog:         "Error getting DDLs of source tables",
+			wantLogAttrs:    map[string]any{"level": "ERROR", "error": "shard must have a primary for copying schema: 0", "error_code": "UNKNOWN"},
+		},
+		{
+			name:         "AtomicCopy normalizes the schema",
+			createDDL:    "create table t1 (id int, primary key (id))",
+			atomicCopy:   true,
+			wantLog:      "AtomicCopy used, and schema was normalized via schemadiff",
+			wantLogAttrs: map[string]any{"level": "INFO", "query_count": float64(1)},
+		},
+		{
+			name:         "AtomicCopy can't normalize the schema",
+			createDDL:    "create table t1 (id int, primary key (id), foreign key (id) references t2 (id))",
+			atomicCopy:   true,
+			wantLog:      "AtomicCopy: failed to normalize schema via schemadiff",
+			wantLogAttrs: map[string]any{"level": "ERROR", "error_code": "UNKNOWN"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			ms := &vtctldatapb.MaterializeSettings{
+				Workflow:       "wf",
+				SourceKeyspace: "sourceks",
+				TargetKeyspace: "targetks",
+				AtomicCopy:     tc.atomicCopy,
+				TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+					TargetTable:      "t1",
+					SourceExpression: "select * from t1",
+				}},
+			}
+			if tc.createDDL != createDDLAsCopy {
+				ms.TableSettings[0].CreateDdl = tc.createDDL
+			}
+			env := newTestMaterializerEnv(t, ctx, ms, []string{"0"}, []string{"0"})
+			defer env.close()
+			ms.TableSettings[0].CreateDdl = tc.createDDL
+			// The target table doesn't exist yet, so it is created.
+			delete(env.tmc.schema, ms.TargetKeyspace+".t1")
+			env.tmc.expectFetchAsAllPrivsQuery(200, getNonEmptyTable, &sqltypes.Result{})
+			if tc.wantErr == "" {
+				env.tmc.expectVRQuery(200, "/(?i)^create table", &sqltypes.Result{})
+			}
+			sourceShard, err := env.topoServ.GetShard(ctx, ms.SourceKeyspace, "0")
+			require.NoError(t, err)
+			if tc.noSourcePrimary {
+				sourceShard.PrimaryAlias = nil
+			}
+			targetShard, err := env.topoServ.GetShard(ctx, ms.TargetKeyspace, "0")
+			require.NoError(t, err)
+			mz := &materializer{
+				ctx:          ctx,
+				ts:           env.topoServ,
+				sourceTs:     env.topoServ,
+				tmc:          env.tmc,
+				ms:           ms,
+				sourceShards: []*topo.ShardInfo{sourceShard},
+				targetShards: []*topo.ShardInfo{targetShard},
+				env:          env.venv,
+			}
+
+			logs := logtest.Capture(t, slog.LevelInfo)
+			err = mz.deploySchema()
+			if tc.wantErr != "" {
+				require.EqualError(t, err, tc.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			record := logs.Record(t, tc.wantLog)
+			assert.Equal(t, "wf", record["workflow"])
+			for key, want := range tc.wantLogAttrs {
+				assert.Equal(t, want, record[key], key)
+			}
+		})
+	}
+}
+
 // TestShardedAutoIncHandling tests the optional behaviors available when moving
 // tables to a sharded keyspace and the tables being copied contain MySQL
 // auto_increment clauses. The optional behaviors are:
@@ -950,6 +1045,30 @@ func TestShardedAutoIncHandling(t *testing.T) {
 					require.NoError(t, err)
 					require.True(t, proto.Equal(targetVSchema, tc.wantTargetVSchema), "got: %v, want: %v", targetVSchema, tc.wantTargetVSchema)
 				}
+				if tc.name == "replace" {
+					// Feed Create's actual output into the SwitchTraffic metadata
+					// path. Qualification must not skip backing VSchema setup.
+					globalVSchema, err := env.ws.ts.GetVSchema(ctx, tc.globalKeyspace)
+					require.NoError(t, err)
+					require.Empty(t, globalVSchema.Tables)
+					ts := &trafficSwitcher{
+						ws: env.ws, targetKeyspace: ms.TargetKeyspace, tables: []string{tableName},
+						targets: map[string]*MigrationTarget{
+							"-80": {primary: &topo.TabletInfo{Tablet: env.tablets[startingTargetTabletUID]}},
+						},
+					}
+					metadata, err := ts.getTargetSequenceMetadata(ctx)
+					require.NoError(t, err)
+					require.Contains(t, metadata, "t-1_seq")
+					assert.Equal(t, tc.globalKeyspace, metadata["t-1_seq"].backingTableKeyspace)
+					assert.True(t, metadata["t-1_seq"].registerInVSchema)
+					// SwitchTraffic then prepares the sequences, which adds it to
+					// the global keyspace's vschema.
+					require.NoError(t, ts.prepareTargetSequences(ctx, metadata))
+					globalVSchema, err = env.ws.ts.GetVSchema(ctx, tc.globalKeyspace)
+					require.NoError(t, err)
+					assert.Equal(t, map[string]*vschemapb.Table{"t-1_seq": {Type: "sequence"}}, globalVSchema.Tables)
+				}
 			}
 		})
 	}
@@ -1010,6 +1129,7 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		TrafficState: "Reads Not Switched. Writes Not Switched",
 	}
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	res, err := env.ws.MoveTablesCreate(ctx, &vtctldatapb.MoveTablesCreateRequest{
 		Workflow:       ms.Workflow,
 		SourceKeyspace: ms.SourceKeyspace,
@@ -1018,6 +1138,11 @@ func TestMoveTablesNoRoutingRules(t *testing.T) {
 		NoRoutingRules: true,
 	})
 	require.NoError(t, err)
+	record := logs.Record(t, "got table schemas from source primary")
+	assert.Equal(t, []any{"t1"}, record["tables"])
+	assert.Equal(t, "cell-0000000100", record["primary_tablet"])
+	assert.NotContains(t, record, "schema_definition")
+	assert.NotContains(t, logs.String(), "table_definitions")
 	require.Equal(t, want, res, "got: %+v, want: %+v", res, want)
 	rr, err := env.ws.ts.GetRoutingRules(ctx)
 	require.NoError(t, err)

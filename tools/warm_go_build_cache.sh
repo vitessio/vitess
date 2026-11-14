@@ -42,6 +42,10 @@
 # "unit" do not already hold. The analysis cache keys the files of other
 # modules by their absolute path, so it only fits runners whose module cache
 # is at the same path.
+#
+# "tools" also runs tools/check_logcheck.sh, which leaves go vet's results for
+# the packages it checks in the build cache, so that the static checks only
+# vet the packages that changed.
 
 set -euo pipefail
 
@@ -106,6 +110,7 @@ tools)
 	GOFLAGS=-trimpath go run -trimpath -modfile=tools/golangci-lint/go.mod \
 		github.com/golangci/golangci-lint/v2/cmd/golangci-lint \
 		run --issues-exit-code=0 --timeout 10m ./go/... >/dev/null
+	GOFLAGS=-trimpath tools/check_logcheck.sh >/dev/null || true
 	;;
 *)
 	echo "usage: $0 <build|unit|race|tools>" >&2

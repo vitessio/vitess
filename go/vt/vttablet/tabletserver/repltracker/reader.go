@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -232,6 +233,6 @@ func (r *heartbeatReader) recordError(err error) {
 	r.lagMu.Lock()
 	r.lastKnownError = err
 	r.lagMu.Unlock()
-	r.errorLog.Errorf("%v", err)
+	r.errorLog.Error("failed to read heartbeat", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	readErrors.Add(1)
 }

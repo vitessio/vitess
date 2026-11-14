@@ -18,7 +18,9 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"path"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,6 +49,114 @@ func checkTryLock(t *testing.T, ctx context.Context, ts *topo.Server) {
 
 	t.Log("===      checkTryLockUnblocks")
 	checkTryLockUnblocks(ctx, t, conn)
+
+	t.Log("===      checkTryLockConcurrent")
+	checkTryLockConcurrent(ctx, t, conn)
+
+	t.Log("===      checkTryLockWithQueuedLock")
+	checkTryLockWithQueuedLock(ctx, t, conn)
+
+	t.Log("===      checkTryLockNoNode")
+	checkTryLockNoNode(ctx, t, conn)
+}
+
+// checkTryLockConcurrent checks that concurrent TryLock calls on a free lock
+// all return without waiting: one gets the lock, the others return NodeExists
+// and leave nothing behind that blocks the next TryLock.
+func checkTryLockConcurrent(ctx context.Context, t *testing.T, conn topo.Conn) {
+	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
+	tryCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	const contenders = 20
+	start := make(chan struct{})
+	locks := make([]topo.LockDescriptor, contenders)
+	errs := make([]error, contenders)
+	var wg sync.WaitGroup
+	for i := range contenders {
+		wg.Go(func() {
+			<-start
+			locks[i], errs[i] = conn.TryLock(tryCtx, keyspacePath, fmt.Sprintf("contender-%d", i))
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	var held topo.LockDescriptor
+	for i, err := range errs {
+		if err == nil {
+			require.Nil(t, held, "more than one TryLock got the lock")
+			held = locks[i]
+			continue
+		}
+		require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+	}
+	require.NotNil(t, held, "no TryLock got the lock")
+	require.NoError(t, held.Unlock(ctx))
+
+	lockDescriptor, err := conn.TryLock(tryCtx, keyspacePath, "after")
+	require.NoError(t, err)
+	require.NoError(t, lockDescriptor.Unlock(ctx))
+}
+
+// checkTryLockWithQueuedLock checks that TryLock calls racing with a Lock
+// queued behind the holder all return NodeExists, and that their short-lived
+// attempts don't hand the lock to the queued caller while the holder has it.
+func checkTryLockWithQueuedLock(ctx context.Context, t *testing.T, conn topo.Conn) {
+	keyspacePath := path.Join(topo.KeyspacesPath, "test_keyspace")
+	lockCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	holder, err := conn.Lock(lockCtx, keyspacePath, "holder")
+	require.NoError(t, err)
+
+	type lockResult struct {
+		ld  topo.LockDescriptor
+		err error
+	}
+	// The queued Lock joins once the first attempt returns, while the
+	// contenders' retries keep rejected attempts appearing ahead of it.
+	const contenders, attempts = 20, 10
+	firstAttempt := make(chan struct{})
+	var firstAttemptOnce sync.Once
+	errs := make([]error, contenders*attempts)
+	var wg sync.WaitGroup
+	for i := range contenders {
+		wg.Go(func() {
+			for j := range attempts {
+				_, errs[i*attempts+j] = conn.TryLock(lockCtx, keyspacePath, fmt.Sprintf("contender-%d-%d", i, j))
+				firstAttemptOnce.Do(func() { close(firstAttempt) })
+			}
+		})
+	}
+
+	queued := make(chan lockResult, 1)
+	go func() {
+		<-firstAttempt
+		ld, err := conn.Lock(lockCtx, keyspacePath, "queued")
+		queued <- lockResult{ld, err}
+	}()
+	wg.Wait()
+	for _, err := range errs {
+		require.True(t, topo.IsErrType(err, topo.NodeExists), "TryLock should return NodeExists, got: %v", err)
+	}
+	require.Never(t, func() bool { return len(queued) > 0 }, 2*time.Second, 50*time.Millisecond, "queued Lock returned while the lock was held")
+
+	require.NoError(t, holder.Unlock(ctx))
+	select {
+	case res := <-queued:
+		require.NoError(t, res.err)
+		require.NoError(t, res.ld.Unlock(ctx))
+	case <-lockCtx.Done():
+		require.Fail(t, "queued Lock did not get the lock after the holder unlocked")
+	}
+}
+
+// checkTryLockNoNode checks that TryLock returns NoNode for a directory that
+// doesn't exist, instead of creating it.
+func checkTryLockNoNode(ctx context.Context, t *testing.T, conn topo.Conn) {
+	_, err := conn.TryLock(ctx, path.Join(topo.KeyspacesPath, "missing_keyspace"), "")
+	require.True(t, topo.IsErrType(err, topo.NoNode), "TryLock should return NoNode, got: %v", err)
 }
 
 // checkTryLockTimeout test the fail-fast nature of TryLock

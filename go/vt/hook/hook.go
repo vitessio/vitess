@@ -18,19 +18,21 @@ package hook
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/fileutil"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Hook is the input structure for this library.
@@ -46,6 +48,10 @@ type HookResult struct {
 	Stdout     string
 	Stderr     string
 }
+
+// hookWaitDelay bounds how long ExecuteOptionalContext waits for a hook's
+// output after the hook exits or is killed.
+const hookWaitDelay = time.Second
 
 // The hook will return a value between 0 and 255. 0 if it succeeds.
 // So we have these additional values here for more information.
@@ -120,7 +126,11 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 	}
 
 	// Configure the command.
-	log.Info(fmt.Sprintf("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " ")))
+	args := hook.Parameters
+	if args == nil {
+		args = []string{}
+	}
+	log.Info("hook: executing hook", slog.String("path", vthook), slog.Any("args", args))
 	cmd := exec.CommandContext(ctx, vthook, hook.Parameters...)
 	if len(hook.ExtraEnv) > 0 {
 		cmd.Env = os.Environ()
@@ -133,7 +143,15 @@ func (hook *Hook) findHook(ctx context.Context) (*exec.Cmd, int, error) {
 }
 
 // ExecuteContext tries to execute the Hook with the given context and returns a HookResult.
-func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
+func (hook *Hook) ExecuteContext(ctx context.Context) *HookResult {
+	return hook.execute(ctx, 0)
+}
+
+// execute runs the hook. A child the hook started can keep its output open
+// after the hook exits or is killed. A zero waitDelay waits for that output to
+// close; otherwise execute stops waiting after waitDelay, and closes the
+// output, so a child that writes to it later fails or is killed by SIGPIPE.
+func (hook *Hook) execute(ctx context.Context, waitDelay time.Duration) (result *HookResult) {
 	result = &HookResult{}
 
 	// Find the hook.
@@ -144,20 +162,46 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 		return result
 	}
 
-	// Run it.
+	// Run it. The hook writes to pipes that this reads, so that it knows
+	// whether the output was complete: a child the hook started can keep them
+	// open after the hook exits.
 	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	output, err := captureOutput(cmd, &stdout, &stderr)
+	if err != nil {
+		result.ExitStatus = HOOK_GENERIC_ERROR
+		result.Stderr = err.Error() + "\n"
+		return result
+	}
 
 	start := time.Now()
-	err = cmd.Run()
+	err = cmd.Start()
+	output.closeWriters()
+	if err == nil {
+		err = cmd.Wait()
+	}
 	duration := time.Since(start)
+	// Whether the context ended before the hook did, not while its output
+	// was still open.
+	canceled := ctx.Err() != nil
+	complete := output.wait(waitDelay)
 
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
+	if !complete {
+		warning := fmt.Sprintf("the output is incomplete: the hook's children kept it open for more than %v after the hook ended", waitDelay)
+		result.Stderr += "WARNING: " + warning + "\n"
+		log.Warn("hook: the output is incomplete: the hook's children kept it open for more than the wait delay after the hook ended", slog.String("hook", hook.Name), slog.Duration("wait_delay", waitDelay))
+	}
 
 	defer func() {
-		log.Info(fmt.Sprintf("hook: result is %v", result.String()))
+		attrs := []slog.Attr{slog.Int("exit_status", result.ExitStatus), slog.String("hook_status", statusText(result.ExitStatus))}
+		if result.Stdout != "" {
+			attrs = append(attrs, slog.String("stdout", result.Stdout))
+		}
+		if result.Stderr != "" {
+			attrs = append(attrs, slog.String("stderr", result.Stderr))
+		}
+		log.Info("hook: result", attrs...)
 	}()
 
 	if err == nil {
@@ -165,8 +209,18 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 		return result
 	}
 
-	if ctx.Err() != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		// When (exec.Cmd).Run hits a context cancelled, the process is killed via SIGTERM.
+	// A hook that exited on its own keeps its exit status, even if its
+	// context ended before it was reaped.
+	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+		result.ExitStatus = cmd.ProcessState.ExitCode()
+		if result.ExitStatus != HOOK_SUCCESS {
+			result.Stderr += "ERROR: " + err.Error() + "\n"
+		}
+		return result
+	}
+
+	if canceled {
+		// When (exec.Cmd).Run hits a context that expired or was canceled, the process is killed.
 		// This means:
 		// 	1. cmd.ProcessState.Exited() is false.
 		//	2. cmd.ProcessState.ExitCode() is -1.
@@ -182,13 +236,80 @@ func (hook *Hook) ExecuteContext(ctx context.Context) (result *HookResult) {
 	}
 
 	if cmd.ProcessState != nil {
-		result.ExitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
+		// A hook that exited is handled above, so this one was signaled. Its
+		// exit status is -1, which is HOOK_DOES_NOT_EXIST.
+		result.ExitStatus = HOOK_GENERIC_ERROR
 	} else {
 		result.ExitStatus = HOOK_CANNOT_GET_EXIT_STATUS
 	}
 	result.Stderr += "ERROR: " + err.Error() + "\n"
 
 	return result
+}
+
+// hookOutput copies a hook's stdout and stderr from pipes.
+type hookOutput struct {
+	readers, writers []*os.File
+	done             chan struct{}
+}
+
+// captureOutput connects cmd's stdout and stderr to pipes, and starts copying
+// them into stdout and stderr.
+func captureOutput(cmd *exec.Cmd, stdout, stderr io.Writer) (*hookOutput, error) {
+	output := &hookOutput{done: make(chan struct{})}
+	for range 2 {
+		r, w, err := os.Pipe()
+		if err != nil {
+			output.closeWriters()
+			for _, r := range output.readers {
+				r.Close()
+			}
+			return nil, err
+		}
+		output.readers = append(output.readers, r)
+		output.writers = append(output.writers, w)
+	}
+	cmd.Stdout, cmd.Stderr = output.writers[0], output.writers[1]
+	var copies sync.WaitGroup
+	for i, w := range []io.Writer{stdout, stderr} {
+		copies.Go(func() { _, _ = io.Copy(w, output.readers[i]) })
+	}
+	go func() {
+		copies.Wait()
+		close(output.done)
+	}()
+	return output, nil
+}
+
+// closeWriters closes this process's copies of the pipes' write ends. Once
+// the hook started, its own copies, and its children's, are the only ones
+// left, so the copies end when those close.
+func (o *hookOutput) closeWriters() {
+	for _, w := range o.writers {
+		w.Close()
+	}
+}
+
+// wait waits for the output to close, at most waitDelay unless it is zero,
+// and reports whether it closed. Otherwise it closes the pipes, so that a
+// child that writes to them later fails or is killed by SIGPIPE.
+func (o *hookOutput) wait(waitDelay time.Duration) bool {
+	o.closeWriters()
+	complete := true
+	if waitDelay == 0 {
+		<-o.done
+	} else {
+		select {
+		case <-o.done:
+		case <-time.After(waitDelay):
+			complete = false
+		}
+	}
+	for _, r := range o.readers {
+		r.Close()
+	}
+	<-o.done
+	return complete
 }
 
 // Execute tries to execute the Hook and returns a HookResult.
@@ -199,12 +320,29 @@ func (hook *Hook) Execute() (result *HookResult) {
 // ExecuteOptional executes an optional hook, logs if it doesn't
 // exist, and returns a printable error.
 func (hook *Hook) ExecuteOptional() error {
-	hr := hook.Execute()
+	return hook.optionalError(hook.Execute())
+}
+
+// ExecuteOptionalContext is ExecuteOptional, but the hook is killed when ctx
+// ends, and it waits at most hookWaitDelay for the hook's output once the hook
+// exits or is killed. A child the hook started that writes to its output after
+// that fails or is killed by SIGPIPE.
+func (hook *Hook) ExecuteOptionalContext(ctx context.Context) error {
+	hr := hook.execute(ctx, hookWaitDelay)
+	if hr.ExitStatus == HOOK_TIMEOUT_ERROR {
+		// The hook was killed because ctx ended: keep the cancellation, and
+		// its code, in the error.
+		return vterrors.Wrapf(ctx.Err(), "%v hook failed(%v): %v", hook.Name, hr.ExitStatus, hr.Stderr)
+	}
+	return hook.optionalError(hr)
+}
+
+func (hook *Hook) optionalError(hr *HookResult) error {
 	switch hr.ExitStatus {
 	case HOOK_DOES_NOT_EXIST:
-		log.Info(fmt.Sprintf("%v hook doesn't exist", hook.Name))
+		log.Info("hook doesn't exist", slog.String("hook", hook.Name))
 	case HOOK_VTROOT_ERROR:
-		log.Info(fmt.Sprintf("VTROOT not set, so %v hook doesn't exist", hook.Name))
+		log.Info("VTROOT not set, so hook doesn't exist", slog.String("hook", hook.Name))
 	case HOOK_SUCCESS:
 		// nothing to do here
 	default:
@@ -291,25 +429,31 @@ func (hook *Hook) ExecuteAsReadPipe(in io.Reader) (io.Reader, WaitFunc, int, err
 	}, HOOK_SUCCESS, nil
 }
 
+// statusText returns an exit status as HookResult.String renders it: the name
+// of a HOOK_* status that has one, and exit(N) for any other status, including
+// the exit status of the hook itself.
+func statusText(status int) string {
+	switch status {
+	case HOOK_SUCCESS:
+		return "HOOK_SUCCESS"
+	case HOOK_DOES_NOT_EXIST:
+		return "HOOK_DOES_NOT_EXIST"
+	case HOOK_STAT_FAILED:
+		return "HOOK_STAT_FAILED"
+	case HOOK_CANNOT_GET_EXIT_STATUS:
+		return "HOOK_CANNOT_GET_EXIT_STATUS"
+	case HOOK_INVALID_NAME:
+		return "HOOK_INVALID_NAME"
+	case HOOK_VTROOT_ERROR:
+		return "HOOK_VTROOT_ERROR"
+	default:
+		return fmt.Sprintf("exit(%v)", status)
+	}
+}
+
 // String returns a printable version of the HookResult
 func (hr *HookResult) String() string {
-	result := "result: "
-	switch hr.ExitStatus {
-	case HOOK_SUCCESS:
-		result += "HOOK_SUCCESS"
-	case HOOK_DOES_NOT_EXIST:
-		result += "HOOK_DOES_NOT_EXIST"
-	case HOOK_STAT_FAILED:
-		result += "HOOK_STAT_FAILED"
-	case HOOK_CANNOT_GET_EXIT_STATUS:
-		result += "HOOK_CANNOT_GET_EXIT_STATUS"
-	case HOOK_INVALID_NAME:
-		result += "HOOK_INVALID_NAME"
-	case HOOK_VTROOT_ERROR:
-		result += "HOOK_VTROOT_ERROR"
-	default:
-		result += fmt.Sprintf("exit(%v)", hr.ExitStatus)
-	}
+	result := "result: " + statusText(hr.ExitStatus)
 	if hr.Stdout != "" {
 		result += "\nstdout:\n" + hr.Stdout
 	}

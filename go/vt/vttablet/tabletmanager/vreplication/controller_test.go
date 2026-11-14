@@ -30,10 +30,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/discovery"
@@ -780,22 +780,10 @@ func TestControllerErrorLogMessages(t *testing.T) {
 	oldErrors := fakeBinlogClientErrorsByTablet
 	defer func() { fakeBinlogClientErrorsByTablet = oldErrors }()
 	fakeBinlogClientErrorsByTablet = map[uint32]error{
-		100: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.GTIDSetMismatch+" test"),
+		100: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.GTIDSetMismatch+" test "+strings.Repeat("x", 1000)),
 	}
 
-	infoLogger := logutil.NewMemoryLogger()
-	oldLogInfo := log.Info
-	log.Info = func(msg string, _ ...slog.Attr) {
-		infoLogger.Infof("%s", msg)
-	}
-	defer func() { log.Info = oldLogInfo }()
-
-	errorLogger := logutil.NewMemoryLogger()
-	oldLogError := log.Error
-	log.Error = func(msg string, _ ...slog.Attr) {
-		errorLogger.Errorf("%s", msg)
-	}
-	defer func() { log.Error = oldLogError }()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClient.AddInvariant("update _vt.vreplication set message=", testDMLResponse)
@@ -816,24 +804,147 @@ func TestControllerErrorLogMessages(t *testing.T) {
 	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
 	require.NoError(t, err)
 
-	require.Eventually(t, func() bool {
-		return strings.Contains(infoLogger.String(), "adding tablet") &&
-			strings.Contains(infoLogger.String(), "to ignore list")
-	}, 30*time.Second, 10*time.Millisecond)
-
+	ignored := logs.Wait(t, "adding tablet to ignore list due to error")
+	retried := logs.Wait(t, "error, will retry")
 	ct.Stop(true)
 
-	infoLogs := infoLogger.String()
-	t.Logf("=== CAPTURED INFO LOGS ===\n%s", infoLogs)
-	expectedIgnorePrefix := fmt.Sprintf("workflow %s, stream %s: adding tablet cell1-0000000100 to ignore list due to error:", workflowName, streamID)
-	require.Contains(t, infoLogs, expectedIgnorePrefix,
-		"log message should have format 'workflow X, stream Y: adding tablet Z to ignore list due to error: ...', got: %s", infoLogs)
+	for _, record := range []map[string]any{ignored, retried} {
+		assert.Equal(t, workflowName, record["workflow"])
+		assert.EqualValues(t, 1, record["stream_id"])
+		assert.Contains(t, record["error"], vterrors.GTIDSetMismatch+" test")
+	}
+	assert.Equal(t, "INFO", ignored["level"])
+	assert.Equal(t, "cell1-0000000100", ignored["tablet"])
+	assert.Equal(t, "INVALID_ARGUMENT", ignored["error_code"])
+	assert.Equal(t, "ERROR", retried["level"])
+	assert.EqualValues(t, 10*time.Millisecond, retried["retry_delay"])
+	assert.LessOrEqual(t, len(retried["error"].(string)), 950, "the retry error is truncated like the vreplication message")
+}
 
-	errorLogs := errorLogger.String()
-	t.Logf("=== CAPTURED ERROR LOGS ===\n%s", errorLogs)
-	expectedRetryPrefix := fmt.Sprintf("workflow %s, stream %s: error, will retry after", workflowName, streamID)
-	require.Contains(t, errorLogs, expectedRetryPrefix,
-		"log message should have format 'workflow X, stream Y: error, will retry after ...', got: %s", errorLogs)
+// TestControllerSetStateErrorLogs checks that when the controller can't save a
+// terminal error, it logs the save failure and the terminal error as separate
+// records, each under error, and that the save-failure record reports the real
+// save failure's mysql_errno (the number of the error that actually broke the
+// save, or none), never the MySQL error the save happens to quote.
+//
+// mysql.Conn sets SQLError.Query on every query error, so the saved terminal
+// error carries its own "(errno 1062) (sqlstate 23000) during query: ..."
+// marker. The failed save quotes that marker in its own text, and without the
+// fix the save-failure record reads it and reports 1062 whatever actually broke
+// the save.
+func TestControllerSetStateErrorLogs(t *testing.T) {
+	const rowValue = "zq7rowvalue"
+
+	// A MySQL save failure carrying its own query, as mysql.Conn produces it.
+	mysqlSaveErr := sqlerror.NewSQLError(sqlerror.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction")
+	mysqlSaveErr.Query = "update _vt.vreplication set state='Error', message=left('terminal error', 1000) where id=1"
+
+	cases := []struct {
+		name      string
+		saveErr   error
+		wantErrno sqlerror.ErrorCode // 0 means no mysql_errno expected
+		wantInErr string
+	}{
+		{"save failure is not a MySQL error", errors.New("zq7setstatefailure"), 0, "zq7setstatefailure"},
+		{"save failure is a MySQL error", mysqlSaveErr, sqlerror.ERLockWaitTimeout, "Lock wait timeout"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			setMessageRecord, setStateRecord, errorTextRecord := runControllerSetStateError(t, rowValue, tc.saveErr)
+
+			for _, record := range []map[string]any{setStateRecord, errorTextRecord} {
+				assert.Equal(t, "ERROR", record["level"])
+				assert.Equal(t, "test_workflow", record["workflow"])
+				assert.EqualValues(t, 1, record["stream_id"])
+			}
+
+			// The terminal error record always carries the MySQL error's number.
+			assert.EqualValues(t, sqlerror.ERDupEntry, errorTextRecord["mysql_errno"])
+			assert.Contains(t, errorTextRecord["error"], rowValue)
+			assert.NotContains(t, errorTextRecord["error"], tc.wantInErr)
+			assert.Equal(t, "UNKNOWN", errorTextRecord["error_code"])
+
+			// The message-save failure, logged as a string by the vreplicator,
+			// reports its own deadlock (1213) through the text parse, never the
+			// 1062 its query quotes.
+			assert.Equal(t, "ERROR", setMessageRecord["level"])
+			assert.EqualValues(t, 1, setMessageRecord["stream_id"])
+			assert.Contains(t, setMessageRecord["error"], "Deadlock")
+			assert.EqualValues(t, sqlerror.ERLockDeadlock, setMessageRecord["mysql_errno"])
+
+			// The state-save failure record reports the real save failure, never
+			// the MySQL error (1062) it quotes.
+			assert.Contains(t, setStateRecord["error"], tc.wantInErr)
+			assert.NotEqualValues(t, sqlerror.ERDupEntry, setStateRecord["mysql_errno"])
+			if tc.wantErrno == 0 {
+				assert.NotContains(t, setStateRecord, "mysql_errno")
+			} else {
+				assert.EqualValues(t, tc.wantErrno, setStateRecord["mysql_errno"])
+			}
+		})
+	}
+}
+
+// runControllerSetStateError drives a stream to an unrecoverable copy-phase
+// error (a duplicate key carrying rowValue), makes the message save that records
+// it fail with a deadlock, and makes the terminal-error save fail with saveErr.
+// It returns the "Failed to set error state", "unable to setState()", and
+// "could not set error text" log records.
+func runControllerSetStateError(t *testing.T, rowValue string, saveErr error) (setMessageRecord, setStateRecord, errorTextRecord map[string]any) {
+	savedDelay := vttablet.DefaultVReplicationConfig.RetryDelay
+	t.Cleanup(func() { vttablet.DefaultVReplicationConfig.RetryDelay = savedDelay })
+	vttablet.DefaultVReplicationConfig.RetryDelay = time.Hour
+
+	tablet := addTablet(100)
+	t.Cleanup(func() { deleteTablet(tablet) })
+
+	params := map[string]string{
+		"id":           "1",
+		"workflow":     "test_workflow",
+		"state":        binlogdatapb.VReplicationWorkflowState_Running.String(),
+		"source":       fmt.Sprintf(`keyspace:"%s" shard:"0" filter:{rules:{match:"t1"}}`, env.KeyspaceName),
+		"cell":         "",
+		"tablet_types": "replica",
+		"options":      "{}",
+	}
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+
+	dbClient := binlogplayer.NewMockDBClient(t)
+	// Only the "Picked source tablet" message must succeed. The message save that
+	// records the copy failure is made to fail below, to cover vr.setMessage.
+	dbClient.AddInvariant("update _vt.vreplication set message='Picked source tablet", testDMLResponse)
+	dbClient.AddInvariant("update _vt.vreplication set state='Running'", testDMLResponse)
+	dbClient.AddInvariant("select pos", testSettingsResponse)
+	dbClient.AddInvariant("set @@session.", testDMLResponse)
+	dbClient.AddInvariant("set names", testDMLResponse)
+	dbClient.AddInvariant("select rows_copied", sqltypes.MakeTestResult(sqltypes.MakeTestFields("rows_copied", "int64"), "0"))
+	copyStateErr := sqlerror.NewSQLError(sqlerror.ERDupEntry, sqlerror.SSConstraintViolation, "Duplicate entry '"+rowValue+"' for key 'val'")
+	copyStateErr.Query = "insert into t1(id, val) values (5, '" + rowValue + "')"
+	// Replicate's setMessage, saving the copy failure's text, fails with its own
+	// MySQL error. The save query quotes the copy failure's 1062, so the record
+	// must report this deadlock (1213), not the quoted number.
+	msgSaveErr := sqlerror.NewSQLError(sqlerror.ERLockDeadlock, sqlerror.SSLockDeadlock, "Deadlock found when trying to get lock")
+	msgSaveErr.Query = "update _vt.vreplication set message=left('error', 1000) where id=1"
+	dbClient.ExpectRequestRE("from _vt.copy_state", nil, copyStateErr)
+	dbClient.ExpectRequestRE("update _vt.vreplication set message=", nil, msgSaveErr)
+	dbClient.ExpectRequestRE("update _vt.vreplication set state='Error'", nil, saveErr)
+
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+	vre := NewTestEngine(nil, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
+
+	t.Cleanup(setTabletTypesStr("replica"))
+
+	ct, err := newController(t.Context(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], nil, vre, defaultTabletPickerOptions)
+	require.NoError(t, err)
+
+	setMessageRecord = logs.Wait(t, "Failed to set error state")
+	setStateRecord = logs.Wait(t, "INTERNAL: unable to setState() in controller")
+	errorTextRecord = logs.Wait(t, "INTERNAL: could not set error text")
+	ct.Stop(true)
+	return setMessageRecord, setStateRecord, errorTextRecord
 }
 
 // TestTerminalVReplicationError tests the terminal error messages: the

@@ -86,6 +86,7 @@ func log(level slog.Level, depth int, msg string, attrs ...slog.Attr) {
 
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
 	r.AddAttrs(attrs...)
+	addErrorAttrs(&r, attrs)
 
 	_ = l.Handler().Handle(context.Background(), r)
 }

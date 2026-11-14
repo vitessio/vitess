@@ -19,6 +19,7 @@ package ldapauthserver
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"sync"
@@ -72,12 +73,12 @@ func Init(ldapAuthConfigFile, ldapAuthConfigString, ldapAuthMethod string) {
 		var err error
 		data, err = os.ReadFile(ldapAuthConfigFile)
 		if err != nil {
-			log.Error(fmt.Sprintf("Failed to read mysql_ldap_auth_config_file: %v", err))
+			log.Error("Failed to read mysql_ldap_auth_config_file", slog.Any("error", err))
 			os.Exit(1)
 		}
 	}
 	if err := json.Unmarshal(data, ldapAuthServer); err != nil {
-		log.Error(fmt.Sprintf("Error parsing AuthServerLdap config: %v", err))
+		log.Error("Error parsing AuthServerLdap config", slog.Any("error", err))
 		os.Exit(1)
 	}
 
@@ -183,13 +184,13 @@ func (lud *LdapUserData) update() {
 	defer lud.updating.Store(false)
 	err := lud.asl.Connect("tcp", &lud.asl.ServerConfig)
 	if err != nil {
-		log.Error(fmt.Sprintf("Error updating LDAP user data: %v", err))
+		log.Error("Error updating LDAP user data", slog.Any("error", err))
 		return
 	}
 	defer lud.asl.Close() // after the error check
 	groups, err := lud.asl.getGroups(lud.username)
 	if err != nil {
-		log.Error(fmt.Sprintf("Error updating LDAP user data: %v", err))
+		log.Error("Error updating LDAP user data", slog.Any("error", err))
 		return
 	}
 	lud.Lock()

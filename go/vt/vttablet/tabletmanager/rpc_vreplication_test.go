@@ -862,13 +862,29 @@ func TestGetOptionSetString(t *testing.T) {
 			},
 			want: ", options = json_set(json_insert(json_remove(options, '$.config.\"host\"', '$.config.\"port\"'), '$.config', json_object()), '$.config.\"password\"', 'secret', '$.config.\"user\"', 'admin')",
 		},
-		// Additional tests for handling escaping errors or complex scenarios can be added here
+		{
+			name: "keys and values that need escaping",
+			config: map[string]string{
+				`quote"and\backslash`: `it's a 'value' with \ and )`,
+				`it's`:                "",
+			},
+			want: `, options = json_set(json_insert(json_remove(options, '$.config."it\'s"'), '$.config', json_object()), '$.config."quote\\"and\\\\backslash"', 'it\'s a \'value\' with \\ and )')`,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getOptionSetString(tt.config)
 			require.Equal(t, tt.want, got)
+			if got == "" {
+				return
+			}
+			// The vreplication engine parses and re-renders the statement before
+			// running it, so the clause must survive that unchanged.
+			query := "update _vt.vreplication set state = 'Running'" + got + " where id = 1"
+			stmt, err := sqlparser.NewTestParser().Parse(query)
+			require.NoError(t, err)
+			require.Equal(t, query, sqlparser.String(stmt))
 		})
 	}
 }

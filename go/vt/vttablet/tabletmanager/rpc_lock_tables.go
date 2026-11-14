@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -77,7 +78,7 @@ func (tm *TabletManager) LockTables(ctx context.Context) error {
 			return err
 		}
 	}
-	log.Info(fmt.Sprintf("[%v] Tables locked", conn.ConnectionID))
+	log.Info("Tables locked", slog.Int64("connection_id", int64(conn.ConnectionID)))
 
 	tm._lockTablesConnection = conn
 	tm._lockTablesTimer = time.AfterFunc(lockTablesTimeout, func() {
@@ -91,7 +92,7 @@ func (tm *TabletManager) LockTables(ctx context.Context) error {
 			log.Error("table lock timed out and released the lock - something went wrong")
 			err = tm.unlockTablesHoldingMutex()
 			if err != nil {
-				log.Error(fmt.Sprintf("failed to unlock tables: %v", err))
+				log.Error("failed to unlock tables", slog.Any("error", err))
 			}
 		}
 	})
@@ -148,7 +149,7 @@ func (tm *TabletManager) unlockTablesHoldingMutex() error {
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("[%v] Tables unlocked", tm._lockTablesConnection.ConnectionID))
+	log.Info("Tables unlocked", slog.Int64("connection_id", int64(tm._lockTablesConnection.ConnectionID)))
 	tm._lockTablesConnection.Close()
 	tm._lockTablesConnection = nil
 	tm._lockTablesTimer = nil

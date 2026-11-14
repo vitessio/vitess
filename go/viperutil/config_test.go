@@ -17,12 +17,15 @@ limitations under the License.
 package viperutil
 
 import (
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 func TestGetConfigHandlingValue(t *testing.T) {
@@ -103,4 +106,42 @@ func TestLoadConfig(t *testing.T) {
 		_, err := LoadConfig()
 		require.Error(t, err)
 	})
+}
+
+// TestGetConfigHandlingValueLogsInvalidValue checks that an invalid value is
+// logged once, at WARN, with the key and the value used instead. The old line's
+// arguments printed the error where the key and the value used instead go.
+func TestGetConfigHandlingValueLogsInvalidValue(t *testing.T) {
+	logs := logtest.Capture(t, slog.LevelInfo)
+	v := viper.New()
+	v.Set("bad", "not-a-handling-value")
+
+	assert.Equal(t, IgnoreConfigFileNotFound, getHandlingValue(v)("bad"))
+
+	assert.Len(t, logs.Records(t), 1, "the jww line isn't also logged to go/vt/log")
+	record := logs.Record(t, "failed to unmarshal config_key; defaulting to default_value")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "bad", record["config_key"])
+	assert.Equal(t, "ignore", record["default_value"])
+}
+
+// TestLoadConfigLogsNotFoundOnce checks that a config file that isn't found is
+// logged once, at ERROR, when the handling is error.
+func TestLoadConfigLogsNotFoundOnce(t *testing.T) {
+	origConfigFile := configFile.Get()
+	origConfigFileNotFoundHandling := configFileNotFoundHandling.Get()
+	t.Cleanup(func() {
+		configFile.Set(origConfigFile)
+		configFileNotFoundHandling.Set(origConfigFileNotFoundHandling)
+	})
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	configFile.Set("notfound.yaml")
+	configFileNotFoundHandling.Set(ErrorOnConfigFileNotFound)
+	_, err := LoadConfig()
+	require.Error(t, err)
+
+	assert.Len(t, logs.Records(t), 1, "the jww line isn't also logged to go/vt/log")
+	record := logs.Record(t, "Failed to read in config")
+	assert.Equal(t, "ERROR", record["level"])
 }

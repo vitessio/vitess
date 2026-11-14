@@ -18,12 +18,14 @@ package topo
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/log/logtest"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -146,6 +148,26 @@ func TestUpdateSourcePrimaryDeniedTables(t *testing.T) {
 	require.Nil(t, si.GetTabletControl(primary))
 
 	require.Error(t, addToDenyList(ctx, si, primary, []string{"cell"}, tables1), dlNoCellsForPrimary)
+}
+
+func TestUpdatePrimaryDeniedTablesLogsTables(t *testing.T) {
+	primary := topodatapb.TabletType_PRIMARY
+	si := NewShardInfo("ks", "sh", &topodatapb.Shard{}, nil)
+	ctx := lockedKeyspaceContext("ks")
+	require.NoError(t, addToDenyList(ctx, si, primary, nil, []string{"t1", "t2"}))
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, addToDenyList(ctx, si, primary, nil, []string{"t3", "t1"}))
+	record := logs.Record(t, dlTablesAlreadyPresent)
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, []any{"t1"}, record["tables"])
+	assert.Equal(t, []any{"t3"}, record["added_tables"])
+
+	logs = logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, addToDenyList(ctx, si, primary, nil, []string{"t2"}))
+	record = logs.Record(t, dlTablesAlreadyPresent)
+	assert.Equal(t, []any{"t2"}, record["tables"])
+	assert.Equal(t, []any{}, record["added_tables"])
 }
 
 func TestUpdateSourceDeniedTables(t *testing.T) {

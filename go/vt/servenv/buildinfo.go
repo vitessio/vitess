@@ -100,6 +100,28 @@ func (v *versionInfo) String() string {
 		v.version, buildInfo, v.buildGitRev, v.buildGitBranch, v.buildTimePretty, v.buildUser, v.buildHost, v.goVersion, v.goOS, v.goArch)
 }
 
+// logInfo logs the fields of String, each as its own attribute.
+func (v *versionInfo) logInfo() {
+	attrs := []slog.Attr{slog.String("version", v.version)}
+	if v.buildNumber != 0 {
+		if v.buildSystem != "" {
+			attrs = append(attrs, slog.String("build_system", v.buildSystem))
+		}
+		attrs = append(attrs, slog.Int64("build_number", v.buildNumber))
+	}
+	attrs = append(attrs,
+		slog.String("build_git_rev", v.buildGitRev),
+		slog.String("build_git_branch", v.buildGitBranch),
+		slog.String("build_time", v.buildTimePretty),
+		slog.String("build_user", v.buildUser),
+		slog.String("build_host", v.buildHost),
+		slog.String("go_version", v.goVersion),
+		slog.String("goos", v.goOS),
+		slog.String("goarch", v.goArch),
+	)
+	log.Info("Version", attrs...)
+}
+
 func (v *versionInfo) MySQLVersion() string {
 	return mySQLServerVersion
 }

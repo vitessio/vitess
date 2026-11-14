@@ -18,6 +18,7 @@ package logutil
 
 import (
 	"fmt"
+	"log/slog"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -33,6 +34,21 @@ type ConsoleLogger struct{}
 // NewConsoleLogger returns a simple ConsoleLogger.
 func NewConsoleLogger() *ConsoleLogger {
 	return &ConsoleLogger{}
+}
+
+// Info is part of the Logger interface
+func (cl *ConsoleLogger) Info(msg string, attrs ...slog.Attr) {
+	cl.InfoDepth(1, msg, attrs...)
+}
+
+// Warn is part of the Logger interface
+func (cl *ConsoleLogger) Warn(msg string, attrs ...slog.Attr) {
+	cl.WarningDepth(1, msg, attrs...)
+}
+
+// Error is part of the Logger interface
+func (cl *ConsoleLogger) Error(msg string, attrs ...slog.Attr) {
+	cl.ErrorDepth(1, msg, attrs...)
 }
 
 // Infof is part of the Logger interface
@@ -55,27 +71,22 @@ func (cl *ConsoleLogger) Errorf2(err error, format string, v ...any) {
 	cl.ErrorDepth(1, fmt.Sprintf(format+": %+v", append(v, err)))
 }
 
-// Error is part of the Logger interface
-func (cl *ConsoleLogger) Error(err error) {
-	cl.ErrorDepth(1, fmt.Sprintf("%+v", err))
-}
-
 // Printf is part of the Logger interface
 func (cl *ConsoleLogger) Printf(format string, v ...any) {
 	fmt.Printf(format, v...)
 }
 
 // InfoDepth is part of the Logger interface.
-func (cl *ConsoleLogger) InfoDepth(depth int, s string) {
-	log.InfoDepth(1+depth, s)
+func (cl *ConsoleLogger) InfoDepth(depth int, msg string, attrs ...slog.Attr) {
+	log.InfoDepth(1+depth, msg, attrs...)
 }
 
 // WarningDepth is part of the Logger interface.
-func (cl *ConsoleLogger) WarningDepth(depth int, s string) {
-	log.WarnDepth(1+depth, s)
+func (cl *ConsoleLogger) WarningDepth(depth int, msg string, attrs ...slog.Attr) {
+	log.WarnDepth(1+depth, msg, attrs...)
 }
 
 // ErrorDepth is part of the Logger interface.
-func (cl *ConsoleLogger) ErrorDepth(depth int, s string) {
-	log.ErrorDepth(1+depth, s)
+func (cl *ConsoleLogger) ErrorDepth(depth int, msg string, attrs ...slog.Attr) {
+	log.ErrorDepth(1+depth, msg, attrs...)
 }

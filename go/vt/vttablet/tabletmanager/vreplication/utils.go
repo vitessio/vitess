@@ -19,6 +19,7 @@ package vreplication
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"vitess.io/vitess/go/constants/sidecar"
@@ -93,7 +94,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 	// a new log but increment the count. This prevents spamming of the log table in case the same message is logged continuously.
 	id, _, lastLogState, lastLogMessage, err := getLastLog(dbClient, vreplID)
 	if err != nil {
-		log.Error(fmt.Sprintf("Could not insert vreplication_log record because we failed to get the last log record: %v", err))
+		log.Error("Could not insert vreplication_log record because we failed to get the last log record", slog.Int("stream_id", int(vreplID)), slog.Any("error", err))
 		return
 	}
 	if typ == LogStateChange && state == lastLogState {
@@ -106,11 +107,15 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 	} else {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		if len(message) > maxVReplicationLogMessageLen {
-			log.Warn(fmt.Sprintf("VReplication log message truncated (vrepl_id=%d, type=%s, len=%d). Full message: %s",
-				vreplID, typ, len(message), message))
+			log.Warn("VReplication log message truncated",
+				slog.Int("stream_id", int(vreplID)),
+				slog.String("log_type", typ),
+				slog.Int("length", len(message)),
+				slog.String("message", message),
+			)
 			message, err = textutil.TruncateText(message, maxVReplicationLogMessageLen, binlogplayer.TruncationLocation, binlogplayer.TruncationIndicator)
 			if err != nil {
-				log.Error(fmt.Sprintf("Could not insert vreplication_log record because we failed to truncate the message: %v", err))
+				log.Error("Could not insert vreplication_log record because we failed to truncate the message", slog.Int("stream_id", int(vreplID)), slog.Any("error", err))
 				return
 			}
 		}
@@ -119,7 +124,7 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 		query = buf.ParsedQuery().Query
 	}
 	if _, err = dbClient.ExecuteFetch(query, 10000); err != nil {
-		log.Error(fmt.Sprintf("Could not insert into vreplication_log table: %v: %v", query, err))
+		log.Error("Could not insert into vreplication_log table", slog.Int("stream_id", int(vreplID)), slog.String("query", query), slog.Any("error", err))
 	}
 }
 
@@ -236,7 +241,7 @@ func isUnrecoverableError(err error) bool {
 		sqlerror.ERWrongParamcountToNativeFct,
 		sqlerror.ERVectorConversion,
 		sqlerror.ERWrongValueCountOnRow:
-		log.Error(fmt.Sprintf("Got unrecoverable error: %v", sqlErr))
+		log.Error("Got unrecoverable error", slog.Any("error", sqlErr))
 		return true
 	case sqlerror.ERErrorDuringCommit:
 		switch sqlErr.HaErrorCode() {
@@ -253,7 +258,7 @@ func isUnrecoverableError(err error) bool {
 			// These are recoverable errors.
 			return false
 		default:
-			log.Error(fmt.Sprintf("Got unrecoverable error: %v", sqlErr))
+			log.Error("Got unrecoverable error", slog.Any("error", sqlErr))
 			return true
 		}
 	}

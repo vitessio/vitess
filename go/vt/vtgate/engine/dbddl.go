@@ -18,7 +18,7 @@ package engine
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -90,7 +90,7 @@ func (c *DBDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 	name := vcursor.GetDBDDLPluginName()
 	plugin, ok := databaseCreatorPlugins[name]
 	if !ok {
-		log.Error(fmt.Sprintf("'%s' database ddl plugin is not registered. Falling back to default plugin", name))
+		log.Error("database ddl plugin is not registered. Falling back to default plugin", slog.String("plugin", name))
 		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
 	}
 

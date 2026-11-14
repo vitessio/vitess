@@ -160,6 +160,10 @@ func (r *switcher) resetSequences(ctx context.Context) error {
 	return r.ts.resetSequences(ctx)
 }
 
+func (r *switcher) prepareTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
+	return r.ts.prepareTargetSequences(ctx, sequencesByBackingTable)
+}
+
 func (r *switcher) initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error {
 	return r.ts.initializeTargetSequences(ctx, sequencesByBackingTable)
 }

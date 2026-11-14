@@ -19,7 +19,9 @@ package vtexplain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -119,6 +121,10 @@ func (vte *VTExplain) newTablet(ctx context.Context, env *vtenv.Environment, opt
 	}
 	config.EnableOnlineDDL = false
 	config.EnableTableGC = false
+	// Auto mode (the default) reads @@global.wait_timeout on a background
+	// goroutine, and that read would land in the recorded queries at a
+	// nondeterministic point; the fake tablets serve no real connections.
+	config.TempTableIdleTimeout = 0
 
 	// XXX much of this is cloned from the tabletserver tests
 	tsv := tabletserver.NewTabletServer(ctx, env, topoproto.TabletAliasString(t.Alias), config, ts, t.Alias, srvTopoCounts)
@@ -849,7 +855,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			for _, colTypeMap := range tableColumnMap {
 				if colTypeMap[col] != querypb.Type_NULL_TYPE {
 					if colType != querypb.Type_NULL_TYPE {
-						log.Error("vtexplain: ambiguous column " + col)
+						log.Error("vtexplain: ambiguous column", slog.String("column", col))
 						return colNames, colTypes
 					}
 
@@ -858,7 +864,15 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			}
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Error(fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap))
+				tables := make([]string, 0, len(tableColumnMap))
+				for table := range tableColumnMap {
+					tables = append(tables, table.String())
+				}
+				slices.Sort(tables)
+				log.Error("vtexplain: invalid column",
+					slog.String("column", col),
+					slog.Any("tables", tables),
+					slog.String("table_columns", fmt.Sprint(tableColumnMap)))
 			}
 
 			colNames = append(colNames, col)
@@ -870,7 +884,10 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 			colType := colTypeMap[col]
 
 			if colType == querypb.Type_NULL_TYPE {
-				log.Error(fmt.Sprintf("vtexplain: invalid column %s.%s, tableColumnMap +%v", node.Qualifier.Name, col, tableColumnMap))
+				log.Error("vtexplain: invalid column",
+					slog.String("table", node.Qualifier.Name.String()),
+					slog.String("column", col),
+					slog.String("table_columns", fmt.Sprint(tableColumnMap)))
 			}
 
 			colNames = append(colNames, col)
@@ -904,7 +921,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 		case sqlparser.DecimalVal:
 			colTypes = append(colTypes, querypb.Type_DECIMAL)
 		default:
-			log.Error("vtexplain: unsupported sql value " + sqlparser.String(node))
+			log.Error("vtexplain: unsupported sql value", slog.String("expression", sqlparser.String(node)))
 		}
 	case *sqlparser.CaseExpr:
 		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, tableColumnMap, colNames, colTypes)
@@ -915,7 +932,7 @@ func inferColTypeFromExpr(node sqlparser.Expr, tableColumnMap map[sqlparser.Iden
 		colNames = append(colNames, sqlparser.String(node))
 		colTypes = append(colTypes, querypb.Type_INT64)
 	default:
-		log.Error(fmt.Sprintf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node)))
+		log.Error("vtexplain: unsupported select expression type", slog.String("type", fmt.Sprintf("%T", node)), slog.String("expression", sqlparser.String(node)))
 	}
 
 	return colNames, colTypes

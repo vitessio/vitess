@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"sort"
 	"strings"
@@ -206,14 +207,14 @@ func (bs *CephBackupStorage) StartBackup(ctx context.Context, dir, name string) 
 
 	found, err := c.BucketExists(bucket)
 	if err != nil {
-		log.Info(fmt.Sprintf("Error from BucketExists: %v, quitting", bucket))
+		log.Info("Error from BucketExists, quitting", slog.String("bucket", bucket))
 		return nil, errors.New("Error checking whether bucket exists: " + bucket)
 	}
 	if !found {
-		log.Info(fmt.Sprintf("Bucket: %v doesn't exist, creating new bucket with the required name", bucket))
+		log.Info("Bucket doesn't exist, creating new bucket with the required name", slog.String("bucket", bucket))
 		err = c.MakeBucket(bucket, "")
 		if err != nil {
-			log.Info(fmt.Sprintf("Error creating Bucket: %v, quitting", bucket))
+			log.Info("Error creating Bucket, quitting", slog.String("bucket", bucket))
 			return nil, errors.New("Error creating new bucket: " + bucket)
 		}
 	}

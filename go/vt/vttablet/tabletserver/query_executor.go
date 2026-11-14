@@ -70,6 +70,9 @@ type QueryExecutor struct {
 	// The target type we requested might be different from tsv's tablet type, if we had a change to the tablet type recently.
 	targetTabletType topodatapb.TabletType
 	setting          *smartconnpool.Setting
+	// transactionID is the open transaction the query runs in, or 0. Unlike connID, it is 0
+	// for a reserved connection without a transaction.
+	transactionID int64
 }
 
 const (
@@ -166,8 +169,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, err
 	}
 
-	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
-		return nil, reqThrottledErr
+	if err = qre.throttle(); err != nil {
+		return nil, err
 	}
 
 	if qre.plan.PlanID == p.PlanNextval {
@@ -499,8 +502,8 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return err
 	}
 
-	if reqThrottledErr := qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); reqThrottledErr != nil {
-		return reqThrottledErr
+	if err := qre.throttle(); err != nil {
+		return err
 	}
 
 	// Plans that don't use generic SQL execution run a dedicated executor and
@@ -812,7 +815,7 @@ func (qre *QueryExecutor) streamDML(callback StreamCallback) (err error) {
 		return err
 	}
 
-	if err = qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.connID, qre.options); err != nil {
+	if err = qre.throttle(); err != nil {
 		return err
 	}
 
@@ -862,6 +865,28 @@ func (qre *QueryExecutor) MessageStream(callback StreamCallback) error {
 	}
 	<-done
 	return nil
+}
+
+// throttle returns the query throttler's error if it rejects the query. The query
+// throttler itself skips statements inside a transaction. throttle also skips statements
+// whose rejection costs more than running them:
+//   - A sequence fetch. VTGate sends it outside the user's transaction, so rejecting it
+//     fails a statement inside that transaction, and VTGate rolls back the whole
+//     transaction when the fetch was an explicit SELECT NEXT.
+//   - A statement that takes or releases an advisory lock, so that clients can still
+//     release their locks while a rule rejects queries.
+//   - A SELECT that names no table. VTGate sends them to check a SET and to keep a lock
+//     session or a temporary table's connection alive, and /debug/health runs one. The skip
+//     keys on the tables the statement names, so it also covers a SELECT that names none but
+//     still loads the server, such as one that calls a stored function that reads tables.
+func (qre *QueryExecutor) throttle() error {
+	switch {
+	case qre.plan.PlanID == p.PlanNextval,
+		qre.plan.PlanID == p.PlanSelectLockFunc || qre.plan.KillsConnOnTimeout,
+		qre.plan.StatementType() == sqlparser.StmtSelect && len(qre.plan.Permissions) == 0:
+		return nil
+	}
+	return qre.tsv.queryThrottler.Throttle(qre.ctx, qre.targetTabletType, qre.plan.FullQuery, qre.plan.StatementType(), qre.transactionID, qre.options)
 }
 
 // checkPermissions returns an error if the query does not pass all checks
@@ -968,7 +993,12 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 		if qre.tsv.qe.strictTableACL {
 			aclState = acl.ACLDenied
 			errStr := fmt.Sprintf("%s command denied to user '%s'%s for table '%s' (ACL check error)", qre.plan.PlanID.String(), callerID.Username, aclGroupsSuffix(callerID), tableName)
-			qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
+			qre.tsv.qe.accessCheckerLogger.Info("command denied (ACL check error)",
+				slog.String("plan_type", qre.plan.PlanID.String()),
+				slog.String("user", callerID.Username),
+				slog.Any("groups", aclGroups(callerID)),
+				slog.String("table", tableName),
+			)
 			return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
 		}
 		return nil
@@ -1014,8 +1044,21 @@ func (qre *QueryExecutor) checkUndeterminedTableAccess(callerID *querypb.VTGateC
 	}
 	aclState = acl.ACLDenied
 	errStr := fmt.Sprintf("%s command denied to user '%s'%s for a table set that cannot be determined (ACL check error)", qre.plan.PlanID.String(), callerID.Username, aclGroupsSuffix(callerID))
-	qre.tsv.qe.accessCheckerLogger.Infof("%s", errStr)
+	qre.tsv.qe.accessCheckerLogger.Info("command denied for a table set that cannot be determined (ACL check error)",
+		slog.String("plan_type", qre.plan.PlanID.String()),
+		slog.String("user", callerID.Username),
+		slog.Any("groups", aclGroups(callerID)),
+	)
 	return vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "%s", errStr)
+}
+
+// aclGroups returns the caller's groups for an ACL denial log record. A
+// caller with no groups logs an empty list, not null.
+func aclGroups(callerID *querypb.VTGateCallerID) []string {
+	if callerID.Groups == nil {
+		return []string{}
+	}
+	return callerID.Groups
 }
 
 // aclGroupsSuffix renders the caller's groups for an ACL denial message, so
@@ -1104,7 +1147,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (result *sqltypes.Re
 			// after every DDL, let them be outdated until the periodic
 			// schema reload fixes it.
 			if err := qre.tsv.se.ReloadAtEx(qre.ctx, replication.Position{}, false); err != nil {
-				log.Error(fmt.Sprintf("failed to reload schema %v", err))
+				log.Error("failed to reload schema", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}()
 	}
@@ -1251,7 +1294,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			// or when an earlier refill's COMMIT applied but returned an error.
 			if lastVal != nextID {
 				if nextID < lastVal {
-					log.Warn(fmt.Sprintf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, lastVal))
+					log.Warn("Sequence next ID value is below the currently cached max, updating it to max", slog.Int64("next_value", nextID), slog.Int64("last_value", lastVal))
 					nextID = lastVal
 				}
 				nextVal = nextID
@@ -1380,7 +1423,12 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
-		log.Warn(fmt.Sprintf("caller id: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser())))
+		log.Warn("row count exceeds warning threshold",
+			slog.String("user", callerID.Username),
+			slog.Int64("row_count", count),
+			slog.Int64("warn_result_size", warnThreshold),
+			slog.String("query", queryAsString(qre.plan.FullQuery.Query, qre.bindVars, qre.tsv.Config().SanitizeLogMessages, true, qre.tsv.env.Parser())),
+		)
 	}
 	return nil
 }
@@ -1462,7 +1510,9 @@ func (qre *QueryExecutor) undoSQLModeSet(conn *StatefulConnection, prev sqltypes
 	restore := "set sql_mode = " + sqltypes.EncodeStringSQL(prev.ToString())
 	if _, err := qre.execStatefulConn(conn, restore, false); err != nil {
 		log.Warn("closing connection: a failed SET could not be undone by restoring the previous sql_mode",
-			slog.Any("cause", cause), slog.Any("restoreError", err), slog.Int64("connID", conn.ID()))
+			slog.Any("error", err), slog.Int64("connection_id", conn.ID()))
+		log.Warn("the failed SET that could not be undone",
+			slog.Any("error", cause), slog.Int64("connection_id", conn.ID()))
 		conn.Close()
 	}
 }

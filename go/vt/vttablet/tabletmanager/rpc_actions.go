@@ -30,6 +30,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // DBAction is used to tell ChangeTabletType whether to call SetReadOnly on change to
@@ -126,6 +127,11 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 	}
 	defer tm.unlock()
 
+	// DRAINED tablets must not ACK, even when an older caller requests semi-sync.
+	if tabletType == topodatapb.TabletType_DRAINED {
+		semiSync = false
+	}
+
 	semiSyncAction, err := tm.convertBoolToSemiSyncAction(ctx, semiSync)
 	if err != nil {
 		return err
@@ -136,18 +142,38 @@ func (tm *TabletManager) ChangeType(ctx context.Context, tabletType topodatapb.T
 
 // changeTypeLocked changes the tablet type under a lock
 func (tm *TabletManager) changeTypeLocked(ctx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
-	// We don't want to allow multiple callers to claim a tablet as drained.
+	return tm.changeTypeLockedWithTopoContext(ctx, ctx, tabletType, action, semiSync)
+}
+
+// changeTypeLockedWithTopoContext is changeTypeLocked with a separate context,
+// topoCtx, for a primary's topo write and its confirmation.
+func (tm *TabletManager) changeTypeLockedWithTopoContext(ctx, topoCtx context.Context, tabletType topodatapb.TabletType, action DBAction, semiSync SemiSyncAction) error {
+	if tabletType == topodatapb.TabletType_DRAINED {
+		// Reparent operations must demote primaries and update the shard record.
+		if tm.Tablet().Type == topodatapb.TabletType_PRIMARY {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot change tablet type from PRIMARY to DRAINED: reparent the shard first")
+		}
+		// Disable ACKs before failover excludes this tablet. Failed updates remain
+		// retryable; already-drained tablets are repaired before rejecting another claim.
+		if err := tm.fixSemiSyncAndReplication(ctx, tabletType, semiSync); err != nil {
+			return vterrors.Wrap(err, "failed to revoke semi-sync acknowledgements before draining")
+		}
+	}
+	// Reject duplicate claims of a DRAINED tablet.
 	if tabletType == topodatapb.TabletType_DRAINED && tm.Tablet().Type == topodatapb.TabletType_DRAINED {
 		return fmt.Errorf("Tablet: %v, is already drained", tm.tabletAlias)
 	}
 
-	if err := tm.tmState.ChangeTabletType(ctx, tabletType, action); err != nil {
+	if err := tm.tmState.changeTabletType(ctx, topoCtx, tabletType, action); err != nil {
 		return err
+	}
+	if tabletType == topodatapb.TabletType_DRAINED {
+		return nil
 	}
 
 	// Let's see if we need to fix semi-sync acking.
 	if err := tm.fixSemiSyncAndReplication(ctx, tm.Tablet().Type, semiSync); err != nil {
-		return vterrors.Wrap(err, "fixSemiSyncAndReplication failed, may not ack correctly")
+		return vterrors.Wrapf(err, "tablet type changed to %v, but semi-sync and replication setup failed, so it may not ack correctly", tm.Tablet().Type)
 	}
 	return nil
 }

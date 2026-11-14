@@ -19,15 +19,18 @@ package vreplication
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vterrors"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 
@@ -97,8 +100,21 @@ func TestInsertLogTruncation(t *testing.T) {
 			}
 			require.LessOrEqual(t, len(messageOut), maxVReplicationLogMessageLen)
 			dbClient.ExpectRequest(fmt.Sprintf(insertStmtf, vrID, typ, state, encodeString(messageOut)), &sqltypes.Result{}, nil)
+			logs := logtest.Capture(t, slog.LevelInfo)
 			insertLog(vdbClient, typ, vrID, state, tc.message)
 			dbClient.Wait()
+
+			if !tc.expectTruncation {
+				assert.Empty(t, logs.Records(t))
+				return
+			}
+			// The full message is only in the message attribute.
+			record := logs.Record(t, "VReplication log message truncated")
+			assert.Equal(t, "WARN", record["level"])
+			assert.EqualValues(t, vrID, record["stream_id"])
+			assert.Equal(t, typ, record["log_type"])
+			assert.EqualValues(t, len(tc.message), record["length"])
+			assert.Equal(t, tc.message, record["message"])
 		})
 	}
 }

@@ -17,7 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
-	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -122,7 +122,7 @@ func querylogzHandler(ch chan *tabletenv.LogStats, w http.ResponseWriter, r *htt
 				Parser     *sqlparser.Parser
 			}{stats, level, parser}
 			if err := querylogzTmpl.Execute(w, tmplData); err != nil {
-				log.Error(fmt.Sprintf("querylogz: couldn't execute template: %v", err))
+				log.Error("querylogz: couldn't execute template", slog.Any("error", err))
 			}
 		case <-tmr.C:
 			return

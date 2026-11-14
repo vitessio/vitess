@@ -93,9 +93,10 @@ func TestCloneBackup(t *testing.T) {
 	require.ErrorContains(t, err, "--include-binlogs cannot be used with --restore-with-clone")
 	verifyBackupCount(t, shardKsName, 0)
 
-	// Take a backup using clone from primary.
+	// Take a backup using clone from primary, with the errant GTID checks of the
+	// cloned data and the new backup.
 	log.Info("Starting vtbackup with --clone-from-primary")
-	err = vtbackupWithClone(t)
+	err = vtbackupWithClone(t, "--enable-errant-gtid-checks")
 	require.NoError(t, err)
 
 	// Verify a backup was created.

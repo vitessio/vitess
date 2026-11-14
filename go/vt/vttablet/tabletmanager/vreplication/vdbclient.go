@@ -18,8 +18,8 @@ package vreplication
 
 import (
 	"context"
-	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -178,7 +178,7 @@ func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqlty
 	qr, err := vc.Execute(query)
 	for err != nil {
 		if sqlErr, ok := err.(*sqlerror.SQLError); ok && (sqlErr.Number() == sqlerror.ERLockDeadlock || sqlErr.Number() == sqlerror.ERLockWaitTimeout) {
-			log.Info(fmt.Sprintf("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay))
+			log.Info("retryable error, waiting and retrying", slog.Any("error", sqlErr), slog.Duration("retry_delay", dbLockRetryDelay))
 			if err := vc.Rollback(); err != nil {
 				return nil, err
 			}

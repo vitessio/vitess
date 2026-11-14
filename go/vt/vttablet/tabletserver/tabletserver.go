@@ -99,11 +99,6 @@ var logComputeRowSerializerKey = logutil.NewThrottledLogger("ComputeRowSerialize
 // Open and Close can be called repeatedly during the lifetime of
 // a subcomponent. These should also be idempotent.
 
-const (
-	throttlerPoolName      = "ThrottlerPool"
-	queryThrottlerPoolName = "QueryThrottlerPool"
-)
-
 type TabletServer struct {
 	exporter               *servenv.Exporter
 	config                 *tabletenv.TabletConfig
@@ -191,8 +186,8 @@ func NewTabletServer(ctx context.Context, env *vtenv.Environment, name string, c
 	tsv.se = schema.NewEngine(tsv)
 	tsv.hs = newHealthStreamer(tsv, alias, tsv.se)
 	tsv.rt = repltracker.NewReplTracker(tsv, alias)
-	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttlerPoolName)
-	tsv.qThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, queryThrottlerPoolName)
+	tsv.lagThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttle.DefaultTabletThrottler)
+	tsv.qThrottler = throttle.NewThrottler(tsv, srvTopoServer, topoServer, alias, tsv.rt.HeartbeatWriter(), tabletTypeFunc, throttle.QueryTabletThrottler)
 	tsv.queryThrottler = querythrottler.NewQueryThrottler(ctx, tsv.qThrottler, tsv, alias, srvTopoServer)
 
 	tsv.vstreamer = vstreamer.NewEngine(tsv, srvTopoServer, tsv.se, tsv.lagThrottler, alias.Cell)
@@ -370,7 +365,7 @@ func (tsv *TabletServer) Environment() *vtenv.Environment {
 // LogError satisfies tabletenv.Env.
 func (tsv *TabletServer) LogError() {
 	if x := recover(); x != nil {
-		log.Error(fmt.Sprintf("Uncaught panic:\n%v\n%s", x, tb.Stack(4)))
+		log.Error("Uncaught panic", slog.Any("panic", x), slog.String("stack", string(tb.Stack(4))))
 		tsv.stats.InternalErrors.Add("Panic", 1)
 	}
 }
@@ -417,9 +412,9 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, reloadACLConfigFileI
 		for range sigChan {
 			err := tsv.initACL(tableACLConfigFile)
 			if err != nil {
-				log.Error(fmt.Sprintf("Error reloading ACL config file %s in SIGHUP handler: %v", tableACLConfigFile, err))
+				log.Error("Error reloading ACL config file in SIGHUP handler", slog.String("path", tableACLConfigFile), slog.Any("error", err))
 			} else {
-				log.Info(fmt.Sprintf("Successfully reloaded ACL file %s in SIGHUP handler", tableACLConfigFile))
+				log.Info("Successfully reloaded ACL file in SIGHUP handler", slog.String("path", tableACLConfigFile))
 			}
 		}
 	}()
@@ -462,6 +457,9 @@ func (tsv *TabletServer) StartService(target *querypb.Target, dbcfgs *dbconfigs.
 // should be called before process termination, or if MySQL is unreachable.
 // Under normal circumstances, SetServingType should be called.
 func (tsv *TabletServer) StopService() {
+	// Shut the throttler down first, so its background updater stops polling services
+	// that are about to be torn down.
+	tsv.queryThrottler.Shutdown()
 	tsv.sm.StopService()
 }
 
@@ -598,6 +596,7 @@ func (tsv *TabletServer) begin(
 					ctx:              ctx,
 					query:            query,
 					connID:           transactionID,
+					transactionID:    transactionID,
 					options:          options,
 					plan:             plan,
 					logStats:         logStats,
@@ -645,8 +644,8 @@ func (tsv *TabletServer) getPriorityFromOptions(options *querypb.ExecuteOptions)
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil {
-		log.Error(fmt.Sprintf("The value of the %s query directive could not be converted to integer, using the "+
-			"default value %d. Error was: %s", sqlparser.DirectivePriority, priority, err))
+		log.Error("The value of the "+sqlparser.DirectivePriority+" query directive could not be converted to integer, using the default value",
+			slog.Int("default_priority", priority), slog.Any("error", err))
 
 		return priority
 	}
@@ -1046,6 +1045,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				marginComments:   comments,
 				bindVars:         bindVariables,
 				connID:           connID,
+				transactionID:    transactionID,
 				options:          options,
 				plan:             plan,
 				ctx:              ctx,
@@ -1150,6 +1150,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				marginComments:   comments,
 				bindVars:         bindVariables,
 				connID:           connID,
+				transactionID:    transactionID,
 				options:          options,
 				plan:             plan,
 				ctx:              ctx,
@@ -1280,7 +1281,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	sql, _ = tsv.env.Parser().SplitMarginComments(sql)
 	plan, err := tsv.qe.GetPlan(ctx, logStats, sql, false, false)
 	if err != nil {
-		logComputeRowSerializerKey.Errorf("failed to get plan for query: %v err: %v", sql, err)
+		logComputeRowSerializerKey.Error("failed to get plan for query", tsv.queryLogAttr(sql, bindVariables), slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		return "", ""
 	}
 
@@ -1300,13 +1301,26 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 
 	where, err := plan.WhereClause.GenerateQuery(bindVariables, nil)
 	if err != nil {
-		logComputeRowSerializerKey.Errorf("failed to substitute bind vars in where clause: %v query: %v bind vars: %v", err, sql, bindVariables)
+		logComputeRowSerializerKey.Error("failed to substitute bind vars in where clause",
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+			tsv.queryLogAttr(sql, bindVariables),
+		)
 		return "", ""
 	}
 
 	// Example: table1 where id = 1 and sub_id = 2
 	key := fmt.Sprintf("%s%s", tableName, where)
 	return key, tableName.String()
+}
+
+// queryLogAttr returns the query attribute as convertAndLogError logs it: bind
+// variables are redacted when SanitizeLogMessages is set. The value is built
+// only if the record is written.
+func (tsv *TabletServer) queryLogAttr(sql string, bindVariables map[string]*querypb.BindVariable) slog.Attr {
+	return slog.Any("query", log.LazyString(func() string {
+		return queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
+	}))
 }
 
 // MessageStream streams messages from the requested table.
@@ -1755,6 +1769,7 @@ func (tsv *TabletServer) ReserveBeginExecute(ctx context.Context, session querys
 					ctx:              ctx,
 					query:            query,
 					connID:           connID,
+					transactionID:    connID,
 					options:          options,
 					plan:             plan,
 					logStats:         logStats,
@@ -2023,18 +2038,15 @@ func (tsv *TabletServer) handlePanicAndSendLogStats(
 		// the log message is controlled by SanitizeLogMessages.
 		// We are handling an unrecoverable panic, so the cost of the dual message handling is
 		// not a concern.
-		var messagef, logMessage, query, truncatedQuery string
-		messagef = fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, tb.Stack(4) /* Skip the last 4 boiler-plate frames. */)
-		query = queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.env.Parser())
+		stack := tb.Stack(4) /* Skip the last 4 boiler-plate frames. */
+		messagef := fmt.Sprintf("Uncaught panic for %%v:\n%v\n%s", x, stack)
+		query := queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.env.Parser())
 		terr := vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%s", fmt.Sprintf(messagef, query))
-		if tsv.TerseErrors == tsv.Config().SanitizeLogMessages {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.TerseErrors, true, tsv.env.Parser())
-			logMessage = fmt.Sprintf(messagef, truncatedQuery)
-		} else {
-			truncatedQuery = queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())
-			logMessage = fmt.Sprintf(messagef, truncatedQuery)
-		}
-		log.Error(logMessage)
+		log.Error("Uncaught panic",
+			slog.String("query", queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())),
+			slog.Any("panic", x),
+			slog.String("stack", string(stack)),
+		)
 		tsv.stats.InternalErrors.Add("Panic", 1)
 		if logStats != nil {
 			logStats.Error = terr
@@ -2063,18 +2075,8 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 		callerID = fmt.Sprintf(" (CallerID: %s)", cid.Username)
 	}
 
-	logMethod := log.Error
-	// Suppress or demote some errors in logs.
-	switch errCode {
-	case vtrpcpb.Code_FAILED_PRECONDITION, vtrpcpb.Code_ALREADY_EXISTS:
-		logMethod = nil
-	case vtrpcpb.Code_RESOURCE_EXHAUSTED:
-		logMethod = func(msg string, _ ...slog.Attr) { logPoolFull.Errorf("%s", msg) }
-	case vtrpcpb.Code_ABORTED:
-		logMethod = log.Warn
-	case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
-		logMethod = log.Info
-	}
+	// Suppress some errors in logs. Others are demoted below.
+	logged := errCode != vtrpcpb.Code_FAILED_PRECONDITION && errCode != vtrpcpb.Code_ALREADY_EXISTS
 
 	// If TerseErrors is on, strip the error message returned by MySQL and only
 	// keep the error number and sql state.
@@ -2085,31 +2087,49 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 	// 1. FAILED_PRECONDITION errors. These are caused when a failover is in progress.
 	// If so, we don't want to suppress the error. This will allow VTGate to
 	// detect and perform buffering during failovers.
-	var message string
+	var attrs []slog.Attr
+	if logged {
+		attrs = make([]slog.Attr, 0, 6)
+	}
 	sqlErr, ok := err.(*sqlerror.SQLError)
 	if ok {
 		sqlState := sqlErr.SQLState()
 		errnum := sqlErr.Number()
 		if tsv.TerseErrors && errCode != vtrpcpb.Code_FAILED_PRECONDITION {
 			err = vterrors.Errorf(errCode, "(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.TerseErrors, false, tsv.env.Parser()))
-			if logMethod != nil {
-				message = fmt.Sprintf("(errno %d) (sqlstate %s)%s: %s", errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
-			}
 		} else {
 			err = vterrors.Errorf(errCode, "%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, false, false, tsv.env.Parser()))
-			if logMethod != nil {
-				message = fmt.Sprintf("%s (errno %d) (sqlstate %s)%s: %s", sqlErr.Message, errnum, sqlState, callerID, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
+			if logged {
+				attrs = append(attrs, slog.String("error", sqlErr.Message))
 			}
 		}
-	} else {
-		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
-		if logMethod != nil {
-			message = fmt.Sprintf("%v: %v", err, queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser()))
+		if logged {
+			attrs = append(attrs, slog.Int("mysql_errno", int(errnum)), slog.String("sql_state", sqlState))
 		}
+	} else {
+		if logged {
+			attrs = append(attrs, slog.Any("error", err))
+		}
+		err = vterrors.Errorf(errCode, "%v%s", err.Error(), callerID)
 	}
 
-	if logMethod != nil {
-		logMethod(message)
+	if logged {
+		attrs = append(attrs, slog.String("error_code", errCode.String()))
+		if cid != nil {
+			attrs = append(attrs, slog.String("user", cid.Username))
+		}
+		attrs = append(attrs, slog.String("query", queryAsString(sql, bindVariables, tsv.Config().SanitizeLogMessages, true, tsv.env.Parser())))
+		// Demote some errors in logs.
+		switch errCode {
+		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
+			logPoolFull.Error("Request failed", attrs...)
+		case vtrpcpb.Code_ABORTED:
+			log.Warn("Request failed", attrs...)
+		case vtrpcpb.Code_INVALID_ARGUMENT, vtrpcpb.Code_DEADLINE_EXCEEDED:
+			log.Info("Request failed", attrs...)
+		default:
+			log.Error("Request failed", attrs...)
+		}
 	}
 
 	if logStats != nil {
@@ -2167,16 +2187,24 @@ func (tsv *TabletServer) TopoServer() *topo.Server {
 	return tsv.topoServer
 }
 
-// CheckThrottler issues a self check
-func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags) *throttle.CheckResult {
-	r := tsv.lagThrottler.Check(ctx, appName, nil, flags)
-	return r
+// CheckThrottler issues a self check for the specified throttler type
+func (tsv *TabletServer) CheckThrottler(ctx context.Context, appName string, flags *throttle.CheckFlags, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.CheckResult {
+	return tsv.throttlerByType(throttlerType).Check(ctx, appName, nil, flags)
 }
 
-// GetThrottlerStatus gets the status of the tablet throttler
-func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context) *throttle.ThrottlerStatus {
-	r := tsv.lagThrottler.Status()
-	return r
+// GetThrottlerStatus gets the status of the specified throttler type
+func (tsv *TabletServer) GetThrottlerStatus(ctx context.Context, throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.ThrottlerStatus {
+	return tsv.throttlerByType(throttlerType).Status()
+}
+
+// throttlerByType returns the throttler that throttle.ThrottlerTypeFromProto selects: the dedicated
+// query throttler for DEDICATED_QUERY_THROTTLER, and the lag throttler otherwise. The throttler RPCs
+// report the same choice back to the caller.
+func (tsv *TabletServer) throttlerByType(throttlerType tabletmanagerdatapb.ThrottlerType) *throttle.Throttler {
+	if throttle.ThrottlerTypeFromProto(throttlerType) == throttle.QueryTabletThrottler {
+		return tsv.qThrottler
+	}
+	return tsv.lagThrottler
 }
 
 // RedoPreparedTransactions redoes the prepared transactions.
@@ -2199,6 +2227,8 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 
 // Close shuts down any remaining go routines
 func (tsv *TabletServer) Close(ctx context.Context) error {
+	// Shut the throttler down first, as in StopService.
+	tsv.queryThrottler.Shutdown()
 	tsv.sm.closeAll()
 	tsv.stats.Stop()
 	return nil

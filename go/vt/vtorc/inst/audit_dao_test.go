@@ -18,13 +18,16 @@ package inst
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+	"vitess.io/vitess/go/vt/log/logtest"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtorc/config"
@@ -176,4 +179,44 @@ func readRecentAudit(tabletAlias *topodatapb.TabletAlias, page int) ([]audit, er
 		return nil
 	})
 	return res, err
+}
+
+// TestAuditOperationLogs checks that the audit line leaves out a missing
+// tablet, keyspace, shard or message, which main logged as "<nil>" and empty
+// values.
+func TestAuditOperationLogs(t *testing.T) {
+	// Open the backend before writing VTOrc's flags, as TestAuditOperation
+	// does. Run alone with -race, a flag write before that is reported as
+	// racing with the package's init goroutines, which read other flags
+	// from the same viperutil map. The race is in viperutil and main has it
+	// too; this order doesn't fix it.
+	db.ClearVTOrcDatabase()
+	originalAuditSysLog := config.GetAuditToSyslog()
+	originalAuditLogFile := config.GetAuditFileLocation()
+	originalAuditBackend := config.GetAuditToBackend()
+	t.Cleanup(func() {
+		config.SetAuditToSyslog(originalAuditSysLog)
+		config.SetAuditFileLocation(originalAuditLogFile)
+		config.SetAuditToBackend(originalAuditBackend)
+		db.ClearVTOrcDatabase()
+	})
+	config.SetAuditFileLocation("")
+	config.SetAuditToSyslog(false)
+	config.SetAuditToBackend(false)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, AuditOperation("test-audit", nil, ""))
+	record := logs.Record(t, "Audit operation")
+	for _, key := range []string{"tablet", "keyspace", "shard", "message"} {
+		assert.NotContains(t, record, key)
+	}
+	assert.NotContains(t, logs.String(), "<nil>")
+
+	// A tablet that isn't in the backend has no keyspace or shard to log.
+	logs.Reset()
+	require.NoError(t, AuditOperation("test-audit", &topodatapb.TabletAlias{Cell: "zone1", Uid: 200}, ""))
+	record = logs.Record(t, "Audit operation")
+	assert.Equal(t, "zone1-0000000200", record["tablet"])
+	assert.NotContains(t, record, "keyspace")
+	assert.NotContains(t, record, "shard")
 }

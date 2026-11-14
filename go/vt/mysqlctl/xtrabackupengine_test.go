@@ -20,7 +20,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path"
 	"testing"
@@ -29,8 +31,17 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/ioutil"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/mysql/replication"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -253,4 +264,137 @@ func TestCloseBackupFilesCancelsOnRealTimeout(t *testing.T) {
 
 	assert.Contains(t, logger.String(), "Timed out waiting for Close()")
 	assert.Error(t, ctx.Err())
+}
+
+// TestExtractFilesLogOmitsXbstreamFlags checks that the xbstream command line
+// that a restore logs leaves out the operator's --xbstream-restore-flags, which
+// can hold an --encrypt-key, and keeps the arguments that Vitess adds, and
+// that xbstream still gets the flags as given.
+func TestExtractFilesLogOmitsXbstreamFlags(t *testing.T) {
+	const secret = "encrypt_key_sentinel_5c1d"
+	oldEnginePath, oldFlags := xtrabackupEnginePath, xbstreamRestoreFlags
+	// The fake xbstream records its arguments, one per line, and fails.
+	xtrabackupEnginePath = t.TempDir()
+	argsFile := path.Join(t.TempDir(), "args")
+	generateTestFile(t, path.Join(xtrabackupEnginePath, xbstream), "#!/bin/bash\nprintf '%s\\n' \"$@\" > '"+argsFile+"'\nexit 1")
+	xbstreamRestoreFlags = "--decrypt=AES256 --encrypt-key=" + secret + "1 -k " + secret + "2 -vk" + secret + "3"
+	t.Cleanup(func() { xtrabackupEnginePath, xbstreamRestoreFlags = oldEnginePath, oldFlags })
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	stream := logutil.NewMemoryLogger()
+	bh := &FakeBackupHandle{
+		ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+			return io.NopCloser(bytes.NewReader(nil)), nil
+		},
+	}
+	tempDir := t.TempDir()
+	bm := xtraBackupManifest{SkipCompress: true, StreamMode: xbstream, FileName: "backup.xbstream"}
+	err := (&XtrabackupEngine{}).extractFiles(t.Context(), logutil.NewTeeLogger(logutil.NewConsoleLogger(), stream), bh, bm, tempDir)
+	require.ErrorContains(t, err, "xbstream failed")
+
+	args, err := os.ReadFile(argsFile)
+	require.NoError(t, err)
+	assert.Equal(t, "-C\n"+tempDir+"\n-xv\n--decrypt=AES256\n--encrypt-key="+secret+"1\n-k\n"+secret+"2\n-vk"+secret+"3\n", string(args))
+
+	r := logs.Record(t, "Executing xbstream cmd")
+	assert.Equal(t, "INFO", r["level"])
+	assert.Equal(t, path.Join(xtrabackupEnginePath, xbstream), r["command"])
+	assert.Equal(t, []any{"-C", tempDir, "-xv", "<--xbstream-restore-flags>"}, r["args"])
+	assert.NotContains(t, logs.String(), secret)
+	assert.Contains(t, stream.String(), "<--xbstream-restore-flags>")
+	for _, event := range stream.Events {
+		assert.NotContains(t, event.Value, secret)
+	}
+}
+
+// TestXtrabackupExecuteBackupVerifiesPosition runs a full backup with a fake
+// xtrabackup binary, and checks that the engine verifies the position its
+// MANIFEST records before it writes the MANIFEST, and writes none when that
+// check fails.
+func TestXtrabackupExecuteBackupVerifiesPosition(t *testing.T) {
+	const (
+		serverUUID = "16b1039f-22b6-11ed-b765-0a43f95f28a3"
+		gtids      = serverUUID + ":1-10"
+	)
+
+	// The fake xtrabackup writes xtrabackup_info into --target-dir, where the
+	// engine reads the position, and streams a few bytes as the backup.
+	binDir := t.TempDir()
+	script := fmt.Sprintf(`#!/bin/bash
+for arg in "$@"; do
+  case "$arg" in --target-dir=*) dir="${arg#--target-dir=}" ;; esac
+done
+echo "binlog_pos = filename 'vt-bin.000001', position '4', GTID of the last change '%s'" > "$dir/xtrabackup_info"
+echo "backup data"
+`, gtids)
+	require.NoError(t, os.WriteFile(path.Join(binDir, xtrabackupBinaryName), []byte(script), 0o755))
+	oldEnginePath, oldUser := xtrabackupEnginePath, xtrabackupUser
+	xtrabackupEnginePath, xtrabackupUser = binDir, "backup"
+	t.Cleanup(func() { xtrabackupEnginePath, xtrabackupUser = oldEnginePath, oldUser })
+
+	fakedb := fakesqldb.New(t)
+	t.Cleanup(fakedb.Close)
+	fakedb.AddQuery("SELECT @@global.gtid_executed", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.gtid_executed", "varchar"), gtids))
+	fakedb.AddQuery("SELECT @@global.server_uuid", sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("@@global.server_uuid", "varchar"), serverUUID))
+	mysqld := NewFakeMysqlDaemon(fakedb)
+	t.Cleanup(mysqld.Close)
+	mysqld.Version = "8.0.40"
+
+	root := t.TempDir()
+	for _, dir := range []string{"innodb", "log", "datadir", "tmp"} {
+		require.NoError(t, os.MkdirAll(path.Join(root, dir), 0o755))
+	}
+	cnf := &Mycnf{
+		InnodbDataHomeDir:     path.Join(root, "innodb"),
+		InnodbLogGroupHomeDir: path.Join(root, "log"),
+		DataDir:               path.Join(root, "datadir"),
+		TmpDir:                path.Join(root, "tmp"),
+	}
+
+	for _, tc := range []struct {
+		name      string
+		verifyErr error
+	}{
+		{"MANIFEST written after the check passes", nil},
+		{"no MANIFEST when the check fails", vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "errant GTIDs")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bh := &FakeBackupHandle{
+				AddFileReturnF: func(string) FakeBackupHandleAddFileReturn {
+					return FakeBackupHandleAddFileReturn{WriteCloser: ioutil.NewBytesBufferWriter()}
+				},
+			}
+			var verified []replication.Position
+			params := BackupParams{
+				Cnf:    cnf,
+				Mysqld: mysqld,
+				Logger: logutil.NewMemoryLogger(),
+				Stats:  backupstats.NoStats(),
+				VerifyPosition: func(ctx context.Context, pos replication.Position) error {
+					verified = append(verified, pos)
+					return tc.verifyErr
+				},
+			}
+
+			result, err := (&XtrabackupEngine{}).ExecuteBackup(t.Context(), params, bh)
+
+			require.Len(t, verified, 1)
+			assert.Equal(t, gtids, verified[0].String())
+			var added []string
+			for _, call := range bh.AddFileCalls {
+				added = append(added, call.Filename)
+			}
+			if tc.verifyErr == nil {
+				require.NoError(t, err)
+				assert.Equal(t, BackupUsable, result)
+				assert.Contains(t, added, backupManifestFileName)
+			} else {
+				require.ErrorContains(t, err, "errant GTIDs")
+				assert.Equal(t, BackupUnusable, result)
+				assert.NotContains(t, added, backupManifestFileName)
+			}
+		})
+	}
 }

@@ -20,6 +20,7 @@ package fakesqldb
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"regexp"
@@ -438,7 +439,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Error(fmt.Sprintf("callback failed : %v", err))
+			log.Error("callback failed", slog.Any("error", err))
 		}
 		return nil
 	}
@@ -451,7 +452,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 		// log error
 		if err := callback(&sqltypes.Result{}); err != nil {
-			log.Error(fmt.Sprintf("callback failed : %v", err))
+			log.Error("callback failed", slog.Any("error", err))
 		}
 		return nil
 	}
@@ -496,7 +497,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	parser := sqlparser.NewTestParser()
 	err = fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
 		parser.TruncateForUI(query), db.name)
-	log.Error("Query not found: " + parser.TruncateForUI(query))
+	log.Error("Query not found", slog.String("query", parser.TruncateForUI(query)))
 
 	return err
 }

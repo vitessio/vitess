@@ -150,12 +150,14 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.DbName = "vt_" + vttablet.Keyspace
 
-	vttablet.exit = make(chan error)
+	// The waiter captures this process and channel: TearDown returns once it
+	// receives the exit result, and a restart then replaces both fields, so
+	// the waiter must not read them again when it closes the channel.
+	proc, exit := vttablet.proc, make(chan error)
+	vttablet.exit = exit
 	go func() {
-		if vttablet.proc != nil {
-			vttablet.exit <- vttablet.proc.Wait()
-			close(vttablet.exit)
-		}
+		exit <- proc.Wait()
+		close(exit)
 	}()
 
 	if vttablet.ServingStatus != "" {
@@ -499,6 +501,29 @@ func (vttablet *VttabletProcess) SemiSyncExtensionLoaded() (mysql.SemiSyncType, 
 	}
 	defer conn.Close()
 	return conn.SemiSyncExtensionLoaded()
+}
+
+// DisableSemiSyncCommand returns the command to disable semi-sync on both the
+// source and replica side, or an empty string when no semi-sync extension is
+// loaded.
+func (vttablet *VttabletProcess) DisableSemiSyncCommand() (string, error) {
+	conn, err := vttablet.TabletConn("", false)
+	if err != nil {
+		return "", err
+	}
+	defer conn.Close()
+	semiSyncType, err := conn.SemiSyncExtensionLoaded()
+	if err != nil {
+		return "", err
+	}
+	switch semiSyncType {
+	case mysql.SemiSyncTypeSource:
+		return "SET GLOBAL rpl_semi_sync_source_enabled = false, GLOBAL rpl_semi_sync_replica_enabled = false", nil
+	case mysql.SemiSyncTypeMaster:
+		return "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false", nil
+	default:
+		return "", nil
+	}
 }
 
 // ResetBinaryLogsCommand returns the commands to reset binary logs

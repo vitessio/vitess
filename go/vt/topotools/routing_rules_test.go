@@ -19,12 +19,14 @@ package topotools
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
@@ -39,13 +41,22 @@ func TestRoutingRulesRoundTrip(t *testing.T) {
 		"t4": {"t5"},
 	}
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	err := SaveRoutingRules(ctx, ts, rules)
 	require.NoError(t, err, "could not save routing rules to topo %v", rules)
+	record := logs.Record(t, "Saving routing rules")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, map[string]any{"t1": []any{"t2", "t3"}, "t4": []any{"t5"}}, record["routing_rules"])
 
 	roundtripRules, err := GetRoutingRules(ctx, ts)
 	require.NoError(t, err, "could not fetch routing rules from topo")
 
 	assert.Equal(t, rules, roundtripRules)
+
+	logs.Reset()
+	require.NoError(t, SaveRoutingRules(ctx, ts, nil))
+	record = logs.Record(t, "Saving routing rules")
+	assert.Equal(t, map[string]any{}, record["routing_rules"])
 }
 
 func TestRoutingRulesErrors(t *testing.T) {
@@ -87,6 +98,12 @@ func TestShardRoutingRulesRoundTrip(t *testing.T) {
 	require.NoError(t, err, "could not fetch shard routing rules from topo: %v", err)
 
 	assert.Equal(t, srr, roundtripRules)
+
+	logs := logtest.Capture(t, slog.LevelInfo)
+	require.NoError(t, SaveShardRoutingRules(ctx, ts, nil))
+	record := logs.Record(t, "Saving shard routing rules")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, map[string]any{}, record["shard_routing_rules"])
 }
 
 func TestKeyspaceRoutingRulesRoundTrip(t *testing.T) {

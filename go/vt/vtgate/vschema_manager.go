@@ -19,7 +19,7 @@ package vtgate
 import (
 	"context"
 	"errors"
-	"fmt"
+	"log/slog"
 	"sync"
 
 	"vitess.io/vitess/go/vt/graph"
@@ -100,7 +100,7 @@ func (vm *VSchemaManager) UpdateVSchema(ctx context.Context, ks *topo.KeyspaceVS
 		cellErr := topoServer.UpdateSrvVSchema(ctx, cell, srv)
 		if cellErr != nil {
 			err = cellErr
-			log.Error(fmt.Sprintf("error updating vschema in cell %s: %v", cell, cellErr))
+			log.Error("error updating vschema in cell", slog.String("cell", cell), slog.Any("error", cellErr))
 		}
 	}
 	if err != nil {
@@ -124,7 +124,7 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool
 		// Otherwise, keep what we already had before.
 		v = nil
 	default:
-		log.Error(fmt.Sprintf("SrvVschema watch error: %v", err))
+		log.Error("SrvVschema watch error", slog.Any("error", err))
 		// Watch error, increment our counters.
 		if vschemaCounters != nil {
 			vschemaCounters.Add("WatchError", 1)
@@ -252,7 +252,7 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 		// We should only add foreign key table info to the routed tables only where the DML operations will be routed.
 		rTbl, _ := vschema.FindRoutedTable(ksName, tblName, topodatapb.TabletType_PRIMARY)
 		if rTbl == nil {
-			log.Warn(fmt.Sprintf("unable to find routed table %s in %s", tblName, ksName))
+			log.Warn("unable to find routed table", slog.String("table", tblName), slog.String("keyspace", ksName))
 			continue
 		}
 
@@ -261,7 +261,7 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 		// otherwise, even in routing rules, table names are expected to be the same.
 		// Ideally they should be in different keyspaces.
 		if rTbl.Keyspace.Name != ksName || rTbl.Name.String() != tblName {
-			log.Warn(fmt.Sprintf("table '%s' in keyspace '%s' routed to table '%s'", tblName, ksName, rTbl.String()))
+			log.Warn("table routed to another table", slog.String("table", tblName), slog.String("keyspace", ksName), slog.String("routed_to", rTbl.String()))
 			continue
 		}
 
@@ -272,7 +272,11 @@ func (vm *VSchemaManager) updateTableInfo(vschema *vindexes.VSchema, ks *vindexe
 			}
 			parentTbl, err := vschema.FindRoutedTable(ksName, fkDef.ReferenceDefinition.ReferencedTable.Name.String(), topodatapb.TabletType_PRIMARY)
 			if err != nil || parentTbl == nil {
-				log.Error(fmt.Sprintf("error finding parent table %s: %v", fkDef.ReferenceDefinition.ReferencedTable.Name.String(), err))
+				attrs := []slog.Attr{slog.String("parent_table", fkDef.ReferenceDefinition.ReferencedTable.Name.String())}
+				if err != nil {
+					attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+				}
+				log.Error("error finding parent table", attrs...)
 				continue
 			}
 			rTbl.ParentForeignKeys = append(rTbl.ParentForeignKeys, vindexes.NewParentFkInfo(parentTbl, fkDef))

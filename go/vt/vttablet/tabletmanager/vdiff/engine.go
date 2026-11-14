@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
@@ -132,7 +134,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 	}
 	vde.vre = vre
 	if err := vde.openLocked(ctx); err != nil {
-		log.Info(fmt.Sprintf("openLocked error: %s", err))
+		log.Info("openLocked error", slog.Any("error", err))
 		ctx, cancel := context.WithCancel(ctx)
 		vde.cancelRetry = cancel
 		go vde.retry(ctx, err)
@@ -142,7 +144,7 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 func (vde *Engine) openLocked(ctx context.Context) error {
 	// This should never happen
 	if len(vde.controllers) > 0 {
-		log.Warn(fmt.Sprintf("VDiff Engine invalid state detected: %d controllers existed when opening; resetting state", len(vde.controllers)))
+		log.Warn("VDiff Engine invalid state detected: controllers existed when opening; resetting state", slog.Int("controller_count", len(vde.controllers)))
 		vde.resetControllers()
 	}
 
@@ -177,7 +179,7 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 var openRetryInterval = 1 * time.Second
 
 func (vde *Engine) retry(ctx context.Context, err error) {
-	log.Error(fmt.Sprintf("Error starting vdiff engine: %v, will keep retrying.", err))
+	log.Error("Error starting vdiff engine, will keep retrying.", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	for {
 		timer := time.NewTimer(openRetryInterval)
 		select {
@@ -366,7 +368,7 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		log.Info(fmt.Sprintf("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError))
+		log.Info("Retrying vdiff that had an ephemeral error", slog.String("vdiff", uuid), slog.Any("error", lastError))
 		query, err := sqlparser.ParseAndBind(sqlRetryVDiff, sqltypes.Int64BindVariable(id), sqltypes.StringBindVariable(vde.dbName))
 		if err != nil {
 			return err
@@ -397,7 +399,7 @@ func (vde *Engine) retryErroredVDiffs() {
 		}
 
 		if err := vde.retryVDiffs(vde.ctx); err != nil {
-			log.Error(fmt.Sprintf("Error retrying vdiffs: %v", err))
+			log.Error("Error retrying vdiffs", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 }

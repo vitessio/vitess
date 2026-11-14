@@ -18,6 +18,7 @@ package vdiff
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -28,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log/logtest"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -195,12 +197,20 @@ func TestVDiff(t *testing.T) {
 	vdenv.dbClient.ExpectRequest("update _vt.vdiff set state = 'completed', last_error = left('', 1024) , completed_at = utc_timestamp() where id = 1 and db_name = 'vttest'", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: completed')", singleRowAffected, nil)
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	vdenv.vde.mu.Lock()
 	err := vdenv.vde.addController(controllerQR.Named().Row(), options)
 	vdenv.vde.mu.Unlock()
 	require.NoError(t, err)
 
 	vdenv.dbClient.Wait()
+
+	for _, msg := range []string{"Table diff done on table for vdiff", "Completed reconciliation on table for vdiff"} {
+		record := logs.Wait(t, msg)
+		assertReportCountKeys(t, record)
+		assert.Equal(t, UUID, record["vdiff"])
+		assert.Equal(t, "t1", record["table"])
+	}
 }
 
 func TestEngineRetryErroredVDiffs(t *testing.T) {

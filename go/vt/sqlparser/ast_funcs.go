@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
@@ -485,7 +486,7 @@ func ReplaceExpr(root, from, to Expr) Expr {
 
 	expr, success := tmp.(Expr)
 	if !success {
-		log.Error("Failed to rewrite expression. Rewriter returned a non-expression:  " + String(tmp))
+		log.Error("Failed to rewrite expression. Rewriter returned a non-expression", slog.String("expression", String(tmp)))
 		return from
 	}
 
