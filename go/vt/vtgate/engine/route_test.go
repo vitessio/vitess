@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
@@ -33,6 +34,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -727,29 +729,73 @@ func TestSelectEqualNoRoute(t *testing.T) {
 	expectResult(t, result, &sqltypes.Result{})
 }
 
-// A no-destination IN fallback must bind the values used by its shard query.
+// A no-destination IN fallback must bind the lists used by its shard query,
+// including indexed lists and scalar/list mixtures for multi-column vindexes.
 func TestSelectINNoRouteBindsFallbackValues(t *testing.T) {
-	vindex, err := vindexes.CreateVindex("lookup_unique", "", map[string]string{"table": "lkp", "from": "from", "to": "toc"})
+	single, err := vindexes.CreateVindex("lookup_unique", "", map[string]string{"table": "lkp", "from": "from", "to": "toc"})
 	require.NoError(t, err)
-	route := NewRoute(IN, &vindexes.Keyspace{Name: "ks", Sharded: true}, "dummy_select", "dummy_select_field")
-	route.Vindex = vindex.(vindexes.SingleColumn)
-	route.Values = []evalengine.Expr{evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)}}
-	route.NoRoutesSpecialHandling = true
-	for _, stream := range []bool{false, true} {
-		t.Run(strconv.FormatBool(stream), func(t *testing.T) {
-			cursor := &loggingVCursor{shards: []string{"-20", "20-"}}
-			bindVars := map[string]*querypb.BindVariable{"kept": sqltypes.Int64BindVariable(7)}
-			if stream {
-				_, err = wrapStreamExecute(route, cursor, bindVars, false)
-			} else {
-				_, err = route.TryExecute(t.Context(), cursor, bindVars, false)
-			}
-			require.NoError(t, err)
-			require.NotContains(t, bindVars, ListVarName, "do not mutate caller bind variables")
-			require.NotEmpty(t, cursor.log)
-			require.Contains(t, cursor.log[len(cursor.log)-1], "__vals: "+fmt.Sprint(tupleBindVariable([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})), "fallback query must receive the evaluated IN tuple")
-			require.Contains(t, cursor.log[len(cursor.log)-1], "kept: "+fmt.Sprint(sqltypes.Int64BindVariable(7)))
-		})
+	multi, err := vindexes.CreateVindex("multicol", "", map[string]string{"column_count": "2", "column_vindex": "hash,hash"})
+	require.NoError(t, err)
+	ints := evalengine.TupleExpr{evalengine.NewLiteralInt(1), evalengine.NewLiteralInt(2)}
+	// Neither string can be hashed, so every multi-column combination misses.
+	misses := evalengine.TupleExpr{
+		evalengine.NewLiteralString([]byte("missing"), collations.SystemCollation),
+		evalengine.NewLiteralString([]byte("other"), collations.SystemCollation),
+	}
+	intTuple := tupleBindVariable([]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	missTuple := tupleBindVariable([]sqltypes.Value{sqltypes.NewVarChar("missing"), sqltypes.NewVarChar("other")})
+	for _, tc := range []struct {
+		name, predicate, expanded string
+		vindex                    vindexes.Vindex
+		values                    []evalengine.Expr
+		lists                     map[string]*querypb.BindVariable
+	}{
+		{"single", "cola in ::__vals", "cola in (1, 2)", single, []evalengine.Expr{ints}, map[string]*querypb.BindVariable{"__vals": intTuple}},
+		{"multi-lists", "cola in ::__vals0 and colb in ::__vals1", "cola in (1, 2) and colb in ('missing', 'other')", multi, []evalengine.Expr{ints, misses}, map[string]*querypb.BindVariable{"__vals0": intTuple, "__vals1": missTuple}},
+		{"multi-scalar-first", "cola = :kept and colb in ::__vals1", "cola = 7 and colb in ('missing', 'other')", multi, []evalengine.Expr{evalengine.NewLiteralInt(7), misses}, map[string]*querypb.BindVariable{"__vals1": missTuple}},
+		{"multi-scalar-second", "cola in ::__vals0 and colb = :kept", "cola in ('missing', 'other') and colb = 7", multi, []evalengine.Expr{misses, evalengine.NewLiteralInt(7)}, map[string]*querypb.BindVariable{"__vals0": missTuple}},
+	} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stream=%t", tc.name, stream), func(t *testing.T) {
+				query := "select id from ref union select cola from multicol_tbl where " + tc.predicate
+				route := NewRoute(IN, &vindexes.Keyspace{Name: "ks", Sharded: true}, query, query)
+				route.Vindex, route.Values = tc.vindex, tc.values
+				route.NoRoutesSpecialHandling = true
+				var sent map[string]*querypb.BindVariable
+				cursor := &loggingVCursor{
+					shards: []string{"-20", "20-"},
+					onExecuteMultiShardFn: func(_ context.Context, _ Primitive, _ []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, _, _ bool) {
+						require.Len(t, queries, 1)
+						sent = queries[0].BindVariables
+					},
+					onStreamExecuteMultiFn: func(_ context.Context, _ Primitive, _ string, _ []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, _, _ bool, _ func(*sqltypes.Result) error) {
+						require.Len(t, vars, 1)
+						sent = vars[0]
+					},
+				}
+				bindVars := map[string]*querypb.BindVariable{"kept": sqltypes.Int64BindVariable(7)}
+				var err error
+				if stream {
+					err = route.TryStreamExecute(t.Context(), cursor, bindVars, false, func(*sqltypes.Result) error { return nil })
+				} else {
+					_, err = route.TryExecute(t.Context(), cursor, bindVars, false)
+				}
+				require.NoError(t, err)
+				require.Len(t, bindVars, 1, "do not mutate caller bind variables")
+				require.True(t, proto.Equal(sqltypes.Int64BindVariable(7), bindVars["kept"]))
+				require.Len(t, sent, len(tc.lists)+1, "bind only tuple columns, keeping their original indexes")
+				require.True(t, proto.Equal(bindVars["kept"], sent["kept"]))
+				for name, want := range tc.lists {
+					require.Contains(t, sent, name)
+					require.True(t, proto.Equal(want, sent[name]), "incorrect fallback tuple %s", name)
+				}
+				stmt, err := sqlparser.NewTestParser().Parse(query)
+				require.NoError(t, err)
+				generated, err := sqlparser.NewParsedQuery(stmt).GenerateQuery(sent, nil)
+				require.NoError(t, err, "VTTablet must be able to bind the fallback query")
+				require.Equal(t, "select id from ref union select cola from multicol_tbl where "+tc.expanded, generated)
+			})
+		}
 	}
 }
 

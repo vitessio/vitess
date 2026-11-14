@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -129,17 +130,28 @@ func NewRoute(opcode Opcode, keyspace *vindexes.Keyspace, query, fieldQuery stri
 
 var partialSuccessScatterQueries = stats.NewCounter("PartialSuccessScatterQueries", "Count of partially successful scatter queries")
 
-// anyShard preserves the IN tuple when no destinations were found. Normal IN
-// routing builds per-shard bind maps, which do not exist on a lookup miss.
+// anyShard preserves IN lists when no destinations were found. Normal IN
+// routing builds per-shard bind maps, which do not exist on a vindex miss.
 func (route *Route) anyShard(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	if route.NoRoutesSpecialHandling && route.Opcode == IN {
 		env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
-		value, err := env.Evaluate(route.Values[0])
-		if err != nil {
-			return nil, nil, err
-		}
 		bindVars = sqltypes.CopyBindVariables(bindVars)
-		bindVars[ListVarName] = tupleBindVariable(value.TupleValues())
+		_, multiColumn := route.Vindex.(vindexes.MultiColumn)
+		for i, expr := range route.Values {
+			value, err := env.Evaluate(expr)
+			if err != nil {
+				return nil, nil, err
+			}
+			values := value.TupleValues()
+			if values == nil {
+				continue
+			}
+			name := ListVarName
+			if multiColumn {
+				name += strconv.Itoa(i)
+			}
+			bindVars[name] = tupleBindVariable(values)
+		}
 	}
 	return route.RoutingParameters.anyShard(ctx, vcursor, bindVars)
 }
