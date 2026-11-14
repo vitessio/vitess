@@ -225,11 +225,9 @@ New connections use the reloaded files as soon as a reload succeeds; established
 
 Every component listed above already handled `SIGHUP` rather than terminating on it, so sending it to reload the TLS files does not stop any of them. **Note** that operators already send `SIGHUP` to `vttablet` and `vtgate` to reload the table ACLs, `--db-credentials-file` and the static authentication file. With `--tls-reload-on-sighup`, that signal also installs whatever TLS files are on disk. Do not stage new TLS files, such as a new CA ahead of a rolling restart, at the paths a running component uses; if a reload installs them early, restore the previous files and send `SIGHUP` again.
 
-Some behavior also changes for deployments that never reload the files. A TLS client whose files failed to load, such as one whose secret is mounted after it starts, loads them again on its next connection rather than failing until a restart. The errors for a certificate that fails to load now include the underlying error. And every TLS server logs a line naming the certificate it loaded, and exports `TLSReloadSuccessTimestamp` and `TLSCertNotAfter`, from startup.
-
 To rotate a CA, first install a CA file that holds both the old and the new CA and reload, then reissue the certificates under the new CA, and remove the old CA last.
 
-Each server exports, labeled by `Server` (`grpc` or `mysql`), `TLSReloadSuccessTimestamp`, the Unix time of the last successful load, `TLSReloadErrors`, the number of failed reloads, and `TLSCertNotAfter`, the Unix time at which the certificate it presents expires. The reloads of a component's TLS clients are counted in `TLSReloadSuccessTimestamp` and `TLSReloadErrors` under `clients`.
+Each server exports, labeled by `Server` (`grpc` or `mysql`), `TLSReloadSuccessTimestamp`, the Unix time of the last successful load, `TLSReloadErrors`, the number of failed reloads, and `TLSCertNotAfter`, the Unix time at which the certificate it presents expires. The reloads of a component's TLS clients are counted in `TLSReloadSuccessTimestamp` and `TLSReloadErrors` under `clients`. Every TLS server logs a line naming the certificate it loaded, and exports `TLSReloadSuccessTimestamp` and `TLSCertNotAfter`, from startup, whether or not either flag is set.
 
 ### <a id="breaking-changes"/>Breaking Changes</a>
 
