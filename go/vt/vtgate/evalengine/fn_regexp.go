@@ -19,6 +19,7 @@ package evalengine
 import (
 	"errors"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -250,6 +251,42 @@ func compileConstantRegex(c *compiler, args TupleExpr, pat, mt int, cs collation
 	return compileRegex(innerPat, colldata.Lookup(cs.Collation).Charset(), flags)
 }
 
+// regexpMatchers hands out matchers for a pattern that was compiled once,
+// when the expression was compiled. The pattern is immutable and shared by
+// every evaluation of the compiled program, but a matcher holds the state of
+// one match: its input and its backtracking stack. Evaluations of the same
+// program can run concurrently, each with its own ExpressionEnv, so each one
+// takes a matcher of its own for as long as it is matching and hands it back
+// afterwards, to save the next evaluation from allocating one.
+type regexpMatchers struct {
+	pool sync.Pool
+}
+
+func newRegexpMatchers(p *icuregex.Pattern) *regexpMatchers {
+	return &regexpMatchers{
+		pool: sync.Pool{
+			New: func() any {
+				return icuregex.NewMatcher(p)
+			},
+		},
+	}
+}
+
+// get returns a matcher that is ready to match input and that no other
+// evaluation is using.
+func (r *regexpMatchers) get(input []rune) *icuregex.Matcher {
+	m := r.pool.Get().(*icuregex.Matcher)
+	m.Reset(input)
+	return m
+}
+
+// put hands back a matcher from get. The matcher must not be used afterwards.
+func (r *regexpMatchers) put(m *icuregex.Matcher) {
+	// Do not keep the input alive for as long as the matcher is idle.
+	m.Reset(nil)
+	r.pool.Put(m)
+}
+
 // resultCollation returns the collation to use for the result of a regexp.
 // This falls back to latin1_swedish if the input collation is binary. This
 // seems to be a side effect of how MySQL also works. Probably due to how it
@@ -363,7 +400,7 @@ func (r *builtinRegexpLike) compile(c *compiler) (ctype, error) {
 		return r.compileSlow(c, input, pat, f, merged, flags, skips...)
 	}
 
-	c.asm.Fn_REGEXP_LIKE(icuregex.NewMatcher(p), r.Negate, colldata.Lookup(merged.Collation).Charset(), len(r.Arguments)-1)
+	c.asm.Fn_REGEXP_LIKE(newRegexpMatchers(p), r.Negate, colldata.Lookup(merged.Collation).Charset(), len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | f.Flag | flagIsBoolean}, nil
@@ -570,7 +607,7 @@ func (r *builtinRegexpInstr) compile(c *compiler) (ctype, error) {
 		return r.compileSlow(c, input, pat, pos, occ, returnOpt, matchType, merged, flags, skips...)
 	}
 
-	c.asm.Fn_REGEXP_INSTR(icuregex.NewMatcher(p), colldata.Lookup(merged.Collation).Charset(), len(r.Arguments)-1)
+	c.asm.Fn_REGEXP_INSTR(newRegexpMatchers(p), colldata.Lookup(merged.Collation).Charset(), len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | flagIsBoolean}, nil
@@ -746,7 +783,7 @@ func (r *builtinRegexpSubstr) compile(c *compiler) (ctype, error) {
 		return r.compileSlow(c, input, pat, pos, occ, matchType, merged, flags, skips...)
 	}
 
-	c.asm.Fn_REGEXP_SUBSTR(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
+	c.asm.Fn_REGEXP_SUBSTR(newRegexpMatchers(p), merged, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
@@ -990,7 +1027,7 @@ func (r *builtinRegexpReplace) compile(c *compiler) (ctype, error) {
 		return r.compileSlow(c, input, pat, repl, pos, occ, matchType, merged, flags, skips...)
 	}
 
-	c.asm.Fn_REGEXP_REPLACE(icuregex.NewMatcher(p), merged, len(r.Arguments)-1)
+	c.asm.Fn_REGEXP_REPLACE(newRegexpMatchers(p), merged, len(r.Arguments)-1)
 	c.asm.jumpDestination(skips...)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: input.Flag | pat.Flag | repl.Flag | pos.Flag | occ.Flag | matchType.Flag}, nil
