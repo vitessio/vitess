@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset/japanese"
 	"vitess.io/vitess/go/mysql/collations/charset/korean"
 	"vitess.io/vitess/go/mysql/collations/charset/simplifiedchinese"
+	"vitess.io/vitess/go/mysql/collations/charset/thai"
 	"vitess.io/vitess/go/mysql/collations/charset/traditionalchinese"
 	"vitess.io/vitess/go/mysql/collations/charset/types"
 	"vitess.io/vitess/go/mysql/collations/charset/unicode"
@@ -63,6 +64,10 @@ type (
 // Traditional Chinese encodings
 
 type Charset_big5 = traditionalchinese.Charset_big5
+
+// Thai encodings
+
+type Charset_tis620 = thai.Charset_tis620
 
 // Japanese encodings
 

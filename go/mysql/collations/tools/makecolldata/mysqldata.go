@@ -301,6 +301,9 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 		// The collation has the tables of an 8-bit collation, and
 		// does not compare as one: 'ä' = 'ae' is true.
 		collation = "Collation_latin1_german2_ci"
+	case meta.Name == "tis620_thai_ci":
+		// As latin1_german2_ci.
+		collation = "Collation_tis620_thai_ci"
 	default:
 		collation = "Collation_8bit_simple_ci"
 	}
@@ -321,9 +324,17 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 	g.P("},")
 
 	// Optimized implementation for latin1
-	if meta.Charset == "latin1" {
+	switch {
+	case meta.Charset == "latin1":
 		g.P("charset: ", PkgCharset, ".Charset_latin1{},")
-	} else {
+	case meta.Name == "tis620_thai_ci":
+		// Collation_tis620_thai_ci always has the tis620 character
+		// set.
+	case meta.Charset == "tis620":
+		// The dump has no conversion tables for tis620, as it has
+		// for the other 8-bit character sets.
+		g.P("charset: ", PkgCharset, ".Charset_tis620{},")
+	default:
 		g.P("charset: &", PkgCharset, ".Charset_8bit{")
 		g.P("Name_: ", codegen.Quote(meta.Charset), ",")
 		if tableToUnicode != "" {
@@ -455,9 +466,6 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 			g.P(uint(63), ": &Collation_binary{},")
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
-		case meta.Name == "tis620_bin":
-			// explicitly unsupported for now because of not accurate results
-
 		case meta.CollationImpl == "any_uca" ||
 			meta.CollationImpl == "utf16_uca" ||
 			meta.CollationImpl == "utf32_uca" ||
@@ -469,7 +477,7 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 			g.printCollationUca900(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
-		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci" || meta.Name == "latin1_german2_ci":
+		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci" || meta.Name == "latin1_german2_ci" || meta.Name == "tis620_thai_ci":
 			g.printCollation8bit(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
