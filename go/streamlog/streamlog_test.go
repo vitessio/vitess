@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -34,6 +35,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -65,8 +67,13 @@ func TestHTTP(t *testing.T) {
 		assert.NoError(t, <-serveErrCh)
 	}()
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	logger := New[*logMessage]("logger", 1)
 	logger.ServeLogs("/log", testLogf)
+	record := logs.Record(t, "Streaming logs")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Equal(t, "logger", record["stream_logger"])
+	assert.Equal(t, "/log", record["url"])
 
 	// This should not block - there are no subscribers yet.
 	logger.Send(&logMessage{"val1"})

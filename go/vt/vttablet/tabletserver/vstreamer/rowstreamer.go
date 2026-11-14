@@ -19,6 +19,7 @@ package vstreamer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"slices"
 	"sync"
@@ -172,7 +173,11 @@ func (rs *rowStreamer) buildPlan() error {
 	// filtering will work.
 	rs.plan, err = buildTablePlan(rs.se.Environment(), ti, rs.vschema, rs.query)
 	if err != nil {
-		log.Error(fmt.Sprintf("Failed to build table plan for %s in row streamer: %v", ti.Name, err))
+		log.Error("Failed to build table plan in row streamer",
+			slog.String("table", ti.Name),
+			slog.String("error_code", vterrors.Code(err).String()),
+			slog.Any("error", err),
+		)
 		return err
 	}
 
@@ -373,7 +378,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 		rotatedLog bool
 		err        error
 	)
-	log.Info(fmt.Sprintf("Streaming rows for query: %s\n", rs.sendQuery))
+	log.Info("row streamer executing query", slog.String("query", rs.sendQuery))
 	if rs.mode == RowStreamerModeSingleTable {
 		gtid, rotatedLog, err = rs.conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 		if err != nil {
@@ -452,7 +457,7 @@ func (rs *rowStreamer) streamQuery(send func(*binlogdatapb.VStreamRowsResponse) 
 			throttleResponseRateLimiter.Do(func() error {
 				return safeSend(rs.ctx, &binlogdatapb.VStreamRowsResponse{Throttled: true, ThrottledReason: checkResult.Summary()})
 			})
-			logger.Infof("Throttled streaming rows for %s", rs.sendQuery)
+			logger.Info("Throttled streaming rows", slog.String("query", rs.sendQuery))
 			continue
 		}
 

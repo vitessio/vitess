@@ -18,6 +18,7 @@ package tabletserver
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"time"
@@ -178,7 +179,7 @@ func queryzHandler(qe *QueryEngine, w http.ResponseWriter, r *http.Request) {
 	sort.Sort(&sorter)
 	for _, Value := range sorter.rows {
 		if err := queryzTmpl.Execute(w, Value); err != nil {
-			log.Error(fmt.Sprintf("queryz: couldn't execute template: %v", err))
+			log.Error("queryz: couldn't execute template", slog.Any("error", err))
 		}
 	}
 }

@@ -332,8 +332,18 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
 func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet *cluster.Vttablet) {
 	t.Helper()
+	// A previous test may have left this mysqld as a semi-sync source. Vitess's
+	// my.cnf configures semi-sync waits to never time out, even with no replica
+	// connected, so the binlogged statements below would block forever unless
+	// semi-sync is disabled first.
+	disableSemiSyncCmd, err := vttablet.VttabletProcess.DisableSemiSyncCommand()
+	require.NoError(t, err)
+	if disableSemiSyncCmd != "" {
+		_, err = RunSQL(t, disableSemiSyncCmd, vttablet, "")
+		require.NoError(t, err)
+	}
 	// set super_read_only to false
-	_, err := RunSQL(t, "SET GLOBAL super_read_only = OFF", vttablet, "")
+	_, err = RunSQL(t, "SET GLOBAL super_read_only = OFF", vttablet, "")
 	require.NoError(t, err)
 	// remove the databases if they exist
 	_, err = RunSQL(t, "DROP DATABASE IF EXISTS vt_ks", vttablet, "")

@@ -481,6 +481,14 @@ func (qp *QueryProjection) extractAggr(
 			makeComplex()
 			return true
 		}
+		switch ex.(type) {
+		case sqlparser.ValTuple, sqlparser.ListArg:
+			// An IN value list must reach the evalengine as a list, not as a
+			// single input column. A tuple is descended so each member becomes
+			// its own input column and the tuple shape survives; a list bind
+			// variable is a leaf left in place for the evalengine to resolve.
+			return true
+		}
 		if !qp.isExprInGroupByExprs(ctx, ex) {
 			aggr := createNonGroupingAggr(aeWrap(ex))
 			addAggr(aggr)

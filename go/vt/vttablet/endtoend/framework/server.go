@@ -18,7 +18,7 @@ package framework
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -89,7 +89,7 @@ func StartCustomServer(ctx context.Context, connParams, connAppDebugParams mysql
 	go func() {
 		err := servenv.HTTPServe(ln)
 		if err != nil {
-			log.Error(fmt.Sprintf("HTTPServe failed: %v", err))
+			log.Error("HTTPServe failed", slog.Any("error", err))
 		}
 	}()
 	for {
@@ -124,7 +124,7 @@ func StartServer(ctx context.Context, connParams, connAppDebugParams mysql.ConnP
 	config.QueryCacheDoorkeeper = false
 	config.SchemaReloadInterval = 5 * time.Second
 	gotBytes, _ := yaml2.Marshal(config)
-	log.Info(fmt.Sprintf("Config:\n%s", gotBytes))
+	log.Info("Config", slog.String("config", string(gotBytes)))
 	// The engine builds the exempt ACL from the registered factory as it
 	// starts, and with none registered it only logs and runs with no exempt
 	// ACL, which would surface as every CALL test being denied. Fail here

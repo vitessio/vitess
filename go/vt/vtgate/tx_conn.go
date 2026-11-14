@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -381,7 +382,10 @@ func (txc *TxConn) errActionAndLogWarn(
 		commitUnresolved.Add(1)
 	}
 	if rollbackErr != nil {
-		log.Warn(fmt.Sprintf("Rollback failed after %s failure: %v", phaseMessage[txPhase], rollbackErr))
+		log.Warn("Rollback failed after commit phase failure",
+			slog.String("phase", phaseMessage[txPhase]),
+			slog.Any("error", rollbackErr),
+			slog.String("error_code", vterrors.Code(rollbackErr).String()))
 		commitUnresolved.Add(1)
 	}
 
@@ -525,11 +529,14 @@ func (txc *TxConn) ResolveTransactions(ctx context.Context, target *querypb.Targ
 
 	failedResolution := 0
 	for _, txRecord := range transactions {
-		log.Info("Resolving transaction ID: " + txRecord.Dtid)
+		log.Info("Resolving transaction", slog.String("dtid", txRecord.Dtid))
 		err = txc.resolveTx(ctx, target, txRecord)
 		if err != nil {
 			failedResolution++
-			log.Error(fmt.Sprintf("Failed to resolve transaction ID: %s with error: %v", txRecord.Dtid, err))
+			log.Error("Failed to resolve transaction",
+				slog.String("dtid", txRecord.Dtid),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 		}
 	}
 	if failedResolution == 0 {

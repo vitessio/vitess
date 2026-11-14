@@ -157,5 +157,10 @@ func evalToIR(simplified eval) IR {
 		}
 		return te
 	}
+	if j, ok := simplified.(*evalJSON); ok {
+		// The literal is shared by every evaluation and every compiled
+		// specialisation: settle it while this goroutine still owns it.
+		j.Resolve()
+	}
 	return &Literal{inner: simplified}
 }

@@ -1315,6 +1315,37 @@ func TestGetHealthyTablets(t *testing.T) {
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	mustMatch(t, want, a, "unexpected result")
 
+	// Grow the lag 1s per update, less than 3% each time, past a 2m high
+	// watermark. Each update must refresh the healthy list, so the tablet
+	// shows its latest lag and leaves the list once that lag is above 2m.
+	prevHighLag := GetHighReplicationLagMinServing()
+	t.Cleanup(func() { SetHighReplicationLagMinServing(prevHighLag) })
+	SetHighReplicationLagMinServing(2 * time.Minute)
+	replicaTarget := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+	for lag := uint32(36); lag <= 125; lag++ {
+		input <- &querypb.StreamHealthResponse{
+			TabletAlias:   tablet.Alias,
+			Target:        replicaTarget,
+			Serving:       true,
+			RealtimeStats: &querypb.RealtimeStats{ReplicationLagSeconds: lag, CpuUsage: 0.2},
+		}
+		<-resultChan
+		a = hc.GetHealthyTabletStats(replicaTarget)
+		if lag > 120 {
+			assert.Empty(t, a, "tablet with %ds of lag must not be healthy", lag)
+			continue
+		}
+		require.Len(t, a, 1, "tablet with %ds of lag must be healthy", lag)
+		assert.Equal(t, lag, a[0].Stats.ReplicationLagSeconds,
+			"healthy list has %ds of lag, want %ds", a[0].Stats.ReplicationLagSeconds, lag)
+	}
+
+	// Send the 35s update again so the steps below start from the list they expect.
+	input <- shr
+	<-resultChan
+	a = hc.GetHealthyTabletStats(replicaTarget)
+	mustMatch(t, want, a, "unexpected result")
+
 	// add a second tablet
 	tablet2 := createTestTablet(11, "cell", "host2")
 	tablet2.Type = topodatapb.TabletType_REPLICA
@@ -2027,4 +2058,100 @@ func deleteCellsAlias(t *testing.T, ts *topo.Server, alias string) {
 	if err := ts.DeleteCellsAlias(t.Context(), alias); err != nil {
 		t.Logf("DeleteCellsAlias(%s) failed: %v", alias, err)
 	}
+}
+
+// TestGetHealthyTabletStatsDoesNotBlockOnHealthCheckLock verifies that routing
+// reads do not wait on hc.mu, which health updates hold while recomputing the
+// healthy lists (including topo lookups for cell aliases).
+func TestGetHealthyTabletStatsDoesNotBlockOnHealthCheckLock(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	ts := memorytopo.NewServer(ctx, "cell")
+	defer ts.Close()
+	hc := createTestHc(ctx, ts)
+	defer hc.Close()
+
+	tablet := createTestTablet(0, "cell", "a")
+	tablet.Type = topodatapb.TabletType_PRIMARY
+	input := make(chan *querypb.StreamHealthResponse)
+	createFakeConn(tablet, input)
+	hc.AddTablet(tablet)
+	input <- &querypb.StreamHealthResponse{
+		TabletAlias:               tablet.Alias,
+		Target:                    &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY},
+		Serving:                   true,
+		PrimaryTermStartTimestamp: 10,
+		RealtimeStats:             &querypb.RealtimeStats{},
+	}
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY}
+	require.Eventually(t, func() bool {
+		return len(hc.GetHealthyTabletStats(target)) == 1
+	}, 30*time.Second, time.Millisecond)
+
+	hc.mu.Lock()
+	result := make(chan []*TabletHealth, 1)
+	go func() { result <- hc.GetHealthyTabletStats(target) }()
+	var ths []*TabletHealth
+	// assert, not require: a failure must still reach Unlock, or hc.Close deadlocks.
+	returned := assert.Eventually(t, func() bool {
+		select {
+		case ths = <-result:
+			return true
+		default:
+			return false
+		}
+	}, 30*time.Second, time.Millisecond, "GetHealthyTabletStats blocked while hc.mu was held")
+	hc.mu.Unlock()
+
+	require.True(t, returned)
+	require.Len(t, ths, 1)
+	assert.True(t, topoproto.TabletAliasEqual(tablet.Alias, ths[0].Tablet.Alias))
+}
+
+// TestGetHealthyTabletStatsReturnsCopy pins that callers own the result. The
+// published list is shared by lock-free readers, and the gateway shuffles the
+// result and runs slices.DeleteFunc on it.
+func TestGetHealthyTabletStatsReturnsCopy(t *testing.T) {
+	bhc := newBenchHealthCheck(t, 3)
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+
+	clear(bhc.hc.GetHealthyTabletStats(target))
+
+	ths := bhc.hc.GetHealthyTabletStats(target)
+	require.Len(t, ths, 3)
+	for _, th := range ths {
+		require.NotNil(t, th)
+	}
+}
+
+// TestGetHealthyTabletStatsDuringHealthUpdates runs lock-free readers against the
+// primary replacement and replica recompute publish paths, so -race covers them.
+func TestGetHealthyTabletStatsDuringHealthUpdates(t *testing.T) {
+	bhc := newBenchHealthCheck(t, 3)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	var empty atomic.Int64
+	var wg sync.WaitGroup
+	for _, tabletType := range []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA} {
+		target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: tabletType}
+		for range 4 {
+			wg.Go(func() {
+				for ctx.Err() == nil {
+					ths := bhc.hc.GetHealthyTabletStats(target)
+					if len(ths) == 0 {
+						empty.Add(1)
+					}
+					for _, th := range ths {
+						_ = th.Stats.ReplicationLagSeconds
+					}
+				}
+			})
+		}
+	}
+	for n := range uint32(2000) {
+		require.True(t, bhc.send(ctx, int(n)%len(bhc.tablets), n%5))
+	}
+	cancel()
+	wg.Wait()
+	assert.Zero(t, empty.Load(), "a reader saw an empty healthy list")
 }

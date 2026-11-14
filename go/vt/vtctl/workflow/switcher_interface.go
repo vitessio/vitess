@@ -57,6 +57,7 @@ type iswitcher interface {
 	deleteKeyspaceRoutingRules(ctx context.Context) error
 	addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error
 	resetSequences(ctx context.Context) error
+	prepareTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error
 	initializeTargetSequences(ctx context.Context, sequencesByBackingTable map[string]*sequenceMetadata) error
 	logs() *[]string
 }

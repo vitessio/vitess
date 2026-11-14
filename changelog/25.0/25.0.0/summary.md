@@ -10,6 +10,7 @@
         - [VTAdmin VExplain modes that can run the statement require the `execute` action](#vtadmin-vexplain-execute-action)
     - **[New Support](#new-support)**
         - [VTOrc failover of an unreachable primary `vttablet` via replica quorum](#vtorc-quorum-unreachable-primary)
+        - [Query throttler `TABLET_THROTTLER` strategy](#vttablet-query-throttler-tablet-throttler)
         - [Back up binary logs with full builtin backups](#backup-include-binlogs)
     - **[Breaking Changes](#breaking-changes)**
         - [`--watch-replication-stream` flag removed](#vttablet-watch-replication-stream-removed)
@@ -19,6 +20,8 @@
         - [`BackupHandle` interface gains `Wait()` method](#backup-handle-wait-method)
         - [VTOrc: `--cells-to-watch` removed in favor of `--cells-no-recovery`](#vtorc-cells-no-recovery)
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
+        - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
+        - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -30,6 +33,7 @@
         - [Preserve Materialize target data on cancel by default](#vreplication-materialize-cancel-data-protection)
         - [Online DDL migrations are no longer failed by recoverable vreplication errors](#onlineddl-vrepl-auto-resume)
         - [VStream: `before_data_columns` bitmap for partial before images](#vstream-before-data-columns)
+        - [Copied tables whose statistics aren't recalculated automatically are analyzed](#vreplication-analyze-stats-auto-recalc)
     - **[VTGate](#minor-changes-vtgate)**
         - [Ingress bytes in query LogStats](#vtgate-logstats-ingress-bytes)
         - [New controls for cross-keyspace reads](#vtgate-cross-keyspace-reads)
@@ -65,6 +69,7 @@
         - [ApplySchema session variables](#vttablet-applyschema-session-variables)
         - [Table ACL: statements whose tables cannot be determined are denied under strict table ACL](#vttablet-table-acl-undetermined-table-set)
         - [Table ACL: reads embedded in non-SELECT statements are now checked](#vttablet-table-acl-embedded-reads)
+        - [Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running](#vttablet-throttler-unprobed-heartbeats)
     - **[VTCtld](#minor-changes-vtctld)**
         - [MySQL version-aware reparent candidate election](#vtctld-version-aware-reparent)
     - **[Backup/Restore](#minor-changes-backup)**
@@ -72,8 +77,11 @@
         - [Slow clean mysqld shutdowns no longer fail backups](#backup-mysqld-shutdown-timeout)
         - [Parallel S3 downloads during restore](#vttablet-s3-parallel-downloads)
         - [lz4 engine: library upgrade and `--compression-level` mapping](#backup-lz4-v4)
+        - [`vtbackup` can refuse backups with errant GTIDs](#vtbackup-errant-gtid-checks)
+        - [`vtbackup` stops catching up at the primary's committed position](#vtbackup-stop-at-committed-position)
+        - [`BackupShard` can choose the tablet type to back up from](#backup-shard-tablet-types)
     - **[VTAdmin](#minor-changes-vtadmin)**
-        - [vtadmin-web updated to node v22.23.2 (LTS)](#vtadmin-updated-node)
+        - [vtadmin-web updated to node v24.21.0 (LTS)](#vtadmin-updated-node)
     - **[General](#minor-changes-general)**
         - [Build version metadata now sourced from VCS stamping](#build-info-from-vcs)
         - [Connections whose certificate revocation cannot be checked against a configured CRL are rejected](#vttls-crl-fail-closed)
@@ -130,6 +138,53 @@ A graceful `vttablet` shutdown records a shutdown marker in the topology server 
 Note that in this scenario the old primary's MySQL keeps running, and because its `vttablet` is the unreachable component, it cannot be demoted until that `vttablet` comes back and discovers the shard has a new primary. As with any emergency reparent away from an unreachable primary, a semi-sync durability policy (e.g. `semi_sync`) is what prevents the old primary from acknowledging new writes in the meantime; with `none` durability, anything writing directly to the old MySQL (bypassing `vtgate`) could cause a split brain.
 
 See [#19918](https://github.com/vitessio/vitess/issues/19918).
+
+#### <a id="vttablet-query-throttler-tablet-throttler"/>Query throttler `TABLET_THROTTLER` strategy</a>
+
+VTTablet's incoming query throttler has a new `TABLET_THROTTLER` strategy, which throttles queries based on the tablet throttler's metrics (for example `lag` or `loadavg`). Rules are keyed by tablet type and statement type, and give each metric a list of thresholds with the percentage of matching queries to reject once the metric goes above that threshold. A query's priority (`/*vt+ PRIORITY=N */`, from 0 to 100, default 100) scales that percentage: a query with priority 50 is rejected half as often, and one with priority 0 is never throttled. A throttled query fails with `RESOURCE_EXHAUSTED`, which MySQL clients receive through a v25 `vtgate` as `ER_OUT_OF_RESOURCES` (1041). `dry_run` evaluates the rules and records metrics without rejecting anything: a query that would have been rejected counts in `QueryThrottlerThrottled` with `DryRun` set to `true`, and in `QueryThrottlerTabletStrategyDecisionCount` with the `would_throttle` outcome rather than `throttled`. Rules can target `REPLACE` statements separately from `INSERT`. VTTablet's own plans, query logs and metrics still report a `REPLACE` with the `Insert` plan type.
+
+VTTablet does not throttle some statements, because rejecting them would cost more than running them:
+
+- Statements that run inside a transaction, because VTGate rolls back the whole transaction when one of its statements is rejected. That covers more than explicit `BEGIN` ... `COMMIT` blocks:
+  - Statements in a session with `autocommit=0`, which is common with ORMs, on replicas as well as primaries: from the session's first statement other than a `SELECT` that names no table, `SET`, `USE`, `PREPARE`, `DEALLOCATE PREPARE`, `SHOW CREATE` or a `SHOW` statement that reads only server state, such as `SHOW VARIABLES`, VTGate runs its statements in a transaction that it opens for them.
+  - DML that VTGate runs in a transaction of its own even under autocommit: an `INSERT`, `UPDATE` or `DELETE` that spans several shards, unless it has the `MULTI_SHARD_AUTOCOMMIT` comment directive, and a write to a table with an owned lookup vindex, unless that lookup vindex sets `autocommit=true` (which `multi_shard_autocommit=true` implies).
+- Sequence fetches. VTGate fetches sequence values outside the user's transaction, both for an `INSERT` that needs them and for `SELECT NEXT ... VALUES`.
+- Statements that take or release an advisory lock (`GET_LOCK()`, `RELEASE_LOCK()`, `RELEASE_ALL_LOCKS()`), so that clients can still release their locks while a rule rejects queries.
+- `SELECT` statements that name no table, such as `SELECT SLEEP(1)`. VTGate sends them to check a `SET` and to keep a lock session or a temporary table's connection alive. The exemption depends only on the tables a statement names, so it also covers a `SELECT` that names none but still loads the server, for example one that calls a stored function that reads or writes tables, calls `BENCHMARK()`, or generates rows with a recursive common table expression.
+
+The query throttler does not evaluate these statements at all, so the `dry_run` counts do not include them either.
+
+Statements that VTGate runs outside the user's transaction, or as autocommit statements of their own, can still be throttled:
+
+- A lookup vindex with `autocommit=true` reads and inserts its lookup rows on a session of its own, so a rule in the lookup table's keyspace can reject the reads, and the inserts when they go to a single shard or the vindex also sets `multi_shard_autocommit=true`. A statement inside a transaction then fails with error 1041, for example an `INSERT` whose lookup row a `PRIMARY` rule for `INSERT` in the lookup keyspace rejects, although VTGate keeps the transaction open. Outside a transaction, VTGate commits the lookup rows before it writes the table itself, and a write to a single shard then runs as an autocommit statement, so a rule can reject it and leave the lookup rows behind, as any other error at that point would.
+- An `INSERT`, `UPDATE` or `DELETE` with the `MULTI_SHARD_AUTOCOMMIT` comment directive runs as an autocommit statement on each shard, so a rule can reject it on some shards after others have committed it.
+
+A `lag` rule ties every query it matches to the slowest tablet that the throttler probes. On a primary, `lag` (or `shard/lag`) is the highest of the primary's own heartbeat lag and the lag of the tablets of the `--throttle-tablet-types` types. On a replica, it is the replica's own lag. The throttler leaves a tablet out only when it cannot probe it, cannot read its lag, or the tablet does not run the query throttler itself, for example while it is not serving, and a rule whose metric cannot be read does not throttle. So a single replica that lags, for example one whose replication is stopped for maintenance or is broken, makes the primary reject the share of matching queries that the rule sets, for as long as that replica lags. VTGate does not retry these rejections, so clients receive error 1041. The tablet throttler aggregates `lag` the same way, but there it delays Online DDL and VReplication rather than user traffic. Try a configuration with `dry_run` first, and take a tablet out of the probed types before maintenance, for example by changing its type to `DRAINED`. After a reparent, `lag` also reads high on every tablet of the shard until the new primary writes its first heartbeat: it is the time since the old primary's last heartbeat, which is the duration of the reparent plus up to about 3 seconds with the default `--heartbeat-interval` of 1 second. A rule whose lowest `above` is below that can reject matching queries for up to one `--query-throttler-cache-update-interval` after a reparent.
+
+The configuration is set per keyspace with the new `vtctldclient UpdateQueryThrottlerConfig` command, which validates an enabled configuration and stores it in the `Keyspace` and then in each cell's `SrvKeyspace`; a cell with no `SrvKeyspace` for the keyspace yet gets the configuration when its `SrvKeyspace` is built. If some cells can't be updated, the command fails with `UNAVAILABLE`, while the `Keyspace` and the other cells already have the new configuration, so re-run it to update the rest. Until then, if one of those cells holds a shard's primary and has no enabled configuration, `REPLICA` and `RDONLY` rules on `lag` in the updated cells can reject queries on a healthy shard, as the upgrade note describes. The command replaces the whole configuration, so `{"enabled":false}` also removes every rule. A disabled configuration is stored without validating the rest of it, and tablets ignore it. Rules can name the statement types `SELECT`, `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, `DDL`, `SHOW`, `OTHER`, `ANALYZE`, `EXPLAIN`, `FLUSH` and `CALL_PROC`. Rules for `MIGRATION`, `SET` and `UNLOCK_TABLES` are refused: they would also reject `ALTER VITESS_MIGRATION ... CANCEL`, the statements that set up a session, and the `UNLOCK TABLES` that releases a `FLUSH TABLES ... WITH READ LOCK`. Rules for `SAVEPOINT`, `SAVEPOINT_ROLLBACK` (`ROLLBACK TO`) and `RELEASE` are refused as well, because those statements only run inside a transaction and could never be throttled. A tablet ignores rules for any of these statement types even if a configuration written straight to the topology server holds one. A rule names a metric either bare, such as `lag`, or with a scope, such as `shard/lag` or `self/lag`. `custom` is not supported, and neither are `default`, `self` and `shard` on their own, which name the throttler's default metric rather than `lag`. A metric can appear in any number of rules, but always spelled the same way, so a configuration that names both `lag` and `shard/lag` is refused. The dedicated throttler that the strategy checks keeps one threshold per metric, the lowest `above` among that metric's rules, and that is the threshold its status shows; each rule still applies its own thresholds. Tablets apply a change as soon as their `SrvKeyspace` watch delivers it, without a restart, but their decisions are based on throttler check results that they refresh every `--query-throttler-cache-update-interval` (default `10s`). So throttling starts and stops up to that long after a metric crosses its threshold, plus the time the throttler takes to collect the metric: under a second, or up to 5 seconds with an interval longer than a minute. A change that adds a metric or lowers its lowest threshold likewise takes effect up to that long after a tablet applies it. If refreshing the check keeps failing, for example because it times out, a tablet stops throttling once its last check result is more than six intervals old, rather than keep throttling on an old result. A disabled configuration runs no strategy. The strategy exports its metrics under the `QueryThrottlerTabletStrategy` prefix (for example `QueryThrottlerTabletStrategyDecisionCount` and `QueryThrottlerTabletStrategyCacheHits`), and registers them only once a tablet first runs it, so tablets that never enable it export none of them. The dedicated tablet throttler instance that the strategy checks exports its metrics under the `QueryThrottlerDedicated` prefix (for example `QueryThrottlerDedicatedCheckAnyTotal` and `QueryThrottlerDedicatedProbesTotal`), rather than into the tablet throttler's `Throttler*` metrics, and likewise only once the query throttler is enabled. Its MySQL connection pool keeps the `QueryThrottlerPool` prefix it has had since v23 (for example `QueryThrottlerPoolCapacity`) and, like every connection pool, exports those metrics on every tablet from startup.
+
+While a `TABLET_THROTTLER` configuration is enabled, in `dry_run` too and whatever metrics its rules use, the primary renews its heartbeat lease every 2 seconds. A tablet refreshes its throttler check only once per `--query-throttler-cache-update-interval`, which can be longer than an on-demand lease, and heartbeats that paused when the lease lapsed would read as replication lag on an idle, healthy shard, including right after a `lag` rule is added to a configuration that had none. So with the default heartbeat settings or with `--heartbeat-on-demand-duration`, the primary writes a heartbeat every `--heartbeat-interval` (default `1s`) for as long as the configuration is enabled, as it always does with `--heartbeat-enable`. Each heartbeat is a row write on the primary and a binary log event that every replica applies, which on-demand heartbeats otherwise avoid while nothing checks the throttler.
+
+`vtctldclient CheckThrottler` and `vtctldclient GetThrottlerStatus` have a new `--throttler-type` flag. It defaults to `DEFAULT_LAG_THROTTLER`, the tablet throttler; `DEDICATED_QUERY_THROTTLER` inspects the instance the query throttler checks. The responses have a new `throttler_type` field that names the throttler that answered. `DEDICATED_QUERY_THROTTLER` needs v25 throughout: a v24 `vtctld` drops `throttler_type` from the request and a v24 `vttablet` ignores it, so the tablet throttler answers instead, and `vtctldclient` then fails with `UNIMPLEMENTED` rather than print that answer as the query throttler's. The default works against any version.
+
+Existing query throttler metrics and behavior change as follows:
+
+- The dedicated tablet throttler instance now runs only while the query throttler is enabled. Previously it ran wherever the tablet throttler was enabled and wrote into the tablet throttler's `Throttler*` metrics, so those metrics now describe only the tablet throttler.
+- `QueryThrottlerThrottled` no longer has a `MetricValue` label, which created a new time series for every distinct metric value.
+- The `Workload` label of `QueryThrottlerRequests`, `QueryThrottlerThrottled`, `QueryThrottlerTotalLatencyNs` and `QueryThrottlerEvaluateLatencyNs` is `unknown` unless `--enable-per-workload-table-metrics` is set, to bound the number of time series. With the flag set, a query without a `WORKLOAD_NAME` is now labeled `unknown` rather than `default`.
+- In vtcombo and vtexplain, which run several tablets in one process, those four metrics no longer have a `Tablet` label. The tablets in a process now share one set of series.
+- While a configuration is enabled, `QueryThrottlerRequests`, `QueryThrottlerThrottled`, `QueryThrottlerTotalLatencyNs` and `QueryThrottlerEvaluateLatencyNs` no longer count the statements that the query throttler does not evaluate: the statements that VTTablet does not throttle, listed above, and statements of the types that rules cannot name.
+
+**Upgrade note**: upgrade every `vtctld`, `vttablet` and `vtgate` to v25 before enabling a `TABLET_THROTTLER` configuration. A v24 `vtgate` returns throttled queries to clients as `ER_TOO_MANY_USER_CONNECTIONS` (1203) rather than 1041, and until every other component is upgraded, query throttling can stop without anything reporting it:
+
+- A v24 `vtctld` rebuilds each `SrvKeyspace` with only the tablet throttler configuration, so `RebuildKeyspaceGraph` on it drops `query_throttler_config`.
+- A v24 `vttablet` or `vtgate` that starts in a cell with no `SrvKeyspace` for the keyspace creates one without `query_throttler_config`.
+- A v24 `vttablet` has no `TABLET_THROTTLER` strategy. It runs the NoOp strategy and logs `Unknown strategy ..., using NoOp`. While the configuration is enabled, it still records `QueryThrottlerRequests`, `QueryThrottlerTotalLatencyNs` and `QueryThrottlerEvaluateLatencyNs` for every query, labeled with the client's `WORKLOAD_NAME` and priority, which can create many time series.
+- A v24 `vttablet` answers a v25 primary's probes from its tablet throttler. While that throttler is disabled, the primary leaves the replica out, so its lag does not count.
+
+In the first two cases the tablets fall back to the NoOp strategy. To restore throttling, re-run `UpdateQueryThrottlerConfig` or rebuild the keyspace graph with a v25 `vtctld`.
+
+Until every `vttablet` is upgraded, a `lag` rule can also reject queries on a healthy shard. A replica's `lag` is the age of the last heartbeat it replicated, and with the default heartbeat settings or with `--heartbeat-on-demand-duration`, the primary writes heartbeats only while their lease is renewed, which in v25 the primary's own query throttler does for as long as the configuration is enabled. A v24 primary has no such throttler: its tablet throttler renews the lease for the replicas only while it is enabled, and a replica of a type in `--throttle-tablet-types` (default `replica`) asks it to only about once a minute. So while a v24 `vttablet` is the primary, the heartbeats that the v25 replicas read, and with them their `lag`, can go stale, and while they are stale, a `REPLICA` or `RDONLY` rule on `lag` rejects the queries it matches. The same happens while the primary's cell doesn't have the enabled configuration, for example in the first two cases above, or in a cell that `UpdateQueryThrottlerConfig` couldn't update. Unless the primary's heartbeats always run, with `--heartbeat-enable` and without `--heartbeat-on-demand-duration`, disable the configuration before downgrading a `vttablet` and before a reparent onto a `vttablet` that isn't upgraded yet, and as soon as an emergency reparent promotes one. To keep its rules, pass the whole configuration with `"enabled":false`.
 
 #### <a id="backup-include-binlogs"/>Back up binary logs with full builtin backups</a>
 
@@ -226,6 +281,29 @@ See [#20021](https://github.com/vitessio/vitess/issues/20021) for details.
 
 Vitess parses and escapes SQL text byte by byte, and in these character sets the second byte of a character can be a backslash or a back quote, so text in them was misparsed or corrupted on its way through Vitess. Use `utf8mb4` as the connection character set instead. Tables and columns can still be declared with any of these character sets; MySQL converts between them and the connection character set.
 
+#### <a id="vtgate-replace-statement-type"/>VTGate reports `REPLACE` statements as `REPLACE`</a>
+
+VTGate used to report a planned `REPLACE` statement with the `INSERT` statement type, because `REPLACE` is parsed as an `INSERT` that carries a "replace" action. It now reports it as `REPLACE`, which is what VTGate already reported for `REPLACE` on paths that don't build a plan, such as `PREPARE`. This changes the statement type of `REPLACE` statements in:
+
+- `StmtType` in the VTGate query log
+- the query-type label of the `QueryExecutions`, `QueryRoutes`, `QueryExecutionsByTable` and `SlowQueries` metrics
+- `QueryType` in plan output (`/debug/query_plans` and the `vtexplain` tool's JSON output)
+- `statementType` in `VEXPLAIN KEYS` output
+
+**Impact**: dashboards, alerts and query-log parsing that count `INSERT` no longer include `REPLACE` statements. Planning, routing, transactions and results are unchanged.
+
+**Migration**: match `REPLACE` as well as `INSERT` wherever `REPLACE` statements should be included.
+
+#### <a id="vtgate-qualified-star-join-using"/>Qualified stars are no longer coalesced by `JOIN ... USING`</a>
+
+MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` only: a qualified `tbl.*` returns every column of the named table, join columns included. VTGate previously applied the coalescing to qualified stars too, omitting the join columns from the right-hand table's `tbl.*` and moving them to the front of the left-hand table's. Qualified stars now expand to every column of the named table in table order, matching MySQL, and unqualified `*` is unchanged.
+
+**Impact**: The right-hand table's `tbl.*` returns additional columns. The left-hand table's `tbl.*` keeps its column count and raises no error, so clients that read it by position get different columns, `ORDER BY` positions sort by a different column, and `INSERT ... SELECT tbl.*` writes values into different columns and can route rows to a different shard. Statements written against the old expansion now fail: a derived table selecting both stars has a duplicate column name, and an `INSERT ... SELECT` column list or a `UNION` whose column count matched the old expansion fails as it does on MySQL, although a `UNION` that VTGate deduplicates itself can fail with the existing `VT13001: [BUG] weight_string offsets did not line up for UNION` instead. A derived table or CTE column list sized for the old expansion no longer matches it.
+
+**Migration**: before upgrading, replace a qualified `tbl.*` selected from a `JOIN ... USING` with an explicit column list wherever its columns or their order matter, since an explicit list returns the same columns before and after the upgrade.
+
+See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
+
 ### <a id="deprecations"/>Deprecations</a>
 
 #### <a id="deprecated-cli-flags"/>CLI Flags</a>
@@ -243,6 +321,10 @@ The VTTablet flag `--vreplication-enable-http-log` is now deprecated and is a no
 The vtctld and vtcombo flags `--cell`, `--proxy-tablets`, `--action-timeout`, and `--tablet-health-keep-alive` are now deprecated and are no-ops, as the [legacy vtctld HTTP API they configured has been removed](#vtctld-http-api-removed). The flags will be removed entirely in v26. This deprecation is tracked in https://github.com/vitessio/vitess/issues/21170.
 
 **Impact**: Remove any usage of these flags from vtctld and vtcombo startup scripts or configuration.
+
+The VTTablet and vtcombo flag `--query-throttler-config-refresh-interval` is now deprecated. It has had no effect since v24, when the query throttler started applying configuration changes as its `SrvKeyspace` topology watch delivers them, instead of polling on an interval. The flag will be removed entirely in v26.
+
+**Impact**: Remove any usage of the `--query-throttler-config-refresh-interval` flag from VTTablet and vtcombo startup scripts or configuration.
 
 #### <a id="deprecated-selectstream-rule-plan"/>Legacy streaming-path plan types in query rules</a>
 
@@ -315,6 +397,18 @@ When MySQL runs with `binlog_row_image=NOBLOB`, it omits BLOB/TEXT columns that 
 `RowChange` now has an additional `before_data_columns` bitmap, set only when the before image is partial (and `--vreplication-experimental-flags` allows NOBLOB row images, which is the default). A bit is set for every column that is present in the before image, in the order of the columns emitted by the stream's filter (after projection). Note that the existing `data_columns` bitmap for the after image remains in the source table's column order for compatibility with existing consumers; aligning the two is tracked in [#21075](https://github.com/vitessio/vitess/issues/21075). The field is additive: VReplication ignores it and consumers that do not know about it are unaffected.
 
 See [#21065](https://github.com/vitessio/vitess/issues/21065) for details.
+
+#### <a id="vreplication-analyze-stats-auto-recalc"/>Copied tables whose statistics aren't recalculated automatically are analyzed</a>
+
+VReplication creates target tables with the source's table options, including `STATS_AUTO_RECALC=0`. InnoDB saves empty persistent statistics for such a table when it is created and never recalculates them on its own, so after a copy the target, its replicas and their backups kept statistics that describe an empty table. The same happens to an InnoDB table that leaves `STATS_AUTO_RECALC` at its default while `innodb_stats_auto_recalc` is off. Tables of other engines, and InnoDB tables with transient statistics (`STATS_PERSISTENT=0`, or the default while `innodb_stats_persistent` is off), are not affected, as InnoDB recalculates transient statistics whenever it opens a table.
+
+At the end of each copy cycle of a workflow or Online DDL migration, the target now runs `ANALYZE TABLE` on the table the cycle copied, if its persistent statistics aren't recalculated automatically:
+
+- The statement is written to the target's binary log, with its own GTID, and the target's replicas apply it. A replica applying it waits while a backup there holds `LOCK INSTANCE FOR BACKUP`, as it does for DDL.
+- It is best effort: a failure does not fail the copy, and is logged and recorded in the workflow's log, which `vtctldclient Workflow show` displays. On the target, its wait for a metadata lock, such as one held by `LOCK TABLES` or `LOCK INSTANCE FOR BACKUP`, is bounded at 60 seconds; a replica applies it under its own `lock_wait_timeout`. If the workflow, or the tablet's VReplication engine, stops while it runs, it is killed, and the table is analyzed when the copy resumes; an atomic copy, which can't resume, finishes without it and logs a warning in the vttablet log.
+- Tables copied before the upgrade keep their empty statistics until `ANALYZE TABLE` is run on them.
+
+See [#21749](https://github.com/vitessio/vitess/issues/21749) for details.
 
 ### <a id="minor-changes-vtgate"/>VTGate</a>
 
@@ -748,6 +842,16 @@ Connection settings — the SET statements vtgate attaches to a session's querie
 
 See [#21139](https://github.com/vitessio/vitess/pull/21139) for details.
 
+#### <a id="vttablet-throttler-unprobed-heartbeats"/>Tablets outside `--throttle-tablet-types` keep their on-demand heartbeats running</a>
+
+When heartbeats run on demand, which is the case unless `--heartbeat-enable` is set without `--heartbeat-on-demand-duration`, the primary renews the heartbeat lease only for the tablet types it probes: the primary and the types in `--throttle-tablet-types` (default `replica`). A tablet of another type, RDONLY by default, asked the primary for heartbeats at most once a minute, so its heartbeats, and with them its lag, went stale for most of every minute. VTGate VStreams, workflows run with `--tablet-types rdonly`, and VDiffs sourced from RDONLY tablets were then throttled on false lag.
+
+While the throttler on such a tablet is being checked, the tablet now asks the primary for heartbeats every 2 seconds, half of the shortest lease, so its lag stays accurate. The primary writes heartbeats while those checks continue, as it already does while the throttler on a replica is being checked. Nothing changes while nothing checks the throttler on the tablet. When the primary's heartbeats always run, it ignores these requests.
+
+Each tablet decides from its own `--throttle-tablet-types` whether the primary probes it, so set the flag to the same value on the primary and on the other tablets of the keyspace. A tablet that lists its own type while the primary does not would ask for heartbeats only once a minute, as before.
+
+See [#20248](https://github.com/vitessio/vitess/issues/20248) for details.
+
 
 ### <a id="minor-changes-vtctld"/>VTCtld</a>
 
@@ -824,11 +928,61 @@ The upgrade changes how `--compression-level` is interpreted for the lz4 engine.
 
 See [#20778](https://github.com/vitessio/vitess/pull/20778) for details.
 
+#### <a id="vtbackup-errant-gtid-checks"/>`vtbackup` can refuse backups with errant GTIDs</a>
+
+The new `--enable-errant-gtid-checks` flag makes `vtbackup` fail a run, without completing a backup, when a position has errant GTIDs: GTIDs that the shard primary doesn't have, under any server UUID but the primary's own. A replica restored from a backup that has them fails with `Errant GTID detected`, and without the checks every `vtbackup` run restores such a backup and carries the errant GTIDs into the next one. With the flag, `vtbackup` checks three times:
+
+- **The restored backup**, or the data cloned with `--restore-with-clone`, before catching up.
+- **The data to back up**, before the upload. Errant GTIDs here come from a reparent that lost transactions `vtbackup` had already applied, or from `--init-backup-sql-queries` running binlogged statements such as `ANALYZE TABLE`, `OPTIMIZE TABLE` or `FLUSH TABLES`.
+- **The new backup**, just before its `MANIFEST` is written. If an emergency reparent during the upload loses transactions that the backup holds, the backup is aborted instead of left for restores to reject.
+
+The error names where the errant GTIDs came from and how to repair them. Before the upload, and again before writing the `MANIFEST`, `vtbackup` also waits while the primary hasn't committed GTIDs under its own UUID that `vtbackup` already applied, as when the primary waits for semi-sync acknowledgements, and then checks them against whichever primary the shard has.
+
+Before turning the flag on:
+- If the shard's newest backup already has errant GTIDs, every run fails. `vtbackup` restores the newest backup, so take a new backup of a healthy replica with `vtctldclient Backup`, and then remove the backups that hold the errant GTIDs.
+- Init SQL that runs binlogged statements fails the run. Use the statements' `NO_WRITE_TO_BINLOG` or `LOCAL` forms, or start the queries with `SET sql_log_bin = 0`.
+- The checks wait for a missing or unreachable primary, an unreachable topo server, for the primary to commit GTIDs that `vtbackup` already applied, and, after a reparent during the upload, for the new primary. Like the existing wait for the primary's position, these waits are bounded only by the job's deadline, if it has one. While the checks of the restored data and of the data to back up run, the `Phase` metric reports the `VerifyErrantGTIDs` phase; the check before the `MANIFEST` runs within `TakeNewBackup`.
+- MariaDB and other non-MySQL56 flavors are not checked, as on tablets.
+
+See [#20677](https://github.com/vitessio/vitess/issues/20677) and [#20678](https://github.com/vitessio/vitess/issues/20678).
+
+#### <a id="vtbackup-stop-at-committed-position"/>`vtbackup` stops catching up at the primary's committed position</a>
+
+On MySQL 8.4 and later, and on MySQL 8.0 with `replica_parallel_workers` set to 0 or 1, `vtbackup` no longer applies binlogged transactions that are still waiting for their semi-sync acknowledgement. An emergency reparent during or after the run can lose such transactions, and a backup that held them would then have errant GTIDs: every replica restored from it, or from a later backup built on it, would fail with `Errant GTID detected`.
+
+It stops catch-up at the primary's committed position, which, with semi-sync's default `AFTER_SYNC` wait point, doesn't include them yet. MySQL 8.0 runs a parallel applier on a single thread until it reaches a stop position, so with more workers (the default is 4 from 8.0.27), `vtbackup` catches up as before, as it does on other versions and MariaDB.
+
+When `vtbackup` stops at the committed position:
+- At startup, it waits while it can't read the shard primary or that tablet's record doesn't say `PRIMARY`, but a shard with no primary still fails the run at once. As with the existing wait for an unreachable primary, only the job's deadline, if it has one, bounds this wait.
+- If replication breaks, it restarts replication only from a primary whose `vttablet` answers and whose tablet record says `PRIMARY`. As before, the run fails once replication has stayed stopped for 60 seconds.
+
+With `--enable-errant-gtid-checks`, whether or not catch-up stops at the committed position, a restart after replication breaks also needs such a primary, and `vtbackup` first checks the data caught up so far for errant GTIDs, failing the run if it finds any.
+
+See [#20676](https://github.com/vitessio/vitess/issues/20676) and [#20679](https://github.com/vitessio/vitess/issues/20679).
+
+#### <a id="backup-shard-tablet-types"/>`BackupShard` can choose the tablet type to back up from</a>
+
+`BackupShard` picks whichever of the shard's `REPLICA`, `RDONLY` and `SPARE` tablets has the lowest replication lag, ignoring the type. A new `--tablet-types` flag, and the matching `tablet_types` field on `BackupShardRequest`, turn that into an ordered preference: the first listed type with a usable tablet wins, and the lowest lag decides within a type. When the flag is unset, the tablet with the lowest lag among `REPLICA`, `RDONLY` and `SPARE` is used, as before.
+
+Passing `--tablet-types=rdonly,replica` prioritises backups from an `RDONLY` tablet and falls back to a `REPLICA` if no `RDONLY` tablet can serve one, which keeps backup load off the tablets serving replica reads.
+
+`primary` cannot be listed. `--allow-primary` keeps its meaning: when no tablet of the listed types can take the backup, it is taken on the primary.
+
+| flags | result |
+|---|---|
+| `--tablet-types=rdonly,replica` | an `RDONLY` tablet, falling back to a `REPLICA` when none can serve the backup |
+| `--tablet-types=rdonly` | an `RDONLY` tablet only, with no fallback |
+| `--tablet-types=rdonly --allow-primary` | an `RDONLY` tablet, falling back to the primary when none can serve the backup |
+| `--tablet-types=rdonly,primary` | rejected: `primary` cannot be listed, use `--allow-primary` |
+| unset | unchanged, including the existing fallback to the primary under `--allow-primary` |
+
+`--tablet-types` needs a v25 `vtctld`. An older `vtctld` ignores the field and uses the lowest-lag tablet of any of those types, so `--tablet-types=rdonly` against it can back up from a `REPLICA`. Upgrade `vtctld` before relying on the flag.
+
 ### <a id="minor-changes-vtadmin"/>VTAdmin</a>
 
-#### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v22.23.2 (LTS)</a>
+#### <a id="vtadmin-updated-node"/>vtadmin-web updated to node v24.21.0 (LTS)</a>
 
-Building `vtadmin-web` now requires node v22.22.2 or newer on the 22 line, v24.15.0 or newer on the 24 line, or v26 and above, up from v22.13.0; `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script and the `vitess/vtadmin` image build with node v22.23.2. The range is what jsdom 30, a test dependency, supports; on the 22 line the bump stays within the same major, so no breaking changes are involved. Full details on the node v22.23.2 release can be found at https://nodejs.org/en/blog/release/v22.23.2.
+Building `vtadmin-web` now requires node v24.15.0 or newer on the 24 line, or v26 and above, with npm v11.12.1 or newer, up from node v22.13.0 and npm v10.9.2; node 22 is no longer supported. `package.json` declares exactly that range and `npm ci` enforces it. The vtadmin build script, the CI workflows, and the `vitess/vtadmin` image build with node v24.21.0. The node range is what jsdom 30, a test dependency, supports on those lines. npm 11 is required because `npm ci` on npm 10 fails against the lock file that npm 11 writes. Full details on the node v24.21.0 release can be found at https://nodejs.org/en/blog/release/v24.21.0.
 
 ### <a id="minor-changes-general"/>General</a>
 

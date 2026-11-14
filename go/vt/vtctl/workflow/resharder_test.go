@@ -74,6 +74,8 @@ func TestReshardCreate(t *testing.T) {
 		updateVReplicationRequest      *tabletmanagerdatapb.UpdateVReplicationWorkflowsRequest
 		autoStart                      bool
 		wantErr                        string
+		// The shards to request, if they differ from the keyspaces' shards.
+		sourceShards, targetShards []string
 	}{
 		{
 			name: "basic",
@@ -133,6 +135,34 @@ func TestReshardCreate(t *testing.T) {
 			},
 			wantErr: "buildResharder: target shard -80 has no primary tablet",
 		},
+		// A repeated shard must not get a second set of streams: the test TMC
+		// fails a target's insert with an extra row, or a second insert, as an
+		// unexpected query. Without the skip, a repeated first source shard
+		// also fails ValidateForReshard.
+		{
+			name: "repeated source shard",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			sourceShards: []string{"0", "0"},
+		},
+		{
+			name: "repeated target shard",
+			sourceKeyspace: &testKeyspace{
+				KeyspaceName: sourceKeyspaceName,
+				ShardNames:   []string{"0"},
+			},
+			targetKeyspace: &testKeyspace{
+				KeyspaceName: targetKeyspaceName,
+				ShardNames:   []string{"-80", "80-"},
+			},
+			targetShards: []string{"-80", "80-", "80-"},
+		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -143,12 +173,20 @@ func TestReshardCreate(t *testing.T) {
 			defer env.close()
 			env.tmc.schema = schema
 
+			sourceShards := tc.sourceKeyspace.ShardNames
+			if tc.sourceShards != nil {
+				sourceShards = tc.sourceShards
+			}
+			targetShards := tc.targetKeyspace.ShardNames
+			if tc.targetShards != nil {
+				targetShards = tc.targetShards
+			}
 			req := &vtctldatapb.ReshardCreateRequest{
 				Keyspace:     targetKeyspaceName,
 				Workflow:     workflowName,
 				TabletTypes:  tabletTypes,
-				SourceShards: tc.sourceKeyspace.ShardNames,
-				TargetShards: tc.targetKeyspace.ShardNames,
+				SourceShards: sourceShards,
+				TargetShards: targetShards,
 				Cells:        []string{env.cell},
 				AutoStart:    tc.autoStart,
 			}
@@ -172,7 +210,7 @@ func TestReshardCreate(t *testing.T) {
 				env.tmc.expectVRQuery(
 					tabletUID,
 					insertPrefix+
-						`\('`+workflowName+`', 'keyspace:"`+targetKeyspaceName+`" shard:"0" filter:{rules:{match:"/.*" filter:"`+target+`"}}', '', [0-9]*, [0-9]*, '`+
+						`\('`+workflowName+`', 'keyspace:"`+targetKeyspaceName+`" shard:"0" filter:{rules:{match:"/\.\*" filter:"`+target+`"}}', '', [0-9]*, [0-9]*, '`+
 						env.cell+`', '`+tabletTypesStr+`', [0-9]*, 0, 'Stopped', 'vt_`+targetKeyspaceName+`', 4, 0, false, '{}'\)`+eol,
 					&sqltypes.Result{},
 				)

@@ -18,7 +18,7 @@ package vttest
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -49,7 +49,10 @@ func (ctl *Topoctl) Setup() error {
 		return err
 	}
 
-	log.Info(fmt.Sprintf("Creating cells if they don't exist in the provided topo server %s %s %s", ctl.TopoImplementation, ctl.TopoGlobalServerAddress, ctl.TopoGlobalRoot))
+	log.Info("Creating cells if they don't exist in the provided topo server",
+		slog.String("topo_implementation", ctl.TopoImplementation),
+		slog.String("topo_global_server_address", ctl.TopoGlobalServerAddress),
+		slog.String("topo_global_root", ctl.TopoGlobalRoot))
 	// Create cells if it doesn't exist to be idempotent. Should work when we share the same topo server across multiple local clusters.
 	for _, cell := range ctl.Topology.Cells {
 		_, err := topoServer.GetCellInfo(ctx, cell, true)
@@ -71,7 +74,11 @@ func (ctl *Topoctl) Setup() error {
 		if err != nil {
 			return err
 		}
-		log.Info(fmt.Sprintf("Created cell info for %s in the topo server %s %s %s", cell, ctl.TopoImplementation, ctl.TopoGlobalServerAddress, ctl.TopoGlobalRoot))
+		log.Info("Created cell info for cell in the topo server",
+			slog.String("cell", cell),
+			slog.String("topo_implementation", ctl.TopoImplementation),
+			slog.String("topo_global_server_address", ctl.TopoGlobalServerAddress),
+			slog.String("topo_global_root", ctl.TopoGlobalRoot))
 	}
 
 	return nil

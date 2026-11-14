@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -43,6 +44,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -715,6 +717,7 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 				analyzedAlias = &topodatapb.TabletAlias{Cell: "zone1", Uid: 100}
 			}
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			err := recheckPrimaryHealth(&inst.DetectionAnalysis{
 				AnalyzedInstanceAlias: analyzedAlias,
 				Analysis:              analysis,
@@ -727,6 +730,10 @@ func TestRecheckPrimaryHealth(t *testing.T) {
 
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
+				// The analysis names no primary, so the line leaves it out.
+				record := logs.Record(t, "recheckPrimaryHealth: Primary recovery is required")
+				assert.Equal(t, "INFO", record["level"])
+				assert.NotContains(t, record, "primary_tablet")
 				return
 			}
 
@@ -2159,6 +2166,20 @@ func TestCheckIfAlreadyFixedReturnsCellFromRefreshedEntry(t *testing.T) {
 // executeCheckAndRecoverFunction path to ensure the returned refreshed entry is actually
 // used to suppress recovery.
 func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
+	checkPostLockCellGate(t, &topodatapb.TabletAlias{Cell: "zone2", Uid: 200})
+}
+
+// TestCellsNoRecoveryGateFiresAfterPostLockUnknownCell is the same, but the
+// shard records a primary term and no primary alias, so the refreshed cell is
+// unknown. The line that reports the skip leaves the cell out.
+func TestCellsNoRecoveryGateFiresAfterPostLockUnknownCell(t *testing.T) {
+	record := checkPostLockCellGate(t, nil)
+	assert.NotContains(t, record, "cell")
+}
+
+// checkPostLockCellGate runs the scenario above with the shard's primary set to
+// primaryAlias, and returns the line that reports the skip.
+func checkPostLockCellGate(t *testing.T, primaryAlias *topodatapb.TabletAlias) map[string]any {
 	db.ClearVTOrcDatabase()
 	defer db.ClearVTOrcDatabase()
 
@@ -2175,7 +2196,7 @@ func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
 	require.NoError(t, ts.CreateKeyspace(ctx, "ks", &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilityNone}))
 	require.NoError(t, ts.CreateShard(ctx, "ks", "0"))
 	_, err = ts.UpdateShardFields(ctx, "ks", "0", func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = &topodatapb.TabletAlias{Cell: "zone2", Uid: 200}
+		si.PrimaryAlias = primaryAlias
 		si.PrimaryTermStartTime = &vttimepb.Time{Seconds: 1672212205}
 		return nil
 	})
@@ -2242,11 +2263,12 @@ func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
 	counterKey := strings.Join([]string{recoveryName, analysis.AnalyzedKeyspace, analysis.AnalyzedShard, RecoverySkipCellNoRecovery.String()}, ".")
 	skipsBefore := recoveriesSkippedCounter.Counts()[counterKey]
 
+	logs := logtest.Capture(t, slog.LevelInfo)
 	require.NoError(t, executeCheckAndRecoverFunction(analysis))
 
 	skipsAfter := recoveriesSkippedCounter.Counts()[counterKey]
 	require.Equal(t, skipsBefore+1, skipsAfter,
-		"CellNoRecovery skip counter must increment: post-lock refresh showed AnalyzedCell shifted from zone1 (allowed) to zone2 (denied)")
+		"CellNoRecovery skip counter must increment: post-lock refresh showed AnalyzedCell shifted from zone1 (allowed) to a denied or unknown cell")
 
 	var recoveryRows int
 	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM topology_recovery").Scan(&recoveryRows))
@@ -2255,6 +2277,7 @@ func TestCellsNoRecoveryGateFiresAfterPostLockCellShift(t *testing.T) {
 	var detectionRows int
 	require.NoError(t, orcDb.QueryRow("SELECT COUNT(*) FROM recovery_detection").Scan(&detectionRows))
 	require.Equal(t, 1, detectionRows, "detection must be recorded even when recovery is suppressed by the post-lock cell gate")
+	return logs.Record(t, "Recovery for PrimaryTabletDeleted on ks/0: CheckAndRecover: NOT Recovering host (refreshed AnalyzedCell is denied or unknown; --cells-no-recovery fail-closed after lock)")
 }
 
 // TestResolveRecoveryIncidentBoundary covers the two-act incident boundary scenario:
@@ -2688,4 +2711,74 @@ func TestReplicaUnreachableAfterDetectionSkipsRepair(t *testing.T) {
 	assert.Equal(t, unreachableBefore+1, skips(RecoverySkipReplicaUnreachable))
 	assert.Equal(t, staleBefore, skips(RecoverySkipStaleAnalysis))
 	assert.Equal(t, primaryBefore, skips(RecoverySkipPrimaryRecovery))
+}
+
+// TestRecoverErrantGTIDDetectedDrainsWithoutSemiSync checks that a tablet drained for errant GTIDs
+// is told to stop sending semi-sync ACKs. ERS neither waits for a DRAINED tablet nor promotes it,
+// so a write that only a DRAINED tablet ACKed is lost in a failover.
+func TestRecoverErrantGTIDDetectedDrainsWithoutSemiSync(t *testing.T) {
+	orcDB, cached, err := db.OpenVTOrcWithCache()
+	require.NoError(t, err)
+	if !cached {
+		t.Cleanup(func() {
+			require.NoError(t, orcDB.Close())
+		})
+	}
+	for _, table := range []string{"topology_recovery_steps", "topology_recovery", "recovery_detection", "vitess_tablet", "vitess_keyspace"} {
+		_, err = orcDB.Exec("delete from " + table)
+		require.NoError(t, err)
+	}
+
+	const (
+		keyspace = "ks"
+		shard    = "0"
+	)
+	primaryTablet := &topodatapb.Tablet{
+		Alias:                &topodatapb.TabletAlias{Cell: "zone1", Uid: 100},
+		Hostname:             "primary",
+		MysqlHostname:        "primary",
+		MysqlPort:            3306,
+		Keyspace:             keyspace,
+		Shard:                shard,
+		Type:                 topodatapb.TabletType_PRIMARY,
+		PrimaryTermStartTime: &vttimepb.Time{Seconds: 1000},
+		PortMap:              map[string]int32{"vt": 15100, "grpc": 15101},
+	}
+	errantTablet := &topodatapb.Tablet{
+		Alias:         &topodatapb.TabletAlias{Cell: "zone2", Uid: 200},
+		Hostname:      "errant",
+		MysqlHostname: "errant",
+		MysqlPort:     3306,
+		Keyspace:      keyspace,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_REPLICA,
+		PortMap:       map[string]int32{"vt": 15200, "grpc": 15201},
+	}
+	require.NoError(t, inst.SaveTablet(primaryTablet))
+	require.NoError(t, inst.SaveTablet(errantTablet))
+	keyspaceInfo := &topo.KeyspaceInfo{
+		Keyspace: &topodatapb.Keyspace{DurabilityPolicy: policy.DurabilitySemiSync},
+	}
+	keyspaceInfo.SetKeyspaceName(keyspace)
+	require.NoError(t, inst.SaveKeyspace(keyspaceInfo))
+
+	oldTMC := tmc
+	t.Cleanup(func() { tmc = oldTMC })
+	mockTMC := tmcmock.NewMockTabletManagerClient(gomock.NewController(t))
+	// The tablet was a semi-sync REPLICA; as DRAINED it must not ACK.
+	mockTMC.EXPECT().
+		ChangeType(gomock.Any(), gomock.Any(), topodatapb.TabletType_DRAINED, false).
+		Return(nil).
+		Times(1)
+	tmc = mockTMC
+
+	analysisEntry := &inst.DetectionAnalysis{
+		Analysis:              inst.ErrantGTIDDetected,
+		AnalyzedInstanceAlias: errantTablet.Alias,
+		AnalyzedKeyspace:      keyspace,
+		AnalyzedShard:         shard,
+	}
+	attempted, _, err := recoverErrantGTIDDetected(t.Context(), analysisEntry, log.NewPrefixedLogger("test-errant-gtid"))
+	require.NoError(t, err)
+	require.True(t, attempted)
 }

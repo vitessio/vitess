@@ -19,6 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"path"
 	"sort"
 	"sync"
@@ -88,7 +89,7 @@ func commandLs(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			hasError = true
 			if !lsArgs.Force || err != zk.ErrNoNode {
-				log.Warn(fmt.Sprintf("ls: cannot access %v: %v", zkPath, err))
+				log.Warn("ls: cannot access", slog.String("path", zkPath), slog.Any("error", err))
 			}
 		}
 
@@ -114,7 +115,7 @@ func commandLs(cmd *cobra.Command, args []string) error {
 				_, stat, err := fs.Conn.Exists(cmd.Context(), localPath)
 				if err != nil {
 					if !lsArgs.Force || err != zk.ErrNoNode {
-						log.Warn(fmt.Sprintf("ls: cannot access: %v: %v", localPath, err))
+						log.Warn("ls: cannot access", slog.String("path", localPath), slog.Any("error", err))
 					}
 				} else {
 					stats[i] = stat

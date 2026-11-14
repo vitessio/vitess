@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -74,11 +75,22 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	require.Equal(t, "Fake", executeBackupStats.ScopeV[backupstats.ScopeImplementation])
 }
 
-// TestBackupParamsCopy tests that Copy carries IncludeBinlogs, which Backup
-// would otherwise silently drop before it reaches the backup engine.
+// TestBackupParamsCopy tests that Copy carries IncludeBinlogs and VerifyPosition,
+// which Backup would otherwise silently drop before they reach the backup engine.
 func TestBackupParamsCopy(t *testing.T) {
-	params := BackupParams{IncludeBinlogs: true}
-	assert.True(t, params.Copy().IncludeBinlogs)
+	called := false
+	params := BackupParams{
+		IncludeBinlogs: true,
+		VerifyPosition: func(context.Context, replication.Position) error {
+			called = true
+			return nil
+		},
+	}
+	copied := params.Copy()
+	assert.True(t, copied.IncludeBinlogs)
+	require.NotNil(t, copied.VerifyPosition)
+	require.NoError(t, copied.VerifyPosition(t.Context(), replication.Position{}))
+	assert.True(t, called)
 }
 
 // TestBackupRejectsIncludeBinlogsWithOtherEngine tests that Backup refuses
@@ -817,7 +829,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go scanLinesToLogger("test", reader, logger, wg.Done)
+	go scanLinesToLogger("test", "stdout", reader, logger, wg.Done)
 
 	for i := range 100 {
 		_, err := fmt.Fprintf(writer, "foobar %d\n", i)
@@ -830,7 +842,7 @@ func TestScanLinesToLogger(t *testing.T) {
 	require.Len(t, logger.Events, 100)
 
 	for i, event := range logger.Events {
-		require.Equal(t, fmt.Sprintf("test: foobar %d", i), event.Value)
+		require.Equal(t, fmt.Sprintf(`command stdout command=test stdout="foobar %d"`, i), event.Value)
 	}
 }
 
@@ -880,7 +892,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				Logger: logutil.NewMemoryLogger(),
 			},
 			wantErr:    false,
-			wantLogMsg: "Skipping backup init SQL queries",
+			wantLogMsg: `Skipping backup init SQL queries as the backup tablet type is not in the provided list queries="[OPTIMIZE TABLE foo]" tablet_type=PRIMARY tablet_types="[replica rdonly]"`,
 		},
 		{
 			name: "missing timeout",
@@ -915,7 +927,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 				}
 			},
 			wantErr:    false,
-			wantLogMsg: "Successfully completed init SQL queries: \"OPTIMIZE LOCAL TABLE foo\"",
+			wantLogMsg: `Successfully completed init SQL queries queries="[OPTIMIZE LOCAL TABLE foo]"`,
 		},
 		{
 			name: "successful execution with multiple queries in order",
@@ -1164,7 +1176,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 		// Check that the appropriate log message was generated.
 		found := false
 		for _, event := range logger.Events {
-			if strings.Contains(event.Value, "Canceling init SQL work due to hitting the configured timeout") {
+			if event.Value == "Canceling init SQL work due to hitting the configured timeout or the backup itself having been canceled timeout=30s" {
 				found = true
 				break
 			}
@@ -1212,6 +1224,7 @@ func TestExecuteBackupInitSQL(t *testing.T) {
 					for _, event := range memLogger.Events {
 						if strings.Contains(event.Value, tc.wantLogMsg) {
 							found = true
+							assert.Equal(t, logutilpb.Level_INFO, event.Level)
 							break
 						}
 					}

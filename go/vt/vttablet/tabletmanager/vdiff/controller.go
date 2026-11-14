@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -87,7 +88,7 @@ type controller struct {
 func newController(row sqltypes.RowNamedValues, dbClientFactory func() binlogplayer.DBClient,
 	ts *topo.Server, vde *Engine, options *tabletmanagerdata.VDiffOptions,
 ) (*controller, error) {
-	log.Info(fmt.Sprintf("VDiff controller initializing for %+v", row))
+	log.Info("VDiff controller initializing", slog.String("row", fmt.Sprint(row)))
 	id, _ := row["id"].ToInt64()
 
 	ct := &controller{
@@ -113,9 +114,14 @@ func (ct *controller) Stop() {
 	<-ct.done
 }
 
+// logAttrs returns the attributes that identify this vdiff, followed by attrs.
+func (ct *controller) logAttrs(attrs ...slog.Attr) []slog.Attr {
+	return append([]slog.Attr{slog.String("vdiff", ct.uuid), slog.String("workflow", ct.workflow)}, attrs...)
+}
+
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
-		log.Info("Run finished for vdiff " + ct.uuid)
+		log.Info("Run finished for vdiff", ct.logAttrs()...)
 		// Unblock Stop() callers waiting on <-ct.done.
 		close(ct.done)
 		// Release gRPC connections held by this controller's tablet manager client.
@@ -124,14 +130,14 @@ func (ct *controller) run(ctx context.Context) {
 
 	dbClient := ct.vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
-		log.Error(fmt.Sprintf("Encountered an error connecting to database for vdiff %s: %v", ct.uuid, err))
+		log.Error("Encountered an error connecting to database for vdiff", ct.logAttrs(slog.Any("error", err))...)
 		return
 	}
 	defer dbClient.Close()
 
 	qr, err := ct.vde.getVDiffByID(ctx, dbClient, ct.id)
 	if err != nil {
-		log.Error(fmt.Sprintf("Encountered an error getting vdiff record for %s: %v", ct.uuid, err))
+		log.Error("Encountered an error getting vdiff record", ct.logAttrs(slog.Any("error", err))...)
 		return
 	}
 
@@ -139,19 +145,19 @@ func (ct *controller) run(ctx context.Context) {
 	state := VDiffState(strings.ToLower(row["state"].ToString()))
 	switch state {
 	case PendingState, StartedState:
-		action := "Starting"
 		if state == StartedState {
-			action = "Restarting"
+			log.Info("Restarting vdiff", ct.logAttrs()...)
+		} else {
+			log.Info("Starting vdiff", ct.logAttrs()...)
 		}
-		log.Info(fmt.Sprintf("%s vdiff %s", action, ct.uuid))
 		if err := ct.start(ctx, dbClient); err != nil {
-			log.Error(fmt.Sprintf("Encountered an error for vdiff %s: %s", ct.uuid, err))
+			log.Error("Encountered an error for vdiff", ct.logAttrs(slog.Any("error", err))...)
 			if err := ct.saveErrorState(ctx, err); err != nil {
-				log.Error(fmt.Sprintf("Unable to save error state for vdiff %s; giving up because %s", ct.uuid, err.Error()))
+				log.Error("Unable to save error state for vdiff; giving up", ct.logAttrs(slog.Any("error", err))...)
 			}
 		}
 	default:
-		log.Info(fmt.Sprintf("VDiff %s was not marked as runnable (state: %s), doing nothing", ct.uuid, state))
+		log.Info("VDiff was not marked as runnable, doing nothing", ct.logAttrs(slog.String("state", string(state)))...)
 	}
 }
 
@@ -204,7 +210,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	if err != nil {
 		return err
 	}
-	log.Info(fmt.Sprintf("Found %d vreplication streams for %s", len(qr.Rows), ct.workflow))
+	log.Info("Found vreplication streams", ct.logAttrs(slog.Int("stream_count", len(qr.Rows)))...)
 	for i, row := range qr.Named().Rows {
 		select {
 		case <-ctx.Done():
@@ -220,7 +226,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		}
 		var bls binlogdatapb.BinlogSource
 		if err := prototext.Unmarshal(sourceBytes, &bls); err != nil {
-			log.Error(fmt.Sprintf("Encountered an error unmarshalling vdiff binlog source for %s: %v", ct.uuid, err))
+			log.Error("Encountered an error unmarshalling vdiff binlog source", ct.logAttrs(slog.Any("error", err))...)
 			return err
 		}
 		source.shard = bls.Shard
@@ -257,7 +263,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 		return err
 	}
 	if err := wd.diff(ctx); err != nil {
-		log.Error(fmt.Sprintf("Encountered an error performing workflow diff for vdiff %s: %v", ct.uuid, err))
+		log.Error("Encountered an error performing workflow diff for vdiff", ct.logAttrs(slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))...)
 		return err
 	}
 
@@ -332,7 +338,7 @@ func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
 
 	for {
 		if err := save(); err != nil {
-			log.Warn(fmt.Sprintf("Failed to persist vdiff error state: %v. Will retry in %s", err, retryDelay.String()))
+			log.Warn("Failed to persist vdiff error state, will retry", ct.logAttrs(slog.Any("error", err), slog.Duration("retry_delay", retryDelay))...)
 			select {
 			case <-ctx.Done():
 				return vterrors.Errorf(vtrpcpb.Code_CANCELED, "engine is shutting down")

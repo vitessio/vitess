@@ -299,6 +299,22 @@ var defaultMarginParser = func() *Parser {
 // parses it.
 func (p *Parser) SplitMarginComments(sql string) (query string, comments MarginComments) {
 	start, end, newlineFirst := p.marginBounds(sql)
+	if strings.Trim(sql[end:], sqlSpaceChars) == "" {
+		// A statement terminator at the end of the text is not part of the
+		// query: trimQuery removes it in every case. The split reads it as
+		// query text, though, so it holds the comments before it in the query,
+		// where the callers rebuild the query from the AST and lose them.
+		// Remove the terminator and split again.
+		//
+		// The retry moves nothing else. When the second split finds no
+		// trailing comment, the text stays as it is, so a ';' that belongs to a
+		// line comment stays in the query with the comment that holds it.
+		if trimmed, ok := trimTerminator(sql); ok {
+			if s, e, nl := p.marginBounds(trimmed); strings.Trim(trimmed[e:], sqlSpaceChars) != "" {
+				sql, start, end, newlineFirst = trimmed, s, e, nl
+			}
+		}
+	}
 	comments = MarginComments{
 		Leading:  strings.TrimLeft(sql[:start], sqlSpaceChars),
 		Trailing: strings.TrimRight(sql[end:], sqlSpaceChars),
@@ -307,6 +323,23 @@ func (p *Parser) SplitMarginComments(sql string) (query string, comments MarginC
 		comments.Trailing = "\n" + comments.Trailing
 	}
 	return trimQuery(sql[start:end]), comments
+}
+
+// trimTerminator removes the ';' characters and spaces at the end of sql for
+// the second split in SplitMarginComments. ok is false when that split cannot
+// find a trailing comment: sql does not end with a ';', so the first split
+// already read the same text, or what is left does not end with '*/', which a
+// trailing comment needs.
+func trimTerminator(sql string) (trimmed string, ok bool) {
+	n := len(sql)
+	for n > 0 && IsSQLSpace(sql[n-1]) {
+		n--
+	}
+	if n == 0 || sql[n-1] != ';' {
+		return sql, false
+	}
+	trimmed = strings.TrimRight(sql[:n], sqlSpaceChars+";")
+	return trimmed, strings.HasSuffix(trimmed, "*/")
 }
 
 // trimQuery removes the spaces and ';' characters at both ends of query. It

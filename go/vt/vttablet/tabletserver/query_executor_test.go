@@ -1002,6 +1002,30 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	require.Truef(t, got.Equal(want), "qre.Execute() =\n%#v, want:\n%#v", got, want)
 }
 
+// VTGate fetches sequence values outside the user's transaction and rolls the transaction
+// back when an explicit fetch is rejected, so the query throttler must not reject them.
+func TestQueryExecutorThrottlerSkipsNextval(t *testing.T) {
+	db := setUpQueryExecutorTest(t)
+	t.Cleanup(db.Close)
+	db.AddQuery("select next_id, cache from seq where id = 0 for update", &sqltypes.Result{
+		Fields: []*querypb.Field{{Type: sqltypes.Int64}, {Type: sqltypes.Int64}},
+		Rows:   [][]sqltypes.Value{{sqltypes.NewInt64(1), sqltypes.NewInt64(3)}},
+	})
+	db.AddQuery("update seq set next_id = 4 where id = 0", &sqltypes.Result{})
+	ctx := t.Context()
+	tsv := newTestTabletServer(ctx, noFlags, db)
+	t.Cleanup(tsv.StopService)
+	enableAlwaysThrottle(t, tsv)
+
+	_, err := newTestQueryExecutor(ctx, tsv, "select * from test_table", 0).Execute()
+	require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err), "the query throttler must reject other statements")
+
+	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
+	require.Equal(t, planbuilder.PlanNextval, qre.plan.PlanID)
+	_, err = qre.Execute()
+	require.NoError(t, err)
+}
+
 // TestQueryExecutorPlanNextvalCommitFailureKeepsCache verifies that a failed
 // refill COMMIT leaves the sequence cache unchanged and that the next call
 // refills the cache from the sequence table.
@@ -2902,11 +2926,11 @@ func TestReserveSettingsRejectUnsupportedSQLModes(t *testing.T) {
 	// that cannot be judged upfront are rejected: non-constant sql_mode expressions,
 	// strings that do not parse, and statements that are not SET statements
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"set sql_mode = concat('AN', 'SI')"})
-	require.EqualError(t, err, "non-constant sql_mode value in connection settings: set sql_mode = concat('AN', 'SI')")
+	require.EqualError(t, err, "non-constant sql_mode value in connection settings")
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"this is not SQL"})
-	require.ErrorContains(t, err, "failed to parse connection setting: this is not SQL")
+	require.ErrorContains(t, err, "failed to parse connection setting at position 1")
 	_, _, err = tsv.te.ReserveBegin(ctx, &querypb.ExecuteOptions{}, []string{"select 1 from dual"})
-	require.EqualError(t, err, "connection setting is not a SET statement: select 1 from dual")
+	require.EqualError(t, err, "connection setting at position 1 is not a SET statement")
 
 	validSetting := "set sql_mode = 'STRICT_TRANS_TABLES'"
 	db.AddQuery(validSetting, &sqltypes.Result{})
@@ -2975,7 +2999,7 @@ func TestSettingsRejectUnsafeConnectionCharsets(t *testing.T) {
 // ACL dry run accepts it too, as it lets through any request the ACL would deny.
 func TestSettingsWithSubqueryUnderStrictTableACL(t *testing.T) {
 	subquerySetting := "set @@sql_select_limit = (select count(*) from test_table)"
-	settingErr := "connection setting must not contain a subquery: " + subquerySetting
+	settingErr := "connection setting must not contain a subquery"
 
 	t.Run("strict table ACL rejects", func(t *testing.T) {
 		db := setUpQueryExecutorTest(t)

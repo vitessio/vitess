@@ -19,6 +19,7 @@ package vreplication
 import (
 	"bytes"
 	"encoding/hex"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -277,7 +278,7 @@ func (tpb *tablePlanBuilder) generatePartialValuesPart(buf *sqlparser.TrackedBuf
 	separator := "("
 	for ind, cexpr := range tpb.colExprs {
 		if int64(ind) >= dataColumns.Count {
-			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
+			log.Error("Ran out of columns trying to generate query", slog.String("table", tpb.name.CompliantName()))
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tpb.name.String())
 		}
 		if cexpr.isGenerated || !isBitSet(dataColumns.Cols, ind) {
@@ -318,7 +319,7 @@ func (tpb *tablePlanBuilder) generatePartialInsertPart(buf *sqlparser.TrackedBuf
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
 		if int64(ind) >= dataColumns.Count {
-			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
+			log.Error("Ran out of columns trying to generate query", slog.String("table", tpb.name.CompliantName()))
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tpb.name.String())
 		}
 		if cexpr.isGenerated {
@@ -340,7 +341,7 @@ func (tpb *tablePlanBuilder) generatePartialSelectPart(buf *sqlparser.TrackedBuf
 	separator := ""
 	for ind, cexpr := range tpb.colExprs {
 		if int64(ind) >= dataColumns.Count {
-			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
+			log.Error("Ran out of columns trying to generate query", slog.String("table", tpb.name.CompliantName()))
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial insert query for "+tpb.name.String())
 		}
 		if cexpr.isGenerated {
@@ -403,7 +404,7 @@ func (tpb *tablePlanBuilder) createPartialUpdateQuery(dataColumns *binlogdatapb.
 	separator := ""
 	for i, cexpr := range tpb.colExprs {
 		if int64(i) >= dataColumns.Count {
-			log.Error("Ran out of columns trying to generate query for " + tpb.name.CompliantName())
+			log.Error("Ran out of columns trying to generate query", slog.String("table", tpb.name.CompliantName()))
 			return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "unable to create partial update query for "+tpb.name.String())
 		}
 		if cexpr.isGrouped || cexpr.isPK || cexpr.isGenerated || !isBitSet(dataColumns.Cols, i) {

@@ -358,6 +358,50 @@
     }
   },
   {
+    "comment": "qualified star after join using keeps the join column",
+    "query": "select b.* from authoritative a join authoritative b using (user_id)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select b.* from authoritative a join authoritative b using (user_id)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select b.user_id, b.col1, b.col2 from authoritative as a, authoritative as b where 1 != 1",
+        "Query": "select b.user_id, b.col1, b.col2 from authoritative as a, authoritative as b where a.user_id = b.user_id"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
+    "comment": "qualified star after join using keeps the table column order",
+    "query": "select a.* from authoritative a join authoritative b using (user_id, col2)",
+    "plan": {
+      "Type": "Scatter",
+      "QueryType": "SELECT",
+      "Original": "select a.* from authoritative a join authoritative b using (user_id, col2)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select a.user_id, a.col1, a.col2 from authoritative as a, authoritative as b where 1 != 1",
+        "Query": "select a.user_id, a.col1, a.col2 from authoritative as a, authoritative as b where a.user_id = b.user_id and a.col2 = b.col2"
+      },
+      "TablesUsed": [
+        "user.authoritative"
+      ]
+    }
+  },
+  {
     "comment": "select * from authoritative table",
     "query": "select * from authoritative",
     "plan": {
@@ -7682,6 +7726,107 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "row comparison with a value subquery in the select list binds each column of the row",
+    "query": "select id, (col, name) = (select col, name from user where id = 5) from user where id = 1",
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id, (col, name) = (select col, name from user where id = 5) from user where id = 1",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutValue",
+        "PulloutVars": [
+          "__sq1_0",
+          "__sq1_1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select col, `name` from `user` where 1 != 1",
+            "Query": "select col, `name` from `user` where id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, (col, `name`) = (:__sq1_0, :__sq1_1) as `(col, name) = (select col, name from user where id = 5)` from `user` where 1 != 1",
+            "Query": "select id, (col, `name`) = (:__sq1_0, :__sq1_1) as `(col, name) = (select col, name from user where id = 5)` from `user` where id = 1",
+            "Values": [
+              "1"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "row IN subquery in the select list has no has-values guard, so its rows are not bound as tuples",
+    "query": "select id, (col, name) in (select user_id, col from music where user_id = 5) from user",
+    "skip_e2e": true,
+    "plan": {
+      "Type": "Complex",
+      "QueryType": "SELECT",
+      "Original": "select id, (col, name) in (select user_id, col from music where user_id = 5) from user",
+      "Instructions": {
+        "OperatorType": "UncorrelatedSubquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "InputName": "SubQuery",
+            "OperatorType": "Route",
+            "Variant": "EqualUnique",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select user_id, col from music where 1 != 1",
+            "Query": "select user_id, col from music where user_id = 5",
+            "Values": [
+              "5"
+            ],
+            "Vindex": "user_index"
+          },
+          {
+            "InputName": "Outer",
+            "OperatorType": "Route",
+            "Variant": "Scatter",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select id, (col, `name`) in ::__sq1 as `(col, name) in (select user_id, col from music where user_id = 5)` from `user` where 1 != 1",
+            "Query": "select id, (col, `name`) in ::__sq1 as `(col, name) in (select user_id, col from music where user_id = 5)` from `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.music",
         "user.user"
       ]
     }

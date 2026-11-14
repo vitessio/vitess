@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build the Vitess Go binaries
-FROM golang:1.27.3-trixie@sha256:1896654cfc5c2b5ad74c07f29cb36f5d2d1cbed42e3054070fbfe444e521e83c AS go-builder
+FROM golang:1.27.4-trixie@sha256:b54b2639de8c1bfe538ec5ffc45f29b1932235ac5f6d63c059853646677112d9 AS go-builder
 
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
@@ -80,7 +80,6 @@ ENV VTDATAROOT=/vt/vtdataroot
 ENV PATH=$VTROOT/bin:$PATH
 
 # Copy artifacts from builder layers.
-COPY --from=go-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=go-builder --chown=vitess:vitess /vt/install /vt
 COPY --from=go-builder --chown=vitess:vitess /vt/src/vitess.io/vitess/web/vtadmin /vt/web/vtadmin
 COPY --from=vtadmin-builder --chown=vitess:vitess /vt/web/vtadmin/build /vt/web/vtadmin/build

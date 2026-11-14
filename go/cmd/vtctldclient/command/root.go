@@ -146,7 +146,7 @@ connect directly to the topo server(s).`, useInternalVtctld),
 			for _, f := range onTerm {
 				f()
 			}
-			trace.LogErrorsWhenClosing(traceCloser)
+			trace.LogErrorsWhenClosing(traceCloser)()
 			return err
 		},
 		TraverseChildren: true,

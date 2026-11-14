@@ -158,7 +158,7 @@ func loadSchemaDefinitions(parser *sqlparser.Parser) {
 			var module string
 			dir, fname := filepath.Split(path)
 			if !strings.HasSuffix(strings.ToLower(fname), sqlFileExtension) {
-				log.Info(fmt.Sprintf("Ignoring non-SQL file: %s, found during sidecar database initialization", path))
+				log.Info("Ignoring non-SQL file found during sidecar database initialization", slog.String("path", path))
 				return nil
 			}
 			dirparts := strings.Split(strings.Trim(dir, "/"), "/")
@@ -185,7 +185,7 @@ func loadSchemaDefinitions(parser *sqlparser.Parser) {
 		return nil
 	})
 	if err != nil {
-		log.Error(fmt.Sprintf("error loading schema files: %+v", err))
+		log.Error("error loading schema files", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 	}
 }
 
@@ -312,16 +312,16 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 	}
 	rs, err := si.exec(si.ctx, query, 2, false)
 	if err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("Error checking whether the sidecar database exists", slog.Any("error", err))
 		return false, err
 	}
 
 	switch len(rs.Rows) {
 	case 0:
-		log.Info(fmt.Sprintf("doesSidecarDBExist: %s not found", sidecar.GetName()))
+		log.Info("doesSidecarDBExist: sidecar database not found", slog.String("db_name", sidecar.GetName()))
 		return false, nil
 	case 1:
-		log.Info("doesSidecarDBExist: found " + sidecar.GetName())
+		log.Info("doesSidecarDBExist: found sidecar database", slog.String("db_name", sidecar.GetName()))
 		return true, nil
 	default:
 		// This should never happen.
@@ -332,10 +332,10 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 func (si *schemaInit) createSidecarDB() error {
 	_, err := si.exec(si.ctx, sidecar.GetCreateQuery(), 1, false)
 	if err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("Error creating the sidecar database", slog.Any("error", err))
 		return err
 	}
-	log.Info("createSidecarDB: " + sidecar.GetName())
+	log.Info("createSidecarDB: created sidecar database", slog.String("db_name", sidecar.GetName()))
 	return nil
 }
 
@@ -348,7 +348,7 @@ func (si *schemaInit) setCurrentDatabase(dbName string) error {
 func (si *schemaInit) collation() (collations.ID, error) {
 	rs, err := si.exec(si.ctx, sidecarCollationQuery, 2, false)
 	if err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("Error getting collation during sidecar database initialization", slog.Any("error", err))
 		return collations.Unknown, err
 	}
 
@@ -375,7 +375,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 			// table does not exist in the sidecar database
 			return "", nil
 		}
-		log.Error(fmt.Sprintf("Error getting table schema for %s: %+v", tableName, err))
+		log.Error("Error getting table schema", slog.String("table", tableName), slog.Any("error", err))
 		return "", err
 	}
 	if len(rs.Rows) > 0 {
@@ -464,9 +464,9 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		ddl = diff.CanonicalStatementString()
 
 		if ddl == "" {
-			log.Info("No changes needed for table " + tableName)
+			log.Info("No changes needed for table", slog.String("table", tableName))
 		} else {
-			log.Info(fmt.Sprintf("Applying DDL for table %s:\n%s", tableName, ddl))
+			log.Info("Applying DDL for table", slog.String("table", tableName), slog.String("query", ddl))
 		}
 	}
 
@@ -513,16 +513,25 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 			}
 			return nil
 		}
-		log.Info(fmt.Sprintf("Applied DDL %s for table %s during sidecar database initialization", ddl, table))
+		log.Info("Applied DDL for table during sidecar database initialization",
+			slog.String("query", ddl),
+			slog.String("db_name", sidecar.GetName()),
+			slog.String("table", table.name),
+			slog.String("module", table.module),
+		)
 		ddlCount.Add(1)
 		return nil
 	}
-	log.Info(fmt.Sprintf("Table schema was already up to date for the %s table in the %s sidecar database", table.name, sidecar.GetName()))
+	log.Info("Table schema was already up to date for the table in the sidecar database", slog.String("table", table.name), slog.String("db_name", sidecar.GetName()))
 	return nil
 }
 
 func recordDDLError(tableName string, err error) {
-	log.Error(fmt.Sprint(err))
+	log.Error("Error running DDL during sidecar database initialization",
+		slog.String("table", tableName),
+		slog.Any("error", err),
+		slog.String("error_code", vterrors.Code(err).String()),
+	)
 	ddlErrorCount.Add(1)
 	ddlErrorHistory.Add(&ddlError{
 		tableName: tableName,

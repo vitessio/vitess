@@ -17,13 +17,14 @@ limitations under the License.
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 
 	"vitess.io/vitess/go/cmd/vtbench/cli"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/utils"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func main() {
@@ -31,7 +32,7 @@ func main() {
 
 	cli.Main.SetGlobalNormalizationFunc(utils.NormalizeUnderscoresToDashes)
 	if err := cli.Main.Execute(); err != nil {
-		log.Error(fmt.Sprint(err))
+		log.Error("command failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		os.Exit(1)
 	}
 }

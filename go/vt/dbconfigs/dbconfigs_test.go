@@ -19,6 +19,7 @@ package dbconfigs
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"reflect"
@@ -36,6 +37,7 @@ import (
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/mysql/sqlmode"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/vtenv"
 	"vitess.io/vitess/go/yaml2"
 
@@ -84,7 +86,15 @@ func TestInit(t *testing.T) {
 			Host: "host",
 		},
 	}
+	logs := logtest.Capture(t, slog.LevelInfo)
 	dbConfigs.InitWithSocket("default", collations.MySQL8())
+
+	record := logs.Record(t, "DBConfigs")
+	assert.Equal(t, "INFO", record["level"])
+	assert.Contains(t, record["db_configs"], "user: app\n")
+	assert.Contains(t, record["db_configs"], "password: '****'\n")
+	assert.NotContains(t, logs.String(), "apppass")
+	assert.NotContains(t, logs.String(), "dbapass")
 
 	want := mysql.ConnParams{
 		Host:             "a",

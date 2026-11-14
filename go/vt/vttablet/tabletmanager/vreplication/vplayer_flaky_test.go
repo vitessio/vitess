@@ -37,8 +37,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/log/logtest"
 	vttablet "vitess.io/vitess/go/vt/vttablet/common"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
@@ -635,14 +634,7 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log message.
-	ole := log.Error
-	logger := logutil.NewMemoryLogger()
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logger.Errorf("%s", msg)
-	}
-	defer func() {
-		log.Error = ole
-	}()
+	logs := logtest.Capture(t, slog.LevelInfo)
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -686,8 +678,11 @@ func TestPlayerStatementModeWithFilterAndErrorHandling(t *testing.T) {
 	execStatements(t, input)
 	expectDBClientQueries(t, output)
 
-	logs := logger.String()
-	require.Regexp(t, expectedMsg, logs)
+	record := logs.Wait(t, "Error applying event")
+	assert.Equal(t, "ERROR", record["level"])
+	assert.NotContains(t, record, "table")
+	assert.Contains(t, record["processing_position"], gtid)
+	assert.Contains(t, record["error"], "filter rules are not supported for SBR")
 }
 
 func TestPlayerStatementMode(t *testing.T) {
@@ -4335,11 +4330,7 @@ func TestPlayerStalls(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// We want to check for the expected log messages.
-	ole := log.Error
-	logger := logutil.NewMemoryLogger()
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logger.Errorf("%s", msg)
-	}
+	logs := logtest.Capture(t, slog.LevelError)
 
 	oldMinimumHeartbeatUpdateInterval := vreplicationMinimumHeartbeatUpdateInterval
 	oldProgressDeadline := vplayerProgressDeadline
@@ -4347,7 +4338,6 @@ func TestPlayerStalls(t *testing.T) {
 	oldRetryDelay := vttablet.DefaultVReplicationConfig.RetryDelay
 	oldIdleTimeout := idleTimeout
 	defer func() {
-		log.Error = ole
 		vreplicationMinimumHeartbeatUpdateInterval = oldMinimumHeartbeatUpdateInterval
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
@@ -4446,8 +4436,7 @@ func TestPlayerStalls(t *testing.T) {
 				// The log message is written asynchronously after the stalled
 				// workflow transitions to the error state, so poll for it.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					log.Flush()
-					assert.Contains(c, logger.String(), relayLogIOStalledMsg)
+					assert.Contains(c, logs.String(), relayLogIOStalledMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				execStatements(t, []string{"set @@session.binlog_format='ROW'"})
 			},
@@ -4486,8 +4475,7 @@ func TestPlayerStalls(t *testing.T) {
 				// locks held by the preFunc connection, rather than sleeping a
 				// fixed multiple of the heartbeat interval.
 				require.EventuallyWithT(t, func(c *assert.CollectT) {
-					log.Flush()
-					assert.Contains(c, logger.String(), failedToRecordHeartbeatMsg)
+					assert.Contains(c, logs.String(), failedToRecordHeartbeatMsg)
 				}, 30*time.Second, 100*time.Millisecond, "expected log message not found")
 				// The vplayer also records the failure in the vreplication
 				// record's message column, but that update is blocked by the
@@ -4524,7 +4512,7 @@ func TestPlayerStalls(t *testing.T) {
 			if tc.postFunc != nil {
 				tc.postFunc()
 			}
-			logger.Clear()
+			logs.Reset()
 		})
 	}
 }
@@ -4605,17 +4593,12 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
 	// Capture the error log so we can assert the stall message is absent.
-	ole := log.Error
-	logger := logutil.NewMemoryLogger()
-	log.Error = func(msg string, _ ...slog.Attr) {
-		logger.Errorf("%s", msg)
-	}
+	logs := logtest.Capture(t, slog.LevelError)
 
 	oldProgressDeadline := vplayerProgressDeadline
 	oldRelayLogMaxItems := vttablet.DefaultVReplicationConfig.RelayLogMaxItems
 	oldThrottlerClient := playerEngine.throttlerClient
 	defer func() {
-		log.Error = ole
 		vplayerProgressDeadline = oldProgressDeadline
 		vttablet.DefaultVReplicationConfig.RelayLogMaxItems = oldRelayLogMaxItems
 		playerEngine.throttlerClient = oldThrottlerClient
@@ -4691,8 +4674,7 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 	// denial handoff to the relay log, the stall fires within
 	// vplayerProgressDeadline and errors the stream.
 	time.Sleep(3 * vplayerProgressDeadline)
-	log.Flush()
-	require.NotContains(t, logger.String(), relayLogIOStalledMsg,
+	require.NotContains(t, logs.String(), relayLogIOStalledMsg,
 		"the stall detector fired while the vplayer was throttled")
 
 	dbc := playerEngine.dbClientFactoryFiltered()
@@ -4712,6 +4694,5 @@ func TestPlayerNoStallWhileThrottled(t *testing.T) {
 		require.Len(c, res.Rows, 1)
 		assert.Equal(c, "3", res.Rows[0][0].ToString())
 	}, 30*time.Second, 100*time.Millisecond, "the queued rows were not applied after the throttler allowed again")
-	log.Flush()
-	require.NotContains(t, logger.String(), relayLogIOStalledMsg)
+	require.NotContains(t, logs.String(), relayLogIOStalledMsg)
 }

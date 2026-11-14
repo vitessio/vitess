@@ -19,6 +19,7 @@ package acl
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -28,6 +29,8 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/log/logtest"
 )
 
 type TestPolicy struct{}
@@ -81,9 +84,13 @@ func TestValidSecurityPolicy(t *testing.T) {
 
 func TestInvalidSecurityPolicy(t *testing.T) {
 	securityPolicy = "invalidSecurityPolicy"
+	logs := logtest.Capture(t, slog.LevelInfo)
 	savePolicy()
 
 	assert.Equalf(t, denyAllPolicy{}, currentPolicy, "got %v, expected %v", currentPolicy, denyAllPolicy{})
+	record := logs.Record(t, "security-policy not found; using fallback policy (deny-all)")
+	assert.Equal(t, "WARN", record["level"])
+	assert.Equal(t, "invalidSecurityPolicy", record["security_policy"])
 }
 
 func TestSendError(t *testing.T) {

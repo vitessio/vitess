@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"sort"
 	"strings"
@@ -492,17 +493,30 @@ func (ts *trafficSwitcher) dropSourceDeniedTables(ctx context.Context) error {
 		defer cancel()
 		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 		if isPartial {
-			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
-				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warn(msg)
+				log.Warn("failed to successfully refresh all tablets in the source shard", ts.partialRefreshAttrs(source.GetShard(), partialDetails, err)...)
 				return nil
-			} else {
-				return errors.New(msg)
 			}
+			return fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
+				source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 		}
 		return err
 	})
+}
+
+// partialRefreshAttrs returns the attributes of a forced partial refresh of
+// the tablets in si.
+func (ts *trafficSwitcher) partialRefreshAttrs(si *topo.ShardInfo, partialDetails string, err error) []slog.Attr {
+	attrs := []slog.Attr{
+		slog.String("workflow", ts.WorkflowName()),
+		slog.String("keyspace", si.Keyspace()),
+		slog.String("shard", si.ShardName()),
+		slog.String("partial_refresh_details", partialDetails),
+	}
+	if err != nil {
+		attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+	}
+	return attrs
 }
 
 func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
@@ -520,14 +534,12 @@ func (ts *trafficSwitcher) dropTargetDeniedTables(ctx context.Context) error {
 		defer cancel()
 		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		if isPartial {
-			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
-				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warn(msg)
+				log.Warn("failed to successfully refresh all tablets in the target shard", ts.partialRefreshAttrs(target.GetShard(), partialDetails, err)...)
 				return nil
-			} else {
-				return errors.New(msg)
 			}
+			return fmt.Errorf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
+				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 		}
 		return err
 	})
@@ -639,10 +651,10 @@ func (ts *trafficSwitcher) switchShardReads(ctx context.Context, cells []string,
 		return err2
 	}
 	for _, servedType := range servedTypes {
-		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), fromShards, cells, servedType, true /* isFrom */, false /* clearSourceShards */, ts.Logger()); err != nil {
+		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), fromShards, cells, servedType, true /* isFrom */, ts.Logger()); err != nil {
 			return err
 		}
-		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), toShards, cells, servedType, false, false, ts.Logger()); err != nil {
+		if err := ts.ws.updateShardRecords(ctx, ts.SourceKeyspaceName(), toShards, cells, servedType, false, ts.Logger()); err != nil {
 			return err
 		}
 		err := ts.TopoServer().MigrateServedType(ctx, ts.SourceKeyspaceName(), toShards, fromShards, servedType, cells)
@@ -1147,14 +1159,12 @@ func (ts *trafficSwitcher) switchDeniedTables(ctx context.Context, backward bool
 			defer cancel()
 			isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), source.GetShard(), nil, ts.Logger())
 			if isPartial {
-				msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
-					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 				if ts.force {
-					log.Warn(msg)
+					log.Warn("failed to successfully refresh all tablets in the source shard", ts.partialRefreshAttrs(source.GetShard(), partialDetails, err)...)
 					return nil
-				} else {
-					return errors.New(msg)
 				}
+				return fmt.Errorf("failed to successfully refresh all tablets in the %s/%s source shard (%v):\n  %v",
+					source.GetShard().Keyspace(), source.GetShard().ShardName(), err, partialDetails)
 			}
 			return err
 		})
@@ -1734,14 +1744,12 @@ func (ts *trafficSwitcher) setTargetDeniedTables(ctx context.Context, opts setTa
 		defer cancel()
 		isPartial, partialDetails, err := topotools.RefreshTabletsByShard(rtbsCtx, ts.TopoServer(), ts.TabletManagerClient(), target.GetShard(), nil, ts.Logger())
 		if isPartial {
-			msg := fmt.Sprintf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
-				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 			if ts.force {
-				log.Warn(msg)
+				log.Warn("failed to successfully refresh all tablets in the target shard", ts.partialRefreshAttrs(target.GetShard(), partialDetails, err)...)
 				return nil
-			} else {
-				return errors.New(msg)
 			}
+			return fmt.Errorf("failed to successfully refresh all tablets in the %s/%s target shard (%v):\n  %v",
+				target.GetShard().Keyspace(), target.GetShard().ShardName(), err, partialDetails)
 		}
 		return err
 	})
