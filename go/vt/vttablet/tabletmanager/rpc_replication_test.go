@@ -24,6 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -2046,7 +2047,7 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 
 	t.Run("action lock wait does not consume promotion deadline", func(t *testing.T) {
 		originalRemoteOperationTimeout := topo.RemoteOperationTimeout
-		topo.RemoteOperationTimeout = 5 * time.Second
+		topo.RemoteOperationTimeout = 30 * time.Second
 		t.Cleanup(func() { topo.RemoteOperationTimeout = originalRemoteOperationTimeout })
 
 		fakeMysqlDaemon := newTestMysqlDaemon(t, 1)
@@ -2085,7 +2086,7 @@ func TestPromoteReplicaAndJournal(t *testing.T) {
 		lockHeld = false
 
 		deadline := receive(t, daemon.promoteDeadline)
-		assert.True(t, deadline.After(lockReleased.Add(4*time.Second)))
+		assert.True(t, deadline.After(lockReleased.Add(topo.RemoteOperationTimeout-time.Second)))
 
 		result := receive(t, resultCh)
 		require.NoError(t, result.err)
@@ -2173,27 +2174,27 @@ func TestPromoteReplicaAndJournalCancellation(t *testing.T) {
 		tm := newPromoteReplicaAndJournalTestTM(t, fakeMysqlDaemon)
 		require.NoError(t, tm.actionSema.Acquire(t.Context(), 1))
 		t.Cleanup(func() { tm.actionSema.Release(1) })
-		baseCtx, cancel := context.WithCancel(t.Context())
-		t.Cleanup(cancel)
-		ctx := &deadlineSignalContext{
-			Context: baseCtx,
-			entered: make(chan struct{}),
-		}
-		resultCh := make(chan promoteResult, 1)
-		go func() {
-			response, err := tm.PromoteReplicaAndJournal(ctx, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
-				TimeCreated: protoutil.TimeToProto(created),
-				ActionName:  "EmergencyReparentShard",
-			})
-			resultCh <- promoteResult{response: response, err: err}
-		}()
 
-		receive(t, ctx.entered)
-		cancel()
+		synctest.Test(t, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			resultCh := make(chan promoteResult, 1)
+			go func() {
+				response, err := tm.PromoteReplicaAndJournal(ctx, &tabletmanagerdatapb.PromoteReplicaAndJournalRequest{
+					TimeCreated: protoutil.TimeToProto(created),
+					ActionName:  "EmergencyReparentShard",
+				})
+				resultCh <- promoteResult{response: response, err: err}
+			}()
 
-		result := receive(t, resultCh)
-		assert.Nil(t, result.response)
-		require.ErrorIs(t, result.err, context.Canceled)
+			// Wait until it blocks, which can only be on the held action lock.
+			synctest.Wait()
+			cancel()
+
+			result := <-resultCh
+			assert.Nil(t, result.response)
+			require.ErrorIs(t, result.err, context.Canceled)
+		})
 		assert.Equal(t, topodatapb.TabletType_REPLICA, tm.Tablet().Type)
 		require.NoError(t, fakeMysqlDaemon.CheckSuperQueryList())
 	})
