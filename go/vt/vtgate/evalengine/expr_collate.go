@@ -181,12 +181,7 @@ func (expr *IntroducerExpr) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	b, err := introducerCast(e, expr.TypedCollation.Collation)
-	if err != nil {
-		return nil, err
-	}
-	b.flag |= flagExplicitCollation
-	return b, nil
+	return introducerCast(e, expr.TypedCollation.Collation)
 }
 
 func (expr *IntroducerExpr) compile(c *compiler) (ctype, error) {
@@ -202,6 +197,5 @@ func (expr *IntroducerExpr) compile(c *compiler) (ctype, error) {
 	}
 	c.asm.Introduce(1, ct.Type, expr.TypedCollation)
 	ct.Col = expr.TypedCollation
-	ct.Flag = flagExplicitCollation
 	return ct, nil
 }

@@ -1539,13 +1539,7 @@ func TestHexBindVariableIsBinary(t *testing.T) {
 	venv := vtenv.NewTestEnv()
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			stmt, known, err := venv.Parser().Parse2("select " + tc.expression + " from dual")
-			require.NoError(t, err)
-			bindVars := map[string]*querypb.BindVariable{}
-			_, err = sqlparser.Normalize(stmt, sqlparser.NewReservedVars("vtg", known), bindVars, true, "", 0, "", nil, nil, nil)
-			require.NoError(t, err)
-			require.NotEmpty(t, bindVars)
-			expr := stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr
+			expr, bindVars := normalizedExpr(t, venv, tc.expression)
 
 			fields := evalengine.FieldResolver(tc.fields)
 			converted, err := evalengine.Translate(expr, &evalengine.Config{
@@ -1579,6 +1573,65 @@ func TestHexBindVariableIsBinary(t *testing.T) {
 			res, err := env.EvaluateVM(compiled)
 			require.NoError(t, err)
 			check("compiled program", res)
+		})
+	}
+}
+
+// normalizedExpr parses expression and replaces its literals with typed
+// bind variables, as vtgate's normalizer does before a query is planned.
+func normalizedExpr(t *testing.T, venv *vtenv.Environment, expression string) (sqlparser.Expr, map[string]*querypb.BindVariable) {
+	stmt, known, err := venv.Parser().Parse2("select " + expression + " from dual")
+	require.NoError(t, err)
+	bindVars := map[string]*querypb.BindVariable{}
+	_, err = sqlparser.Normalize(stmt, sqlparser.NewReservedVars("vtg", known), bindVars, true, "", 0, "", nil, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, bindVars)
+	return stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr, bindVars
+}
+
+// TestIntroducerOnBindVariable checks a literal with a character set
+// introducer that the normalizer turned into a bind variable. It is as weak
+// as any other literal: the collation of a column wins over it.
+func TestIntroducerOnBindVariable(t *testing.T) {
+	row := []sqltypes.Value{sqltypes.NewVarChar("a"), sqltypes.NewInt64(1)}
+
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{expression: `COLLATION(IF(column1 = 1, _latin1'A', column0))`, result: `VARCHAR("utf8mb4_0900_ai_ci")`},
+		{expression: `_latin1'A' = column0`, result: `INT64(1)`},
+		{expression: `COALESCE(column0, _binary'b')`, result: `VARCHAR("a")`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, bindVars := normalizedExpr(t, venv, tc.expression)
+
+			fields := evalengine.FieldResolver(makeFields(row))
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     fields.Column,
+				ResolveType:       fields.Type,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+			compiled, ok := converted.(*evalengine.CompiledExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = bindVars
+			env.Row = row
+
+			expected, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, expected.String(), "interpreter")
+
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "compiled program")
 		})
 	}
 }
