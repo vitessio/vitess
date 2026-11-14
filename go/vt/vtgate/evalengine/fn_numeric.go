@@ -47,7 +47,7 @@ func (call *builtinCeil) eval(env *ExpressionEnv) (eval, error) {
 
 	switch num := arg.(type) {
 	case *evalInt64, *evalUint64:
-		return num, nil
+		return evalPlain(num), nil
 	case *evalDecimal:
 		dec := num.dec
 		dec = dec.Ceil()
@@ -83,7 +83,7 @@ func (call *builtinFloor) eval(env *ExpressionEnv) (eval, error) {
 
 	switch num := arg.(type) {
 	case *evalInt64, *evalUint64:
-		return num, nil
+		return evalPlain(num), nil
 	case *evalDecimal:
 		dec := num.dec
 		dec = dec.Floor()
@@ -119,7 +119,7 @@ func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 
 	switch num := arg.(type) {
 	case *evalUint64:
-		return num, nil
+		return evalPlain(num), nil
 	case *evalInt64:
 		if num.i < 0 {
 			if num.i == math.MinInt64 {
@@ -127,7 +127,7 @@ func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 			}
 			return newEvalInt64(-num.i), nil
 		}
-		return num, nil
+		return evalPlain(num), nil
 	case *evalDecimal:
 		return newEvalDecimalWithPrec(num.dec.Abs(), num.length), nil
 	default:
@@ -144,6 +144,7 @@ func (expr *builtinAbs) compile(c *compiler) (ctype, error) {
 
 	if arg.Type == sqltypes.Uint64 {
 		// No-op if it's unsigned since that's already positive.
+		arg.Flag = nullableFlags(arg.Flag)
 		return arg, nil
 	}
 
@@ -538,7 +539,7 @@ func (expr *builtinLog) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_LOG()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag|arg2.Flag) | flagNullable}, nil
 }
 
 type builtinLog10 struct {
@@ -638,7 +639,7 @@ func (expr *builtinPow) compile(c *compiler) (ctype, error) {
 	c.compileToFloat(arg2, 1)
 	c.asm.Fn_POW()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag | arg2.Flag)}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: nullableFlags(arg1.Flag|arg2.Flag) | flagNullable}, nil
 }
 
 type builtinSign struct {
@@ -989,6 +990,22 @@ func (call *builtinRound) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
+// roundScale returns the digits after the point of ROUND or TRUNCATE of a
+// decimal with scale digits after the point, to the number of digits in
+// the expression digits. With a constant it is that number, between 0 and
+// scale: ROUND(1.5, 3) is shown as 1.5 and ROUND(1.5, -1) as 0. Otherwise
+// it is scale.
+func (c *compiler) roundScale(scale int32, digits IR) int32 {
+	if !digits.constant() {
+		return scale
+	}
+	d, err := digits.eval(EmptyExpressionEnv(c.env))
+	if err != nil || d == nil {
+		return scale
+	}
+	return int32(max(0, min(int64(scale), evalToInt64(d).i)))
+}
+
 func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 	arg, err := expr.Arguments[0].compile(c)
 	if err != nil {
@@ -1010,7 +1027,9 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// We assume here the most common case here is that
 			// the decimal fits into an integer.
 			c.asm.Fn_ROUND1_d()
+			arg.Scale = 0
 		default:
+			arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 			c.asm.Convert_xf(1)
 			c.asm.Fn_ROUND1_f()
 		}
@@ -1021,6 +1040,7 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 		}
 
 		skip2 = c.compileNullCheck1r(round)
+		arg.Flag |= nullableFlags(round.Flag)
 
 		switch round.Type {
 		case sqltypes.Int64:
@@ -1043,13 +1063,16 @@ func (expr *builtinRound) compile(c *compiler) (ctype, error) {
 			// We assume here the most common case here is that
 			// the decimal fits into an integer.
 			c.asm.Fn_ROUND2_d()
+			arg.Scale = c.roundScale(arg.Scale, expr.Arguments[1])
 		default:
+			arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 			c.asm.Convert_xf(2)
 			c.asm.Fn_ROUND2_f()
 		}
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
+	arg.Flag = nullableFlags(arg.Flag)
 	return arg, nil
 }
 
@@ -1196,6 +1219,7 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 	}
 
 	skip2 := c.compileNullCheck1r(round)
+	arg.Flag |= nullableFlags(round.Flag)
 
 	switch round.Type {
 	case sqltypes.Int64:
@@ -1218,12 +1242,15 @@ func (expr *builtinTruncate) compile(c *compiler) (ctype, error) {
 		// We assume here the most common case here is that
 		// the decimal fits into an integer.
 		c.asm.Fn_TRUNCATE_d()
+		arg.Scale = c.roundScale(arg.Scale, expr.Arguments[1])
 	default:
+		arg = ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}
 		c.asm.Convert_xf(2)
 		c.asm.Fn_TRUNCATE_f()
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
+	arg.Flag = nullableFlags(arg.Flag)
 	return arg, nil
 }
 
@@ -1263,7 +1290,7 @@ func (expr *builtinCrc32) compile(c *compiler) (ctype, error) {
 
 	c.asm.Fn_CRC32()
 	c.asm.jumpDestination(skip)
-	return arg, nil
+	return ctype{Type: sqltypes.Uint64, Col: collationNumeric, Flag: nullableFlags(arg.Flag)}, nil
 }
 
 type builtinConv struct {
@@ -1316,8 +1343,11 @@ func (call *builtinConv) eval(env *ExpressionEnv) (eval, error) {
 
 	var u uint64
 	if b, ok := n.(*evalBytes); ok && b.isHexOrBitLiteral() {
-		nh, _ := b.toNumericHex()
-		u = nh.u
+		// A literal that does not fit 64 bits is the number 0 in MySQL:
+		// CONV(0xffffffffffffffffff, 16, 10) is '0'.
+		if nh, ok := b.toNumericHex(); ok {
+			u = nh.u
+		}
 	} else {
 		nStr := evalToBinary(n)
 		i, err := fastparse.ParseInt64(nStr.string(), int(fromBase))

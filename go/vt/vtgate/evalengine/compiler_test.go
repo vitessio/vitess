@@ -217,6 +217,9 @@ func TestCompilerSingle(t *testing.T) {
 		result     string
 		collation  collations.ID
 		typeWanted evalengine.Type
+		// fields describes the columns, when makeFields cannot: the type
+		// of a NULL value is not the one of its column.
+		fields []*querypb.Field
 	}{
 		{
 			expression: "1 + column0",
@@ -930,6 +933,457 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `TRIM(TRAILING '0' FROM '1.500')`,
 			result:     `VARCHAR("1.5")`,
 		},
+		{
+			// The result of a function is not a boolean, and it is not a bit
+			// literal, which unary minus would turn into a DOUBLE.
+			expression: `CAST(CEIL(1=1) AS JSON)`,
+			result:     `JSON("1")`,
+		},
+		{
+			expression: `CAST(FLOOR(1=0) AS JSON)`,
+			result:     `JSON("0")`,
+		},
+		{
+			expression: `CAST(CAST(1=1 AS SIGNED) AS JSON)`,
+			result:     `JSON("1")`,
+		},
+		{
+			expression: `CAST(CONVERT(1=0, SIGNED) AS JSON)`,
+			result:     `JSON("0")`,
+		},
+		{
+			expression: `-(CAST(0b110001 AS SIGNED))`,
+			result:     `INT64(-49)`,
+		},
+		{
+			// A hex literal that IF selects at run time is the string '12',
+			// but its number in a numeric context.
+			expression: `IF(column0 > 0, 0x3132, column1) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.MakeTrusted(sqltypes.VarBinary, []byte("34"))},
+			result:     `FLOAT64(12594)`,
+		},
+		{
+			expression: `ELT(column0, column1, IF(column0 > 0, 0x3132, column1)) = 12594`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(2), sqltypes.NewVarChar("a")},
+			result:     `INT64(1)`,
+		},
+		{
+			// 0b110000 is the string '0', but the number 48, which is true.
+			expression: `NOT (CASE WHEN column0 THEN 0b110000 ELSE column1 END)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("1")},
+			result:     `INT64(0)`,
+		},
+		{
+			// IFNULL does not hand the bit literal on.
+			expression: `IFNULL(column0, 0b11000100110010) + 0`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			result:     `FLOAT64(12)`,
+		},
+		{
+			// A hex literal that does not fit 64 bits is the number 0, which
+			// is false, also when IF selects it.
+			expression: `IF(IF(column0 > 0, 0xffffffffffffffffff, 0x31), 'T', 'F')`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `VARCHAR("F")`,
+		},
+		{
+			expression: `IF(0xffffffffffffffffff, 'T', 'F')`,
+			result:     `VARCHAR("F")`,
+		},
+		{
+			// A shift or a bitwise NOT of a binary string returns an ordinary
+			// binary string, also when ELT selected the string from a hex
+			// literal.
+			expression: `(ELT(column0, 0x62, 'a') >> 1) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `FLOAT64(1)`,
+		},
+		{
+			expression: `(ELT(column0, 0x62, 'a') << 1) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `FLOAT64(0)`,
+		},
+		{
+			expression: `(~ELT(column0, 0x62, 'a')) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `FLOAT64(0)`,
+		},
+		{
+			// A number is converted to a string in the connection collation,
+			// which is the collation of the result.
+			expression: `REVERSE(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(12)},
+			result:     `VARCHAR("21")`,
+			collation:  collations.CollationUtf8mb4ID,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			expression: `REPEAT(column0, 2)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(12)},
+			result:     `VARCHAR("1212")`,
+			collation:  collations.CollationUtf8mb4ID,
+			typeWanted: evalengine.NewTypeEx(sqltypes.VarChar, collations.CollationUtf8mb4ID, true, 0, 0, nil),
+		},
+		{
+			// BIT_COUNT counts the bits of the bytes of a binary string that a
+			// string function returns.
+			expression: `BIT_COUNT(REVERSE(column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("1")},
+			result:     `INT64(3)`,
+		},
+		{
+			// ROUND of that string is a number, whose bits BIT_COUNT counts.
+			expression: `BIT_COUNT(ROUND(REVERSE(column0)))`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("1")},
+			result:     `INT64(1)`,
+		},
+		{
+			// ROUND and TRUNCATE convert an argument that is not a number to a
+			// double.
+			expression: `ROUND(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("1.5")},
+			result:     `FLOAT64(2)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `ROUND(column0, 1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("1.25")},
+			result:     `FLOAT64(1.2)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `ROUND(TIME'10:11:12.5')`,
+			result:     `FLOAT64(101112)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			expression: `TRUNCATE('1.5', 0)`,
+			result:     `FLOAT64(1)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			expression: `TRUNCATE(column0, 1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarBinary("1.25")},
+			result:     `FLOAT64(1.2)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `TRUNCATE(column0, 0)`,
+			values:     []sqltypes.Value{sqltypes.NewDatetime("2020-01-02 10:11:12")},
+			result:     `FLOAT64(20200102101112)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Float64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			// CRC32 returns an unsigned integer for every argument.
+			expression: `CRC32(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `UINT64(3904355907)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `CRC32(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewDecimal("1.5")},
+			result:     `UINT64(2270993338)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, true, 0, 0, nil),
+		},
+		{
+			expression: `CRC32(1 = 1)`,
+			result:     `UINT64(2212294583)`,
+			typeWanted: evalengine.NewTypeEx(sqltypes.Uint64, collations.CollationBinaryID, false, 0, 0, nil),
+		},
+		{
+			// A column has the implicit coercibility, which wins over the
+			// one of a hex literal: they compare with the column's collation.
+			expression: `column0 = 0x41`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `INT64(1)`,
+		},
+		{
+			// The collation of the column wins over the binary literal, and
+			// the result of IF is a character string.
+			expression: `COLLATION(IF(column0 = 1, column1, _binary'A'))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// A binary column and CAST(... AS CHAR) both have the implicit
+			// coercibility: they compare as binary strings.
+			expression: `CAST(column0 AS CHAR) = column1`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a"), sqltypes.NewVarBinary("A")},
+			result:     `INT64(0)`,
+		},
+		{
+			// So does CAST(... AS BINARY).
+			expression: `CAST(column0 AS BINARY) = CAST(column1 AS CHAR)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a"), sqltypes.NewVarChar("A")},
+			result:     `INT64(0)`,
+		},
+		{
+			// CAST(... AS CHAR) wins over a binary literal.
+			expression: `CAST(_binary'a' AS CHAR) = 0x41`,
+			result:     `INT64(1)`,
+		},
+		{
+			// IN compares the values with the collation they carry.
+			expression: `CAST(_binary'a' AS CHAR) IN (0x41, 'zz')`,
+			result:     `INT64(1)`,
+		},
+		{
+			// The result of IF has the coercibility of the column it selects.
+			expression: `IF(column0 = 1, column1, 'x') = 0x41`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `IF(column0 = 1, column1, 'x') IN (0x41, 'zz')`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarChar("a")},
+			result:     `INT64(1)`,
+		},
+		{
+			// With two literals, the result of IF is a binary string, which
+			// the bit operators shift byte-wise.
+			expression: `IF(column0 = 1, 0x62, 'x') >> 1`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `VARBINARY("1")`,
+		},
+		{
+			// A text column whose value is NULL keeps its collation, which
+			// makes the result of IFNULL a number for BIT_COUNT.
+			expression: `BIT_COUNT(IFNULL(column0, 0x3132))`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)}},
+			result:     `INT64(2)`,
+		},
+		{
+			// COALESCE gives the argument it selects the collation that its
+			// arguments aggregate to: the column's, over the hex literal.
+			expression: `COLLATION(COALESCE(0x41, column0))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// A text and a binary column aggregate to a binary string.
+			expression: `COLLATION(COALESCE(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a"), sqltypes.NewVarBinary("b")},
+			result:     `VARCHAR("binary")`,
+		},
+		{
+			// A text column whose value is NULL keeps its collation.
+			expression: `COLLATION(COALESCE(column0, 0x41))`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)}},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// CONVERT(... USING ...) has the implicit coercibility, which
+			// wins over a binary literal.
+			expression: `CONVERT(_binary'a' USING utf8mb4) = 0x41`,
+			result:     `INT64(1)`,
+		},
+		{
+			// COALESCE of an INT and a decimal is a decimal with the digits
+			// of the decimal.
+			expression: `COALESCE(column0, 1.5)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5)},
+			result:     `DECIMAL(5.0)`,
+		},
+		{
+			// JSON reads the decimal with its own digits.
+			expression: `CAST(COALESCE(column0, 1.5) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5)},
+			result:     `JSON("5")`,
+		},
+		{
+			// IFNULL shows all the digits too, IF does not.
+			expression: `IFNULL(column0, 1.5)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5)},
+			result:     `DECIMAL(5.0)`,
+		},
+		{
+			// COALESCE of an INT and a VARCHAR is the VARCHAR '5'.
+			expression: `LENGTH(COALESCE(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewVarChar("abc")},
+			result:     `INT64(1)`,
+		},
+		{
+			// A number and a date combine to a VARCHAR with the connection
+			// collation, which BIT_COUNT reads as a number.
+			expression: `BIT_COUNT(IFNULL(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewDate("2020-01-02")},
+			result:     `INT64(2)`,
+		},
+		{
+			// The conversion to DATETIME keeps the digits of the value.
+			expression: `IFNULL(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NULL, sqltypes.NewDatetime("2020-01-02 03:04:05.678")},
+			fields: []*querypb.Field{
+				{Name: "column0", Type: sqltypes.Datetime, Charset: uint32(collations.CollationBinaryID)},
+				{Name: "column1", Type: sqltypes.Datetime, Charset: uint32(collations.CollationBinaryID)},
+			},
+			result: `DATETIME("2020-01-02 03:04:05.678")`,
+		},
+		{
+			// A DATE converted to a DATETIME keeps its number in arithmetic.
+			expression: `-IFNULL(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-02 03:04:05")},
+			result:     `FLOAT64(-20200102)`,
+		},
+		{
+			// DIV and a comparison with a number read that number too.
+			expression: `IFNULL(column0, column1) DIV 1`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-02 03:04:05")},
+			result:     `INT64(20200102)`,
+		},
+		{
+			expression: `IFNULL(column0, column1) = 20200102`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-02 03:04:05")},
+			result:     `INT64(1)`,
+		},
+		{
+			// COALESCE counts a NULLIF of a date as a string: the DATE is not
+			// converted to a DATETIME.
+			expression: `COALESCE(NULLIF(column0, 5), column1)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `VARCHAR("2020-01-02")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
+		{
+			// Also when the NULLIF is NULL: it counts with the type of its
+			// column.
+			expression: `COALESCE(NULLIF(column1, column1), column0)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `VARCHAR("2020-01-02")`,
+		},
+		{
+			expression: `IFNULL(NULLIF(column0, 5), column1)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `VARCHAR("2020-01-02")`,
+		},
+		{
+			// So does an IF with a NULLIF in a branch.
+			expression: `COALESCE(IF(column2 = 1, NULLIF(column0, 5), NULL), column1)`,
+			values:     []sqltypes.Value{sqltypes.NewDate("2020-01-02"), sqltypes.NewDatetime("2020-01-03 04:05:06.789"), sqltypes.NewInt64(1)},
+			result:     `VARCHAR("2020-01-02")`,
+		},
+		{
+			// A DATETIME with fractional seconds and no declared precision
+			// is compared with a number as a double.
+			expression: `column0 > 1`,
+			values:     []sqltypes.Value{sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `20200103040506.789 = column0`,
+			values:     []sqltypes.Value{sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `INT64(1)`,
+		},
+		{
+			// So is one without fractional seconds: the decimal is equal
+			// to it as a double.
+			expression: `column0 = 20200103040506.0001`,
+			values:     []sqltypes.Value{sqltypes.NewDatetime("2020-01-03 04:05:06")},
+			result:     `INT64(1)`,
+		},
+		{
+			// A YEAR column combines with an INT to an INT.
+			expression: `IFNULL(column0, column1) + 0`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.MakeTrusted(sqltypes.Year, []byte("2020"))},
+			result:     `INT64(5)`,
+		},
+		{
+			// A VARCHAR column that is NULL and a JSON value combine to a
+			// LONGTEXT in MySQL 8.4.
+			expression: `CAST(IFNULL(column0, column1) AS CHAR)`,
+			values:     []sqltypes.Value{sqltypes.NULL, sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
+			fields: []*querypb.Field{
+				{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4ID)},
+				{Name: "column1", Type: sqltypes.TypeJSON, Charset: uint32(collations.CollationBinaryID)},
+			},
+			result: `TEXT("{\"a\": 1}")`,
+		},
+		{
+			expression: `HEX(COALESCE(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": 1}`))},
+			result:     `TEXT("35")`,
+		},
+		{
+			// COALESCE of a text and a binary column is a binary string, but
+			// JSON reads the text that it selected as JSON text.
+			expression: `CAST(COALESCE(column0, column1) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("12"), sqltypes.NewVarBinary("xyz")},
+			result:     `JSON("12")`,
+		},
+		{
+			expression: `JSON_ARRAY(COALESCE(column0, column1))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("12"), sqltypes.NewVarBinary("xyz")},
+			result:     `JSON("[\"12\"]")`,
+		},
+		{
+			// SUBSTRING keeps the character set of the string, CONCAT does not.
+			expression: `CAST(SUBSTRING(COALESCE(column0, column1), 1) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("12"), sqltypes.NewVarBinary("xyz")},
+			result:     `JSON("12")`,
+		},
+		{
+			// It reads a binary string that it selected as a binary value.
+			expression: `CAST(COALESCE(0x41, column0) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `JSON("\"base64:type15:QQ==\"")`,
+		},
+		{
+			// IFNULL does not: its result is a binary string.
+			expression: `CAST(IFNULL(column0, column1) AS JSON)`,
+			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.NewVarBinary("xyz")},
+			result:     `JSON("\"base64:type15:NQ==\"")`,
+		},
+		{
+			// An ENUM column has its collation, also in the interpreter.
+			expression: `COALESCE('x', column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte("abc"))},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.Enum, Charset: uint32(collations.CollationUtf8mb4ID)}},
+			result:     `VARCHAR("x")`,
+			collation:  collations.CollationUtf8mb4ID,
+		},
+		{
+			// COLLATION() of a NULL value is the collation that its
+			// expression is declared with: NULLIF returns NULL here, with
+			// the collation of the column.
+			expression: `COLLATION(NULLIF(column0, 0x41))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// A text column whose value is NULL keeps its collation.
+			expression: `COLLATION(column0)`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationLatin1Swedish)}},
+			result:     `VARCHAR("latin1_swedish_ci")`,
+		},
+		{
+			expression: `COLLATION(GREATEST(column0, NULL))`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("a")},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationUtf8mb4BinID)}},
+			result:     `VARCHAR("utf8mb4_bin")`,
+		},
+		{
+			// A NULL number becomes a string with the default collation.
+			expression: `COLLATION(LEFT(column0, 1))`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.Int64, Charset: uint32(collations.CollationBinaryID)}},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			expression: `COLLATION(UPPER(column0))`,
+			values:     []sqltypes.Value{sqltypes.NULL},
+			fields:     []*querypb.Field{{Name: "column0", Type: sqltypes.Int64, Charset: uint32(collations.CollationBinaryID)}},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			// LEFT(NULL, 1) has the collation of NULL, which loses to the
+			// one of the latin1 literal.
+			expression: `COLLATION(CONCAT(LEFT(NULL, 1), _latin1'x'))`,
+			result:     `VARCHAR("latin1_swedish_ci")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -939,7 +1393,11 @@ func TestCompilerSingle(t *testing.T) {
 			expr, err := venv.Parser().ParseExpr(tc.expression)
 			require.NoError(t, err)
 
-			fields := evalengine.FieldResolver(makeFields(tc.values))
+			schema := tc.fields
+			if schema == nil {
+				schema = makeFields(tc.values)
+			}
+			fields := evalengine.FieldResolver(schema)
 			cfg := &evalengine.Config{
 				ResolveColumn:     fields.Column,
 				ResolveType:       fields.Type,
@@ -1048,6 +1506,136 @@ func TestBindVarLiteral(t *testing.T) {
 	}
 }
 
+// TestHexBindVariableIsBinary checks a hex or bit literal that the
+// normalizer turned into a bind variable, as vtgate does before it plans a
+// query. The literal is a binary string for the compiled program, as it is
+// for the interpreter, and the collation of an ENUM column wins over it.
+func TestHexBindVariableIsBinary(t *testing.T) {
+	enum := []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Enum, []byte("abc"))}
+	enumField := []*querypb.Field{{Name: "column0", Type: sqltypes.Enum, Charset: uint32(collations.CollationUtf8mb4ID)}}
+
+	testCases := []struct {
+		expression string
+		values     []sqltypes.Value
+		fields     []*querypb.Field
+		result     string
+		// binary is set when the result is a string with the binary
+		// collation. LPAD and LEFT return a VARCHAR with that collation
+		// for a binary string, where MySQL returns a VARBINARY.
+		binary bool
+		// compiledOnly is set when the interpreter does not return result:
+		// it compares the value of an ENUM column byte by byte, as it does
+		// on main.
+		compiledOnly bool
+	}{
+		{expression: `CONCAT(0x4142, 'x')`, result: `VARBINARY("ABx")`, binary: true},
+		{expression: `LPAD(x'4142', 5, 'x')`, result: `VARCHAR("xxxAB")`, binary: true},
+		{expression: `LEFT(b'0100000101000010', 1)`, result: `VARCHAR("A")`, binary: true},
+		// The ENUM value is 'abc': the comparison is not byte by byte.
+		{expression: `column0 = 0x414243`, values: enum, fields: enumField, result: `INT64(1)`, compiledOnly: true},
+		{expression: `column0 LIKE 0x414243`, values: enum, fields: enumField, result: `INT64(1)`, compiledOnly: true},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, bindVars := normalizedExpr(t, venv, tc.expression)
+
+			fields := evalengine.FieldResolver(tc.fields)
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     fields.Column,
+				ResolveType:       fields.Type,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+			compiled, ok := converted.(*evalengine.CompiledExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = bindVars
+			env.Row = tc.values
+
+			check := func(path string, res evalengine.EvalResult) {
+				assert.Equal(t, tc.result, res.String(), path)
+				if tc.binary {
+					assert.Equal(t, collations.ID(collations.CollationBinaryID), res.Collation(), path)
+				}
+			}
+
+			if !tc.compiledOnly {
+				expected, err := env.EvaluateAST(converted)
+				require.NoError(t, err)
+				check("interpreter", expected)
+			}
+
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			check("compiled program", res)
+		})
+	}
+}
+
+// normalizedExpr parses expression and replaces its literals with typed
+// bind variables, as vtgate's normalizer does before a query is planned.
+func normalizedExpr(t *testing.T, venv *vtenv.Environment, expression string) (sqlparser.Expr, map[string]*querypb.BindVariable) {
+	stmt, known, err := venv.Parser().Parse2("select " + expression + " from dual")
+	require.NoError(t, err)
+	bindVars := map[string]*querypb.BindVariable{}
+	_, err = sqlparser.Normalize(stmt, sqlparser.NewReservedVars("vtg", known), bindVars, true, "", 0, "", nil, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, bindVars)
+	return stmt.(*sqlparser.Select).SelectExprs.Exprs[0].(*sqlparser.AliasedExpr).Expr, bindVars
+}
+
+// TestIntroducerOnBindVariable checks a literal with a character set
+// introducer that the normalizer turned into a bind variable. It is as weak
+// as any other literal: the collation of a column wins over it.
+func TestIntroducerOnBindVariable(t *testing.T) {
+	row := []sqltypes.Value{sqltypes.NewVarChar("a"), sqltypes.NewInt64(1)}
+
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{expression: `COLLATION(IF(column1 = 1, _latin1'A', column0))`, result: `VARCHAR("utf8mb4_0900_ai_ci")`},
+		{expression: `_latin1'A' = column0`, result: `INT64(1)`},
+		{expression: `COALESCE(column0, _binary'b')`, result: `VARCHAR("a")`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, bindVars := normalizedExpr(t, venv, tc.expression)
+
+			fields := evalengine.FieldResolver(makeFields(row))
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     fields.Column,
+				ResolveType:       fields.Type,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+			compiled, ok := converted.(*evalengine.CompiledExpr)
+			require.True(t, ok)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.BindVars = bindVars
+			env.Row = row
+
+			expected, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, expected.String(), "interpreter")
+
+			res, err := env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "compiled program")
+		})
+	}
+}
+
 // TestBindVarLiteralMalformed pins that a malformed hex bind variable evaluated
 // by the engine — which decodes the payload itself, with no SQL encoder
 // involved — returns an error and never panics, in both the AST evaluator and
@@ -1139,6 +1727,109 @@ func TestBindVarLiteralMalformed(t *testing.T) {
 				_, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 				assert.ErrorContains(t, err, "malformed")
 			})
+		})
+	}
+}
+
+// TestInTupleBindVarNull checks that IN over a tuple bind variable that holds
+// a NULL is declared nullable, so that the compiled consumer of its NULL result
+// checks for it.
+func TestInTupleBindVarNull(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`1 IN ::list`, `NULL`},
+		{`1 NOT IN ::list`, `NULL`},
+		{`LENGTH(1 IN ::list)`, `NULL`},
+		{`(1 NOT IN ::list) + 1`, `NULL`},
+		{`2 IN ::list`, `INT64(1)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	list := &querypb.BindVariable{
+		Type:   querypb.Type_TUPLE,
+		Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(2)), sqltypes.ValueToProto(sqltypes.NULL)},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			converted, err := evalengine.Translate(expr, &evalengine.Config{
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.NewExpressionEnv(t.Context(), map[string]*querypb.BindVariable{"list": list}, evalengine.NewEmptyVCursor(venv, nil))
+
+			interpreted, err := env.EvaluateAST(converted)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, interpreted.String())
+
+			var res evalengine.EvalResult
+			require.NotPanics(t, func() {
+				res, err = env.Evaluate(converted)
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
+
+			typ, err := env.TypeOf(converted)
+			require.NoError(t, err)
+			assert.True(t, typ.Nullable())
+		})
+	}
+}
+
+// TestUntypedColumnNullRow checks a column that has neither a static type nor
+// field metadata, and so takes its type from the row value: a NULL value makes
+// it nullable, like a NULL literal.
+func TestUntypedColumnNullRow(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`column0`, `NULL`},
+		{`LENGTH(column0)`, `NULL`},
+		{`column0 + 1`, `NULL`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	values := []sqltypes.Value{sqltypes.NULL}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn:     evalengine.FieldResolver(makeFields(values)).Column,
+				Collation:         collations.CollationUtf8mb4ID,
+				Environment:       venv,
+				NoConstantFolding: true,
+			})
+			require.NoError(t, err)
+
+			env := evalengine.EmptyExpressionEnv(venv)
+			env.Row = values
+
+			typ, err := env.TypeOf(translated)
+			require.NoError(t, err)
+			assert.True(t, typ.Nullable())
+
+			// A bare column is evaluated as it is; anything around it is compiled
+			// for the column's type.
+			if untyped, ok := translated.(*evalengine.UntypedExpr); ok {
+				translated, err = untyped.Compile(env)
+				require.NoError(t, err)
+			}
+			var res evalengine.EvalResult
+			require.NotPanics(t, func() {
+				res, err = env.Evaluate(translated)
+			})
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
 		})
 	}
 }
@@ -1355,6 +2046,250 @@ func TestCompiledJSONInList(t *testing.T) {
 			res, err := env.EvaluateVM(compiled)
 			require.NoError(t, err)
 			require.Equal(t, tc.result, res.String())
+		})
+	}
+}
+
+// TestCompilerUntypedColumnCollation checks the collation that a compiled
+// expression gives a column whose type comes from the fields of the row.
+func TestCompilerUntypedColumnCollation(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	values := []sqltypes.Value{sqltypes.NewVarChar("a")}
+	fields := makeFields(values)
+
+	expr, err := venv.Parser().ParseExpr("column0 = 0x41")
+	require.NoError(t, err)
+	translated, err := evalengine.Translate(expr, &evalengine.Config{
+		ResolveColumn: evalengine.FieldResolver(fields).Column,
+		Collation:     collations.CollationUtf8mb4ID,
+		Environment:   venv,
+	})
+	require.NoError(t, err)
+	untyped, ok := translated.(*evalengine.UntypedExpr)
+	require.True(t, ok)
+
+	env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, nil))
+	env.Row = values
+	env.Fields = fields
+	compiled, err := untyped.Compile(env)
+	require.NoError(t, err)
+	res, err := env.EvaluateVM(compiled)
+	require.NoError(t, err)
+	// The column has the implicit coercibility, which wins over the hex
+	// literal: they compare with the column's collation.
+	assert.Equal(t, `INT64(1)`, res.String())
+}
+
+// TestCollationOfNullUntyped checks COLLATION() of a NULL value whose
+// expression has columns and bind variables without a static type, in the
+// interpreter and in the compiled program. Their types come from the fields
+// of the row, or from the row and the bind variables when there are no
+// fields.
+func TestCollationOfNullUntyped(t *testing.T) {
+	latin1 := []*querypb.Field{{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(collations.CollationLatin1Swedish)}}
+	testCases := []struct {
+		expression string
+		row        []sqltypes.Value
+		fields     []*querypb.Field
+		bindVars   map[string]*querypb.BindVariable
+		result     string
+	}{
+		{
+			expression: `COLLATION(column0)`,
+			row:        []sqltypes.Value{sqltypes.NULL},
+			fields:     latin1,
+			result:     `VARCHAR("latin1_swedish_ci")`,
+		},
+		{
+			expression: `COLLATION(NULLIF(column0, 'A'))`,
+			row:        []sqltypes.Value{sqltypes.NewVarChar("a")},
+			fields:     latin1,
+			result:     `VARCHAR("latin1_swedish_ci")`,
+		},
+		{
+			// Without fields, the type comes from the value: CONCAT makes
+			// a string with the default collation of the number.
+			expression: `COLLATION(NULLIF(CONCAT(column0, ''), '1'))`,
+			row:        []sqltypes.Value{sqltypes.NewInt64(1)},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+		{
+			expression: `COLLATION(NULLIF(:v, 'A'))`,
+			bindVars:   map[string]*querypb.BindVariable{"v": sqltypes.StringBindVariable("a")},
+			result:     `VARCHAR("utf8mb4_0900_ai_ci")`,
+		},
+	}
+
+	venv := vtenv.NewTestEnv()
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: evalengine.FieldResolver(latin1).Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			env := evalengine.NewExpressionEnv(t.Context(), tc.bindVars, evalengine.NewEmptyVCursor(venv, nil))
+			env.Row = tc.row
+			env.Fields = tc.fields
+
+			res, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "interpreter")
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "compiled program")
+		})
+	}
+}
+
+// TestUntypedStringColumnIsNotBinary checks that the string of a column
+// without a declared type is read as a character string, in the interpreter
+// and in the compiled program. Its collation is not known, which does not
+// make it a binary string: BIT_COUNT and the bit operators read it as a
+// number, and a conversion to JSON parses it as JSON text.
+func TestUntypedStringColumnIsNotBinary(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`BIT_COUNT(column0)`, `INT64(2)`},
+		{`BIT_COUNT(TRIM(column0))`, `INT64(2)`},
+		{`column0 >> 1`, `UINT64(6)`},
+		{`~column0`, `UINT64(18446744073709551603)`},
+		{`CAST(column0 AS JSON)`, `JSON("12")`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	fields := []*querypb.Field{{Name: "column0"}}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: evalengine.FieldResolver(fields).Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			// The row has no fields: the type of the column comes from
+			// its value, which has no collation.
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, nil))
+			env.Row = []sqltypes.Value{sqltypes.NewVarChar("12")}
+
+			res, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "interpreter")
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "compiled program")
+		})
+	}
+}
+
+// TestUntypedStringColumnWinsOverLiteral checks that a string made from a
+// column without a declared type and a literal is as strong as a column,
+// in the interpreter and in the compiled program: it wins over a hex
+// literal, so the two are a character string and compare with the
+// connection collation.
+func TestUntypedStringColumnWinsOverLiteral(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`CONCAT(column1, '') = 0x41`, `INT64(1)`},
+		{`IF(column0 = '12', column1, 'x') = 0x41`, `INT64(1)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, CONCAT(column0, '')))`, `INT64(2)`},
+		{`IF(column0 = 'x', 0x3132, CONCAT(column0, '')) >> 1`, `UINT64(6)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, CONCAT(column0)))`, `INT64(2)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, CONCAT_WS(',', column0)))`, `INT64(2)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, ELT(1, column0, 'a')))`, `INT64(2)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, GREATEST(column0, '1')))`, `INT64(2)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	fields := []*querypb.Field{{Name: "column0"}, {Name: "column1"}}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: evalengine.FieldResolver(fields).Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			// The row has no fields: the types of the columns come from
+			// their values, which have no collation.
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, nil))
+			env.Row = []sqltypes.Value{sqltypes.NewVarChar("12"), sqltypes.NewVarChar("a")}
+
+			res, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "interpreter")
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "compiled program")
+		})
+	}
+}
+
+// TestCompilerFoldedTemporalNumber checks the number of a DATETIME that
+// CASE or COALESCE made of a DATE or a TIME, when constant folding made
+// their result a literal of the compiled program. Arithmetic reads the
+// number of the DATE or the TIME, as it does without folding.
+func TestCompilerFoldedTemporalNumber(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`IFNULL(DATE'2020-01-02', TIMESTAMP'2020-01-03 00:00:00') DIV column0`, `INT64(20200102)`},
+		{`IF(TRUE, DATE'2020-01-02', TIMESTAMP'2020-01-03 00:00:00') + column0`, `INT64(20200103)`},
+		{`CASE WHEN TRUE THEN TIME'10:11:12' ELSE TIMESTAMP'2020-01-03 00:00:00' END + column0`, `INT64(101113)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	row := []sqltypes.Value{sqltypes.NewInt64(1)}
+	fields := evalengine.FieldResolver(makeFields(row))
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: fields.Column,
+				ResolveType:   fields.Type,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			_, compiled := translated.(*evalengine.CompiledExpr)
+			require.True(t, compiled)
+
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, time.UTC))
+			env.Row = row
+			res, err := env.Evaluate(translated)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String())
 		})
 	}
 }

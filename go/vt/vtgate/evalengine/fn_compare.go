@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"bytes"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -31,6 +32,8 @@ import (
 type (
 	builtinCoalesce struct {
 		CallExpr
+		// collate is the connection collation. See caseResult.
+		collate collations.ID
 	}
 
 	multiComparisonFunc func(env *ExpressionEnv, args []eval, cmp, prec int) (eval, error)
@@ -39,6 +42,8 @@ type (
 		CallExpr
 		cmp  int
 		prec int
+		// collate is the connection collation. See resultFor.
+		collate collations.ID
 	}
 )
 
@@ -52,12 +57,138 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
+	var (
+		ta typeAggregation
+		ca collationAggregation
+	)
+	for i, arg := range args {
+		if err := addCaseBranch(&ta, &ca, b.Arguments[i], arg, env, true); err != nil {
+			return nil, err
+		}
+	}
+	tt, col := coalesceType(&ta, &ca, b.collate, env.currentVersion())
 	for _, arg := range args {
 		if arg != nil {
-			return arg, nil
+			return coalesceResult(arg, tt, ta.size, ta.scale, col, env.now, env.sqlmode.AllowZeroDate())
 		}
 	}
 	return nil, nil
+}
+
+// coalesceType returns the type and the collation of the result of
+// COALESCE, whose arguments have the types in ta and the collations in ca.
+// It is the one of a CASE, see caseResult, except for an ENUM or SET that
+// is the only argument that is not the NULL literal: COALESCE(en, NULL)
+// is an ENUM, where COALESCE(en, en) is a VARCHAR.
+func coalesceType(ta *typeAggregation, ca *collationAggregation, conn collations.ID, version string) (sqltypes.Type, collations.TypedCollation) {
+	switch {
+	case ta.total == 1 && ta.enum == 1:
+		return sqltypes.Enum, ca.result()
+	case ta.total == 1 && ta.set == 1:
+		return sqltypes.Set, ca.result()
+	}
+	return caseResult(ta, ca, conn, version)
+}
+
+// coalesceResult converts sel, the argument that COALESCE selected, to the
+// type tt and the collation col that all the arguments combine to, as CASE
+// does. size and scale are the ones of evalCoerce. With an INT column i that
+// holds 5, COALESCE(i, 1.5) is the decimal 5.0 and COALESCE(i, s) the
+// string '5'.
+//
+// The result is never a hex or bit literal: COALESCE(0x31) + 0 is 1. It
+// keeps the character set of the selected argument for a conversion to
+// JSON, see flagJSONBinary.
+func coalesceResult(sel eval, tt sqltypes.Type, size, scale int32, col collations.TypedCollation, now time.Time, allowZero bool) (eval, error) {
+	var selBinary bool
+	if b, ok := sel.(*evalBytes); ok {
+		selBinary = b.jsonBinary()
+	}
+	sel = evalPlain(sel)
+
+	var (
+		res eval
+		err error
+	)
+	if b, ok := sel.(*evalBytes); ok && isCoalesceString(b.SQLType()) && isCoalesceString(tt) {
+		res, err = coalesceString(b, tt, col)
+	} else {
+		res, err = evalCoerce(sel, tt, size, scale, col.Collation, now, allowZero)
+		res = evalWithCollation(evalTemporalFrom(sel, res, false), col)
+	}
+	r, ok := res.(*evalBytes)
+	if !ok || err != nil {
+		return res, err
+	}
+	if r.jsonBinary() == selBinary {
+		return r, nil
+	}
+	if r == sel {
+		c := *r
+		r = &c
+	}
+	if selBinary {
+		r.flag |= flagJSONBinary
+	} else {
+		r.flag |= flagJSONText
+	}
+	return r, nil
+}
+
+// coalesceString converts the string sel to the string type tt and the
+// collation col. See coalesceResult.
+//
+// With a text column s and a binary column vb, COALESCE(s, vb) is a binary
+// string, and COALESCE(s, 0x41) has the collation of s.
+func coalesceString(sel *evalBytes, tt sqltypes.Type, col collations.TypedCollation) (eval, error) {
+	if col.Collation == collations.Unknown {
+		return sel, nil
+	}
+	binary := col.Collation == collations.CollationBinaryID
+	r := sel
+	switch {
+	case sel.isBinary() && binary:
+	case sel.isBinary():
+		// the bytes of a binary string are read in the character set of col
+		r = newEvalText(sel.bytes, col)
+	case binary && (tt == sqltypes.VarBinary || tt == sqltypes.Binary || tt == sqltypes.Blob):
+		r = newEvalBinary(sel.bytes)
+	case sel.col.Collation == collations.CollationBinaryID && !binary:
+		// the collation of the string is binary or not known: its bytes
+		// are read in the character set of col
+		c := *sel
+		c.col = col
+		r = &c
+	case sel.col.Collation != col.Collation:
+		t, err := evalToVarchar(sel, col.Collation, true)
+		if err != nil {
+			return nil, err
+		}
+		// a TEXT stays a TEXT
+		t.tt = sel.tt
+		r = t
+	}
+	if tt == sqltypes.Text || tt == sqltypes.Blob || sqltypes.IsBinary(r.SQLType()) != sqltypes.IsBinary(tt) {
+		// the result is a binary string or a TEXT when COALESCE is, also
+		// when it is the selected string: COALESCE(s, CAST(js AS CHAR)) is
+		// a TEXT
+		if r == sel {
+			c := *r
+			r = &c
+		}
+		r.tt = int16(tt)
+	}
+	return evalWithCollation(r, col), nil
+}
+
+// isCoalesceString reports whether tt is one of the string types that
+// coalesceString converts from and to.
+func isCoalesceString(tt sqltypes.Type) bool {
+	switch tt {
+	case sqltypes.VarChar, sqltypes.Char, sqltypes.VarBinary, sqltypes.Binary, sqltypes.Text, sqltypes.Blob:
+		return true
+	}
+	return false
 }
 
 func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
@@ -75,26 +206,34 @@ func (b *builtinCoalesce) compile(c *compiler) (ctype, error) {
 		if !tt.nullable() {
 			f = 0
 		}
-		ta.add(tt.Type, tt.Flag, tt.Size, tt.Scale)
-		if err := ca.add(tt.Col, c.env.CollationEnv()); err != nil {
+		ta.add(c.caseBranchType(arg, tt.Type, true), tt.Flag, tt.Size, tt.Scale)
+		if err := ca.addTyped(tt.Type, tt.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
 
 	args := len(b.Arguments)
+	tt, col := coalesceType(&ta, &ca, b.collate, c.env.MySQLVersion())
+	size, scale, allowZero := ta.size, ta.scale, c.sqlmode.AllowZeroDate()
 	c.asm.adjustStack(-(args - 1))
 	c.asm.emit(func(env *ExpressionEnv) int {
+		var sel eval
 		for sp := env.vm.sp - args; sp < env.vm.sp; sp++ {
 			if env.vm.stack[sp] != nil {
-				env.vm.stack[env.vm.sp-args] = env.vm.stack[sp]
+				sel = env.vm.stack[sp]
 				break
 			}
+		}
+		if sel != nil {
+			env.vm.stack[env.vm.sp-args], env.vm.err = coalesceResult(sel, tt, size, scale, col, env.now, allowZero)
+		} else {
+			env.vm.stack[env.vm.sp-args] = nil
 		}
 		env.vm.sp -= args - 1
 		return 1
 	}, "COALESCE (SP-%d) ... (SP-1)", args)
 
-	return ctype{Type: ta.result(), Flag: f, Col: ca.result()}, nil
+	return ctype{Type: tt, Flag: f, Col: col, Size: size, Scale: scale}, nil
 }
 
 func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiComparisonFunc {
@@ -237,7 +376,7 @@ func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiCom
 	}
 	if binary > 0 || text > 0 {
 		if text > 0 {
-			return compareAllText
+			return compareAllText(call.collate)
 		}
 		if binary > 0 {
 			return compareAllBinary
@@ -250,7 +389,7 @@ func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiCom
 			return compareAllDecimal
 		}
 		if json > 0 {
-			return compareAllText
+			return compareAllText(call.collate)
 		}
 	}
 	panic("unexpected argument type")
@@ -300,7 +439,7 @@ func compareAllTemporalAsString(f func(env *ExpressionEnv, arg eval, prec int) *
 				return evalToVarchar(arg, tc.Collation, false)
 			}
 		}
-		txt, err := compareAllText(env, args, cmp, prec)
+		txt, err := compareText(env, args, cmp, collations.Unknown)
 		if err != nil {
 			return nil, err
 		}
@@ -406,18 +545,30 @@ func compareAllDecimal(_ *ExpressionEnv, args []eval, cmp, _ int) (eval, error) 
 	return newEvalDecimalWithPrec(decExtreme, precExtreme), nil
 }
 
-func compareAllText(env *ExpressionEnv, args []eval, cmp, _ int) (eval, error) {
+// compareAllText compares its arguments as strings. conn is the connection
+// collation.
+func compareAllText(conn collations.ID) multiComparisonFunc {
+	return func(env *ExpressionEnv, args []eval, cmp, _ int) (eval, error) {
+		return compareText(env, args, cmp, conn)
+	}
+}
+
+func compareText(env *ExpressionEnv, args []eval, cmp int, conn collations.ID) (eval, error) {
 	charsets := make([]charset.Charset, 0, len(args))
 	var ca collationAggregation
 	for _, arg := range args {
 		col := evalCollation(arg)
-		if err := ca.add(col, env.collationEnv); err != nil {
+		tt := sqltypes.Null
+		if arg != nil {
+			tt = arg.SQLType()
+		}
+		if err := ca.addTyped(tt, col, env.collationEnv); err != nil {
 			return nil, err
 		}
 		charsets = append(charsets, colldata.Lookup(col.Collation).Charset())
 	}
 
-	tc := ca.result()
+	tc := ca.resultFor(conn)
 	col := colldata.Lookup(tc.Collation)
 	cs := col.Charset()
 
@@ -457,7 +608,8 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	return call.getMultiComparisonFunc(args)(env, args, call.cmp, call.prec)
+	res, err := call.getMultiComparisonFunc(args)(env, args, call.cmp, call.prec)
+	return evalPlain(res), err
 }
 
 func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype, jumps []*jump) (ctype, error) {
@@ -465,12 +617,12 @@ func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype, jumps [
 	var f typeFlag
 	for _, arg := range args {
 		f |= nullableFlags(arg.Flag)
-		if err := ca.add(arg.Col, c.env.CollationEnv()); err != nil {
+		if err := ca.addTyped(arg.Type, arg.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
 
-	tc := ca.result()
+	tc := ca.resultFor(call.collate)
 	c.asm.Fn_MULTICMP_c(len(args), call.cmp < 0, tc)
 	c.asm.jumpDestination(jumps...)
 	return ctype{Type: sqltypes.VarChar, Flag: f, Col: tc}, nil
@@ -686,7 +838,7 @@ func (call *builtinMultiComparison) compile(c *compiler) (ctype, error) {
 		if nullable {
 			c.asm.adjustStack(-len(args) + 1)
 			c.asm.jumpDestination(jumps...)
-			return ctype{Type: sqltypes.Null, Flag: f, Col: collationBinary}, nil
+			return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationBinary}, nil
 		}
 	}
 	return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected argument for GREATEST/LEAST")

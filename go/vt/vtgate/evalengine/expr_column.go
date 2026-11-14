@@ -57,7 +57,13 @@ func (c *Column) IsExpr() {}
 
 // eval implements the expression interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.Collation, c.Values)
+	e, err := valueToEval(env.Row[c.Offset], c.Collation, c.Values)
+	if b, ok := e.(*evalBytes); ok && b.isBinary() && b.flag&(flagHex|flagBit) == 0 {
+		// valueToEval gives a binary string the literal's coercibility:
+		// a binary column has the implicit one, like a text column.
+		b.col = collationBinaryImplicit
+	}
+	return e, err
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
@@ -78,7 +84,7 @@ func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 
 		return ctype{
 			Type:  field.Type,
-			Col:   typedCoercionCollation(field.Type, collations.ID(field.Charset)),
+			Col:   typedColumnCollation(field.Type, collations.ID(field.Charset)),
 			Flag:  f,
 			Size:  int32(field.ColumnLength),
 			Scale: int32(field.Decimals),
@@ -86,7 +92,16 @@ func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 	}
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
-		return ctype{Type: value.Type(), Flag: 0, Col: c.Collation, Values: c.Values}, nil
+		var f typeFlag
+		if value.IsNull() {
+			f = flagNull | flagNullable
+		}
+		col := c.Collation
+		if value.Type() == sqltypes.TypeJSON {
+			// as evalCollation does for the value in the interpreter
+			col = collationJSON
+		}
+		return ctype{Type: value.Type(), Flag: f, Col: col, Values: c.Values}, nil
 	}
 	return ctype{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "no column at offset %d", c.Offset)
 }
@@ -95,34 +110,25 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 	var typ ctype
 
 	if column.typed() {
-		typ.Type = column.Type
-		typ.Col = column.Collation
-		if column.Nullable {
-			typ.Flag = flagNullable
-		}
-		typ.Size = column.Size
-		typ.Scale = column.Scale
-		typ.Values = column.Values
+		typ = column.typedType()
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[column.dynamicTypeOffset]
+	} else if c.typeEnv != nil {
+		var err error
+		if typ, err = column.typeof(c.typeEnv); err != nil {
+			return ctype{}, err
+		}
 	} else {
 		return ctype{}, c.unsupported(column)
-	}
-
-	if typ.Col.Collation != collations.CollationBinaryID {
-		typ.Col.Repertoire = collations.RepertoireUnicode
 	}
 
 	switch tt := typ.Type; {
 	case sqltypes.IsSigned(tt):
 		c.asm.PushColumn_i(column.Offset)
-		typ.Type = sqltypes.Int64
 	case sqltypes.IsUnsigned(tt):
 		c.asm.PushColumn_u(column.Offset)
-		typ.Type = sqltypes.Uint64
 	case sqltypes.IsFloat(tt):
 		c.asm.PushColumn_f(column.Offset)
-		typ.Type = sqltypes.Float64
 	case sqltypes.IsDecimal(tt):
 		c.asm.PushColumn_d(column.Offset)
 	case tt == sqltypes.Enum:
@@ -133,17 +139,13 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 		switch tt {
 		case sqltypes.HexNum:
 			c.asm.PushColumn_hexnum(column.Offset)
-			typ.Type = sqltypes.VarBinary
 		case sqltypes.HexVal:
 			c.asm.PushColumn_hexval(column.Offset)
-			typ.Type = sqltypes.VarBinary
 		default:
-			c.asm.PushColumn_text(column.Offset, typ.Col)
-			typ.Type = sqltypes.VarChar
+			c.asm.PushColumn_text(column.Offset, compiledColumnType(typ).Col)
 		}
 	case sqltypes.IsBinary(tt):
 		c.asm.PushColumn_bin(column.Offset)
-		typ.Type = sqltypes.VarBinary
 	case sqltypes.IsNull(tt):
 		c.asm.PushNull()
 	case tt == sqltypes.TypeJSON:
@@ -162,7 +164,47 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Type is not supported: %s", tt)
 	}
 
-	return typ, nil
+	return compiledColumnType(typ), nil
+}
+
+// typedType returns the declared type of a typed column.
+func (column *Column) typedType() ctype {
+	typ := ctype{
+		Type:   column.Type,
+		Col:    column.Collation,
+		Size:   column.Size,
+		Scale:  column.Scale,
+		Values: column.Values,
+	}
+	if column.Nullable {
+		typ.Flag = flagNullable
+	}
+	return typ
+}
+
+// compiledColumnType returns the type of the value that the compiled
+// program pushes for a column of type typ: an INT column is pushed as an
+// INT64 and a TEXT column as a VARCHAR.
+func compiledColumnType(typ ctype) ctype {
+	if typ.Col.Collation != collations.CollationBinaryID {
+		typ.Col.Repertoire = collations.RepertoireUnicode
+	}
+	switch tt := typ.Type; {
+	case sqltypes.IsSigned(tt):
+		typ.Type = sqltypes.Int64
+	case sqltypes.IsUnsigned(tt):
+		typ.Type = sqltypes.Uint64
+	case sqltypes.IsFloat(tt):
+		typ.Type = sqltypes.Float64
+	case tt == sqltypes.HexNum, tt == sqltypes.HexVal:
+		typ.Type = sqltypes.VarBinary
+	case sqltypes.IsText(tt) && tt != sqltypes.Enum && tt != sqltypes.Set:
+		typ.Type = sqltypes.VarChar
+	case sqltypes.IsBinary(tt):
+		typ.Type = sqltypes.VarBinary
+		typ.Col = collationBinaryImplicit
+	}
+	return typ
 }
 
 func (column *Column) typed() bool {

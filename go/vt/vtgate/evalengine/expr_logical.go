@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/capabilities"
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -64,6 +66,17 @@ type (
 	CaseExpr struct {
 		cases []WhenThen
 		Else  IR
+		// plain is set for IFNULL, whose result is a regular string even
+		// when it selects a hex or bit literal: IFNULL(0x41, 'x') + 0 is
+		// 0 in MySQL, where IF(1, 0x41, 'x') + 0 is 65.
+		plain bool
+		// nullif is set for the CASE that NULLIF is rewritten to. COALESCE
+		// and IFNULL count a NULLIF of a date or a time as a string, see
+		// nullifBranch: with a DATE column dt and a DATETIME column dtm,
+		// COALESCE(NULLIF(dt, 5), dtm) is the VARCHAR '2020-01-02' in MySQL.
+		nullif bool
+		// collate is the connection collation. See caseResult.
+		collate collations.ID
 	}
 )
 
@@ -605,8 +618,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		ta.addEval(then)
-		if err := ca.add(evalCollation(then), env.collationEnv); err != nil {
+		if err := addCaseBranch(&ta, &ca, whenThen.then, then, env, c.plain); err != nil {
 			return nil, err
 		}
 
@@ -620,8 +632,7 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		ta.addEval(e)
-		if err := ca.add(evalCollation(e), env.collationEnv); err != nil {
+		if err := addCaseBranch(&ta, &ca, c.Else, e, env, c.plain); err != nil {
 			return nil, err
 		}
 		if !matched {
@@ -633,7 +644,219 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !matched {
 		return nil, nil
 	}
-	return evalCoerce(result, ta.result(), ta.size, ta.scale, ca.result().Collation, env.now, env.sqlmode.AllowZeroDate())
+	// TRUE and FALSE become the integers 1 and 0. A selected hex or bit
+	// literal still counts as a number: see evalKeepNumber.
+	tt, col := caseResult(&ta, &ca, c.collate, env.currentVersion())
+	res, err := evalCoerce(evalNotBoolean(result), tt, ta.size, c.decimalScale(ta.scale), col.Collation, env.now, env.sqlmode.AllowZeroDate())
+	res = evalTemporalFrom(result, res, !c.plain)
+	return evalWithCollation(evalKeepNumber(result, res, c.numberFlags()), col), err
+}
+
+// addCaseBranch adds one branch of a CASE to the type and the collation of
+// its result. expr is the branch and e is its value.
+//
+// A typed column counts with its collation, and with its type when it is
+// NULL, as in the compiled program: IFNULL(col, 0x3132) has the collation
+// of col also when col is NULL, and IFNULL(i, nd) with a NULL DECIMAL(10,3)
+// column nd is 5.000. See caseBranchType for a YEAR column, and for plain,
+// which is set for COALESCE and IFNULL.
+//
+// A NULLIF that is NULL has no value to read its type from. When its first
+// argument is a column, the branch counts with the type of the column, as
+// in the compiled program: with a DATE column dt and a DATETIME column dtm,
+// COALESCE(NULLIF(dtm, dtm), dt) is the VARCHAR '2020-01-02'. The NULLIF of
+// any other expression counts as NULL then.
+func addCaseBranch(ta *typeAggregation, ca *collationAggregation, expr IR, e eval, env *ExpressionEnv, plain bool) error {
+	if e == nil && plain {
+		if tt := nullifColumnType(expr, env); sqltypes.IsDateOrTime(tt) {
+			ta.add(sqltypes.VarChar, flagNullable, 0, 0)
+			return ca.addTyped(tt, collationNumeric, env.collationEnv)
+		}
+	}
+	col, ok := expr.(*Column)
+	if !ok || !col.typed() {
+		tt, tc := sqltypes.Null, evalCollation(e)
+		if e != nil {
+			tt = e.SQLType()
+		}
+		if ok && e != nil && col.Offset < len(env.Row) && env.Row[col.Offset].Type() == sqltypes.Year {
+			// the value of a YEAR column is an integer, see caseBranchType
+			ta.add(sqltypes.Uint16, 0, e.Size(), e.Scale())
+		} else if bt := caseBranchType(expr, tt, plain); bt != tt {
+			// a date or a time from a NULLIF, see caseBranchType
+			ta.add(bt, 0, e.Size(), e.Scale())
+		} else {
+			ta.addEval(e)
+		}
+		if tt == sqltypes.Enum || tt == sqltypes.Set {
+			// the value of an ENUM or SET column has no collation
+			tc = collationNumeric
+		}
+		return ca.addTyped(tt, tc, env.collationEnv)
+	}
+	ct := compiledColumnType(col.typedType())
+	if e == nil {
+		ta.add(caseBranchType(expr, ct.Type, plain), ct.Flag, ct.Size, ct.Scale)
+	} else {
+		var f typeFlag
+		if b, ok := e.(*evalBytes); ok {
+			f = b.flag
+		}
+		ta.add(caseBranchType(expr, e.SQLType(), plain), f, e.Size(), e.Scale())
+	}
+	return ca.addTyped(ct.Type, ct.Col, env.collationEnv)
+}
+
+// caseBranchType returns the type with which the branch expr of type tt
+// counts in the type of the result of a CASE. plain is set for COALESCE and
+// IFNULL.
+//
+// A YEAR column is an unsigned 16-bit integer there. With an INT column i,
+// IFNULL(i, y) is an INT, and with a BIGINT UNSIGNED column u, IFNULL(u, y)
+// is a BIGINT UNSIGNED.
+//
+// For COALESCE and IFNULL, a date or a time from a NULLIF is a VARCHAR, see
+// nullifBranch. IF and CASE keep the date: IF(c, NULLIF(dt, 5), dt) is a
+// DATE, although MySQL calls it a VARCHAR, because MySQL still reads it as
+// the selected date in arithmetic: IF(c, NULLIF(dt, 5), dt) DIV 1 is
+// 20200102.
+func caseBranchType(expr IR, tt sqltypes.Type, plain bool) sqltypes.Type {
+	if col, ok := expr.(*Column); ok && col.typed() && col.Type == sqltypes.Year {
+		return sqltypes.Uint16
+	}
+	if plain && sqltypes.IsDateOrTime(tt) && nullifBranch(expr) {
+		return sqltypes.VarChar
+	}
+	return tt
+}
+
+// nullifBranch reports whether expr is a NULLIF, or an IF or a CASE with a
+// NULLIF in one of its THEN or ELSE branches, at any depth. COALESCE and
+// IFNULL count such a date or time as a VARCHAR, as MySQL does: with a DATE
+// column dt and a DATETIME column dtm, COALESCE(IF(c, NULLIF(dt, 5), NULL),
+// dtm) is the VARCHAR '2020-01-02', where COALESCE(dt, dtm) is a DATETIME.
+// A CASE written by hand as a NULLIF is not one: COALESCE(CASE WHEN dt = 5
+// THEN NULL ELSE dt END, dtm) is a DATETIME in MySQL.
+func nullifBranch(expr IR) bool {
+	cs, ok := expr.(*CaseExpr)
+	if !ok || cs.plain {
+		return false
+	}
+	if cs.nullif {
+		return true
+	}
+	for _, wt := range cs.cases {
+		if nullifBranch(wt.then) {
+			return true
+		}
+	}
+	return cs.Else != nil && nullifBranch(cs.Else)
+}
+
+// nullifColumnType returns the type of the column that expr is the NULLIF
+// of, from its declaration or else from the row, or NULL when expr is not
+// the NULLIF of a column. See addCaseBranch.
+func nullifColumnType(expr IR, env *ExpressionEnv) sqltypes.Type {
+	cs, ok := expr.(*CaseExpr)
+	if !ok || !cs.nullif {
+		return sqltypes.Null
+	}
+	col, ok := cs.Else.(*Column)
+	switch {
+	case !ok:
+		return sqltypes.Null
+	case col.typed():
+		return col.Type
+	case col.Offset < len(env.Row):
+		return env.Row[col.Offset].Type()
+	}
+	return sqltypes.Null
+}
+
+// caseBranchType is the function caseBranchType for the compiler, which
+// also knows the type of a column that has no declared type.
+func (c *compiler) caseBranchType(expr IR, tt sqltypes.Type, plain bool) sqltypes.Type {
+	if col, ok := expr.(*Column); ok && !col.typed() {
+		var typ ctype
+		switch {
+		case c.dynamicTypes != nil:
+			typ = c.dynamicTypes[col.dynamicTypeOffset]
+		case c.typeEnv != nil:
+			typ, _ = col.typeof(c.typeEnv)
+		}
+		if typ.Type == sqltypes.Year {
+			return sqltypes.Uint16
+		}
+	}
+	return caseBranchType(expr, tt, plain)
+}
+
+// caseResult returns the type and the collation of the result of a CASE
+// whose branches have the types in ta and the collations in ca. COALESCE
+// uses it too: MySQL types it like a CASE. conn is the connection
+// collation and version the MySQL version.
+//
+//   - Numbers and dates have no character set. When they combine to a
+//     string, it has the connection collation: IF(c, 1, DATE'2020-01-02')
+//     is a VARCHAR, not a VARBINARY.
+//   - Character and binary strings together give a binary string only if
+//     the collation is binary. IF(c, s, _binary'A') with a text column s is
+//     a character string, because the collation of s wins over the literal.
+//   - JSON with other types gives a LONGTEXT since MySQL 8.1, and a VARCHAR
+//     before: IF(c, i, js) is a TEXT in MySQL 8.4. As elsewhere in the
+//     evalengine, a TEXT is a BLOB whose collation is not binary.
+func caseResult(ta *typeAggregation, ca *collationAggregation, conn collations.ID, version string) (sqltypes.Type, collations.TypedCollation) {
+	t := ta.result()
+	switch {
+	case sqltypes.IsSigned(t):
+		// the compiled program has no smaller integers
+		t = sqltypes.Int64
+	case sqltypes.IsUnsigned(t) && t != sqltypes.Year:
+		t = sqltypes.Uint64
+	}
+	if t != sqltypes.TypeJSON && ta.json > 0 {
+		if blob, _ := capabilities.ServerVersionAtLeast(version, 8, 1, 0); blob {
+			t = sqltypes.Blob
+		}
+	}
+	col := ca.resultFor(conn)
+	switch {
+	case ca.unknownResult():
+		// the collation stays unknown, and the result is a character
+		// string like the column that it comes from
+		col.Coercibility = collations.CoerceNumeric
+		if t == sqltypes.VarBinary && ta.char > 0 {
+			t = sqltypes.VarChar
+		}
+	case col.Coercibility == collations.CoerceNumeric && (t == sqltypes.VarChar || t == sqltypes.Blob) && conn != collations.Unknown:
+		col = typedCoercionCollation(sqltypes.VarChar, conn)
+	}
+	if t == sqltypes.VarBinary && col.Collation != collations.CollationBinaryID && ta.char > 0 {
+		t = sqltypes.VarChar
+	}
+	return t, col
+}
+
+// numberFlags returns the flags to pass to evalKeepNumber:
+// flagNumberFromBytes and flagDecimalFromBytes, or none for IFNULL. See
+// CaseExpr.plain.
+func (c *CaseExpr) numberFlags() typeFlag {
+	if c.plain {
+		return 0
+	}
+	return flagNumberFromBytes | flagDecimalFromBytes
+}
+
+// decimalScale returns the digits after the point that the result of the
+// CASE is shown with when it is a decimal and scale is the largest of its
+// branches. IFNULL shows them all, like COALESCE: with an INT column i that
+// holds 5, IFNULL(i, 1.5) is 5.0. IF and CASE show the ones of the selected
+// value: IF(c, i, 1.5) is 5.
+func (c *CaseExpr) decimalScale(scale int32) int32 {
+	if c.plain {
+		return scale
+	}
+	return 0
 }
 
 func (c *CaseExpr) constant() bool {
@@ -692,8 +915,8 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		ta.add(then.Type, then.Flag, then.Size, then.Scale)
-		if err := ca.add(then.Col, c.env.CollationEnv()); err != nil {
+		ta.add(c.caseBranchType(wt.then, then.Type, cs.plain), then.Flag, then.Size, then.Scale)
+		if err := ca.addTyped(then.Type, then.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
@@ -704,18 +927,20 @@ func (cs *CaseExpr) compile(c *compiler) (ctype, error) {
 			return ctype{}, err
 		}
 
-		ta.add(els.Type, els.Flag, els.Size, els.Scale)
-		if err := ca.add(els.Col, c.env.CollationEnv()); err != nil {
+		ta.add(c.caseBranchType(cs.Else, els.Type, cs.plain), els.Flag, els.Size, els.Scale)
+		if err := ca.addTyped(els.Type, els.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
 
 	var f typeFlag
-	if ta.nullable {
+	// Without ELSE, a CASE that matches no WHEN returns NULL.
+	if ta.nullable || cs.Else == nil {
 		f |= flagNullable
 	}
-	ct := ctype{Type: ta.result(), Flag: f, Col: ca.result(), Scale: ta.scale, Size: ta.size}
-	c.asm.CmpCase(len(cs.cases), cs.Else != nil, ct.Type, ct.Size, ct.Scale, ct.Col, c.sqlmode.AllowZeroDate())
+	tt, col := caseResult(&ta, &ca, cs.collate, c.env.MySQLVersion())
+	ct := ctype{Type: tt, Flag: f, Col: col, Scale: ta.scale, Size: ta.size}
+	c.asm.CmpCase(len(cs.cases), cs.Else != nil, cs.numberFlags(), !cs.plain, ct.Type, ct.Size, cs.decimalScale(ct.Scale), ct.Col, c.sqlmode.AllowZeroDate())
 	return ct, nil
 }
 

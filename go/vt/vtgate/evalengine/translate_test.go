@@ -109,6 +109,8 @@ func TestTranslateSimplification(t *testing.T) {
 		{"ifnull(null, 23)", ok(`case when null is null then 23 else null`), ok(`23`)},
 		{"nullif(1, 1)", ok(`case when 1 = 1 then null else 1`), ok(`null`)},
 		{"nullif(1, 2)", ok(`case when 1 = 2 then null else 1`), ok(`1`)},
+		// COLLATION() of a NULL value is the collation of its expression.
+		{"collation(nullif('A', 'A'))", ok(`collation(case when 'A' = 'A' then null else 'A')`), ok(`'utf8mb4_0900_ai_ci'`)},
 		{"12 between 5 and 20", ok("12 >= 5 and 12 <= 20"), ok(`1`)},
 		{"12 not between 5 and 20", ok("12 < 5 or 12 > 20"), ok(`0`)},
 		{"2 not between 5 and 20", ok("2 < 5 or 2 > 20"), ok(`1`)},

@@ -60,6 +60,40 @@ var (
 	_ IR = (*BitwiseNotExpr)(nil)
 )
 
+// bitBinaryString returns e if the bit operators treat it as a binary
+// string, which they work on byte by byte.
+//
+// That is a binary string, or a character string with the binary collation.
+// IF, CASE, NULLIF and ELT return the latter when their arguments combine
+// to the binary collation: IF(1, 0x62, 'x') >> 1 is the binary string '1'
+// in MySQL. With a text column s, IF(1, 0x62, s) has the collation of s
+// instead, and a bit operator reads it as a number.
+//
+// A hex or bit literal also passes, but the callers read a literal as a
+// number: 0x62 >> 1 is 49.
+func bitBinaryString(e eval) (*evalBytes, bool) {
+	b, ok := e.(*evalBytes)
+	if !ok || !(isBinaryString(b.SQLType(), b.col.Collation) || isBinaryText(b.SQLType(), b.col)) {
+		return nil, false
+	}
+	return b, true
+}
+
+// bitBinaryString reports whether the bit operators treat a value of type
+// ct as a binary string. See the function bitBinaryString.
+func (ct *ctype) bitBinaryString() bool {
+	return isBinaryString(ct.Type, ct.Col.Collation) || isBinaryText(ct.Type, ct.Col)
+}
+
+// compileToBitBinary converts the value of type ct to a VARBINARY, which is
+// what the byte-wise instructions of the bit operators expect. A character
+// string with the binary collation needs this conversion.
+func (c *compiler) compileToBitBinary(ct ctype, offset int) {
+	if ct.Type != sqltypes.VarBinary {
+		c.asm.Convert_xbin(offset)
+	}
+}
+
 func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := b.Inner.eval(env)
 	if err != nil {
@@ -68,7 +102,7 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
-	if e, ok := e.(*evalBytes); ok && e.isBinary() && !e.isHexOrBitLiteral() {
+	if e, ok := bitBinaryString(e); ok && !e.isHexOrBitLiteral() {
 		in := e.bytes
 		out := make([]byte, len(in))
 		for i := range in {
@@ -89,15 +123,17 @@ func (expr *BitwiseNotExpr) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(ct)
 
-	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
+	if ct.bitBinaryString() && !ct.isHexOrBitLiteral() {
+		c.compileToBitBinary(ct, 1)
 		c.asm.BitwiseNot_b()
 		c.asm.jumpDestination(skip)
-		return ct, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: nullableFlags(ct.Flag), Col: collationBinary}, nil
 	}
 
 	ct = c.compileToBitwiseUint64(ct, 1)
 	c.asm.BitwiseNot_u()
 	c.asm.jumpDestination(skip)
+	ct.Flag = nullableFlags(ct.Flag)
 	return ct, nil
 }
 
@@ -207,8 +243,8 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			the same length as the arguments. If the arguments have unequal lengths, an ER_INVALID_BITWISE_OPERANDS_SIZE
 			error occurs. Numeric evaluation produces an unsigned 64-bit integer.
 		*/
-		if l, ok := l.(*evalBytes); ok && l.isBinary() {
-			if r, ok := r.(*evalBytes); ok && r.isBinary() {
+		if l, ok := bitBinaryString(l); ok {
+			if r, ok := bitBinaryString(r); ok {
 				if !l.isHexOrBitLiteral() || !r.isHexOrBitLiteral() {
 					b1 := l.bytes
 					b2 := r.bytes
@@ -231,7 +267,7 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			literal, bit literal, or NULL literal. Numeric evaluation occurs otherwise, with argument conversion to an
 			unsigned 64-bit integer as necessary.
 		*/
-		if l, ok := l.(*evalBytes); ok && l.isBinary() && !l.isHexOrBitLiteral() {
+		if l, ok := bitBinaryString(l); ok && !l.isHexOrBitLiteral() {
 			ru := evalToInt64(r)
 			return newEvalBinary(op.binary(l.bytes, uint64(ru.i))), nil
 		}
@@ -259,11 +295,13 @@ func (expr *BitwiseExpr) compileBinary(c *compiler, asm_ins_bb, asm_ins_uu func(
 
 	skip2 := c.compileNullCheck1r(rt)
 
-	if lt.Type == sqltypes.VarBinary && rt.Type == sqltypes.VarBinary {
+	if lt.bitBinaryString() && rt.bitBinaryString() {
 		if !lt.isHexOrBitLiteral() || !rt.isHexOrBitLiteral() {
+			c.compileToBitBinary(lt, 2)
+			c.compileToBitBinary(rt, 1)
 			asm_ins_bb()
 			c.asm.jumpDestination(skip1, skip2)
-			return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+			return ctype{Type: sqltypes.VarBinary, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationBinary}, nil
 		}
 	}
 
@@ -290,7 +328,8 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 
 	skip2 := c.compileNullCheck1r(rt)
 
-	if lt.Type == sqltypes.VarBinary && !lt.isHexOrBitLiteral() {
+	if lt.bitBinaryString() && !lt.isHexOrBitLiteral() {
+		c.compileToBitBinary(lt, 2)
 		_ = c.compileToUint64(rt, 1)
 		if i < 0 {
 			c.asm.BitShiftLeft_bu()
@@ -298,7 +337,7 @@ func (expr *BitwiseExpr) compileShift(c *compiler, i int) (ctype, error) {
 			c.asm.BitShiftRight_bu()
 		}
 		c.asm.jumpDestination(skip1, skip2)
-		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: nullableFlags(lt.Flag | rt.Flag), Col: collationBinary}, nil
 	}
 
 	lt = c.compileToBitwiseUint64(lt, 2)

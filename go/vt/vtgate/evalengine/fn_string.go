@@ -86,6 +86,7 @@ type (
 
 	builtinCollation struct {
 		CallExpr
+		collate collations.ID
 	}
 
 	builtinWeightString struct {
@@ -386,26 +387,21 @@ func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
 			continue
 		}
 
-		tt = concatSQLType(arg.SQLType(), tt)
-		err = ca.add(evalCollation(arg), env.collationEnv)
+		tt = concatSQLType(arg.SQLType(), evalCollation(arg).Collation, tt)
+		err = ca.addTyped(arg.SQLType(), evalCollation(arg), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	b, err := evalToVarchar(args[i], tc.Collation, true)
 	if err != nil {
 		return nil, err
 	}
 
-	return newEvalRaw(tt, b.bytes, b.col), nil
+	return evalKeepNumber(args[i], newEvalRaw(tt, b.bytes, tc), flagNumberFromBytes), nil
 }
 
 func (call *builtinElt) compile(c *compiler) (ctype, error) {
@@ -427,43 +423,16 @@ func (call *builtinElt) compile(c *compiler) (ctype, error) {
 			continue
 		}
 
-		tt = concatSQLType(args[i].Type, tt)
-		err = ca.add(args[i].Col, c.env.CollationEnv())
+		tt = concatSQLType(args[i].Type, args[i].Col.Collation, tt)
+		err = ca.addTyped(args[i].Type, args[i].Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	_ = c.compileToInt64(args[0], len(args))
-
-	for i, arg := range args[1:] {
-		offset := len(args) - (i + 1)
-		skip := c.compileNullCheckOffset(arg, offset)
-
-		switch arg.Type {
-		case sqltypes.VarBinary, sqltypes.Binary, sqltypes.Blob:
-			if tc.Collation != collations.CollationBinaryID {
-				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
-			}
-		case sqltypes.VarChar, sqltypes.Char, sqltypes.Text:
-			fromCharset := colldata.Lookup(arg.Col.Collation).Charset()
-			toCharset := colldata.Lookup(tc.Collation).Charset()
-			if fromCharset != toCharset && !toCharset.IsSuperset(fromCharset) {
-				c.asm.Convert_xce(offset, arg.Type, tc.Collation)
-			}
-		default:
-			c.asm.Convert_xce(offset, arg.Type, tc.Collation)
-		}
-
-		c.asm.jumpDestination(skip)
-	}
 
 	c.asm.Fn_ELT(len(args), tt, tc)
 	c.asm.jumpDestination(skip)
@@ -584,7 +553,7 @@ func (call *builtinInsert) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_INSERT(col)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: nullStringCollation(str, col), Flag: flagNullable}, nil
 }
 
 func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
@@ -612,7 +581,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		} else {
 			newcase = csa.ToLower(nil, e.bytes)
 		}
-		return newEvalText(newcase, e.col), nil
+		return newEvalText(newcase, e.col).withCharsetOf(e), nil
 
 	default:
 		return e, nil
@@ -631,11 +600,15 @@ func (call *builtinChangeCase) compile(c *compiler) (ctype, error) {
 	case str.isTextual():
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+		if !nullType(str) {
+			str.Col = typedCoercionCollation(sqltypes.VarChar, c.collation)
+		}
 	}
 
 	c.asm.Fn_LUCASE(call.upcase)
 	c.asm.jumpDestination(skip)
 
+	str.Flag = nullableFlags(str.Flag) | str.Flag&flagExplicitCollation
 	return str, nil
 }
 
@@ -763,7 +736,7 @@ func (call *builtinReverse) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	return newEvalText(reverse(b), b.col), nil
+	return newEvalText(reverse(b), b.col).withCharsetOf(b), nil
 }
 
 func (call *builtinReverse) compile(c *compiler) (ctype, error) {
@@ -774,15 +747,21 @@ func (call *builtinReverse) compile(c *compiler) (ctype, error) {
 
 	skip := c.compileNullCheck1(arg)
 
+	col := arg.Col
 	switch {
 	case arg.isTextual():
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.collation, nil)
+		col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
 	}
 
 	c.asm.Fn_REVERSE()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: arg.Col, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: nullStringCollation(arg, col), Flag: flagNullable}, nil
 }
 
 func space(num int64) []byte {
@@ -935,7 +914,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	if len(text.bytes) == 0 {
-		return newEvalText(nil, text.col), nil
+		return newEvalText(nil, text.col).withCharsetOf(text), nil
 	}
 
 	repeat := evalToInt64(arg2).i
@@ -953,7 +932,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 		tt = repeatType(env.currentVersion(), tt)
 	}
 
-	return newEvalRaw(tt, b, text.col), nil
+	return newEvalRaw(tt, b, text.col).withCharsetOf(text), nil
 }
 
 func validMaxLength(len, repeat int64) bool {
@@ -981,17 +960,43 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 	skip := c.compileNullCheck2(str, repeat)
 
 	tt := sqltypes.VarChar
+	col := str.Col
 	switch {
 	case str.isTextual():
 		tt = str.Type
 	default:
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.collation, nil)
+		col = collations.TypedCollation{
+			Collation:    c.collation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
 	}
 	_ = c.compileToInt64(repeat, 1)
 
 	c.asm.Fn_REPEAT(tt, repeatType(c.env.MySQLVersion(), tt))
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: str.Col, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: nullStringCollation(str, col), Flag: flagNullable}, nil
+}
+
+// nullStringCollation returns the collation of the result of a string
+// function: col, the collation of the string that it makes of its argument
+// str. When str is not a string but a NULL, such as the NULL literal or
+// IF(c, NULL, NULL), the result is NULL too and has the collation of NULL.
+//
+// With a NULL int column ni, COLLATION(TRIM(ni)) is utf8mb4_0900_ai_ci in
+// MySQL, and COLLATION(TRIM(NULL)) is binary.
+func nullStringCollation(str ctype, col collations.TypedCollation) collations.TypedCollation {
+	if nullType(str) {
+		return collationNull
+	}
+	return col
+}
+
+// nullType reports whether ct is the type of a NULL that is not a string,
+// such as the NULL literal or IF(c, NULL, NULL).
+func nullType(ct ctype) bool {
+	return !ct.isTextual() && (ct.Type == sqltypes.Null || ct.Col.Coercibility == collations.CoerceIgnorable)
 }
 
 func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
@@ -1000,22 +1005,64 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	col := evalCollation(arg)
+	col := evalCollation(arg).Collation
+	if arg == nil {
+		col = c.declaredCollation(env)
+	}
 
 	// the collation of a `COLLATION` expr is hardcoded to `utf8mb3_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
-	return newEvalText([]byte(env.collationEnv.LookupName(col.Collation)), collationUtf8mb3), nil
+	return newEvalText([]byte(env.collationEnv.LookupName(col)), collationUtf8mb3), nil
+}
+
+// declaredCollation returns the collation that the argument of COLLATION()
+// is declared with, for the interpreter, which has no declared types.
+//
+// It compiles the argument for its type only and drops the program. The
+// types of columns and bind variables come from env. The interpreter calls
+// it when the argument is NULL, so it costs one compilation of the argument
+// for every such row.
+func (expr *builtinCollation) declaredCollation(env *ExpressionEnv) collations.ID {
+	c := compiler{
+		collation: expr.collate,
+		typeEnv:   env,
+		sqlmode:   env.sqlmode,
+		env:       env.vc.Environment(),
+	}
+	arg, err := expr.Arguments[0].compile(&c)
+	if err != nil {
+		// the collation of a NULL value
+		return collations.CollationBinaryID
+	}
+	return expr.nullCollation(arg)
+}
+
+// nullCollation returns the collation that COLLATION() reports when its
+// argument, of the declared type arg, is NULL. It is the collation that the
+// argument is declared with: with a text column s, COLLATION(NULLIF(s, s))
+// is the collation of s in MySQL.
+func (expr *builtinCollation) nullCollation(arg ctype) collations.ID {
+	if _, ok := expr.Arguments[0].(*Column); ok && arg.Type == sqltypes.TypeJSON {
+		// MySQL reports binary for a JSON column, but utf8mb4_bin for
+		// JSON_EXTRACT(js, '$.a').
+		return collations.CollationBinaryID
+	}
+	if arg.Col.Collation == collations.Unknown {
+		// An untyped column with no fields and a NULL value.
+		return collations.CollationBinaryID
+	}
+	return arg.Col.Collation
 }
 
 func (expr *builtinCollation) compile(c *compiler) (ctype, error) {
-	_, err := expr.Arguments[0].compile(c)
+	arg, err := expr.Arguments[0].compile(c)
 	if err != nil {
 		return ctype{}, err
 	}
 
 	skip := c.asm.jumpFrom()
 
-	c.asm.Fn_COLLATION(c.env.CollationEnv(), collationUtf8mb3)
+	c.asm.Fn_COLLATION(c.env.CollationEnv(), expr.nullCollation(arg), collationUtf8mb3)
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
@@ -1111,7 +1158,7 @@ func (call *builtinWeightString) compile(c *compiler) (ctype, error) {
 
 		c.asm.Fn_WEIGHT_STRING(typ, *call.Len)
 		c.asm.jumpDestination(skip)
-		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
+		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable, Col: collationBinary}, nil
 	}
 
 	switch str.Type {
@@ -1162,7 +1209,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 
 	length := evalToInt64(l).i
 	if length <= 0 {
-		return newEvalText(nil, text.col), nil
+		return newEvalText(nil, text.col).withCharsetOf(text), nil
 	}
 
 	// LEFT / RIGHT operates on characters, not bytes
@@ -1170,7 +1217,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	strLen := charset.Length(cs, text.bytes)
 
 	if strLen <= int(length) {
-		return newEvalText(text.bytes, text.col), nil
+		return newEvalText(text.bytes, text.col).withCharsetOf(text), nil
 	}
 
 	var res []byte
@@ -1179,7 +1226,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 	} else {
 		res = charset.Slice(cs, text.bytes, strLen-int(length), strLen)
 	}
-	return newEvalText(res, text.col), nil
+	return newEvalText(res, text.col).withCharsetOf(text), nil
 }
 
 func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
@@ -1210,7 +1257,7 @@ func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_RIGHT(col)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: col, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: nullStringCollation(str, col), Flag: flagNullable}, nil
 }
 
 func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
@@ -1255,12 +1302,12 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	if strLen >= int(length) {
 		// If the existing string is longer than the requested padding,
 		// MySQL truncates the string to the requested padding length.
-		return newEvalText(charset.Slice(cs, text.bytes, 0, int(length)), text.col), nil
+		return newEvalText(charset.Slice(cs, text.bytes, 0, int(length)), text.col).withCharsetOf(text), nil
 	}
 
 	runeLen := charset.Length(cs, pad.bytes)
 	if runeLen == 0 {
-		return newEvalText(nil, text.col), nil
+		return newEvalText(nil, text.col).withCharsetOf(text), nil
 	}
 
 	repeat := (int(length) - strLen) / runeLen
@@ -1281,7 +1328,7 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 		res = slices.Concat(text.bytes, padding)
 	}
 
-	return newEvalText(res, text.col), nil
+	return newEvalText(res, text.col).withCharsetOf(text), nil
 }
 
 func (call *builtinPad) compile(c *compiler) (ctype, error) {
@@ -1328,7 +1375,7 @@ func (call *builtinPad) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_RPAD(col)
 	}
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: nullStringCollation(str, col)}, nil
 }
 
 func strcmpCollate(left, right []byte, col collations.ID) int64 {
@@ -1447,11 +1494,11 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 	if len(call.Arguments) == 1 {
 		switch call.trim {
 		case sqlparser.LeadingTrimType:
-			return newEvalText(bytes.TrimLeft(text.bytes, " "), text.col), nil
+			return newEvalText(bytes.TrimLeft(text.bytes, " "), text.col).withCharsetOf(text), nil
 		case sqlparser.TrailingTrimType:
-			return newEvalText(bytes.TrimRight(text.bytes, " "), text.col), nil
+			return newEvalText(bytes.TrimRight(text.bytes, " "), text.col).withCharsetOf(text), nil
 		default:
-			return newEvalText(bytes.Trim(text.bytes, " "), text.col), nil
+			return newEvalText(bytes.Trim(text.bytes, " "), text.col).withCharsetOf(text), nil
 		}
 	}
 
@@ -1473,11 +1520,11 @@ func (call *builtinTrim) eval(env *ExpressionEnv) (eval, error) {
 
 	switch call.trim {
 	case sqlparser.LeadingTrimType:
-		return newEvalText(trimLeftRepeated(text.bytes, pat.bytes), text.col), nil
+		return newEvalText(trimLeftRepeated(text.bytes, pat.bytes), text.col).withCharsetOf(text), nil
 	case sqlparser.TrailingTrimType:
-		return newEvalText(trimRightRepeated(text.bytes, pat.bytes), text.col), nil
+		return newEvalText(trimRightRepeated(text.bytes, pat.bytes), text.col).withCharsetOf(text), nil
 	default:
-		return newEvalText(trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col), nil
+		return newEvalText(trimRightRepeated(trimLeftRepeated(text.bytes, pat.bytes), pat.bytes), text.col).withCharsetOf(text), nil
 	}
 }
 
@@ -1531,7 +1578,7 @@ func (call *builtinTrim) compile(c *compiler) (ctype, error) {
 			c.asm.Fn_TRIM1(col)
 		}
 		c.asm.jumpDestination(skip1)
-		return ctype{Type: sqltypes.VarChar, Flag: nullableFlags(str.Flag), Col: col}, nil
+		return ctype{Type: sqltypes.VarChar, Flag: nullableFlags(str.Flag), Col: nullStringCollation(str, col)}, nil
 	}
 
 	pat, err := call.Arguments[1].compile(c)
@@ -1562,7 +1609,7 @@ func (call *builtinTrim) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: nullStringCollation(str, col)}, nil
 }
 
 func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
@@ -1596,7 +1643,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 
 	pos := evalToInt64(p).i
 	if pos == 0 {
-		return newEvalRaw(tt, nil, text.col), nil
+		return newEvalRaw(tt, nil, text.col).withCharsetOf(text), nil
 	}
 	cs := colldata.Lookup(text.col.Collation).Charset()
 	end := int64(charset.Length(cs, text.bytes))
@@ -1605,13 +1652,13 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		pos += end + 1
 	}
 	if pos < 1 || pos > end {
-		return newEvalRaw(tt, nil, text.col), nil
+		return newEvalRaw(tt, nil, text.col).withCharsetOf(text), nil
 	}
 
 	if len(call.Arguments) > 2 {
 		ll := evalToInt64(l).i
 		if ll < 1 {
-			return newEvalRaw(tt, nil, text.col), nil
+			return newEvalRaw(tt, nil, text.col).withCharsetOf(text), nil
 		}
 		if ll > end-pos+1 {
 			ll = end - pos + 1
@@ -1619,7 +1666,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 		end = pos + ll - 1
 	}
 	res := charset.Slice(cs, text.bytes, int(pos-1), int(end))
-	return newEvalRaw(tt, res, text.col), nil
+	return newEvalRaw(tt, res, text.col).withCharsetOf(text), nil
 }
 
 func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
@@ -1661,7 +1708,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip1, skip2)
-	return ctype{Type: tt, Col: col, Flag: flagNullable}, nil
+	return ctype{Type: tt, Col: nullStringCollation(str, col), Flag: flagNullable}, nil
 }
 
 func (call *builtinLocate) eval(env *ExpressionEnv) (eval, error) {
@@ -1771,8 +1818,10 @@ func (call *builtinLocate) compile(c *compiler) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}, nil
 }
 
-func concatSQLType(arg sqltypes.Type, tt sqltypes.Type) sqltypes.Type {
-	if arg == sqltypes.TypeJSON {
+func concatSQLType(arg sqltypes.Type, col collations.ID, tt sqltypes.Type) sqltypes.Type {
+	if arg == sqltypes.TypeJSON || arg == sqltypes.Blob && col != collations.CollationBinaryID {
+		// a BLOB with the collation of a character string is a TEXT:
+		// CONCAT(IF(c, i, js), '') is a LONGTEXT in MySQL 8.4
 		return sqltypes.Blob
 	}
 
@@ -1810,20 +1859,15 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		args = append(args, a)
-		tt = concatSQLType(a.SQLType(), tt)
+		tt = concatSQLType(a.SQLType(), evalCollation(a).Collation, tt)
 
-		err = ca.add(evalCollation(a), env.collationEnv)
+		err = ca.addTyped(a.SQLType(), evalCollation(a), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	var buf []byte
 	for _, arg := range args {
@@ -1858,23 +1902,18 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		f |= a.Flag
+		f |= nullableFlags(a.Flag) | a.Flag&flagExplicitCollation
 		skips = append(skips, c.compileNullCheckArg(a, i))
 		args = append(args, a)
-		tt = concatSQLType(a.Type, tt)
+		tt = concatSQLType(a.Type, a.Col.Collation, tt)
 
-		err = ca.add(a.Col, c.env.CollationEnv())
+		err = ca.addTyped(a.Type, a.Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	for i, arg := range args {
 		switch arg.Type {
@@ -1917,20 +1956,15 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 			continue
 		}
 		args = append(args, a)
-		tt = concatSQLType(a.SQLType(), tt)
+		tt = concatSQLType(a.SQLType(), evalCollation(a).Collation, tt)
 
-		err = ca.add(evalCollation(a), env.collationEnv)
+		err = ca.addTyped(a.SQLType(), evalCollation(a), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	var sep []byte
 	var buf []byte
@@ -1979,9 +2013,9 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		if err != nil {
 			return ctype{}, err
 		}
-		tt = concatSQLType(a.Type, tt)
+		tt = concatSQLType(a.Type, a.Col.Collation, tt)
 
-		err = ca.add(a.Col, c.env.CollationEnv())
+		err = ca.addTyped(a.Type, a.Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
 		}
@@ -1994,12 +2028,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	for i, arg := range args {
 		offset := len(args) - i
@@ -2027,7 +2056,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 	c.asm.Fn_CONCAT_WS(tt, tc, len(args)-1)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: tt, Flag: args[0].Flag, Col: tc}, nil
+	return ctype{Type: tt, Flag: nullableFlags(args[0].Flag) | args[0].Flag&flagExplicitCollation, Col: tc}, nil
 }
 
 func (call *builtinChar) eval(env *ExpressionEnv) (eval, error) {
@@ -2166,6 +2195,7 @@ func (call *builtinReplace) compile(c *compiler) (ctype, error) {
 	}
 
 	skip := c.compileNullCheck3(str, fromStr, toStr)
+	arg := str
 	if !str.isTextual() {
 		c.asm.Convert_xce(3, sqltypes.VarChar, c.collation)
 		str.Col = collations.TypedCollation{
@@ -2198,7 +2228,7 @@ func (call *builtinReplace) compile(c *compiler) (ctype, error) {
 
 	c.asm.Replace()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.VarChar, Col: str.Col, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.VarChar, Col: nullStringCollation(arg, str.Col), Flag: flagNullable}, nil
 }
 
 func replace(str, from, to []byte) []byte {
