@@ -46,10 +46,16 @@ func (l *Literal) eval(_ *ExpressionEnv) (eval, error) {
 
 // typeof implements the Expr interface
 func (l *Literal) typeof(*ExpressionEnv) (ctype, error) {
+	ct := l.literalType()
+	ct.StrLen = evalStrLen(l.inner)
+	return ct, nil
+}
+
+func (l *Literal) literalType() ctype {
 	var f typeFlag
 	switch e := l.inner.(type) {
 	case nil:
-		return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}, nil
+		return ctype{Type: sqltypes.Null, Flag: flagNull | flagNullable, Col: collationNull}
 	case *evalBytes:
 		f = e.flag
 	case *evalInt64:
@@ -73,11 +79,11 @@ func (l *Literal) typeof(*ExpressionEnv) (ctype, error) {
 			f |= flagIntegerOvf
 		}
 	case *evalTemporal:
-		return ctype{Type: e.t, Col: collationNumeric, Size: int32(e.prec)}, nil
+		return ctype{Type: e.t, Col: collationNumeric, Size: int32(e.prec)}
 	case *evalDecimal:
-		return ctype{Type: sqltypes.Decimal, Col: collationNumeric, Size: e.length, Scale: -e.dec.Exponent()}, nil
+		return ctype{Type: sqltypes.Decimal, Col: collationNumeric, Size: e.length, Scale: -e.dec.Exponent()}
 	}
-	return ctype{Type: l.inner.SQLType(), Flag: f, Col: evalCollation(l.inner)}, nil
+	return ctype{Type: l.inner.SQLType(), Flag: f, Col: evalCollation(l.inner)}
 }
 
 func (l *Literal) compile(c *compiler) (ctype, error) {

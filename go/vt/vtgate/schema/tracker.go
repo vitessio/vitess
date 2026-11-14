@@ -413,9 +413,26 @@ func getColumns(tblSpec *sqlparser.TableSpec) []vindexes.Column {
 				Scale:         int32(scale),
 				Nullable:      nullable,
 				Values:        column.Type.EnumValues,
+				TextLength:    textLength(column.Type.Type),
 			})
 	}
 	return cols
+}
+
+// textLength returns the maximum length of a TEXT or BLOB column from the
+// name of its type, and 0 for any other type.
+func textLength(typeName string) int64 {
+	switch strings.ToLower(typeName) {
+	case "tinytext", "tinyblob":
+		return 255
+	case "text", "blob":
+		return 65535
+	case "mediumtext", "mediumblob":
+		return 16777215
+	case "longtext", "longblob":
+		return 4294967295
+	}
+	return 0
 }
 
 func getForeignKeys(tblSpec *sqlparser.TableSpec) []*sqlparser.ForeignKeyDefinition {

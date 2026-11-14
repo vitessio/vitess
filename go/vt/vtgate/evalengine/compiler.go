@@ -60,6 +60,9 @@ type ctype struct {
 	Size, Scale int32
 	Col         collations.TypedCollation
 	Values      *EnumSetValues
+	// StrLen is the maximum length of the expression as a string, in
+	// characters; nil when it is unknown. See strLen.
+	StrLen *strLen
 }
 
 type Type struct {
@@ -68,7 +71,12 @@ type Type struct {
 	nullable    bool
 	init        bool
 	size, scale int32
-	values      *EnumSetValues
+	// chars is the maximum length of a value as a string, in characters,
+	// when hasChars is set: 10 for a VARCHAR(10), whatever its character
+	// set. Unlike size, it does not depend on where the type comes from.
+	chars    uint32
+	hasChars bool
+	values   *EnumSetValues
 }
 
 func (v *EnumSetValues) Equal(other *EnumSetValues) bool {
@@ -103,7 +111,7 @@ func NewTypeEx(t sqltypes.Type, collation collations.ID, nullable bool, size, sc
 }
 
 func NewTypeFromField(f *querypb.Field) Type {
-	return Type{
+	t := Type{
 		typ:       f.Type,
 		collation: collations.ID(f.Charset),
 		nullable:  f.Flags&uint32(querypb.MySqlFlag_NOT_NULL_FLAG) == 0,
@@ -111,6 +119,23 @@ func NewTypeFromField(f *querypb.Field) Type {
 		size:      int32(f.ColumnLength),
 		scale:     int32(f.Decimals),
 	}
+	// The ColumnLength of a field is in bytes: 40 for a utf8mb4 VARCHAR(10).
+	if n, ok := charLength(f.ColumnLength, collations.ID(f.Charset)); ok {
+		t.SetCharLength(n)
+	}
+	return t
+}
+
+// SetCharLength sets the maximum length of a value of the type as a string,
+// in characters: 10 for a VARCHAR(10), 255 for a TINYTEXT.
+func (t *Type) SetCharLength(n int64) {
+	t.chars, t.hasChars = uint32(max(0, min(n, maxStrLen))), true
+}
+
+// CharLength returns the maximum length of a value of the type as a string,
+// in characters, when it is known.
+func (t *Type) CharLength() (int64, bool) {
+	return int64(t.chars), t.hasChars
 }
 
 func (t *Type) ToField(name string) *querypb.Field {
@@ -187,7 +212,8 @@ func (ct *ctype) equal(other ctype) bool {
 		ct.Size == other.Size &&
 		ct.Scale == other.Scale &&
 		ct.Col == other.Col &&
-		ct.Values.Equal(other.Values)
+		ct.Values.Equal(other.Values) &&
+		ct.StrLen.equal(other.StrLen)
 }
 
 func (ct *ctype) nullable() bool {

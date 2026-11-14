@@ -35,6 +35,8 @@ type (
 		Original  sqlparser.Expr
 		Nullable  bool
 		Values    *EnumSetValues // For ENUM and SET types
+		// strLen is the length of the column as a string, from its type.
+		strLen *strLen
 
 		// dynamicTypeOffset is set when the type of this column cannot be calculated
 		// at translation time. Since expressions with dynamic types cannot be compiled ahead of time,
@@ -77,11 +79,12 @@ func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
 		}
 
 		return ctype{
-			Type:  field.Type,
-			Col:   typedCoercionCollation(field.Type, collations.ID(field.Charset)),
-			Flag:  f,
-			Size:  int32(field.ColumnLength),
-			Scale: int32(field.Decimals),
+			Type:   field.Type,
+			Col:    typedCoercionCollation(field.Type, collations.ID(field.Charset)),
+			Flag:   f,
+			Size:   int32(field.ColumnLength),
+			Scale:  int32(field.Decimals),
+			StrLen: columnStrLen(field.Type, field.ColumnLength, collations.ID(field.Charset)),
 		}, nil
 	}
 	if c.Offset < len(env.Row) {
@@ -103,6 +106,7 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 		typ.Size = column.Size
 		typ.Scale = column.Scale
 		typ.Values = column.Values
+		typ.StrLen = column.strLen
 	} else if c.dynamicTypes != nil {
 		typ = c.dynamicTypes[column.dynamicTypeOffset]
 	} else {
@@ -111,6 +115,9 @@ func (column *Column) compile(c *compiler) (ctype, error) {
 
 	if typ.Col.Collation != collations.CollationBinaryID {
 		typ.Col.Repertoire = collations.RepertoireUnicode
+	}
+	if typ.StrLen == nil {
+		typ.StrLen = typeStrLen(typ.Type)
 	}
 
 	switch tt := typ.Type; {

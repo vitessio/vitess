@@ -243,6 +243,10 @@ type Column struct {
 	Nullable  bool  `json:"nullable,omitempty"`
 	// Values contains the list of values for enum and set types.
 	Values []string `json:"values,omitempty"`
+	// TextLength is the maximum length of a TEXT or BLOB column, from the
+	// name of its type: 255 for a TINYTEXT. It is 0 for any other column,
+	// whose Size is its length.
+	TextLength int64 `json:"-"`
 }
 
 // MarshalJSON returns a JSON representation of Column.
@@ -278,7 +282,16 @@ func (col *Column) ToEvalengineType(collationEnv *collations.Environment) evalen
 	} else {
 		collation = collations.CollationForType(col.Type, collationEnv.DefaultConnectionCharset())
 	}
-	return evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale, new(evalengine.EnumSetValues(col.Values)))
+	typ := evalengine.NewTypeEx(col.Type, collation, col.Nullable, col.Size, col.Scale, new(evalengine.EnumSetValues(col.Values)))
+	// The Size of a string column is its length in the DDL, in characters:
+	// 10 for a VARCHAR(10).
+	switch {
+	case col.TextLength > 0:
+		typ.SetCharLength(col.TextLength)
+	case sqltypes.IsTextOrBinary(col.Type) && col.Size > 0:
+		typ.SetCharLength(int64(col.Size))
+	}
+	return typ
 }
 
 // KeyspaceSchema contains the schema(table) for a keyspace.

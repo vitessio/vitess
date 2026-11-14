@@ -57,6 +57,12 @@ func makeFields(values []sqltypes.Value) (fields []*querypb.Field) {
 	return
 }
 
+// lengthField returns the field of a column with a length, which MySQL
+// reports in bytes: 40 for a utf8mb4 VARCHAR(10).
+func lengthField(name string, typ sqltypes.Type, length uint32, collation collations.ID) *querypb.Field {
+	return &querypb.Field{Name: name, Type: typ, ColumnLength: length, Charset: uint32(collation)}
+}
+
 type Tracker struct {
 	buf              strings.Builder
 	tbl              *tablewriter.Table
@@ -217,6 +223,9 @@ func TestCompilerSingle(t *testing.T) {
 		result     string
 		collation  collations.ID
 		typeWanted evalengine.Type
+		// fields declares the types of the columns, when the test needs
+		// more than the types of values: lengths and collations.
+		fields []*querypb.Field
 	}{
 		{
 			expression: "1 + column0",
@@ -930,6 +939,106 @@ func TestCompilerSingle(t *testing.T) {
 			expression: `TRIM(TRAILING '0' FROM '1.500')`,
 			result:     `VARCHAR("1.5")`,
 		},
+		{
+			// MySQL declares a string function result a TEXT when its
+			// maximum length is above 65,535 bytes. 1638 copies of a
+			// utf8mb4 VARCHAR(10) are 16,380 characters, at most 65,520
+			// bytes: a VARCHAR, even though these copies take 18,018 bytes.
+			expression: `REPEAT(column0, 1638)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abcdefghié")},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID)},
+			result:     `VARCHAR("` + strings.Repeat("abcdefghié", 1638) + `")`,
+		},
+		{
+			// 1639 copies of a utf8mb4 VARCHAR(10) can take 65,560 bytes.
+			expression: `REPEAT(column0, 1639)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abcdefghij")},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID)},
+			result:     `TEXT("` + strings.Repeat("abcdefghij", 1639) + `")`,
+			typeWanted: evalengine.NewType(sqltypes.Text, collations.CollationUtf8mb4ID),
+		},
+		{
+			// The same 16,390 characters in latin1 are 16,390 bytes.
+			expression: `REPEAT(column0, 1639)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abcdefghij")},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.VarChar, 10, collations.ID(8))},
+			result:     `VARCHAR("` + strings.Repeat("abcdefghij", 1639) + `")`,
+		},
+		{
+			// A count that is not a constant can be anything.
+			expression: `REPEAT(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.NewInt32(3)},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID), lengthField("column1", sqltypes.Int32, 11, collations.CollationBinaryID)},
+			result:     `TEXT("abcabcabc")`,
+		},
+		{
+			expression: `SPACE(column0)`,
+			values:     []sqltypes.Value{sqltypes.NewInt32(3)},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.Int32, 11, collations.CollationBinaryID)},
+			result:     `TEXT("   ")`,
+		},
+		{
+			expression: `LPAD(column0, column1, 'x')`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.NewInt32(5)},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID), lengthField("column1", sqltypes.Int32, 11, collations.CollationBinaryID)},
+			result:     `TEXT("xxabc")`,
+		},
+		{
+			expression: `CONCAT(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.MakeTrusted(sqltypes.Text, []byte("tx"))},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID), lengthField("column1", sqltypes.Text, 262140, collations.CollationUtf8mb4ID)},
+			result:     `TEXT("abctx")`,
+		},
+		{
+			// HEX doubles the length in bytes of a utf8mb4 TEXT, 262,140.
+			expression: `HEX(column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Text, []byte("tx"))},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.Text, 262140, collations.CollationUtf8mb4ID)},
+			result:     `TEXT("7478")`,
+		},
+		{
+			expression: `UPPER(column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Text, []byte("tx"))},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.Text, 262140, collations.CollationUtf8mb4ID)},
+			result:     `TEXT("TX")`,
+		},
+		{
+			// LEFT keeps the length of its argument when the length it
+			// takes is not a constant.
+			expression: `LEFT(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Text, []byte("tx")), sqltypes.NewInt32(1)},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.Text, 262140, collations.CollationUtf8mb4ID), lengthField("column1", sqltypes.Int32, 11, collations.CollationBinaryID)},
+			result:     `TEXT("t")`,
+		},
+		{
+			// A TINYTEXT is 255 characters: CONCAT with a VARCHAR(10) is a
+			// VARCHAR, in the interpreter too.
+			expression: `CONCAT(column0, column1)`,
+			values:     []sqltypes.Value{sqltypes.NewVarChar("abc"), sqltypes.MakeTrusted(sqltypes.Text, []byte("tt"))},
+			fields:     []*querypb.Field{lengthField("column0", sqltypes.VarChar, 40, collations.CollationUtf8mb4ID), lengthField("column1", sqltypes.Text, 1020, collations.CollationUtf8mb4ID)},
+			result:     `VARCHAR("abctt")`,
+		},
+		{
+			// A BLOB without a declared length is 65,535 bytes, which is not
+			// above the VARBINARY limit.
+			expression: `UPPER(column0)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Blob, []byte("bl"))},
+			result:     `VARBINARY("bl")`,
+		},
+		{
+			// Two BLOBs are above the limit, and LEFT of them stays binary.
+			expression: `LEFT(REPEAT(column0, 2), column1)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Blob, []byte("bl")), sqltypes.NewInt64(3)},
+			result:     `BLOB("blb")`,
+		},
+		{
+			// The length of a DATE without a declared length is not known
+			// at compile time, so each value decides: 1639 copies of
+			// '2020-01-02' are 16,390 characters, above 16,383 in utf8mb4.
+			expression: `REPEAT(column0, 1639)`,
+			values:     []sqltypes.Value{sqltypes.MakeTrusted(sqltypes.Date, []byte("2020-01-02"))},
+			result:     `TEXT("` + strings.Repeat("2020-01-02", 1639) + `")`,
+		},
 	}
 
 	tz, _ := time.LoadLocation("Europe/Madrid")
@@ -946,6 +1055,18 @@ func TestCompilerSingle(t *testing.T) {
 				Collation:         collations.CollationUtf8mb4ID,
 				Environment:       venv,
 				NoConstantFolding: true,
+			}
+			if tc.fields != nil {
+				fields = tc.fields
+				cfg.ResolveColumn = fields.Column
+				cfg.ResolveType = func(expr sqlparser.Expr) (evalengine.Type, bool) {
+					for _, f := range fields {
+						if col, ok := expr.(*sqlparser.ColName); ok && col.CompliantName() == f.Name {
+							return evalengine.NewTypeFromField(f), true
+						}
+					}
+					return evalengine.Type{}, false
+				}
 			}
 
 			converted, err := evalengine.Translate(expr, cfg)

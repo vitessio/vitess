@@ -48,10 +48,25 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	default:
 		encoded = hex.EncodeBytes(arg.ToRawBytes())
 	}
+	tt := sqltypes.VarChar
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, typedCoercionCollation(sqltypes.Text, call.collate)), nil
+		tt = sqltypes.Text
 	}
-	return newEvalText(encoded, typedCoercionCollation(sqltypes.VarChar, call.collate)), nil
+	_, numeric := arg.(evalNumeric)
+	length := hexLen(argStrLen(env, call.Arguments[0], arg), evalCollation(arg).Collation, numeric)
+	col := typedCoercionCollation(tt, call.collate)
+	sr := newStrResult(tt, length, col.Collation)
+	return sr.eval(encoded, col), nil
+}
+
+// hexLen returns the length of HEX(arg): two digits for each byte of a
+// string, and 16 digits for a number, which HEX turns into a 64-bit integer.
+// HEX(s) on a utf8mb4 VARCHAR(10) is 2 × 40 = 80, and HEX(i) is 16.
+func hexLen(arg *strLen, col collations.ID, numeric bool) *strLen {
+	if numeric {
+		return newStrLenConst(16)
+	}
+	return strLenProduct(strLenIn(arg, col, collations.CollationBinaryID), newStrLenConst(2))
 }
 
 func (call *builtinHex) compile(c *compiler) (ctype, error) {
@@ -66,6 +81,9 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 		t = sqltypes.Text
 	}
 	col := typedCoercionCollation(t, c.collation)
+	length := hexLen(str.stringLen(), str.Col.Collation, sqltypes.IsNumber(str.Type))
+	sr := newStrResult(t, length, col.Collation)
+	t = sr.tt
 
 	switch {
 	case sqltypes.IsNumber(str.Type):
@@ -77,9 +95,10 @@ func (call *builtinHex) compile(c *compiler) (ctype, error) {
 		c.asm.Fn_HEX_c(t, col)
 	}
 
+	c.asm.Fn_STRING_TYPE(sr)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: col}, nil
+	return ctype{Type: t, Flag: nullableFlags(str.Flag), Col: col, StrLen: length}, nil
 }
 
 type builtinUnhex struct {

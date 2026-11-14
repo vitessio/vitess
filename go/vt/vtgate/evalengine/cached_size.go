@@ -167,7 +167,7 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(64)
+		size += int64(80)
 	}
 	// field Original vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Original.(cachedObject); ok {
@@ -181,6 +181,8 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
+	// field strLen *vitess.io/vitess/go/vt/vtgate/evalengine.strLen
+	size += cached.strLen.CachedSize(true)
 	return size
 }
 
@@ -192,7 +194,7 @@ func (cached *Comparison) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(56))
+	size += hack.RuntimeAllocSize(int64(cap(*cached)) * int64(64))
 	for _, elem := range *cached {
 		size += elem.CachedSize(false)
 	}
@@ -222,7 +224,7 @@ func (cached *CompiledExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(96)
 	}
 	// field code []vitess.io/vitess/go/vt/vtgate/evalengine.frame
 	{
@@ -472,7 +474,7 @@ func (cached *Type) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field values *vitess.io/vitess/go/vt/vtgate/evalengine.EnumSetValues
 	if cached.values != nil {
@@ -2202,7 +2204,7 @@ func (cached *ctype) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field Values *vitess.io/vitess/go/vt/vtgate/evalengine.EnumSetValues
 	if cached.Values != nil {
@@ -2212,6 +2214,8 @@ func (cached *ctype) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(elem)))
 		}
 	}
+	// field StrLen *vitess.io/vitess/go/vt/vtgate/evalengine.strLen
+	size += cached.StrLen.CachedSize(true)
 	return size
 }
 
@@ -2348,6 +2352,21 @@ func (cached *frame) CachedSize(alloc bool) int64 {
 	return int64(0)
 }
 
+func (cached *strLen) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field l *vitess.io/vitess/go/vt/vtgate/evalengine.strLen
+	size += cached.l.CachedSize(true)
+	// field r *vitess.io/vitess/go/vt/vtgate/evalengine.strLen
+	size += cached.r.CachedSize(true)
+	return size
+}
+
 func (cached *typedExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2358,7 +2377,7 @@ func (cached *typedExpr) CachedSize(alloc bool) int64 {
 	}
 	// field types []vitess.io/vitess/go/vt/vtgate/evalengine.ctype
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.types)) * int64(32))
+		size += hack.RuntimeAllocSize(int64(cap(cached.types)) * int64(40))
 		for _, elem := range cached.types {
 			size += elem.CachedSize(false)
 		}

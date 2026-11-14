@@ -29,7 +29,7 @@ func (cached *AggregateParams) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(144)
 	}
 	// field EExpr vitess.io/vitess/go/vt/vtgate/evalengine.Expr
 	if cc, ok := cached.EExpr.(cachedObject); ok {
@@ -71,7 +71,7 @@ func (cached *CheckCol) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field WsCol *int
 	if cached.WsCol != nil {
@@ -285,7 +285,7 @@ func (cached *Distinct) CachedSize(alloc bool) int64 {
 	}
 	// field CheckCols []vitess.io/vitess/go/vt/vtgate/engine.CheckCol
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(48))
+		size += hack.RuntimeAllocSize(int64(cap(cached.CheckCols)) * int64(56))
 		for _, elem := range cached.CheckCols {
 			size += elem.CachedSize(false)
 		}
@@ -728,7 +728,7 @@ func (cached *MemorySort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(56))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(64))
 		for _, elem := range cached.OrderBy {
 			size += elem.CachedSize(false)
 		}
@@ -759,7 +759,7 @@ func (cached *MergeSort) CachedSize(alloc bool) int64 {
 	}
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(56))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(64))
 		for _, elem := range cached.OrderBy {
 			size += elem.CachedSize(false)
 		}
@@ -1050,7 +1050,7 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy vitess.io/vitess/go/vt/vtgate/evalengine.Comparison
 	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(56))
+		size += hack.RuntimeAllocSize(int64(cap(cached.OrderBy)) * int64(64))
 		for _, elem := range cached.OrderBy {
 			size += elem.CachedSize(false)
 		}

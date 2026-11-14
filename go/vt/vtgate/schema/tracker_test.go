@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -26,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
@@ -35,6 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtenv"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
@@ -605,4 +609,54 @@ func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return true // timed out
 	}
+}
+
+// TestGetColumnsCharLength checks that the length of a string column, as the
+// evalengine sees it, comes from its DDL: VARCHAR(10) is 10 characters, and
+// the name of a TEXT type gives its length.
+func TestGetColumnsCharLength(t *testing.T) {
+	venv := vtenv.NewTestEnv()
+	stmt, err := venv.Parser().ParseStrictDDL("create table t (s varchar(10), tt tinytext, tx text) collate utf8mb4_0900_ai_ci")
+	require.NoError(t, err)
+	cols := getColumns(stmt.(*sqlparser.CreateTable).TableSpec)
+
+	typeOf := func(expr string) sqltypes.Type {
+		e, err := venv.Parser().ParseExpr(expr)
+		require.NoError(t, err)
+		cfg := &evalengine.Config{
+			ResolveColumn: func(col *sqlparser.ColName) (int, error) {
+				for i, c := range cols {
+					if c.Name.Equal(col.Name) {
+						return i, nil
+					}
+				}
+				return 0, fmt.Errorf("unknown column %s", sqlparser.String(col))
+			},
+			ResolveType: func(e sqlparser.Expr) (evalengine.Type, bool) {
+				col, ok := e.(*sqlparser.ColName)
+				if !ok {
+					return evalengine.Type{}, false
+				}
+				for _, c := range cols {
+					if c.Name.Equal(col.Name) {
+						return c.ToEvalengineType(venv.CollationEnv()), true
+					}
+				}
+				return evalengine.Type{}, false
+			},
+			Collation:   collations.CollationUtf8mb4ID,
+			Environment: venv,
+		}
+		translated, err := evalengine.Translate(e, cfg)
+		require.NoError(t, err)
+		typ, err := evalengine.EmptyExpressionEnv(venv).TypeOf(translated)
+		require.NoError(t, err)
+		return typ.Type()
+	}
+
+	// 1639 copies of 10 utf8mb4 characters can take 65,560 bytes.
+	assert.Equal(t, sqltypes.Text, typeOf("REPEAT(s, 1639)"))
+	// A TINYTEXT is 255 characters, a TEXT 65,535.
+	assert.Equal(t, sqltypes.VarChar, typeOf("UPPER(tt)"))
+	assert.Equal(t, sqltypes.Text, typeOf("UPPER(tx)"))
 }

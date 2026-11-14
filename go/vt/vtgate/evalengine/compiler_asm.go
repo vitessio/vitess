@@ -1467,17 +1467,17 @@ func (asm *assembler) Fn_ASCII() {
 	}, "FN ASCII VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_REVERSE() {
+func (asm *assembler) Fn_REVERSE(tt sqltypes.Type) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-		arg.tt = int16(sqltypes.VarChar)
+		arg.tt = int16(tt)
 		arg.bytes = reverse(arg)
 		return 1
 	}, "FN REVERSE VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_SPACE(col collations.TypedCollation) {
+func (asm *assembler) Fn_SPACE(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		arg := env.vm.stack[env.vm.sp-1].(*evalInt64).i
 
@@ -1485,7 +1485,7 @@ func (asm *assembler) Fn_SPACE(col collations.TypedCollation) {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
-		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalText(space(arg), col)
+		env.vm.stack[env.vm.sp-1] = env.vm.arena.newEvalRaw(space(arg), tt, col)
 		return 1
 	}, "FN SPACE INT64(SP-1)")
 }
@@ -2671,7 +2671,7 @@ func (asm *assembler) Fn_INSERT(col collations.TypedCollation) {
 	}, "FN INSERT VARCHAR(SP-4) INT64(SP-3) INT64(SP-2) VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_LUCASE(upcase bool) {
+func (asm *assembler) Fn_LUCASE(tt sqltypes.Type, upcase bool) {
 	if upcase {
 		asm.emit(func(env *ExpressionEnv) int {
 			str := env.vm.stack[env.vm.sp-1].(*evalBytes)
@@ -2683,7 +2683,7 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 			} else {
 				str.bytes = csa.ToUpper(nil, str.bytes)
 			}
-			str.tt = int16(sqltypes.VarChar)
+			str.tt = int16(tt)
 			return 1
 		}, "FN UPPER VARCHAR(SP-1)")
 	} else {
@@ -2697,7 +2697,7 @@ func (asm *assembler) Fn_LUCASE(upcase bool) {
 			} else {
 				str.bytes = csa.ToLower(nil, str.bytes)
 			}
-			str.tt = int16(sqltypes.VarChar)
+			str.tt = int16(tt)
 			return 1
 		}, "FN LOWER VARCHAR(SP-1)")
 	}
@@ -2845,23 +2845,35 @@ func (asm *assembler) Fn_MULTICMP_temporal_fallback(f multiComparisonFunc, args 
 	}, "FN MULTICMP_FALLBACK TEMPORAL(SP-%d)...TEMPORAL(SP-1)", args)
 }
 
-func (asm *assembler) Fn_REPEAT(base sqltypes.Type, fallback sqltypes.Type) {
+// Fn_STRING_TYPE types the string at SP-1 from its own length, for a string
+// function whose length is not known at compile time. It emits nothing when
+// the length is known: the function's instruction has typed the result.
+func (asm *assembler) Fn_STRING_TYPE(r strResult) {
+	if r.fixed {
+		return
+	}
+	asm.emit(func(env *ExpressionEnv) int {
+		if str, ok := env.vm.stack[env.vm.sp-1].(*evalBytes); ok {
+			str.tt = int16(r.typeOf(str.bytes))
+		}
+		return 1
+	}, "TYPE STRING(SP-1)")
+}
+
+func (asm *assembler) Fn_REPEAT(tt sqltypes.Type) {
 	asm.adjustStack(-1)
 
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		repeat := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
+		str.tt = int16(tt)
 		if len(str.bytes) == 0 {
 			str.bytes = nil
 			env.vm.sp--
 			return 1
 		}
-		negative := false
-		if repeat.i < 0 {
-			repeat.i = 0
-			negative = true
-		}
+		repeat.i = max(repeat.i, 0)
 
 		if !validMaxLength(int64(len(str.bytes)), repeat.i) {
 			env.vm.stack[env.vm.sp-2] = nil
@@ -2870,17 +2882,12 @@ func (asm *assembler) Fn_REPEAT(base sqltypes.Type, fallback sqltypes.Type) {
 		}
 
 		str.bytes = bytes.Repeat(str.bytes, int(repeat.i))
-		if len(str.bytes) >= repeatTypeChangeLength || negative {
-			str.tt = int16(fallback)
-		} else {
-			str.tt = int16(base)
-		}
 		env.vm.sp--
 		return 1
 	}, "FN REPEAT VARCHAR(SP-2) INT64(SP-1)")
 }
 
-func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
+func (asm *assembler) Fn_LEFT(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.adjustStack(-1)
 
 	asm.emit(func(env *ExpressionEnv) int {
@@ -2888,7 +2895,7 @@ func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
 		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		if length.i <= 0 {
-			str.tt = int16(sqltypes.VarChar)
+			str.tt = int16(tt)
 			str.bytes = nil
 			str.col = col
 			env.vm.sp--
@@ -2898,7 +2905,7 @@ func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
 		cs := colldata.Lookup(col.Collation).Charset()
 		strLen := charset.Length(cs, str.bytes)
 
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.col = col
 		if strLen <= int(length.i) {
 			env.vm.sp--
@@ -2911,7 +2918,7 @@ func (asm *assembler) Fn_LEFT(col collations.TypedCollation) {
 	}, "FN LEFT VARCHAR(SP-2) INT64(SP-1)")
 }
 
-func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
+func (asm *assembler) Fn_RIGHT(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.adjustStack(-1)
 
 	asm.emit(func(env *ExpressionEnv) int {
@@ -2919,7 +2926,7 @@ func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
 		length := env.vm.stack[env.vm.sp-1].(*evalInt64)
 
 		if length.i <= 0 {
-			str.tt = int16(sqltypes.VarChar)
+			str.tt = int16(tt)
 			str.bytes = nil
 			str.col = col
 			env.vm.sp--
@@ -2929,7 +2936,7 @@ func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
 		cs := colldata.Lookup(col.Collation).Charset()
 		strLen := charset.Length(cs, str.bytes)
 
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.col = col
 
 		if strLen <= int(length.i) {
@@ -2943,7 +2950,7 @@ func (asm *assembler) Fn_RIGHT(col collations.TypedCollation) {
 	}, "FN RIGHT VARCHAR(SP-2) INT64(SP-1)")
 }
 
-func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
+func (asm *assembler) Fn_LPAD(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
@@ -2967,7 +2974,7 @@ func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
 		strLen := charset.Length(cs, str.bytes)
 		l := int(length.i)
 
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.col = col
 
 		if strLen >= int(length.i) {
@@ -2997,7 +3004,7 @@ func (asm *assembler) Fn_LPAD(col collations.TypedCollation) {
 	}, "FN LPAD VARCHAR(SP-3) INT64(SP-2) VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
+func (asm *assembler) Fn_RPAD(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.adjustStack(-2)
 
 	asm.emit(func(env *ExpressionEnv) int {
@@ -3021,7 +3028,7 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 		strLen := charset.Length(cs, str.bytes)
 		l := int(length.i)
 
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.col = col
 
 		if strLen >= int(length.i) {
@@ -3053,42 +3060,42 @@ func (asm *assembler) Fn_RPAD(col collations.TypedCollation) {
 	}, "FN RPAD VARCHAR(SP-3) INT64(SP-2) VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_LTRIM1(col collations.TypedCollation) {
+func (asm *assembler) Fn_LTRIM1(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.bytes = bytes.TrimLeft(str.bytes, " ")
 		str.col = col
 		return 1
 	}, "FN LTRIM VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_RTRIM1(col collations.TypedCollation) {
+func (asm *assembler) Fn_RTRIM1(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.bytes = bytes.TrimRight(str.bytes, " ")
 		str.col = col
 		return 1
 	}, "FN RTRIM VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_TRIM1(col collations.TypedCollation) {
+func (asm *assembler) Fn_TRIM1(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.bytes = bytes.Trim(str.bytes, " ")
 		str.col = col
 		return 1
 	}, "FN TRIM VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_LTRIM2(col collations.TypedCollation) {
+func (asm *assembler) Fn_LTRIM2(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.bytes = trimLeftRepeated(str.bytes, pat.bytes)
 		str.col = col
 		env.vm.sp--
@@ -3096,12 +3103,12 @@ func (asm *assembler) Fn_LTRIM2(col collations.TypedCollation) {
 	}, "FN LTRIM VARCHAR(SP-2) VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_RTRIM2(col collations.TypedCollation) {
+func (asm *assembler) Fn_RTRIM2(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.bytes = trimRightRepeated(str.bytes, pat.bytes)
 		str.col = col
 		env.vm.sp--
@@ -3109,12 +3116,12 @@ func (asm *assembler) Fn_RTRIM2(col collations.TypedCollation) {
 	}, "FN RTRIM VARCHAR(SP-2) VARCHAR(SP-1)")
 }
 
-func (asm *assembler) Fn_TRIM2(col collations.TypedCollation) {
+func (asm *assembler) Fn_TRIM2(tt sqltypes.Type, col collations.TypedCollation) {
 	asm.adjustStack(-1)
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-2].(*evalBytes)
 		pat := env.vm.stack[env.vm.sp-1].(*evalBytes)
-		str.tt = int16(sqltypes.VarChar)
+		str.tt = int16(tt)
 		str.bytes = trimRightRepeated(trimLeftRepeated(str.bytes, pat.bytes), pat.bytes)
 		str.col = col
 		env.vm.sp--

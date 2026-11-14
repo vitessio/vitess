@@ -243,6 +243,7 @@ func NewColumn(offset int, typ Type, original sqlparser.Expr) *Column {
 		Nullable:          typ.nullable,
 		Values:            typ.values,
 		dynamicTypeOffset: -1,
+		strLen:            typ.strLen(),
 	}
 }
 
