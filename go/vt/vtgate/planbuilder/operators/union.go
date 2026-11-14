@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -57,6 +58,26 @@ func (u *Union) Clone(inputs []Operator) Operator {
 	newOp.Sources = inputs
 	newOp.Selects = slices.Clone(u.Selects)
 	return &newOp
+}
+
+// Parent offset planning has requested the helpers needed above this UNION.
+// Trim only helpers subsequently added by an arm's own route ordering.
+func (u *Union) planOffsets(ctx *plancontext.PlanningContext) Operator {
+	for _, source := range u.Sources {
+		route, ok := source.(*Route)
+		if !ok || route.ResultColumns != 0 || len(route.GetOrdering(ctx)) == 0 {
+			continue
+		}
+		limit, ok := route.Source.(*Limit)
+		if !ok {
+			continue
+		}
+		arg, ok := limit.AST.Rowcount.(*sqlparser.Argument)
+		if ok && arg.Name == engine.UpperLimitStr {
+			route.setTruncateColumnCount(len(route.GetColumns(ctx)))
+		}
+	}
+	return nil
 }
 
 func (u *Union) GetOrdering(*plancontext.PlanningContext) []OrderBy {
@@ -167,7 +188,7 @@ func (u *Union) GetSelectFor(source int) *sqlparser.Select {
 }
 
 func (u *Union) AddWSColumn(ctx *plancontext.PlanningContext, offset int, underRoute bool) int {
-	outputOffset, err := u.addWeightStringToOffset(ctx, offset)
+	outputOffset, err := u.addWeightStringToOffset(ctx, offset, true)
 	if err != nil {
 		panic(err)
 	}
@@ -207,7 +228,7 @@ func (u *Union) AddColumn(ctx *plancontext.PlanningContext, reuse bool, gb bool,
 			panic(vterrors.VT13001("could not find the argument to the weight_string function: " + sqlparser.String(wsArg)))
 		}
 
-		offset, err := u.addWeightStringToOffset(ctx, argIdx)
+		offset, err := u.addWeightStringToOffset(ctx, argIdx, true)
 		if err != nil {
 			panic(err)
 		}
@@ -296,19 +317,52 @@ func (u *Union) addConstantToUnion(ctx *plancontext.PlanningContext, aexpr *sqlp
 	return
 }
 
-func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int) (outputOffset int, err error) {
-	for i, src := range u.Sources {
-		thisOffset := src.AddWSColumn(ctx, argIdx, false)
-
-		// all offsets for the newly added ws need to line up
-		if i == 0 {
-			outputOffset = thisOffset
-		} else {
-			if thisOffset != outputOffset {
-				return 0, vterrors.VT13001("weight_string offsets did not line up for UNION")
-			}
+func (u *Union) addWeightStringToOffset(ctx *plancontext.PlanningContext, argIdx int, normalize bool) (outputOffset int, err error) {
+	columnCount := 0
+	if normalize {
+		for _, src := range u.Sources {
+			columnCount = max(columnCount, len(src.GetColumns(ctx)))
 		}
 	}
+	offsets := make([]int, len(u.Sources))
+	aligned := true
+	for i, src := range u.Sources {
+		offsets[i] = src.AddWSColumn(ctx, argIdx, false)
+		if i > 0 && offsets[i] != offsets[0] {
+			aligned = false
+		}
+	}
+	if aligned {
+		return offsets[0], nil
+	}
+	if !normalize {
+		return 0, vterrors.VT13001("weight_string offsets did not line up for UNION")
+	}
+
+	// Arms can already contain different helper columns, or reuse an existing
+	// weight string. Project their keys to a common output offset rather than
+	// requiring those route-local offsets to match.
+	for i, src := range u.Sources {
+		columns := src.GetColumns(ctx)
+		if offsets[i] < 0 || offsets[i] >= len(columns) {
+			return 0, vterrors.VT13001("weight_string offsets did not line up for UNION")
+		}
+		projection := newAliasedProjection(src)
+		for col := 0; col < columnCount; col++ {
+			if col < len(columns) {
+				expr := newProjExpr(columns[col])
+				expr.Info = Offset(col)
+				projection.addProjExpr(expr)
+			} else {
+				projection.addProjExpr(newProjExpr(aeWrap(sqlparser.NewIntLiteral("0"))))
+			}
+		}
+		weight := newProjExpr(columns[offsets[i]])
+		weight.Info = Offset(offsets[i])
+		projection.addProjExpr(weight)
+		u.Sources[i] = projection
+	}
+	outputOffset = columnCount
 	return
 }
 

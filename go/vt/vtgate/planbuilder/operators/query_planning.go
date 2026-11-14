@@ -19,11 +19,15 @@ package operators
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -189,13 +193,15 @@ func tryMergeApplyJoin(in *ApplyJoin, ctx *plancontext.PlanningContext) (_ Opera
 		return in, NoRewrite
 	}
 
-	// Special case: If LHS is a DualRouting AND the join isn't INNER or targeting a single shard,
-	// we cannot safely perform this rewrite.
-	if _, isDual := rb.Routing.(*DualRouting); isDual &&
+	// Special case: If LHS is a DualRouting or AnyShardRouting and the join
+	// isn't INNER or targeting a single shard, we cannot safely perform this rewrite.
+	_, isDual := rb.Routing.(*DualRouting)
+	_, isAnyShard := rb.Routing.(*AnyShardRouting)
+	if !TableID(in).IsOverlapping(ctx.SemTable.DMLTargets) && (isDual || isAnyShard) &&
 		(!jm.joinType.IsInner() && !r.Routing.OpCode().IsSingleShard()) {
 		// to check the resulting opcode, we've used the original predicates.
 		// Since we are not using them, we need to restore the argument versions of the predicates
-		debugNoRewrite("apply join merge blocked: dual routing with non-inner join and multi-shard target")
+		debugNoRewrite("apply join merge blocked: special routing with non-inner join and multi-shard target")
 		return in, NoRewrite
 	}
 
@@ -359,7 +365,7 @@ func tryPushLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Apply
 		in.Source = src.Source
 		return in, Rewrote("merged two limits")
 	}
-	return setUpperLimit(in)
+	return setUpperLimit(ctx, in)
 }
 
 func mergeLimits(l1, l2 *sqlparser.Limit) *sqlparser.Limit {
@@ -553,7 +559,7 @@ func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src
 	}
 
 	if sqlparser.IsDMLStatement(ctx.Statement) {
-		return setUpperLimit(in)
+		return setUpperLimit(ctx, in)
 	}
 
 	// this limit has already been pushed down, nothing to do here
@@ -572,17 +578,27 @@ func tryPushingDownLimitInRoute(ctx *plancontext.PlanningContext, in *Limit, src
 	return in, Rewrote("pushed limit under route")
 }
 
-func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
+func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *ApplyResult) {
 	if in.Pushed {
 		debugNoRewrite("limit push blocked: upper limit already set")
+		return in, NoRewrite
+	}
+	orderToPush, safe := findOrderingInSourceChain(ctx, in.Source)
+	if !safe {
+		debugNoRewrite("limit push blocked: UNION requires all rows or ordering mapped to each arm")
+		return in, NoRewrite
+	}
+	// A mapped UNION ordering may contain only arm-local constants, in which
+	// case every arm is already ordered without adding an ORDER BY clause.
+	hasOrderingToPush := len(orderToPush) > 0
+	if (hasOrdering(in.Source) && !hasOrderingToPush) || hasDistinctBeforeRoute(ctx, in.Source) {
+		debugNoRewrite("limit push blocked: VTGate DISTINCT needs all input rows before deduplication")
 		return in, NoRewrite
 	}
 	in.Pushed = true
 	visitor := func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		return op, NoRewrite
 	}
-
-	orderToPush := findOrderingInSourceChain(in.Source)
 
 	var result *ApplyResult
 	shouldVisit := func(op Operator) VisitRule {
@@ -598,8 +614,8 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 		case *Route:
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
 			src := op.Source
-			if len(orderToPush) > 0 {
-				src = newOrdering(src, orderToPush)
+			if order, ok := orderToPush[op]; ok && len(order) > 0 {
+				src = newOrdering(src, order)
 			}
 			op.Source = newLimit(src, ast, false)
 			result = result.Merge(Rewrote("push upper limit under route"))
@@ -613,28 +629,249 @@ func setUpperLimit(in *Limit) (Operator, *ApplyResult) {
 	return in, result
 }
 
-// findOrderingInSourceChain walks down unary operators for an Ordering above a
-// Window, so it can be pushed into the route with the limit. Window queries need
-// this because DISTINCT stays (not converted to GROUP BY), leaving Ordering unpushed.
-// Resolved upfront to avoid leaking across branches during the TopDown walk.
-func findOrderingInSourceChain(op Operator) []OrderBy {
+func hasOrdering(op Operator) bool {
+	switch op.(type) {
+	case *Route:
+		return false
+	case *Ordering:
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), hasOrdering)
+}
+
+// findOrderingInSourceChain finds an Ordering above a Window that can be pushed
+// into a route with the limit. A limit cannot safely cross an ordered UNION
+// unless the ordering expression is mapped to every arm. The boolean is false
+// when UNION semantics require all arm rows or that per-arm mapping.
+func findOrderingInSourceChain(ctx *plancontext.PlanningContext, op Operator) (map[*Route][]OrderBy, bool) {
 	var order []OrderBy
+	window := false
 	for {
 		switch src := op.(type) {
 		case *Ordering:
 			// Clone the slice to avoid aliasing with src.Order, which may be rewritten later.
 			order = append([]OrderBy(nil), src.Order...)
 		case *Window:
-			return order
+			window = true
+		case *Union:
+			return mapUnionArmOrdering(ctx, src, order)
 		case *Route:
-			return nil
+			if window {
+				return map[*Route][]OrderBy{src: order}, true
+			}
+			return nil, true
 		}
 		inputs := op.Inputs()
 		if len(inputs) != 1 {
-			return nil
+			return nil, true
 		}
 		op = inputs[0]
 	}
+}
+
+func mapUnionArmOrdering(ctx *plancontext.PlanningContext, union *Union, order []OrderBy) (map[*Route][]OrderBy, bool) {
+	if len(order) == 0 {
+		return nil, true
+	}
+	outputOffsets := make([]int, len(order))
+	for i, by := range order {
+		offset, ok := knownOutputOffset(ctx, union, by.SimplifiedExpr)
+		if !ok {
+			return nil, false
+		}
+		outputOffsets[i] = offset
+	}
+
+	routes := make(map[*Route][]OrderBy)
+	var commonTypes []string
+	for sourceIdx, source := range union.Sources {
+		columns := source.GetColumns(ctx)
+		armOrder := make([]OrderBy, 0, len(order))
+		for i, offset := range outputOffsets {
+			if offset >= len(columns) {
+				return nil, false
+			}
+			expr := columns[offset].Expr
+			typ, found := ctx.TypeForExpr(expr)
+			typeKey := ""
+			if found && typ.Type() != sqltypes.Unknown && (!sqltypes.IsText(typ.Type()) || typ.Collation() != collations.Unknown) {
+				typeKey = fmt.Sprintf("%d:%d", typ.Type(), typ.Collation())
+			} else if typeKey, found = knownNumericCastType(expr); !found {
+				return nil, false
+			}
+			if sourceIdx == 0 {
+				commonTypes = append(commonTypes, typeKey)
+			} else if commonTypes[i] != typeKey {
+				return nil, false
+			}
+			// A literal is constant within its arm. MySQL treats an integer
+			// ORDER BY literal as a column ordinal, so omit that key locally.
+			if sqlparser.IsLiteral(expr) {
+				continue
+			}
+			mapped := order[i]
+			mapped.Inner = sqlparser.Clone(order[i].Inner)
+			mapped.Inner.Expr = sqlparser.Clone(expr)
+			mapped.SimplifiedExpr = sqlparser.Clone(expr)
+			armOrder = append(armOrder, mapped)
+		}
+		armRoutes := routesForUnionArm(source)
+		if len(armRoutes) != 1 {
+			return nil, false
+		}
+		routes[armRoutes[0]] = armOrder
+	}
+	return routes, true
+}
+
+func knownNumericCastType(expr sqlparser.Expr) (string, bool) {
+	var castType *sqlparser.ConvertType
+	switch expr := expr.(type) {
+	case *sqlparser.CastExpr:
+		castType = expr.Type
+	case *sqlparser.ConvertExpr:
+		castType = expr.Type
+	default:
+		return "", false
+	}
+	if castType == nil {
+		return "", false
+	}
+	typeName := strings.ToLower(castType.Type)
+	switch typeName {
+	case "signed", "signed integer", "unsigned", "unsigned integer", "decimal", "numeric", "float", "double", "real", "integer", "int":
+		length, scale := "", ""
+		if castType.Length != nil {
+			length = strconv.Itoa(*castType.Length)
+		}
+		if castType.Scale != nil {
+			scale = strconv.Itoa(*castType.Scale)
+		}
+		return fmt.Sprintf("cast:%s:%s:%s", typeName, length, scale), true
+	default:
+		return "", false
+	}
+}
+
+func routesForUnionArm(op Operator) []*Route {
+	if route, ok := op.(*Route); ok {
+		return []*Route{route}
+	}
+	if _, ok := op.(*Join); ok {
+		return nil
+	}
+	if _, ok := op.(*ApplyJoin); ok {
+		return nil
+	}
+	var routes []*Route
+	for _, input := range op.Inputs() {
+		routes = append(routes, routesForUnionArm(input)...)
+	}
+	return routes
+}
+
+// hasDistinctBeforeRoute reports whether a DISTINCT operator in VTGate must
+// see all rows before the limit. DISTINCT inside a Route is executed by MySQL
+// before its route-local limit and does not need to block that limit.
+func hasDistinctBeforeRoute(ctx *plancontext.PlanningContext, op Operator) bool {
+	switch op := op.(type) {
+	case *Route:
+		return false
+	case *Distinct:
+		return (containsUnionAll(op.Source) || hasDistinctUnionOutsideRoute(op.Source)) && !unionRoutesDeduplicate(ctx, op.Source)
+	case *Union:
+		if op.distinct {
+			return !unionRoutesDeduplicate(ctx, op)
+		}
+	}
+	return slices.ContainsFunc(op.Inputs(), func(input Operator) bool { return hasDistinctBeforeRoute(ctx, input) })
+}
+
+func unionRoutesDeduplicate(ctx *plancontext.PlanningContext, op Operator) bool {
+	// A VTGate projection can collapse distinct input rows by evaluating an
+	// expression or dropping columns. DISTINCT below it does not justify a
+	// route-local LIMIT for a DISTINCT above it.
+	if projection, ok := op.(*Projection); ok && !projectionPreservesDistinct(ctx, projection) {
+		return false
+	}
+	if route, ok := op.(*Route); ok {
+		return isDistinct(route.Source)
+	}
+	inputs := op.Inputs()
+	if len(inputs) == 0 {
+		return false
+	}
+	for _, input := range inputs {
+		if !unionRoutesDeduplicate(ctx, input) {
+			return false
+		}
+	}
+	return true
+}
+
+// projectionPreservesDistinct requires every input column to pass through
+// unchanged. Reordering and aliases are safe; expressions or dropped columns
+// alone cannot establish that distinct inputs remain distinct.
+func projectionPreservesDistinct(ctx *plancontext.PlanningContext, projection *Projection) bool {
+	columns, ok := projection.Columns.(AliasedProjections)
+	if !ok {
+		return false
+	}
+	if len(columns) == 0 {
+		// A derived UNION projection is populated during offset planning. At this
+		// stage it only introduces a namespace; check its consumer's expressions.
+		return projection.DT != nil
+	}
+	exprs := slice.Map(columns, func(col *ProjExpr) sqlparser.Expr { return col.EvalExpr })
+	source := projection.Source
+	for {
+		if derived, ok := source.(*Projection); ok && derived.DT != nil {
+			for i, expr := range exprs {
+				exprs[i] = derived.DT.RewriteExpression(ctx, expr)
+			}
+			if len(derived.GetSelectExprs(ctx)) == 0 {
+				source = derived.Source
+				continue
+			}
+		}
+		inputColumns := source.GetSelectExprs(ctx)
+		if len(inputColumns) == 0 {
+			inputs := source.Inputs()
+			if len(inputs) != 1 {
+				return false
+			}
+			source = inputs[0]
+			continue
+		}
+		for _, column := range inputColumns {
+			ae, ok := column.(*sqlparser.AliasedExpr)
+			if !ok || !slices.ContainsFunc(exprs, func(expr sqlparser.Expr) bool {
+				return ctx.SemTable.EqualsExprWithDeps(expr, ae.Expr)
+			}) {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+func hasDistinctUnionOutsideRoute(op Operator) bool {
+	switch op := op.(type) {
+	case *Route:
+		return false
+	case *Union:
+		if op.distinct {
+			return true
+		}
+	}
+	return slices.ContainsFunc(op.Inputs(), hasDistinctUnionOutsideRoute)
+}
+
+func containsUnionAll(op Operator) bool {
+	if union, ok := op.(*Union); ok && !union.distinct {
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), containsUnionAll)
 }
 
 func tryPushOrdering(ctx *plancontext.PlanningContext, in *Ordering) (Operator, *ApplyResult) {

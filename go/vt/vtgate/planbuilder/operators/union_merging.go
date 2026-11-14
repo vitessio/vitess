@@ -110,6 +110,9 @@ func mergeUnionInputs(
 	lhsExprs, rhsExprs []sqlparser.SelectExpr,
 	distinct bool,
 ) (Operator, []sqlparser.SelectExpr) {
+	lhsInput, rhsInput := operatorsToRoutes(lhs, rhs)
+	containsSpecialInput := routeContainsSpecialUnionInput(lhsInput) || routeContainsSpecialUnionInput(rhsInput)
+
 	lhsRoute, rhsRoute, routingA, routingB, a, b, sameKeyspace := prepareInputRoutes(ctx, lhs, rhs)
 	if lhsRoute == nil {
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
@@ -122,23 +125,38 @@ func mergeUnionInputs(
 	// incorrectly discard the other side's rows.
 	if a == none || b == none {
 		if op, exprs, merged := tryMergeNoneUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, routingB, a, b); merged {
+			markSpecialUnionInput(op, containsSpecialInput)
 			return op, exprs
 		}
 		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 		return nil, nil
 	}
 
+	// A UNION ALL route containing a reference or dual input may be merged while
+	// single-shard, but must not later widen to multi-shard.
+	if !distinct && containsSpecialInput &&
+		((a == sharded && !isSingleShardRouting(routingA)) || (b == sharded && !isSingleShardRouting(routingB))) {
+		checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
+		return nil, nil
+	}
+
 	switch {
-	// if either side is a dual query, we can always merge them together
-	// an unsharded/reference route can be merged with anything going to that keyspace
+	// Preserve single-shard merges. The guards above and in
+	// tryMergeUnionShardedRouting prevent a later UNION ALL arm from widening
+	// a route to scatter.
 	case b == dual || (b == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingA, nil)
+		markSpecialUnionInput(op, containsSpecialInput)
+		return op, exprs
 	case a == dual || (a == anyShard && sameKeyspace):
-		return createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		op, exprs := createMergedUnion(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct, routingB, nil)
+		markSpecialUnionInput(op, containsSpecialInput)
+		return op, exprs
 
 	case a == sharded && b == sharded && sameKeyspace:
 		res, exprs := tryMergeUnionShardedRouting(ctx, lhsRoute, rhsRoute, lhsExprs, rhsExprs, distinct)
 		if res != nil {
+			markSpecialUnionInput(res, containsSpecialInput)
 			return res, exprs
 		}
 	}
@@ -147,6 +165,97 @@ func mergeUnionInputs(
 	checkCrossKeyspaceOp(ctx, lhs, rhs, "UNION")
 
 	return nil, nil
+}
+
+func isSingleShardRouting(routing Routing) bool {
+	return routing.OpCode().IsSingleShard()
+}
+
+func routeContainsSpecialUnionInput(route *Route) bool {
+	if route == nil {
+		return false
+	}
+	if route.ContainsSpecialUnionInput {
+		return true
+	}
+	switch route.Routing.(type) {
+	case *AnyShardRouting, *DualRouting:
+		return true
+	}
+	return false
+}
+
+func hasUnionOperator(op Operator) bool {
+	if op == nil {
+		return false
+	}
+	if _, ok := op.(*Union); ok {
+		return true
+	}
+	return slices.ContainsFunc(op.Inputs(), hasUnionOperator)
+}
+
+func knownOutputOffset(ctx *plancontext.PlanningContext, op Operator, expr sqlparser.Expr) (int, bool) {
+	selectExprs, ok := outputSelectExprs(ctx, op)
+	if !ok {
+		return -1, false
+	}
+	for offset, selectExpr := range selectExprs {
+		switch selectExpr := selectExpr.(type) {
+		case *sqlparser.StarExpr:
+			return -1, false
+		case *sqlparser.AliasedExpr:
+			if sqlparser.Equals.Expr(expr, selectExpr.Expr) || ctx.SemTable.EqualsExprWithDeps(expr, selectExpr.Expr) {
+				return offset, true
+			}
+			if col, isColumn := expr.(*sqlparser.ColName); isColumn && col.Qualifier.IsEmpty() && col.Name.EqualString(selectExpr.ColumnName()) {
+				return offset, true
+			}
+		}
+	}
+	return -1, false
+}
+
+func outputSelectExprs(ctx *plancontext.PlanningContext, op Operator) ([]sqlparser.SelectExpr, bool) {
+	switch op := op.(type) {
+	case *Projection:
+		return op.GetSelectExprs(ctx), true
+	case *Horizon:
+		return queryOutputSelectExprs(op.Query)
+	case *Union:
+		return op.unionColumns, true
+	case *Filter:
+		return outputSelectExprs(ctx, op.Source)
+	case *Distinct:
+		return outputSelectExprs(ctx, op.Source)
+	case *Limit:
+		return outputSelectExprs(ctx, op.Source)
+	case *Ordering:
+		return outputSelectExprs(ctx, op.Source)
+	case *LockAndComment:
+		return outputSelectExprs(ctx, op.Source)
+	}
+	return nil, false
+}
+
+func queryOutputSelectExprs(query sqlparser.TableStatement) ([]sqlparser.SelectExpr, bool) {
+	switch query := query.(type) {
+	case *sqlparser.Select:
+		if query.SelectExprs == nil {
+			return nil, false
+		}
+		return query.SelectExprs.Exprs, true
+	case *sqlparser.Union:
+		return queryOutputSelectExprs(query.Left)
+	default:
+		return nil, false
+	}
+}
+
+func markSpecialUnionInput(op Operator, contains bool) {
+	if route, ok := op.(*Route); ok && contains {
+		route.ContainsSpecialUnionInput = true
+	}
 }
 
 // tryMergeNoneUnion merges a union pairing in which at least one side has a

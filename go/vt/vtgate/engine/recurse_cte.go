@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -34,11 +35,15 @@ type RecurseCTE struct {
 	Seed, Term Primitive
 
 	Vars map[string]int
+
+	// Distinct retains the term-execution cap until VTGate recursion deduplicates rows.
+	Distinct bool
 }
 
 var _ Primitive = (*RecurseCTE)(nil)
 
-// maxRecurseDepth caps the number of recursion iterations before we abort.
+// maxRecurseDepth caps expansion levels for UNION ALL. UNION DISTINCT retains
+// the existing term-execution cap until recursive results are deduplicated.
 // TODO: This should be controlled with the cte_max_recursion_depth system variable.
 const maxRecurseDepth = 1000
 
@@ -48,15 +53,32 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		return nil, err
 	}
 
+	if vcursor.ExceedsMaxMemoryRows(len(res.Rows)) {
+		return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+	}
+
 	// recurseRows contains the rows used in the next recursion
 	recurseRows := res.Rows
 	joinVars := make(map[string]*querypb.BindVariable)
-	loops := 0
+	iterations := 0
+	termExecutions := 0
 	for len(recurseRows) > 0 {
+		if !r.Distinct {
+			iterations++
+			if iterations > maxRecurseDepth {
+				return nil, vterrors.VT09030("")
+			}
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
 		for _, row := range theseRows {
+			if r.Distinct {
+				iterations++
+				if iterations > maxRecurseDepth {
+					return nil, vterrors.VT09030("")
+				}
+			}
 			for k, col := range r.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(row[col])
 			}
@@ -64,13 +86,16 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			loops++
-			if loops > maxRecurseDepth {
-				return nil, vterrors.VT09030("")
+			termExecutions++
+			if termExecutions > vcursor.MaxMemoryRows() {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "recursive term execution count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 			}
 			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
 			if err != nil {
 				return nil, err
+			}
+			if vcursor.ExceedsMaxMemoryRows(len(res.Rows) + len(rresult.Rows)) {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 			}
 			recurseRows = append(recurseRows, rresult.Rows...)
 			res.Rows = append(res.Rows, rresult.Rows...)
@@ -93,16 +118,35 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// serialized.
 	var mu sync.Mutex
 
-	// Stream the seed, emitting its rows and collecting them to drive the first
-	// recursion level.
+	// Keep the seed/next frontier and the current level within one row budget.
+	// Latch callback errors so concurrent scatter chunks cannot resume delivery.
 	var recurseRows []sqltypes.Row
-	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
+	var currentLevelRows int
+	var callbackErr error
+	collect := func(result *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
+		if callbackErr != nil {
+			return callbackErr
+		}
+		if callbackErr = ctx.Err(); callbackErr != nil {
+			return callbackErr
+		}
+		if vcursor.ExceedsMaxMemoryRows(currentLevelRows + len(recurseRows) + len(result.Rows)) {
+			callbackErr = vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+			return callbackErr
+		}
 		recurseRows = append(recurseRows, result.Rows...)
-		return callback(result)
-	})
+		callbackErr = callback(result)
+		return callbackErr
+	}
+	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, collect)
 	if err != nil {
+		mu.Lock()
+		defer mu.Unlock()
+		if callbackErr != nil {
+			return callbackErr
+		}
 		return err
 	}
 
@@ -110,12 +154,27 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	// one Term stream is active at a time: recursing inside the Term callback
 	// would nest a live stream per level and exhaust the connection pool.
 	joinVars := make(map[string]*querypb.BindVariable)
-	loops := 0
+	iterations := 0
+	// Releasing completed levels must not reset the cumulative Term budget.
+	termExecutions := 0
 	for len(recurseRows) > 0 {
+		if !r.Distinct {
+			iterations++
+			if iterations > maxRecurseDepth {
+				return vterrors.VT09030("")
+			}
+		}
 		// copy over the results from the previous recursion
 		theseRows := recurseRows
 		recurseRows = nil
+		currentLevelRows = len(theseRows)
 		for _, row := range theseRows {
+			if r.Distinct {
+				iterations++
+				if iterations > maxRecurseDepth {
+					return vterrors.VT09030("")
+				}
+			}
 			for k, col := range r.Vars {
 				joinVars[k] = sqltypes.ValueBindVariable(row[col])
 			}
@@ -123,17 +182,17 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			loops++
-			if loops > maxRecurseDepth {
-				return vterrors.VT09030("")
+			termExecutions++
+			if termExecutions > vcursor.MaxMemoryRows() {
+				return vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "recursive term execution count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
 			}
-			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
+			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, collect)
+			if err != nil {
 				mu.Lock()
 				defer mu.Unlock()
-				recurseRows = append(recurseRows, result.Rows...)
-				return callback(result)
-			})
-			if err != nil {
+				if callbackErr != nil {
+					return callbackErr
+				}
 				return err
 			}
 		}

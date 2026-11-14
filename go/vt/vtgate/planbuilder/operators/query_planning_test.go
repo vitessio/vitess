@@ -17,11 +17,18 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 func TestMergeOffsetExpressions(t *testing.T) {
@@ -184,6 +191,65 @@ func TestMergeLimitExpressions(t *testing.T) {
 	}
 }
 
+func TestRebindHiddenUnionWeightStringThroughDerivedOutput(t *testing.T) {
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	source := []*sqlparser.AliasedExpr{{
+		Expr: sqlparser.NewIntLiteral("1"),
+		As:   sqlparser.NewIdentifierCI("id"),
+	}}
+	hidden := &sqlparser.AliasedExpr{Expr: &sqlparser.WeightStringFuncExpr{
+		Expr: sqlparser.NewColName("id"),
+	}}
+
+	rebound, ok := rebindDerivedUnionColumn(ctx, source, hidden)
+	assert.True(t, ok)
+	weightString, ok := rebound.(*sqlparser.WeightStringFuncExpr)
+	assert.True(t, ok)
+	column, ok := weightString.Expr.(*sqlparser.ColName)
+	assert.True(t, ok)
+	assert.Equal(t, "c0", column.Name.String())
+	assert.Equal(t, "dt", column.Qualifier.Name.String())
+}
+
+func TestRebindUserColumnNamedLikeDerivedUnionOutput(t *testing.T) {
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	source := []*sqlparser.AliasedExpr{{Expr: sqlparser.NewColNameWithQualifier("col", sqlparser.NewTableName("dt"))}}
+	hidden := &sqlparser.AliasedExpr{Expr: &sqlparser.WeightStringFuncExpr{
+		Expr: sqlparser.NewColNameWithQualifier("col", sqlparser.NewTableName("dt")),
+	}}
+
+	rebound, ok := rebindDerivedUnionColumn(ctx, source, hidden)
+	assert.True(t, ok)
+	weightString, ok := rebound.(*sqlparser.WeightStringFuncExpr)
+	assert.True(t, ok)
+	column, ok := weightString.Expr.(*sqlparser.ColName)
+	assert.True(t, ok)
+	assert.Equal(t, "c0", column.Name.String())
+	assert.Equal(t, "dt", column.Qualifier.Name.String())
+
+	generated := &sqlparser.AliasedExpr{Expr: sqlparser.NewColNameWithQualifier("c0", sqlparser.NewTableName("dt"))}
+	rebound, ok = rebindDerivedUnionColumn(ctx, source, generated)
+	assert.True(t, ok)
+	assert.True(t, sqlparser.Equals.Expr(generated.Expr, rebound))
+}
+
+func TestHasDistinctBeforeRoute(t *testing.T) {
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	routeLocalDistinct := &Route{unaryOperator: newUnaryOp(&Union{distinct: true})}
+	assert.False(t, hasDistinctBeforeRoute(ctx, routeLocalDistinct), "MySQL applies a route-local UNION DISTINCT before its LIMIT")
+
+	vtgateDistinct := &Distinct{unaryOperator: newUnaryOp(&Union{
+		Sources: []Operator{&Route{unaryOperator: newUnaryOp(&Table{})}, &Route{unaryOperator: newUnaryOp(&Table{})}},
+	})}
+	assert.True(t, hasDistinctBeforeRoute(ctx, vtgateDistinct), "VTGate DISTINCT over UNION ALL must see all rows")
+
+	globalUnionDistinct := &Distinct{unaryOperator: newUnaryOp(&Union{
+		Sources:  []Operator{&Route{unaryOperator: newUnaryOp(&Table{})}, &Route{unaryOperator: newUnaryOp(&Table{})}},
+		distinct: true,
+	})}
+	assert.True(t, hasDistinctBeforeRoute(ctx, globalUnionDistinct), "VTGate UNION DISTINCT must see all rows")
+}
+
 func TestTryPushDistinctWithWindow(t *testing.T) {
 	tests := []struct {
 		name                     string
@@ -252,4 +318,154 @@ func TestTryPushDistinctWithWindow(t *testing.T) {
 			assert.False(t, underWindow.Required, "pushed distinct should not be required")
 		})
 	}
+}
+
+func TestUpperLimitAcrossUnion(t *testing.T) {
+	t.Run("ordered UNION ALL does not push limit without per-arm ordering", func(t *testing.T) {
+		order := []OrderBy{{SimplifiedExpr: sqlparser.NewColName("id")}}
+		op := &Ordering{unaryOperator: newUnaryOp(&Union{}), Order: order}
+		limit := newLimit(op, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, false)
+		result, rewrite := setUpperLimit(nil, limit)
+		assert.Same(t, limit, result)
+		assert.Equal(t, NoRewrite, rewrite)
+		assert.False(t, limit.Pushed)
+	})
+
+	t.Run("ordered outer DISTINCT over UNION ALL needs ordering pushed with limit", func(t *testing.T) {
+		distinct := newDistinct(&Union{}, nil, true)
+		ordering := &Ordering{unaryOperator: newUnaryOp(distinct), Order: []OrderBy{{SimplifiedExpr: sqlparser.NewColName("id")}}}
+		limit := newLimit(ordering, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, true)
+		result, rewrite := setUpperLimit(nil, limit)
+		assert.Same(t, limit, result)
+		assert.Equal(t, NoRewrite, rewrite)
+		assert.False(t, limit.Pushed)
+	})
+
+	t.Run("unordered outer DISTINCT over UNION ALL keeps all arm rows", func(t *testing.T) {
+		limit := newLimit(newDistinct(&Union{}, nil, true), &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, true)
+		result, rewrite := setUpperLimit(nil, limit)
+		assert.Same(t, limit, result)
+		assert.Equal(t, NoRewrite, rewrite)
+		assert.False(t, limit.Pushed)
+	})
+
+	t.Run("ordered UNION DISTINCT keeps all arm rows without mapped ordering", func(t *testing.T) {
+		ordering := &Ordering{unaryOperator: newUnaryOp(&Union{distinct: true}), Order: []OrderBy{{SimplifiedExpr: sqlparser.NewColName("id")}}}
+		limit := newLimit(ordering, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("5")}, false)
+		result, rewrite := setUpperLimit(nil, limit)
+		assert.Same(t, limit, result)
+		assert.Equal(t, NoRewrite, rewrite)
+		assert.False(t, limit.Pushed)
+	})
+}
+
+// A rejected CTE merge must leave both recursive state and tracked arguments
+// intact so the VTGate recursive operator can still bind its term correctly.
+func TestRejectedCTEMergeLeavesRecursiveStateUntouched(t *testing.T) {
+	for _, distinct := range []bool{false, true} {
+		t.Run(fmt.Sprintf("distinct=%t", distinct), func(t *testing.T) {
+			tracker := predicates.NewTracker()
+			temporary := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewArgument("c_id")}
+			join := tracker.NewJoinPredicate(temporary)
+			original := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewColNameWithQualifier("id", sqlparser.NewTableName("c"))}
+			ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable(), PredTracker: tracker, VSchema: &mockVSchema{}}
+			ctx.SemTable.Recursive[original] = semantics.SingleTableSet(0)
+			routing := &ShardedRouting{keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true}, RouteOpCode: engine.EqualUnique, SeenPredicates: []sqlparser.Expr{join}}
+			term := &Route{Routing: routing}
+			horizon := &Horizon{}
+			in := &RecurseCTE{Def: &semantics.CTE{}, Distinct: distinct, Horizon: horizon, Predicates: []*plancontext.RecurseExpression{{JoinPredicateID: &join.ID, Original: original}}}
+			seed := &Route{ContainsSpecialUnionInput: true}
+
+			result := mergeCTE(ctx, seed, term, routing, in, nil)
+			require.Nil(t, result)
+			assert.False(t, in.Def.Merged)
+			assert.Same(t, horizon, in.Horizon)
+			assert.Nil(t, horizon.Source)
+			assert.Same(t, temporary, join.Current())
+			assert.Equal(t, engine.EqualUnique, routing.RouteOpCode)
+			assert.Same(t, join, routing.SeenPredicates[0])
+		})
+	}
+}
+
+// An accepted CTE merge must restore predicates before recomputing routing,
+// rather than retaining a reserved recursive argument in its merged route.
+func TestMergedCTERestoresPredicatesAndRecomputesRouting(t *testing.T) {
+	tracker := predicates.NewTracker()
+	temporary := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewArgument("c_id")}
+	join := tracker.NewJoinPredicate(temporary)
+	original := &sqlparser.ComparisonExpr{Operator: sqlparser.EqualOp, Left: sqlparser.NewColName("id"), Right: sqlparser.NewColNameWithQualifier("id", sqlparser.NewTableName("c"))}
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable(), PredTracker: tracker, VSchema: &mockVSchema{}}
+	ctx.SemTable.Recursive[original] = semantics.SingleTableSet(0)
+	routing := &ShardedRouting{keyspace: &vindexes.Keyspace{Name: "ks", Sharded: true}, RouteOpCode: engine.EqualUnique, SeenPredicates: []sqlparser.Expr{join}}
+	term := &Route{Routing: routing, unaryOperator: newUnaryOp(&fakeOp{})}
+	statement, err := sqlparser.NewTestParser().Parse("select 1")
+	require.NoError(t, err)
+	horizon := &Horizon{Query: statement.(*sqlparser.Select)}
+	in := &RecurseCTE{Def: &semantics.CTE{}, Horizon: horizon, Predicates: []*plancontext.RecurseExpression{{JoinPredicateID: &join.ID, Original: original}}}
+	seed := &Route{Routing: &ShardedRouting{RouteOpCode: engine.Scatter}, unaryOperator: newUnaryOp(&fakeOp{})}
+	result := mergeCTE(ctx, seed, term, routing, in, nil)
+	require.NotNil(t, result)
+	require.Equal(t, engine.Scatter, result.Routing.OpCode())
+	require.Same(t, original, join.Current())
+	require.Equal(t, engine.EqualUnique, routing.RouteOpCode, "recompute a copy")
+}
+
+// Both special left-input cases may bypass the read guard only when the join
+// itself includes a DML target, not merely because the statement has a target.
+func TestOuterJoinDMLExemptionIsLocalToTargets(t *testing.T) {
+	for _, dual := range []bool{false, true} {
+		for _, touchesTarget := range []bool{false, true} {
+			t.Run(fmt.Sprintf("dual=%t/target=%t", dual, touchesTarget), func(t *testing.T) {
+				ks := &vindexes.Keyspace{Name: "ks", Sharded: true}
+				ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable(), PredTracker: predicates.NewTracker(), VSchema: &mockVSchema{}}
+				ctx.SemTable.DMLTargets = semantics.SingleTableSet(0)
+				if !touchesTarget {
+					ctx.SemTable.DMLTargets = semantics.SingleTableSet(1)
+				}
+				var leftRouting Routing = &AnyShardRouting{keyspace: ks}
+				if dual {
+					leftRouting = &DualRouting{}
+				}
+				lhs := &Route{Routing: leftRouting, unaryOperator: newUnaryOp(&fakeOp{id: semantics.SingleTableSet(2)})}
+				rhs := &Route{Routing: &ShardedRouting{keyspace: ks, RouteOpCode: engine.Scatter}, unaryOperator: newUnaryOp(&fakeOp{id: semantics.SingleTableSet(0)})}
+				result := newJoinMerge(nil, sqlparser.LeftJoinType).mergeJoinInputs(ctx, lhs, rhs)
+				if touchesTarget {
+					require.NotNil(t, result)
+					require.Equal(t, engine.Scatter, result.Routing.OpCode())
+				} else {
+					require.Nil(t, result)
+				}
+			})
+		}
+	}
+}
+
+// An aggregate may report a helper offset that its truncated output does not
+// expose. Return a planner error rather than indexing outside that output.
+func TestUnionRejectsUnavailableWeightStringOffsets(t *testing.T) {
+	columns := []*sqlparser.AliasedExpr{aeWrap(sqlparser.NewIntLiteral("1")), aeWrap(sqlparser.NewIntLiteral("2"))}
+	for _, offset := range []int{-1, 2} {
+		union := &Union{Sources: []Operator{
+			&unavailableWeightStringSource{columns: columns, offset: offset},
+			&unavailableWeightStringSource{columns: columns, offset: 1},
+		}}
+		var err error
+		assert.NotPanics(t, func() { _, err = union.addWeightStringToOffset(&plancontext.PlanningContext{}, 0, true) })
+		assert.ErrorContains(t, err, "VT13001")
+	}
+}
+
+type unavailableWeightStringSource struct {
+	Operator
+	columns []*sqlparser.AliasedExpr
+	offset  int
+}
+
+func (s *unavailableWeightStringSource) GetColumns(*plancontext.PlanningContext) []*sqlparser.AliasedExpr {
+	return s.columns
+}
+
+func (s *unavailableWeightStringSource) AddWSColumn(*plancontext.PlanningContext, int, bool) int {
+	return s.offset
 }

@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/key"
@@ -40,6 +42,11 @@ type (
 
 		// Routes that have been merged into this one.
 		MergedWith []*Route
+
+		// ContainsSpecialUnionInput is set when the route includes a reference
+		// or dual input that can return the same rows on every shard. UNION ALL
+		// must not widen such a route to multiple shards.
+		ContainsSpecialUnionInput bool
 
 		Routing Routing
 
@@ -698,7 +705,7 @@ func addWSColumnToInput(ctx *plancontext.PlanningContext, source Operator, offse
 		cloned := slice.Map(op.Sources, func(src Operator) Operator {
 			return Clone(src)
 		})
-		wsOffset, err := op.addWeightStringToOffset(ctx, offset)
+		wsOffset, err := op.addWeightStringToOffset(ctx, offset, false)
 		if err != nil {
 			op.Sources = cloned
 			return false, -1
@@ -714,6 +721,19 @@ func wrapInDerivedProjection(
 	op Operator,
 ) (projection *Projection) {
 	unionColumns := op.GetColumns(ctx)
+	derivedColumnCount, hasUnionOutputCount := unionOutputColumnCount(op)
+	rebindDerivedColumns := hasUnionOutputCount && derivedColumnCount < len(unionColumns)
+	if rebindDerivedColumns {
+		for _, col := range unionColumns[derivedColumnCount:] {
+			if _, ok := rebindDerivedUnionColumn(ctx, unionColumns[:derivedColumnCount], col); !ok {
+				rebindDerivedColumns = false
+				break
+			}
+		}
+	}
+	if !rebindDerivedColumns || derivedColumnCount > len(unionColumns) {
+		derivedColumnCount = len(unionColumns)
+	}
 	columns := make(sqlparser.Columns, 0, len(unionColumns))
 	for i := range unionColumns {
 		columns = append(columns, sqlparser.NewIdentifierCI(fmt.Sprintf("c%d", i)))
@@ -727,9 +747,27 @@ func wrapInDerivedProjection(
 			Columns: columns,
 		},
 	}
+	// Hidden columns added for post-processing are not part of a UNION's SQL
+	// output. Rebind projections through the UNION's actual output columns.
+	tbl := sqlparser.NewTableName("dt")
+	if rebindDerivedColumns {
+		for i, col := range unionColumns {
+			if i < derivedColumnCount {
+				derivedProj.Columns.(AliasedProjections)[i].EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", i), tbl)
+				continue
+			}
+			rebound, ok := rebindDerivedUnionColumn(ctx, unionColumns[:derivedColumnCount], col)
+			if !ok {
+				panic(vterrors.VT13001("failed to rebind hidden UNION column through derived table"))
+			}
+			derivedProj.Columns.(AliasedProjections)[i].EvalExpr = rebound
+		}
+	}
 
 	proj := newAliasedProjection(derivedProj)
-	tbl := sqlparser.NewTableName("dt")
+	if hasUnionOutputCount {
+		proj.UnionColumns = unionColumns[:derivedColumnCount]
+	}
 	for i, col := range unionColumns {
 		projExpr := newProjExpr(col)
 		projExpr.EvalExpr = sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", i), tbl)
@@ -737,6 +775,109 @@ func wrapInDerivedProjection(
 	}
 
 	return proj
+}
+
+func unionOutputColumnCount(op Operator) (int, bool) {
+	switch op := op.(type) {
+	case *Union:
+		return len(op.unionColumns), true
+	case *Horizon:
+		if _, ok := op.Query.(*sqlparser.Union); ok {
+			selectExprs, found := queryOutputSelectExprs(op.Query)
+			return len(selectExprs), found
+		}
+	case *Route:
+		return unionOutputColumnCount(op.Source)
+	case *Distinct:
+		return unionOutputColumnCount(op.Source)
+	case *Filter:
+		return unionOutputColumnCount(op.Source)
+	case *Limit:
+		return unionOutputColumnCount(op.Source)
+	case *Ordering:
+		return unionOutputColumnCount(op.Source)
+	case *LockAndComment:
+		return unionOutputColumnCount(op.Source)
+	}
+	for _, input := range op.Inputs() {
+		if count, ok := unionOutputColumnCount(input); ok {
+			return count, true
+		}
+	}
+	return 0, false
+}
+
+func findDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []*sqlparser.AliasedExpr, col *sqlparser.AliasedExpr) int {
+	expr := col.Expr
+	if weightString, ok := expr.(*sqlparser.WeightStringFuncExpr); ok {
+		expr = weightString.Expr
+	}
+	for i, source := range sourceColumns {
+		if sqlparser.Equals.Expr(source.Expr, expr) || ctx.SemTable.EqualsExprWithDeps(source.Expr, expr) {
+			return i
+		}
+	}
+	name := ""
+	switch expr := col.Expr.(type) {
+	case *sqlparser.ColName:
+		if expr.Qualifier.IsEmpty() {
+			name = expr.Name.String()
+		}
+	case *sqlparser.WeightStringFuncExpr:
+		if source, ok := expr.Expr.(*sqlparser.ColName); ok && source.Qualifier.IsEmpty() {
+			name = source.Name.String()
+		}
+	}
+	if name == "" {
+		return -1
+	}
+	match := -1
+	for i, source := range sourceColumns {
+		if !strings.EqualFold(source.ColumnName(), name) {
+			continue
+		}
+		if match >= 0 {
+			return -1
+		}
+		match = i
+	}
+	return match
+}
+
+func rebindDerivedUnionColumn(ctx *plancontext.PlanningContext, sourceColumns []*sqlparser.AliasedExpr, col *sqlparser.AliasedExpr) (sqlparser.Expr, bool) {
+	offset := findDerivedUnionColumn(ctx, sourceColumns, col)
+	if offset < 0 {
+		if refersToDerivedUnionOutput(col.Expr, len(sourceColumns)) {
+			return sqlparser.Clone(col.Expr), true
+		}
+		return nil, false
+	}
+	derivedCol := sqlparser.NewColNameWithQualifier(fmt.Sprintf("c%d", offset), sqlparser.NewTableName("dt"))
+	if weightString, ok := col.Expr.(*sqlparser.WeightStringFuncExpr); ok {
+		copy := sqlparser.Clone(weightString)
+		copy.Expr = derivedCol
+		return copy, true
+	}
+	return derivedCol, true
+}
+
+func refersToDerivedUnionOutput(expr sqlparser.Expr, outputColumnCount int) bool {
+	var column *sqlparser.ColName
+	switch expr := expr.(type) {
+	case *sqlparser.ColName:
+		column = expr
+	case *sqlparser.WeightStringFuncExpr:
+		column, _ = expr.Expr.(*sqlparser.ColName)
+	}
+	if column == nil || !strings.EqualFold(column.Qualifier.Name.String(), "dt") {
+		return false
+	}
+	name := column.Name.String()
+	if len(name) < 2 || name[0] != 'c' {
+		return false
+	}
+	index, err := strconv.Atoi(name[1:])
+	return err == nil && index >= 0 && index < outputColumnCount
 }
 
 func (r *Route) FindCol(ctx *plancontext.PlanningContext, expr sqlparser.Expr, _ bool) int {
@@ -789,7 +930,16 @@ func (r *Route) planOffsets(ctx *plancontext.PlanningContext) Operator {
 		if isSpecialOrderBy(order) {
 			continue
 		}
-		offset := r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
+		var offset int
+		if hasUnionOperator(r.Source) {
+			if knownOffset, found := knownOutputOffset(ctx, r.Source, order.SimplifiedExpr); found {
+				offset = knownOffset
+			} else {
+				offset = r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
+			}
+		} else {
+			offset = r.AddColumn(ctx, true, false, aeWrap(order.SimplifiedExpr))
+		}
 
 		o := RouteOrdering{
 			AST:       order.Inner.Expr,

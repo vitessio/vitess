@@ -243,3 +243,40 @@ func TestConcatenateTypes(t *testing.T) {
 		})
 	}
 }
+
+func TestConcatenateCoercesBitValues(t *testing.T) {
+	bitResult := &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Bit, Charset: collations.CollationBinaryID}},
+		Rows:   [][]sqltypes.Value{{sqltypes.MakeTrusted(sqltypes.Bit, []byte{1, 2})}},
+	}
+	intResult := r("id", "int32", "3")
+	concatenate := NewConcatenate([]Primitive{
+		&fakePrimitive{results: []*sqltypes.Result{bitResult, bitResult}},
+		&fakePrimitive{results: []*sqltypes.Result{intResult, intResult}},
+	}, nil)
+
+	result, err := concatenate.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.Int64, result.Fields[0].Type)
+	require.Equal(t, "258", result.Rows[0][0].ToString())
+	require.Equal(t, "3", result.Rows[1][0].ToString())
+}
+
+func TestConcatenatePreservesGeometryValues(t *testing.T) {
+	geometry := []byte{0, 1, 2, 3}
+	geometryResult := &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "value", Type: sqltypes.Geometry, Charset: collations.CollationBinaryID}},
+		Rows:   [][]sqltypes.Value{{sqltypes.MakeTrusted(sqltypes.Geometry, geometry)}},
+	}
+	stringResult := r("value", "varchar", "shape")
+	concatenate := NewConcatenate([]Primitive{
+		&fakePrimitive{results: []*sqltypes.Result{geometryResult, geometryResult}},
+		&fakePrimitive{results: []*sqltypes.Result{stringResult, stringResult}},
+	}, nil)
+
+	result, err := concatenate.TryExecute(t.Context(), &noopVCursor{}, nil, true)
+	require.NoError(t, err)
+	require.Equal(t, sqltypes.VarChar, result.Fields[0].Type)
+	require.Equal(t, geometry, result.Rows[0][0].Raw())
+	require.Equal(t, []byte("shape"), result.Rows[1][0].Raw())
+}

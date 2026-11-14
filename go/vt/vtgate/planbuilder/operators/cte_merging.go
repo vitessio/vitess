@@ -18,10 +18,19 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 func tryMergeRecurse(ctx *plancontext.PlanningContext, in *RecurseCTE) (Operator, *ApplyResult) {
+	if !reachedPhase(ctx, initialPlanning) {
+		seed, changed := useRecursiveCTESeedAlternates(ctx, in.Seed(), in.Term())
+		if changed != NoRewrite {
+			in.LHS = seed
+			return in, changed
+		}
+	}
 	op := tryMergeCTE(ctx, in.Seed(), in.Term(), in)
 	if op == nil {
 		return in, NoRewrite
@@ -78,6 +87,32 @@ func tryMergeCTESharded(ctx *plancontext.PlanningContext, seed, term *Route, in 
 }
 
 func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in *RecurseCTE, conditions []engine.Condition) *Route {
+	// Evaluate routing with the original recursive predicates on a copy before
+	// committing the merge. A multi-shard route would repeat a replicated seed,
+	// including DISTINCT recursion that only deduplicates within each shard.
+	if routeContainsSpecialUnionInput(seed) {
+		candidate := r.Clone()
+		if routing, ok := candidate.(*ShardedRouting); ok {
+			for i, expr := range routing.SeenPredicates {
+				join, ok := expr.(*predicates.JoinPredicate)
+				if !ok {
+					continue
+				}
+				for _, predicate := range in.Predicates {
+					if predicate.JoinPredicateID != nil && *predicate.JoinPredicateID == join.ID {
+						routing.SeenPredicates[i] = predicate.Original
+						break
+					}
+				}
+			}
+		}
+		candidate = candidate.resetRoutingLogic(ctx)
+		if !candidate.OpCode().IsSingleShard() {
+			in.SeedMergeRejected = true
+			return nil
+		}
+	}
+
 	in.Def.Merged = true
 	hz := in.Horizon
 	hz.Source = term.Source
@@ -88,6 +123,9 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		}
 	}
 
+	// Accepted merges retain tracked predicates for subsequent routing rewrites.
+	r = r.Clone().resetRoutingLogic(ctx)
+
 	cte := &RecurseCTE{
 		binaryOperator: newBinaryOp(seed.Source, newTerm),
 		Predicates:     in.Predicates,
@@ -97,9 +135,47 @@ func mergeCTE(ctx *plancontext.PlanningContext, seed, term *Route, r Routing, in
 		Distinct:       in.Distinct,
 	}
 	return &Route{
-		Routing:       r,
-		unaryOperator: newUnaryOp(cte),
-		MergedWith:    []*Route{term},
-		Conditions:    conditions,
+		Routing:                   r,
+		unaryOperator:             newUnaryOp(cte),
+		MergedWith:                []*Route{term},
+		ContainsSpecialUnionInput: routeContainsSpecialUnionInput(seed) || routeContainsSpecialUnionInput(term),
+		Conditions:                conditions,
+	}
+}
+
+// Select copies while the seed still has its original Horizon. Replacing a
+// planned seed route later would discard its projected CTE output columns.
+func useRecursiveCTESeedAlternates(ctx *plancontext.PlanningContext, seed, term Operator) (Operator, *ApplyResult) {
+	keyspaces := operatorKeyspaces(term)
+	if len(keyspaces) != 1 {
+		return seed, NoRewrite
+	}
+	return topDown(seed, semantics.EmptyTableSet(), TableID, func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
+		route, ok := op.(*Route)
+		if !ok || TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) || !canReplaceCTESeed(route.Source) {
+			return op, NoRewrite
+		}
+		routing, ok := route.Routing.(*AnyShardRouting)
+		if !ok {
+			return op, NoRewrite
+		}
+		alternate := routing.AlternateInKeyspace(keyspaces[0])
+		if alternate == nil {
+			return op, NoRewrite
+		}
+		return Clone(alternate), Rewrote("select recursive CTE seed reference copy")
+	}, stopAtRoute, true)
+}
+
+// Alternates at this phase contain table and join planning, not the projected
+// outputs of a derived seed. Do not discard a projection when selecting a copy.
+func canReplaceCTESeed(op Operator) bool {
+	switch op := op.(type) {
+	case *Table:
+		return true
+	case *ApplyJoin:
+		return canReplaceCTESeed(op.LHS) && canReplaceCTESeed(op.RHS)
+	default:
+		return false
 	}
 }
