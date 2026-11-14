@@ -1240,6 +1240,25 @@ func TestCompilerSingle(t *testing.T) {
 			result:     `INT64(1)`,
 		},
 		{
+			// A DATETIME with fractional seconds and no declared precision
+			// is compared with a number as a double.
+			expression: `column0 > 1`,
+			values:     []sqltypes.Value{sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `20200103040506.789 = column0`,
+			values:     []sqltypes.Value{sqltypes.NewDatetime("2020-01-03 04:05:06.789")},
+			result:     `INT64(1)`,
+		},
+		{
+			// So is one without fractional seconds: the decimal is equal
+			// to it as a double.
+			expression: `column0 = 20200103040506.0001`,
+			values:     []sqltypes.Value{sqltypes.NewDatetime("2020-01-03 04:05:06")},
+			result:     `INT64(1)`,
+		},
+		{
 			// A YEAR column combines with an INT to an INT.
 			expression: `IFNULL(column0, column1) + 0`,
 			values:     []sqltypes.Value{sqltypes.NewInt64(5), sqltypes.MakeTrusted(sqltypes.Year, []byte("2020"))},

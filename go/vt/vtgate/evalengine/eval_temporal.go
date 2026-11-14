@@ -135,7 +135,7 @@ func (e *evalTemporal) toInt64() int64 {
 }
 
 // toDecimalInt64 returns the integer part of toDecimal: the number that DIV
-// and a comparison with a number read. It differs from toInt64 for a DATE
+// reads. It differs from toInt64 for a DATE
 // that COALESCE or IFNULL made a DATETIME, see evalTemporalFrom.
 func (e *evalTemporal) toDecimalInt64() int64 {
 	return e.int64Of(e.numberType(false))

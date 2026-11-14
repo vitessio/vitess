@@ -976,8 +976,8 @@ func (asm *assembler) Convert_Ti(offset int) {
 	}, "CONV SQLTIME(SP-%d), INT64", offset)
 }
 
-// Convert_Tn is Convert_Ti for DIV and for a comparison with a number. They
-// read a temporal value as a conversion to a decimal does, which differs for
+// Convert_Tn is Convert_Ti for DIV. It reads a temporal value as a
+// conversion to a decimal does, which differs for
 // a DATE that COALESCE or IFNULL made a DATETIME, see evalTemporalFrom. With
 // a DATE column dt that holds 2020-01-02 and a DATETIME column d0,
 // COALESCE(dt, d0) + 0 is 20200102000000, and COALESCE(dt, d0) DIV 1 is

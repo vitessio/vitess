@@ -402,23 +402,17 @@ func (expr *ComparisonExpr) compile(c *compiler) (ctype, error) {
 	case compareAsDateAndString(lt.Type, rt.Type):
 		c.asm.CmpDateString()
 	case compareAsDateAndNumeric(lt.Type, rt.Type):
+		// A date or a time is compared with a number as a double, as
+		// evalCompare does. The declared precision does not tell whether
+		// the value has fractional seconds: it is 0 for a column without a
+		// declared type, whose value can have them.
 		if sqltypes.IsDateOrTime(lt.Type) {
-			if lt.Size == 0 {
-				c.asm.Convert_Tn(2)
-				lt.Type = sqltypes.Int64
-			} else {
-				c.asm.Convert_Tf(2)
-				lt.Type = sqltypes.Float64
-			}
+			c.asm.Convert_Tf(2)
+			lt.Type = sqltypes.Float64
 		}
 		if sqltypes.IsDateOrTime(rt.Type) {
-			if rt.Size == 0 {
-				c.asm.Convert_Tn(1)
-				rt.Type = sqltypes.Int64
-			} else {
-				c.asm.Convert_Tf(1)
-				rt.Type = sqltypes.Float64
-			}
+			c.asm.Convert_Tf(1)
+			rt.Type = sqltypes.Float64
 		}
 		swapped = c.compareNumericTypes(lt, rt)
 	case compareAsJSON(lt.Type, rt.Type):
