@@ -187,3 +187,34 @@ func (ca *collationAggregation) add(tc collations.TypedCollation, env *collation
 func (ca *collationAggregation) result() collations.TypedCollation {
 	return ca.cur
 }
+
+// resultFor is result for a function that makes a string of its arguments,
+// where conn is the connection collation.
+//
+// A string whose collation is not known comes from a column, and the
+// collation of a column wins over the one of a literal. When such a string
+// is combined with a literal that has the connection collation, the result
+// keeps that collation and is as strong as a column: with a column s that
+// has no declared type, CONCAT(s, 'a') wins over a hex literal as s does.
+func (ca *collationAggregation) resultFor(conn collations.ID) collations.TypedCollation {
+	cur := ca.cur
+	if ca.unknown && conn != collations.Unknown && cur.Collation == conn && cur.Coercibility > collations.CoerceImplicit {
+		cur.Coercibility = collations.CoerceImplicit
+	}
+	return cur
+}
+
+// concatResult is resultFor for CONCAT, CONCAT_WS and ELT, whose result
+// has the type tt. Numbers have no collation: when there are only numbers,
+// or strings whose collation is not known, the result has the connection
+// collation.
+func (ca *collationAggregation) concatResult(tt sqltypes.Type, conn collations.ID) collations.TypedCollation {
+	tc := ca.resultFor(conn)
+	if tc.Coercibility == collations.CoerceNumeric {
+		tc = typedCoercionCollation(tt, conn)
+		if ca.unknown && tc.Collation != collations.CollationBinaryID {
+			tc.Coercibility = collations.CoerceImplicit
+		}
+	}
+	return tc
+}

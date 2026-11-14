@@ -75,12 +75,12 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (IR, error) {
 		if len(args) == 0 {
 			return nil, argError(method)
 		}
-		return &builtinMultiComparison{CallExpr: call, cmp: 1}, nil
+		return &builtinMultiComparison{CallExpr: call, cmp: 1, collate: ast.cfg.Collation}, nil
 	case "least":
 		if len(args) == 0 {
 			return nil, argError(method)
 		}
-		return &builtinMultiComparison{CallExpr: call, cmp: -1}, nil
+		return &builtinMultiComparison{CallExpr: call, cmp: -1, collate: ast.cfg.Collation}, nil
 	case "collation":
 		if len(args) != 1 {
 			return nil, argError(method)

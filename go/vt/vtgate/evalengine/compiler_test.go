@@ -2026,6 +2026,59 @@ func TestUntypedStringColumnIsNotBinary(t *testing.T) {
 	}
 }
 
+// TestUntypedStringColumnWinsOverLiteral checks that a string made from a
+// column without a declared type and a literal is as strong as a column,
+// in the interpreter and in the compiled program: it wins over a hex
+// literal, so the two are a character string and compare with the
+// connection collation.
+func TestUntypedStringColumnWinsOverLiteral(t *testing.T) {
+	testCases := []struct {
+		expression string
+		result     string
+	}{
+		{`CONCAT(column1, '') = 0x41`, `INT64(1)`},
+		{`IF(column0 = '12', column1, 'x') = 0x41`, `INT64(1)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, CONCAT(column0, '')))`, `INT64(2)`},
+		{`IF(column0 = 'x', 0x3132, CONCAT(column0, '')) >> 1`, `UINT64(6)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, CONCAT(column0)))`, `INT64(2)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, CONCAT_WS(',', column0)))`, `INT64(2)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, ELT(1, column0, 'a')))`, `INT64(2)`},
+		{`BIT_COUNT(IF(column0 = 'x', 0x3132, GREATEST(column0, '1')))`, `INT64(2)`},
+	}
+
+	venv := vtenv.NewTestEnv()
+	fields := []*querypb.Field{{Name: "column0"}, {Name: "column1"}}
+	for _, tc := range testCases {
+		t.Run(tc.expression, func(t *testing.T) {
+			expr, err := venv.Parser().ParseExpr(tc.expression)
+			require.NoError(t, err)
+			translated, err := evalengine.Translate(expr, &evalengine.Config{
+				ResolveColumn: evalengine.FieldResolver(fields).Column,
+				Collation:     collations.CollationUtf8mb4ID,
+				Environment:   venv,
+			})
+			require.NoError(t, err)
+			untyped, ok := translated.(*evalengine.UntypedExpr)
+			require.True(t, ok)
+
+			// The row has no fields: the types of the columns come from
+			// their values, which have no collation.
+			env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, nil))
+			env.Row = []sqltypes.Value{sqltypes.NewVarChar("12"), sqltypes.NewVarChar("a")}
+
+			res, err := env.EvaluateAST(untyped)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "interpreter")
+
+			compiled, err := untyped.Compile(env)
+			require.NoError(t, err)
+			res, err = env.EvaluateVM(compiled)
+			require.NoError(t, err)
+			assert.Equal(t, tc.result, res.String(), "compiled program")
+		})
+	}
+}
+
 // TestCompileFoldedJSONLiteralConcurrency compiles distinct type
 // specialisations of one translated expression concurrently while the
 // interpreter evaluates it concurrently too. Both read the same folded JSON

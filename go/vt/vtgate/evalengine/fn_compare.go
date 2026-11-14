@@ -42,6 +42,8 @@ type (
 		CallExpr
 		cmp  int
 		prec int
+		// collate is the connection collation. See resultFor.
+		collate collations.ID
 	}
 )
 
@@ -374,7 +376,7 @@ func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiCom
 	}
 	if binary > 0 || text > 0 {
 		if text > 0 {
-			return compareAllText
+			return compareAllText(call.collate)
 		}
 		if binary > 0 {
 			return compareAllBinary
@@ -387,7 +389,7 @@ func (call *builtinMultiComparison) getMultiComparisonFunc(args []eval) multiCom
 			return compareAllDecimal
 		}
 		if json > 0 {
-			return compareAllText
+			return compareAllText(call.collate)
 		}
 	}
 	panic("unexpected argument type")
@@ -437,7 +439,7 @@ func compareAllTemporalAsString(f func(env *ExpressionEnv, arg eval, prec int) *
 				return evalToVarchar(arg, tc.Collation, false)
 			}
 		}
-		txt, err := compareAllText(env, args, cmp, prec)
+		txt, err := compareText(env, args, cmp, collations.Unknown)
 		if err != nil {
 			return nil, err
 		}
@@ -543,18 +545,30 @@ func compareAllDecimal(_ *ExpressionEnv, args []eval, cmp, _ int) (eval, error) 
 	return newEvalDecimalWithPrec(decExtreme, precExtreme), nil
 }
 
-func compareAllText(env *ExpressionEnv, args []eval, cmp, _ int) (eval, error) {
+// compareAllText compares its arguments as strings. conn is the connection
+// collation.
+func compareAllText(conn collations.ID) multiComparisonFunc {
+	return func(env *ExpressionEnv, args []eval, cmp, _ int) (eval, error) {
+		return compareText(env, args, cmp, conn)
+	}
+}
+
+func compareText(env *ExpressionEnv, args []eval, cmp int, conn collations.ID) (eval, error) {
 	charsets := make([]charset.Charset, 0, len(args))
 	var ca collationAggregation
 	for _, arg := range args {
 		col := evalCollation(arg)
-		if err := ca.add(col, env.collationEnv); err != nil {
+		tt := sqltypes.Null
+		if arg != nil {
+			tt = arg.SQLType()
+		}
+		if err := ca.addTyped(tt, col, env.collationEnv); err != nil {
 			return nil, err
 		}
 		charsets = append(charsets, colldata.Lookup(col.Collation).Charset())
 	}
 
-	tc := ca.result()
+	tc := ca.resultFor(conn)
 	col := colldata.Lookup(tc.Collation)
 	cs := col.Charset()
 
@@ -603,12 +617,12 @@ func (call *builtinMultiComparison) compile_c(c *compiler, args []ctype, jumps [
 	var f typeFlag
 	for _, arg := range args {
 		f |= nullableFlags(arg.Flag)
-		if err := ca.add(arg.Col, c.env.CollationEnv()); err != nil {
+		if err := ca.addTyped(arg.Type, arg.Col, c.env.CollationEnv()); err != nil {
 			return ctype{}, err
 		}
 	}
 
-	tc := ca.result()
+	tc := ca.resultFor(call.collate)
 	c.asm.Fn_MULTICMP_c(len(args), call.cmp < 0, tc)
 	c.asm.jumpDestination(jumps...)
 	return ctype{Type: sqltypes.VarChar, Flag: f, Col: tc}, nil

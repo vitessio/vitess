@@ -745,7 +745,7 @@ func caseResult(ta *typeAggregation, ca *collationAggregation, conn collations.I
 			t = sqltypes.Blob
 		}
 	}
-	col := ca.result()
+	col := ca.resultFor(conn)
 	switch {
 	case ca.unknownResult():
 		// the collation stays unknown, and the result is a character

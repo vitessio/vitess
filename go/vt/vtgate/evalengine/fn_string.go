@@ -388,25 +388,20 @@ func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
 		}
 
 		tt = concatSQLType(arg.SQLType(), evalCollation(arg).Collation, tt)
-		err = ca.add(evalCollation(arg), env.collationEnv)
+		err = ca.addTyped(arg.SQLType(), evalCollation(arg), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	b, err := evalToVarchar(args[i], tc.Collation, true)
 	if err != nil {
 		return nil, err
 	}
 
-	return evalKeepNumber(args[i], newEvalRaw(tt, b.bytes, b.col), flagIsNumber|flagNotDecimal), nil
+	return evalKeepNumber(args[i], newEvalRaw(tt, b.bytes, tc), flagIsNumber|flagNotDecimal), nil
 }
 
 func (call *builtinElt) compile(c *compiler) (ctype, error) {
@@ -429,18 +424,13 @@ func (call *builtinElt) compile(c *compiler) (ctype, error) {
 		}
 
 		tt = concatSQLType(args[i].Type, args[i].Col.Collation, tt)
-		err = ca.add(args[i].Col, c.env.CollationEnv())
+		err = ca.addTyped(args[i].Type, args[i].Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	_ = c.compileToInt64(args[0], len(args))
 
@@ -1871,18 +1861,13 @@ func (call *builtinConcat) eval(env *ExpressionEnv) (eval, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.SQLType(), evalCollation(a).Collation, tt)
 
-		err = ca.add(evalCollation(a), env.collationEnv)
+		err = ca.addTyped(a.SQLType(), evalCollation(a), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	var buf []byte
 	for _, arg := range args {
@@ -1922,18 +1907,13 @@ func (call *builtinConcat) compile(c *compiler) (ctype, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.Type, a.Col.Collation, tt)
 
-		err = ca.add(a.Col, c.env.CollationEnv())
+		err = ca.addTyped(a.Type, a.Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	for i, arg := range args {
 		switch arg.Type {
@@ -1978,18 +1958,13 @@ func (call *builtinConcatWs) eval(env *ExpressionEnv) (eval, error) {
 		args = append(args, a)
 		tt = concatSQLType(a.SQLType(), evalCollation(a).Collation, tt)
 
-		err = ca.add(evalCollation(a), env.collationEnv)
+		err = ca.addTyped(a.SQLType(), evalCollation(a), env.collationEnv)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	var sep []byte
 	var buf []byte
@@ -2040,7 +2015,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		}
 		tt = concatSQLType(a.Type, a.Col.Collation, tt)
 
-		err = ca.add(a.Col, c.env.CollationEnv())
+		err = ca.addTyped(a.Type, a.Col, c.env.CollationEnv())
 		if err != nil {
 			return ctype{}, err
 		}
@@ -2053,12 +2028,7 @@ func (call *builtinConcatWs) compile(c *compiler) (ctype, error) {
 		}
 	}
 
-	tc := ca.result()
-	// If we only had numbers, we instead fall back to the default
-	// collation instead of using the numeric collation.
-	if tc.Coercibility == collations.CoerceNumeric {
-		tc = typedCoercionCollation(tt, call.collate)
-	}
+	tc := ca.concatResult(tt, call.collate)
 
 	for i, arg := range args {
 		offset := len(args) - i
