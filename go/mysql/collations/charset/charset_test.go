@@ -124,6 +124,7 @@ func TestDecodeRuneWidthContract(t *testing.T) {
 		Charset_gb2312{},
 		Charset_gbk{},
 		Charset_big5{},
+		Charset_tis620{},
 		Charset_ujis{},
 		Charset_sjis{},
 		Charset_cp932{},
@@ -262,6 +263,10 @@ func TestDecodeRuneValidity(t *testing.T) {
 		{"big5 unassigned pair", Charset_big5{}, []byte{0xF9, 0xFE}, RuneError, 2, false},
 		// MySQL has U+FFFD as the character at A1 C3.
 		{"big5 replacement character", Charset_big5{}, []byte{0xA1, 0xC3}, RuneError, 2, true},
+		{"tis620 thai", Charset_tis620{}, []byte{0xA1}, 0x0E01, 1, true},
+		{"tis620 control", Charset_tis620{}, []byte{0x9F}, 0x9F, 1, true},
+		// MySQL has U+FFFD as the character of the bytes without one.
+		{"tis620 no character", Charset_tis620{}, []byte{0xA0}, RuneError, 1, true},
 		{"ujis invalid", Charset_ujis{}, []byte{0xFF}, RuneError, 1, false},
 		{"ujis kana invalid trail", Charset_ujis{}, []byte{0x8E, 0xE5}, RuneError, 1, false},
 		{"ujis plane2 invalid trail", Charset_ujis{}, []byte{0x8F, 0xA1, 0x20}, RuneError, 1, false},
@@ -323,4 +328,31 @@ func TestBig5Encode(t *testing.T) {
 	// Multilingual Plane.
 	assert.Equal(t, -1, Charset_big5{}.EncodeRune(buf[:], 0x00E9))
 	assert.Equal(t, -1, Charset_big5{}.EncodeRune(buf[:], 0x1F600))
+}
+
+// TestTIS620Encode checks the conversion to tis620 against MySQL 8.4.13 and
+// 8.0.46: "ก" is A1, and U+10041 is "A" because MySQL looks at the two
+// lowest bytes of a code point only.
+func TestTIS620Encode(t *testing.T) {
+	var buf [4]byte
+	for r, want := range map[rune]int{
+		'ก':     0xA1,
+		0x0E5B:  0xFB,
+		0x9F:    0x9F,
+		0xFFFD:  0xFF,
+		0x10041: 0x41,
+		0x10E01: 0xA1,
+		0x00A0:  -1,
+		0x0E3B:  -1,
+		0x10000: -1,
+		'é':     -1,
+	} {
+		n := Charset_tis620{}.EncodeRune(buf[:], r)
+		if want < 0 {
+			assert.Equal(t, -1, n, "U+%04X", r)
+			continue
+		}
+		require.Equal(t, 1, n, "U+%04X", r)
+		assert.Equal(t, byte(want), buf[0], "U+%04X", r)
+	}
 }

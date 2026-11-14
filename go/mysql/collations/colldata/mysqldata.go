@@ -3958,6 +3958,16 @@ var collationsById = [...]Collation{
 			FromUnicode: fromunicode_hebrew_general_ci,
 		},
 	},
+	0x12: &Collation_tis620_thai_ci{
+		id:   0x12,
+		name: "tis620_thai_ci",
+		simpletables: simpletables{
+			ctype:   &ctype_ascii_general_ci,
+			tolower: &tolower_ascii_general_ci,
+			toupper: &toupper_ascii_general_ci,
+			sort:    &sortorder_big5_chinese_ci,
+		},
+	},
 	0x13: &Collation_multibyte{
 		id:       0x13,
 		name:     "euckr_korean_ci",
@@ -4760,6 +4770,16 @@ var collationsById = [...]Collation{
 		name:     "sjis_bin",
 		charset:  charset.Charset_sjis{},
 		caseinfo: multibyteCase_sjis,
+	},
+	0x59: &Collation_8bit_bin{
+		id:   0x59,
+		name: "tis620_bin",
+		simpletables: simpletables{
+			ctype:   &ctype_ascii_general_ci,
+			tolower: &tolower_ascii_general_ci,
+			toupper: &toupper_ascii_general_ci,
+		},
+		charset: charset.Charset_tis620{},
 	},
 	0x5a: &Collation_unicode_bin{
 		id:      0x5a,
