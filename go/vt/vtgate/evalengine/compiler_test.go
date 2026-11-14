@@ -2353,6 +2353,56 @@ func TestCompilerFoldedTemporalNumber(t *testing.T) {
 	}
 }
 
+// TestSecToTimeOfSelectedLiteral checks the fractional digits of
+// SEC_TO_TIME in the interpreter for a hex or bit literal that IF or CASE
+// selected: six on MySQL 8.4, none on MySQL 8.0 when every branch is a hex
+// or bit literal. NULLIF shows none on both. On MySQL 8.0,
+// SEC_TO_TIME(IF(column0 = 1, 0x3132, 'x')) shows six digits, which the
+// interpreter does not: it is not checked here.
+func TestSecToTimeOfSelectedLiteral(t *testing.T) {
+	testCases := []struct {
+		expression string
+		mysql84    string
+		mysql80    string
+	}{
+		{`SEC_TO_TIME(IF(column0 = 1, 0x3132, 0x33))`, `TIME("03:29:54.000000")`, `TIME("03:29:54")`},
+		{`SEC_TO_TIME(IF(column0 = 1, b'11000100110010', 0x33))`, `TIME("03:29:54.000000")`, `TIME("03:29:54")`},
+		{`SEC_TO_TIME(CASE WHEN column0 = 1 THEN 0x3132 END)`, `TIME("03:29:54.000000")`, `TIME("03:29:54")`},
+		{`SEC_TO_TIME(NULLIF(0x3132, 0x33))`, `TIME("03:29:54")`, `TIME("03:29:54")`},
+	}
+
+	row := []sqltypes.Value{sqltypes.NewInt64(1)}
+	fields := evalengine.FieldResolver(makeFields(row))
+	for _, version := range []string{"8.4.6", "8.0.40"} {
+		venv, err := vtenv.New(vtenv.Options{MySQLServerVersion: version})
+		require.NoError(t, err)
+		for _, tc := range testCases {
+			t.Run(version+" "+tc.expression, func(t *testing.T) {
+				expr, err := venv.Parser().ParseExpr(tc.expression)
+				require.NoError(t, err)
+				translated, err := evalengine.Translate(expr, &evalengine.Config{
+					ResolveColumn:     fields.Column,
+					ResolveType:       fields.Type,
+					Collation:         collations.CollationUtf8mb4ID,
+					Environment:       venv,
+					NoConstantFolding: true,
+				})
+				require.NoError(t, err)
+
+				env := evalengine.NewExpressionEnv(t.Context(), nil, evalengine.NewEmptyVCursor(venv, time.UTC))
+				env.Row = row
+				res, err := env.EvaluateAST(translated)
+				require.NoError(t, err)
+				want := tc.mysql84
+				if version == "8.0.40" {
+					want = tc.mysql80
+				}
+				assert.Equal(t, want, res.String())
+			})
+		}
+	}
+}
+
 // TestCompileFoldedJSONLiteralConcurrency compiles distinct type
 // specialisations of one translated expression concurrently while the
 // interpreter evaluates it concurrently too. Both read the same folded JSON

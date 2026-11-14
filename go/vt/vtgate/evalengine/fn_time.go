@@ -1443,7 +1443,36 @@ func (b *builtinSecToTime) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	prec = min(int(evalDecimalPrecision(e)), prec)
+	if selectedLiteral81(env, b.Arguments[0], arg) {
+		prec = datetime.DefaultPrecision
+	}
 	return newEvalTime(datetime.NewTimeFromSeconds(e.dec), prec), nil
+}
+
+// selectedLiteral81 reports whether SEC_TO_TIME shows six fractional digits
+// for arg, the value of the argument expr, although it reads its bytes as a
+// whole number of seconds: on MySQL 8.1 and later, when arg is a hex or bit
+// literal that IF or CASE selected. The digits are the ones of the string
+// that IF or CASE returns.
+//
+// SEC_TO_TIME(IF(c = 1, 0x3132, 0x33)) is '03:29:54.000000' on MySQL 8.4.
+// NULLIF selects a literal too, but keeps no digits there:
+// SEC_TO_TIME(NULLIF(0x3132, 0x33)) is '03:29:54'.
+//
+// MySQL 8.0 shows six digits only when a branch is a character string, as
+// in SEC_TO_TIME(IF(c = 1, 0x3132, 'x')). The value does not tell that, so
+// MySQL 8.0 keeps none here.
+func selectedLiteral81(env *ExpressionEnv, expr IR, arg eval) bool {
+	b, ok := arg.(*evalBytes)
+	if !ok || b.flag&flagNumberFromBytes == 0 || !b.decimalFromBytes() {
+		return false
+	}
+	cs, ok := expr.(*CaseExpr)
+	if !ok || cs.nullif || cs.plain {
+		return false
+	}
+	after80, _ := capabilities.ServerVersionAtLeast(env.currentVersion(), 8, 1, 0)
+	return after80
 }
 
 func (call *builtinSecToTime) compile(c *compiler) (ctype, error) {
