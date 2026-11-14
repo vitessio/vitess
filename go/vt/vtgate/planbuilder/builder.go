@@ -47,6 +47,9 @@ type (
 	planResult struct {
 		primitive engine.Primitive
 		tables    []string
+		// queryHints are the hints of the prepared statement that an
+		// EXECUTE runs.
+		queryHints *sqlparser.QueryHints
 	}
 
 	stmtPlanner func(sqlparser.Statement, *sqlparser.ReservedVars, plancontext.VSchema) (*planResult, error)
@@ -119,11 +122,17 @@ func BuildFromStmt(ctx context.Context, query string, stmt sqlparser.Statement, 
 
 	var primitive engine.Primitive
 	var tablesUsed []string
+	var queryHints *sqlparser.QueryHints
 	if planResult != nil {
 		primitive = planResult.primitive
 		tablesUsed = planResult.tables
+		queryHints = planResult.queryHints
 	}
-	return engine.NewPlan(query, queryType, primitive, bindVarNeeds, tablesUsed), nil
+	plan := engine.NewPlan(query, queryType, primitive, bindVarNeeds, tablesUsed)
+	if queryHints != nil {
+		plan.QueryHints = *queryHints
+	}
+	return plan, nil
 }
 
 func checkDeniedSetVarHints(stmt sqlparser.Statement, vschema plancontext.VSchema) error {

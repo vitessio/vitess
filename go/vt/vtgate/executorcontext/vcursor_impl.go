@@ -186,6 +186,10 @@ type (
 		queryTimeout        time.Duration
 		transactionTimeout  time.Duration
 
+		// statementOptions are the execute options that the statement's comment
+		// directives set.
+		statementOptions *StatementOptions
+
 		warnings []*querypb.QueryWarning // any warnings that are accumulated during the planning phase are stored here
 
 		observer ResultsObserver
@@ -330,6 +334,7 @@ func (vc *VCursorImpl) CloneForMirroring(ctx context.Context) engine.VCursor {
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		statementOptions:    vc.statementOptions,
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
 		semTable:            vc.semTable,
@@ -357,6 +362,7 @@ func (vc *VCursorImpl) CloneForReplicaWarming(ctx context.Context) engine.VCurso
 		metrics:        vc.metrics,
 
 		ignoreMaxMemoryRows: vc.ignoreMaxMemoryRows,
+		statementOptions:    vc.statementOptions,
 		vschema:             vc.vschema,
 		vm:                  vc.vm,
 		semTable:            vc.semTable,
@@ -401,6 +407,8 @@ func (vc *VCursorImpl) cloneWithAutocommitSession() *VCursorImpl {
 		vm:         vc.vm,
 		topoServer: vc.topoServer,
 		observer:   vc.observer,
+
+		statementOptions: vc.statementOptions,
 	}
 }
 
@@ -1296,47 +1304,25 @@ func (vc *VCursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.SafeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
-func (vc *VCursorImpl) SetPriority(priority string) {
-	if priority != "" {
-		intPriority, err := strconv.Atoi(priority)
-		if err != nil {
-			// On invalid priority input, clear any existing priority to avoid
-			// unintentionally reusing a previous valid priority.
-			if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
-				vc.SafeSession.Options.Priority = ""
-			}
-			return
-		}
-		intPriority = max(0, min(intPriority, sqlparser.MaxPriorityValue))
-		vc.SafeSession.GetOrCreateOptions().Priority = strconv.Itoa(intPriority)
-	} else if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
-		vc.SafeSession.Options.Priority = ""
+// SetExecQueryTimeout sets the timeout for the statement's execution: the
+// QUERY_TIMEOUT_MS directive if the statement has one, otherwise the
+// session's or the default query timeout.
+func (vc *VCursorImpl) SetExecQueryTimeout(timeout *int) {
+	if execTimeout := vc.execQueryTimeout(timeout); execTimeout != nil {
+		vc.queryTimeout = time.Duration(*execTimeout) * time.Millisecond
 	}
 }
 
-func (vc *VCursorImpl) SetExecQueryTimeout(timeout *int) {
-	// Determine the effective timeout: use passed timeout if non-nil, otherwise use session's query timeout if available
-	var execTimeout *int
+// execQueryTimeout returns timeout if it is set, otherwise the session's or
+// the default query timeout, or nil if there is none.
+func (vc *VCursorImpl) execQueryTimeout(timeout *int) *int {
 	if timeout != nil {
-		execTimeout = timeout
-	} else if sessionTimeout := vc.getQueryTimeout(); sessionTimeout > 0 {
-		execTimeout = &sessionTimeout
+		return timeout
 	}
-
-	// If no effective timeout and no session options, return early
-	if execTimeout == nil {
-		if vc.SafeSession.GetOptions() == nil {
-			return
-		}
-		vc.SafeSession.GetOrCreateOptions().Timeout = nil
-		return
+	if sessionTimeout := vc.getQueryTimeout(); sessionTimeout > 0 {
+		return &sessionTimeout
 	}
-
-	vc.queryTimeout = time.Duration(*execTimeout) * time.Millisecond
-	// Set the authoritative timeout using the determined execTimeout
-	vc.SafeSession.GetOrCreateOptions().Timeout = &querypb.ExecuteOptions_AuthoritativeTimeout{
-		AuthoritativeTimeout: int64(*execTimeout),
-	}
+	return nil
 }
 
 // getQueryTimeout returns timeout based on the priority
@@ -1349,20 +1335,31 @@ func (vc *VCursorImpl) getQueryTimeout() int {
 	return vc.config.QueryTimeout
 }
 
-// SetConsolidator implements the SessionActions interface
-func (vc *VCursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
-	// Avoid creating session Options when they do not yet exist and the
-	// consolidator is unspecified.
-	if consolidator == querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED && vc.SafeSession.GetOptions() == nil {
+// SetStatementOptions sets the execute options of the statement from its
+// comment directives. A statement that VTGate runs on another statement's
+// behalf, such as a lookup vindex query, runs with a ctx that carries the
+// other statement's options, and keeps them.
+func (vc *VCursorImpl) SetStatementOptions(ctx context.Context, qh sqlparser.QueryHints) {
+	if opts, ok := StatementOptionsFromContext(ctx); ok {
+		vc.statementOptions = opts
 		return
 	}
-	vc.SafeSession.GetOrCreateOptions().Consolidator = consolidator
+	opts := &StatementOptions{
+		WorkloadName: qh.Workload,
+		// BuildQueryHints has validated the priority.
+		Priority:     normalizePriority(qh.Priority),
+		Consolidator: qh.Consolidator,
+	}
+	if execTimeout := vc.execQueryTimeout(qh.Timeout); execTimeout != nil {
+		timeout := int64(*execTimeout)
+		opts.timeout = &timeout
+	}
+	vc.statementOptions = opts
 }
 
-func (vc *VCursorImpl) SetWorkloadName(workloadName string) {
-	if workloadName != "" {
-		vc.SafeSession.GetOrCreateOptions().WorkloadName = workloadName
-	}
+// StatementOptions returns the execute options of the statement.
+func (vc *VCursorImpl) StatementOptions() *StatementOptions {
+	return vc.statementOptions
 }
 
 // SetFoundRows implements the SessionActions interface
@@ -1764,14 +1761,21 @@ func (vc *VCursorImpl) GetWarmingReadsSemaphore() *semaphore.Weighted {
 }
 
 func (vc *VCursorImpl) GetQueryPriority() (int, error) {
-	if vc.SafeSession.Options != nil && vc.SafeSession.Options.Priority != "" {
-		priority, err := strconv.Atoi(vc.SafeSession.Options.Priority)
-		if err != nil {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", vc.SafeSession.Options.Priority, err)
-		}
-		return max(0, min(priority, sqlparser.MaxPriorityValue)), nil
+	var priority string
+	if vc.SafeSession.Options != nil {
+		priority = normalizePriority(vc.SafeSession.Options.Priority)
 	}
-	return 0, nil
+	if vc.statementOptions != nil && vc.statementOptions.Priority != "" {
+		priority = vc.statementOptions.Priority
+	}
+	if priority == "" {
+		return 0, nil
+	}
+	intPriority, err := strconv.Atoi(priority)
+	if err != nil {
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid query priority %q: %v", priority, err)
+	}
+	return max(0, min(intPriority, sqlparser.MaxPriorityValue)), nil
 }
 
 // SetForeignKeyCheckState updates the foreign key checks state of the vcursor.

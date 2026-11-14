@@ -22,6 +22,7 @@
         - [Connection character sets restricted](#vttablet-connection-charsets-restricted)
         - [VTGate reports `REPLACE` statements as `REPLACE`](#vtgate-replace-statement-type)
         - [Qualified stars are no longer coalesced by `JOIN ... USING`](#vtgate-qualified-star-join-using)
+        - [Comment directives apply only to their statement](#vtgate-statement-directive-options)
     - **[Deprecations](#deprecations)**
         - [CLI Flags](#deprecated-cli-flags)
         - [Legacy streaming-path plan types in query rules](#deprecated-selectstream-rule-plan)
@@ -303,6 +304,21 @@ MySQL coalesces the join columns of a `JOIN ... USING` for an unqualified `*` on
 **Migration**: before upgrading, replace a qualified `tbl.*` selected from a `JOIN ... USING` with an explicit column list wherever its columns or their order matter, since an explicit list returns the same columns before and after the upgrade.
 
 See [#20759](https://github.com/vitessio/vitess/pull/20759) for details.
+
+#### <a id="vtgate-statement-directive-options"/>Comment directives apply only to their statement</a>
+
+The execute options that the `WORKLOAD_NAME`, `PRIORITY`, `CONSOLIDATOR` and `QUERY_TIMEOUT_MS` comment directives set now apply only to the statement that carries them, and to the statements that VTGate runs on its behalf, such as lookup vindex queries and savepoints. VTGate used to write them into the session. A `WORKLOAD_NAME` then carried over to every later statement on the same connection, and a statement without directives cleared the `Priority` and `Consolidator` that a gRPC client had set in its session's `Options`.
+
+**Impact**:
+
+- A `WORKLOAD_NAME` directive no longer applies to the later statements of the session.
+- `Priority` and `Consolidator` set in a gRPC session's `Options` are now sent to vttablet with the queries of each statement that doesn't override them with a directive, and an earlier statement's directive no longer replaces the session's `WorkloadName`. VTGate clamps such a `Priority` to the range of the `PRIORITY` directive, and ignores one that it can't parse as an integer.
+- `EXECUTE` of a statement prepared with SQL `PREPARE` runs with all of the prepared text's directives, as a statement prepared over the binary protocol does. It used to get only the text's `WORKLOAD_NAME`.
+- A gRPC session keeps the `WORKLOAD_NAME`, `PRIORITY` and `CONSOLIDATOR` values that an older VTGate wrote into it, and a newer VTGate sends them with each later statement of the session that doesn't override them with a directive. Only an older VTGate clears a `PRIORITY` or `CONSOLIDATOR` value, with the session's next statement that doesn't set it, so once every VTGate runs v25, such a value stays until the client starts a new session. For example, after a single `PRIORITY=0` statement that an older VTGate served, the session's later statements run with priority 0, so the transaction throttler never throttles their transactions.
+
+**Migration**: a client that relied on a `WORKLOAD_NAME` directive carrying over to later statements has to repeat the directive on each statement, or, over gRPC, set `WorkloadName` in its session's `Options`. A gRPC client that uses `WORKLOAD_NAME`, `PRIORITY` or `CONSOLIDATOR` directives should start new sessions, for example by recycling its connection pool, once every VTGate runs v25.
+
+See [#22008](https://github.com/vitessio/vitess/pull/22008) for details.
 
 ### <a id="deprecations"/>Deprecations</a>
 
