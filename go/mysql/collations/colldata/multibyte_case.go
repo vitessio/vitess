@@ -132,6 +132,21 @@ func charLenEUCKR(src []byte) int {
 	return 0
 }
 
+// charLenGBK is for gbk: a lead byte 81-FE, and a second byte 40-7E or 80-FE.
+func charLenGBK(src []byte) int {
+	if len(src) < 2 {
+		return 0
+	}
+	lead, trail := src[0], src[1]
+	if lead < 0x81 || lead > 0xFE {
+		return 0
+	}
+	if (0x40 <= trail && trail <= 0x7E) || (0x80 <= trail && trail <= 0xFE) {
+		return 2
+	}
+	return 0
+}
+
 // charLenGB2312 is for gb2312: a lead byte A1-F7, and a second byte A1-FE.
 func charLenGB2312(src []byte) int {
 	if len(src) < 2 {
@@ -169,4 +184,5 @@ var (
 	multibyteCase_eucjpms = &multibyteCase{charLen: charLenUJIS, chars: multibyteCaseChars_eucjpms}
 	multibyteCase_euckr   = &multibyteCase{charLen: charLenEUCKR, chars: multibyteCaseChars_euckr}
 	multibyteCase_gb2312  = &multibyteCase{charLen: charLenGB2312, chars: multibyteCaseChars_gb2312}
+	multibyteCase_gbk     = &multibyteCase{charLen: charLenGBK, chars: multibyteCaseChars_gbk}
 )

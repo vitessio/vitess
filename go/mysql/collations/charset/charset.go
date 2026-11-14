@@ -56,6 +56,7 @@ type (
 type (
 	Charset_gb18030 = simplifiedchinese.Charset_gb18030
 	Charset_gb2312  = simplifiedchinese.Charset_gb2312
+	Charset_gbk     = simplifiedchinese.Charset_gbk
 )
 
 // Japanese encodings
@@ -73,7 +74,7 @@ type Charset_euckr = korean.Charset_euckr
 
 func IsMultibyteByName(csname string) bool {
 	switch csname {
-	case "euckr", "gb2312", "sjis", "cp932", "eucjpms", "ujis":
+	case "euckr", "gb2312", "gbk", "sjis", "cp932", "eucjpms", "ujis":
 		return true
 
 	default:
@@ -105,7 +106,7 @@ func IsUnicodeByName(csname string) bool {
 
 func IsBackslashSafe(charset Charset) bool {
 	switch charset.(type) {
-	case Charset_sjis, Charset_cp932, Charset_gb18030 /*, Charset_gbk, Charset_big5 */ :
+	case Charset_sjis, Charset_cp932, Charset_gb18030, Charset_gbk /*, Charset_big5 */ :
 		return false
 	default:
 		return true

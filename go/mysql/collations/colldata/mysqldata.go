@@ -4048,6 +4048,16 @@ var collationsById = [...]Collation{
 			FromUnicode: fromunicode_latin2_general_ci,
 		},
 	},
+	0x1c: &Collation_chinese_ci{
+		id:       0x1c,
+		name:     "gbk_chinese_ci",
+		sort:     &sortorder_gb2312_chinese_ci,
+		charset:  charset.Charset_gbk{},
+		caseinfo: multibyteCase_gbk,
+		charLen:  charLenGBK,
+		order:    gbkSortOrder,
+		weight:   gbkSortOrder,
+	},
 	0x1d: &Collation_8bit_simple_ci{
 		id:   0x1d,
 		name: "cp1257_lithuanian_ci",
@@ -4703,6 +4713,12 @@ var collationsById = [...]Collation{
 		name:     "gb2312_bin",
 		charset:  charset.Charset_gb2312{},
 		caseinfo: multibyteCase_gb2312,
+	},
+	0x57: &Collation_multibyte{
+		id:       0x57,
+		name:     "gbk_bin",
+		charset:  charset.Charset_gbk{},
+		caseinfo: multibyteCase_gbk,
 	},
 	0x58: &Collation_multibyte{
 		id:       0x58,
