@@ -180,7 +180,7 @@ func (bvar *BindVariable) compile(c *compiler) (ctype, error) {
 	if typ.Type != sqltypes.Tuple {
 		// The length of a bind variable is the length of its value, which
 		// is known at execution.
-		typ.StrLen = &strLen{op: strLenBindVar, bv: bvar}
+		typ.StrLen = bindVarStrLen(bvar)
 	}
 	return typ, nil
 }

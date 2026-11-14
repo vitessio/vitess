@@ -21,9 +21,11 @@ import (
 	"reflect"
 	"strconv"
 
+	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/colldata"
+	"vitess.io/vitess/go/mysql/fastparse"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -31,75 +33,17 @@ import (
 // way MySQL declares it: CONCAT(s, 'x') on a VARCHAR(10) column s is 11.
 // A nil *strLen means that the length is unknown.
 //
-// A length that depends on a bind variable is kept as a tree and resolved at
-// execution, because MySQL sees the literal the bind variable stands for:
-// CONCAT(s, :v) is 10 + the length of the value of v.
+// A length that depends on a bind variable is resolved at execution, because
+// MySQL sees the literal the bind variable stands for: CONCAT(s, :v) is 10 +
+// the length of the value of v. Such a length is a function of env.
 type strLen struct {
-	op   strLenOp
-	n    int64         // the value of a strLenConst
-	l, r *strLen       // the operands of the other operations
-	bv   *BindVariable // the bind variable of a strLenBindVar
-	fn   countFn       // the function of a strLenCount
-	args []constInt    // the integer arguments of a strLenCount
-}
-
-type strLenOp uint8
-
-const (
-	strLenConst strLenOp = iota
-	strLenAdd
-	strLenMul
-	strLenMin
-	// strLenSub is l - r, and 0 when r is larger.
-	strLenSub
-	// strLenBindVar is the length of the value of a bind variable.
-	strLenBindVar
-	// strLenCount is the length of the result of a function that takes an
-	// integer argument from a bind variable, such as REPEAT(s, :n), from the
-	// length l of its string argument.
-	strLenCount
-)
-
-// countFn is a function whose length depends on an integer argument.
-type countFn uint8
-
-const (
-	countRepeat countFn = iota
-	countSpace
-	countLeftRight
-	countSubstring
-	countPad
-)
-
-// apply returns the length of the result of the function from the length of
-// its string argument and its integer arguments, none of them symbolic.
-func (fn countFn) apply(str *strLen, args []constInt, version string) *strLen {
-	switch fn {
-	case countRepeat:
-		return repeatLen(str, args[0], version)
-	case countSpace:
-		return spaceLen(args[0])
-	case countLeftRight:
-		return leftRightLen(str, args[0])
-	case countSubstring:
-		return substringLen(str, args[0], args[1])
-	default:
-		return padLen(args[0])
-	}
-}
-
-// symbolicCount returns the length of a function whose integer arguments or
-// string argument depend on a bind variable, to be resolved at execution:
-// REPEAT(s, :n). It returns nil when they do not.
-func symbolicCount(fn countFn, str *strLen, args ...constInt) *strLen {
-	symbolic := str != nil && str.op != strLenConst
-	for _, arg := range args {
-		symbolic = symbolic || arg.expr != nil
-	}
-	if !symbolic {
-		return nil
-	}
-	return &strLen{op: strLenCount, fn: fn, l: str, args: args}
+	// n is the length, when it is a constant.
+	n int64
+	// resolve returns the length against the bind variables of env, and
+	// false when it is unknown. It is nil for a constant.
+	resolve func(env *ExpressionEnv) (int64, bool)
+	// bv is set for the length of a bind variable by itself.
+	bv *BindVariable
 }
 
 const (
@@ -131,15 +75,20 @@ var strLenLong = newStrLenConst(maxStrLen)
 var strLenText = newStrLenConst(maxTextLen)
 
 func newStrLenConst(n int64) *strLen {
-	return &strLen{op: strLenConst, n: max(0, min(n, maxStrLen))}
+	return &strLen{n: max(0, min(n, maxStrLen))}
 }
 
 // constant returns the value of a constant length.
 func (l *strLen) constant() (int64, bool) {
-	if l == nil || l.op != strLenConst {
+	if l == nil || l.resolve != nil {
 		return 0, false
 	}
 	return l.n, true
+}
+
+// symbolic returns whether the length depends on bind variables.
+func (l *strLen) symbolic() bool {
+	return l != nil && l.resolve != nil
 }
 
 func (l *strLen) isLong() bool {
@@ -147,101 +96,265 @@ func (l *strLen) isLong() bool {
 	return ok && n == maxStrLen
 }
 
-// equal compares two lengths. A bind variable is compared by its key, not
-// its value, so that one compiled program serves every value.
+func (l *strLen) isZero() bool {
+	n, ok := l.constant()
+	return ok && n == 0
+}
+
+// get returns the length, resolved against the bind variables of env when
+// it depends on them.
+func (l *strLen) get(env *ExpressionEnv) optLen {
+	switch {
+	case l == nil:
+		return optLen{}
+	case l.resolve == nil:
+		return optLen{n: l.n, ok: true}
+	}
+	n, ok := l.resolve(env)
+	return optLen{n: n, ok: ok}
+}
+
+// equal compares two lengths: constants by value, the lengths of two bind
+// variables by key, so that one compiled program serves every value, and
+// any other lengths by identity.
 func (l *strLen) equal(other *strLen) bool {
-	if l == nil || other == nil {
+	switch {
+	case l == nil || other == nil:
 		return l == other
+	case l.resolve == nil && other.resolve == nil:
+		return l.n == other.n
+	case l.bv != nil && other.bv != nil:
+		return l.bv.Key == other.bv.Key
 	}
-	if l.op != other.op || l.n != other.n || l.fn != other.fn || len(l.args) != len(other.args) ||
-		!sameBindVar(l.bv, other.bv) || !l.l.equal(other.l) || !l.r.equal(other.r) {
-		return false
-	}
-	for i, arg := range l.args {
-		o := other.args[i]
-		if arg.n != o.n || arg.null != o.null || arg.ok != o.ok || !sameArg(arg.expr, o.expr) {
-			return false
-		}
-	}
-	return true
+	return l == other
 }
 
-func sameBindVar(a, b *BindVariable) bool {
+// optLen is a length that is known or not, for the rules below that
+// compute lengths, at compile time and at execution alike.
+type optLen struct {
+	n  int64
+	ok bool
+}
+
+func someLen(n int64) optLen {
+	return optLen{n: max(0, min(n, maxStrLen)), ok: true}
+}
+
+func (x optLen) long() bool {
+	return x.ok && x.n == maxStrLen
+}
+
+// strLen returns the length as a constant, or nil when it is unknown.
+func (x optLen) strLen() *strLen {
+	if !x.ok {
+		return nil
+	}
+	return newStrLenConst(x.n)
+}
+
+// sumLen returns x + y: CONCAT(s, 'x') is 10 + 1. A sum with a long operand
+// is long, even when the other operand is unknown.
+func sumLen(x, y optLen) optLen {
+	switch {
+	case x.long() || y.long():
+		return someLen(maxStrLen)
+	case !x.ok || !y.ok:
+		return optLen{}
+	}
+	return someLen(x.n + y.n)
+}
+
+// productLen returns x × y: REPEAT(s, 3) is 10 × 3. A product with a zero
+// operand is zero, even when the other operand is unknown.
+func productLen(x, y optLen) optLen {
+	switch {
+	case (x.ok && x.n == 0) || (y.ok && y.n == 0):
+		return someLen(0)
+	case !x.ok || !y.ok:
+		return optLen{}
+	case x.n > maxStrLen/y.n:
+		return someLen(maxStrLen)
+	}
+	return someLen(x.n * y.n)
+}
+
+// leastLen returns the smaller of x and y: LEFT(s, 3) is min(10, 3). When
+// one operand is unknown, the other one is still an upper bound.
+func leastLen(x, y optLen) optLen {
+	switch {
+	case !x.ok:
+		return y
+	case !y.ok:
+		return x
+	}
+	return someLen(min(x.n, y.n))
+}
+
+// diffLen returns x - y, and 0 when y is larger: SUBSTRING(s, 3) is 10 - 2.
+// When y is unknown, x is still an upper bound, and a long x stays long.
+func diffLen(x, y optLen) optLen {
+	if !x.ok || !y.ok || x.n == maxStrLen {
+		return x
+	}
+	return someLen(x.n - y.n)
+}
+
+// strLenSum returns a + b, see sumLen.
+func strLenSum(a, b *strLen) *strLen {
+	if a.isLong() || b.isLong() {
+		return strLenLong
+	}
 	if a == nil || b == nil {
-		return a == b
+		return nil
 	}
-	return a.Key == b.Key
+	return applyLen(sumLen, a, b)
 }
 
-// sameArg compares the expressions of two symbolic integer arguments: a bind
-// variable by its key, any other expression by identity.
-func sameArg(a, b IR) bool {
-	abv, aok := a.(*BindVariable)
-	bbv, bok := b.(*BindVariable)
-	if aok && bok {
-		return sameBindVar(abv, bbv)
+// strLenProduct returns a × b, see productLen.
+func strLenProduct(a, b *strLen) *strLen {
+	if a.isZero() || b.isZero() {
+		return newStrLenConst(0)
 	}
-	return a == b
+	if a == nil || b == nil {
+		return nil
+	}
+	return applyLen(productLen, a, b)
 }
 
-// resolve returns the length against the bind variables of env: a constant,
-// or nil when it cannot be known. REPEAT(s, :n) with n = 3 on a VARCHAR(10)
-// is 30. A bind variable missing from env.BindVars is taken as NULL, as its
-// literal would be; when env has no bind variables at all, as when the
-// planner asks for a type, the length is unknown.
-func (l *strLen) resolve(env *ExpressionEnv) *strLen {
-	if l == nil || l.op == strLenConst {
-		return l
+// strLenLeast returns the smaller of a and b, see leastLen.
+func strLenLeast(a, b *strLen) *strLen {
+	if a == nil {
+		return b
 	}
-	switch l.op {
-	case strLenAdd:
-		return strLenSum(l.l.resolve(env), l.r.resolve(env))
-	case strLenMul:
-		return strLenProduct(l.l.resolve(env), l.r.resolve(env))
-	case strLenMin:
-		return strLenLeast(l.l.resolve(env), l.r.resolve(env))
-	case strLenSub:
-		return strLenDiff(l.l.resolve(env), l.r.resolve(env))
-	case strLenBindVar:
-		value, ok := exprValue(env, l.bv)
-		if !ok {
-			return nil
+	if b == nil {
+		return a
+	}
+	return applyLen(leastLen, a, b)
+}
+
+// strLenDiff returns a - b, see diffLen.
+func strLenDiff(a, b *strLen) *strLen {
+	if a == nil || b == nil {
+		return a
+	}
+	return applyLen(diffLen, a, b)
+}
+
+// applyLen applies a rule to two lengths: now when both are constants, and
+// at execution when one depends on bind variables.
+func applyLen(rule func(x, y optLen) optLen, a, b *strLen) *strLen {
+	if !a.symbolic() && !b.symbolic() {
+		return rule(a.get(nil), b.get(nil)).strLen()
+	}
+	return &strLen{resolve: func(env *ExpressionEnv) (int64, bool) {
+		r := rule(a.get(env), b.get(env))
+		return r.n, r.ok
+	}}
+}
+
+// countLen returns the length of a function that takes integer arguments,
+// such as REPEAT(s, 3), from rule, the length of its string argument and its
+// integer arguments a and b: now when they are all known, and at execution
+// when one depends on bind variables, such as REPEAT(s, :n).
+func countLen(rule func(str optLen, a, b constInt, version string) optLen, str *strLen, a, b constInt, version string) *strLen {
+	if !str.symbolic() && a.expr == nil && b.expr == nil {
+		return rule(str.get(nil), a, b, version).strLen()
+	}
+	return &strLen{resolve: func(env *ExpressionEnv) (int64, bool) {
+		ra, aok := a.resolve(env)
+		rb, bok := b.resolve(env)
+		if !aok || !bok {
+			return 0, false
 		}
-		return evalStrLen(value)
-	case strLenCount:
-		args := make([]constInt, len(l.args))
-		for i, arg := range l.args {
-			if arg.expr == nil {
-				args[i] = arg
-				continue
-			}
-			value, ok := exprValue(env, arg.expr)
-			if !ok {
-				return nil
-			}
-			args[i] = constIntOf(value)
-		}
-		return l.fn.apply(l.l.resolve(env), args, env.currentVersion())
-	}
-	return nil
+		r := rule(str.get(env), ra, rb, env.currentVersion())
+		return r.n, r.ok
+	}}
 }
 
-// resolveStrLen returns l.resolve(env), resolving it once for the bind
-// variables of env.
-func (env *ExpressionEnv) resolveStrLen(l *strLen) *strLen {
-	if env == nil || l == nil || l.op == strLenConst {
-		return l
+// resolveStrLen returns the length of l against the bind variables of env,
+// resolving it once for the bind variables of env.
+func (env *ExpressionEnv) resolveStrLen(l *strLen) (int64, bool) {
+	if !l.symbolic() {
+		r := l.get(env)
+		return r.n, r.ok
 	}
 	if env.strLens == nil || reflect.ValueOf(env.strLensVars).UnsafePointer() != reflect.ValueOf(env.BindVars).UnsafePointer() {
-		env.strLens = make(map[*strLen]*strLen)
+		env.strLens = make(map[*strLen]optLen)
 		env.strLensVars = env.BindVars
 	}
-	resolved, ok := env.strLens[l]
+	r, ok := env.strLens[l]
 	if !ok {
-		resolved = l.resolve(env)
-		env.strLens[l] = resolved
+		r = l.get(env)
+		env.strLens[l] = r
 	}
-	return resolved
+	return r.n, r.ok
+}
+
+// bindVarStrLen returns the length of a bind variable by itself: the length
+// of its value, as the length of the literal it stands for.
+func bindVarStrLen(bv *BindVariable) *strLen {
+	return &strLen{bv: bv, resolve: func(env *ExpressionEnv) (int64, bool) {
+		return bindVarLength(env, bv)
+	}}
+}
+
+// bindVarLength returns the length of the value of a bind variable, with
+// the rules of evalStrLen: the characters of a string, the bytes of a binary
+// string, the digits and a sign of an integer. A bind variable missing from
+// env.BindVars is NULL, of length 0. The length is unknown when env has no
+// bind variables at all, as when the planner asks for a type.
+func bindVarLength(env *ExpressionEnv, bv *BindVariable) (int64, bool) {
+	if env == nil || env.BindVars == nil {
+		return 0, false
+	}
+	bvar, ok := env.BindVars[bv.Key]
+	if !ok {
+		return 0, true
+	}
+	switch typ := bvar.Type; {
+	case typ == sqltypes.Null:
+		return 0, true
+	case typ == sqltypes.HexNum || typ == sqltypes.HexVal || typ == sqltypes.BitNum:
+	case sqltypes.IsText(typ):
+		if n, ok := valueCharLength(bvar.Value, collations.CollationForType(typ, bv.Collation)); ok {
+			return n, true
+		}
+	case sqltypes.IsBinary(typ):
+		return int64(len(bvar.Value)), true
+	case sqltypes.IsSigned(typ):
+		if i, err := fastparse.ParseInt64(hack.String(bvar.Value), 10); err == nil {
+			return intLength(i), true
+		}
+	case sqltypes.IsUnsigned(typ):
+		if u, err := fastparse.ParseUint64(hack.String(bvar.Value), 10); err == nil {
+			return digits(u), true
+		}
+	}
+	value, ok := exprValue(env, bv)
+	if !ok {
+		return 0, false
+	}
+	r := evalStrLen(value).get(nil)
+	return r.n, r.ok
+}
+
+// digits returns the number of decimal digits of u.
+func digits(u uint64) int64 {
+	n := int64(1)
+	for ; u >= 10; u /= 10 {
+		n++
+	}
+	return n
+}
+
+// intLength returns the length of an integer literal: its digits and one
+// for a sign, whether it has one or not, as MySQL declares 1 and -1 as 2.
+func intLength(i int64) int64 {
+	u := uint64(i)
+	if i < 0 {
+		u = -u
+	}
+	return digits(u) + 1
 }
 
 // exprValue returns the value of an expression that depends only on bind
@@ -323,77 +436,6 @@ func constantWithBindVars(e IR) bool {
 		return true
 	}
 	return false
-}
-
-// strLenSum returns a + b: CONCAT(s, 'x') is 10 + 1. A sum with a long
-// operand is long, even when the other operand is unknown.
-func strLenSum(a, b *strLen) *strLen {
-	if a.isLong() || b.isLong() {
-		return strLenLong
-	}
-	if a == nil || b == nil {
-		return nil
-	}
-	x, aok := a.constant()
-	y, bok := b.constant()
-	if aok && bok {
-		return newStrLenConst(x + y)
-	}
-	return &strLen{op: strLenAdd, l: a, r: b}
-}
-
-// strLenProduct returns a × b: REPEAT(s, 3) is 10 × 3. A product with a
-// zero operand is zero, even when the other operand is unknown.
-func strLenProduct(a, b *strLen) *strLen {
-	x, aok := a.constant()
-	y, bok := b.constant()
-	if (aok && x == 0) || (bok && y == 0) {
-		return newStrLenConst(0)
-	}
-	if a == nil || b == nil {
-		return nil
-	}
-	if aok && bok {
-		if x > maxStrLen/y {
-			return strLenLong
-		}
-		return newStrLenConst(x * y)
-	}
-	return &strLen{op: strLenMul, l: a, r: b}
-}
-
-// strLenLeast returns the smaller of a and b: LEFT(s, 3) is min(10, 3).
-// When one operand is unknown, the other one is still an upper bound.
-func strLenLeast(a, b *strLen) *strLen {
-	if a == nil {
-		return b
-	}
-	if b == nil {
-		return a
-	}
-	x, aok := a.constant()
-	y, bok := b.constant()
-	if aok && bok {
-		return newStrLenConst(min(x, y))
-	}
-	return &strLen{op: strLenMin, l: a, r: b}
-}
-
-// strLenDiff returns a - b, and 0 when b is larger: SUBSTRING(s, 3) is
-// 10 - 2. When b is unknown, a is still an upper bound.
-func strLenDiff(a, b *strLen) *strLen {
-	if a == nil || b == nil {
-		return a
-	}
-	x, aok := a.constant()
-	y, bok := b.constant()
-	if aok && bok {
-		if x == maxStrLen {
-			return a
-		}
-		return newStrLenConst(x - y)
-	}
-	return &strLen{op: strLenSub, l: a, r: b}
 }
 
 // charsetWidth returns the maximum number of bytes of a character in the
@@ -626,7 +668,7 @@ func (r *strResult) typeOf(env *ExpressionEnv, value []byte) sqltypes.Type {
 	if r.fixed {
 		return r.tt
 	}
-	if n, ok := env.resolveStrLen(r.length).constant(); ok {
+	if n, ok := env.resolveStrLen(r.length); ok {
 		return stringTypeOf(r.base, n, r.col)
 	}
 	n, ok := valueCharLength(value, r.col)
@@ -659,6 +701,36 @@ func newConstInt(arg IR, value eval) constInt {
 		return constInt{}
 	}
 	return constIntOf(value)
+}
+
+// resolve returns the value of the argument against the bind variables of
+// env, and false when env has no bind variables at all. A bind variable of
+// an integer type is read directly from its value; any other expression is
+// evaluated.
+func (a constInt) resolve(env *ExpressionEnv) (constInt, bool) {
+	if a.expr == nil {
+		return a, true
+	}
+	if env == nil || env.BindVars == nil {
+		return constInt{}, false
+	}
+	if bv, ok := a.expr.(*BindVariable); ok {
+		bvar, found := env.BindVars[bv.Key]
+		switch {
+		case !found || bvar.Type == sqltypes.Null:
+			return constInt{null: true, ok: true}, true
+		case sqltypes.IsSigned(bvar.Type):
+			if i, err := fastparse.ParseInt64(hack.String(bvar.Value), 10); err == nil {
+				return constInt{n: i, ok: true}, true
+			}
+		case sqltypes.IsUnsigned(bvar.Type):
+			if u, err := fastparse.ParseUint64(hack.String(bvar.Value), 10); err == nil {
+				return constInt{n: int64(min(u, math.MaxInt64)), ok: true}, true
+			}
+		}
+	}
+	value, _ := exprValue(env, a.expr)
+	return constIntOf(value), true
 }
 
 // constIntOf returns a constant integer argument from its value, the way

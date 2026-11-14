@@ -821,24 +821,25 @@ func (call *builtinSpace) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 	}
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
-	sr := newStrResult(sqltypes.VarChar, spaceLen(newConstInt(call.Arguments[0], arg)), col.Collation)
+	sr := newStrResult(sqltypes.VarChar, spaceStrLen(newConstInt(call.Arguments[0], arg)), col.Collation)
 	return sr.eval(env, space(num), col), nil
 }
 
 // spaceLen returns the length of SPACE(n): n when it is a constant, 0 when n
 // is negative or NULL, and the longest a string can be when n is not a
 // constant. SPACE(3) is 3 and SPACE(i) is a LONGTEXT.
-func spaceLen(n constInt) *strLen {
-	if l := symbolicCount(countSpace, nil, n); l != nil {
-		return l
-	}
+func spaceLen(n constInt) optLen {
 	switch {
 	case !n.ok:
-		return strLenLong
+		return someLen(maxStrLen)
 	case n.null:
-		return newStrLenConst(0)
+		return someLen(0)
 	}
-	return newStrLenConst(min(n.n, maxInt32))
+	return someLen(min(n.n, maxInt32))
+}
+
+func spaceStrLen(n constInt) *strLen {
+	return countLen(func(_ optLen, n, _ constInt, _ string) optLen { return spaceLen(n) }, nil, n, constInt{}, "")
 }
 
 func (call *builtinSpace) compile(c *compiler) (ctype, error) {
@@ -852,7 +853,7 @@ func (call *builtinSpace) compile(c *compiler) (ctype, error) {
 	_ = c.compileToInt64(arg, 1)
 
 	col := typedCoercionCollation(sqltypes.VarChar, call.collate)
-	length := spaceLen(c.constInt(call.Arguments[0]))
+	length := spaceStrLen(c.constInt(call.Arguments[0]))
 	sr := newStrResult(sqltypes.VarChar, length, col.Collation)
 	tt := sr.tt
 	c.asm.Fn_SPACE(tt, col)
@@ -935,20 +936,21 @@ const maxRepeatLength = 1073741824
 // not. REPEAT(s, 3) on a VARCHAR(10) is 30 and REPEAT(s, i) is a LONGTEXT.
 // For a negative constant count, MySQL 8.0 declares 0 and MySQL 8.4 reads
 // the count as a huge unsigned number: REPEAT(s, -1) is a LONGTEXT there.
-func repeatLen(str *strLen, count constInt, version string) *strLen {
-	if l := symbolicCount(countRepeat, str, count); l != nil {
-		return l
-	}
+func repeatLen(str optLen, count constInt, version string) optLen {
 	switch {
 	case !count.ok || count.null:
-		return strLenLong
+		return someLen(maxStrLen)
 	case count.n < 0:
 		if unsigned, _ := capabilities.ServerVersionAtLeast(version, 8, 1, 0); unsigned {
-			return strLenLong
+			return someLen(maxStrLen)
 		}
-		return newStrLenConst(0)
+		return someLen(0)
 	}
-	return strLenProduct(str, newStrLenConst(min(count.n, maxInt32)))
+	return productLen(str, someLen(min(count.n, maxInt32)))
+}
+
+func repeatStrLen(str *strLen, count constInt, version string) *strLen {
+	return countLen(func(str optLen, count, _ constInt, version string) optLen { return repeatLen(str, count, version) }, str, count, constInt{}, version)
 }
 
 func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
@@ -971,7 +973,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	length := repeatLen(argStrLen(env, call.Arguments[0], arg1), newConstInt(call.Arguments[1], arg2), env.currentVersion())
+	length := repeatStrLen(argStrLen(env, call.Arguments[0], arg1), newConstInt(call.Arguments[1], arg2), env.currentVersion())
 	sr := newStrResult(tt, length, text.col.Collation)
 
 	if len(text.bytes) == 0 {
@@ -1022,7 +1024,7 @@ func (expr *builtinRepeat) compile(c *compiler) (ctype, error) {
 	}
 	_ = c.compileToInt64(repeat, 1)
 
-	length := repeatLen(str.stringLen(), c.constInt(expr.Arguments[1]), c.env.MySQLVersion())
+	length := repeatStrLen(str.stringLen(), c.constInt(expr.Arguments[1]), c.env.MySQLVersion())
 	sr := newStrResult(tt, length, col)
 	tt = sr.tt
 	c.asm.Fn_REPEAT(tt)
@@ -1197,7 +1199,7 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 		}
 	}
 
-	sr := newStrResult(sqltypes.VarChar, leftRightLen(argStrLen(env, call.Arguments[0], str), newConstInt(call.Arguments[1], l)), text.col.Collation)
+	sr := newStrResult(sqltypes.VarChar, leftRightStrLen(argStrLen(env, call.Arguments[0], str), newConstInt(call.Arguments[1], l)), text.col.Collation)
 	length := evalToInt64(l).i
 	if length <= 0 {
 		return sr.eval(env, nil, text.col), nil
@@ -1224,17 +1226,18 @@ func (call *builtinLeftRight) eval(env *ExpressionEnv) (eval, error) {
 // smaller of the length of str and n when n is a constant, and the length of
 // str when it is not. LEFT(tx, 5) on a TEXT column is 5 and LEFT(tx, i) is
 // as long as tx.
-func leftRightLen(str *strLen, n constInt) *strLen {
-	if l := symbolicCount(countLeftRight, str, n); l != nil {
-		return l
-	}
+func leftRightLen(str optLen, n constInt) optLen {
 	switch {
 	case !n.ok || n.null || n.n > maxInt32:
 		return str
 	case n.n < 0:
-		return newStrLenConst(0)
+		return someLen(0)
 	}
-	return strLenLeast(str, newStrLenConst(n.n))
+	return leastLen(str, someLen(n.n))
+}
+
+func leftRightStrLen(str *strLen, n constInt) *strLen {
+	return countLen(func(str optLen, n, _ constInt, _ string) optLen { return leftRightLen(str, n) }, str, n, constInt{}, "")
 }
 
 func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
@@ -1259,7 +1262,7 @@ func (call *builtinLeftRight) compile(c *compiler) (ctype, error) {
 	}
 	_ = c.compileToInt64(l, 1)
 
-	length := leftRightLen(str.stringLen(), c.constInt(call.Arguments[1]))
+	length := leftRightStrLen(str.stringLen(), c.constInt(call.Arguments[1]))
 	sr := newStrResult(sqltypes.VarChar, length, col.Collation)
 	tt := sr.tt
 	if call.left {
@@ -1303,7 +1306,7 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 	if length < 0 {
 		return nil, nil
 	}
-	sr := newStrResult(sqltypes.VarChar, padLen(newConstInt(call.Arguments[1], l)), text.col.Collation)
+	sr := newStrResult(sqltypes.VarChar, padStrLen(newConstInt(call.Arguments[1], l)), text.col.Collation)
 
 	if !validMaxLength(int64(len(pad.bytes)), length) {
 		return nil, nil
@@ -1348,14 +1351,15 @@ func (call *builtinPad) eval(env *ExpressionEnv) (eval, error) {
 // when it is a constant, and the longest a string can be when it is not, or
 // when it is negative or NULL. LPAD(s, 5, 'x') is 5 and LPAD(s, i, 'x') is a
 // LONGTEXT.
-func padLen(n constInt) *strLen {
-	if l := symbolicCount(countPad, nil, n); l != nil {
-		return l
-	}
+func padLen(n constInt) optLen {
 	if !n.ok || n.null || n.n < 0 {
-		return strLenLong
+		return someLen(maxStrLen)
 	}
-	return newStrLenConst(min(n.n, maxInt32))
+	return someLen(min(n.n, maxInt32))
+}
+
+func padStrLen(n constInt) *strLen {
+	return countLen(func(_ optLen, n, _ constInt, _ string) optLen { return padLen(n) }, nil, n, constInt{}, "")
 }
 
 func (call *builtinPad) compile(c *compiler) (ctype, error) {
@@ -1396,7 +1400,7 @@ func (call *builtinPad) compile(c *compiler) (ctype, error) {
 		c.asm.Convert_xce(1, sqltypes.VarChar, col.Collation)
 	}
 
-	length := padLen(c.constInt(call.Arguments[1]))
+	length := padStrLen(c.constInt(call.Arguments[1]))
 	sr := newStrResult(sqltypes.VarChar, length, col.Collation)
 	tt := sr.tt
 	if call.left {
@@ -1683,7 +1687,7 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 	if len(call.Arguments) > 2 {
 		n = newConstInt(call.Arguments[2], l)
 	}
-	length := substringLen(argStrLen(env, call.Arguments[0], str), newConstInt(call.Arguments[1], p), n)
+	length := substringStrLen(argStrLen(env, call.Arguments[0], str), newConstInt(call.Arguments[1], p), n)
 	sr := newStrResult(tt, length, text.col.Collation)
 	pos := evalToInt64(p).i
 	if pos == 0 {
@@ -1718,34 +1722,33 @@ func (call *builtinSubstring) eval(env *ExpressionEnv) (eval, error) {
 // constants, as MySQL does: SUBSTRING(s, 2) on a VARCHAR(10) is 9,
 // SUBSTRING(s, -3) is 3, and SUBSTRING(tx, i, 3) is 3. When pos is not a
 // constant, only a constant len shortens it.
-func substringLen(str *strLen, pos, n constInt) *strLen {
-	if l := symbolicCount(countSubstring, str, pos, n); l != nil {
-		return l
-	}
+func substringLen(str optLen, pos, n constInt) optLen {
 	length := str
 	switch {
 	case pos.null:
 		return str
 	case !pos.ok || pos.n <= math.MinInt32 || pos.n > maxInt32:
 	case pos.n == 0:
-		length = newStrLenConst(0)
+		length = someLen(0)
 	case pos.n > 0:
-		length = strLenDiff(str, newStrLenConst(pos.n-1))
+		length = diffLen(str, someLen(pos.n-1))
+	case str.ok && -pos.n > str.n:
+		// SUBSTRING(s, -30) starts before s does and is empty.
+		length = someLen(0)
 	default:
-		if l, ok := str.constant(); ok && -pos.n > l {
-			// SUBSTRING(s, -30) starts before s does and is empty.
-			length = newStrLenConst(0)
-		} else {
-			length = strLenLeast(str, newStrLenConst(-pos.n))
-		}
+		length = leastLen(str, someLen(-pos.n))
 	}
 	switch {
 	case !n.ok || n.null || n.n > maxInt32:
 		return length
 	case n.n < 0:
-		return newStrLenConst(0)
+		return someLen(0)
 	}
-	return strLenLeast(length, newStrLenConst(n.n))
+	return leastLen(length, someLen(n.n))
+}
+
+func substringStrLen(str *strLen, pos, n constInt) *strLen {
+	return countLen(func(str optLen, pos, n constInt, _ string) optLen { return substringLen(str, pos, n) }, str, pos, n, "")
 }
 
 func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
@@ -1776,7 +1779,7 @@ func (call *builtinSubstring) compile(c *compiler) (ctype, error) {
 	if len(call.Arguments) > 2 {
 		n = c.constInt(call.Arguments[2])
 	}
-	length := substringLen(str.stringLen(), c.constInt(call.Arguments[1]), n)
+	length := substringStrLen(str.stringLen(), c.constInt(call.Arguments[1]), n)
 	sr := newStrResult(tt, length, col.Collation)
 	tt = sr.tt
 

@@ -62,14 +62,12 @@ func (p *CompiledExpr) typeof(env *ExpressionEnv) (ctype, error) {
 	// typed from its own type whatever its length: only the string functions
 	// build a length from it.
 	ct := p.typed
-	if ct.StrLen == nil || ct.StrLen.op == strLenConst || ct.StrLen.op == strLenBindVar || !sqltypes.IsTextOrBinary(ct.Type) {
+	if !ct.StrLen.symbolic() || ct.StrLen.bv != nil || !sqltypes.IsTextOrBinary(ct.Type) {
 		return ct, nil
 	}
-	if length := env.resolveStrLen(ct.StrLen); length != nil {
-		if _, ok := length.constant(); ok {
-			ct.Type = stringType(ct.Type, length, ct.Col.Collation)
-			ct.StrLen = length
-		}
+	if n, ok := env.resolveStrLen(ct.StrLen); ok {
+		ct.Type = stringTypeOf(ct.Type, n, ct.Col.Collation)
+		ct.StrLen = newStrLenConst(n)
 	}
 	return ct, nil
 }
