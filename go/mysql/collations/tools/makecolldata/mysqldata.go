@@ -116,6 +116,18 @@ func (g *Generator) printCollationUcaLegacy(meta *CollationMetadata) {
 		or(tableContractions, "nil"), ",",
 		maxCodepoint, "),",
 	)
+
+	// The dump has no case table. The Turkish collations convert case
+	// with the Turkish table, the Unicode 5.2.0 collations with the table
+	// of Unicode 5.2.0 and the others with the default table.
+	switch {
+	case strings.Contains(meta.Name, "_turkish_"):
+		g.P("unicase: unicaseInfo_turkish,")
+	case meta.UCAVersion == 520:
+		g.P("unicase: unicaseInfo_unicode520,")
+	default:
+		g.P("unicase: unicaseInfo_default,")
+	}
 	g.P("},")
 }
 

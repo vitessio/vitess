@@ -230,6 +230,37 @@ var inputCaseConversions = []string{
 	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf16le) COLLATE utf16le_general_ci",
 	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf32) COLLATE utf32_bin",
 	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf32) COLLATE utf32_general_ci",
+
+	// The Turkish collations have their own "i" and "I", and the
+	// Unicode 5.2.0 collations convert more characters, among them the
+	// Deseret "𐐨" and "𐐀" outside the Basic Multilingual Plane.
+	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ 𐐨 𐐀' COLLATE utf8mb4_unicode_ci",
+	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ 𐐨 𐐀' COLLATE utf8mb4_turkish_ci",
+	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ 𐐨 𐐀' COLLATE utf8mb4_unicode_520_ci",
+	"_utf8mb3 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ' COLLATE utf8mb3_unicode_ci",
+	"_utf8mb3 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ' COLLATE utf8mb3_turkish_ci",
+	"_utf8mb3 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ i I ⱥ Ⱥ' COLLATE utf8mb3_unicode_520_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ' USING ucs2) COLLATE ucs2_unicode_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ' USING ucs2) COLLATE ucs2_turkish_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ' USING ucs2) COLLATE ucs2_unicode_520_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ 𐐨 𐐀' USING utf16) COLLATE utf16_unicode_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ 𐐨 𐐀' USING utf16) COLLATE utf16_turkish_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ 𐐨 𐐀' USING utf16) COLLATE utf16_unicode_520_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ 𐐨 𐐀' USING utf32) COLLATE utf32_unicode_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ 𐐨 𐐀' USING utf32) COLLATE utf32_turkish_ci",
+	"CONVERT('aBc ß ÿ ı İ i I ⱥ Ⱥ 𐐨 𐐀' USING utf32) COLLATE utf32_unicode_520_ci",
+
+	// In utf8mb3 and utf8mb4, the upper case of "ɐ" and the lower case of
+	// "Ⱥ" in the Unicode 5.2.0 table are one byte longer than the
+	// character. MySQL does not return a result that is longer than the
+	// input: the result of UPPER('aɐb') ends after the upper case of "ɐ",
+	// and UPPER('ɐ') is the empty string.
+	"_utf8mb4 'aɐb' COLLATE utf8mb4_unicode_520_ci",
+	"_utf8mb4 'ɐ' COLLATE utf8mb4_unicode_520_ci",
+	"_utf8mb4 'ȺBC' COLLATE utf8mb4_unicode_520_ci",
+	"_utf8mb3 'aɐb' COLLATE utf8mb3_unicode_520_ci",
+	"_utf8mb3 'ȺBC' COLLATE utf8mb3_unicode_520_ci",
+	"_utf8mb4 'aɐb ȺBC' COLLATE utf8mb4_unicode_ci",
 }
 
 var insertStrings = []string{
