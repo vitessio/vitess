@@ -29,9 +29,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -54,6 +56,11 @@ const (
 	cell         = "zone1"
 	// reloadTimeout bounds how long a reload may take to show.
 	reloadTimeout = 30 * time.Second
+	// vtgateAddress is the address that vtgate listens on. The test
+	// dials it rather than localhost, which may resolve to [::1] as
+	// well: a gRPC client that fails on both reports the refused [::1]
+	// connection rather than the TLS alert that vtgate sent.
+	vtgateAddress = "127.0.0.1"
 )
 
 var (
@@ -158,7 +165,7 @@ func grpcServedCert(t *testing.T, certs tlstest.ClientServerKeyPairs) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-	conn, err := grpc.NewClient(fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateGrpcPort), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+	conn, err := grpc.NewClient(net.JoinHostPort(vtgateAddress, strconv.Itoa(clusterInstance.VtgateGrpcPort)), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +186,7 @@ func grpcServedCert(t *testing.T, certs tlstest.ClientServerKeyPairs) ([]byte, e
 // does not fail t, so that it can run in assert.Eventually.
 func connectMySQL(t *testing.T, certs tlstest.ClientServerKeyPairs) (*mysql.Conn, error) {
 	params := clusterInstance.GetVTParams(keyspaceName)
+	params.Host = vtgateAddress
 	params.SslMode = vttls.VerifyIdentity
 	params.SslCa = certs.ServerCA
 	params.SslCert = certs.ClientCert
