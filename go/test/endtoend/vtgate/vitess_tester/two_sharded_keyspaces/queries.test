@@ -56,3 +56,19 @@ from (select price as col from corder.corder
       select customer_id as col from customer.customer where customer_id in (2, 4)) dt
 order by parity
 limit 2;
+
+# The scatter arm adds a route-only merge-sort helper outside its generated
+# DISTINCT derived table. The single-shard arm must return the same width.
+select cast(price as signed) as x, price
+from corder.corder
+union
+select cast(customer_id as signed) as x, customer_id
+from customer.customer where customer_id = 1
+order by x limit 3;
+
+select cast(customer_id as signed) as x, customer_id
+from customer.customer where customer_id = 1
+union
+select cast(price as signed) as x, price
+from corder.corder
+order by x desc limit 1, 3;

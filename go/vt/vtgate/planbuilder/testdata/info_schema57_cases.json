@@ -962,7 +962,7 @@
                       "Sharded": false
                     },
                     "FieldQuery": "select 1 as `found` from information_schema.views where 1 != 1",
-                    "Query": "select 1 as `found` from information_schema.views where `table_name` = :table_name2 /* VARCHAR */ and `table_name` = 'user' limit :__upper_limit",
+                    "Query": "select 1 as `found` from information_schema.views where `table_name` = :table_name2 /* VARCHAR */ and `table_name` = 'user' limit 1",
                     "SysTableTableName": "[table_name2:'music']"
                   }
                 ]

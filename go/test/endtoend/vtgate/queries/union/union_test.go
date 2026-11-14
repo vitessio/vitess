@@ -157,6 +157,11 @@ func TestUnionAllOrderedLimitPushdown(t *testing.T) {
 
 	mcmp.Exec("insert into t1(id1, id2) values (1, 1), (2, 2), (20, 20), (21, 21), (22, 22), (23, 23), (24, 24), (25, 25)")
 	mcmp.Exec("insert into t2(id3, id4) values (3, 3), (4, 4), (5, 5), (6, 6), (7, 7), (8, 8), (9, 9), (10, 10)")
+	utils.Exec(t, mcmp.MySQLConn, "insert into ref(id) values (100), (101), (102)")
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet("insert into ref(id) values (100), (101), (102)", keyspaceName, true)
+		require.NoError(t, err)
+	}
 
 	require.NoError(t, utils.WaitForColumn(t, clusterInstance.VtgateProcess, keyspaceName, "t1", "name"))
 	mcmp.Exec("update t1 set name = case id1 when 1 then 'abcdefghijklmnopq_z' when 2 then 'abcdefghijklmnopq_a' else 'm' end")
@@ -165,6 +170,18 @@ func TestUnionAllOrderedLimitPushdown(t *testing.T) {
 			utils.Exec(t, mcmp.VtConn, "set workload = "+workload)
 			mcmp.Exec("select name as x from t1 where id1 = 1 union all select name from t1 where id1 = 2 order by x limit 3")
 			mcmp.Exec("select 1 as c from dual union all select count(*) from t1 order by c limit 3")
+			// The outer ordering must not change which rows an arm's LIMIT selects.
+			for _, query := range []string{
+				"(select id1 as id from t1 order by id1 desc limit 2) union all (select id3 from t2) order by id limit 3",
+				"(select id1 as id from t1 order by id1 desc limit 1, 2) union all (select id3 from t2) order by id limit 1, 3",
+				"(select id1 as id from t1 order by id1 limit 2) union all (select id3 from t2) order by id desc limit 3",
+				"(select id from ref order by id desc limit 1) union all (select id1 from t1) order by id desc limit 3",
+				"(select id from ref order by id desc limit 1, 1) union all (select id1 from t1) order by id desc limit 3",
+			} {
+				mcmp.Exec(query)
+			}
+			mcmp.AssertMatchesNoOrder("(select id from ref order by id desc limit 1) union all (select id1 from t1) limit 100", "[[INT64(102)] [INT64(1)] [INT64(2)] [INT64(20)] [INT64(21)] [INT64(22)] [INT64(23)] [INT64(24)] [INT64(25)]]")
+
 			// Split literal arms can report INT32 where MySQL's native UNION
 			// reports INT64. Compare ordered numeric values for these rank keys.
 			for _, query := range []string{

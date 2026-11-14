@@ -17,14 +17,19 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -143,6 +148,81 @@ func TestConcatenate_NoErrors(t *testing.T) {
 			})
 		}
 	}
+}
+
+// Hold the first arm open to distinguish sequential execution from parallel
+// execution, including the ordinary-session path that must remain parallel.
+func TestConcatenateSessionConcurrency(t *testing.T) {
+	for _, session := range []string{"ordinary", "reserved", "transaction"} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stream=%t", session, stream), func(t *testing.T) {
+				result := r("id", "int64", "1")
+				sources := []Primitive{
+					&fakePrimitive{results: []*sqltypes.Result{result}},
+					&fakePrimitive{results: []*sqltypes.Result{result}},
+				}
+				var first, second atomic.Bool
+				release, done := make(chan struct{}), make(chan struct{})
+				var once sync.Once
+				cursor := &concatenateConcurrencyVCursor{
+					before: func(p Primitive) {
+						if p == sources[0] {
+							first.Store(true)
+							<-release
+						} else {
+							second.Store(true)
+						}
+					},
+				}
+				cursor.inTx = session == "transaction"
+				cursor.inReserved = session == "reserved"
+				concatenate := NewConcatenate(sources, nil)
+				var execErr error
+				var rows atomic.Int32
+				t.Cleanup(func() { once.Do(func() { close(release) }); <-done })
+				go func() {
+					defer close(done)
+					if stream {
+						execErr = concatenate.TryStreamExecute(t.Context(), cursor, nil, true, func(qr *sqltypes.Result) error {
+							rows.Add(int32(len(qr.Rows)))
+							return nil
+						})
+					} else {
+						qr, err := concatenate.TryExecute(t.Context(), cursor, nil, true)
+						execErr = err
+						if err == nil {
+							rows.Add(int32(len(qr.Rows)))
+						}
+					}
+				}()
+				require.Eventually(t, first.Load, 30*time.Second, time.Millisecond)
+				if session == "ordinary" {
+					assert.Eventually(t, second.Load, 30*time.Second, time.Millisecond, "ordinary sessions retain parallel arms")
+				} else {
+					assert.Never(t, second.Load, 100*time.Millisecond, time.Millisecond, "arms must not share a session connection concurrently")
+				}
+				once.Do(func() { close(release) })
+				<-done
+				require.NoError(t, execErr)
+				require.Equal(t, int32(2), rows.Load())
+			})
+		}
+	}
+}
+
+type concatenateConcurrencyVCursor struct {
+	noopVCursor
+	before func(Primitive)
+}
+
+func (c *concatenateConcurrencyVCursor) ExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool) (*sqltypes.Result, error) {
+	c.before(p)
+	return c.noopVCursor.ExecutePrimitive(ctx, p, vars, fields)
+}
+
+func (c *concatenateConcurrencyVCursor) StreamExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool, callback func(*sqltypes.Result) error) error {
+	c.before(p)
+	return c.noopVCursor.StreamExecutePrimitive(ctx, p, vars, fields, callback)
 }
 
 func TestConcatenate_WithErrors(t *testing.T) {

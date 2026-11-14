@@ -603,8 +603,8 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 	var result *ApplyResult
 	shouldVisit := func(op Operator) VisitRule {
 		switch op := op.(type) {
-		case *Join, *ApplyJoin, *SubQueryContainer, *SubQuery:
-			// we can't push limits down on either side
+		case *Limit, *Join, *ApplyJoin, *SubQueryContainer, *SubQuery:
+			// Do not cross an arm-local LIMIT or push limits into either side of a join.
 			return SkipChildren
 		case *Aggregator:
 			if len(op.Grouping) > 0 {
@@ -612,10 +612,14 @@ func setUpperLimit(ctx *plancontext.PlanningContext, in *Limit) (Operator, *Appl
 				return SkipChildren
 			}
 		case *Route:
+			if containsLimit(op.Source) {
+				return SkipChildren
+			}
 			ast := &sqlparser.Limit{Rowcount: sqlparser.NewArgument(engine.UpperLimitStr)}
 			src := op.Source
 			if order, ok := orderToPush[op]; ok && len(order) > 0 {
 				src = newOrdering(src, order)
+				op.unionOrderingPushed = true
 			}
 			op.Source = newLimit(src, ast, false)
 			result = result.Merge(Rewrote("push upper limit under route"))
@@ -716,12 +720,25 @@ func mapUnionArmOrdering(ctx *plancontext.PlanningContext, union *Union, order [
 			armOrder = append(armOrder, mapped)
 		}
 		armRoutes := routesForUnionArm(source)
-		if len(armRoutes) != 1 {
+		if len(armRoutes) != 1 || containsLimit(armRoutes[0].Source) {
+			// An arm's own LIMIT must select its rows before the outer ordering.
 			return nil, false
 		}
 		routes[armRoutes[0]] = armOrder
 	}
 	return routes, true
+}
+
+func containsLimit(op Operator) bool {
+	switch op := op.(type) {
+	case *Limit:
+		return true
+	case *Horizon:
+		if op.Query.GetLimit() != nil {
+			return true
+		}
+	}
+	return slices.ContainsFunc(op.Inputs(), containsLimit)
 }
 
 func knownNumericCastType(expr sqlparser.Expr) (string, bool) {

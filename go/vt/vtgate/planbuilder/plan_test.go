@@ -232,6 +232,73 @@ func (s *planTestSuite) TestOrderedUnionLimitKeepsHelperColumns() {
 	}
 }
 
+// A single-shard arm can retain its LIMIT in an unexpanded Horizon.
+func (s *planTestSuite) TestReferenceUnionArmKeepsLocalLimit() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["user"].Tables["ref"].Columns = []vindexes.Column{{Name: sqlparser.NewIdentifierCI("intcol"), Type: sqltypes.Int16}}
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, suffix := range []string{"order by intcol limit 3", "limit 100"} {
+		plan, err := TestBuilder("(select id, intcol from ref order by intcol desc limit 1) union all (select id, intcol from user) "+suffix, vw, vw.CurrentDb())
+		s.Require().NoError(err)
+		found := false
+		for _, route := range routePrimitives(plan.Instructions) {
+			if strings.Contains(route.Query, "from ref") {
+				found = true
+				s.Require().Regexp(`limit 1(\)|$)`, route.Query, "the local LIMIT must survive outer LIMIT planning")
+				s.Require().NotContains(route.Query, ":__upper_limit")
+			}
+		}
+		s.Require().True(found)
+	}
+}
+
+// Generated DISTINCT derived tables must not leak an arm-only sort helper.
+func (s *planTestSuite) TestOrderedDistinctUnionArmWidths() {
+	env := vtenv.NewTestEnv()
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	for _, ks := range vschema.Keyspaces {
+		for _, table := range ks.Tables {
+			table.Columns = nil
+		}
+	}
+	vw, err := vschemawrapper.NewVschemaWrapper(env, vschema, TestBuilder)
+	s.Require().NoError(err)
+	for _, query := range []string{
+		// Untyped id columns force weight strings through a generated DISTINCT derived table.
+		"select cast(id as signed) as x, id from user union select cast(id as signed) as x, id from unsharded order by x limit 3",
+		"select cast(id as signed) as x, id from unsharded union select cast(id as signed) as x, id from user order by x desc limit 1, 3",
+	} {
+		s.Run(query, func() {
+			plan, err := TestBuilder(query, vw, vw.CurrentDb())
+			s.Require().NoError(err)
+			sort := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.MemorySort); return ok }, plan.Instructions)
+			s.Require().NotNil(sort)
+			concatenate := engine.Find(func(p engine.Primitive) bool { _, ok := p.(*engine.Concatenate); return ok }, plan.Instructions)
+			s.Require().NotNil(concatenate)
+			width := -1
+			for _, input := range concatenate.(*engine.Concatenate).Sources {
+				route, ok := input.(*engine.Route)
+				s.Require().True(ok, "test must exercise route outputs directly")
+				stmt, err := env.Parser().Parse(route.Query)
+				s.Require().NoError(err)
+				columns := stmt.(sqlparser.SelectStatement).GetColumnCount()
+				if route.TruncateColumnCount > 0 {
+					columns = route.TruncateColumnCount
+				}
+				if width < 0 {
+					width = columns
+				}
+				s.Require().Equal(width, columns, "every Concatenate input must return the same width: %s", route.Query)
+				for _, order := range sort.(*engine.MemorySort).OrderBy {
+					s.Require().Greater(columns, order.Col, route.Query)
+					s.Require().Greater(columns, order.WeightStringCol, route.Query)
+				}
+			}
+		})
+	}
+}
+
 // Integer constants in a select list must not become ordinal ORDER BY keys.
 func (s *planTestSuite) TestUnionArmOrderingSkipsLiteralKeys() {
 	env := vtenv.NewTestEnv()
@@ -540,6 +607,46 @@ func (s *planTestSuite) TestReferenceOuterJoinHonorsCrossKeyspaceReadPolicy() {
 	for _, route := range routes {
 		s.Require().Equal("user", route.Keyspace.Name)
 	}
+}
+
+// A bare reference copy cannot replace a derived input with a row limit.
+func (s *planTestSuite) TestReferenceCopyPreservesDerivedLimit() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	plan, err := TestBuilder("select u.id from (select id from source_of_ref limit 1) dt left join user u on u.col = 5", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	routes := routePrimitives(plan.Instructions)
+	s.Require().Len(routes, 2, "reference-preserving join must remain split")
+	found := false
+	for _, route := range routes {
+		if strings.Contains(route.Query, "source_of_ref") {
+			found = true
+			s.Require().Contains(route.Query, "limit 1", "copy selection must preserve the derived limit")
+		}
+	}
+	s.Require().True(found)
+}
+
+// If a derived wrapper prevents copy selection, check the keyspaces actually read.
+func (s *planTestSuite) TestDerivedReferenceCopyHonorsCrossKeyspacePolicy() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vschema.Keyspaces["main"].PreventCrossKeyspaceReads = true
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	query := "select u.id from (select id from source_of_ref limit 1) dt left join user u on u.col = 5"
+	_, err = TestBuilder(query, vw, vw.CurrentDb())
+	s.Require().ErrorContains(err, "cross-keyspace JOIN")
+	plan, err := TestBuilder(strings.Replace(query, "select u.id", "select /*vt+ ALLOW_CROSS_KEYSPACE_READS */ u.id", 1), vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	found := false
+	for _, route := range routePrimitives(plan.Instructions) {
+		if strings.Contains(route.Query, "source_of_ref") {
+			found = true
+			s.Require().Contains(route.Query, "limit 1")
+		}
+	}
+	s.Require().True(found)
 }
 
 func (s *planTestSuite) TestReferenceUnionProvenanceSurvivesMergedCTE() {

@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/slice"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/predicates"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -65,15 +64,7 @@ func (u *Union) Clone(inputs []Operator) Operator {
 func (u *Union) planOffsets(ctx *plancontext.PlanningContext) Operator {
 	for _, source := range u.Sources {
 		route, ok := source.(*Route)
-		if !ok || route.ResultColumns != 0 || len(route.GetOrdering(ctx)) == 0 {
-			continue
-		}
-		limit, ok := route.Source.(*Limit)
-		if !ok {
-			continue
-		}
-		arg, ok := limit.AST.Rowcount.(*sqlparser.Argument)
-		if ok && arg.Name == engine.UpperLimitStr {
+		if ok && route.unionOrderingPushed && route.ResultColumns == 0 {
 			route.setTruncateColumnCount(len(route.GetColumns(ctx)))
 		}
 	}

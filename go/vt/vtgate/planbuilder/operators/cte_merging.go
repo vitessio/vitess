@@ -152,7 +152,7 @@ func useRecursiveCTESeedAlternates(ctx *plancontext.PlanningContext, seed, term 
 	}
 	return topDown(seed, semantics.EmptyTableSet(), TableID, func(op Operator, _ semantics.TableSet, _ bool) (Operator, *ApplyResult) {
 		route, ok := op.(*Route)
-		if !ok || TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) || !canReplaceCTESeed(route.Source) {
+		if !ok || TableID(route).IsOverlapping(ctx.SemTable.DMLTargets) || !canReplaceReferenceInput(route.Source) {
 			return op, NoRewrite
 		}
 		routing, ok := route.Routing.(*AnyShardRouting)
@@ -167,14 +167,14 @@ func useRecursiveCTESeedAlternates(ctx *plancontext.PlanningContext, seed, term 
 	}, stopAtRoute, true)
 }
 
-// Alternates at this phase contain table and join planning, not the projected
-// outputs of a derived seed. Do not discard a projection when selecting a copy.
-func canReplaceCTESeed(op Operator) bool {
+// Reference alternates contain table and join planning, not derived outputs.
+// Do not discard projections or row limits when selecting a bare-table copy.
+func canReplaceReferenceInput(op Operator) bool {
 	switch op := op.(type) {
 	case *Table:
 		return true
 	case *ApplyJoin:
-		return canReplaceCTESeed(op.LHS) && canReplaceCTESeed(op.RHS)
+		return canReplaceReferenceInput(op.LHS) && canReplaceReferenceInput(op.RHS)
 	default:
 		return false
 	}

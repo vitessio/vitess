@@ -48,6 +48,10 @@ type (
 		// must not widen such a route to multiple shards.
 		ContainsSpecialUnionInput bool
 
+		// unionOrderingPushed records route ordering added for an outer UNION
+		// limit. Its route-only sort helpers are trimmed after parent offsets.
+		unionOrderingPushed bool
+
 		Routing Routing
 
 		Ordering []RouteOrdering

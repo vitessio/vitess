@@ -149,12 +149,12 @@ func (c *Concatenate) getFieldTypes(vcursor VCursor, res []*sqltypes.Result) ([]
 }
 
 func (c *Concatenate) execSources(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) ([]*sqltypes.Result, error) {
-	if vcursor.Session().InTransaction() {
-		// as we are in a transaction, we need to execute all queries inside a single transaction
-		// therefore it needs a sequential execution.
+	if vcursor.Session().InTransaction() || vcursor.Session().InReservedConn() {
+		// A transaction or reserved session can share one connection across arms.
+		// Execute them sequentially to avoid concurrent use of that connection.
 		return c.sequentialExec(ctx, vcursor, bindVars, wantfields)
 	}
-	// not in transaction, so execute in parallel.
+	// Ordinary sessions can execute arms in parallel.
 	return c.parallelExec(ctx, vcursor, bindVars, wantfields)
 }
 
@@ -199,12 +199,11 @@ func (c *Concatenate) sequentialExec(ctx context.Context, vcursor VCursor, bindV
 // TryStreamExecute performs a streaming exec.
 func (c *Concatenate) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, _ bool, callback func(*sqltypes.Result) error) error {
 	sqlmode := evalengine.ParseSQLMode(vcursor.SQLMode())
-	if vcursor.Session().InTransaction() {
-		// as we are in a transaction, we need to execute all queries inside a single connection,
-		// which holds the single transaction we have
+	if vcursor.Session().InTransaction() || vcursor.Session().InReservedConn() {
+		// Transactional and reserved sessions can share one connection across arms.
 		return c.sequentialStreamExec(ctx, vcursor, bindVars, callback, sqlmode)
 	}
-	// not in transaction, so execute in parallel.
+	// Ordinary sessions can execute arms in parallel.
 	return c.parallelStreamExec(ctx, vcursor, bindVars, callback, sqlmode)
 }
 
