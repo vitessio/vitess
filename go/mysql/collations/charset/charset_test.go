@@ -31,6 +31,7 @@ func TestIsMultibyteByName(t *testing.T) {
 		{"euckr", true},
 		{"gb2312", true},
 		{"gbk", true},
+		{"big5", true},
 		{"sjis", true},
 		{"cp932", true},
 		{"eucjpms", true},
@@ -122,6 +123,7 @@ func TestDecodeRuneWidthContract(t *testing.T) {
 		Charset_gb18030{},
 		Charset_gb2312{},
 		Charset_gbk{},
+		Charset_big5{},
 		Charset_ujis{},
 		Charset_sjis{},
 		Charset_cp932{},
@@ -253,6 +255,13 @@ func TestDecodeRuneValidity(t *testing.T) {
 		{"gbk truncated", Charset_gbk{}, []byte{0xD6}, RuneError, 1, false},
 		{"gbk unassigned pair", Charset_gbk{}, []byte{0xA2, 0xA0}, RuneError, 2, false},
 		{"gbk euro sign of gb18030", Charset_gbk{}, []byte{0xA2, 0xE3}, RuneError, 2, false},
+		{"big5 two byte", Charset_big5{}, []byte{0xA4, 0xA4}, 0x4E2D, 2, true},
+		{"big5 invalid lead", Charset_big5{}, []byte{0xA0, 0x40}, RuneError, 1, false},
+		{"big5 invalid trail", Charset_big5{}, []byte{0xA4, 0x7F}, RuneError, 1, false},
+		{"big5 truncated", Charset_big5{}, []byte{0xA4}, RuneError, 1, false},
+		{"big5 unassigned pair", Charset_big5{}, []byte{0xF9, 0xFE}, RuneError, 2, false},
+		// MySQL has U+FFFD as the character at A1 C3.
+		{"big5 replacement character", Charset_big5{}, []byte{0xA1, 0xC3}, RuneError, 2, true},
 		{"ujis invalid", Charset_ujis{}, []byte{0xFF}, RuneError, 1, false},
 		{"ujis kana invalid trail", Charset_ujis{}, []byte{0x8E, 0xE5}, RuneError, 1, false},
 		{"ujis plane2 invalid trail", Charset_ujis{}, []byte{0x8F, 0xA1, 0x20}, RuneError, 1, false},
@@ -296,4 +305,22 @@ func TestGBKEncode(t *testing.T) {
 
 	// U+2E81 is FE 50 in gb18030, one of the characters GB18030 added.
 	assert.Equal(t, -1, Charset_gbk{}.EncodeRune(buf[:], 0x2E81))
+}
+
+// TestBig5Encode checks the conversion to big5 against MySQL 8.4.13 and
+// 8.0.46: "中" is A4 A4, and U+FFFD is A2 CE, the last of the seven big5
+// characters that decode to U+FFFD.
+func TestBig5Encode(t *testing.T) {
+	var buf [4]byte
+
+	require.Equal(t, 2, Charset_big5{}.EncodeRune(buf[:], '中'))
+	assert.Equal(t, []byte{0xA4, 0xA4}, buf[:2])
+
+	require.Equal(t, 2, Charset_big5{}.EncodeRune(buf[:], 0xFFFD))
+	assert.Equal(t, []byte{0xA2, 0xCE}, buf[:2])
+
+	// big5 has no "é" at U+00E9, and no character outside the Basic
+	// Multilingual Plane.
+	assert.Equal(t, -1, Charset_big5{}.EncodeRune(buf[:], 0x00E9))
+	assert.Equal(t, -1, Charset_big5{}.EncodeRune(buf[:], 0x1F600))
 }

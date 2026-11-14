@@ -261,7 +261,7 @@
             {
               "name": "textcol2",
               "type": "VARCHAR",
-              "collation_name": "big5_bin"
+              "collation_name": "cp1250_czech_cs"
             }
           ]
         },

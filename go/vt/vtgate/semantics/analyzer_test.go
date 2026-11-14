@@ -1528,7 +1528,7 @@ func tableT2() *vindexes.BaseTable {
 		}, {
 			Name:          sqlparser.NewIdentifierCI("textcol"),
 			Type:          querypb.Type_VARCHAR,
-			CollationName: "big5_bin",
+			CollationName: "cp1250_czech_cs",
 		}},
 		ColumnListAuthoritative: true,
 		Keyspace:                ks3,
@@ -1548,11 +1548,11 @@ func tableT3() *vindexes.BaseTable {
 		}, {
 			Name:          sqlparser.NewIdentifierCI("textcol"),
 			Type:          querypb.Type_VARCHAR,
-			CollationName: "big5_bin",
+			CollationName: "cp1250_czech_cs",
 		}, {
 			Name:          sqlparser.NewIdentifierCI("invcol"),
 			Type:          querypb.Type_VARCHAR,
-			CollationName: "big5_bin",
+			CollationName: "cp1250_czech_cs",
 			Invisible:     true,
 		}},
 		ColumnListAuthoritative: true,

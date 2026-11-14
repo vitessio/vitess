@@ -42,9 +42,9 @@ type chineseCICase struct {
 	}
 }
 
-// TestChineseCI checks gbk_chinese_ci against values measured on MySQL 8.4.13
-// and 8.0.46 with a column of the collation: WEIGHT_STRING('a中') is
-// 41 D3 21 in gbk_chinese_ci.
+// TestChineseCI checks gbk_chinese_ci and big5_chinese_ci against values
+// measured on MySQL 8.4.13 and 8.0.46 with a column of the collation:
+// WEIGHT_STRING('a中') is 41 D3 21 in gbk_chinese_ci.
 func TestChineseCI(t *testing.T) {
 	testcases := []chineseCICase{
 		{
@@ -74,6 +74,34 @@ func TestChineseCI(t *testing.T) {
 				{"a中", "_中", true},
 				{"ａ", "Ａ", false},
 				{"aBc ａＡ", "A%", true},
+			},
+		},
+		{
+			collation: "big5_chinese_ci",
+			weights: map[string]string{
+				// "一" and "乙" have one stroke.
+				"一":      "A440",
+				"乙":      "A440",
+				"a中":     "41A4A1",
+				"aBc ａＡ": "41424320A140A140",
+			},
+			comparisons: []struct {
+				left, right string
+				cmp         int
+			}{
+				// A comparison is by the bytes of a character
+				// and not by its weight.
+				{"一", "乙", -1},
+				{"a中", "A中", 0},
+				{"ａ", "Ａ", 1},
+			},
+			likes: []struct {
+				input, pattern string
+				match          bool
+			}{
+				{"一", "乙", false},
+				{"乙", "乙", true},
+				{"a中", "A_", true},
 			},
 		},
 	}
