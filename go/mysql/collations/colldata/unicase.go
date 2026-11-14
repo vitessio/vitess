@@ -17,6 +17,8 @@ limitations under the License.
 package colldata
 
 import (
+	"unicode/utf8"
+
 	"vitess.io/vitess/go/mysql/collations/charset"
 )
 
@@ -42,6 +44,120 @@ func (info *UnicaseInfo) unicodeSort(codepoint rune) rune {
 		return unicaseChar.Sort
 	}
 	return codepoint
+}
+
+// toUpper returns the upper-case form of a code point, and the code point
+// itself when the table has no entry for it. With the default table,
+// toUpper(U+00FF, "ÿ") is U+0178, "Ÿ", and toUpper(U+00DF, "ß") is U+00DF.
+func (info *UnicaseInfo) toUpper(codepoint rune) rune {
+	if codepoint < 0 || codepoint > info.MaxChar {
+		return codepoint
+	}
+	if page := info.Page[int(codepoint)>>8]; page != nil {
+		return (*page)[int(codepoint)&0xFF].ToUpper
+	}
+	return codepoint
+}
+
+// toLower returns the lower-case form of a code point, and the code point
+// itself when the table has no entry for it. With the default table,
+// toLower(U+01C4, "Ǆ") is U+01C6, "ǆ".
+func (info *UnicaseInfo) toLower(codepoint rune) rune {
+	if codepoint < 0 || codepoint > info.MaxChar {
+		return codepoint
+	}
+	if page := info.Page[int(codepoint)>>8]; page != nil {
+		return (*page)[int(codepoint)&0xFF].ToLower
+	}
+	return codepoint
+}
+
+// changeCase appends src to dst with every character converted to upper or
+// lower case, the way UPPER() and LOWER() do it in MySQL for a collation
+// that uses this table. src is text in the character set cs.
+//
+// With the default table, the upper case of "aBc ß ÿ ǆ" in utf8mb4 is
+// "ABC ß Ÿ Ǆ": MySQL maps one code point to one code point, so "ß" has no
+// upper case.
+func (info *UnicaseInfo) changeCase(dst, src []byte, cs charset.Charset, upper bool) []byte {
+	convert := info.toLower
+	if upper {
+		convert = info.toUpper
+	}
+	switch cs.(type) {
+	case charset.Charset_utf8mb3, charset.Charset_utf8mb4:
+		return changeCaseUTF8(dst, src, cs, convert)
+	default:
+		return changeCaseFixedWidth(dst, src, cs, convert)
+	}
+}
+
+// changeCaseUTF8 converts utf8mb3 and utf8mb4 text. The result of MySQL is
+// never longer than the input for these, and this function converts a copy
+// of src in place, which gives the same results.
+//
+// A converted character can be shorter than the original: the lower case of
+// "K" (U+212A, E2 84 AA) is "k" (6B), and the result is two bytes shorter.
+//
+// The conversion stops at the first byte sequence that is not valid in cs,
+// and at a converted character that does not fit in the length of the input.
+// The result ends there. With a table where a converted character can be
+// longer than the original, the longer character takes the place of the
+// start of the next one before that is read: in utf8mb4_unicode_520_ci,
+// UPPER('aɐb') is "AⱯ" (41 E2 B1 AF) in MySQL, where the upper case of "ɐ"
+// (C9 90) is three bytes long and the "b" is gone.
+func changeCaseUTF8(dst, src []byte, cs charset.Charset, convert func(rune) rune) []byte {
+	start := len(dst)
+	dst = append(dst, src...)
+	buf := dst[start:]
+
+	var read, write int
+	for read < len(buf) {
+		codepoint, width, ok := cs.DecodeRune(buf[read:])
+		if !ok {
+			break
+		}
+		codepoint = convert(codepoint)
+		converted := utf8.RuneLen(codepoint)
+		if converted < 0 || converted > cs.MaxWidth() || write+converted > len(buf) {
+			break
+		}
+		cs.EncodeRune(buf[write:], codepoint)
+		read += width
+		write += converted
+	}
+	return dst[:start+write]
+}
+
+// changeCaseFixedWidth converts ucs2, utf16, utf16le and utf32 text. The
+// result always has the length of src: the upper case of "ÿ" in ucs2
+// (00 FF) is "Ÿ" (01 78).
+//
+// The conversion stops at the first byte sequence that is not valid in cs,
+// for example a utf16 high surrogate that no low surrogate follows. MySQL
+// returns the rest of the input unchanged, and so does this function.
+func changeCaseFixedWidth(dst, src []byte, cs charset.Charset, convert func(rune) rune) []byte {
+	start := len(dst)
+	dst = append(dst, src...)
+	buf := dst[start:]
+
+	var encoded [4]byte
+	for len(buf) > 0 {
+		codepoint, width, ok := cs.DecodeRune(buf)
+		if !ok {
+			break
+		}
+		if converted := convert(codepoint); converted != codepoint {
+			// No table maps a code point to one with a different
+			// width in these character sets.
+			if cs.EncodeRune(encoded[:], converted) != width {
+				break
+			}
+			copy(buf, encoded[:width])
+		}
+		buf = buf[width:]
+	}
+	return dst
 }
 
 var plane00 = []UnicaseChar{

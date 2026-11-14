@@ -164,6 +164,18 @@ func (c *Collation_unicode_general_ci) Wildcard(pat []byte, matchOne rune, match
 	return newUnicodeWildcardMatcher(c.charset, equals, c.Collate, pat, matchOne, matchMany, escape)
 }
 
+// ToUpper appends the upper case of src to dst. The collation uses the
+// default MySQL case table: in utf8mb4_general_ci, the upper case of
+// "aBc ß ÿ" is "ABC ß Ÿ".
+func (c *Collation_unicode_general_ci) ToUpper(dst, src []byte) []byte {
+	return c.unicase.changeCase(dst, src, c.charset, true)
+}
+
+// ToLower appends the lower case of src to dst. See ToUpper.
+func (c *Collation_unicode_general_ci) ToLower(dst, src []byte) []byte {
+	return c.unicase.changeCase(dst, src, c.charset, false)
+}
+
 type Collation_unicode_bin struct {
 	id      collations.ID
 	name    string
@@ -188,6 +200,19 @@ func (c *Collation_unicode_bin) IsBinary() bool {
 
 func (c *Collation_unicode_bin) Collate(left, right []byte, isPrefix bool) int {
 	return collationBinary(left, right, isPrefix)
+}
+
+// ToUpper appends the upper case of src to dst. A binary collation of a
+// Unicode character set uses the default MySQL case table, the same table
+// as the _general_ci collation: in utf8mb4_bin, the upper case of
+// "aBc ß ÿ" is "ABC ß Ÿ".
+func (c *Collation_unicode_bin) ToUpper(dst, src []byte) []byte {
+	return unicaseInfo_default.changeCase(dst, src, c.charset, true)
+}
+
+// ToLower appends the lower case of src to dst. See ToUpper.
+func (c *Collation_unicode_bin) ToLower(dst, src []byte) []byte {
+	return unicaseInfo_default.changeCase(dst, src, c.charset, false)
 }
 
 func (c *Collation_unicode_bin) WeightString(dst, src []byte, numCodepoints int) []byte {

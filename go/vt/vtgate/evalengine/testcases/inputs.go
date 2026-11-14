@@ -213,6 +213,25 @@ var inputStrings = []string{
 	// "_ucs2 'AabcÅå'",
 }
 
+// inputCaseConversions are strings for UPPER and LOWER in collations of the
+// Unicode character sets other than the utf8mb4_0900 ones. MySQL converts
+// these with its own case tables: in utf8mb4_bin, the upper case of "ÿ" is
+// "Ÿ", and "ß" and the Georgian "ა" have no upper case.
+var inputCaseConversions = []string{
+	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ' COLLATE utf8mb4_bin",
+	"_utf8mb4 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ' COLLATE utf8mb4_general_ci",
+	"_utf8mb3 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ' COLLATE utf8mb3_bin",
+	"_utf8mb3 'aBc ß ÿ Ÿ ǆ Ǆ ა ı İ' COLLATE utf8mb3_general_ci",
+	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ' USING ucs2) COLLATE ucs2_bin",
+	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ' USING ucs2) COLLATE ucs2_general_ci",
+	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf16) COLLATE utf16_bin",
+	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf16) COLLATE utf16_general_ci",
+	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf16le) COLLATE utf16le_bin",
+	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf16le) COLLATE utf16le_general_ci",
+	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf32) COLLATE utf32_bin",
+	"CONVERT('aBc ß ÿ Ÿ ǆ Ǆ ა ı İ 😊' USING utf32) COLLATE utf32_general_ci",
+}
+
 var insertStrings = []string{
 	"NULL",
 	"\"\"",
