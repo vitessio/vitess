@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -727,15 +728,19 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 		// now extract the files by running xbstream
 		xbstreamProgram := path.Join(xtrabackupEnginePath, xbstream)
 		flagsToExec := []string{"-C", tempDir, "-xv"}
+		// The operator's --xbstream-restore-flags can hold an --encrypt-key, so
+		// the log line shows a placeholder for them instead.
+		loggedArgs := slices.Clone(flagsToExec)
 		if xbstreamRestoreFlags != "" {
 			restoreFlags, err := shlex.Split(xbstreamRestoreFlags)
 			if err != nil {
 				return vterrors.Wrap(err, "failed to parse --xbstream-restore-flags")
 			}
 			flagsToExec = append(flagsToExec, restoreFlags...)
+			loggedArgs = append(loggedArgs, "<--xbstream-restore-flags>")
 		}
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
-		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
+		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, loggedArgs)
 		xbstreamCmd.Stdin = reader
 		xbstreamOut, err := xbstreamCmd.StdoutPipe()
 		if err != nil {
