@@ -23,6 +23,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset/japanese"
 	"vitess.io/vitess/go/mysql/collations/charset/korean"
 	"vitess.io/vitess/go/mysql/collations/charset/simplifiedchinese"
+	"vitess.io/vitess/go/mysql/collations/charset/traditionalchinese"
 	"vitess.io/vitess/go/mysql/collations/charset/types"
 	"vitess.io/vitess/go/mysql/collations/charset/unicode"
 )
@@ -59,6 +60,10 @@ type (
 	Charset_gbk     = simplifiedchinese.Charset_gbk
 )
 
+// Traditional Chinese encodings
+
+type Charset_big5 = traditionalchinese.Charset_big5
+
 // Japanese encodings
 
 type (
@@ -74,7 +79,7 @@ type Charset_euckr = korean.Charset_euckr
 
 func IsMultibyteByName(csname string) bool {
 	switch csname {
-	case "euckr", "gb2312", "gbk", "sjis", "cp932", "eucjpms", "ujis":
+	case "big5", "euckr", "gb2312", "gbk", "sjis", "cp932", "eucjpms", "ujis":
 		return true
 
 	default:
@@ -106,7 +111,7 @@ func IsUnicodeByName(csname string) bool {
 
 func IsBackslashSafe(charset Charset) bool {
 	switch charset.(type) {
-	case Charset_sjis, Charset_cp932, Charset_gb18030, Charset_gbk /*, Charset_big5 */ :
+	case Charset_sjis, Charset_cp932, Charset_gb18030, Charset_gbk, Charset_big5:
 		return false
 	default:
 		return true

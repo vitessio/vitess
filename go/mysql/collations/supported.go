@@ -19,6 +19,7 @@ limitations under the License.
 package collations
 
 var supported = [...]string{
+	0x1:   "big5_chinese_ci",
 	0x3:   "dec8_swedish_ci",
 	0x4:   "cp850_general_ci",
 	0x5:   "latin1_german1_ci",
@@ -97,6 +98,7 @@ var supported = [...]string{
 	0x51:  "cp852_bin",
 	0x52:  "swe7_bin",
 	0x53:  "utf8mb3_bin",
+	0x54:  "big5_bin",
 	0x55:  "euckr_bin",
 	0x56:  "gb2312_bin",
 	0x57:  "gbk_bin",
