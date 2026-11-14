@@ -49,6 +49,11 @@ const (
 	// queryTimeout bounds how long vtgate may take to reach the tablet,
 	// or to give up on it, after the tablet restarts.
 	queryTimeout = 60 * time.Second
+	// refusalWindow is how long queries must keep failing, once the
+	// tablet serves, for vtgate to count as refusing it: several times
+	// the 5s that vtgate's health check waits before it dials a tablet
+	// again.
+	refusalWindow = 30 * time.Second
 )
 
 var (
@@ -185,20 +190,28 @@ func query(t *testing.T) error {
 	return err
 }
 
-// requireQueries requires a query through vtgate to succeed, or keep
-// failing, within queryTimeout.
-func requireQueries(t *testing.T, succeed bool, msg string) {
+// requireQueries requires a query through vtgate to succeed within
+// queryTimeout.
+func requireQueries(t *testing.T, msg string) {
 	t.Helper()
 	var err error
 	assert.Eventually(t, func() bool {
 		err = query(t)
-		return (err == nil) == succeed
+		return err == nil
 	}, queryTimeout, time.Second, msg)
-	if succeed {
-		require.NoError(t, err, msg)
-	} else {
-		require.Error(t, err, msg)
-	}
+	require.NoError(t, err, msg)
+}
+
+// requireQueriesRefused requires queries through vtgate to keep failing
+// for refusalWindow once the tablet serves, so that a failure while
+// vtgate is still reconnecting to the restarted tablet does not count.
+func requireQueriesRefused(t *testing.T, msg string) {
+	t.Helper()
+	tablet := clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet().VttabletProcess
+	require.NoError(t, tablet.WaitForTabletStatus("SERVING"))
+	assert.Never(t, func() bool {
+		return query(t) == nil
+	}, refusalWindow, time.Second, msg)
 }
 
 // clientReloadErrors returns vtgate's count of failed reloads of its
@@ -213,7 +226,7 @@ func clientReloadErrors(t *testing.T) float64 {
 // TestClientTLSReload runs in order: each step starts from the files
 // the previous one installed.
 func TestClientTLSReload(t *testing.T) {
-	requireQueries(t, true, "vtgate must reach the tablet with the files it started with")
+	requireQueries(t, "vtgate must reach the tablet with the files it started with")
 
 	t.Run("presents the reloaded certificate", func(t *testing.T) {
 		// The tablet trusts only the new client CA from now on, so
@@ -225,7 +238,7 @@ func TestClientTLSReload(t *testing.T) {
 		}))
 		require.NoError(t, clusterInstance.VtgateProcess.SendSIGHUP())
 		restartTablet(t)
-		requireQueries(t, true, "vtgate must present the certificate it reloaded")
+		requireQueries(t, "vtgate must present the certificate it reloaded")
 	})
 
 	t.Run("keeps its files through a half-finished rotation", func(t *testing.T) {
@@ -240,7 +253,7 @@ func TestClientTLSReload(t *testing.T) {
 			return clientReloadErrors(t) > errorsBefore
 		}, queryTimeout, 100*time.Millisecond, "the failed reload must be counted")
 		restartTablet(t)
-		requireQueries(t, true, "vtgate must keep the certificate and key it loaded before")
+		requireQueries(t, "vtgate must keep the certificate and key it loaded before")
 	})
 
 	// vtgate's health check dials a restarted tablet again, building new
@@ -251,7 +264,7 @@ func TestClientTLSReload(t *testing.T) {
 		tlstest.RevokeCertAndRegenerateCRL(root, "tablet-server-ca", "tablet-server-1")
 		require.NoError(t, install(map[string]string{vtgateFiles.crl: "tablet-server-ca-crl.pem"}))
 		restartTablet(t)
-		requireQueries(t, false, "vtgate must refuse the tablet whose certificate the CRL now revokes")
+		requireQueriesRefused(t, "vtgate must refuse the tablet whose certificate the CRL now revokes")
 
 		// The tablet's other certificate, which the CRL does not
 		// revoke, is accepted, so it is the revocation that vtgate
@@ -261,6 +274,6 @@ func TestClientTLSReload(t *testing.T) {
 			tabletFiles.key:  "tablet-server-2-key.pem",
 		}))
 		restartTablet(t)
-		requireQueries(t, true, "vtgate must accept a tablet certificate that the CRL does not revoke")
+		requireQueries(t, "vtgate must accept a tablet certificate that the CRL does not revoke")
 	})
 }
