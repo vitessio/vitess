@@ -400,7 +400,7 @@
           "Sharded": true
         },
         "FieldQuery": "select a, textcol1, b, textcol2, weight_string(a), weight_string(b), weight_string(textcol2) from `user` where 1 != 1",
-        "OrderBy": "(0|4) ASC, 1 ASC COLLATE latin1_swedish_ci, (2|5) ASC, (3|6) ASC COLLATE ",
+        "OrderBy": "(0|4) ASC, 1 ASC COLLATE latin1_swedish_ci, (2|5) ASC, (3|6) ASC",
         "Query": "select a, textcol1, b, textcol2, weight_string(a), weight_string(b), weight_string(textcol2) from `user` order by `user`.a asc, `user`.textcol1 asc, `user`.b asc, `user`.textcol2 asc",
         "ResultColumns": 4
       },
@@ -2308,7 +2308,7 @@
       "Instructions": {
         "OperatorType": "Distinct",
         "Collations": [
-          "(0:1): "
+          "(0:1)"
         ],
         "ResultColumns": 1,
         "Inputs": [
