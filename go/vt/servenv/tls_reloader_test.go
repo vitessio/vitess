@@ -204,8 +204,9 @@ func TestTLSReloaderStartOnProcessSignalsOnTheIntervalAlone(t *testing.T) {
 
 // TestTLSReloaderReloadsTheCRLAloneOnSignal checks that a signal that
 // does not reload every file, as vtgate's MySQL server gets without
-// --tls-reload-on-sighup, reloads the CRL alone, validated under the CA
-// the config was built from, and keeps the certificate, key and CA.
+// --tls-reload-on-sighup, reloads the CRL alone, and keeps the
+// certificate, key and CA. TestTLSReloaderReloadCRLRefusesACRLTheCADoesNotValidate
+// checks the CA it validates the CRL under.
 func TestTLSReloaderReloadsTheCRLAloneOnSignal(t *testing.T) {
 	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
 	otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
@@ -242,6 +243,49 @@ func TestTLSReloaderReloadsTheCRLAloneOnSignal(t *testing.T) {
 	require.NoError(t, res.serverErr, "the server must keep the CA it was built with")
 	res = tryTLSHandshake(t, sink.current(), client(certs.RevokedClientCert, certs.RevokedClientKey))
 	require.ErrorContains(t, res.serverErr, "Certificate revoked", "the server must check clients against the reloaded CRL")
+}
+
+// TestTLSReloaderReloadCRLRefusesACRLTheCADoesNotValidate checks that
+// ReloadCRL validates the CRL under the CA the config was built from,
+// rather than under no CA or the CA file on disk, and keeps the previous
+// config when the CA does not validate it, as the MySQL server's CRL
+// reload did before --tls-reload-on-sighup.
+func TestTLSReloaderReloadCRLRefusesACRLTheCADoesNotValidate(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := liveTLSFiles(t)
+	installTLSFiles(t, files, certs)
+
+	var sink configSink
+	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
+	require.NoError(t, err)
+	client := func(cert, key string) *tls.Config {
+		config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		return config
+	}
+	res := tryTLSHandshake(t, sink.current(), client(certs.RevokedClientCert, certs.RevokedClientKey))
+	require.ErrorContains(t, res.serverErr, "Certificate revoked", "the server must start with the CRL for this test to be meaningful")
+
+	// The other files rotate, so that the CA file on disk does not
+	// issue the CRL, which passes over it rather than refusing it. The
+	// CRL is the same, but for one bit of its signature.
+	installTLSFiles(t, files, otherCerts)
+	b, err := os.ReadFile(certs.ClientCRL)
+	require.NoError(t, err)
+	block, _ := pem.Decode(b)
+	require.NotNil(t, block)
+	block.Bytes[len(block.Bytes)-1] ^= 1
+	require.NoError(t, os.WriteFile(files.CRL, pem.EncodeToMemory(block), 0o600))
+
+	errorsBefore := tlsReloadErrors.Counts()[t.Name()]
+	require.Error(t, reloader.ReloadCRL(), "the CA the config was built from must not validate the CRL")
+	assert.Equal(t, errorsBefore+1, tlsReloadErrors.Counts()[t.Name()], "the failed reload must be counted")
+	require.Equal(t, 1, sink.count(), "the previous config must stay in place")
+	res = tryTLSHandshake(t, sink.current(), client(certs.ClientCert, certs.ClientKey))
+	require.NoError(t, res.serverErr, "the server must keep accepting a client the previous CRL does not revoke")
+	res = tryTLSHandshake(t, sink.current(), client(certs.RevokedClientCert, certs.RevokedClientKey))
+	require.ErrorContains(t, res.serverErr, "Certificate revoked", "the server must keep the previous CRL")
 }
 
 // TestTLSReloaderReloadsAfterACRLOnlyReload checks that once a signal

@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/pem"
 	"errors"
+	"expvar"
 	"fmt"
 	"io"
 	"net"
@@ -43,6 +44,7 @@ import (
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -389,6 +391,34 @@ func TestInitTLSConfigWithServerCA(t *testing.T) {
 
 func TestInitTLSConfigReloadsTheCRLAloneByDefault(t *testing.T) {
 	testInitTLSConfig(t, false, false)
+}
+
+// TestInitTLSConfigWithoutACRLLeavesSIGHUPAlone checks that without
+// --tls-reload-on-sighup, a SIGHUP to a MySQL server that has TLS but no
+// CRL file leaves its config as it was, and counts no failed reload.
+func TestInitTLSConfigWithoutACRLLeavesSIGHUPAlone(t *testing.T) {
+	ctx := utils.LeakCheckContext(t)
+	root := t.TempDir()
+	tlstest.CreateCA(root)
+	tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
+
+	srv := &mysqlServer{tcpListener: &mysql.Listener{}}
+	require.NoError(t, initTLSConfig(ctx, srv, path.Join(root, "server-cert.pem"), path.Join(root, "server-key.pem"), path.Join(root, "ca-cert.pem"), "", "", true, tls.VersionTLS12, false))
+	t.Cleanup(srv.tlsReloader.Stop)
+	loaded := srv.tcpListener.TLSConfig.Load().(*tls.Config)
+	reloadErrors := func() int64 {
+		return expvar.Get("TLSReloadErrors").(*stats.CountersWithSingleLabel).Counts()["mysql"]
+	}
+	errorsBefore := reloadErrors()
+
+	// The channel holds one signal, and the reloader takes the next one
+	// off it only once it handled the one before: once the third send
+	// returns, the reloader handled the first.
+	for range 3 {
+		srv.sigChan <- syscall.SIGHUP
+	}
+	assert.Equal(t, errorsBefore, reloadErrors(), "a SIGHUP must not count a failed reload for a server without a CRL file")
+	assert.Same(t, loaded, srv.tcpListener.TLSConfig.Load().(*tls.Config), "a SIGHUP must leave the config of a server without a CRL file as it was")
 }
 
 // testInitTLSConfig checks that once it gets a SIGHUP, the MySQL
