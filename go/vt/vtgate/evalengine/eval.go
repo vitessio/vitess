@@ -62,29 +62,31 @@ const (
 	// and cannot be computed accurately
 	flagAmbiguousType typeFlag = 1 << 11
 
-	// flagIsNumber marks a string that counts as a number in arithmetic,
-	// although it is not a hex or bit literal.
+	// flagNumberFromBytes marks a string whose bytes are read as a number
+	// in arithmetic, although it is not a hex or bit literal.
 	//
 	// IF, CASE, NULLIF and ELT return such a string when they select a hex
 	// or bit literal: IF(1, 0x41, 'x') + 0 is 65 in MySQL.
 	//
-	// This flag and flagNotDecimal are only set on an evalBytes value,
-	// never on a ctype: which argument is selected is only known when the
-	// expression runs.
-	flagIsNumber typeFlag = 1 << 12
-	// flagNotDecimal marks a string with flagIsNumber that does not count
-	// as a number in one case: a conversion to a decimal parses its text.
+	// This flag and flagDecimalFromBytes are only set on an evalBytes
+	// value, never on a ctype: which argument is selected is only known
+	// when the expression runs.
+	flagNumberFromBytes typeFlag = 1 << 12
+	// flagDecimalFromBytes marks a string with flagNumberFromBytes whose
+	// bytes are also read as a number in a conversion to a decimal.
 	//
-	// ELT returns such a string: CAST(ELT(1, 0x3132) AS DECIMAL) is 12,
-	// where CAST(IF(1, 0x3132, 'x') AS DECIMAL) is 12594.
-	flagNotDecimal typeFlag = 1 << 13
+	// IF, CASE and NULLIF return such a string, and ELT does not:
+	// CAST(IF(1, 0x3132, 'x') AS DECIMAL) is 12594, where
+	// CAST(ELT(1, 0x3132) AS DECIMAL) parses the text and is 12.
+	flagDecimalFromBytes typeFlag = 1 << 13
 
 	// flagJSONBinary and flagJSONText mark the result of COALESCE when the
 	// argument that it selected is a binary string and the result is not,
 	// or the other way around. A conversion to JSON reads such a result
 	// like the selected argument: with a text column sn = '12' and a
 	// binary column vb, CAST(COALESCE(sn, vb) AS JSON) is 12, not a binary
-	// value. Like flagIsNumber, they are only set on an evalBytes value.
+	// value. Like flagNumberFromBytes, they are only set on an evalBytes
+	// value.
 	flagJSONBinary typeFlag = 1 << 14
 	flagJSONText   typeFlag = 1 << 15
 
@@ -93,7 +95,7 @@ const (
 
 	// flagNumericContext are the flags that make a string count as a number
 	// in arithmetic. See (*evalBytes).makePlain.
-	flagNumericContext = flagHex | flagBit | flagIsNumber | flagNotDecimal
+	flagNumericContext = flagHex | flagBit | flagNumberFromBytes | flagDecimalFromBytes
 
 	// flagSelected are the flags that a function result does not keep from
 	// its argument. See (*evalBytes).makePlain.
@@ -246,13 +248,14 @@ func evalNotBoolean(e eval) eval {
 // res must too: IF(1, 0x41, 'x') + 0 is 65 in MySQL. In that case
 // evalKeepNumber returns a copy of res with the flags in keep:
 //
-//   - flagIsNumber for IF, CASE and NULLIF
-//   - flagIsNumber | flagNotDecimal for ELT
+//   - flagNumberFromBytes | flagDecimalFromBytes for IF, CASE and NULLIF
+//   - flagNumberFromBytes for ELT
 //   - none for IFNULL, whose result is a regular string:
 //     IFNULL(0x41, 'x') + 0 is 0
 //
-// Unless keep is none, the copy also keeps the flagNotDecimal of sel.
-// In every other case evalKeepNumber returns res as it is.
+// The copy does not get flagDecimalFromBytes when sel is a string that ELT
+// selected: CAST(IF(1, ELT(1, 0x3132), 'x') AS DECIMAL) is 12, as it is
+// without the IF. In every other case evalKeepNumber returns res as it is.
 func evalKeepNumber(sel, res eval, keep typeFlag) eval {
 	s, ok := sel.(*evalBytes)
 	if !ok || s.flag&flagNumericContext == 0 {
@@ -265,7 +268,10 @@ func evalKeepNumber(sel, res eval, keep typeFlag) eval {
 	r := *b
 	r.makePlain()
 	if keep != 0 {
-		r.flag |= keep | s.flag&flagNotDecimal
+		r.flag |= keep
+		if s.flag&flagNumberFromBytes != 0 && s.flag&flagDecimalFromBytes == 0 {
+			r.flag &^= flagDecimalFromBytes
+		}
 	}
 	return &r
 }

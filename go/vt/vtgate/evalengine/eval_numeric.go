@@ -125,7 +125,7 @@ func evalToNumeric(e eval, preciseDatetime bool) evalNumeric {
 	case evalNumeric:
 		return e
 	case *evalBytes:
-		if e.flag&flagIsNumber != 0 {
+		if e.flag&flagNumberFromBytes != 0 {
 			// IF(1, 0x41, 'x') + 0 is the double 65: the string counts as
 			// a number, and a string in arithmetic is a double.
 			f, _ := evalToFloat(e)
@@ -189,7 +189,7 @@ func evalToFloat(e eval) (*evalFloat, bool) {
 	case evalNumeric:
 		return e.toFloat()
 	case *evalBytes:
-		if e.flag&(flagHex|flagIsNumber) != 0 {
+		if e.flag&(flagHex|flagNumberFromBytes) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -247,7 +247,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 	case evalNumeric:
 		return e.toDecimal(m, d)
 	case *evalBytes:
-		if e.flag&(flagHex|flagIsNumber) != 0 && e.flag&flagNotDecimal == 0 {
+		if e.flag&(flagHex|flagDecimalFromBytes) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow
@@ -319,7 +319,7 @@ func evalToDecimal(e eval, m, d int32) *evalDecimal {
 // IF(1, 0x3132, 'x') + 0 is 12594. A literal is still read as a number:
 // CAST(0x3132 AS SIGNED) is 12594.
 func evalCastToInt64(e eval) *evalInt64 {
-	if b, ok := e.(*evalBytes); ok && b.flag&flagIsNumber != 0 {
+	if b, ok := e.(*evalBytes); ok && b.flag&flagNumberFromBytes != 0 {
 		i, _ := fastparse.ParseInt64(b.string(), 10)
 		return newEvalInt64(i)
 	}
@@ -334,7 +334,7 @@ func evalCastToInt64(e eval) *evalInt64 {
 // evalDecimalOperand returns such a string as a regular string. It returns
 // every other value as it is.
 func evalDecimalOperand(e eval) eval {
-	if b, ok := e.(*evalBytes); ok && b.flag&flagNotDecimal != 0 {
+	if b, ok := e.(*evalBytes); ok && b.flag&flagNumberFromBytes != 0 && b.flag&flagDecimalFromBytes == 0 {
 		return evalPlain(b)
 	}
 	return e
@@ -347,7 +347,7 @@ func evalToInt64(e eval) *evalInt64 {
 	case evalNumeric:
 		return e.toInt64()
 	case *evalBytes:
-		if e.flag&(flagHex|flagIsNumber) != 0 {
+		if e.flag&(flagHex|flagNumberFromBytes) != 0 {
 			hex, ok := e.toNumericHex()
 			if !ok {
 				// overflow

@@ -2776,7 +2776,7 @@ func (asm *assembler) Fn_ELT(args int, tt sqltypes.Type, tc collations.TypedColl
 				env.vm.stack[env.vm.sp-args] = nil
 				env.vm.err = err
 			} else {
-				env.vm.stack[env.vm.sp-args] = evalKeepNumber(sel, env.vm.arena.newEvalRaw(b.bytes, tt, tc), flagIsNumber|flagNotDecimal)
+				env.vm.stack[env.vm.sp-args] = evalKeepNumber(sel, env.vm.arena.newEvalRaw(b.bytes, tt, tc), flagNumberFromBytes)
 			}
 		}
 

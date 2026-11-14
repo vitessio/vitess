@@ -79,7 +79,7 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 	var typedcol collations.TypedCollation
 
 	if b, ok := e.(*evalBytes); ok && convert {
-		if b.isVarChar() && b.col.Collation == col && b.flag&(flagIsNumber|flagJSONBinary|flagJSONText) == 0 {
+		if b.isVarChar() && b.col.Collation == col && b.flag&(flagNumberFromBytes|flagJSONBinary|flagJSONText) == 0 {
 			return b, nil
 		}
 
@@ -197,7 +197,7 @@ func (e *evalBytes) jsonBinary() bool {
 // NULLIF selected from one: CAST(0x3132 AS DECIMAL) is 12594. It does not
 // for a string that ELT selected: CAST(ELT(1, 0x3132) AS DECIMAL) is 12.
 func (e *evalBytes) decimalFromBytes() bool {
-	return e.flag&flagNumericContext != 0 && e.flag&flagNotDecimal == 0
+	return e.flag&(flagHex|flagBit|flagDecimalFromBytes) != 0
 }
 
 func (e *evalBytes) isVarChar() bool {

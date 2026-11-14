@@ -764,12 +764,13 @@ func caseResult(ta *typeAggregation, ca *collationAggregation, conn collations.I
 }
 
 // numberFlags returns the flags to pass to evalKeepNumber:
-// flagIsNumber, or none for IFNULL. See CaseExpr.plain.
+// flagNumberFromBytes and flagDecimalFromBytes, or none for IFNULL. See
+// CaseExpr.plain.
 func (c *CaseExpr) numberFlags() typeFlag {
 	if c.plain {
 		return 0
 	}
-	return flagIsNumber
+	return flagNumberFromBytes | flagDecimalFromBytes
 }
 
 // decimalScale returns the digits after the point that the result of the

@@ -401,7 +401,7 @@ func (call *builtinElt) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	return evalKeepNumber(args[i], newEvalRaw(tt, b.bytes, tc), flagIsNumber|flagNotDecimal), nil
+	return evalKeepNumber(args[i], newEvalRaw(tt, b.bytes, tc), flagNumberFromBytes), nil
 }
 
 func (call *builtinElt) compile(c *compiler) (ctype, error) {
