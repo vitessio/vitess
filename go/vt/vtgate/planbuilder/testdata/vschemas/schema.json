@@ -261,7 +261,7 @@
             {
               "name": "textcol2",
               "type": "VARCHAR",
-              "collation_name": "cp1250_czech_cs"
+              "collation_name": "tis620_thai_nopad_ci"
             }
           ]
         },

@@ -304,6 +304,13 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 	case meta.Name == "tis620_thai_ci":
 		// As latin1_german2_ci.
 		collation = "Collation_tis620_thai_ci"
+	case meta.Name == "latin2_czech_cs":
+		// As latin1_german2_ci. The tables of its four passes are
+		// in colldata/czech_data.go.
+		collation = "Collation_latin2_czech_cs"
+	case meta.Name == "cp1250_czech_cs":
+		// As latin2_czech_cs, with two passes.
+		collation = "Collation_cp1250_czech_cs"
 	default:
 		collation = "Collation_8bit_simple_ci"
 	}
@@ -477,7 +484,8 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 			g.printCollationUca900(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
-		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci" || meta.Name == "latin1_german2_ci" || meta.Name == "tis620_thai_ci":
+		case meta.CollationImpl == "8bit_bin" || meta.CollationImpl == "8bit_simple_ci" || meta.Name == "latin1_german2_ci" || meta.Name == "tis620_thai_ci" ||
+			meta.Name == "latin2_czech_cs" || meta.Name == "cp1250_czech_cs":
 			g.printCollation8bit(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 

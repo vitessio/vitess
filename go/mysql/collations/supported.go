@@ -20,6 +20,7 @@ package collations
 
 var supported = [...]string{
 	0x1:   "big5_chinese_ci",
+	0x2:   "latin2_czech_cs",
 	0x3:   "dec8_swedish_ci",
 	0x4:   "cp850_general_ci",
 	0x5:   "latin1_german1_ci",
@@ -50,6 +51,7 @@ var supported = [...]string{
 	0x1f:  "latin1_german2_ci",
 	0x20:  "armscii8_general_ci",
 	0x21:  "utf8mb3_general_ci",
+	0x22:  "cp1250_czech_cs",
 	0x23:  "ucs2_general_ci",
 	0x24:  "cp866_general_ci",
 	0x25:  "keybcs2_general_ci",
