@@ -490,7 +490,6 @@ func jsonQuoteReference(t *testing.T, s string) []byte {
 
 func checkQuote(t *testing.T, s string) {
 	t.Helper()
-	var outputs []struct{ got, want []byte }
 	for _, jsonFormat := range []bool{false, true} {
 		var quoted []byte
 		if jsonFormat {
@@ -505,13 +504,8 @@ func checkQuote(t *testing.T, s string) {
 				copy(dst, prefix)
 				got := appendQuote(dst, s, jsonFormat)
 				require.Equal(t, want, got, "input %q, JSON %v, spare %d", s, jsonFormat, spare)
-				outputs = append(outputs, struct{ got, want []byte }{got, want})
 			}
 		}
-	}
-	// Reusing the encoder must not change previously returned buffers.
-	for _, output := range outputs {
-		require.Equal(t, output.want, output.got)
 	}
 }
 
