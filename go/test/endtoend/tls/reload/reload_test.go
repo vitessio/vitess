@@ -160,11 +160,19 @@ func certificateOf(t *testing.T, file string) []byte {
 // grpcServedCert makes a gRPC call to vtgate as a client of certs and
 // returns the certificate vtgate presented. It does not fail t, so
 // that it can run in assert.Eventually.
+//
+// The client speaks TLS 1.2 at most, so that vtgate refuses its
+// certificate with an alert that the client reads during its own
+// handshake. Over TLS 1.3, the client finishes its handshake before
+// vtgate checks its certificate, and the refusal can surface as a
+// write to a connection that vtgate closed.
 func grpcServedCert(t *testing.T, certs tlstest.ClientServerKeyPairs) ([]byte, error) {
 	config, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.ClientCert, certs.ClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
 	if err != nil {
 		return nil, err
 	}
+	config = config.Clone()
+	config.MaxVersion = tls.VersionTLS12
 	conn, err := grpc.NewClient(net.JoinHostPort(vtgateAddress, strconv.Itoa(clusterInstance.VtgateGrpcPort)), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 	if err != nil {
 		return nil, err
@@ -193,6 +201,24 @@ func connectMySQL(t *testing.T, certs tlstest.ClientServerKeyPairs) (*mysql.Conn
 	params.SslKey = certs.ClientKey
 	params.ServerName = certs.ServerName
 	return mysql.Connect(t.Context(), &params)
+}
+
+// requireMySQLRefused fails t unless err shows that vtgate's MySQL
+// server refused the client's certificate. mysql.ConnParams cannot cap
+// the TLS version, so over TLS 1.3 the client can finish its handshake
+// before vtgate checks its certificate. Then the refusal surfaces when
+// the client next writes to or reads from the connection that vtgate
+// closed, as a closed connection rather than the TLS alert. A vtgate
+// that cannot be reached fails it, with "connection refused".
+func requireMySQLRefused(t *testing.T, err error) {
+	t.Helper()
+	require.Error(t, err)
+	for _, refusal := range []string{"remote error: tls:", "broken pipe", "connection reset by peer", "EOF"} {
+		if strings.Contains(err.Error(), refusal) {
+			return
+		}
+	}
+	require.Failf(t, "vtgate's MySQL server must refuse the client's certificate", "the connection failed otherwise: %v", err)
 }
 
 // servesCerts returns whether vtgate serves the certificate of certs
@@ -300,14 +326,15 @@ func TestTLSReload(t *testing.T) {
 		// connections. The client trusts the new server CA, so that it
 		// is vtgate that rejects the handshake, for the old client
 		// certificate: a vtgate still trusting the old client CA would
-		// accept it. The TLS alert shows that vtgate rejected it, rather
-		// than that it could not be reached.
+		// accept it. The TLS alert, or for MySQL a connection that vtgate
+		// closed, shows that vtgate rejected it, rather than that it
+		// could not be reached.
 		staleClient := newCerts
 		staleClient.ClientCert, staleClient.ClientKey = oldCerts.ClientCert, oldCerts.ClientKey
 		_, err = grpcServedCert(t, staleClient)
 		require.ErrorContains(t, err, "remote error: tls:")
 		_, err = connectMySQL(t, staleClient)
-		require.ErrorContains(t, err, "remote error: tls:")
+		requireMySQLRefused(t, err)
 
 		// The connection established before the reload keeps working.
 		_, err = established.ExecuteFetch("select 1", 1, false)
@@ -351,7 +378,7 @@ func TestTLSReload(t *testing.T) {
 			return grpcErr != nil && mysqlErr != nil
 		}, reloadTimeout, 100*time.Millisecond, "vtgate must refuse a client that the reloaded CRL revokes")
 		require.ErrorContains(t, grpcErr, "remote error: tls:")
-		require.ErrorContains(t, mysqlErr, "remote error: tls:")
+		requireMySQLRefused(t, mysqlErr)
 	})
 }
 
