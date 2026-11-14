@@ -16,11 +16,12 @@ limitations under the License.
 
 // Package clientreload checks that a running vtgate reloads the TLS
 // files of its gRPC client to the tablets (the --tablet-grpc-* flags) on
-// SIGHUP, with --tls-reload-on-sighup: once the tablet restarts, and
-// vtgate reconnects to it, vtgate presents the reloaded certificate, and
-// keeps the files it loaded when a reload fails. It also checks that
-// vtgate verifies a tablet it dials again against the CRL file as it is
-// then.
+// SIGHUP with --tls-reload-on-sighup, and with --tls-reload-interval
+// alone: once the tablet restarts, and vtgate reconnects to it, vtgate
+// presents the reloaded certificate, and keeps the files it loaded when
+// a reload fails. Without either flag, a SIGHUP leaves the files as they
+// were loaded. It also checks that vtgate verifies a tablet it dials
+// again against the CRL file as it is then.
 package clientreload
 
 import (
@@ -105,7 +106,6 @@ func TestMain(m *testing.M) {
 			"--tablet-grpc-ca", vtgateFiles.ca,
 			"--tablet-grpc-crl", vtgateFiles.crl,
 			"--tablet-grpc-server-name", tabletServerName,
-			"--tls-reload-on-sighup",
 		)
 		if err := clusterInstance.StartVtgate(); err != nil {
 			fmt.Fprintf(os.Stderr, "cannot start vtgate: %v\n", err)
@@ -223,10 +223,49 @@ func clientReloadErrors(t *testing.T) float64 {
 	return count
 }
 
+// restartVtgate restarts vtgate with the reload flags reloadFlags in
+// place of the ones it had.
+func restartVtgate(t *testing.T, reloadFlags ...string) {
+	t.Helper()
+	var args []string
+	for i := 0; i < len(clusterInstance.VtGateExtraArgs); i++ {
+		switch arg := clusterInstance.VtGateExtraArgs[i]; arg {
+		case "--tls-reload-on-sighup":
+		case "--tls-reload-interval":
+			i++
+		default:
+			args = append(args, arg)
+		}
+	}
+	clusterInstance.VtGateExtraArgs = append(args, reloadFlags...)
+	require.NoError(t, clusterInstance.RestartVtgate())
+}
+
 // TestClientTLSReload runs in order: each step starts from the files
 // the previous one installed.
 func TestClientTLSReload(t *testing.T) {
 	requireQueries(t, "vtgate must reach the tablet with the files it started with")
+
+	t.Run("SIGHUP leaves the files alone without --tls-reload-on-sighup", func(t *testing.T) {
+		// The tablet still trusts only the old client CA, so vtgate
+		// reaches it only with the certificate it started with.
+		require.NoError(t, install(map[string]string{
+			vtgateFiles.cert: "new-client-cert.pem",
+			vtgateFiles.key:  "new-client-key.pem",
+		}))
+		t.Cleanup(func() {
+			require.NoError(t, install(map[string]string{
+				vtgateFiles.cert: "old-client-cert.pem",
+				vtgateFiles.key:  "old-client-key.pem",
+			}))
+		})
+		require.NoError(t, clusterInstance.VtgateProcess.SendSIGHUP())
+		restartTablet(t)
+		requireQueries(t, "a SIGHUP must leave vtgate's certificate as it was loaded without --tls-reload-on-sighup")
+	})
+
+	restartVtgate(t, "--tls-reload-on-sighup")
+	requireQueries(t, "vtgate must reach the tablet once it restarts")
 
 	t.Run("presents the reloaded certificate", func(t *testing.T) {
 		// The tablet trusts only the new client CA from now on, so
@@ -275,5 +314,22 @@ func TestClientTLSReload(t *testing.T) {
 		}))
 		restartTablet(t)
 		requireQueries(t, "vtgate must accept a tablet certificate that the CRL does not revoke")
+	})
+
+	t.Run("reloads on --tls-reload-interval alone", func(t *testing.T) {
+		// The interval alone, as for a Kubernetes secret.
+		restartVtgate(t, "--tls-reload-interval", "1s")
+		requireQueries(t, "vtgate must reach the tablet once it restarts")
+
+		// The tablet trusts only the old client CA from now on, so that
+		// vtgate reaches it only once the interval reloads the old
+		// certificate, with no SIGHUP.
+		require.NoError(t, install(map[string]string{
+			vtgateFiles.cert: "old-client-cert.pem",
+			vtgateFiles.key:  "old-client-key.pem",
+			tabletFiles.ca:   "old-client-ca-cert.pem",
+		}))
+		restartTablet(t)
+		requireQueries(t, "vtgate must present the certificate that the interval reloaded")
 	})
 }

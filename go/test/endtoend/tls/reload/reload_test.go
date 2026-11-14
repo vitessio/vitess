@@ -16,8 +16,10 @@ limitations under the License.
 
 // Package reload checks that a running vtgate process reloads the TLS
 // files of its gRPC and MySQL servers from disk, on SIGHUP with
-// --tls-reload-on-sighup and with --tls-reload-interval, without
-// dropping established connections.
+// --tls-reload-on-sighup and with --tls-reload-interval alone, without
+// dropping established connections, and that without either flag a
+// SIGHUP leaves them as they were loaded, but for the MySQL server's
+// CRL.
 package reload
 
 import (
@@ -102,7 +104,6 @@ func TestMain(m *testing.M) {
 			"--mysql-server-ssl-key", liveFiles.key,
 			"--mysql-server-ssl-ca", liveFiles.ca,
 			"--mysql-server-ssl-crl", liveFiles.crl,
-			"--tls-reload-on-sighup",
 		)
 		if err := clusterInstance.StartVtgate(); err != nil {
 			fmt.Fprintf(os.Stderr, "cannot start vtgate: %v\n", err)
@@ -206,12 +207,64 @@ func servesCerts(t *testing.T, certs tlstest.ClientServerKeyPairs, cert []byte) 
 	return nil
 }
 
+// restartVtgate restarts vtgate with the reload flags reloadFlags in
+// place of the ones it had.
+func restartVtgate(t *testing.T, reloadFlags ...string) {
+	t.Helper()
+	var args []string
+	for i := 0; i < len(clusterInstance.VtGateExtraArgs); i++ {
+		switch arg := clusterInstance.VtGateExtraArgs[i]; arg {
+		case "--tls-reload-on-sighup":
+		case "--tls-reload-interval":
+			i++
+		default:
+			args = append(args, arg)
+		}
+	}
+	clusterInstance.VtGateExtraArgs = append(args, reloadFlags...)
+	require.NoError(t, clusterInstance.RestartVtgate())
+}
+
+// mysqlReloadTimestamp returns the Unix time at which vtgate's MySQL
+// server last loaded its TLS files, or its CRL alone.
+func mysqlReloadTimestamp() float64 {
+	timestamps, _ := clusterInstance.VtgateProcess.GetVars()["TLSReloadSuccessTimestamp"].(map[string]any)
+	timestamp, _ := timestamps["mysql"].(float64)
+	return timestamp
+}
+
 // TestTLSReload runs in order: each step starts from the files the
 // previous one installed.
 func TestTLSReload(t *testing.T) {
 	oldCert, newCert := certificateOf(t, oldCerts.ServerCert), certificateOf(t, newCerts.ServerCert)
 
+	t.Run("SIGHUP leaves the files alone without --tls-reload-on-sighup", func(t *testing.T) {
+		require.NoError(t, servesCerts(t, oldCerts, oldCert), "vtgate must serve the certificates it started with")
+
+		// The certificate, key and CA rotate, but not the CRL, which
+		// the MySQL server reloads on SIGHUP regardless.
+		require.NoError(t, copyFile(liveFiles.cert, newCerts.ServerCert))
+		require.NoError(t, copyFile(liveFiles.key, newCerts.ServerKey))
+		require.NoError(t, copyFile(liveFiles.ca, newCerts.ClientCA))
+		t.Cleanup(func() { require.NoError(t, installCerts(oldCerts)) })
+
+		// The MySQL server's CRL reload shows that vtgate handled the
+		// SIGHUP. Its timestamp has a resolution of a second, so the
+		// SIGHUP is sent again until the timestamp moves.
+		before := mysqlReloadTimestamp()
+		assert.Eventually(t, func() bool {
+			if err := clusterInstance.VtgateProcess.SendSIGHUP(); err != nil {
+				return false
+			}
+			return mysqlReloadTimestamp() > before
+		}, reloadTimeout, 200*time.Millisecond, "vtgate's MySQL server must reload its CRL on SIGHUP")
+		assert.Never(t, func() bool {
+			return servesCerts(t, oldCerts, oldCert) != nil
+		}, 5*time.Second, 500*time.Millisecond, "a SIGHUP must leave the certificate, key and CA as they were loaded without --tls-reload-on-sighup")
+	})
+
 	t.Run("SIGHUP", func(t *testing.T) {
+		restartVtgate(t, "--tls-reload-on-sighup")
 		require.NotContains(t, clusterInstance.VtGateExtraArgs, "--tls-reload-interval",
 			"this step must run with the interval reload disabled, or vtgate could pick up the new files before the SIGHUP it checks for")
 		require.NoError(t, servesCerts(t, oldCerts, oldCert), "vtgate must serve the certificates it started with")
@@ -253,8 +306,8 @@ func TestTLSReload(t *testing.T) {
 	})
 
 	t.Run("--tls-reload-interval", func(t *testing.T) {
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--tls-reload-interval", "1s")
-		require.NoError(t, clusterInstance.RestartVtgate())
+		// The interval alone, as for a Kubernetes secret.
+		restartVtgate(t, "--tls-reload-interval", "1s")
 		require.NoError(t, servesCerts(t, newCerts, newCert), "vtgate must serve the certificates it restarted with")
 
 		require.NoError(t, installCerts(oldCerts))
