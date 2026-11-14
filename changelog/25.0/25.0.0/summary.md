@@ -314,9 +314,9 @@ The execute options that the `WORKLOAD_NAME`, `PRIORITY`, `CONSOLIDATOR` and `QU
 - A `WORKLOAD_NAME` directive no longer applies to the later statements of the session.
 - `Priority` and `Consolidator` set in a gRPC session's `Options` are now sent to vttablet with the queries of each statement that doesn't override them with a directive, and an earlier statement's directive no longer replaces the session's `WorkloadName`. VTGate clamps such a `Priority` to the range of the `PRIORITY` directive, and ignores one that it can't parse as an integer.
 - `EXECUTE` of a statement prepared with SQL `PREPARE` runs with all of the prepared text's directives, as a statement prepared over the binary protocol does. It used to get only the text's `WORKLOAD_NAME`.
-- While VTGates of both versions serve the same gRPC client, a session that an older VTGate wrote a directive's value into keeps sending that value until the client starts a new session.
+- A gRPC session keeps the `WORKLOAD_NAME`, `PRIORITY` and `CONSOLIDATOR` values that an older VTGate wrote into it, and a newer VTGate sends them with each later statement of the session that doesn't override them with a directive. Only an older VTGate clears a `PRIORITY` or `CONSOLIDATOR` value, with the session's next statement that doesn't set it, so once every VTGate runs v25, such a value stays until the client starts a new session. For example, after a single `PRIORITY=0` statement that an older VTGate served, the session's later statements run with priority 0, so the transaction throttler never throttles their transactions.
 
-**Migration**: a client that relied on a `WORKLOAD_NAME` directive carrying over to later statements has to repeat the directive on each statement, or, over gRPC, set `WorkloadName` in its session's `Options`.
+**Migration**: a client that relied on a `WORKLOAD_NAME` directive carrying over to later statements has to repeat the directive on each statement, or, over gRPC, set `WorkloadName` in its session's `Options`. A gRPC client that uses `WORKLOAD_NAME`, `PRIORITY` or `CONSOLIDATOR` directives should start new sessions, for example by recycling its connection pool, once every VTGate runs v25.
 
 See [#22008](https://github.com/vitessio/vitess/pull/22008) for details.
 
