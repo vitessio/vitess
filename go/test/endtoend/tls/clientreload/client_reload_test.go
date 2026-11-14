@@ -16,9 +16,11 @@ limitations under the License.
 
 // Package clientreload checks that a running vtgate reloads the TLS
 // files of its gRPC client to the tablets (the --tablet-grpc-* flags) on
-// SIGHUP, with --tls-reload-on-sighup: once the tablet restarts, and vtgate reconnects to it, vtgate
-// presents the reloaded certificate, verifies the tablet against the
-// reloaded CRL, and keeps the files it loaded when a reload fails.
+// SIGHUP, with --tls-reload-on-sighup: once the tablet restarts, and
+// vtgate reconnects to it, vtgate presents the reloaded certificate, and
+// keeps the files it loaded when a reload fails. It also checks that
+// vtgate verifies a tablet it dials again against the CRL file as it is
+// then.
 package clientreload
 
 import (
@@ -241,12 +243,15 @@ func TestClientTLSReload(t *testing.T) {
 		requireQueries(t, true, "vtgate must keep the certificate and key it loaded before")
 	})
 
-	t.Run("refuses a tablet that the reloaded CRL revokes", func(t *testing.T) {
+	// vtgate's health check dials a restarted tablet again, building new
+	// credentials, which read the CRL file, so this step does not depend
+	// on a reload: TestSecureCredentialsReload in go/vt/grpcclient covers
+	// a connection that reconnects with the credentials it has.
+	t.Run("refuses a tablet that the CRL revokes when it dials it again", func(t *testing.T) {
 		tlstest.RevokeCertAndRegenerateCRL(root, "tablet-server-ca", "tablet-server-1")
 		require.NoError(t, install(map[string]string{vtgateFiles.crl: "tablet-server-ca-crl.pem"}))
-		require.NoError(t, clusterInstance.VtgateProcess.SendSIGHUP())
 		restartTablet(t)
-		requireQueries(t, false, "vtgate must refuse the tablet whose certificate the reloaded CRL revokes")
+		requireQueries(t, false, "vtgate must refuse the tablet whose certificate the CRL now revokes")
 
 		// The tablet's other certificate, which the CRL does not
 		// revoke, is accepted, so it is the revocation that vtgate
