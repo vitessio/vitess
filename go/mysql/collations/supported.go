@@ -44,6 +44,7 @@ var supported = [...]string{
 	0x1b:  "latin2_croatian_ci",
 	0x1d:  "cp1257_lithuanian_ci",
 	0x1e:  "latin5_turkish_ci",
+	0x1f:  "latin1_german2_ci",
 	0x20:  "armscii8_general_ci",
 	0x21:  "utf8mb3_general_ci",
 	0x23:  "ucs2_general_ci",
