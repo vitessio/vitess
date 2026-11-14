@@ -436,6 +436,7 @@ func TestBindVariablesNumbers(t *testing.T) {
 		{querypb.Type_FLOAT64, ".5"},
 		{querypb.Type_FLOAT64, "1."},
 		{querypb.Type_FLOAT64, "1.e2"},
+		{querypb.Type_FLOAT64, "1.E2"},
 		{querypb.Type_FLOAT64, "0.e2"},
 		{querypb.Type_FLOAT64, "000e2"},
 		{querypb.Type_FLOAT64, "000"},
