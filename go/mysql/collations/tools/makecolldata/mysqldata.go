@@ -380,7 +380,24 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
 	// The case table of the character set, my_caseinfo_<charset> in the
 	// MySQL source. The dump does not have it.
-	g.P("caseinfo: multibyteCase_", meta.Charset, ",")
+	if meta.Charset == "gb18030" {
+		g.P("caseinfo: gb18030Case{},")
+	} else {
+		g.P("caseinfo: multibyteCase_", meta.Charset, ",")
+	}
+	g.P("},")
+}
+
+// printCollationGB18030 prints gb18030_chinese_ci. The dump has its sort
+// table for single bytes. The weights of multi-byte characters are in
+// colldata/gb18030_data.go.
+func (g *Generator) printCollationGB18030(meta *CollationMetadata) {
+	tableSortOrder := g.Tables.printSlice("sortorder", meta.Name, codegen.Array8(meta.SortOrder))
+
+	g.P(meta.Number, ": &Collation_gb18030_chinese_ci{")
+	g.P("id: ", meta.Number, ",")
+	g.P("name: ", codegen.Quote(meta.Name), ",")
+	g.P("sort: &", tableSortOrder, ",")
 	g.P("},")
 }
 
@@ -436,7 +453,11 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 			g.printCollationUcaLegacy(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
-		case charset.IsMultibyteByName(meta.Charset):
+		case meta.Name == "gb18030_chinese_ci":
+			g.printCollationGB18030(meta)
+			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
+
+		case charset.IsMultibyteByName(meta.Charset), meta.Name == "gb18030_bin":
 			g.printCollationMultibyte(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
