@@ -19,6 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -66,7 +67,7 @@ func commandCat(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			hasError = true
 			if !catArgs.Force || err != zk.ErrNoNode {
-				log.Warn(fmt.Sprintf("cat: cannot access %v: %v", zkPath, err))
+				log.Warn("cat: cannot access", slog.String("path", zkPath), slog.Any("error", err))
 			}
 			continue
 		}
@@ -78,7 +79,7 @@ func commandCat(cmd *cobra.Command, args []string) error {
 		if catArgs.DecodeProto {
 			decoded, err = topo.DecodeContent(zkPath, data, false)
 			if err != nil {
-				log.Warn(fmt.Sprintf("cat: cannot proto decode %v: %v", zkPath, err))
+				log.Warn("cat: cannot proto decode", slog.String("path", zkPath), slog.Any("error", err))
 				decoded = string(data)
 			}
 		} else {

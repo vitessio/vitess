@@ -277,7 +277,15 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 	if tCfg.GetDryRun() {
 		// Rate-limited: with a 100% rule this path fires per query; the requestsThrottled
 		// counter (incremented above) carries the volume.
-		qt.throttledLogger.Warningf("[DRY-RUN] %s, metric name: %s, metric value: %f", decision.Message, decision.MetricName, decision.MetricValue)
+		qt.throttledLogger.Warn("[DRY-RUN] query would have been throttled",
+			slog.String("strategy", strategyName),
+			slog.String("workload", attrs.WorkloadName),
+			slog.String("priority", priorityStr),
+			slog.String("decision_message", decision.Message),
+			slog.String("metric_name", decision.MetricName),
+			slog.Float64("metric_value", decision.MetricValue),
+			slog.Float64("threshold", decision.Threshold),
+		)
 		return nil
 	}
 
@@ -294,13 +302,20 @@ func (qt *QueryThrottler) Throttle(ctx context.Context, tabletType topodatapb.Ta
 func (qt *QueryThrottler) startSrvKeyspaceWatch() {
 	// Pre-flight validation: ensure required fields are set
 	if qt.srvTopoServer == nil || qt.keyspace == "" {
-		log.Error("QueryThrottler: cannot start SrvKeyspace watch", slog.Bool("hasSrvTopoServer", qt.srvTopoServer != nil), slog.String("keyspace", qt.keyspace))
+		log.Error("QueryThrottler: cannot start SrvKeyspace watch",
+			slog.Bool("has_srv_topo_server", qt.srvTopoServer != nil),
+			slog.String("keyspace", qt.keyspace),
+		)
 		return
 	}
 
 	srvKS, err := qt.srvTopoServer.GetSrvKeyspace(qt.ctx, qt.cell, qt.keyspace)
 	if err != nil {
-		log.Warn("QueryThrottler: failed to load initial config from GetSrvKeyspace", slog.String("keyspace", qt.keyspace), slog.Any("error", err))
+		log.Warn("QueryThrottler: failed to load initial config from GetSrvKeyspace",
+			slog.String("keyspace", qt.keyspace),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()),
+		)
 	}
 	if srvKS == nil {
 		log.Warn("QueryThrottler: fetched SrvKeyspace is nil", slog.String("keyspace", qt.keyspace))
@@ -383,7 +398,10 @@ func extractPriority(options *querypb.ExecuteOptions) int {
 	// This should never error out, as the value for Priority has been validated in the vtgate already.
 	// Still, handle it just to make sure.
 	if err != nil || optionsPriority < 0 || optionsPriority > 100 {
-		log.Warn("Invalid priority value in ExecuteOptions, expected integer 0-100, using default priority", slog.String("priority", options.Priority), slog.Int("defaultPriority", defaultPriority))
+		log.Warn("Invalid priority value in ExecuteOptions, expected integer 0-100, using default priority",
+			slog.String("requested_priority", options.Priority),
+			slog.Int("default_priority", defaultPriority),
+		)
 		return defaultPriority
 	}
 
@@ -405,11 +423,18 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		case topo.IsErrType(err, topo.NoNode):
 			// The watch keeps retrying while the cell has no SrvKeyspace, calling back about once a second,
 			// even on tablets that never enable the query throttler, so this warning is rate-limited.
-			qt.noNodeLogger.Warningf("HandleConfigUpdate: keyspace %s not found in topology (may not be created yet): %v", qt.keyspace, err)
+			qt.noNodeLogger.Warn("HandleConfigUpdate: keyspace not found in topology (may not be created yet)",
+				slog.String("keyspace", qt.keyspace),
+				slog.Any("error", err),
+			)
 		case errors.Is(err, context.Canceled) || topo.IsErrType(err, topo.Interrupted):
 			log.Info("HandleConfigUpdate: watch interrupted", slog.String("keyspace", qt.keyspace), slog.Any("error", err))
 		default:
-			log.Warn("HandleConfigUpdate: transient topo watch error (will retry)", slog.String("keyspace", qt.keyspace), slog.Any("error", err))
+			log.Warn("HandleConfigUpdate: transient topo watch error (will retry)",
+				slog.String("keyspace", qt.keyspace),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()),
+			)
 		}
 		return true
 	}
@@ -489,7 +514,12 @@ func (qt *QueryThrottler) HandleConfigUpdate(srvks *topodatapb.SrvKeyspace, err 
 		currentSnap.strategy.Stop()
 	}
 
-	log.Info("HandleConfigUpdate: config updated", slog.String("keyspace", qt.keyspace), slog.String("strategy", newCfg.GetStrategy().String()), slog.Bool("enabled", newCfg.GetEnabled()), slog.Bool("dryRun", newCfg.GetDryRun()))
+	log.Info("HandleConfigUpdate: config updated",
+		slog.String("keyspace", qt.keyspace),
+		slog.String("strategy", newCfg.GetStrategy().String()),
+		slog.Bool("enabled", newCfg.GetEnabled()),
+		slog.Bool("dry_run", newCfg.GetDryRun()),
+	)
 	return true
 }
 

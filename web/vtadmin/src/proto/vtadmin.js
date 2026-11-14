@@ -3240,7 +3240,7 @@ export const vtadmin = $root.vtadmin = (() => {
         Cluster.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -3500,13 +3500,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.backup = $root.mysqlctl.BackupInfo.decode(reader, reader.uint32(), $undefined, _depth + 1, message.backup);
+                        message.backup = $root.mysqlctl.BackupInfo.decode(reader, reader.size(), $undefined, _depth + 1, message.backup);
                         continue;
                     }
                 }
@@ -3539,7 +3539,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ClusterBackup.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -3811,7 +3811,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -3819,7 +3819,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (message.aliases === $util.emptyObject)
                             message.aliases = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -3837,7 +3837,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.CellsAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.topodata.CellsAlias.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -3880,7 +3880,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ClusterCellsAliases.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -4178,7 +4178,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -4193,7 +4193,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cell_info);
+                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.size(), $undefined, _depth + 1, message.cell_info);
                         continue;
                     }
                 }
@@ -4226,7 +4226,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ClusterCellInfo.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -4525,7 +4525,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -4549,7 +4549,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.position_info = $root.vtctldata.ShardReplicationPositionsResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, message.position_info);
+                        message.position_info = $root.vtctldata.ShardReplicationPositionsResponse.decode(reader, reader.size(), $undefined, _depth + 1, message.position_info);
                         continue;
                     }
                 }
@@ -4582,7 +4582,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ClusterShardReplicationPosition.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -4874,7 +4874,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.workflows && message.workflows.length))
                             message.workflows = [];
-                        message.workflows.push($root.vtadmin.Workflow.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.workflows.push($root.vtadmin.Workflow.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -4915,7 +4915,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ClusterWorkflows.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -5217,13 +5217,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                        message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                         continue;
                     }
                 case 3: {
@@ -5231,7 +5231,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (message.shards === $util.emptyObject)
                             message.shards = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -5249,7 +5249,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -5292,7 +5292,7 @@ export const vtadmin = $root.vtadmin = (() => {
         Keyspace.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -5621,7 +5621,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -5638,7 +5638,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.table_definitions && message.table_definitions.length))
                             message.table_definitions = [];
-                        message.table_definitions.push($root.tabletmanagerdata.TableDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.table_definitions.push($root.tabletmanagerdata.TableDefinition.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 4: {
@@ -5646,7 +5646,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (message.table_sizes === $util.emptyObject)
                             message.table_sizes = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -5664,7 +5664,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtadmin.Schema.TableSize.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtadmin.Schema.TableSize.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -5707,7 +5707,7 @@ export const vtadmin = $root.vtadmin = (() => {
         Schema.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -6072,7 +6072,7 @@ export const vtadmin = $root.vtadmin = (() => {
             ShardTableSize.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -6399,7 +6399,7 @@ export const vtadmin = $root.vtadmin = (() => {
                                 break;
                             if (message.by_shard === $util.emptyObject)
                                 message.by_shard = {};
-                            let end2 = reader.uint32() + reader.pos;
+                            let end2 = reader.size() + reader.pos;
                             if (end2 > reader.len)
                                 throw $RangeError("index out of range");
                             reader.len = end2;
@@ -6417,7 +6417,7 @@ export const vtadmin = $root.vtadmin = (() => {
                                 case 2:
                                     if (wireType !== 2)
                                         break;
-                                    value = $root.vtadmin.Schema.ShardTableSize.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                    value = $root.vtadmin.Schema.ShardTableSize.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                     continue;
                                 }
                                 reader.skipType(wireType, _depth, tag2);
@@ -6460,7 +6460,7 @@ export const vtadmin = $root.vtadmin = (() => {
             TableSize.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -6788,13 +6788,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.schema_migration = $root.vtctldata.SchemaMigration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.schema_migration);
+                        message.schema_migration = $root.vtctldata.SchemaMigration.decode(reader, reader.size(), $undefined, _depth + 1, message.schema_migration);
                         continue;
                     }
                 }
@@ -6827,7 +6827,7 @@ export const vtadmin = $root.vtadmin = (() => {
         SchemaMigration.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -7095,13 +7095,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.shard = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                        message.shard = $root.vtctldata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                         continue;
                     }
                 }
@@ -7134,7 +7134,7 @@ export const vtadmin = $root.vtadmin = (() => {
         Shard.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -7422,13 +7422,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.srv_v_schema = $root.vschema.SrvVSchema.decode(reader, reader.uint32(), $undefined, _depth + 1, message.srv_v_schema);
+                        message.srv_v_schema = $root.vschema.SrvVSchema.decode(reader, reader.size(), $undefined, _depth + 1, message.srv_v_schema);
                         continue;
                     }
                 }
@@ -7461,7 +7461,7 @@ export const vtadmin = $root.vtadmin = (() => {
         SrvVSchema.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -7760,13 +7760,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.tablet = $root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                        message.tablet = $root.topodata.Tablet.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                         continue;
                     }
                 case 3: {
@@ -7817,7 +7817,7 @@ export const vtadmin = $root.vtadmin = (() => {
         Tablet.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -8145,7 +8145,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -8160,7 +8160,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.v_schema);
+                        message.v_schema = $root.vschema.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.v_schema);
                         continue;
                     }
                 }
@@ -8193,7 +8193,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VSchema.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -8490,7 +8490,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 3: {
@@ -8532,7 +8532,7 @@ export const vtadmin = $root.vtadmin = (() => {
         Vtctld.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -8878,7 +8878,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 5: {
@@ -8928,7 +8928,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VTGate.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -9251,7 +9251,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -9266,7 +9266,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.workflow = $root.vtctldata.Workflow.decode(reader, reader.uint32(), $undefined, _depth + 1, message.workflow);
+                        message.workflow = $root.vtctldata.Workflow.decode(reader, reader.size(), $undefined, _depth + 1, message.workflow);
                         continue;
                     }
                 }
@@ -9299,7 +9299,7 @@ export const vtadmin = $root.vtadmin = (() => {
         Workflow.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -9585,7 +9585,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.WorkflowDeleteRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.WorkflowDeleteRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -9618,7 +9618,7 @@ export const vtadmin = $root.vtadmin = (() => {
         WorkflowDeleteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -9891,7 +9891,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.WorkflowSwitchTrafficRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.WorkflowSwitchTrafficRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -9924,7 +9924,7 @@ export const vtadmin = $root.vtadmin = (() => {
         WorkflowSwitchTrafficRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -10237,7 +10237,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.ApplySchemaRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.ApplySchemaRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -10270,7 +10270,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ApplySchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -10561,7 +10561,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.CancelSchemaMigrationRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.CancelSchemaMigrationRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -10594,7 +10594,7 @@ export const vtadmin = $root.vtadmin = (() => {
         CancelSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -10867,7 +10867,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.CleanupSchemaMigrationRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.CleanupSchemaMigrationRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -10900,7 +10900,7 @@ export const vtadmin = $root.vtadmin = (() => {
         CleanupSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -11173,7 +11173,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.CompleteSchemaMigrationRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.CompleteSchemaMigrationRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -11206,7 +11206,7 @@ export const vtadmin = $root.vtadmin = (() => {
         CompleteSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -11515,7 +11515,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ConcludeTransactionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -11784,7 +11784,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.vtctldata.CreateKeyspaceRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.vtctldata.CreateKeyspaceRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -11817,7 +11817,7 @@ export const vtadmin = $root.vtadmin = (() => {
         CreateKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -12070,7 +12070,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace = $root.vtadmin.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                        message.keyspace = $root.vtadmin.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                         continue;
                     }
                 }
@@ -12103,7 +12103,7 @@ export const vtadmin = $root.vtadmin = (() => {
         CreateKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -12366,7 +12366,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.vtctldata.CreateShardRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.vtctldata.CreateShardRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -12399,7 +12399,7 @@ export const vtadmin = $root.vtadmin = (() => {
         CreateShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -12672,7 +12672,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.vtctldata.DeleteKeyspaceRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.vtctldata.DeleteKeyspaceRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -12705,7 +12705,7 @@ export const vtadmin = $root.vtadmin = (() => {
         DeleteKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -12978,7 +12978,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.vtctldata.DeleteShardsRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.vtctldata.DeleteShardsRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -13011,7 +13011,7 @@ export const vtadmin = $root.vtadmin = (() => {
         DeleteShardsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -13288,7 +13288,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -13338,7 +13338,7 @@ export const vtadmin = $root.vtadmin = (() => {
         DeleteTabletRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -13632,7 +13632,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 }
@@ -13665,7 +13665,7 @@ export const vtadmin = $root.vtadmin = (() => {
         DeleteTabletResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -13938,7 +13938,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.vtctldata.EmergencyReparentShardRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.vtctldata.EmergencyReparentShardRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -13971,7 +13971,7 @@ export const vtadmin = $root.vtadmin = (() => {
         EmergencyFailoverShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -14270,7 +14270,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -14294,7 +14294,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.promoted_primary);
+                        message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.promoted_primary);
                         continue;
                     }
                 case 5: {
@@ -14302,7 +14302,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -14335,7 +14335,7 @@ export const vtadmin = $root.vtadmin = (() => {
         EmergencyFailoverShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -14677,7 +14677,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.table_size_options);
+                        message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.table_size_options);
                         continue;
                     }
                 }
@@ -14710,7 +14710,7 @@ export const vtadmin = $root.vtadmin = (() => {
         FindSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -15047,7 +15047,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.request_options = $root.vtctldata.GetBackupsRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request_options);
+                        message.request_options = $root.vtctldata.GetBackupsRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request_options);
                         continue;
                     }
                 }
@@ -15080,7 +15080,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetBackupsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -15389,7 +15389,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.backups && message.backups.length))
                             message.backups = [];
-                        message.backups.push($root.vtadmin.ClusterBackup.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.backups.push($root.vtadmin.ClusterBackup.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -15422,7 +15422,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetBackupsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -15755,7 +15755,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetCellInfosRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -16040,7 +16040,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.cell_infos && message.cell_infos.length))
                             message.cell_infos = [];
-                        message.cell_infos.push($root.vtadmin.ClusterCellInfo.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.cell_infos.push($root.vtadmin.ClusterCellInfo.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -16073,7 +16073,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetCellInfosResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -16365,7 +16365,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetCellsAliasesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -16619,7 +16619,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.aliases && message.aliases.length))
                             message.aliases = [];
-                        message.aliases.push($root.vtadmin.ClusterCellsAliases.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.aliases.push($root.vtadmin.ClusterCellsAliases.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -16652,7 +16652,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetCellsAliasesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -16920,7 +16920,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetClustersRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -17145,7 +17145,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.clusters && message.clusters.length))
                             message.clusters = [];
-                        message.clusters.push($root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.clusters.push($root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -17178,7 +17178,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetClustersResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -17453,7 +17453,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 }
@@ -17486,7 +17486,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetFullStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -17776,7 +17776,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetGatesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -18030,7 +18030,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.gates && message.gates.length))
                             message.gates = [];
-                        message.gates.push($root.vtadmin.VTGate.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.gates.push($root.vtadmin.VTGate.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -18063,7 +18063,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetGatesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -18374,7 +18374,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -18660,7 +18660,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetKeyspacesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -18914,7 +18914,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.keyspaces && message.keyspaces.length))
                             message.keyspaces = [];
-                        message.keyspaces.push($root.vtadmin.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.keyspaces.push($root.vtadmin.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -18947,7 +18947,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetKeyspacesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -19262,7 +19262,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.table_size_options);
+                        message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.table_size_options);
                         continue;
                     }
                 }
@@ -19295,7 +19295,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -19587,7 +19587,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.table_size_options);
+                        message.table_size_options = $root.vtadmin.GetSchemaTableSizeOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.table_size_options);
                         continue;
                     }
                 }
@@ -19620,7 +19620,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSchemasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -19888,7 +19888,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.schemas && message.schemas.length))
                             message.schemas = [];
-                        message.schemas.push($root.vtadmin.Schema.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.schemas.push($root.vtadmin.Schema.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -19921,7 +19921,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSchemasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -20180,7 +20180,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.cluster_requests && message.cluster_requests.length))
                             message.cluster_requests = [];
-                        message.cluster_requests.push($root.vtadmin.GetSchemaMigrationsRequest.ClusterRequest.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.cluster_requests.push($root.vtadmin.GetSchemaMigrationsRequest.ClusterRequest.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -20213,7 +20213,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSchemaMigrationsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -20485,7 +20485,7 @@ export const vtadmin = $root.vtadmin = (() => {
                     case 2: {
                             if (wireType !== 2)
                                 break;
-                            message.request = $root.vtctldata.GetSchemaMigrationsRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                            message.request = $root.vtctldata.GetSchemaMigrationsRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                             continue;
                         }
                     }
@@ -20518,7 +20518,7 @@ export const vtadmin = $root.vtadmin = (() => {
             ClusterRequest.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -20778,7 +20778,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.schema_migrations && message.schema_migrations.length))
                             message.schema_migrations = [];
-                        message.schema_migrations.push($root.vtadmin.SchemaMigration.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.schema_migrations.push($root.vtadmin.SchemaMigration.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -20811,7 +20811,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSchemaMigrationsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -21145,7 +21145,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetShardReplicationPositionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -21440,7 +21440,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.replication_positions && message.replication_positions.length))
                             message.replication_positions = [];
-                        message.replication_positions.push($root.vtadmin.ClusterShardReplicationPosition.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.replication_positions.push($root.vtadmin.ClusterShardReplicationPosition.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -21473,7 +21473,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetShardReplicationPositionsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -21805,7 +21805,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSrvKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -22133,7 +22133,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSrvKeyspacesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -22410,7 +22410,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (message.srv_keyspaces === $util.emptyObject)
                             message.srv_keyspaces = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -22428,7 +22428,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.GetSrvKeyspacesResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.GetSrvKeyspacesResponse.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -22471,7 +22471,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSrvKeyspacesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -22789,7 +22789,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSrvVSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -23096,7 +23096,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSrvVSchemasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -23371,7 +23371,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.srv_v_schemas && message.srv_v_schemas.length))
                             message.srv_v_schemas = [];
-                        message.srv_v_schemas.push($root.vtadmin.SrvVSchema.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.srv_v_schemas.push($root.vtadmin.SrvVSchema.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -23404,7 +23404,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSrvVSchemasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -23715,7 +23715,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetSchemaTableSizeOptions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -23977,7 +23977,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -24018,7 +24018,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetTabletRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -24319,7 +24319,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetTabletsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -24573,7 +24573,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.tablets && message.tablets.length))
                             message.tablets = [];
-                        message.tablets.push($root.vtadmin.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.tablets.push($root.vtadmin.Tablet.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -24606,7 +24606,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetTabletsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -24917,7 +24917,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetTopologyPathRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -25186,7 +25186,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.GetTransactionInfoRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.GetTransactionInfoRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -25219,7 +25219,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetTransactionInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -25548,7 +25548,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetUnresolvedTransactionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -25878,7 +25878,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetVSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -26164,7 +26164,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetVSchemasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -26418,7 +26418,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.v_schemas && message.v_schemas.length))
                             message.v_schemas = [];
-                        message.v_schemas.push($root.vtadmin.VSchema.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.v_schemas.push($root.vtadmin.VSchema.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -26451,7 +26451,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetVSchemasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -26743,7 +26743,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetVtctldsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -26997,7 +26997,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.vtctlds && message.vtctlds.length))
                             message.vtctlds = [];
-                        message.vtctlds.push($root.vtadmin.Vtctld.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.vtctlds.push($root.vtadmin.Vtctld.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -27030,7 +27030,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetVtctldsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -27381,7 +27381,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetWorkflowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -27724,7 +27724,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetWorkflowStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -28058,7 +28058,7 @@ export const vtadmin = $root.vtadmin = (() => {
         StartWorkflowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -28392,7 +28392,7 @@ export const vtadmin = $root.vtadmin = (() => {
         StopWorkflowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -28749,7 +28749,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetWorkflowsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -29056,7 +29056,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (message.workflows_by_cluster === $util.emptyObject)
                             message.workflows_by_cluster = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -29074,7 +29074,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtadmin.ClusterWorkflows.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtadmin.ClusterWorkflows.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -29117,7 +29117,7 @@ export const vtadmin = $root.vtadmin = (() => {
         GetWorkflowsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -29399,7 +29399,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.LaunchSchemaMigrationRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.LaunchSchemaMigrationRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -29432,7 +29432,7 @@ export const vtadmin = $root.vtadmin = (() => {
         LaunchSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -29725,7 +29725,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.MaterializeCreateRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.MaterializeCreateRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -29758,7 +29758,7 @@ export const vtadmin = $root.vtadmin = (() => {
         MaterializeCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -30040,7 +30040,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.MoveTablesCompleteRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.MoveTablesCompleteRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -30073,7 +30073,7 @@ export const vtadmin = $root.vtadmin = (() => {
         MoveTablesCompleteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -30346,7 +30346,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.MoveTablesCreateRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.MoveTablesCreateRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -30379,7 +30379,7 @@ export const vtadmin = $root.vtadmin = (() => {
         MoveTablesCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -30645,7 +30645,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -30686,7 +30686,7 @@ export const vtadmin = $root.vtadmin = (() => {
         PingTabletRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -30970,7 +30970,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 }
@@ -31003,7 +31003,7 @@ export const vtadmin = $root.vtadmin = (() => {
         PingTabletResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -31276,7 +31276,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.vtctldata.PlannedReparentShardRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.vtctldata.PlannedReparentShardRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -31309,7 +31309,7 @@ export const vtadmin = $root.vtadmin = (() => {
         PlannedFailoverShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -31608,7 +31608,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -31632,7 +31632,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.promoted_primary);
+                        message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.promoted_primary);
                         continue;
                     }
                 case 5: {
@@ -31640,7 +31640,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -31673,7 +31673,7 @@ export const vtadmin = $root.vtadmin = (() => {
         PlannedFailoverShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -32071,7 +32071,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RebuildKeyspaceGraphRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -32386,7 +32386,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RebuildKeyspaceGraphResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -32638,7 +32638,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -32679,7 +32679,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RefreshStateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -32963,7 +32963,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 }
@@ -32996,7 +32996,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RefreshStateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -33341,7 +33341,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.tablets && message.tablets.length))
                             message.tablets = [];
-                        message.tablets.push($root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.tablets.push($root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 4: {
@@ -33409,7 +33409,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ReloadSchemasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -33784,7 +33784,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.keyspace_results && message.keyspace_results.length))
                             message.keyspace_results = [];
-                        message.keyspace_results.push($root.vtadmin.ReloadSchemasResponse.KeyspaceResult.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.keyspace_results.push($root.vtadmin.ReloadSchemasResponse.KeyspaceResult.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -33792,7 +33792,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.shard_results && message.shard_results.length))
                             message.shard_results = [];
-                        message.shard_results.push($root.vtadmin.ReloadSchemasResponse.ShardResult.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.shard_results.push($root.vtadmin.ReloadSchemasResponse.ShardResult.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -33800,7 +33800,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.tablet_results && message.tablet_results.length))
                             message.tablet_results = [];
-                        message.tablet_results.push($root.vtadmin.ReloadSchemasResponse.TabletResult.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.tablet_results.push($root.vtadmin.ReloadSchemasResponse.TabletResult.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -33833,7 +33833,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ReloadSchemasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -34149,7 +34149,7 @@ export const vtadmin = $root.vtadmin = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.keyspace = $root.vtadmin.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                            message.keyspace = $root.vtadmin.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                             continue;
                         }
                     case 2: {
@@ -34157,7 +34157,7 @@ export const vtadmin = $root.vtadmin = (() => {
                                 break;
                             if (!(message.events && message.events.length))
                                 message.events = [];
-                            message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     }
@@ -34190,7 +34190,7 @@ export const vtadmin = $root.vtadmin = (() => {
             KeyspaceResult.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -34472,7 +34472,7 @@ export const vtadmin = $root.vtadmin = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.shard = $root.vtadmin.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                            message.shard = $root.vtadmin.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                             continue;
                         }
                     case 2: {
@@ -34480,7 +34480,7 @@ export const vtadmin = $root.vtadmin = (() => {
                                 break;
                             if (!(message.events && message.events.length))
                                 message.events = [];
-                            message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     }
@@ -34513,7 +34513,7 @@ export const vtadmin = $root.vtadmin = (() => {
             ShardResult.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -34793,7 +34793,7 @@ export const vtadmin = $root.vtadmin = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.tablet = $root.vtadmin.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                            message.tablet = $root.vtadmin.Tablet.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                             continue;
                         }
                     case 2: {
@@ -34835,7 +34835,7 @@ export const vtadmin = $root.vtadmin = (() => {
             TabletResult.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -35227,7 +35227,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ReloadSchemaShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -35516,7 +35516,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -35549,7 +35549,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ReloadSchemaShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -35817,7 +35817,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -35858,7 +35858,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RefreshTabletReplicationSourceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -36173,13 +36173,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary);
+                        message.primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.primary);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 }
@@ -36212,7 +36212,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RefreshTabletReplicationSourceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -36603,7 +36603,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RemoveKeyspaceCellRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -36915,7 +36915,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RemoveKeyspaceCellResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -37174,7 +37174,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.RetrySchemaMigrationRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.RetrySchemaMigrationRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -37207,7 +37207,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RetrySchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -37473,7 +37473,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -37514,7 +37514,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RunHealthCheckRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -37798,7 +37798,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 }
@@ -37831,7 +37831,7 @@ export const vtadmin = $root.vtadmin = (() => {
         RunHealthCheckResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -38104,7 +38104,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.ReshardCreateRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.ReshardCreateRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -38137,7 +38137,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ReshardCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -38403,7 +38403,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -38444,7 +38444,7 @@ export const vtadmin = $root.vtadmin = (() => {
         SetReadOnlyRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -38721,7 +38721,7 @@ export const vtadmin = $root.vtadmin = (() => {
         SetReadOnlyResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -38955,7 +38955,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -38996,7 +38996,7 @@ export const vtadmin = $root.vtadmin = (() => {
         SetReadWriteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -39273,7 +39273,7 @@ export const vtadmin = $root.vtadmin = (() => {
         SetReadWriteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -39507,7 +39507,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -39548,7 +39548,7 @@ export const vtadmin = $root.vtadmin = (() => {
         StartReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -39832,7 +39832,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 }
@@ -39865,7 +39865,7 @@ export const vtadmin = $root.vtadmin = (() => {
         StartReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -40131,7 +40131,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -40172,7 +40172,7 @@ export const vtadmin = $root.vtadmin = (() => {
         StopReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -40456,7 +40456,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 }
@@ -40489,7 +40489,7 @@ export const vtadmin = $root.vtadmin = (() => {
         StopReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -40755,7 +40755,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -40796,7 +40796,7 @@ export const vtadmin = $root.vtadmin = (() => {
         TabletExternallyPromotedRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -41104,7 +41104,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cluster);
+                        message.cluster = $root.vtadmin.Cluster.decode(reader, reader.size(), $undefined, _depth + 1, message.cluster);
                         continue;
                     }
                 case 2: {
@@ -41128,13 +41128,13 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.new_primary);
+                        message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.new_primary);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.old_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.old_primary);
+                        message.old_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.old_primary);
                         continue;
                     }
                 }
@@ -41167,7 +41167,7 @@ export const vtadmin = $root.vtadmin = (() => {
         TabletExternallyPromotedResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -41468,7 +41468,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -41509,7 +41509,7 @@ export const vtadmin = $root.vtadmin = (() => {
         TabletExternallyReparentedRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -41829,7 +41829,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ValidateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -42154,7 +42154,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ValidateKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -42468,7 +42468,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ValidateSchemaKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -42813,7 +42813,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ValidateShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -43136,7 +43136,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ValidateVersionKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -43461,7 +43461,7 @@ export const vtadmin = $root.vtadmin = (() => {
         ValidateVersionShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -43739,7 +43739,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.VDiffCreateRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.VDiffCreateRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -43772,7 +43772,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VDiffCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -44045,7 +44045,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.request = $root.vtctldata.VDiffShowRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.request);
+                        message.request = $root.vtctldata.VDiffShowRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.request);
                         continue;
                     }
                 }
@@ -44078,7 +44078,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VDiffShowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -44387,7 +44387,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VDiffProgress.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -44736,7 +44736,7 @@ export const vtadmin = $root.vtadmin = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.progress = $root.vtadmin.VDiffProgress.decode(reader, reader.uint32(), $undefined, _depth + 1, message.progress);
+                        message.progress = $root.vtadmin.VDiffProgress.decode(reader, reader.size(), $undefined, _depth + 1, message.progress);
                         continue;
                     }
                 }
@@ -44769,7 +44769,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VDiffShardReport.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -45080,7 +45080,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             break;
                         if (message.shard_report === $util.emptyObject)
                             message.shard_report = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -45098,7 +45098,7 @@ export const vtadmin = $root.vtadmin = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtadmin.VDiffShardReport.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtadmin.VDiffShardReport.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -45141,7 +45141,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VDiffShowResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -45479,7 +45479,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VTExplainRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -45773,7 +45773,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VTExplainResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -46088,7 +46088,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VExplainRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -46382,7 +46382,7 @@ export const vtadmin = $root.vtadmin = (() => {
         VExplainResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -46695,7 +46695,7 @@ export const logutil = $root.logutil = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time);
+                        message.time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.time);
                         continue;
                     }
                 case 2: {
@@ -46764,7 +46764,7 @@ export const logutil = $root.logutil = (() => {
         Event.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -47147,7 +47147,7 @@ export const vttime = $root.vttime = (() => {
         Time.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -47468,7 +47468,7 @@ export const vttime = $root.vttime = (() => {
         Duration.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -47782,7 +47782,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         StartRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -48045,7 +48045,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         StartResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -48286,7 +48286,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.mysql_shutdown_timeout);
+                        message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.mysql_shutdown_timeout);
                         continue;
                     }
                 }
@@ -48319,7 +48319,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         ShutdownRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -48585,7 +48585,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         ShutdownResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -48819,7 +48819,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         RunMysqlUpgradeRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -49053,7 +49053,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         RunMysqlUpgradeResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -49314,7 +49314,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.binlog_restore_datetime = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.binlog_restore_datetime);
+                        message.binlog_restore_datetime = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.binlog_restore_datetime);
                         continue;
                     }
                 }
@@ -49347,7 +49347,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         ApplyBinlogFileRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -49622,7 +49622,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         ApplyBinlogFileResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -49880,7 +49880,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         ReadBinlogFilesTimestampsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -50163,7 +50163,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.first_timestamp = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.first_timestamp);
+                        message.first_timestamp = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.first_timestamp);
                         continue;
                     }
                 case 2: {
@@ -50178,7 +50178,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.last_timestamp = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_timestamp);
+                        message.last_timestamp = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.last_timestamp);
                         continue;
                     }
                 case 4: {
@@ -50220,7 +50220,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         ReadBinlogFilesTimestampsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -50508,7 +50508,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         ReinitConfigRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -50742,7 +50742,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         ReinitConfigResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -50976,7 +50976,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         RefreshConfigRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -51210,7 +51210,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         RefreshConfigResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -51444,7 +51444,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         VersionStringRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -51701,7 +51701,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         VersionStringResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -51953,7 +51953,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         HostMetricsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -52180,7 +52180,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                             break;
                         if (message.metrics === $util.emptyObject)
                             message.metrics = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -52198,7 +52198,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.mysqlctl.HostMetricsResponse.Metric.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.mysqlctl.HostMetricsResponse.Metric.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -52241,7 +52241,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         HostMetricsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -52540,7 +52540,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
                     case 3: {
                             if (wireType !== 2)
                                 break;
-                            message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                            message.error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                             continue;
                         }
                     }
@@ -52573,7 +52573,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
             Metric.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -53355,13 +53355,13 @@ export const mysqlctl = $root.mysqlctl = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time);
+                        message.time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.time);
                         continue;
                     }
                 case 7: {
@@ -53412,7 +53412,7 @@ export const mysqlctl = $root.mysqlctl = (() => {
         BackupInfo.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -53834,7 +53834,7 @@ export const topodata = $root.topodata = (() => {
         KeyRange.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -54171,7 +54171,7 @@ export const topodata = $root.topodata = (() => {
         TabletAlias.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -54610,7 +54610,7 @@ export const topodata = $root.topodata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.alias);
+                        message.alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.alias);
                         continue;
                     }
                 case 2: {
@@ -54627,7 +54627,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (message.port_map === $util.emptyObject)
                             message.port_map = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -54679,7 +54679,7 @@ export const topodata = $root.topodata = (() => {
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32(), $undefined, _depth + 1, message.key_range);
+                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.size(), $undefined, _depth + 1, message.key_range);
                         continue;
                     }
                 case 8: {
@@ -54705,7 +54705,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (message.tags === $util.emptyObject)
                             message.tags = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -54757,7 +54757,7 @@ export const topodata = $root.topodata = (() => {
                 case 14: {
                         if (wireType !== 2)
                             break;
-                        message.primary_term_start_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary_term_start_time);
+                        message.primary_term_start_time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.primary_term_start_time);
                         continue;
                     }
                 case 16: {
@@ -54772,13 +54772,13 @@ export const topodata = $root.topodata = (() => {
                 case 17: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_start_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_start_time);
+                        message.tablet_start_time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_start_time);
                         continue;
                     }
                 case 18: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_shutdown_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_shutdown_time);
+                        message.tablet_shutdown_time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_shutdown_time);
                         continue;
                     }
                 }
@@ -54811,7 +54811,7 @@ export const topodata = $root.topodata = (() => {
         Tablet.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -55353,19 +55353,19 @@ export const topodata = $root.topodata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary_alias);
+                        message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.primary_alias);
                         continue;
                     }
                 case 8: {
                         if (wireType !== 2)
                             break;
-                        message.primary_term_start_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary_term_start_time);
+                        message.primary_term_start_time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.primary_term_start_time);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32(), $undefined, _depth + 1, message.key_range);
+                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.size(), $undefined, _depth + 1, message.key_range);
                         continue;
                     }
                 case 4: {
@@ -55373,7 +55373,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (!(message.source_shards && message.source_shards.length))
                             message.source_shards = [];
-                        message.source_shards.push($root.topodata.Shard.SourceShard.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.source_shards.push($root.topodata.Shard.SourceShard.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 6: {
@@ -55381,7 +55381,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (!(message.tablet_controls && message.tablet_controls.length))
                             message.tablet_controls = [];
-                        message.tablet_controls.push($root.topodata.Shard.TabletControl.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.tablet_controls.push($root.topodata.Shard.TabletControl.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 7: {
@@ -55396,7 +55396,7 @@ export const topodata = $root.topodata = (() => {
                 case 9: {
                         if (wireType !== 2)
                             break;
-                        message.vtorc_state = $root.vtorcdata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.vtorc_state);
+                        message.vtorc_state = $root.vtorcdata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.vtorc_state);
                         continue;
                     }
                 }
@@ -55429,7 +55429,7 @@ export const topodata = $root.topodata = (() => {
         Shard.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -55843,7 +55843,7 @@ export const topodata = $root.topodata = (() => {
                     case 4: {
                             if (wireType !== 2)
                                 break;
-                            message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32(), $undefined, _depth + 1, message.key_range);
+                            message.key_range = $root.topodata.KeyRange.decode(reader, reader.size(), $undefined, _depth + 1, message.key_range);
                             continue;
                         }
                     case 5: {
@@ -55884,7 +55884,7 @@ export const topodata = $root.topodata = (() => {
             SourceShard.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -56294,7 +56294,7 @@ export const topodata = $root.topodata = (() => {
             TabletControl.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -56739,7 +56739,7 @@ export const topodata = $root.topodata = (() => {
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.snapshot_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.snapshot_time);
+                        message.snapshot_time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.snapshot_time);
                         continue;
                     }
                 case 8: {
@@ -56754,7 +56754,7 @@ export const topodata = $root.topodata = (() => {
                 case 9: {
                         if (wireType !== 2)
                             break;
-                        message.throttler_config = $root.topodata.ThrottlerConfig.decode(reader, reader.uint32(), $undefined, _depth + 1, message.throttler_config);
+                        message.throttler_config = $root.topodata.ThrottlerConfig.decode(reader, reader.size(), $undefined, _depth + 1, message.throttler_config);
                         continue;
                     }
                 case 10: {
@@ -56769,13 +56769,13 @@ export const topodata = $root.topodata = (() => {
                 case 11: {
                         if (wireType !== 2)
                             break;
-                        message.vtorc_state = $root.vtorcdata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.vtorc_state);
+                        message.vtorc_state = $root.vtorcdata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.vtorc_state);
                         continue;
                     }
                 case 12: {
                         if (wireType !== 2)
                             break;
-                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query_throttler_config);
+                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.size(), $undefined, _depth + 1, message.query_throttler_config);
                         continue;
                     }
                 }
@@ -56808,7 +56808,7 @@ export const topodata = $root.topodata = (() => {
         Keyspace.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -57142,7 +57142,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (!(message.nodes && message.nodes.length))
                             message.nodes = [];
-                        message.nodes.push($root.topodata.ShardReplication.Node.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.nodes.push($root.topodata.ShardReplication.Node.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -57175,7 +57175,7 @@ export const topodata = $root.topodata = (() => {
         ShardReplication.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -57427,7 +57427,7 @@ export const topodata = $root.topodata = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                            message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                             continue;
                         }
                     }
@@ -57460,7 +57460,7 @@ export const topodata = $root.topodata = (() => {
             Node.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -57726,7 +57726,7 @@ export const topodata = $root.topodata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -57759,7 +57759,7 @@ export const topodata = $root.topodata = (() => {
         ShardReplicationError.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -58063,7 +58063,7 @@ export const topodata = $root.topodata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32(), $undefined, _depth + 1, message.key_range);
+                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.size(), $undefined, _depth + 1, message.key_range);
                         continue;
                     }
                 }
@@ -58096,7 +58096,7 @@ export const topodata = $root.topodata = (() => {
         ShardReference.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -58380,7 +58380,7 @@ export const topodata = $root.topodata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32(), $undefined, _depth + 1, message.key_range);
+                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.size(), $undefined, _depth + 1, message.key_range);
                         continue;
                     }
                 case 3: {
@@ -58422,7 +58422,7 @@ export const topodata = $root.topodata = (() => {
         ShardTabletControl.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -58735,7 +58735,7 @@ export const topodata = $root.topodata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.expires_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.expires_at);
+                        message.expires_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.expires_at);
                         continue;
                     }
                 case 4: {
@@ -58777,7 +58777,7 @@ export const topodata = $root.topodata = (() => {
         ThrottledAppRule.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -59162,7 +59162,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (message.throttled_apps === $util.emptyObject)
                             message.throttled_apps = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -59180,7 +59180,7 @@ export const topodata = $root.topodata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.ThrottledAppRule.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.topodata.ThrottledAppRule.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -59198,7 +59198,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (message.app_checked_metrics === $util.emptyObject)
                             message.app_checked_metrics = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -59216,7 +59216,7 @@ export const topodata = $root.topodata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.ThrottlerConfig.MetricNames.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.topodata.ThrottlerConfig.MetricNames.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -59234,7 +59234,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (message.metric_thresholds === $util.emptyObject)
                             message.metric_thresholds = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -59295,7 +59295,7 @@ export const topodata = $root.topodata = (() => {
         ThrottlerConfig.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -59688,7 +59688,7 @@ export const topodata = $root.topodata = (() => {
             MetricNames.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -59967,19 +59967,19 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (!(message.partitions && message.partitions.length))
                             message.partitions = [];
-                        message.partitions.push($root.topodata.SrvKeyspace.KeyspacePartition.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.partitions.push($root.topodata.SrvKeyspace.KeyspacePartition.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.throttler_config = $root.topodata.ThrottlerConfig.decode(reader, reader.uint32(), $undefined, _depth + 1, message.throttler_config);
+                        message.throttler_config = $root.topodata.ThrottlerConfig.decode(reader, reader.size(), $undefined, _depth + 1, message.throttler_config);
                         continue;
                     }
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query_throttler_config);
+                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.size(), $undefined, _depth + 1, message.query_throttler_config);
                         continue;
                     }
                 }
@@ -60012,7 +60012,7 @@ export const topodata = $root.topodata = (() => {
         SrvKeyspace.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -60329,7 +60329,7 @@ export const topodata = $root.topodata = (() => {
                                 break;
                             if (!(message.shard_references && message.shard_references.length))
                                 message.shard_references = [];
-                            message.shard_references.push($root.topodata.ShardReference.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.shard_references.push($root.topodata.ShardReference.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     case 3: {
@@ -60337,7 +60337,7 @@ export const topodata = $root.topodata = (() => {
                                 break;
                             if (!(message.shard_tablet_controls && message.shard_tablet_controls.length))
                                 message.shard_tablet_controls = [];
-                            message.shard_tablet_controls.push($root.topodata.ShardTabletControl.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.shard_tablet_controls.push($root.topodata.ShardTabletControl.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     }
@@ -60370,7 +60370,7 @@ export const topodata = $root.topodata = (() => {
             KeyspacePartition.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -60767,7 +60767,7 @@ export const topodata = $root.topodata = (() => {
         CellInfo.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -61053,7 +61053,7 @@ export const topodata = $root.topodata = (() => {
         CellsAlias.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -61379,7 +61379,7 @@ export const topodata = $root.topodata = (() => {
         TopoConfig.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -61637,7 +61637,7 @@ export const topodata = $root.topodata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.topo_config = $root.topodata.TopoConfig.decode(reader, reader.uint32(), $undefined, _depth + 1, message.topo_config);
+                        message.topo_config = $root.topodata.TopoConfig.decode(reader, reader.size(), $undefined, _depth + 1, message.topo_config);
                         continue;
                     }
                 }
@@ -61670,7 +61670,7 @@ export const topodata = $root.topodata = (() => {
         ExternalVitessCluster.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -61917,7 +61917,7 @@ export const topodata = $root.topodata = (() => {
                             break;
                         if (!(message.vitess_cluster && message.vitess_cluster.length))
                             message.vitess_cluster = [];
-                        message.vitess_cluster.push($root.topodata.ExternalVitessCluster.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.vitess_cluster.push($root.topodata.ExternalVitessCluster.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -61950,7 +61950,7 @@ export const topodata = $root.topodata = (() => {
         ExternalClusters.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -62253,7 +62253,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
         Keyspace.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -62528,7 +62528,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
         Shard.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -62823,7 +62823,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
         PrimaryHealthEvent.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -63103,7 +63103,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.vtorcdata.PrimaryHealthEvent.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.vtorcdata.PrimaryHealthEvent.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -63145,7 +63145,7 @@ export const vtorcdata = $root.vtorcdata = (() => {
         PrimaryHealthState.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -63487,7 +63487,7 @@ export const querythrottler = $root.querythrottler = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_strategy_config = $root.querythrottler.TabletStrategyConfig.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_strategy_config);
+                        message.tablet_strategy_config = $root.querythrottler.TabletStrategyConfig.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_strategy_config);
                         continue;
                     }
                 case 4: {
@@ -63529,7 +63529,7 @@ export const querythrottler = $root.querythrottler = (() => {
         Config.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -63817,7 +63817,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             break;
                         if (message.tablet_rules === $util.emptyObject)
                             message.tablet_rules = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -63835,7 +63835,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.querythrottler.StatementRuleSet.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.querythrottler.StatementRuleSet.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -63878,7 +63878,7 @@ export const querythrottler = $root.querythrottler = (() => {
         TabletStrategyConfig.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -64146,7 +64146,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             break;
                         if (message.statement_rules === $util.emptyObject)
                             message.statement_rules = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -64164,7 +64164,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.querythrottler.MetricRuleSet.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.querythrottler.MetricRuleSet.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -64207,7 +64207,7 @@ export const querythrottler = $root.querythrottler = (() => {
         StatementRuleSet.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -64475,7 +64475,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             break;
                         if (message.metric_rules === $util.emptyObject)
                             message.metric_rules = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -64493,7 +64493,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.querythrottler.MetricRule.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.querythrottler.MetricRule.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -64536,7 +64536,7 @@ export const querythrottler = $root.querythrottler = (() => {
         MetricRuleSet.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -64802,7 +64802,7 @@ export const querythrottler = $root.querythrottler = (() => {
                             break;
                         if (!(message.thresholds && message.thresholds.length))
                             message.thresholds = [];
-                        message.thresholds.push($root.querythrottler.ThrottleThreshold.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.thresholds.push($root.querythrottler.ThrottleThreshold.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -64835,7 +64835,7 @@ export const querythrottler = $root.querythrottler = (() => {
         MetricRule.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -65146,7 +65146,7 @@ export const querythrottler = $root.querythrottler = (() => {
         ThrottleThreshold.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -65504,7 +65504,7 @@ export const vtrpc = $root.vtrpc = (() => {
         CallerID.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -65887,7 +65887,7 @@ export const vtrpc = $root.vtrpc = (() => {
         RPCError.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -66389,7 +66389,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.fields && message.fields.length))
                             message.fields = [];
-                        message.fields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.fields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -66422,7 +66422,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         TableDefinition.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -66821,7 +66821,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.table_definitions && message.table_definitions.length))
                             message.table_definitions = [];
-                        message.table_definitions.push($root.tabletmanagerdata.TableDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.table_definitions.push($root.tabletmanagerdata.TableDefinition.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -66854,7 +66854,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SchemaDefinition.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -67130,13 +67130,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.before_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before_schema);
+                        message.before_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.size(), $undefined, _depth + 1, message.before_schema);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.after_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1, message.after_schema);
+                        message.after_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.size(), $undefined, _depth + 1, message.after_schema);
                         continue;
                     }
                 }
@@ -67169,7 +67169,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SchemaChangeResult.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -67490,7 +67490,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.privileges === $util.emptyObject)
                             message.privileges = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -67551,7 +67551,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UserPermission.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -67918,7 +67918,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.privileges === $util.emptyObject)
                             message.privileges = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -67979,7 +67979,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DbPermission.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -68283,7 +68283,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.user_permissions && message.user_permissions.length))
                             message.user_permissions = [];
-                        message.user_permissions.push($root.tabletmanagerdata.UserPermission.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.user_permissions.push($root.tabletmanagerdata.UserPermission.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -68291,7 +68291,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.db_permissions && message.db_permissions.length))
                             message.db_permissions = [];
-                        message.db_permissions.push($root.tabletmanagerdata.DbPermission.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.db_permissions.push($root.tabletmanagerdata.DbPermission.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -68324,7 +68324,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         Permissions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -68641,7 +68641,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PingRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -68916,7 +68916,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PingResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -69191,7 +69191,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SleepRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -69459,7 +69459,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SleepResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -69725,7 +69725,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.extra_env === $util.emptyObject)
                             message.extra_env = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -69786,7 +69786,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteHookRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -70151,7 +70151,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteHookResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -70523,7 +70523,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -70814,7 +70814,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.schema_definition = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1, message.schema_definition);
+                        message.schema_definition = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.size(), $undefined, _depth + 1, message.schema_definition);
                         continue;
                     }
                 }
@@ -70847,7 +70847,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -71103,7 +71103,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetPermissionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -71324,7 +71324,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.permissions = $root.tabletmanagerdata.Permissions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.permissions);
+                        message.permissions = $root.tabletmanagerdata.Permissions.decode(reader, reader.size(), $undefined, _depth + 1, message.permissions);
                         continue;
                     }
                 }
@@ -71357,7 +71357,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetPermissionsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -71637,7 +71637,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetGlobalStatusVarsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -71891,7 +71891,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.status_values === $util.emptyObject)
                             message.status_values = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -71952,7 +71952,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetGlobalStatusVarsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -72223,7 +72223,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SetReadOnlyRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -72457,7 +72457,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SetReadOnlyResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -72691,7 +72691,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SetReadWriteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -72925,7 +72925,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SetReadWriteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -73202,7 +73202,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ChangeTypeRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -73511,7 +73511,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ChangeTypeResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -73745,7 +73745,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         RefreshStateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -73979,7 +73979,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         RefreshStateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -74213,7 +74213,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         RunHealthCheckRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -74447,7 +74447,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         RunHealthCheckResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -74704,7 +74704,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReloadSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -74956,7 +74956,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReloadSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -75214,7 +75214,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PreflightSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -75468,7 +75468,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.change_results && message.change_results.length))
                             message.change_results = [];
-                        message.change_results.push($root.tabletmanagerdata.SchemaChangeResult.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.change_results.push($root.tabletmanagerdata.SchemaChangeResult.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -75501,7 +75501,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PreflightSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -75860,13 +75860,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.before_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before_schema);
+                        message.before_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.size(), $undefined, _depth + 1, message.before_schema);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.after_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1, message.after_schema);
+                        message.after_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.size(), $undefined, _depth + 1, message.after_schema);
                         continue;
                     }
                 case 6: {
@@ -75926,7 +75926,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ApplySchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -76264,13 +76264,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.before_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before_schema);
+                        message.before_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.size(), $undefined, _depth + 1, message.before_schema);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.after_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1, message.after_schema);
+                        message.after_schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.size(), $undefined, _depth + 1, message.after_schema);
                         continue;
                     }
                 }
@@ -76303,7 +76303,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ApplySchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -76573,7 +76573,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         LockTablesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -76807,7 +76807,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         LockTablesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -77041,7 +77041,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UnlockTablesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -77275,7 +77275,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UnlockTablesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -77556,7 +77556,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.caller_id);
+                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.caller_id);
                         continue;
                     }
                 }
@@ -77589,7 +77589,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteQueryRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -77885,7 +77885,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -77918,7 +77918,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteQueryResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -78297,7 +78297,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteFetchAsDbaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -78607,7 +78607,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -78640,7 +78640,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteFetchAsDbaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -78939,7 +78939,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SessionVariable.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -79312,7 +79312,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.session_variables && message.session_variables.length))
                             message.session_variables = [];
-                        message.session_variables.push($root.tabletmanagerdata.SessionVariable.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.session_variables.push($root.tabletmanagerdata.SessionVariable.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -79345,7 +79345,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteMultiFetchAsDbaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -79685,7 +79685,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.results && message.results.length))
                             message.results = [];
-                        message.results.push($root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.results.push($root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -79718,7 +79718,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteMultiFetchAsDbaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -80069,7 +80069,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteFetchAsAllPrivsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -80361,7 +80361,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -80394,7 +80394,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteFetchAsAllPrivsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -80693,7 +80693,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteFetchAsAppRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -80967,7 +80967,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -81000,7 +81000,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ExecuteFetchAsAppResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -81279,7 +81279,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetUnresolvedTransactionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -81538,7 +81538,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.transactions && message.transactions.length))
                             message.transactions = [];
-                        message.transactions.push($root.query.TransactionMetadata.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.transactions.push($root.query.TransactionMetadata.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -81571,7 +81571,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetUnresolvedTransactionsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -81862,7 +81862,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReadTransactionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -82101,7 +82101,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.transaction = $root.query.TransactionMetadata.decode(reader, reader.uint32(), $undefined, _depth + 1, message.transaction);
+                        message.transaction = $root.query.TransactionMetadata.decode(reader, reader.size(), $undefined, _depth + 1, message.transaction);
                         continue;
                     }
                 }
@@ -82134,7 +82134,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReadTransactionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -82413,7 +82413,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetTransactionInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -82749,7 +82749,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetTransactionInfoResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -83100,7 +83100,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ConcludeTransactionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -83362,7 +83362,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ConcludeTransactionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -83596,7 +83596,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         MysqlHostMetricsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -83817,7 +83817,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.HostMetrics = $root.mysqlctl.HostMetricsResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, message.HostMetrics);
+                        message.HostMetrics = $root.mysqlctl.HostMetricsResponse.decode(reader, reader.size(), $undefined, _depth + 1, message.HostMetrics);
                         continue;
                     }
                 }
@@ -83850,7 +83850,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         MysqlHostMetricsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -84106,7 +84106,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReplicationStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -84327,7 +84327,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.status = $root.replicationdata.Status.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        message.status = $root.replicationdata.Status.decode(reader, reader.size(), $undefined, _depth + 1, message.status);
                         continue;
                     }
                 }
@@ -84360,7 +84360,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReplicationStatusResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -84616,7 +84616,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PrimaryStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -84837,7 +84837,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.status = $root.replicationdata.PrimaryStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        message.status = $root.replicationdata.PrimaryStatus.decode(reader, reader.size(), $undefined, _depth + 1, message.status);
                         continue;
                     }
                 }
@@ -84870,7 +84870,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PrimaryStatusResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -85126,7 +85126,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PrimaryPositionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -85383,7 +85383,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PrimaryPositionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -85658,7 +85658,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         WaitForPositionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -85910,7 +85910,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         WaitForPositionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -86144,7 +86144,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StopReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -86378,7 +86378,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StopReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -86655,7 +86655,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StopReplicationMinimumRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -86956,7 +86956,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StopReplicationMinimumResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -87231,7 +87231,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StartReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -87483,7 +87483,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StartReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -87740,7 +87740,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         RestartReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -87992,7 +87992,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         RestartReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -88269,7 +88269,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StartReplicationUntilAfterRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -88547,7 +88547,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StartReplicationUntilAfterResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -88781,7 +88781,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetReplicasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -89039,7 +89039,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetReplicasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -89302,7 +89302,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ResetReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -89536,7 +89536,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ResetReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -89793,7 +89793,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VReplicationExecRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -90032,7 +90032,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -90065,7 +90065,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VReplicationExecResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -90364,7 +90364,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VReplicationWaitForPosRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -90626,7 +90626,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VReplicationWaitForPosResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -90883,7 +90883,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         InitPrimaryRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -91158,7 +91158,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         InitPrimaryResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -91448,7 +91448,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary_alias);
+                        message.primary_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.primary_alias);
                         continue;
                     }
                 case 4: {
@@ -91490,7 +91490,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PopulateReparentJournalRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -91790,7 +91790,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PopulateReparentJournalResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -92024,7 +92024,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReadReparentJournalInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -92281,7 +92281,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReadReparentJournalInfoResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -92553,7 +92553,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.parent = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.parent);
+                        message.parent = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.parent);
                         continue;
                     }
                 case 2: {
@@ -92613,7 +92613,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         InitReplicaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -92913,7 +92913,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         InitReplicaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -93170,7 +93170,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DemotePrimaryRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -93409,7 +93409,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.primary_status = $root.replicationdata.PrimaryStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary_status);
+                        message.primary_status = $root.replicationdata.PrimaryStatus.decode(reader, reader.size(), $undefined, _depth + 1, message.primary_status);
                         continue;
                     }
                 }
@@ -93442,7 +93442,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DemotePrimaryResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -93721,7 +93721,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UndoDemotePrimaryRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -93973,7 +93973,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UndoDemotePrimaryResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -94207,7 +94207,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReplicaWasPromotedRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -94441,7 +94441,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReplicaWasPromotedResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -94675,7 +94675,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ResetReplicationParametersRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -94909,7 +94909,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ResetReplicationParametersResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -95143,7 +95143,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         FullStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -95364,7 +95364,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.status = $root.replicationdata.FullStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        message.status = $root.replicationdata.FullStatus.decode(reader, reader.size(), $undefined, _depth + 1, message.status);
                         continue;
                     }
                 }
@@ -95397,7 +95397,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         FullStatusResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -95695,7 +95695,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.parent = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.parent);
+                        message.parent = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.parent);
                         continue;
                     }
                 case 2: {
@@ -95773,7 +95773,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SetReplicationSourceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -96091,7 +96091,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         SetReplicationSourceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -96312,7 +96312,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.parent = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.parent);
+                        message.parent = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.parent);
                         continue;
                     }
                 }
@@ -96345,7 +96345,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReplicaWasRestartedRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -96601,7 +96601,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReplicaWasRestartedResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -96858,7 +96858,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StopReplicationAndGetStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -97108,7 +97108,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.status = $root.replicationdata.StopReplicationStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        message.status = $root.replicationdata.StopReplicationStatus.decode(reader, reader.size(), $undefined, _depth + 1, message.status);
                         continue;
                     }
                 }
@@ -97141,7 +97141,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         StopReplicationAndGetStatusResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -98062,7 +98062,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PromoteReplicaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -98337,7 +98337,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         PromoteReplicaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -99406,13 +99406,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.mysql_shutdown_timeout);
+                        message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.mysql_shutdown_timeout);
                         continue;
                     }
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32(), $undefined, _depth + 1, message.init_sql);
+                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.size(), $undefined, _depth + 1, message.init_sql);
                         continue;
                     }
                 case 8: {
@@ -99454,7 +99454,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         BackupRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -99821,7 +99821,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 3: {
                             if (wireType !== 2)
                                 break;
-                            message.timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.timeout);
+                            message.timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.timeout);
                             continue;
                         }
                     case 4: {
@@ -99863,7 +99863,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             InitSQL.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -100209,7 +100209,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.event = $root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1, message.event);
+                        message.event = $root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1, message.event);
                         continue;
                     }
                 }
@@ -100242,7 +100242,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         BackupResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -100531,7 +100531,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.backup_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.backup_time);
+                        message.backup_time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.backup_time);
                         continue;
                     }
                 case 2: {
@@ -100555,7 +100555,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.restore_to_timestamp = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.restore_to_timestamp);
+                        message.restore_to_timestamp = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.restore_to_timestamp);
                         continue;
                     }
                 case 5: {
@@ -100596,7 +100596,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         RestoreFromBackupRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -100892,7 +100892,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.event = $root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1, message.event);
+                        message.event = $root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1, message.event);
                         continue;
                     }
                 }
@@ -100925,7 +100925,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         RestoreFromBackupResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -101294,7 +101294,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.binlog_source && message.binlog_source.length))
                             message.binlog_source = [];
-                        message.binlog_source.push($root.binlogdata.BinlogSource.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.binlog_source.push($root.binlogdata.BinlogSource.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -101412,7 +101412,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         CreateVReplicationWorkflowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -101887,7 +101887,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -101920,7 +101920,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         CreateVReplicationWorkflowResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -102178,7 +102178,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.table_filters === $util.emptyObject)
                             message.table_filters = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -102248,7 +102248,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DeleteTableDataRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -102545,7 +102545,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DeleteTableDataResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -102802,7 +102802,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DeleteVReplicationWorkflowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -103041,7 +103041,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -103074,7 +103074,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         DeleteVReplicationWorkflowResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -103330,7 +103330,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         HasVReplicationWorkflowsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -103587,7 +103587,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         HasVReplicationWorkflowsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -103982,7 +103982,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReadVReplicationWorkflowsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -104391,7 +104391,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.workflows && message.workflows.length))
                             message.workflows = [];
-                        message.workflows.push($root.tabletmanagerdata.ReadVReplicationWorkflowResponse.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.workflows.push($root.tabletmanagerdata.ReadVReplicationWorkflowResponse.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -104424,7 +104424,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReadVReplicationWorkflowsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -104715,7 +104715,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReadVReplicationWorkflowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -105168,7 +105168,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.streams && message.streams.length))
                             message.streams = [];
-                        message.streams.push($root.tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.streams.push($root.tabletmanagerdata.ReadVReplicationWorkflowResponse.Stream.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 12: {
@@ -105185,7 +105185,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.config_overrides === $util.emptyObject)
                             message.config_overrides = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -105246,7 +105246,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ReadVReplicationWorkflowResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -105888,7 +105888,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 2: {
                             if (wireType !== 2)
                                 break;
-                            message.bls = $root.binlogdata.BinlogSource.decode(reader, reader.uint32(), $undefined, _depth + 1, message.bls);
+                            message.bls = $root.binlogdata.BinlogSource.decode(reader, reader.size(), $undefined, _depth + 1, message.bls);
                             continue;
                         }
                     case 3: {
@@ -105930,13 +105930,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 7: {
                             if (wireType !== 2)
                                 break;
-                            message.time_updated = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_updated);
+                            message.time_updated = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.time_updated);
                             continue;
                         }
                     case 8: {
                             if (wireType !== 2)
                                 break;
-                            message.transaction_timestamp = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.transaction_timestamp);
+                            message.transaction_timestamp = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.transaction_timestamp);
                             continue;
                         }
                     case 9: {
@@ -105969,13 +105969,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 12: {
                             if (wireType !== 2)
                                 break;
-                            message.time_heartbeat = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_heartbeat);
+                            message.time_heartbeat = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.time_heartbeat);
                             continue;
                         }
                     case 13: {
                             if (wireType !== 2)
                                 break;
-                            message.time_throttled = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_throttled);
+                            message.time_throttled = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.time_throttled);
                             continue;
                         }
                     case 14: {
@@ -106017,7 +106017,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             Stream.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -106489,7 +106489,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ValidateVReplicationPermissionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -106786,7 +106786,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ValidateVReplicationPermissionsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -107144,7 +107144,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.tabletmanagerdata.VDiffOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.tabletmanagerdata.VDiffOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -107177,7 +107177,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VDiffRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -107497,7 +107497,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.output = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.output);
+                        message.output = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.output);
                         continue;
                     }
                 case 3: {
@@ -107539,7 +107539,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VDiffResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -107893,7 +107893,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VDiffPickerOptions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -108287,7 +108287,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VDiffReportOptions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -108827,7 +108827,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VDiffCoreOptions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -109251,19 +109251,19 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.picker_options = $root.tabletmanagerdata.VDiffPickerOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.picker_options);
+                        message.picker_options = $root.tabletmanagerdata.VDiffPickerOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.picker_options);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.core_options = $root.tabletmanagerdata.VDiffCoreOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.core_options);
+                        message.core_options = $root.tabletmanagerdata.VDiffCoreOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.core_options);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.report_options = $root.tabletmanagerdata.VDiffReportOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.report_options);
+                        message.report_options = $root.tabletmanagerdata.VDiffReportOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.report_options);
                         continue;
                     }
                 }
@@ -109296,7 +109296,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VDiffOptions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -109586,13 +109586,13 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.source = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.source);
+                        message.source = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.source);
                         message._source = "source";
                         continue;
                     }
@@ -109626,7 +109626,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         VDiffTableLastPK.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -110082,7 +110082,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.config_overrides === $util.emptyObject)
                             message.config_overrides = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -110125,7 +110125,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.filter_rules && message.filter_rules.length))
                             message.filter_rules = [];
-                        message.filter_rules.push($root.binlogdata.Rule.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.filter_rules.push($root.binlogdata.Rule.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -110158,7 +110158,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UpdateVReplicationWorkflowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -110663,7 +110663,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -110696,7 +110696,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UpdateVReplicationWorkflowResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -111092,7 +111092,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UpdateVReplicationWorkflowsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -111432,7 +111432,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -111465,7 +111465,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UpdateVReplicationWorkflowsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -111745,7 +111745,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ResetSequencesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -112008,7 +112008,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ResetSequencesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -112345,7 +112345,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         CheckThrottlerRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -112818,7 +112818,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.metrics === $util.emptyObject)
                             message.metrics = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -112836,7 +112836,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.CheckThrottlerResponse.Metric.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.tabletmanagerdata.CheckThrottlerResponse.Metric.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -112915,7 +112915,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         CheckThrottlerResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -113451,7 +113451,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             Metric.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -113811,7 +113811,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetThrottlerStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -114380,7 +114380,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.aggregated_metrics === $util.emptyObject)
                             message.aggregated_metrics = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -114398,7 +114398,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricResult.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricResult.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -114416,7 +114416,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.metric_thresholds === $util.emptyObject)
                             message.metric_thresholds = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -114452,7 +114452,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.metrics_health === $util.emptyObject)
                             message.metrics_health = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -114470,7 +114470,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.MetricHealth.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -114488,7 +114488,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.throttled_apps === $util.emptyObject)
                             message.throttled_apps = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -114506,7 +114506,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.ThrottledAppRule.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.topodata.ThrottledAppRule.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -114524,7 +114524,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.app_checked_metrics === $util.emptyObject)
                             message.app_checked_metrics = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -114569,7 +114569,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.recent_apps === $util.emptyObject)
                             message.recent_apps = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -114587,7 +114587,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.tabletmanagerdata.GetThrottlerStatusResponse.RecentApp.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -114639,7 +114639,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetThrottlerStatusResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -115232,7 +115232,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             MetricResult.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -115492,7 +115492,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.last_healthy_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_healthy_at);
+                            message.last_healthy_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.last_healthy_at);
                             continue;
                         }
                     case 2: {
@@ -115534,7 +115534,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             MetricHealth.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -115814,7 +115814,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.checked_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.checked_at);
+                            message.checked_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.checked_at);
                             continue;
                         }
                     case 3: {
@@ -115856,7 +115856,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             RecentApp.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -116154,7 +116154,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.tags === $util.emptyObject)
                             message.tags = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -116224,7 +116224,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ChangeTagsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -116496,7 +116496,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.tags === $util.emptyObject)
                             message.tags = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -116557,7 +116557,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         ChangeTagsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -116819,7 +116819,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.sequences && message.sequences.length))
                             message.sequences = [];
-                        message.sequences.push($root.tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.sequences.push($root.tabletmanagerdata.UpdateSequenceTablesRequest.SequenceMetadata.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -116852,7 +116852,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UpdateSequenceTablesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -117180,7 +117180,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             SequenceMetadata.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -117470,7 +117470,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         UpdateSequenceTablesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -117695,7 +117695,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (!(message.sequences && message.sequences.length))
                             message.sequences = [];
-                        message.sequences.push($root.tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.sequences.push($root.tabletmanagerdata.GetMaxValueForSequencesRequest.SequenceMetadata.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -117728,7 +117728,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetMaxValueForSequencesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -118076,7 +118076,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
             SequenceMetadata.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -118350,7 +118350,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
                             break;
                         if (message.max_values_by_sequence_table === $util.emptyObject)
                             message.max_values_by_sequence_table = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -118411,7 +118411,7 @@ export const tabletmanagerdata = $root.tabletmanagerdata = (() => {
         GetMaxValueForSequencesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -118769,7 +118769,7 @@ export const binlogdata = $root.binlogdata = (() => {
         Charset.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -119042,13 +119042,13 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.statements && message.statements.length))
                             message.statements = [];
-                        message.statements.push($root.binlogdata.BinlogTransaction.Statement.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.statements.push($root.binlogdata.BinlogTransaction.Statement.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.event_token = $root.query.EventToken.decode(reader, reader.uint32(), $undefined, _depth + 1, message.event_token);
+                        message.event_token = $root.query.EventToken.decode(reader, reader.size(), $undefined, _depth + 1, message.event_token);
                         continue;
                     }
                 }
@@ -119081,7 +119081,7 @@ export const binlogdata = $root.binlogdata = (() => {
         BinlogTransaction.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -119378,7 +119378,7 @@ export const binlogdata = $root.binlogdata = (() => {
                     case 2: {
                             if (wireType !== 2)
                                 break;
-                            message.charset = $root.binlogdata.Charset.decode(reader, reader.uint32(), $undefined, _depth + 1, message.charset);
+                            message.charset = $root.binlogdata.Charset.decode(reader, reader.size(), $undefined, _depth + 1, message.charset);
                             continue;
                         }
                     case 3: {
@@ -119420,7 +119420,7 @@ export const binlogdata = $root.binlogdata = (() => {
             Statement.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -119798,13 +119798,13 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32(), $undefined, _depth + 1, message.key_range);
+                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.size(), $undefined, _depth + 1, message.key_range);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.charset = $root.binlogdata.Charset.decode(reader, reader.uint32(), $undefined, _depth + 1, message.charset);
+                        message.charset = $root.binlogdata.Charset.decode(reader, reader.size(), $undefined, _depth + 1, message.charset);
                         continue;
                     }
                 }
@@ -119837,7 +119837,7 @@ export const binlogdata = $root.binlogdata = (() => {
         StreamKeyRangeRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -120103,7 +120103,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.binlog_transaction = $root.binlogdata.BinlogTransaction.decode(reader, reader.uint32(), $undefined, _depth + 1, message.binlog_transaction);
+                        message.binlog_transaction = $root.binlogdata.BinlogTransaction.decode(reader, reader.size(), $undefined, _depth + 1, message.binlog_transaction);
                         continue;
                     }
                 }
@@ -120136,7 +120136,7 @@ export const binlogdata = $root.binlogdata = (() => {
         StreamKeyRangeResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -120420,7 +120420,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.charset = $root.binlogdata.Charset.decode(reader, reader.uint32(), $undefined, _depth + 1, message.charset);
+                        message.charset = $root.binlogdata.Charset.decode(reader, reader.size(), $undefined, _depth + 1, message.charset);
                         continue;
                     }
                 }
@@ -120453,7 +120453,7 @@ export const binlogdata = $root.binlogdata = (() => {
         StreamTablesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -120727,7 +120727,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.binlog_transaction = $root.binlogdata.BinlogTransaction.decode(reader, reader.uint32(), $undefined, _depth + 1, message.binlog_transaction);
+                        message.binlog_transaction = $root.binlogdata.BinlogTransaction.decode(reader, reader.size(), $undefined, _depth + 1, message.binlog_transaction);
                         continue;
                     }
                 }
@@ -120760,7 +120760,7 @@ export const binlogdata = $root.binlogdata = (() => {
         StreamTablesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -121059,7 +121059,7 @@ export const binlogdata = $root.binlogdata = (() => {
         CharsetConversion.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -121424,7 +121424,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (message.convert_enum_to_text === $util.emptyObject)
                             message.convert_enum_to_text = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -121460,7 +121460,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (message.convert_charset === $util.emptyObject)
                             message.convert_charset = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -121478,7 +121478,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.binlogdata.CharsetConversion.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.binlogdata.CharsetConversion.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -121523,7 +121523,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (message.convert_int_to_enum === $util.emptyObject)
                             message.convert_int_to_enum = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -121593,7 +121593,7 @@ export const binlogdata = $root.binlogdata = (() => {
         Rule.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -122003,7 +122003,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.rules && message.rules.length))
                             message.rules = [];
-                        message.rules.push($root.binlogdata.Rule.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rules.push($root.binlogdata.Rule.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -122063,7 +122063,7 @@ export const binlogdata = $root.binlogdata = (() => {
         Filter.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -122618,7 +122618,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32(), $undefined, _depth + 1, message.key_range);
+                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.size(), $undefined, _depth + 1, message.key_range);
                         continue;
                     }
                 case 5: {
@@ -122632,7 +122632,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.filter = $root.binlogdata.Filter.decode(reader, reader.uint32(), $undefined, _depth + 1, message.filter);
+                        message.filter = $root.binlogdata.Filter.decode(reader, reader.size(), $undefined, _depth + 1, message.filter);
                         continue;
                     }
                 case 7: {
@@ -122719,7 +122719,7 @@ export const binlogdata = $root.binlogdata = (() => {
         BinlogSource.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -123255,37 +123255,37 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.before = $root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before);
+                        message.before = $root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1, message.before);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.after = $root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1, message.after);
+                        message.after = $root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1, message.after);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.data_columns);
+                        message.data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.size(), $undefined, _depth + 1, message.data_columns);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.json_partial_values = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.json_partial_values);
+                        message.json_partial_values = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.size(), $undefined, _depth + 1, message.json_partial_values);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.before_data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before_data_columns);
+                        message.before_data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.size(), $undefined, _depth + 1, message.before_data_columns);
                         continue;
                     }
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.after_data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.uint32(), $undefined, _depth + 1, message.after_data_columns);
+                        message.after_data_columns = $root.binlogdata.RowChange.Bitmap.decode(reader, reader.size(), $undefined, _depth + 1, message.after_data_columns);
                         continue;
                     }
                 }
@@ -123318,7 +123318,7 @@ export const binlogdata = $root.binlogdata = (() => {
         RowChange.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -123680,7 +123680,7 @@ export const binlogdata = $root.binlogdata = (() => {
             Bitmap.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -124025,7 +124025,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.row_changes && message.row_changes.length))
                             message.row_changes = [];
-                        message.row_changes.push($root.binlogdata.RowChange.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.row_changes.push($root.binlogdata.RowChange.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -124094,7 +124094,7 @@ export const binlogdata = $root.binlogdata = (() => {
         RowEvent.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -124464,7 +124464,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.fields && message.fields.length))
                             message.fields = [];
-                        message.fields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.fields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -124533,7 +124533,7 @@ export const binlogdata = $root.binlogdata = (() => {
         FieldEvent.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -124899,7 +124899,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.table_p_ks && message.table_p_ks.length))
                             message.table_p_ks = [];
-                        message.table_p_ks.push($root.binlogdata.TableLastPK.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.table_p_ks.push($root.binlogdata.TableLastPK.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -124932,7 +124932,7 @@ export const binlogdata = $root.binlogdata = (() => {
         ShardGtid.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -125220,7 +125220,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.shard_gtids && message.shard_gtids.length))
                             message.shard_gtids = [];
-                        message.shard_gtids.push($root.binlogdata.ShardGtid.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.shard_gtids.push($root.binlogdata.ShardGtid.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -125253,7 +125253,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VGtid.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -125564,7 +125564,7 @@ export const binlogdata = $root.binlogdata = (() => {
         KeyspaceShard.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -125938,7 +125938,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.shard_gtids && message.shard_gtids.length))
                             message.shard_gtids = [];
-                        message.shard_gtids.push($root.binlogdata.ShardGtid.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.shard_gtids.push($root.binlogdata.ShardGtid.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 6: {
@@ -125946,7 +125946,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.participants && message.participants.length))
                             message.participants = [];
-                        message.participants.push($root.binlogdata.KeyspaceShard.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.participants.push($root.binlogdata.KeyspaceShard.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 7: {
@@ -125987,7 +125987,7 @@ export const binlogdata = $root.binlogdata = (() => {
         Journal.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -126587,25 +126587,25 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.row_event = $root.binlogdata.RowEvent.decode(reader, reader.uint32(), $undefined, _depth + 1, message.row_event);
+                        message.row_event = $root.binlogdata.RowEvent.decode(reader, reader.size(), $undefined, _depth + 1, message.row_event);
                         continue;
                     }
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.field_event = $root.binlogdata.FieldEvent.decode(reader, reader.uint32(), $undefined, _depth + 1, message.field_event);
+                        message.field_event = $root.binlogdata.FieldEvent.decode(reader, reader.size(), $undefined, _depth + 1, message.field_event);
                         continue;
                     }
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.vgtid = $root.binlogdata.VGtid.decode(reader, reader.uint32(), $undefined, _depth + 1, message.vgtid);
+                        message.vgtid = $root.binlogdata.VGtid.decode(reader, reader.size(), $undefined, _depth + 1, message.vgtid);
                         continue;
                     }
                 case 8: {
                         if (wireType !== 2)
                             break;
-                        message.journal = $root.binlogdata.Journal.decode(reader, reader.uint32(), $undefined, _depth + 1, message.journal);
+                        message.journal = $root.binlogdata.Journal.decode(reader, reader.size(), $undefined, _depth + 1, message.journal);
                         continue;
                     }
                 case 9: {
@@ -126629,7 +126629,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 21: {
                         if (wireType !== 2)
                             break;
-                        message.last_p_k_event = $root.binlogdata.LastPKEvent.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_p_k_event);
+                        message.last_p_k_event = $root.binlogdata.LastPKEvent.decode(reader, reader.size(), $undefined, _depth + 1, message.last_p_k_event);
                         continue;
                     }
                 case 22: {
@@ -126725,7 +126725,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VEvent.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -127344,7 +127344,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.fields && message.fields.length))
                             message.fields = [];
-                        message.fields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.fields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -127400,7 +127400,7 @@ export const binlogdata = $root.binlogdata = (() => {
         MinimalTable.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -127712,7 +127712,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.tables && message.tables.length))
                             message.tables = [];
-                        message.tables.push($root.binlogdata.MinimalTable.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.tables.push($root.binlogdata.MinimalTable.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -127745,7 +127745,7 @@ export const binlogdata = $root.binlogdata = (() => {
         MinimalSchema.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -128061,7 +128061,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (message.config_overrides === $util.emptyObject)
                             message.config_overrides = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -128153,7 +128153,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamOptions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -128647,19 +128647,19 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -128674,7 +128674,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.filter = $root.binlogdata.Filter.decode(reader, reader.uint32(), $undefined, _depth + 1, message.filter);
+                        message.filter = $root.binlogdata.Filter.decode(reader, reader.size(), $undefined, _depth + 1, message.filter);
                         continue;
                     }
                 case 6: {
@@ -128682,13 +128682,13 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.table_last_p_ks && message.table_last_p_ks.length))
                             message.table_last_p_ks = [];
-                        message.table_last_p_ks.push($root.binlogdata.TableLastPK.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.table_last_p_ks.push($root.binlogdata.TableLastPK.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.binlogdata.VStreamOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.binlogdata.VStreamOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -128721,7 +128721,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -129056,7 +129056,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.binlogdata.VEvent.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.binlogdata.VEvent.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -129089,7 +129089,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -129399,19 +129399,19 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -129426,13 +129426,13 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.lastpk = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.lastpk);
+                        message.lastpk = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.lastpk);
                         continue;
                     }
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.binlogdata.VStreamOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.binlogdata.VStreamOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -129465,7 +129465,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamRowsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -129855,7 +129855,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.fields && message.fields.length))
                             message.fields = [];
-                        message.fields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.fields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -129863,7 +129863,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.pkfields && message.pkfields.length))
                             message.pkfields = [];
-                        message.pkfields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.pkfields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -129880,13 +129880,13 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.rows && message.rows.length))
                             message.rows = [];
-                        message.rows.push($root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rows.push($root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.lastpk = $root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1, message.lastpk);
+                        message.lastpk = $root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1, message.lastpk);
                         continue;
                     }
                 case 6: {
@@ -129946,7 +129946,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamRowsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -130336,25 +130336,25 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.binlogdata.VStreamOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.binlogdata.VStreamOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -130387,7 +130387,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamTablesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -130742,7 +130742,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.fields && message.fields.length))
                             message.fields = [];
-                        message.fields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.fields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -130750,7 +130750,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.pkfields && message.pkfields.length))
                             message.pkfields = [];
-                        message.pkfields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.pkfields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 4: {
@@ -130767,13 +130767,13 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.rows && message.rows.length))
                             message.rows = [];
-                        message.rows.push($root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rows.push($root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.lastpk = $root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1, message.lastpk);
+                        message.lastpk = $root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1, message.lastpk);
                         continue;
                     }
                 }
@@ -130806,7 +130806,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamTablesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -131156,7 +131156,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.table_last_p_k = $root.binlogdata.TableLastPK.decode(reader, reader.uint32(), $undefined, _depth + 1, message.table_last_p_k);
+                        message.table_last_p_k = $root.binlogdata.TableLastPK.decode(reader, reader.size(), $undefined, _depth + 1, message.table_last_p_k);
                         continue;
                     }
                 case 2: {
@@ -131198,7 +131198,7 @@ export const binlogdata = $root.binlogdata = (() => {
         LastPKEvent.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -131471,7 +131471,7 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.lastpk = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.lastpk);
+                        message.lastpk = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.lastpk);
                         continue;
                     }
                 }
@@ -131504,7 +131504,7 @@ export const binlogdata = $root.binlogdata = (() => {
         TableLastPK.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -131790,19 +131790,19 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -131844,7 +131844,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamResultsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -132151,7 +132151,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.fields && message.fields.length))
                             message.fields = [];
-                        message.fields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.fields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -132168,7 +132168,7 @@ export const binlogdata = $root.binlogdata = (() => {
                             break;
                         if (!(message.rows && message.rows.length))
                             message.rows = [];
-                        message.rows.push($root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rows.push($root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -132201,7 +132201,7 @@ export const binlogdata = $root.binlogdata = (() => {
         VStreamResultsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -132558,19 +132558,19 @@ export const binlogdata = $root.binlogdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -132639,7 +132639,7 @@ export const binlogdata = $root.binlogdata = (() => {
         BinlogDumpGTIDRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -132997,7 +132997,7 @@ export const binlogdata = $root.binlogdata = (() => {
         BinlogDumpResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -133353,7 +133353,7 @@ export const query = $root.query = (() => {
         Target.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -133724,7 +133724,7 @@ export const query = $root.query = (() => {
         VTGateCallerID.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -134060,7 +134060,7 @@ export const query = $root.query = (() => {
         EventToken.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -134550,7 +134550,7 @@ export const query = $root.query = (() => {
         Value.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -135007,7 +135007,7 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.values && message.values.length))
                             message.values = [];
-                        message.values.push($root.query.Value.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.values.push($root.query.Value.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -135040,7 +135040,7 @@ export const query = $root.query = (() => {
         BindVariable.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -135505,7 +135505,7 @@ export const query = $root.query = (() => {
                             break;
                         if (message.bind_variables === $util.emptyObject)
                             message.bind_variables = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -135523,7 +135523,7 @@ export const query = $root.query = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.query.BindVariable.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.query.BindVariable.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -135566,7 +135566,7 @@ export const query = $root.query = (() => {
         BoundQuery.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -136238,7 +136238,7 @@ export const query = $root.query = (() => {
         ExecuteOptions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -137167,7 +137167,7 @@ export const query = $root.query = (() => {
         Field.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -137714,7 +137714,7 @@ export const query = $root.query = (() => {
         Row.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -138067,7 +138067,7 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.fields && message.fields.length))
                             message.fields = [];
-                        message.fields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.fields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -138093,7 +138093,7 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.rows && message.rows.length))
                             message.rows = [];
-                        message.rows.push($root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rows.push($root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 6: {
@@ -138153,7 +138153,7 @@ export const query = $root.query = (() => {
         QueryResult.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -138569,7 +138569,7 @@ export const query = $root.query = (() => {
         QueryWarning.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -138833,13 +138833,13 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.statements && message.statements.length))
                             message.statements = [];
-                        message.statements.push($root.query.StreamEvent.Statement.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.statements.push($root.query.StreamEvent.Statement.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.event_token = $root.query.EventToken.decode(reader, reader.uint32(), $undefined, _depth + 1, message.event_token);
+                        message.event_token = $root.query.EventToken.decode(reader, reader.size(), $undefined, _depth + 1, message.event_token);
                         continue;
                     }
                 }
@@ -138872,7 +138872,7 @@ export const query = $root.query = (() => {
         StreamEvent.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -139206,7 +139206,7 @@ export const query = $root.query = (() => {
                                 break;
                             if (!(message.primary_key_fields && message.primary_key_fields.length))
                                 message.primary_key_fields = [];
-                            message.primary_key_fields.push($root.query.Field.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.primary_key_fields.push($root.query.Field.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     case 4: {
@@ -139214,7 +139214,7 @@ export const query = $root.query = (() => {
                                 break;
                             if (!(message.primary_key_values && message.primary_key_values.length))
                                 message.primary_key_values = [];
-                            message.primary_key_values.push($root.query.Row.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.primary_key_values.push($root.query.Row.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     case 5: {
@@ -139256,7 +139256,7 @@ export const query = $root.query = (() => {
             Statement.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -139721,25 +139721,25 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.query = $root.query.BoundQuery.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query);
+                        message.query = $root.query.BoundQuery.decode(reader, reader.size(), $undefined, _depth + 1, message.query);
                         continue;
                     }
                 case 5: {
@@ -139754,7 +139754,7 @@ export const query = $root.query = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 case 7: {
@@ -139828,7 +139828,7 @@ export const query = $root.query = (() => {
         ExecuteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -140225,7 +140225,7 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -140258,7 +140258,7 @@ export const query = $root.query = (() => {
         ExecuteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -140512,13 +140512,13 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                        message.error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -140551,7 +140551,7 @@ export const query = $root.query = (() => {
         ResultWithError.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -140883,31 +140883,31 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.query = $root.query.BoundQuery.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query);
+                        message.query = $root.query.BoundQuery.decode(reader, reader.size(), $undefined, _depth + 1, message.query);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 case 6: {
@@ -140958,7 +140958,7 @@ export const query = $root.query = (() => {
         StreamExecuteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -141304,7 +141304,7 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -141337,7 +141337,7 @@ export const query = $root.query = (() => {
         StreamExecuteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -141619,25 +141619,25 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -141670,7 +141670,7 @@ export const query = $root.query = (() => {
         BeginRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -141984,7 +141984,7 @@ export const query = $root.query = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 3: {
@@ -142026,7 +142026,7 @@ export const query = $root.query = (() => {
         BeginResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -142337,19 +142337,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -142391,7 +142391,7 @@ export const query = $root.query = (() => {
         CommitRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -142722,7 +142722,7 @@ export const query = $root.query = (() => {
         CommitResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -143010,19 +143010,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -143064,7 +143064,7 @@ export const query = $root.query = (() => {
         RollbackRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -143395,7 +143395,7 @@ export const query = $root.query = (() => {
         RollbackResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -143694,19 +143694,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -143757,7 +143757,7 @@ export const query = $root.query = (() => {
         PrepareRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -144074,7 +144074,7 @@ export const query = $root.query = (() => {
         PrepareResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -144328,19 +144328,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -144382,7 +144382,7 @@ export const query = $root.query = (() => {
         CommitPreparedRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -144674,7 +144674,7 @@ export const query = $root.query = (() => {
         CommitPreparedResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -144939,19 +144939,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -145002,7 +145002,7 @@ export const query = $root.query = (() => {
         RollbackPreparedRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -145319,7 +145319,7 @@ export const query = $root.query = (() => {
         RollbackPreparedResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -145586,19 +145586,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -145615,7 +145615,7 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.participants && message.participants.length))
                             message.participants = [];
-                        message.participants.push($root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.participants.push($root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -145648,7 +145648,7 @@ export const query = $root.query = (() => {
         CreateTransactionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -145966,7 +145966,7 @@ export const query = $root.query = (() => {
         CreateTransactionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -146231,19 +146231,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -146294,7 +146294,7 @@ export const query = $root.query = (() => {
         StartCommitRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -146650,7 +146650,7 @@ export const query = $root.query = (() => {
         StartCommitResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -146948,19 +146948,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -147011,7 +147011,7 @@ export const query = $root.query = (() => {
         SetRollbackRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -147328,7 +147328,7 @@ export const query = $root.query = (() => {
         SetRollbackResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -147582,19 +147582,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -147636,7 +147636,7 @@ export const query = $root.query = (() => {
         ConcludeTransactionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -147928,7 +147928,7 @@ export const query = $root.query = (() => {
         ConcludeTransactionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -148182,19 +148182,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -148236,7 +148236,7 @@ export const query = $root.query = (() => {
         ReadTransactionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -148515,7 +148515,7 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.metadata = $root.query.TransactionMetadata.decode(reader, reader.uint32(), $undefined, _depth + 1, message.metadata);
+                        message.metadata = $root.query.TransactionMetadata.decode(reader, reader.size(), $undefined, _depth + 1, message.metadata);
                         continue;
                     }
                 }
@@ -148548,7 +148548,7 @@ export const query = $root.query = (() => {
         ReadTransactionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -148824,19 +148824,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -148878,7 +148878,7 @@ export const query = $root.query = (() => {
         UnresolvedTransactionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -149177,7 +149177,7 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.transactions && message.transactions.length))
                             message.transactions = [];
-                        message.transactions.push($root.query.TransactionMetadata.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.transactions.push($root.query.TransactionMetadata.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -149210,7 +149210,7 @@ export const query = $root.query = (() => {
         UnresolvedTransactionsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -149542,31 +149542,31 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.query = $root.query.BoundQuery.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query);
+                        message.query = $root.query.BoundQuery.decode(reader, reader.size(), $undefined, _depth + 1, message.query);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 case 6: {
@@ -149616,7 +149616,7 @@ export const query = $root.query = (() => {
         BeginExecuteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -150002,13 +150002,13 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                        message.error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 case 3: {
@@ -150023,7 +150023,7 @@ export const query = $root.query = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 5: {
@@ -150065,7 +150065,7 @@ export const query = $root.query = (() => {
         BeginExecuteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -150446,31 +150446,31 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.query = $root.query.BoundQuery.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query);
+                        message.query = $root.query.BoundQuery.decode(reader, reader.size(), $undefined, _depth + 1, message.query);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 case 6: {
@@ -150520,7 +150520,7 @@ export const query = $root.query = (() => {
         BeginStreamExecuteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -150906,13 +150906,13 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                        message.error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 case 3: {
@@ -150927,7 +150927,7 @@ export const query = $root.query = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 5: {
@@ -150969,7 +150969,7 @@ export const query = $root.query = (() => {
         BeginStreamExecuteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -151306,19 +151306,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -151360,7 +151360,7 @@ export const query = $root.query = (() => {
         MessageStreamRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -151639,7 +151639,7 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -151672,7 +151672,7 @@ export const query = $root.query = (() => {
         MessageStreamResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -151961,19 +151961,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -151990,7 +151990,7 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.ids && message.ids.length))
                             message.ids = [];
-                        message.ids.push($root.query.Value.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.ids.push($root.query.Value.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -152023,7 +152023,7 @@ export const query = $root.query = (() => {
         MessageAckRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -152328,7 +152328,7 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -152361,7 +152361,7 @@ export const query = $root.query = (() => {
         MessageAckResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -152681,25 +152681,25 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.query = $root.query.BoundQuery.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query);
+                        message.query = $root.query.BoundQuery.decode(reader, reader.size(), $undefined, _depth + 1, message.query);
                         continue;
                     }
                 case 5: {
@@ -152714,7 +152714,7 @@ export const query = $root.query = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 case 7: {
@@ -152755,7 +152755,7 @@ export const query = $root.query = (() => {
         ReserveExecuteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -153130,13 +153130,13 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                        message.error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 case 3: {
@@ -153151,7 +153151,7 @@ export const query = $root.query = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -153184,7 +153184,7 @@ export const query = $root.query = (() => {
         ReserveExecuteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -153556,31 +153556,31 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.query = $root.query.BoundQuery.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query);
+                        message.query = $root.query.BoundQuery.decode(reader, reader.size(), $undefined, _depth + 1, message.query);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 case 6: {
@@ -153630,7 +153630,7 @@ export const query = $root.query = (() => {
         ReserveStreamExecuteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -154005,13 +154005,13 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                        message.error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 case 3: {
@@ -154026,7 +154026,7 @@ export const query = $root.query = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -154059,7 +154059,7 @@ export const query = $root.query = (() => {
         ReserveStreamExecuteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -154433,31 +154433,31 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.query = $root.query.BoundQuery.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query);
+                        message.query = $root.query.BoundQuery.decode(reader, reader.size(), $undefined, _depth + 1, message.query);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 case 6: {
@@ -154506,7 +154506,7 @@ export const query = $root.query = (() => {
         ReserveBeginExecuteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -154899,13 +154899,13 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                        message.error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 case 3: {
@@ -154929,7 +154929,7 @@ export const query = $root.query = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 6: {
@@ -154971,7 +154971,7 @@ export const query = $root.query = (() => {
         ReserveBeginExecuteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -155379,31 +155379,31 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.query = $root.query.BoundQuery.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query);
+                        message.query = $root.query.BoundQuery.decode(reader, reader.size(), $undefined, _depth + 1, message.query);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.query.ExecuteOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.query.ExecuteOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 case 6: {
@@ -155452,7 +155452,7 @@ export const query = $root.query = (() => {
         ReserveBeginStreamExecuteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -155845,13 +155845,13 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.error = $root.vtrpc.RPCError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                        message.error = $root.vtrpc.RPCError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 case 3: {
@@ -155875,7 +155875,7 @@ export const query = $root.query = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 6: {
@@ -155917,7 +155917,7 @@ export const query = $root.query = (() => {
         ReserveBeginStreamExecuteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -156290,19 +156290,19 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.effective_caller_id);
+                        message.effective_caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.effective_caller_id);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.immediate_caller_id);
+                        message.immediate_caller_id = $root.query.VTGateCallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.immediate_caller_id);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -156353,7 +156353,7 @@ export const query = $root.query = (() => {
         ReleaseRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -156686,7 +156686,7 @@ export const query = $root.query = (() => {
         ReleaseResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -156920,7 +156920,7 @@ export const query = $root.query = (() => {
         StreamHealthRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -157359,7 +157359,7 @@ export const query = $root.query = (() => {
         RealtimeStats.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -157816,7 +157816,7 @@ export const query = $root.query = (() => {
         AggregateStats.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -158127,7 +158127,7 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 2: {
@@ -158151,13 +158151,13 @@ export const query = $root.query = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.realtime_stats = $root.query.RealtimeStats.decode(reader, reader.uint32(), $undefined, _depth + 1, message.realtime_stats);
+                        message.realtime_stats = $root.query.RealtimeStats.decode(reader, reader.size(), $undefined, _depth + 1, message.realtime_stats);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -158190,7 +158190,7 @@ export const query = $root.query = (() => {
         StreamHealthResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -158576,7 +158576,7 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.participants && message.participants.length))
                             message.participants = [];
-                        message.participants.push($root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.participants.push($root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -158609,7 +158609,7 @@ export const query = $root.query = (() => {
         TransactionMetadata.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -158970,7 +158970,7 @@ export const query = $root.query = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 2: {
@@ -159020,7 +159020,7 @@ export const query = $root.query = (() => {
         GetSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -159389,7 +159389,7 @@ export const query = $root.query = (() => {
         UDFInfo.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -159819,7 +159819,7 @@ export const query = $root.query = (() => {
                             break;
                         if (!(message.udfs && message.udfs.length))
                             message.udfs = [];
-                        message.udfs.push($root.query.UDFInfo.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.udfs.push($root.query.UDFInfo.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -159827,7 +159827,7 @@ export const query = $root.query = (() => {
                             break;
                         if (message.table_definition === $util.emptyObject)
                             message.table_definition = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -159888,7 +159888,7 @@ export const query = $root.query = (() => {
         GetSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -160760,7 +160760,7 @@ export const replicationdata = $root.replicationdata = (() => {
         Status.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -161299,7 +161299,7 @@ export const replicationdata = $root.replicationdata = (() => {
         Configuration.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -161559,13 +161559,13 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.before = $root.replicationdata.Status.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before);
+                        message.before = $root.replicationdata.Status.decode(reader, reader.size(), $undefined, _depth + 1, message.before);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.after = $root.replicationdata.Status.decode(reader, reader.uint32(), $undefined, _depth + 1, message.after);
+                        message.after = $root.replicationdata.Status.decode(reader, reader.size(), $undefined, _depth + 1, message.after);
                         continue;
                     }
                 }
@@ -161598,7 +161598,7 @@ export const replicationdata = $root.replicationdata = (() => {
         StopReplicationStatus.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -161965,7 +161965,7 @@ export const replicationdata = $root.replicationdata = (() => {
         PrimaryStatus.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -162276,7 +162276,7 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -162291,19 +162291,19 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.last_successful_ping = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_successful_ping);
+                        message.last_successful_ping = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.last_successful_ping);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.last_attempted_ping = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_attempted_ping);
+                        message.last_attempted_ping = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.last_attempted_ping);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.time_since_last_attempted_ping = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_since_last_attempted_ping);
+                        message.time_since_last_attempted_ping = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.time_since_last_attempted_ping);
                         continue;
                     }
                 }
@@ -162336,7 +162336,7 @@ export const replicationdata = $root.replicationdata = (() => {
         ShardPeerHealth.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -162939,13 +162939,13 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.replication_status = $root.replicationdata.Status.decode(reader, reader.uint32(), $undefined, _depth + 1, message.replication_status);
+                        message.replication_status = $root.replicationdata.Status.decode(reader, reader.size(), $undefined, _depth + 1, message.replication_status);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.primary_status = $root.replicationdata.PrimaryStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary_status);
+                        message.primary_status = $root.replicationdata.PrimaryStatus.decode(reader, reader.size(), $undefined, _depth + 1, message.primary_status);
                         continue;
                     }
                 case 5: {
@@ -163104,7 +163104,7 @@ export const replicationdata = $root.replicationdata = (() => {
                 case 22: {
                         if (wireType !== 2)
                             break;
-                        message.replication_configuration = $root.replicationdata.Configuration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.replication_configuration);
+                        message.replication_configuration = $root.replicationdata.Configuration.decode(reader, reader.size(), $undefined, _depth + 1, message.replication_configuration);
                         continue;
                     }
                 case 23: {
@@ -163139,7 +163139,7 @@ export const replicationdata = $root.replicationdata = (() => {
                             break;
                         if (!(message.shard_peer_health && message.shard_peer_health.length))
                             message.shard_peer_health = [];
-                        message.shard_peer_health.push($root.replicationdata.ShardPeerHealth.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.shard_peer_health.push($root.replicationdata.ShardPeerHealth.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -163172,7 +163172,7 @@ export const replicationdata = $root.replicationdata = (() => {
         FullStatus.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -163745,7 +163745,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (!(message.rules && message.rules.length))
                             message.rules = [];
-                        message.rules.push($root.vschema.RoutingRule.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rules.push($root.vschema.RoutingRule.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -163778,7 +163778,7 @@ export const vschema = $root.vschema = (() => {
         RoutingRules.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -164090,7 +164090,7 @@ export const vschema = $root.vschema = (() => {
         RoutingRule.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -164435,7 +164435,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (message.vindexes === $util.emptyObject)
                             message.vindexes = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -164453,7 +164453,7 @@ export const vschema = $root.vschema = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vschema.Vindex.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vschema.Vindex.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -164471,7 +164471,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (message.tables === $util.emptyObject)
                             message.tables = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -164489,7 +164489,7 @@ export const vschema = $root.vschema = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vschema.Table.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vschema.Table.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -164523,7 +164523,7 @@ export const vschema = $root.vschema = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.multi_tenant_spec = $root.vschema.MultiTenantSpec.decode(reader, reader.uint32(), $undefined, _depth + 1, message.multi_tenant_spec);
+                        message.multi_tenant_spec = $root.vschema.MultiTenantSpec.decode(reader, reader.size(), $undefined, _depth + 1, message.multi_tenant_spec);
                         continue;
                     }
                 case 7: {
@@ -164565,7 +164565,7 @@ export const vschema = $root.vschema = (() => {
         Keyspace.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -165003,7 +165003,7 @@ export const vschema = $root.vschema = (() => {
         MultiTenantSpec.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -165442,7 +165442,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (message.params === $util.emptyObject)
                             message.params = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -165512,7 +165512,7 @@ export const vschema = $root.vschema = (() => {
         Vindex.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -165871,13 +165871,13 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (!(message.column_vindexes && message.column_vindexes.length))
                             message.column_vindexes = [];
-                        message.column_vindexes.push($root.vschema.ColumnVindex.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.column_vindexes.push($root.vschema.ColumnVindex.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.auto_increment = $root.vschema.AutoIncrement.decode(reader, reader.uint32(), $undefined, _depth + 1, message.auto_increment);
+                        message.auto_increment = $root.vschema.AutoIncrement.decode(reader, reader.size(), $undefined, _depth + 1, message.auto_increment);
                         continue;
                     }
                 case 4: {
@@ -165885,7 +165885,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (!(message.columns && message.columns.length))
                             message.columns = [];
-                        message.columns.push($root.vschema.Column.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.columns.push($root.vschema.Column.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 5: {
@@ -165945,7 +165945,7 @@ export const vschema = $root.vschema = (() => {
         Table.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -166354,7 +166354,7 @@ export const vschema = $root.vschema = (() => {
         ColumnVindex.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -166680,7 +166680,7 @@ export const vschema = $root.vschema = (() => {
         AutoIncrement.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -167133,7 +167133,7 @@ export const vschema = $root.vschema = (() => {
         Column.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -167663,7 +167663,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (message.keyspaces === $util.emptyObject)
                             message.keyspaces = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -167681,7 +167681,7 @@ export const vschema = $root.vschema = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vschema.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vschema.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -167697,25 +167697,25 @@ export const vschema = $root.vschema = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.routing_rules);
+                        message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.routing_rules);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.shard_routing_rules = $root.vschema.ShardRoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard_routing_rules);
+                        message.shard_routing_rules = $root.vschema.ShardRoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.shard_routing_rules);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace_routing_rules);
+                        message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace_routing_rules);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.mirror_rules = $root.vschema.MirrorRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.mirror_rules);
+                        message.mirror_rules = $root.vschema.MirrorRules.decode(reader, reader.size(), $undefined, _depth + 1, message.mirror_rules);
                         continue;
                     }
                 }
@@ -167748,7 +167748,7 @@ export const vschema = $root.vschema = (() => {
         SrvVSchema.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -168068,7 +168068,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (!(message.rules && message.rules.length))
                             message.rules = [];
-                        message.rules.push($root.vschema.ShardRoutingRule.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rules.push($root.vschema.ShardRoutingRule.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -168101,7 +168101,7 @@ export const vschema = $root.vschema = (() => {
         ShardRoutingRules.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -168432,7 +168432,7 @@ export const vschema = $root.vschema = (() => {
         ShardRoutingRule.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -168694,7 +168694,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (!(message.rules && message.rules.length))
                             message.rules = [];
-                        message.rules.push($root.vschema.KeyspaceRoutingRule.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rules.push($root.vschema.KeyspaceRoutingRule.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -168727,7 +168727,7 @@ export const vschema = $root.vschema = (() => {
         KeyspaceRoutingRules.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -169038,7 +169038,7 @@ export const vschema = $root.vschema = (() => {
         KeyspaceRoutingRule.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -169291,7 +169291,7 @@ export const vschema = $root.vschema = (() => {
                             break;
                         if (!(message.rules && message.rules.length))
                             message.rules = [];
-                        message.rules.push($root.vschema.MirrorRule.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.rules.push($root.vschema.MirrorRule.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -169324,7 +169324,7 @@ export const vschema = $root.vschema = (() => {
         MirrorRules.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -169655,7 +169655,7 @@ export const vschema = $root.vschema = (() => {
         MirrorRule.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -169982,7 +169982,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteVtctlCommandRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -170258,7 +170258,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.event = $root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1, message.event);
+                        message.event = $root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1, message.event);
                         continue;
                     }
                 }
@@ -170291,7 +170291,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteVtctlCommandResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -170628,7 +170628,7 @@ export const vtctldata = $root.vtctldata = (() => {
         TableMaterializeSettings.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -171117,7 +171117,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.table_settings && message.table_settings.length))
                             message.table_settings = [];
-                        message.table_settings.push($root.vtctldata.TableMaterializeSettings.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.table_settings.push($root.vtctldata.TableMaterializeSettings.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 6: {
@@ -171221,7 +171221,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 17: {
                         if (wireType !== 2)
                             break;
-                        message.workflow_options = $root.vtctldata.WorkflowOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.workflow_options);
+                        message.workflow_options = $root.vtctldata.WorkflowOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.workflow_options);
                         continue;
                     }
                 case 18: {
@@ -171262,7 +171262,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MaterializeSettings.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -171753,7 +171753,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace = $root.topodata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                        message.keyspace = $root.topodata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                         continue;
                     }
                 }
@@ -171786,7 +171786,7 @@ export const vtctldata = $root.vtctldata = (() => {
         Keyspace.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -172721,43 +172721,43 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 9: {
                         if (wireType !== 2)
                             break;
-                        message.added_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.added_at);
+                        message.added_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.added_at);
                         continue;
                     }
                 case 10: {
                         if (wireType !== 2)
                             break;
-                        message.requested_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.requested_at);
+                        message.requested_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.requested_at);
                         continue;
                     }
                 case 11: {
                         if (wireType !== 2)
                             break;
-                        message.ready_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.ready_at);
+                        message.ready_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.ready_at);
                         continue;
                     }
                 case 12: {
                         if (wireType !== 2)
                             break;
-                        message.started_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.started_at);
+                        message.started_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.started_at);
                         continue;
                     }
                 case 13: {
                         if (wireType !== 2)
                             break;
-                        message.liveness_timestamp = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.liveness_timestamp);
+                        message.liveness_timestamp = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.liveness_timestamp);
                         continue;
                     }
                 case 14: {
                         if (wireType !== 2)
                             break;
-                        message.completed_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.completed_at);
+                        message.completed_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.completed_at);
                         continue;
                     }
                 case 15: {
                         if (wireType !== 2)
                             break;
-                        message.cleaned_up_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cleaned_up_at);
+                        message.cleaned_up_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.cleaned_up_at);
                         continue;
                     }
                 case 16: {
@@ -172799,7 +172799,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 20: {
                         if (wireType !== 2)
                             break;
-                        message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                        message.tablet = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                         continue;
                     }
                 case 21: {
@@ -172904,7 +172904,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 32: {
                         if (wireType !== 2)
                             break;
-                        message.artifact_retention = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.artifact_retention);
+                        message.artifact_retention = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.artifact_retention);
                         continue;
                     }
                 case 33: {
@@ -173018,7 +173018,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 45: {
                         if (wireType !== 2)
                             break;
-                        message.last_throttled_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.last_throttled_at);
+                        message.last_throttled_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.last_throttled_at);
                         continue;
                     }
                 case 46: {
@@ -173033,7 +173033,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 47: {
                         if (wireType !== 2)
                             break;
-                        message.cancelled_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cancelled_at);
+                        message.cancelled_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.cancelled_at);
                         continue;
                     }
                 case 48: {
@@ -173075,13 +173075,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 52: {
                         if (wireType !== 2)
                             break;
-                        message.reviewed_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.reviewed_at);
+                        message.reviewed_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.reviewed_at);
                         continue;
                     }
                 case 53: {
                         if (wireType !== 2)
                             break;
-                        message.ready_to_complete_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.ready_to_complete_at);
+                        message.ready_to_complete_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.ready_to_complete_at);
                         continue;
                     }
                 case 54: {
@@ -173132,7 +173132,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SchemaMigration.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -174144,7 +174144,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.shard = $root.topodata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                        message.shard = $root.topodata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                         continue;
                     }
                 }
@@ -174177,7 +174177,7 @@ export const vtctldata = $root.vtctldata = (() => {
         Shard.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -174544,7 +174544,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.config === $util.emptyObject)
                             message.config = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -174622,7 +174622,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowOptions.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -175078,13 +175078,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.source = $root.vtctldata.Workflow.ReplicationLocation.decode(reader, reader.uint32(), $undefined, _depth + 1, message.source);
+                        message.source = $root.vtctldata.Workflow.ReplicationLocation.decode(reader, reader.size(), $undefined, _depth + 1, message.source);
                         continue;
                     }
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.target = $root.vtctldata.Workflow.ReplicationLocation.decode(reader, reader.uint32(), $undefined, _depth + 1, message.target);
+                        message.target = $root.vtctldata.Workflow.ReplicationLocation.decode(reader, reader.size(), $undefined, _depth + 1, message.target);
                         continue;
                     }
                 case 4: {
@@ -175101,7 +175101,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.shard_streams === $util.emptyObject)
                             message.shard_streams = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -175119,7 +175119,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.Workflow.ShardStream.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.Workflow.ShardStream.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -175171,7 +175171,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 10: {
                         if (wireType !== 2)
                             break;
-                        message.options = $root.vtctldata.WorkflowOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.options);
+                        message.options = $root.vtctldata.WorkflowOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.options);
                         continue;
                     }
                 }
@@ -175204,7 +175204,7 @@ export const vtctldata = $root.vtctldata = (() => {
         Workflow.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -175647,7 +175647,7 @@ export const vtctldata = $root.vtctldata = (() => {
             ReplicationLocation.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -175935,7 +175935,7 @@ export const vtctldata = $root.vtctldata = (() => {
                                 break;
                             if (!(message.streams && message.streams.length))
                                 message.streams = [];
-                            message.streams.push($root.vtctldata.Workflow.Stream.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.streams.push($root.vtctldata.Workflow.Stream.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     case 2: {
@@ -175943,7 +175943,7 @@ export const vtctldata = $root.vtctldata = (() => {
                                 break;
                             if (!(message.tablet_controls && message.tablet_controls.length))
                                 message.tablet_controls = [];
-                            message.tablet_controls.push($root.topodata.Shard.TabletControl.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.tablet_controls.push($root.topodata.Shard.TabletControl.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     case 3: {
@@ -175985,7 +175985,7 @@ export const vtctldata = $root.vtctldata = (() => {
             ShardStream.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -176512,13 +176512,13 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 3: {
                             if (wireType !== 2)
                                 break;
-                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                             continue;
                         }
                     case 4: {
                             if (wireType !== 2)
                                 break;
-                            message.binlog_source = $root.binlogdata.BinlogSource.decode(reader, reader.uint32(), $undefined, _depth + 1, message.binlog_source);
+                            message.binlog_source = $root.binlogdata.BinlogSource.decode(reader, reader.size(), $undefined, _depth + 1, message.binlog_source);
                             continue;
                         }
                     case 5: {
@@ -176560,13 +176560,13 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 9: {
                             if (wireType !== 2)
                                 break;
-                            message.transaction_timestamp = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.transaction_timestamp);
+                            message.transaction_timestamp = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.transaction_timestamp);
                             continue;
                         }
                     case 10: {
                             if (wireType !== 2)
                                 break;
-                            message.time_updated = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_updated);
+                            message.time_updated = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.time_updated);
                             continue;
                         }
                     case 11: {
@@ -176583,7 +176583,7 @@ export const vtctldata = $root.vtctldata = (() => {
                                 break;
                             if (!(message.copy_states && message.copy_states.length))
                                 message.copy_states = [];
-                            message.copy_states.push($root.vtctldata.Workflow.Stream.CopyState.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.copy_states.push($root.vtctldata.Workflow.Stream.CopyState.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     case 13: {
@@ -176591,7 +176591,7 @@ export const vtctldata = $root.vtctldata = (() => {
                                 break;
                             if (!(message.logs && message.logs.length))
                                 message.logs = [];
-                            message.logs.push($root.vtctldata.Workflow.Stream.Log.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.logs.push($root.vtctldata.Workflow.Stream.Log.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     case 14: {
@@ -176623,7 +176623,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 17: {
                             if (wireType !== 2)
                                 break;
-                            message.throttler_status = $root.vtctldata.Workflow.Stream.ThrottlerStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.throttler_status);
+                            message.throttler_status = $root.vtctldata.Workflow.Stream.ThrottlerStatus.decode(reader, reader.size(), $undefined, _depth + 1, message.throttler_status);
                             continue;
                         }
                     case 18: {
@@ -176687,7 +176687,7 @@ export const vtctldata = $root.vtctldata = (() => {
             Stream.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -177353,7 +177353,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 CopyState.decodeDelimited = function(reader) {
                     if (!(reader instanceof $Reader))
                         reader = new $Reader(reader);
-                    return this.decode(reader, reader.uint32());
+                    return this.decode(reader, reader.size());
                 };
 
                 /**
@@ -177740,13 +177740,13 @@ export const vtctldata = $root.vtctldata = (() => {
                         case 5: {
                                 if (wireType !== 2)
                                     break;
-                                message.created_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.created_at);
+                                message.created_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.created_at);
                                 continue;
                             }
                         case 6: {
                                 if (wireType !== 2)
                                     break;
-                                message.updated_at = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.updated_at);
+                                message.updated_at = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.updated_at);
                                 continue;
                             }
                         case 7: {
@@ -177797,7 +177797,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 Log.decodeDelimited = function(reader) {
                     if (!(reader instanceof $Reader))
                         reader = new $Reader(reader);
-                    return this.decode(reader, reader.uint32());
+                    return this.decode(reader, reader.size());
                 };
 
                 /**
@@ -178176,7 +178176,7 @@ export const vtctldata = $root.vtctldata = (() => {
                         case 2: {
                                 if (wireType !== 2)
                                     break;
-                                message.time_throttled = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.time_throttled);
+                                message.time_throttled = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.time_throttled);
                                 continue;
                             }
                         }
@@ -178209,7 +178209,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 ThrottlerStatus.decodeDelimited = function(reader) {
                     if (!(reader instanceof $Reader))
                         reader = new $Reader(reader);
-                    return this.decode(reader, reader.uint32());
+                    return this.decode(reader, reader.size());
                 };
 
                 /**
@@ -178488,7 +178488,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cell_info);
+                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.size(), $undefined, _depth + 1, message.cell_info);
                         continue;
                     }
                 }
@@ -178521,7 +178521,7 @@ export const vtctldata = $root.vtctldata = (() => {
         AddCellInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -178787,7 +178787,7 @@ export const vtctldata = $root.vtctldata = (() => {
         AddCellInfoResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -179065,7 +179065,7 @@ export const vtctldata = $root.vtctldata = (() => {
         AddCellsAliasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -179338,7 +179338,7 @@ export const vtctldata = $root.vtctldata = (() => {
         AddCellsAliasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -179583,7 +179583,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace_routing_rules);
+                        message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace_routing_rules);
                         continue;
                     }
                 case 2: {
@@ -179633,7 +179633,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplyKeyspaceRoutingRulesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -179907,7 +179907,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace_routing_rules);
+                        message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace_routing_rules);
                         continue;
                     }
                 }
@@ -179940,7 +179940,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplyKeyspaceRoutingRulesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -180207,7 +180207,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.routing_rules);
+                        message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.routing_rules);
                         continue;
                     }
                 case 2: {
@@ -180257,7 +180257,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplyRoutingRulesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -180544,7 +180544,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplyRoutingRulesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -180789,7 +180789,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.shard_routing_rules = $root.vschema.ShardRoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard_routing_rules);
+                        message.shard_routing_rules = $root.vschema.ShardRoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.shard_routing_rules);
                         continue;
                     }
                 case 2: {
@@ -180839,7 +180839,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplyShardRoutingRulesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -181126,7 +181126,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplyShardRoutingRulesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -181471,13 +181471,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_replicas_timeout);
+                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.wait_replicas_timeout);
                         continue;
                     }
                 case 9: {
                         if (wireType !== 2)
                             break;
-                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.caller_id);
+                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.caller_id);
                         continue;
                     }
                 case 10: {
@@ -181519,7 +181519,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplySchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -181895,7 +181895,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.rows_affected_by_shard === $util.emptyObject)
                             message.rows_affected_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -181956,7 +181956,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplySchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -182350,7 +182350,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.v_schema);
+                        message.v_schema = $root.vschema.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.v_schema);
                         continue;
                     }
                 case 6: {
@@ -182401,7 +182401,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplyVSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -182726,7 +182726,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.v_schema);
+                        message.v_schema = $root.vschema.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.v_schema);
                         continue;
                     }
                 case 2: {
@@ -182734,7 +182734,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.unknown_vindex_params === $util.emptyObject)
                             message.unknown_vindex_params = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -182752,7 +182752,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ApplyVSchemaResponse.ParamList.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.ApplyVSchemaResponse.ParamList.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -182795,7 +182795,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ApplyVSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -183105,7 +183105,7 @@ export const vtctldata = $root.vtctldata = (() => {
             ParamList.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -183455,7 +183455,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -183504,13 +183504,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.mysql_shutdown_timeout);
+                        message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.mysql_shutdown_timeout);
                         continue;
                     }
                 case 8: {
                         if (wireType !== 2)
                             break;
-                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32(), $undefined, _depth + 1, message.init_sql);
+                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.size(), $undefined, _depth + 1, message.init_sql);
                         continue;
                     }
                 case 9: {
@@ -183552,7 +183552,7 @@ export const vtctldata = $root.vtctldata = (() => {
         BackupRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -183910,7 +183910,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -183934,7 +183934,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.event = $root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1, message.event);
+                        message.event = $root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1, message.event);
                         continue;
                     }
                 }
@@ -183967,7 +183967,7 @@ export const vtctldata = $root.vtctldata = (() => {
         BackupResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -184396,13 +184396,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 7: {
                         if (wireType !== 2)
                             break;
-                        message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.mysql_shutdown_timeout);
+                        message.mysql_shutdown_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.mysql_shutdown_timeout);
                         continue;
                     }
                 case 8: {
                         if (wireType !== 2)
                             break;
-                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.uint32(), $undefined, _depth + 1, message.init_sql);
+                        message.init_sql = $root.tabletmanagerdata.BackupRequest.InitSQL.decode(reader, reader.size(), $undefined, _depth + 1, message.init_sql);
                         continue;
                     }
                 case 9: {
@@ -184458,7 +184458,7 @@ export const vtctldata = $root.vtctldata = (() => {
         BackupShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -184887,7 +184887,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.caller_id);
+                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.caller_id);
                         continue;
                     }
                 }
@@ -184920,7 +184920,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CancelSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -185186,7 +185186,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.rows_affected_by_shard === $util.emptyObject)
                             message.rows_affected_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -185247,7 +185247,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CancelSchemaMigrationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -185541,7 +185541,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -185549,7 +185549,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.tags === $util.emptyObject)
                             message.tags = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -185619,7 +185619,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ChangeTabletTagsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -185918,7 +185918,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.before_tags === $util.emptyObject)
                             message.before_tags = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -185954,7 +185954,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.after_tags === $util.emptyObject)
                             message.after_tags = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -186015,7 +186015,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ChangeTabletTagsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -186323,7 +186323,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -186374,7 +186374,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ChangeTabletTypeRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -186705,13 +186705,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.before_tablet = $root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1, message.before_tablet);
+                        message.before_tablet = $root.topodata.Tablet.decode(reader, reader.size(), $undefined, _depth + 1, message.before_tablet);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.after_tablet = $root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1, message.after_tablet);
+                        message.after_tablet = $root.topodata.Tablet.decode(reader, reader.size(), $undefined, _depth + 1, message.after_tablet);
                         continue;
                     }
                 case 3: {
@@ -186753,7 +186753,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ChangeTabletTypeResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -187074,7 +187074,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -187152,7 +187152,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CheckThrottlerRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -187463,13 +187463,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.Check = $root.tabletmanagerdata.CheckThrottlerResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, message.Check);
+                        message.Check = $root.tabletmanagerdata.CheckThrottlerResponse.decode(reader, reader.size(), $undefined, _depth + 1, message.Check);
                         continue;
                     }
                 }
@@ -187502,7 +187502,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CheckThrottlerResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -187799,7 +187799,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.caller_id);
+                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.caller_id);
                         continue;
                     }
                 }
@@ -187832,7 +187832,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CleanupSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -188098,7 +188098,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.rows_affected_by_shard === $util.emptyObject)
                             message.rows_affected_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -188159,7 +188159,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CleanupSchemaMigrationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -188469,7 +188469,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.caller_id);
+                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.caller_id);
                         continue;
                     }
                 }
@@ -188502,7 +188502,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CompleteSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -188768,7 +188768,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.rows_affected_by_shard === $util.emptyObject)
                             message.rows_affected_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -188829,7 +188829,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CompleteSchemaMigrationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -189180,7 +189180,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.source_tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.source_tablet_alias);
+                        message.source_tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.source_tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -189220,7 +189220,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_replicas_timeout);
+                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.wait_replicas_timeout);
                         continue;
                     }
                 case 7: {
@@ -189271,7 +189271,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CopySchemaShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -189619,7 +189619,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CopySchemaShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -189962,7 +189962,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 9: {
                         if (wireType !== 2)
                             break;
-                        message.snapshot_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.snapshot_time);
+                        message.snapshot_time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.snapshot_time);
                         continue;
                     }
                 case 10: {
@@ -190013,7 +190013,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CreateKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -190331,7 +190331,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                        message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                         continue;
                     }
                 }
@@ -190364,7 +190364,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CreateKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -190703,7 +190703,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CreateShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -190992,13 +190992,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                        message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.shard = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                        message.shard = $root.vtctldata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                         continue;
                     }
                 case 3: {
@@ -191040,7 +191040,7 @@ export const vtctldata = $root.vtctldata = (() => {
         CreateShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -191362,7 +191362,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteCellInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -191624,7 +191624,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteCellInfoResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -191881,7 +191881,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteCellsAliasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -192133,7 +192133,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteCellsAliasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -192430,7 +192430,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -192701,7 +192701,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -192959,7 +192959,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.shards && message.shards.length))
                             message.shards = [];
-                        message.shards.push($root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.shards.push($root.vtctldata.Shard.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -193019,7 +193019,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteShardsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -193316,7 +193316,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteShardsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -193573,7 +193573,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteSrvVSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -193825,7 +193825,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteSrvVSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -194061,7 +194061,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.tablet_aliases && message.tablet_aliases.length))
                             message.tablet_aliases = [];
-                        message.tablet_aliases.push($root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.tablet_aliases.push($root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 2: {
@@ -194103,7 +194103,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteTabletsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -194381,7 +194381,7 @@ export const vtctldata = $root.vtctldata = (() => {
         DeleteTabletsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -194721,7 +194721,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.new_primary);
+                        message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.new_primary);
                         continue;
                     }
                 case 4: {
@@ -194729,13 +194729,13 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.ignore_replicas && message.ignore_replicas.length))
                             message.ignore_replicas = [];
-                        message.ignore_replicas.push($root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.ignore_replicas.push($root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_replicas_timeout);
+                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.wait_replicas_timeout);
                         continue;
                     }
                 case 6: {
@@ -194759,7 +194759,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 8: {
                         if (wireType !== 2)
                             break;
-                        message.expected_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.expected_primary);
+                        message.expected_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.expected_primary);
                         continue;
                     }
                 case 9: {
@@ -194810,7 +194810,7 @@ export const vtctldata = $root.vtctldata = (() => {
         EmergencyReparentShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -195213,7 +195213,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.promoted_primary);
+                        message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.promoted_primary);
                         continue;
                     }
                 case 4: {
@@ -195221,7 +195221,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -195254,7 +195254,7 @@ export const vtctldata = $root.vtctldata = (() => {
         EmergencyReparentShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -195575,7 +195575,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -195635,7 +195635,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteFetchAsAppRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -195922,7 +195922,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -195955,7 +195955,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteFetchAsAppResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -196242,7 +196242,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -196311,7 +196311,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteFetchAsDBARequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -196607,7 +196607,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.result = $root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1, message.result);
+                        message.result = $root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1, message.result);
                         continue;
                     }
                 }
@@ -196640,7 +196640,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteFetchAsDBAResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -196894,13 +196894,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_hook_request = $root.tabletmanagerdata.ExecuteHookRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_hook_request);
+                        message.tablet_hook_request = $root.tabletmanagerdata.ExecuteHookRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_hook_request);
                         continue;
                     }
                 }
@@ -196933,7 +196933,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteHookRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -197190,7 +197190,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.hook_result = $root.tabletmanagerdata.ExecuteHookResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, message.hook_result);
+                        message.hook_result = $root.tabletmanagerdata.ExecuteHookResponse.decode(reader, reader.size(), $undefined, _depth + 1, message.hook_result);
                         continue;
                     }
                 }
@@ -197223,7 +197223,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteHookResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -197510,7 +197510,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -197579,7 +197579,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteMultiFetchAsDBARequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -197879,7 +197879,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.results && message.results.length))
                             message.results = [];
-                        message.results.push($root.query.QueryResult.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.results.push($root.query.QueryResult.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -197912,7 +197912,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ExecuteMultiFetchAsDBAResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -198203,7 +198203,7 @@ export const vtctldata = $root.vtctldata = (() => {
         FindAllShardsInKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -198448,7 +198448,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.shards === $util.emptyObject)
                             message.shards = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -198466,7 +198466,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -198509,7 +198509,7 @@ export const vtctldata = $root.vtctldata = (() => {
         FindAllShardsInKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -198811,7 +198811,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.caller_id);
+                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.caller_id);
                         continue;
                     }
                 }
@@ -198844,7 +198844,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ForceCutOverSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -199110,7 +199110,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.rows_affected_by_shard === $util.emptyObject)
                             message.rows_affected_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -199171,7 +199171,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ForceCutOverSchemaMigrationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -199557,7 +199557,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetBackupsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -199837,7 +199837,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.backups && message.backups.length))
                             message.backups = [];
-                        message.backups.push($root.mysqlctl.BackupInfo.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.backups.push($root.mysqlctl.BackupInfo.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -199870,7 +199870,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetBackupsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -200161,7 +200161,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetCellInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -200400,7 +200400,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cell_info);
+                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.size(), $undefined, _depth + 1, message.cell_info);
                         continue;
                     }
                 }
@@ -200433,7 +200433,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetCellInfoResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -200689,7 +200689,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetCellInfoNamesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -200947,7 +200947,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetCellInfoNamesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -201210,7 +201210,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetCellsAliasesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -201437,7 +201437,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.aliases === $util.emptyObject)
                             message.aliases = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -201455,7 +201455,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.CellsAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.topodata.CellsAlias.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -201498,7 +201498,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetCellsAliasesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -201760,7 +201760,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -201793,7 +201793,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetFullStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -202036,7 +202036,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.status = $root.replicationdata.FullStatus.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        message.status = $root.replicationdata.FullStatus.decode(reader, reader.size(), $undefined, _depth + 1, message.status);
                         continue;
                     }
                 }
@@ -202069,7 +202069,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetFullStatusResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -202325,7 +202325,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetKeyspacesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -202550,7 +202550,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.keyspaces && message.keyspaces.length))
                             message.keyspaces = [];
-                        message.keyspaces.push($root.vtctldata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.keyspaces.push($root.vtctldata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -202583,7 +202583,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetKeyspacesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -202874,7 +202874,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -203113,7 +203113,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                        message.keyspace = $root.vtctldata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                         continue;
                     }
                 }
@@ -203146,7 +203146,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -203389,7 +203389,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -203422,7 +203422,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetPermissionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -203665,7 +203665,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.permissions = $root.tabletmanagerdata.Permissions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.permissions);
+                        message.permissions = $root.tabletmanagerdata.Permissions.decode(reader, reader.size(), $undefined, _depth + 1, message.permissions);
                         continue;
                     }
                 }
@@ -203698,7 +203698,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetPermissionsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -203954,7 +203954,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetKeyspaceRoutingRulesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -204175,7 +204175,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace_routing_rules);
+                        message.keyspace_routing_rules = $root.vschema.KeyspaceRoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace_routing_rules);
                         continue;
                     }
                 }
@@ -204208,7 +204208,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetKeyspaceRoutingRulesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -204464,7 +204464,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetRoutingRulesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -204685,7 +204685,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.routing_rules);
+                        message.routing_rules = $root.vschema.RoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.routing_rules);
                         continue;
                     }
                 }
@@ -204718,7 +204718,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetRoutingRulesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -205031,7 +205031,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -205116,7 +205116,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -205438,7 +205438,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.uint32(), $undefined, _depth + 1, message.schema);
+                        message.schema = $root.tabletmanagerdata.SchemaDefinition.decode(reader, reader.size(), $undefined, _depth + 1, message.schema);
                         continue;
                     }
                 }
@@ -205471,7 +205471,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -205827,7 +205827,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.recent = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.recent);
+                        message.recent = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.recent);
                         continue;
                     }
                 case 6: {
@@ -205887,7 +205887,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSchemaMigrationsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -206280,7 +206280,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.migrations && message.migrations.length))
                             message.migrations = [];
-                        message.migrations.push($root.vtctldata.SchemaMigration.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.migrations.push($root.vtctldata.SchemaMigration.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -206313,7 +206313,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSchemaMigrationsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -206645,7 +206645,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetShardReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -206921,7 +206921,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.shard_replication_by_cell === $util.emptyObject)
                             message.shard_replication_by_cell = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -206939,7 +206939,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.ShardReplication.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.topodata.ShardReplication.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -206982,7 +206982,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetShardReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -207300,7 +207300,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -207549,7 +207549,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.shard = $root.vtctldata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                        message.shard = $root.vtctldata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                         continue;
                     }
                 }
@@ -207582,7 +207582,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -207838,7 +207838,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetShardRoutingRulesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -208059,7 +208059,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.shard_routing_rules = $root.vschema.ShardRoutingRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard_routing_rules);
+                        message.shard_routing_rules = $root.vschema.ShardRoutingRules.decode(reader, reader.size(), $undefined, _depth + 1, message.shard_routing_rules);
                         continue;
                     }
                 }
@@ -208092,7 +208092,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetShardRoutingRulesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -208372,7 +208372,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSrvKeyspaceNamesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -208628,7 +208628,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.names === $util.emptyObject)
                             message.names = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -208646,7 +208646,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.GetSrvKeyspaceNamesResponse.NameList.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -208689,7 +208689,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSrvKeyspaceNamesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -208985,7 +208985,7 @@ export const vtctldata = $root.vtctldata = (() => {
             NameList.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -209295,7 +209295,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSrvKeyspacesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -209561,7 +209561,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.srv_keyspaces === $util.emptyObject)
                             message.srv_keyspaces = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -209579,7 +209579,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.SrvKeyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.topodata.SrvKeyspace.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -209622,7 +209622,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSrvKeyspacesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -210079,7 +210079,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 9: {
                         if (wireType !== 2)
                             break;
-                        message.throttled_app = $root.topodata.ThrottledAppRule.decode(reader, reader.uint32(), $undefined, _depth + 1, message.throttled_app);
+                        message.throttled_app = $root.topodata.ThrottledAppRule.decode(reader, reader.size(), $undefined, _depth + 1, message.throttled_app);
                         continue;
                     }
                 case 10: {
@@ -210138,7 +210138,7 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateThrottlerConfigRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -210506,7 +210506,7 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateThrottlerConfigResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -210763,7 +210763,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSrvVSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -211002,7 +211002,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.srv_v_schema = $root.vschema.SrvVSchema.decode(reader, reader.uint32(), $undefined, _depth + 1, message.srv_v_schema);
+                        message.srv_v_schema = $root.vschema.SrvVSchema.decode(reader, reader.size(), $undefined, _depth + 1, message.srv_v_schema);
                         continue;
                     }
                 }
@@ -211035,7 +211035,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSrvVSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -211315,7 +211315,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSrvVSchemasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -211571,7 +211571,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.srv_v_schemas === $util.emptyObject)
                             message.srv_v_schemas = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -211589,7 +211589,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vschema.SrvVSchema.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vschema.SrvVSchema.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -211632,7 +211632,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetSrvVSchemasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -211894,7 +211894,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -211927,7 +211927,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetTabletRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -212170,7 +212170,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet = $root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                        message.tablet = $root.topodata.Tablet.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                         continue;
                     }
                 }
@@ -212203,7 +212203,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetTabletResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -212542,7 +212542,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.tablet_aliases && message.tablet_aliases.length))
                             message.tablet_aliases = [];
-                        message.tablet_aliases.push($root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.tablet_aliases.push($root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 6: {
@@ -212584,7 +212584,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetTabletsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -212949,7 +212949,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.tablets && message.tablets.length))
                             message.tablets = [];
-                        message.tablets.push($root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.tablets.push($root.topodata.Tablet.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -212982,7 +212982,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetTabletsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -213248,7 +213248,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -213290,7 +213290,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetThrottlerStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -213554,7 +213554,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.status = $root.tabletmanagerdata.GetThrottlerStatusResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, message.status);
+                        message.status = $root.tabletmanagerdata.GetThrottlerStatusResponse.decode(reader, reader.size(), $undefined, _depth + 1, message.status);
                         continue;
                     }
                 }
@@ -213587,7 +213587,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetThrottlerStatusResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -213906,7 +213906,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetTopologyPathRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -214180,7 +214180,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.cell = $root.vtctldata.TopologyCell.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cell);
+                        message.cell = $root.vtctldata.TopologyCell.decode(reader, reader.size(), $undefined, _depth + 1, message.cell);
                         continue;
                     }
                 }
@@ -214213,7 +214213,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetTopologyPathResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -214573,7 +214573,7 @@ export const vtctldata = $root.vtctldata = (() => {
         TopologyCell.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -214933,7 +214933,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetUnresolvedTransactionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -215202,7 +215202,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.transactions && message.transactions.length))
                             message.transactions = [];
-                        message.transactions.push($root.query.TransactionMetadata.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.transactions.push($root.query.TransactionMetadata.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -215235,7 +215235,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetUnresolvedTransactionsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -215526,7 +215526,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetTransactionInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -215882,7 +215882,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardTransactionState.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -216199,7 +216199,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.metadata = $root.query.TransactionMetadata.decode(reader, reader.uint32(), $undefined, _depth + 1, message.metadata);
+                        message.metadata = $root.query.TransactionMetadata.decode(reader, reader.size(), $undefined, _depth + 1, message.metadata);
                         continue;
                     }
                 case 2: {
@@ -216207,7 +216207,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.shard_states && message.shard_states.length))
                             message.shard_states = [];
-                        message.shard_states.push($root.vtctldata.ShardTransactionState.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.shard_states.push($root.vtctldata.ShardTransactionState.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -216240,7 +216240,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetTransactionInfoResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -216533,7 +216533,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.participants && message.participants.length))
                             message.participants = [];
-                        message.participants.push($root.query.Target.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.participants.push($root.query.Target.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -216566,7 +216566,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ConcludeTransactionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -216844,7 +216844,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ConcludeTransactionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -217101,7 +217101,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetVSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -217340,7 +217340,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -217373,7 +217373,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetVersionRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -217652,7 +217652,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetVersionResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -217891,7 +217891,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.v_schema = $root.vschema.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.v_schema);
+                        message.v_schema = $root.vschema.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.v_schema);
                         continue;
                     }
                 }
@@ -217924,7 +217924,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetVSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -218304,7 +218304,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetWorkflowsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -218605,7 +218605,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.workflows && message.workflows.length))
                             message.workflows = [];
-                        message.workflows.push($root.vtctldata.Workflow.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.workflows.push($root.vtctldata.Workflow.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -218638,7 +218638,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetWorkflowsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -218955,7 +218955,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.primary_elect_tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary_elect_tablet_alias);
+                        message.primary_elect_tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.primary_elect_tablet_alias);
                         continue;
                     }
                 case 4: {
@@ -218970,7 +218970,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_replicas_timeout);
+                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.wait_replicas_timeout);
                         continue;
                     }
                 }
@@ -219003,7 +219003,7 @@ export const vtctldata = $root.vtctldata = (() => {
         InitShardPrimaryRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -219291,7 +219291,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -219324,7 +219324,7 @@ export const vtctldata = $root.vtctldata = (() => {
         InitShardPrimaryResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -219619,7 +219619,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.caller_id);
+                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.caller_id);
                         continue;
                     }
                 }
@@ -219652,7 +219652,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LaunchSchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -219918,7 +219918,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.rows_affected_by_shard === $util.emptyObject)
                             message.rows_affected_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -219979,7 +219979,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LaunchSchemaMigrationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -220325,7 +220325,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LookupVindexCompleteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -220596,7 +220596,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LookupVindexCompleteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -220912,7 +220912,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.vindex = $root.vschema.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.vindex);
+                        message.vindex = $root.vschema.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.vindex);
                         continue;
                     }
                 case 5: {
@@ -220977,7 +220977,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LookupVindexCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -221375,7 +221375,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LookupVindexCreateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -221692,7 +221692,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LookupVindexExternalizeRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -222015,7 +222015,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LookupVindexExternalizeResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -222340,7 +222340,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LookupVindexInternalizeRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -222611,7 +222611,7 @@ export const vtctldata = $root.vtctldata = (() => {
         LookupVindexInternalizeResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -222832,7 +222832,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.settings = $root.vtctldata.MaterializeSettings.decode(reader, reader.uint32(), $undefined, _depth + 1, message.settings);
+                        message.settings = $root.vtctldata.MaterializeSettings.decode(reader, reader.size(), $undefined, _depth + 1, message.settings);
                         continue;
                     }
                 }
@@ -222865,7 +222865,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MaterializeCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -223121,7 +223121,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MaterializeCreateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -223397,7 +223397,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.table_settings && message.table_settings.length))
                             message.table_settings = [];
-                        message.table_settings.push($root.vtctldata.TableMaterializeSettings.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.table_settings.push($root.vtctldata.TableMaterializeSettings.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 4: {
@@ -223439,7 +223439,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowAddTablesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -223755,7 +223755,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowAddTablesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -224341,7 +224341,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MigrateCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -224970,7 +224970,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MigrateCompleteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -225312,7 +225312,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MigrateCompleteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -225668,7 +225668,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MountRegisterRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -225948,7 +225948,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MountRegisterResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -226205,7 +226205,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MountUnregisterRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -226457,7 +226457,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MountUnregisterResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -226714,7 +226714,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MountShowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -227049,7 +227049,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MountShowResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -227329,7 +227329,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MountListRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -227587,7 +227587,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MountListResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -228227,7 +228227,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 20: {
                         if (wireType !== 2)
                             break;
-                        message.workflow_options = $root.vtctldata.WorkflowOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.workflow_options);
+                        message.workflow_options = $root.vtctldata.WorkflowOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.workflow_options);
                         continue;
                     }
                 }
@@ -228260,7 +228260,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MoveTablesCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -228819,7 +228819,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.details && message.details.length))
                             message.details = [];
-                        message.details.push($root.vtctldata.MoveTablesCreateResponse.TabletInfo.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.details.push($root.vtctldata.MoveTablesCreateResponse.TabletInfo.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -228852,7 +228852,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MoveTablesCreateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -229125,7 +229125,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                             continue;
                         }
                     case 2: {
@@ -229167,7 +229167,7 @@ export const vtctldata = $root.vtctldata = (() => {
             TabletInfo.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -229607,7 +229607,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MoveTablesCompleteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -230001,7 +230001,7 @@ export const vtctldata = $root.vtctldata = (() => {
         MoveTablesCompleteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -230282,7 +230282,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -230315,7 +230315,7 @@ export const vtctldata = $root.vtctldata = (() => {
         PingTabletRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -230571,7 +230571,7 @@ export const vtctldata = $root.vtctldata = (() => {
         PingTabletResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -230887,25 +230887,25 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.new_primary);
+                        message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.new_primary);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.avoid_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.avoid_primary);
+                        message.avoid_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.avoid_primary);
                         continue;
                     }
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_replicas_timeout);
+                        message.wait_replicas_timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.wait_replicas_timeout);
                         continue;
                     }
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.tolerable_replication_lag = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tolerable_replication_lag);
+                        message.tolerable_replication_lag = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.tolerable_replication_lag);
                         continue;
                     }
                 case 7: {
@@ -230920,7 +230920,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 8: {
                         if (wireType !== 2)
                             break;
-                        message.expected_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.expected_primary);
+                        message.expected_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.expected_primary);
                         continue;
                     }
                 }
@@ -230953,7 +230953,7 @@ export const vtctldata = $root.vtctldata = (() => {
         PlannedReparentShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -231329,7 +231329,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.promoted_primary);
+                        message.promoted_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.promoted_primary);
                         continue;
                     }
                 case 4: {
@@ -231337,7 +231337,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -231370,7 +231370,7 @@ export const vtctldata = $root.vtctldata = (() => {
         PlannedReparentShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -231735,7 +231735,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RebuildKeyspaceGraphRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -232018,7 +232018,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RebuildKeyspaceGraphResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -232276,7 +232276,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RebuildVSchemaGraphRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -232539,7 +232539,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RebuildVSchemaGraphResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -232760,7 +232760,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -232793,7 +232793,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RefreshStateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -233049,7 +233049,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RefreshStateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -233347,7 +233347,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RefreshStateByShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -233673,7 +233673,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RefreshStateByShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -233922,7 +233922,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -233955,7 +233955,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReloadSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -234211,7 +234211,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReloadSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -234528,7 +234528,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReloadSchemaKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -234799,7 +234799,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -234832,7 +234832,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReloadSchemaKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -235203,7 +235203,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReloadSchemaShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -235483,7 +235483,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.events && message.events.length))
                             message.events = [];
-                        message.events.push($root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.events.push($root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -235516,7 +235516,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReloadSchemaShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -235847,7 +235847,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RemoveBackupRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -236118,7 +236118,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RemoveBackupResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -236435,7 +236435,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RemoveKeyspaceCellRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -236715,7 +236715,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RemoveKeyspaceCellResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -237052,7 +237052,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RemoveShardCellRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -237341,7 +237341,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RemoveShardCellResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -237562,7 +237562,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                        message.tablet = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                         continue;
                     }
                 }
@@ -237595,7 +237595,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReparentTabletRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -237878,7 +237878,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.primary);
+                        message.primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.primary);
                         continue;
                     }
                 }
@@ -237911,7 +237911,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReparentTabletResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -238422,7 +238422,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 13: {
                         if (wireType !== 2)
                             break;
-                        message.workflow_options = $root.vtctldata.WorkflowOptions.decode(reader, reader.uint32(), $undefined, _depth + 1, message.workflow_options);
+                        message.workflow_options = $root.vtctldata.WorkflowOptions.decode(reader, reader.size(), $undefined, _depth + 1, message.workflow_options);
                         continue;
                     }
                 }
@@ -238455,7 +238455,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ReshardCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -238973,13 +238973,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.backup_time = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.backup_time);
+                        message.backup_time = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.backup_time);
                         continue;
                     }
                 case 3: {
@@ -239003,7 +239003,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.restore_to_timestamp = $root.vttime.Time.decode(reader, reader.uint32(), $undefined, _depth + 1, message.restore_to_timestamp);
+                        message.restore_to_timestamp = $root.vttime.Time.decode(reader, reader.size(), $undefined, _depth + 1, message.restore_to_timestamp);
                         continue;
                     }
                 case 6: {
@@ -239044,7 +239044,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RestoreFromBackupRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -239386,7 +239386,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -239410,7 +239410,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.event = $root.logutil.Event.decode(reader, reader.uint32(), $undefined, _depth + 1, message.event);
+                        message.event = $root.logutil.Event.decode(reader, reader.size(), $undefined, _depth + 1, message.event);
                         continue;
                     }
                 }
@@ -239443,7 +239443,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RestoreFromBackupResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -239758,7 +239758,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.uint32(), $undefined, _depth + 1, message.caller_id);
+                        message.caller_id = $root.vtrpc.CallerID.decode(reader, reader.size(), $undefined, _depth + 1, message.caller_id);
                         continue;
                     }
                 }
@@ -239791,7 +239791,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RetrySchemaMigrationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -240057,7 +240057,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.rows_affected_by_shard === $util.emptyObject)
                             message.rows_affected_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -240118,7 +240118,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RetrySchemaMigrationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -240388,7 +240388,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -240421,7 +240421,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RunHealthCheckRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -240677,7 +240677,7 @@ export const vtctldata = $root.vtctldata = (() => {
         RunHealthCheckResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -240954,7 +240954,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetKeyspaceDurabilityPolicyRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -241203,7 +241203,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace = $root.topodata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                        message.keyspace = $root.topodata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                         continue;
                     }
                 }
@@ -241236,7 +241236,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetKeyspaceDurabilityPolicyResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -241535,7 +241535,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetKeyspaceShardingInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -241784,7 +241784,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.keyspace = $root.topodata.Keyspace.decode(reader, reader.uint32(), $undefined, _depth + 1, message.keyspace);
+                        message.keyspace = $root.topodata.Keyspace.decode(reader, reader.size(), $undefined, _depth + 1, message.keyspace);
                         continue;
                     }
                 }
@@ -241817,7 +241817,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetKeyspaceShardingInfoResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -242136,7 +242136,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetShardIsPrimaryServingRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -242394,7 +242394,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.shard = $root.topodata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                        message.shard = $root.topodata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                         continue;
                     }
                 }
@@ -242427,7 +242427,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetShardIsPrimaryServingResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -242828,7 +242828,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetShardTabletControlRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -243193,7 +243193,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.shard = $root.topodata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                        message.shard = $root.topodata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                         continue;
                     }
                 }
@@ -243226,7 +243226,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetShardTabletControlResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -243480,7 +243480,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
@@ -243522,7 +243522,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetWritableRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -243788,7 +243788,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetWritableResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -244049,7 +244049,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -244082,7 +244082,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardReplicationAddRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -244357,7 +244357,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardReplicationAddResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -244654,7 +244654,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardReplicationFixRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -244912,7 +244912,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.error = $root.topodata.ShardReplicationError.decode(reader, reader.uint32(), $undefined, _depth + 1, message.error);
+                        message.error = $root.topodata.ShardReplicationError.decode(reader, reader.size(), $undefined, _depth + 1, message.error);
                         continue;
                     }
                 }
@@ -244945,7 +244945,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardReplicationFixResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -245244,7 +245244,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardReplicationPositionsRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -245514,7 +245514,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.replication_statuses === $util.emptyObject)
                             message.replication_statuses = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -245532,7 +245532,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.replicationdata.Status.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.replicationdata.Status.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -245550,7 +245550,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.tablet_map === $util.emptyObject)
                             message.tablet_map = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -245568,7 +245568,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.topodata.Tablet.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.topodata.Tablet.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -245611,7 +245611,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardReplicationPositionsResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -245945,7 +245945,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -245978,7 +245978,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardReplicationRemoveRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -246253,7 +246253,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ShardReplicationRemoveResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -246485,13 +246485,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.duration = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.duration);
+                        message.duration = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.duration);
                         continue;
                     }
                 }
@@ -246524,7 +246524,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SleepTabletRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -246794,7 +246794,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SleepTabletResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -247128,7 +247128,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 6: {
                         if (wireType !== 2)
                             break;
-                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.uint32(), $undefined, _depth + 1, message.key_range);
+                        message.key_range = $root.topodata.KeyRange.decode(reader, reader.size(), $undefined, _depth + 1, message.key_range);
                         continue;
                     }
                 case 7: {
@@ -247169,7 +247169,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SourceShardAddRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -247479,7 +247479,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.shard = $root.topodata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                        message.shard = $root.topodata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                         continue;
                     }
                 }
@@ -247512,7 +247512,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SourceShardAddResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -247831,7 +247831,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SourceShardDeleteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -248089,7 +248089,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.shard = $root.topodata.Shard.decode(reader, reader.uint32(), $undefined, _depth + 1, message.shard);
+                        message.shard = $root.topodata.Shard.decode(reader, reader.size(), $undefined, _depth + 1, message.shard);
                         continue;
                     }
                 }
@@ -248122,7 +248122,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SourceShardDeleteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -248365,7 +248365,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -248398,7 +248398,7 @@ export const vtctldata = $root.vtctldata = (() => {
         StartReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -248654,7 +248654,7 @@ export const vtctldata = $root.vtctldata = (() => {
         StartReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -248875,7 +248875,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_alias);
+                        message.tablet_alias = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_alias);
                         continue;
                     }
                 }
@@ -248908,7 +248908,7 @@ export const vtctldata = $root.vtctldata = (() => {
         StopReplicationRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -249164,7 +249164,7 @@ export const vtctldata = $root.vtctldata = (() => {
         StopReplicationResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -249385,7 +249385,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                        message.tablet = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                         continue;
                     }
                 }
@@ -249418,7 +249418,7 @@ export const vtctldata = $root.vtctldata = (() => {
         TabletExternallyReparentedRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -249712,13 +249712,13 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 3: {
                         if (wireType !== 2)
                             break;
-                        message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.new_primary);
+                        message.new_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.new_primary);
                         continue;
                     }
                 case 4: {
                         if (wireType !== 2)
                             break;
-                        message.old_primary = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.old_primary);
+                        message.old_primary = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.old_primary);
                         continue;
                     }
                 }
@@ -249751,7 +249751,7 @@ export const vtctldata = $root.vtctldata = (() => {
         TabletExternallyReparentedResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -250046,7 +250046,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cell_info);
+                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.size(), $undefined, _depth + 1, message.cell_info);
                         continue;
                     }
                 }
@@ -250079,7 +250079,7 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateCellInfoRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -250352,7 +250352,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cell_info);
+                        message.cell_info = $root.topodata.CellInfo.decode(reader, reader.size(), $undefined, _depth + 1, message.cell_info);
                         continue;
                     }
                 }
@@ -250385,7 +250385,7 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateCellInfoResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -250658,7 +250658,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cells_alias = $root.topodata.CellsAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cells_alias);
+                        message.cells_alias = $root.topodata.CellsAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.cells_alias);
                         continue;
                     }
                 }
@@ -250691,7 +250691,7 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateCellsAliasRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -250964,7 +250964,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.cells_alias = $root.topodata.CellsAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.cells_alias);
+                        message.cells_alias = $root.topodata.CellsAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.cells_alias);
                         continue;
                     }
                 }
@@ -250997,7 +250997,7 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateCellsAliasResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -251286,7 +251286,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -251552,7 +251552,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.results_by_keyspace === $util.emptyObject)
                             message.results_by_keyspace = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -251570,7 +251570,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateKeyspaceResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.ValidateKeyspaceResponse.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -251613,7 +251613,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -251952,7 +251952,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -252228,7 +252228,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.results_by_shard === $util.emptyObject)
                             message.results_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -252246,7 +252246,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -252289,7 +252289,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -252629,7 +252629,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidatePermissionsKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -252902,7 +252902,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidatePermissionsKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -253261,7 +253261,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateSchemaKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -253597,7 +253597,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.results_by_shard === $util.emptyObject)
                             message.results_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -253615,7 +253615,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -253658,7 +253658,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateSchemaKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -254017,7 +254017,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -254312,7 +254312,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -254598,7 +254598,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateVersionKeyspaceRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -254864,7 +254864,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.results_by_shard === $util.emptyObject)
                             message.results_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -254882,7 +254882,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -254925,7 +254925,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateVersionKeyspaceResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -255264,7 +255264,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateVersionShardRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -255550,7 +255550,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateVersionShardResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -255898,7 +255898,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateVSchemaRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -256216,7 +256216,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.results_by_shard === $util.emptyObject)
                             message.results_by_shard = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -256234,7 +256234,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.ValidateShardResponse.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -256277,7 +256277,7 @@ export const vtctldata = $root.vtctldata = (() => {
         ValidateVSchemaResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -256890,7 +256890,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 10: {
                         if (wireType !== 2)
                             break;
-                        message.filtered_replication_wait_time = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.filtered_replication_wait_time);
+                        message.filtered_replication_wait_time = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.filtered_replication_wait_time);
                         continue;
                     }
                 case 11: {
@@ -256941,7 +256941,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 16: {
                         if (wireType !== 2)
                             break;
-                        message.wait_update_interval = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.wait_update_interval);
+                        message.wait_update_interval = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.wait_update_interval);
                         continue;
                     }
                 case 17: {
@@ -256974,7 +256974,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 20: {
                         if (wireType !== 2)
                             break;
-                        message.max_diff_duration = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.max_diff_duration);
+                        message.max_diff_duration = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.max_diff_duration);
                         continue;
                     }
                 case 21: {
@@ -257023,7 +257023,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffCreateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -257674,7 +257674,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffCreateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -257989,7 +257989,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffDeleteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -258260,7 +258260,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffDeleteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -258578,7 +258578,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffResumeRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -258870,7 +258870,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffResumeResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -259187,7 +259187,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffShowRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -259460,7 +259460,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.tablet_responses === $util.emptyObject)
                             message.tablet_responses = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -259478,7 +259478,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.tabletmanagerdata.VDiffResponse.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.tabletmanagerdata.VDiffResponse.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -259521,7 +259521,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffShowResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -259880,7 +259880,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffStopRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -260172,7 +260172,7 @@ export const vtctldata = $root.vtctldata = (() => {
         VDiffStopResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -260557,7 +260557,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowDeleteRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -260917,7 +260917,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.details && message.details.length))
                             message.details = [];
-                        message.details.push($root.vtctldata.WorkflowDeleteResponse.TabletInfo.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.details.push($root.vtctldata.WorkflowDeleteResponse.TabletInfo.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 case 3: {
@@ -260958,7 +260958,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowDeleteResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -261252,7 +261252,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                             continue;
                         }
                     case 2: {
@@ -261294,7 +261294,7 @@ export const vtctldata = $root.vtctldata = (() => {
             TabletInfo.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -261627,7 +261627,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowStatusRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -261947,7 +261947,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.table_copy_state === $util.emptyObject)
                             message.table_copy_state = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -261965,7 +261965,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.WorkflowStatusResponse.TableCopyState.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.WorkflowStatusResponse.TableCopyState.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -261983,7 +261983,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (message.shard_streams === $util.emptyObject)
                             message.shard_streams = {};
-                        let end2 = reader.uint32() + reader.pos;
+                        let end2 = reader.size() + reader.pos;
                         if (end2 > reader.len)
                             throw $RangeError("index out of range");
                         reader.len = end2;
@@ -262001,7 +262001,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             case 2:
                                 if (wireType !== 2)
                                     break;
-                                value = $root.vtctldata.WorkflowStatusResponse.ShardStreams.decode(reader, reader.uint32(), $undefined, _depth + 1, value);
+                                value = $root.vtctldata.WorkflowStatusResponse.ShardStreams.decode(reader, reader.size(), $undefined, _depth + 1, value);
                                 continue;
                             }
                             reader.skipType(wireType, _depth, tag2);
@@ -262053,7 +262053,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowStatusResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -262510,7 +262510,7 @@ export const vtctldata = $root.vtctldata = (() => {
             TableCopyState.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -262951,7 +262951,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 2: {
                             if (wireType !== 2)
                                 break;
-                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                             continue;
                         }
                     case 3: {
@@ -263020,7 +263020,7 @@ export const vtctldata = $root.vtctldata = (() => {
             ShardStreamState.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -263313,7 +263313,7 @@ export const vtctldata = $root.vtctldata = (() => {
                                 break;
                             if (!(message.streams && message.streams.length))
                                 message.streams = [];
-                            message.streams.push($root.vtctldata.WorkflowStatusResponse.ShardStreamState.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                            message.streams.push($root.vtctldata.WorkflowStatusResponse.ShardStreamState.decode(reader, reader.size(), $undefined, _depth + 1));
                             continue;
                         }
                     }
@@ -263346,7 +263346,7 @@ export const vtctldata = $root.vtctldata = (() => {
             ShardStreams.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -263770,7 +263770,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 5: {
                         if (wireType !== 2)
                             break;
-                        message.max_replication_lag_allowed = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.max_replication_lag_allowed);
+                        message.max_replication_lag_allowed = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.max_replication_lag_allowed);
                         continue;
                     }
                 case 6: {
@@ -263794,7 +263794,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 8: {
                         if (wireType !== 2)
                             break;
-                        message.timeout = $root.vttime.Duration.decode(reader, reader.uint32(), $undefined, _depth + 1, message.timeout);
+                        message.timeout = $root.vttime.Duration.decode(reader, reader.size(), $undefined, _depth + 1, message.timeout);
                         continue;
                     }
                 case 9: {
@@ -263862,7 +263862,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowSwitchTrafficRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -264389,7 +264389,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowSwitchTrafficResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -264688,7 +264688,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.tablet_request = $root.tabletmanagerdata.UpdateVReplicationWorkflowRequest.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet_request);
+                        message.tablet_request = $root.tabletmanagerdata.UpdateVReplicationWorkflowRequest.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet_request);
                         continue;
                     }
                 }
@@ -264721,7 +264721,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowUpdateRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -264998,7 +264998,7 @@ export const vtctldata = $root.vtctldata = (() => {
                             break;
                         if (!(message.details && message.details.length))
                             message.details = [];
-                        message.details.push($root.vtctldata.WorkflowUpdateResponse.TabletInfo.decode(reader, reader.uint32(), $undefined, _depth + 1));
+                        message.details.push($root.vtctldata.WorkflowUpdateResponse.TabletInfo.decode(reader, reader.size(), $undefined, _depth + 1));
                         continue;
                     }
                 }
@@ -265031,7 +265031,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowUpdateResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -265304,7 +265304,7 @@ export const vtctldata = $root.vtctldata = (() => {
                     case 1: {
                             if (wireType !== 2)
                                 break;
-                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.uint32(), $undefined, _depth + 1, message.tablet);
+                            message.tablet = $root.topodata.TabletAlias.decode(reader, reader.size(), $undefined, _depth + 1, message.tablet);
                             continue;
                         }
                     case 2: {
@@ -265346,7 +265346,7 @@ export const vtctldata = $root.vtctldata = (() => {
             TabletInfo.decodeDelimited = function(reader) {
                 if (!(reader instanceof $Reader))
                     reader = new $Reader(reader);
-                return this.decode(reader, reader.uint32());
+                return this.decode(reader, reader.size());
             };
 
             /**
@@ -265615,7 +265615,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetMirrorRulesRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -265836,7 +265836,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 1: {
                         if (wireType !== 2)
                             break;
-                        message.mirror_rules = $root.vschema.MirrorRules.decode(reader, reader.uint32(), $undefined, _depth + 1, message.mirror_rules);
+                        message.mirror_rules = $root.vschema.MirrorRules.decode(reader, reader.size(), $undefined, _depth + 1, message.mirror_rules);
                         continue;
                     }
                 }
@@ -265869,7 +265869,7 @@ export const vtctldata = $root.vtctldata = (() => {
         GetMirrorRulesResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -266214,7 +266214,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowMirrorTrafficRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -266617,7 +266617,7 @@ export const vtctldata = $root.vtctldata = (() => {
         WorkflowMirrorTrafficResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -266951,7 +266951,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetVtorcEmergencyReparentRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -267222,7 +267222,7 @@ export const vtctldata = $root.vtctldata = (() => {
         SetVtorcEmergencyReparentResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -267463,7 +267463,7 @@ export const vtctldata = $root.vtctldata = (() => {
                 case 2: {
                         if (wireType !== 2)
                             break;
-                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.uint32(), $undefined, _depth + 1, message.query_throttler_config);
+                        message.query_throttler_config = $root.querythrottler.Config.decode(reader, reader.size(), $undefined, _depth + 1, message.query_throttler_config);
                         continue;
                     }
                 }
@@ -267496,7 +267496,7 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateQueryThrottlerConfigRequest.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**
@@ -267762,7 +267762,7 @@ export const vtctldata = $root.vtctldata = (() => {
         UpdateQueryThrottlerConfigResponse.decodeDelimited = function(reader) {
             if (!(reader instanceof $Reader))
                 reader = new $Reader(reader);
-            return this.decode(reader, reader.uint32());
+            return this.decode(reader, reader.size());
         };
 
         /**

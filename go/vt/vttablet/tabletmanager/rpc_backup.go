@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"vitess.io/vitess/go/protoutil"
@@ -148,7 +149,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 					err = vterrors.Wrap(err, "backup completed, but tablet restoration failed")
 					retErr = err
 				}
-				l.Errorf("%s", err)
+				l.Error("Failed to restore tablet after backup", slog.Any("error", err))
 			}
 			// Each restore step gets a fresh context independent of the RPC. This
 			// bounds semi-sync restoration and the primary topology update;
@@ -190,7 +191,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			// also affect whether we want to send semi sync acks or not.
 			tabletInfo, err := tm.TopoServer.GetTablet(bgCtx, tablet.Alias)
 			if err != nil {
-				l.Errorf("Failed to fetch updated tablet info, error: %v", err)
+				l.Error("Failed to fetch updated tablet info", slog.Any("error", err))
 				return
 			}
 
@@ -206,22 +207,22 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 
 			durabilityName, err := tm.TopoServer.GetKeyspaceDurability(bgCtx, tablet.Keyspace)
 			if err != nil {
-				l.Errorf("Failed to get durability policy, error: %v", err)
+				l.Error("Failed to get durability policy", slog.String("keyspace", tablet.Keyspace), slog.Any("error", err))
 				return
 			}
 			durability, err := policy.GetDurabilityPolicy(durabilityName)
 			if err != nil {
-				l.Errorf("Failed to get durability with name %v, error: %v", durabilityName, err)
+				l.Error("Failed to get durability with name", slog.String("durability_policy", durabilityName), slog.Any("error", err))
 			}
 
 			isSemiSync := policy.IsReplicaSemiSync(durability, shardPrimary.Tablet, tabletInfo.Tablet)
 			semiSyncAction, err := tm.convertBoolToSemiSyncAction(bgCtx, isSemiSync)
 			if err != nil {
-				l.Errorf("Failed to convert bool to semisync action, error: %v", err)
+				l.Error("Failed to convert bool to semisync action", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 				return
 			}
 			if err := tm.setReplicationSourceLocked(bgCtx, shardPrimary.Alias, 0, "", false, semiSyncAction, 0); err != nil {
-				l.Errorf("Failed to set replication source, error: %v", err)
+				l.Error("Failed to set replication source", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 			}
 		}()
 
@@ -326,7 +327,7 @@ func (tm *TabletManager) endBackup(backupMode string) {
 func shutdownTimeout(l logutil.Logger, tm *vttime.Duration) time.Duration {
 	timeout, ok, err := protoutil.DurationFromProto(tm)
 	if err != nil {
-		l.Errorf("failed to parse mysql shutdown timeout, falling back to default: %v", err)
+		l.Error("failed to parse mysql shutdown timeout, falling back to default", slog.Any("error", err))
 		return mysqlShutdownTimeout
 	}
 	if !ok {

@@ -25,6 +25,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -581,7 +582,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 
 	send := func(evs []*binlogdatapb.VEvent) error {
 		if err := vs.send(evs); err != nil {
-			log.Info(fmt.Sprintf("Error in vstream send (wrapper) to client: %v", err))
+			log.Info("Error in vstream send (wrapper) to client", slog.Any("error", err))
 			vs.once.Do(func() {
 				vs.setError(err, "error sending events")
 			})
@@ -605,7 +606,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				return
 			}
 			if err := send(evs); err != nil {
-				log.Info(fmt.Sprintf("Error in vstream send events to client: %v", err))
+				log.Info("Error in vstream send events to client", slog.Any("error", err))
 				vs.once.Do(func() {
 					vs.setError(err, "error sending events")
 				})
@@ -620,7 +621,7 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 				CurrentTime: now,
 			}}
 			if err := send(evs); err != nil {
-				log.Info(fmt.Sprintf("Error in vstream sending heartbeat to client: %v", err))
+				log.Info("Error in vstream sending heartbeat to client", slog.Any("error", err))
 				vs.once.Do(func() {
 					vs.setError(err, "error sending heartbeat")
 				})
@@ -628,7 +629,8 @@ func (vs *vstream) sendEvents(ctx context.Context) {
 			}
 		case <-vs.streamLivenessTimer.C:
 			msg := fmt.Sprintf("vstream failed liveness checks as there was no activity, including heartbeats, within the last %v", livenessTimeout)
-			log.Info("Error in vstream: " + msg)
+			log.Info("Error in vstream: vstream failed liveness checks as there was no activity, including heartbeats, within the timeout",
+				slog.Duration("timeout", livenessTimeout))
 			vs.once.Do(func() {
 				vs.setError(vterrors.New(vtrpcpb.Code_UNAVAILABLE, msg), "vstream is fully throttled or otherwise hung")
 			})
@@ -650,7 +652,16 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 		vs.vsm.vstreamsCount.Add(labelValues, -1)
 		// Set the error on exit. First one wins.
 		if err != nil {
-			log.Error(fmt.Sprintf("Error in vstream for %+v: %v", sgtid, err))
+			attrs := []slog.Attr{
+				slog.String("keyspace", sgtid.Keyspace),
+				slog.String("shard", sgtid.Shard),
+				slog.String("position", sgtid.Gtid),
+			}
+			if len(sgtid.TablePKs) > 0 {
+				attrs = append(attrs, slog.String("last_pk", fmt.Sprint(sgtid.TablePKs)))
+			}
+			attrs = append(attrs, slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
+			log.Error("Error in vstream", attrs...)
 			// Get the original/base error.
 			uerr := vterrors.UnwrapAll(err)
 			if !errors.Is(uerr, context.Canceled) && !errors.Is(uerr, context.DeadlineExceeded) {
@@ -701,7 +712,7 @@ func (vs *vstream) computeSkew(streamID string, event *binlogdatapb.VEvent) bool
 		}
 	} else {
 		if (maxTs - minTs) > MaxSkew { // check if we are skewed due to this event
-			log.Info(fmt.Sprintf("Skew found, laggard is %s, %+v", laggardStream, vs.timestamps))
+			log.Info("Skew found", slog.String("laggard", laggardStream), slog.Any("timestamps", vs.timestamps))
 			vs.laggard = laggardStream
 			vs.skewCh = make(chan bool)
 		}
@@ -748,7 +759,7 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 			return vterrors.Wrapf(ctx.Err(), "context ended while waiting for skew to reduce for stream %s from %s/%s",
 				streamID, keyspace, shard)
 		case <-time.After(time.Duration(vs.skewTimeoutSeconds) * time.Second):
-			log.Error("timed out while waiting for skew to reduce: " + streamID)
+			log.Error("timed out while waiting for skew to reduce", slog.String("keyspace", keyspace), slog.String("shard", shard))
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "timed out while waiting for skew to reduce for stream %s from %s/%s",
 				streamID, keyspace, shard)
 		case <-vs.skewCh:
@@ -815,7 +826,13 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		tabletPickerErr := func(err error) error {
 			tperr := vterrors.Wrapf(err, "failed to find a %s tablet for VStream in %s/%s within the %s cell(s)",
 				vs.tabletType.String(), sgtid.GetKeyspace(), sgtid.GetShard(), strings.Join(cells, ","))
-			log.Error(fmt.Sprintf("%v", tperr))
+			log.Error("failed to find a tablet for VStream",
+				slog.String("tablet_type", vs.tabletType.String()),
+				slog.String("keyspace", sgtid.GetKeyspace()),
+				slog.String("shard", sgtid.GetShard()),
+				slog.Any("cells", cells),
+				slog.Any("error", tperr),
+				slog.String("error_code", vterrors.Code(tperr).String()))
 			return tperr
 		}
 		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.GetKeyspace(), sgtid.GetShard(), vs.tabletType.String(), tpo, ignoreTablets...)
@@ -831,7 +848,12 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			return tabletPickerErr(err)
 		}
 		tabletAliasString := topoproto.TabletAliasString(tablet.Alias)
-		log.Info(fmt.Sprintf("Picked %s tablet %s for VStream in %s/%s within the %s cell(s)", vs.tabletType.String(), tabletAliasString, sgtid.GetKeyspace(), sgtid.GetShard(), strings.Join(cells, ",")))
+		log.Info("Picked tablet for VStream",
+			slog.String("tablet_type", vs.tabletType.String()),
+			slog.String("tablet", tabletAliasString),
+			slog.String("keyspace", sgtid.GetKeyspace()),
+			slog.String("shard", sgtid.GetShard()),
+			slog.Any("cells", cells))
 
 		target := &querypb.Target{
 			Keyspace:   sgtid.Keyspace,
@@ -841,7 +863,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 		tabletConn, err := vs.vsm.resolver.GetGateway().QueryServiceByAlias(ctx, tablet.Alias, target)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("failed to get tablet connection", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 			return vterrors.Wrapf(err, "failed to get tablet connection to %s", tabletAliasString)
 		}
 
@@ -865,7 +887,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						topoproto.TabletAliasString(tablet.Alias), shr.RealtimeStats.ReplicationLagSeconds, discovery.GetLowReplicationLag())
 				}
 				if err != nil {
-					log.Warn(fmt.Sprintf("Tablet state changed: %s, attempting to restart", err))
+					log.Warn("Tablet state changed, attempting to restart", slog.String("tablet", tabletAliasString), slog.Any("error", err))
 					err = vterrors.Wrapf(err, "error streaming tablet health from %s", tabletAliasString)
 					errCh <- err
 					return err
@@ -902,7 +924,20 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			TableLastPKs: sgtid.TablePKs,
 			Options:      options,
 		}
-		log.Info(fmt.Sprintf("Starting to vstream from %s, with req %+v", tabletAliasString, req))
+		attrs := []slog.Attr{
+			slog.String("tablet", tabletAliasString),
+			slog.String("keyspace", target.Keyspace),
+			slog.String("shard", target.Shard),
+			slog.String("tablet_type", target.TabletType.String()),
+			slog.String("cell", target.Cell),
+			slog.String("position", req.Position),
+			slog.String("filter", fmt.Sprint(req.Filter)),
+		}
+		if len(req.TableLastPKs) > 0 {
+			attrs = append(attrs, slog.String("last_pk", fmt.Sprint(req.TableLastPKs)))
+		}
+		attrs = append(attrs, slog.String("options", fmt.Sprint(req.Options)))
+		log.Info("Starting to vstream", attrs...)
 		var txLockHeld bool
 		var inTransaction bool
 		var accumulatedSize int
@@ -923,7 +958,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				return vterrors.Wrapf(ctx.Err(), "context ended while streaming from tablet %s in %s/%s",
 					tabletAliasString, sgtid.Keyspace, sgtid.Shard)
 			case streamErr := <-errCh:
-				log.Info(fmt.Sprintf("vstream for %s/%s ended due to health check, should retry: %v", sgtid.Keyspace, sgtid.Shard, streamErr))
+				log.Info("vstream ended due to health check, should retry",
+					slog.String("keyspace", sgtid.Keyspace),
+					slog.String("shard", sgtid.Shard),
+					slog.Any("error", streamErr),
+					slog.String("error_code", vterrors.Code(streamErr).String()))
 				// You must return Code_UNAVAILABLE here to trigger a restart.
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "error streaming from tablet %s in %s/%s: %s",
 					tabletAliasString, sgtid.Keyspace, sgtid.Shard, streamErr.Error())
@@ -931,7 +970,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				// Unreachable.
 				// This can happen if a server misbehaves and does not end
 				// the stream after we return an error.
-				log.Info(fmt.Sprintf("vstream for %s/%s ended due to journal event, returning io.EOF", sgtid.Keyspace, sgtid.Shard))
+				log.Info("vstream ended due to journal event, returning io.EOF", slog.String("keyspace", sgtid.Keyspace), slog.String("shard", sgtid.Shard))
 				return io.EOF
 			default:
 			}
@@ -977,7 +1016,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						sendErr = vs.sendAll(ctx, sgtid, eventss)
 					}
 					if sendErr != nil {
-						log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll: %v", sgtid.Keyspace, sgtid.Shard, sendErr))
+						log.Info("vstream error in sendAll",
+							slog.String("keyspace", sgtid.Keyspace),
+							slog.String("shard", sgtid.Shard),
+							slog.Any("error", sendErr),
+							slog.String("error_code", vterrors.Code(sendErr).String()))
 						return vterrors.Wrap(sendErr, sendingEventsErr)
 					}
 					eventss = nil //nolint:prealloc
@@ -994,7 +1037,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					}
 
 					if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
-						log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll, on copy completed event: %v", sgtid.Keyspace, sgtid.Shard, err))
+						log.Info("vstream error in sendAll, on copy completed event",
+							slog.String("keyspace", sgtid.Keyspace),
+							slog.String("shard", sgtid.Shard),
+							slog.Any("error", err),
+							slog.String("error_code", vterrors.Code(err).String()))
 						return vterrors.Wrap(err, sendingEventsErr)
 					}
 					eventss = nil
@@ -1025,7 +1072,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 						}
 						eventss = append(eventss, sendevents)
 						if err := vs.sendAll(ctx, sgtid, eventss); err != nil {
-							log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll, on journal event: %v", sgtid.Keyspace, sgtid.Shard, err))
+							log.Info("vstream error in sendAll, on journal event",
+								slog.String("keyspace", sgtid.Keyspace),
+								slog.String("shard", sgtid.Shard),
+								slog.Any("error", err),
+								slog.String("error_code", vterrors.Code(err).String()))
 							return vterrors.Wrap(err, sendingEventsErr)
 						}
 						eventss = nil
@@ -1060,7 +1111,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 							if endTimer != nil {
 								<-endTimer.C
 							}
-							log.Info(fmt.Sprintf("vstream for %s/%s ended due to journal event, returning io.EOF", sgtid.Keyspace, sgtid.Shard))
+							log.Info("vstream ended due to journal event, returning io.EOF", slog.String("keyspace", sgtid.Keyspace), slog.String("shard", sgtid.Shard))
 							return io.EOF
 						}
 					}
@@ -1086,7 +1137,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			// If chunking is enabled, and we are holding the lock (only possible when chunking is enabled), send the events.
 			if vs.isChunkingEnabled() && txLockHeld && len(eventss) > 0 {
 				if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
-					log.Info(fmt.Sprintf("vstream for %s/%s, error in sendAll at end of callback: %v", sgtid.Keyspace, sgtid.Shard, err))
+					log.Info("vstream error in sendAll at end of callback",
+						slog.String("keyspace", sgtid.Keyspace),
+						slog.String("shard", sgtid.Shard),
+						slog.Any("error", err),
+						slog.String("error_code", vterrors.Code(err).String()))
 					return vterrors.Wrap(err, sendingEventsErr)
 				}
 				eventss = nil
@@ -1095,13 +1150,21 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			// If chunking is enabled and we are in a transaction, and we do not yet hold the lock, and the accumulated size is greater than our chunk size
 			// then acquire the lock, so that we can send the events, and begin chunking the transaction.
 			if vs.isChunkingEnabled() && inTransaction && !txLockHeld && accumulatedSize > vs.transactionChunkSizeBytes {
-				log.Info(fmt.Sprintf("vstream for %s/%s: transaction size %d bytes exceeds chunk size %d bytes, acquiring lock for contiguous, chunked delivery", sgtid.Keyspace, sgtid.Shard, accumulatedSize, vs.transactionChunkSizeBytes))
+				log.Info("vstream transaction size exceeds chunk size, acquiring lock for contiguous, chunked delivery",
+					slog.String("keyspace", sgtid.Keyspace),
+					slog.String("shard", sgtid.Shard),
+					slog.Int("transaction_size", accumulatedSize),
+					slog.Int("transaction_chunk_size", vs.transactionChunkSizeBytes))
 				vs.vsm.vstreamsTransactionsChunked.Add(labelValues, 1)
 				vs.mu.Lock()
 				txLockHeld = true
 				if len(eventss) > 0 {
 					if err := vs.sendEventsLocked(ctx, sgtid, eventss); err != nil {
-						log.Info(fmt.Sprintf("vstream for %s/%s, error sending events after acquiring lock: %v", sgtid.Keyspace, sgtid.Shard, err))
+						log.Info("vstream error sending events after acquiring lock",
+							slog.String("keyspace", sgtid.Keyspace),
+							slog.String("shard", sgtid.Shard),
+							slog.Any("error", err),
+							slog.String("error_code", vterrors.Code(err).String()))
 						return vterrors.Wrap(err, sendingEventsErr)
 					}
 					eventss = nil
@@ -1124,7 +1187,11 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		retry, ignoreTablet := vs.shouldRetry(err)
 		if !retry {
-			log.Info(fmt.Sprintf("vstream for %s/%s error, no retry: %v", sgtid.Keyspace, sgtid.Shard, err))
+			log.Info("vstream error, no retry",
+				slog.String("keyspace", sgtid.Keyspace),
+				slog.String("shard", sgtid.Shard),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return vterrors.Wrapf(err, "error in vstream for %s/%s on tablet %s",
 				sgtid.Keyspace, sgtid.Shard, tabletAliasString)
 		}
@@ -1135,11 +1202,19 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		errCount++
 		// Retry, at most, 3 times if the error can be retried.
 		if errCount >= 3 {
-			log.Error(fmt.Sprintf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err))
+			log.Error("vstream had three consecutive failures",
+				slog.String("keyspace", sgtid.Keyspace),
+				slog.String("shard", sgtid.Shard),
+				slog.Any("error", err),
+				slog.String("error_code", vterrors.Code(err).String()))
 			return vterrors.Wrapf(err, "persistent error in vstream for %s/%s on tablet %s; giving up",
 				sgtid.Keyspace, sgtid.Shard, tabletAliasString)
 		}
-		log.Info(fmt.Sprintf("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err))
+		log.Info("vstream error, retrying",
+			slog.String("keyspace", sgtid.Keyspace),
+			slog.String("shard", sgtid.Shard),
+			slog.Any("error", err),
+			slog.String("error_code", vterrors.Code(err).String()))
 	}
 }
 
@@ -1310,7 +1385,7 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 
 	je, ok := vs.journaler[journal.Id]
 	if !ok {
-		log.Info(fmt.Sprintf("Journal event received: %v", journal))
+		log.Info("Journal event received", slog.String("journal", fmt.Sprint(journal)))
 		// Identify the list of ShardGtids that match the participants of the journal.
 		je = &journalEvent{
 			journal:      journal,
@@ -1372,7 +1447,18 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 	if !vs.stopOnReshard { // stop streaming from current shards and start streaming the new shards
 		// All participants are waiting. Replace old shard gtids with new ones.
 		newsgtids := make([]*binlogdatapb.ShardGtid, 0, len(vs.vgtid.ShardGtids)-len(je.participants)+len(je.journal.ShardGtids))
-		log.Info(fmt.Sprintf("Removing shard gtids: %v", je.participants))
+		participants := make([]*binlogdatapb.ShardGtid, 0, len(je.participants))
+		for participant := range je.participants {
+			participants = append(participants, participant)
+		}
+		slices.SortFunc(participants, func(a, b *binlogdatapb.ShardGtid) int {
+			return strings.Compare(a.Keyspace+"/"+a.Shard, b.Keyspace+"/"+b.Shard)
+		})
+		attrs := []slog.Attr{slog.String("shard_gtids", shardGtidsString(participants))}
+		if lastPKs := shardLastPKsString(participants); lastPKs != "" {
+			attrs = append(attrs, slog.String("last_pk", lastPKs))
+		}
+		log.Info("Removing shard gtids", attrs...)
 		for _, cursgtid := range vs.vgtid.ShardGtids {
 			if je.participants[cursgtid] {
 				continue
@@ -1380,7 +1466,7 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 			newsgtids = append(newsgtids, cursgtid)
 		}
 
-		log.Info(fmt.Sprintf("Adding shard gtids: %v", je.journal.ShardGtids))
+		log.Info("Adding shard gtids", slog.String("shard_gtids", shardGtidsString(je.journal.ShardGtids)))
 		for _, sgtid := range je.journal.ShardGtids {
 			newsgtids = append(newsgtids, sgtid)
 			// It's ok to start the streams even though ShardGtids are not updated yet.
@@ -1391,6 +1477,32 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 	}
 	close(je.done)
 	return je, nil
+}
+
+// shardGtidsString formats shard GTIDs for a log line without their TablePKs,
+// which hold the copy phase's primary key values.
+func shardGtidsString(sgtids []*binlogdatapb.ShardGtid) string {
+	positions := make([]*binlogdatapb.ShardGtid, 0, len(sgtids))
+	for _, sgtid := range sgtids {
+		positions = append(positions, &binlogdatapb.ShardGtid{Keyspace: sgtid.Keyspace, Shard: sgtid.Shard, Gtid: sgtid.Gtid})
+	}
+	return fmt.Sprint(positions)
+}
+
+// shardLastPKsString formats the TablePKs of the shard GTIDs that have any,
+// each with its keyspace and shard, for a log line. It returns "" when none
+// have any.
+func shardLastPKsString(sgtids []*binlogdatapb.ShardGtid) string {
+	var lastPKs []*binlogdatapb.ShardGtid
+	for _, sgtid := range sgtids {
+		if len(sgtid.TablePKs) > 0 {
+			lastPKs = append(lastPKs, &binlogdatapb.ShardGtid{Keyspace: sgtid.Keyspace, Shard: sgtid.Shard, TablePKs: sgtid.TablePKs})
+		}
+	}
+	if len(lastPKs) == 0 {
+		return ""
+	}
+	return fmt.Sprint(lastPKs)
 }
 
 // keyspaceHasBeenResharded returns true if the keyspace's serving shard set has changed

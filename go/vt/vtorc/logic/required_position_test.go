@@ -17,6 +17,7 @@ limitations under the License.
 package logic
 
 import (
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/log/logtest"
 	"vitess.io/vitess/go/vt/logutil"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -111,12 +113,12 @@ func TestRequiredPositionForRecovery(t *testing.T) {
 		audit string
 	}{
 		{name: "flag off", flag: false, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid},
-		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, position: "MySQL56/" + requiredGtid, level: logutilpb.Level_INFO, audit: "required position: " + requiredGtid},
+		{name: "primary with semi-sync", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, position: "MySQL56/" + requiredGtid, level: logutilpb.Level_INFO, audit: "required position position=MySQL56/" + requiredGtid},
 		{name: "no semi-sync", flag: true, durability: policy.DurabilityNone, tabletType: topodatapb.TabletType_PRIMARY, storedSet: requiredGtid, level: logutilpb.Level_INFO, audit: "required position: none, the durability policy has no semi-sync"},
-		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid, level: logutilpb.Level_WARNING, audit: "required position: none, the analyzed tablet zone1-0000000100 is not the primary"},
+		{name: "analyzed tablet is a replica", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_REPLICA, storedSet: requiredGtid, level: logutilpb.Level_WARNING, audit: "is not the primary and VTOrc has no stored GTID set for the failed primary, ERS runs without the requirement tablet=zone1-0000000100"},
 		{name: "no stored set", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "", level: logutilpb.Level_WARNING, audit: "required position: none, VTOrc has no stored GTID set"},
-		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100", level: logutilpb.Level_WARNING, audit: "required position: none, the stored GTID set is not a MySQL GTID set"},
-		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567", level: logutilpb.Level_WARNING, audit: "required position: none, the stored GTID set is not a MySQL GTID set"},
+		{name: "MariaDB shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "0-1-100", level: logutilpb.Level_WARNING, audit: `required position: none, ERS runs without the requirement tablet=zone1-0000000100 error="the stored GTID set is not a MySQL GTID set`},
+		{name: "file position shard", flag: true, durability: policy.DurabilitySemiSync, tabletType: topodatapb.TabletType_PRIMARY, storedSet: "vt-0000000101-bin.000001:4567", level: logutilpb.Level_WARNING, audit: `required position: none, ERS runs without the requirement tablet=zone1-0000000100 error="the stored GTID set is not a MySQL GTID set`},
 	}
 
 	for _, tt := range tests {
@@ -150,6 +152,8 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 		name    string
 		setup   func(t *testing.T) *topodatapb.TabletAlias
 		wantErr string
+		// The line ERS's logger forwards to VTOrc's log, without time and source.
+		wantRecord map[string]any
 	}{
 		{
 			name: "durability read error",
@@ -160,6 +164,9 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 				return alias
 			},
 			wantErr: "cannot read the durability policy of keyspace ks",
+			wantRecord: map[string]any{
+				"msg": "test: required position: cannot read the durability policy, aborting ERS", "level": "ERROR", "reparent": "ERS",
+			},
 		},
 		{
 			name: "stored set read error",
@@ -172,6 +179,9 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 				return tablet.Alias
 			},
 			wantErr: "cannot read the stored GTID set of zone1-0000000100",
+			wantRecord: map[string]any{
+				"msg": "test: required position: aborting ERS", "level": "ERROR", "reparent": "ERS",
+			},
 		},
 	}
 
@@ -186,9 +196,15 @@ func TestRequiredPositionAbortCountsAsAttempted(t *testing.T) {
 			entry := &inst.DetectionAnalysis{AnalyzedInstanceAlias: alias, Analysis: inst.DeadPrimary, AnalyzedKeyspace: "ks", AnalyzedShard: "0"}
 			require.NoError(t, InsertRecoveryDetection(entry))
 
+			logs := logtest.Capture(t, slog.LevelInfo)
 			recoveryAttempted, _, err := runEmergencyReparentOp(t.Context(), entry, "RecoverDeadPrimary", false, log.NewPrefixedLogger("test"))
 			require.ErrorContains(t, err, tt.wantErr)
 			assert.True(t, recoveryAttempted)
+
+			record := logs.Record(t, tt.wantRecord["msg"].(string))
+			for key, value := range tt.wantRecord {
+				assert.Equal(t, value, record[key], key)
+			}
 		})
 	}
 }

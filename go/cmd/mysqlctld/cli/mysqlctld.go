@@ -22,6 +22,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -119,7 +120,7 @@ func run(cmd *cobra.Command, args []string) error {
 	mycnfFile := mysqlctl.MycnfFile(tabletUID)
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
 		// Generate my.cnf from scratch and use it to find mysqld.
-		log.Info(fmt.Sprintf("mycnf file (%s) doesn't exist, initializing", mycnfFile))
+		log.Info("mycnf file doesn't exist, initializing", slog.String("path", mycnfFile))
 
 		var err error
 		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort, collationEnv)
@@ -135,7 +136,7 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	} else {
 		// There ought to be an existing my.cnf, so use it to find mysqld.
-		log.Info(fmt.Sprintf("mycnf file (%s) already exists, starting without init", mycnfFile))
+		log.Info("mycnf file already exists, starting without init", slog.String("path", mycnfFile))
 
 		var err error
 		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(tabletUID, collationEnv)
@@ -171,7 +172,7 @@ func run(cmd *cobra.Command, args []string) error {
 		ctx, cancel := context.WithTimeout(cmd.Context(), shutdownWaitTime+mysqlctl.MysqldShutdownGracePeriod)
 		defer cancel()
 		if err := mysqld.Shutdown(ctx, cnf, true, shutdownWaitTime); err != nil {
-			log.Error(fmt.Sprintf("failed to shutdown mysqld: %v", err))
+			log.Error("failed to shutdown mysqld", slog.Any("error", err))
 		}
 	})
 

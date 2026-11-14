@@ -19,7 +19,6 @@ package schema
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -32,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
@@ -133,7 +133,7 @@ func (tr *Tracker) process(ctx context.Context) {
 		}
 
 		tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
-		log.Error(fmt.Sprintf("error getting the schema tracker's startup position: %v", err))
+		log.Error("error getting the schema tracker's startup position", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
 		if !tr.wait(ctx, 5*time.Second) {
 			return
 		}
@@ -166,8 +166,12 @@ func (tr *Tracker) process(ctx context.Context) {
 					MustReloadSchemaOnDDL(event.Statement, tr.engine.cp.DBName(), tr.env.Environment().Parser()) {
 					if err := tr.schemaUpdated(ctx, gtid, event.Statement, event.Timestamp); err != nil {
 						tr.env.Stats().ErrorCounters.Add(vtrpcpb.Code_INTERNAL.String(), 1)
-						log.Error(fmt.Sprintf("Error updating schema: %s for ddl %q at pos %s",
-							tr.env.Environment().Parser().TruncateForLog(err.Error()), event.Statement, gtid))
+						log.Error("Error updating schema",
+							slog.String("error", tr.env.Environment().Parser().TruncateForLog(err.Error())),
+							slog.String("error_code", vterrors.Code(err).String()),
+							slog.String("query", event.Statement),
+							slog.String("position", gtid),
+						)
 						gtid = prevGtid
 						return err
 					}
@@ -188,14 +192,18 @@ func (tr *Tracker) process(ctx context.Context) {
 						slog.String("position", gtid),
 						slog.Any("error", err))
 					if pos, serr := tr.insertCurrentSchemaSnapshot(ctx); serr != nil {
-						log.Error(fmt.Sprintf("error saving a fresh schema snapshot: %v", serr))
+						log.Error("error saving a fresh schema snapshot", slog.Any("error", serr), slog.String("error_code", vterrors.Code(serr).String()))
 					} else {
 						gtid = pos
 						prevGtid = pos
 					}
 				}
 			}
-			log.Warn(fmt.Sprintf("Schema Version Tracker's vstream ended (error: %v), retrying in 5 seconds...", err))
+			var errAttrs []slog.Attr
+			if err != nil {
+				errAttrs = []slog.Attr{slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String())}
+			}
+			log.Warn("Schema Version Tracker's vstream ended, retrying in 5 seconds...", errAttrs...)
 			if !tr.wait(ctx, 5*time.Second) {
 				return
 			}
@@ -256,7 +264,7 @@ func (tr *Tracker) insertCurrentSchemaSnapshot(ctx context.Context) (string, err
 		return "", err
 	}
 	gtid := replication.EncodePosition(pos)
-	log.Info("Saving schema snapshot for gtid " + gtid)
+	log.Info("Saving schema snapshot", slog.String("position", gtid))
 	if err := tr.saveCurrentSchemaToDb(ctx, gtid, "", timestamp); err != nil {
 		return "", err
 	}
@@ -300,7 +308,7 @@ func isResumePositionUnavailable(err error) bool {
 }
 
 func (tr *Tracker) schemaUpdated(ctx context.Context, gtid string, ddl string, timestamp int64) error {
-	log.Info(fmt.Sprintf("Processing schemaUpdated event for gtid %s, ddl %s", gtid, ddl))
+	log.Info("Processing schemaUpdated event", slog.String("position", gtid), slog.String("query", ddl))
 	if gtid == "" || ddl == "" {
 		return errors.New("got invalid gtid or ddl in schemaUpdated")
 	}

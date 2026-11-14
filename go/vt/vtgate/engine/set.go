@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/mysql/sqlmode"
@@ -237,7 +238,7 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
 		// There is no benefit of returning the error back to client.
-		log.Warn(fmt.Sprintf("unable to validate the current settings for '%s': %s", svci.Name, err.Error()))
+		log.Warn("unable to validate the current settings", slog.String("system_variable", svci.Name), slog.Any("error", err))
 		return nil
 	}
 	if svci.Name == "sql_mode" {

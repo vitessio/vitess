@@ -266,7 +266,10 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.consolidatorMode.Store(config.Consolidator)
 	qe.consolidator = sync2.NewConsolidator()
 	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
-		log.Info(fmt.Sprintf("Stream consolidator is enabled with query size set to %d and total size set to %d.", config.ConsolidatorStreamQuerySize, config.ConsolidatorStreamTotalSize))
+		log.Info("Stream consolidator is enabled",
+			slog.Int64("consolidator_stream_query_size", config.ConsolidatorStreamQuerySize),
+			slog.Int64("consolidator_stream_total_size", config.ConsolidatorStreamTotalSize),
+		)
 		qe.streamConsolidator = NewStreamConsolidator(config.ConsolidatorStreamTotalSize, config.ConsolidatorStreamQuerySize, returnStreamResult)
 	} else {
 		log.Info("Stream consolidator is not enabled.")
@@ -281,13 +284,13 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	if config.TableACLExemptACL != "" {
 		if f, err := tableacl.GetCurrentACLFactory(); err == nil {
 			if exemptACL, err := f.New([]string{config.TableACLExemptACL}); err == nil {
-				log.Info(fmt.Sprintf("Setting Table ACL exempt rule for %v", config.TableACLExemptACL))
+				log.Info("Setting Table ACL exempt rule", slog.String("exempt_acl", config.TableACLExemptACL))
 				qe.exemptACL = exemptACL
 			} else {
-				log.Info(fmt.Sprintf("Cannot build exempt ACL for table ACL: %v", err))
+				log.Info("Cannot build exempt ACL for table ACL", slog.Any("error", err))
 			}
 		} else {
-			log.Info(fmt.Sprintf("Cannot get current ACL Factory: %v", err))
+			log.Info("Cannot get current ACL Factory", slog.Any("error", err))
 		}
 	}
 
@@ -600,7 +603,7 @@ func logDryRunSetting(setting string, sanitize bool, parser *sqlparser.Parser) {
 	if setting == "" {
 		return
 	}
-	logSettingSubqueryDryRun.Warningf("table ACL dry run: allowing a connection setting with a subquery, which strict table ACL rejects: %s", settingForLog(setting, sanitize, parser))
+	logSettingSubqueryDryRun.Warn("table ACL dry run: allowing a connection setting with a subquery, which strict table ACL rejects", slog.String("query", settingForLog(setting, sanitize, parser)))
 }
 
 // settingForLog returns a connection setting as it may be logged. With

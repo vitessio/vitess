@@ -667,20 +667,20 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 	cancel()
 
 	expectedLogs := []string{
-		"Backing up file: test1/0.ibd (attempt 1/2)",
-		"Backing up file: test1/1.ibd (attempt 1/2)",
-		"Backing up file: test2/0.ibd (attempt 1/2)",
-		"Backing up file: test2/1.ibd (attempt 1/2)",
+		"Backing up file file=test1/0.ibd attempt=1 max_attempts=2",
+		"Backing up file file=test1/1.ibd attempt=1 max_attempts=2",
+		"Backing up file file=test2/0.ibd attempt=1 max_attempts=2",
+		"Backing up file file=test2/1.ibd attempt=1 max_attempts=2",
 
-		"Backing up file: test1/0.ibd (attempt 2/2)",
-		"Backing up file: test1/1.ibd (attempt 2/2)",
-		"Backing up file: test2/0.ibd (attempt 2/2)",
-		"Backing up file: test2/1.ibd (attempt 2/2)",
+		"Backing up file file=test1/0.ibd attempt=2 max_attempts=2",
+		"Backing up file file=test1/1.ibd attempt=2 max_attempts=2",
+		"Backing up file file=test2/0.ibd attempt=2 max_attempts=2",
+		"Backing up file file=test2/1.ibd attempt=2 max_attempts=2",
 
-		"Backing up file MANIFEST (attempt 1/2)",
-		"Failed backing up MANIFEST (attempt 1/2)",
-		"Backing up file MANIFEST (attempt 2/2)",
-		"Completed backing up MANIFEST (attempt 2/2)",
+		"Backing up file file=MANIFEST attempt=1 max_attempts=2",
+		"Failed backing up file file=MANIFEST attempt=1 max_attempts=2",
+		"Backing up file file=MANIFEST attempt=2 max_attempts=2",
+		"Completed backing up file file=MANIFEST attempt=2 max_attempts=2",
 	}
 
 	// Sleep just long enough for everything to complete.
@@ -688,6 +688,9 @@ func TestExecuteBackupFailToWriteEachFileOnlyOnce(t *testing.T) {
 	// the machine is just too slow to propagate the ctxCancel() to all goroutines.
 	time.Sleep(2 * time.Second)
 	AssertLogs(t, expectedLogs, logger)
+	// A full backup has no position to start from, so none is logged.
+	assert.Contains(t, logger.String(), "Executing Backup backup_time=")
+	assert.NotContains(t, logger.String(), "incremental_from_pos")
 
 	require.NoError(t, err)
 	require.Equal(t, mysqlctl.BackupUsable, backupResult)
@@ -742,8 +745,8 @@ func TestExecuteBackupFailToWriteFileTwice(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	expectedLogs := []string{
-		"Backing up file: test1/0.ibd (attempt 1/2)",
-		"Backing up file: test1/0.ibd (attempt 2/2)",
+		"Backing up file file=test1/0.ibd attempt=1 max_attempts=2",
+		"Backing up file file=test1/0.ibd attempt=2 max_attempts=2",
 	}
 	AssertLogs(t, expectedLogs, logger)
 

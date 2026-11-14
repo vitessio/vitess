@@ -490,9 +490,9 @@ func (mysqld *Mysqld) showReplicationStatusDirectContext(ctx context.Context, co
 		// The context expired or was canceled.
 		// Try to kill the connection to effectively cancel the status read.
 		connID := conn.ID()
-		log.Info(fmt.Sprintf("Mysqld.showReplicationStatusDirectContext(): killing connID %v due to timeout", connID))
+		log.Info("Mysqld.showReplicationStatusDirectContext(): killing connection due to timeout", slog.Int64("connection_id", connID))
 		if killErr := mysqld.killConnection(connID); killErr != nil {
-			log.Warn(fmt.Sprintf("Mysqld.showReplicationStatusDirectContext(): failed to kill connID %v: %v", connID, killErr))
+			log.Warn("Mysqld.showReplicationStatusDirectContext(): failed to kill connection", slog.Int64("connection_id", connID), slog.Any("error", killErr))
 		}
 		// Close the connection before waiting: if the server cannot service
 		// the KILL (it is wedged), closing the socket is what unblocks the
@@ -1109,7 +1109,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos replicatio
 	defer recycle(ctx, conn)
 
 	cmds := conn.Conn.SetReplicationPositionCommands(pos)
-	log.Info(fmt.Sprintf("Executing commands to set replication position: %v", cmds))
+	log.Info("Executing commands to set replication position", slog.Any("queries", cmds))
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
 }
 
@@ -1298,7 +1298,7 @@ func (mysqld *Mysqld) semiSyncReplicationStatusQuery(ctx context.Context) (strin
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
 func (mysqld *Mysqld) SetSemiSyncEnabled(ctx context.Context, primary, replica bool) error {
-	log.Info(fmt.Sprintf("Setting semi-sync mode: primary=%v, replica=%v", primary, replica))
+	log.Info("Setting semi-sync mode", slog.Bool("semi_sync_primary", primary), slog.Bool("semi_sync_replica", replica))
 
 	// Convert bool to int.
 	var p, s int

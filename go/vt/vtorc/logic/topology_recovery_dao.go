@@ -19,6 +19,7 @@ package logic
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"vitess.io/vitess/go/vt/external/golib/sqlutils"
@@ -66,12 +67,12 @@ func InsertRecoveryDetection(analysisEntry *inst.DetectionAnalysis) error {
 			return nil
 		})
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to insert recovery detection", slog.String("tablet", aliasStr), slog.String("analysis", analysisStr), slog.Any("error", err))
 		return err
 	}
 	if analysisEntry.RecoveryId == 0 {
 		err = fmt.Errorf("InsertRecoveryDetection: no detection_id returned for alias=%s analysis=%s", aliasStr, analysisStr)
-		log.Error(err.Error())
+		log.Error("InsertRecoveryDetection: no detection_id returned", slog.String("tablet", aliasStr), slog.String("analysis", analysisStr))
 		return err
 	}
 	return nil
@@ -127,12 +128,16 @@ func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*Topolo
 	// Check if there is an active recovery in progress for the cluster of the given instance.
 	recoveries, err := ReadActiveClusterRecoveries(analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read active cluster recoveries", slog.String("keyspace", analysisEntry.AnalyzedKeyspace), slog.String("shard", analysisEntry.AnalyzedShard), slog.Any("error", err))
 		return nil, err
 	}
 	if len(recoveries) > 0 {
 		errMsg := fmt.Sprintf("AttemptRecoveryRegistration: Active recovery (id:%v) in the cluster %s:%s for %s", recoveries[0].ID, analysisEntry.AnalyzedKeyspace, analysisEntry.AnalyzedShard, recoveries[0].AnalysisEntry.Analysis)
-		log.Error(errMsg)
+		log.Error("AttemptRecoveryRegistration: Active recovery in the cluster",
+			slog.Int64("recovery_id", recoveries[0].ID),
+			slog.String("keyspace", analysisEntry.AnalyzedKeyspace),
+			slog.String("shard", analysisEntry.AnalyzedShard),
+			slog.String("analysis", string(recoveries[0].AnalysisEntry.Analysis)))
 		return nil, errors.New(errMsg)
 	}
 
@@ -140,7 +145,10 @@ func AttemptRecoveryRegistration(analysisEntry *inst.DetectionAnalysis) (*Topolo
 
 	topologyRecovery, err = writeTopologyRecovery(topologyRecovery)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to write topology recovery",
+			slog.String("tablet", topoproto.TabletAliasString(analysisEntry.AnalyzedInstanceAlias)),
+			slog.String("analysis", string(analysisEntry.Analysis)),
+			slog.Any("error", err))
 		return nil, err
 	}
 	return topologyRecovery, nil
@@ -169,7 +177,7 @@ func writeResolveRecovery(topologyRecovery *TopologyRecovery) error {
 		topologyRecovery.ID,
 	)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to write recovery resolution", slog.Int64("recovery_id", topologyRecovery.ID), slog.Any("error", err))
 	}
 	return err
 }
@@ -185,7 +193,7 @@ func deleteResolvedDetection(detectionID int64) {
 		`DELETE FROM recovery_detection WHERE detection_id = ?`,
 		detectionID,
 	); err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to delete resolved detection", slog.Int64("detection_id", detectionID), slog.Any("error", err))
 	}
 }
 
@@ -245,7 +253,7 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		return nil
 	})
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read recoveries", slog.Any("error", err))
 	}
 	return res, err
 }
@@ -291,12 +299,12 @@ func writeTopologyRecoveryStep(topologyRecoveryStep *TopologyRecoveryStep) error
 		topologyRecoveryStep.Message,
 	)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to write topology recovery step", slog.Int64("recovery_id", topologyRecoveryStep.RecoveryID), slog.Any("error", err))
 		return err
 	}
 	topologyRecoveryStep.ID, err = sqlResult.LastInsertId()
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("Failed to read id of topology recovery step", slog.Int64("recovery_id", topologyRecoveryStep.RecoveryID), slog.Any("error", err))
 	}
 	return err
 }

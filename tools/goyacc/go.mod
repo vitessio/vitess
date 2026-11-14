@@ -1,6 +1,6 @@
 module vitess.io/vitess/tools/goyacc
 
-go 1.27.3
+go 1.27.4
 
 tool github.com/vitessio/goyacc
 
