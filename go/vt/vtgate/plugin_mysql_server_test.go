@@ -380,16 +380,22 @@ func TestDefaultWorkloadOLAP(t *testing.T) {
 }
 
 func TestInitTLSConfigWithoutServerCA(t *testing.T) {
-	testInitTLSConfig(t, false)
+	testInitTLSConfig(t, false, true)
 }
 
 func TestInitTLSConfigWithServerCA(t *testing.T) {
-	testInitTLSConfig(t, true)
+	testInitTLSConfig(t, true, true)
 }
 
-// testInitTLSConfig checks that the MySQL listener serves the
-// certificate that replaced its files on disk once it gets a SIGHUP.
-func testInitTLSConfig(t *testing.T, serverCA bool) {
+func TestInitTLSConfigReloadsTheCRLAloneByDefault(t *testing.T) {
+	testInitTLSConfig(t, false, false)
+}
+
+// testInitTLSConfig checks that once it gets a SIGHUP, the MySQL
+// listener serves the certificate that replaced its files on disk with
+// reloadAllOnSIGHUP, as with --tls-reload-on-sighup, and reloads its
+// CRL alone, keeping the certificate it serves, without it.
+func testInitTLSConfig(t *testing.T, serverCA, reloadAllOnSIGHUP bool) {
 	ctx := utils.LeakCheckContext(t)
 
 	// Two unrelated sets of files, the second one installed over the
@@ -400,15 +406,15 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 		tlstest.CreateCRL(root, tlstest.CA)
 		tlstest.CreateSignedCert(root, tlstest.CA, "01", "server", "server.example.com")
 	}
-	install := func(root string) {
-		for _, name := range []string{"server-cert.pem", "server-key.pem", "ca-cert.pem", "ca-crl.pem"} {
+	install := func(root string, names ...string) {
+		for _, name := range names {
 			b, err := os.ReadFile(path.Join(root, name))
 			require.NoError(t, err)
 			require.NoError(t, os.WriteFile(path.Join(live, name), b, 0o600))
 		}
 	}
-	servedCert := func(srv *mysqlServer) []byte {
-		return srv.tcpListener.TLSConfig.Load().(*tls.Config).Certificates[0].Certificate[0]
+	served := func(srv *mysqlServer) *tls.Config {
+		return srv.tcpListener.TLSConfig.Load().(*tls.Config)
 	}
 	certOf := func(root string) []byte {
 		b, err := os.ReadFile(path.Join(root, "server-cert.pem"))
@@ -423,16 +429,28 @@ func testInitTLSConfig(t *testing.T, serverCA bool) {
 		serverCACert = path.Join(live, "ca-cert.pem")
 	}
 
-	install(oldRoot)
+	install(oldRoot, "server-cert.pem", "server-key.pem", "ca-cert.pem", "ca-crl.pem")
 	srv := &mysqlServer{tcpListener: &mysql.Listener{}}
-	require.NoError(t, initTLSConfig(ctx, srv, path.Join(live, "server-cert.pem"), path.Join(live, "server-key.pem"), path.Join(live, "ca-cert.pem"), path.Join(live, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12))
+	require.NoError(t, initTLSConfig(ctx, srv, path.Join(live, "server-cert.pem"), path.Join(live, "server-key.pem"), path.Join(live, "ca-cert.pem"), path.Join(live, "ca-crl.pem"), serverCACert, true, tls.VersionTLS12, reloadAllOnSIGHUP))
 	t.Cleanup(srv.tlsReloader.Stop)
-	require.Equal(t, certOf(oldRoot), servedCert(srv))
+	loaded := served(srv)
+	require.Equal(t, certOf(oldRoot), loaded.Certificates[0].Certificate[0])
 
-	install(newRoot)
+	if !reloadAllOnSIGHUP {
+		// The CRL stays one that the CA the listener keeps issued.
+		install(newRoot, "server-cert.pem", "server-key.pem", "ca-cert.pem")
+		srv.sigChan <- syscall.SIGHUP
+		assert.Eventually(t, func() bool {
+			return served(srv) != loaded
+		}, 30*time.Second, 10*time.Millisecond, "the listener must reload its CRL after SIGHUP")
+		require.Equal(t, certOf(oldRoot), served(srv).Certificates[0].Certificate[0], "the listener must keep its certificate without --tls-reload-on-sighup")
+		return
+	}
+
+	install(newRoot, "server-cert.pem", "server-key.pem", "ca-cert.pem", "ca-crl.pem")
 	srv.sigChan <- syscall.SIGHUP
 	assert.Eventually(t, func() bool {
-		return bytes.Equal(certOf(newRoot), servedCert(srv))
+		return bytes.Equal(certOf(newRoot), served(srv).Certificates[0].Certificate[0])
 	}, 30*time.Second, 10*time.Millisecond, "the listener must serve the new certificate after SIGHUP")
 }
 

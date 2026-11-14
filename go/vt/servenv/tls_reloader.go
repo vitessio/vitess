@@ -63,6 +63,10 @@ type TLSReloader struct {
 	// fingerprint digests the files the current config was built
 	// from.
 	fingerprint [sha256.Size]byte
+	// config is the current config, and caPEM the contents of the CA
+	// file it was built from, which ReloadCRL validates the CRLs under.
+	config *tls.Config
+	caPEM  []byte
 
 	// testHook, when set, runs on every attempt Reload makes to read
 	// the files, between the pre-load digest and the config load, so
@@ -95,10 +99,11 @@ func NewTLSReloader(name string, files TLSServerFiles, minTLSVersion uint16, sin
 
 // Start reloads the config on every signal received on signals, and
 // every interval if it is positive, when the files changed since the
-// last load, until ctx is done or Stop is called. signals may be nil
-// when the config reloads on a timer alone. It must be called at most
-// once.
-func (r *TLSReloader) Start(ctx context.Context, signals <-chan os.Signal, interval time.Duration) {
+// last load, until ctx is done or Stop is called. A signal reloads
+// every file when signalReloadsAll is set, and the CRL alone, with
+// ReloadCRL, otherwise. signals may be nil when the config reloads on
+// a timer alone. It must be called at most once.
+func (r *TLSReloader) Start(ctx context.Context, signals <-chan os.Signal, signalReloadsAll bool, interval time.Duration) {
 	ctx, r.cancel = context.WithCancel(ctx)
 	r.done = make(chan struct{})
 
@@ -115,7 +120,11 @@ func (r *TLSReloader) Start(ctx context.Context, signals <-chan os.Signal, inter
 			case <-ctx.Done():
 				return
 			case <-signals:
-				_ = r.Reload(true)
+				if signalReloadsAll {
+					_ = r.Reload(true)
+				} else {
+					_ = r.ReloadCRL()
+				}
 			case <-tick:
 				_ = r.Reload(false)
 			}
@@ -129,13 +138,13 @@ func (r *TLSReloader) Start(ctx context.Context, signals <-chan os.Signal, inter
 func (r *TLSReloader) StartOnProcessSignals(onSIGHUP bool, interval time.Duration) {
 	if !onSIGHUP {
 		if interval > 0 {
-			r.Start(context.Background(), nil, interval)
+			r.Start(context.Background(), nil, true, interval)
 		}
 		return
 	}
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGHUP)
-	r.Start(context.Background(), signals, interval)
+	r.Start(context.Background(), signals, true, interval)
 	go func() {
 		<-r.done
 		signal.Stop(signals)
@@ -160,6 +169,7 @@ func (r *TLSReloader) Reload(force bool) error {
 
 	var (
 		fingerprint [sha256.Size]byte
+		caPEM       []byte
 		config      *tls.Config
 	)
 	// The files are digested before they are loaded, and again after,
@@ -169,7 +179,7 @@ func (r *TLSReloader) Reload(force bool) error {
 	// re-digesting first, until a pre- and post-load digest agree.
 	for attempt := 1; ; attempt++ {
 		var err error
-		if fingerprint, err = r.digest(); err != nil {
+		if fingerprint, caPEM, err = r.digest(); err != nil {
 			return r.failed(err)
 		}
 		if !force && attempt == 1 && fingerprint == r.fingerprint {
@@ -183,7 +193,7 @@ func (r *TLSReloader) Reload(force bool) error {
 			return r.failed(err)
 		}
 
-		after, err := r.digest()
+		after, _, err := r.digest()
 		if err != nil {
 			return r.failed(err)
 		}
@@ -197,6 +207,7 @@ func (r *TLSReloader) Reload(force bool) error {
 
 	r.sink(config)
 	r.fingerprint = fingerprint
+	r.config, r.caPEM = config, caPEM
 
 	now := time.Now()
 	tlsReloadSuccessTimestamp.Set(r.name, now.Unix())
@@ -211,6 +222,27 @@ func (r *TLSReloader) Reload(force bool) error {
 	return nil
 }
 
+// ReloadCRL hands the sink the current config with the CRLs that the
+// CRL file holds now, validated under the CA file the config was built
+// from. The certificate, key and CA stay as they were loaded. It does
+// nothing for a server without a CRL file.
+func (r *TLSReloader) ReloadCRL() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.files.CRL == "" {
+		return nil
+	}
+	config, err := vttls.ServerConfigWithCRL(r.config, r.caPEM, r.files.CRL)
+	if err != nil {
+		return r.failed(err)
+	}
+	r.sink(config)
+	r.config = config
+	tlsReloadSuccessTimestamp.Set(r.name, time.Now().Unix())
+	log.Info("Reloaded a server's CRL", slog.String("server", r.name), slog.String("crl", r.files.CRL))
+	return nil
+}
+
 func (r *TLSReloader) failed(err error) error {
 	tlsReloadErrors.Add(r.name, 1)
 	err = vterrors.Wrapf(err, "cannot load the %s server's TLS config from cert %s, key %s, ca %s, crl %s, server-ca %s; the previous config stays in place", r.name, r.files.Cert, r.files.Key, r.files.CA, r.files.CRL, r.files.ServerCA)
@@ -218,22 +250,26 @@ func (r *TLSReloader) failed(err error) error {
 	return err
 }
 
-// digest returns the SHA-256 digest of the files.
-func (r *TLSReloader) digest() (digest [sha256.Size]byte, err error) {
+// digest returns the SHA-256 digest of the files, and the contents of
+// the CA file.
+func (r *TLSReloader) digest() (digest [sha256.Size]byte, caPEM []byte, err error) {
 	h := sha256.New()
 	for _, path := range []string{r.files.Cert, r.files.Key, r.files.CA, r.files.CRL, r.files.ServerCA} {
 		var content []byte
 		if path != "" {
 			if content, err = os.ReadFile(path); err != nil {
-				return digest, err
+				return digest, nil, err
 			}
+		}
+		if path == r.files.CA {
+			caPEM = content
 		}
 		// Length-prefixed, so that no two sets of files digest alike.
 		_ = binary.Write(h, binary.BigEndian, uint64(len(content)))
 		h.Write(content)
 	}
 	copy(digest[:], h.Sum(nil))
-	return digest, nil
+	return digest, caPEM, nil
 }
 
 // leafCertificate returns the certificate that config presents.

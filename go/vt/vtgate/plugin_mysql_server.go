@@ -1832,8 +1832,10 @@ type mysqlServer struct {
 	heartbeatCancel context.CancelFunc
 }
 
-// initTLSConfig inits tls config for the given mysql listener
-func initTLSConfig(ctx context.Context, srv *mysqlServer, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA string, mysqlServerRequireSecureTransport bool, mysqlMinTLSVersion uint16) error {
+// initTLSConfig inits tls config for the given mysql listener. A SIGHUP
+// reloads every TLS file when reloadAllOnSIGHUP is set, and the CRL
+// alone otherwise, as it did before the other files could be reloaded.
+func initTLSConfig(ctx context.Context, srv *mysqlServer, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA string, mysqlServerRequireSecureTransport bool, mysqlMinTLSVersion uint16, reloadAllOnSIGHUP bool) error {
 	files := servenv.TLSServerFiles{Cert: mysqlSslCert, Key: mysqlSslKey, CA: mysqlSslCa, CRL: mysqlSslCrl, ServerCA: mysqlSslServerCA}
 	reloader, err := servenv.NewTLSReloader("mysql", files, mysqlMinTLSVersion, func(config *tls.Config) {
 		srv.tcpListener.TLSConfig.Store(config)
@@ -1846,7 +1848,7 @@ func initTLSConfig(ctx context.Context, srv *mysqlServer, mysqlSslCert, mysqlSsl
 	srv.tcpListener.RequireSecureTransport = mysqlServerRequireSecureTransport
 	srv.sigChan = make(chan os.Signal, 1)
 	signal.Notify(srv.sigChan, syscall.SIGHUP)
-	reloader.Start(ctx, srv.sigChan, servenv.TLSReloadInterval())
+	reloader.Start(ctx, srv.sigChan, reloadAllOnSIGHUP, servenv.TLSReloadInterval())
 	srv.tlsReloader = reloader
 	return nil
 }
@@ -1932,7 +1934,7 @@ func initMySQLProtocol(vtgate *VTGate) *mysqlServer {
 				os.Exit(1)
 			}
 
-			_ = initTLSConfig(context.Background(), srv, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlServerRequireSecureTransport, tlsVersion)
+			_ = initTLSConfig(context.Background(), srv, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlServerRequireSecureTransport, tlsVersion, servenv.TLSReloadOnSIGHUP())
 		}
 		srv.tcpListener.AllowClearTextWithoutTLS.Store(mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold

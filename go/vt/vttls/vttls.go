@@ -303,6 +303,25 @@ func ServerConfig(cert, key, ca, crl, serverCA string, minTLSVersion uint16) (*t
 	return config, nil
 }
 
+// ServerConfigWithCRL returns a copy of config, which ServerConfig built
+// from the CA file contents caPEM, that checks client certificates
+// against the CRLs that the file crl holds now, under the certificates
+// of caPEM. The certificate, key and CA of config stay as they are: a
+// server reloads its CRL alone with it.
+func ServerConfigWithCRL(config *tls.Config, caPEM []byte, crl string) (*tls.Config, error) {
+	crls, err := loadCRLSet(crl)
+	if err != nil {
+		return nil, err
+	}
+	checker, err := newCRLCheckerFrom(crls, parseX509Certificates(caPEM))
+	if err != nil {
+		return nil, err
+	}
+	withCRL := config.Clone()
+	withCRL.VerifyConnection = checker.verifyConnection
+	return withCRL, nil
+}
+
 // readx509Certificates returns the certificates in the PEM file ca, see
 // parseX509Certificates.
 func readx509Certificates(ca string) ([]*x509.Certificate, error) {

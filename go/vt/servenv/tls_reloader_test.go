@@ -17,6 +17,7 @@ limitations under the License.
 package servenv
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
@@ -97,6 +98,12 @@ func (s *configSink) count() int {
 	return len(s.configs)
 }
 
+func (s *configSink) current() *tls.Config {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.configs[len(s.configs)-1]
+}
+
 func (s *configSink) leaf() []byte {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -115,7 +122,7 @@ func TestTLSReloaderReloadsOnSignal(t *testing.T) {
 	require.Equal(t, readCert(t, oldCerts.ServerCert).Raw, sink.leaf())
 
 	signals := make(chan os.Signal, 1)
-	reloader.Start(t.Context(), signals, 0)
+	reloader.Start(t.Context(), signals, true, 0)
 	t.Cleanup(reloader.Stop)
 
 	installTLSFiles(t, files, newCerts)
@@ -173,6 +180,70 @@ func TestTLSReloaderStartOnProcessSignals(t *testing.T) {
 	require.Equal(t, readCert(t, oldCerts.ServerCert).Raw, ignoring.leaf())
 }
 
+// TestTLSReloaderStartOnProcessSignalsOnTheIntervalAlone checks that a
+// server's TLS files are reloaded on the interval without
+// --tls-reload-on-sighup, as for a Kubernetes secret.
+func TestTLSReloaderStartOnProcessSignalsOnTheIntervalAlone(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := liveTLSFiles(t)
+	installTLSFiles(t, files, oldCerts)
+
+	var sink configSink
+	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
+	require.NoError(t, err)
+	reloader.StartOnProcessSignals(false, 10*time.Millisecond)
+	t.Cleanup(reloader.Stop)
+
+	installTLSFiles(t, files, newCerts)
+	newLeaf := readCert(t, newCerts.ServerCert).Raw
+	assert.Eventually(t, func() bool {
+		return sink.count() > 1 && bytes.Equal(newLeaf, sink.leaf())
+	}, 30*time.Second, 10*time.Millisecond, "the interval must reload the files without --tls-reload-on-sighup")
+}
+
+// TestTLSReloaderReloadsTheCRLAloneOnSignal checks that a signal that
+// does not reload every file, as vtgate's MySQL server gets without
+// --tls-reload-on-sighup, reloads the CRL alone, validated under the CA
+// the config was built from, and keeps the certificate, key and CA.
+func TestTLSReloaderReloadsTheCRLAloneOnSignal(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := liveTLSFiles(t)
+	installTLSFiles(t, files, certs)
+	// A CRL of another CA, which revokes none of the clients of certs.
+	copyFile(t, files.CRL, otherCerts.ClientCRL)
+
+	var sink configSink
+	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
+	require.NoError(t, err)
+	signals := make(chan os.Signal, 1)
+	reloader.Start(t.Context(), signals, false, 0)
+	t.Cleanup(reloader.Stop)
+	client := func(cert, key string) *tls.Config {
+		config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+		require.NoError(t, err)
+		return config
+	}
+	res := tryTLSHandshake(t, sink.current(), client(certs.RevokedClientCert, certs.RevokedClientKey))
+	require.NoError(t, res.serverErr, "the client must be accepted before the CRL revokes it for this test to be meaningful")
+
+	// Every file rotates to other certificates, but for the CRL, which
+	// now revokes a client of certs.
+	installTLSFiles(t, files, otherCerts)
+	copyFile(t, files.CRL, certs.ClientCRL)
+	signals <- syscall.SIGHUP
+	assert.Eventually(t, func() bool {
+		return sink.count() == 2
+	}, 30*time.Second, 10*time.Millisecond)
+
+	require.Equal(t, readCert(t, certs.ServerCert).Raw, sink.leaf(), "the server must keep its certificate")
+	res = tryTLSHandshake(t, sink.current(), client(certs.ClientCert, certs.ClientKey))
+	require.NoError(t, res.serverErr, "the server must keep the CA it was built with")
+	res = tryTLSHandshake(t, sink.current(), client(certs.RevokedClientCert, certs.RevokedClientKey))
+	require.ErrorContains(t, res.serverErr, "Certificate revoked", "the server must check clients against the reloaded CRL")
+}
+
 func TestTLSReloaderReloadsPeriodically(t *testing.T) {
 	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
 	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
@@ -182,7 +253,7 @@ func TestTLSReloaderReloadsPeriodically(t *testing.T) {
 	var sink configSink
 	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
 	require.NoError(t, err)
-	reloader.Start(t.Context(), nil, 10*time.Millisecond)
+	reloader.Start(t.Context(), nil, true, 10*time.Millisecond)
 	t.Cleanup(reloader.Stop)
 
 	installTLSFiles(t, files, newCerts)
@@ -239,7 +310,7 @@ func TestTLSReloaderDigestsConsistentlyDespiteRaceOnCAChange(t *testing.T) {
 	require.NoError(t, reloader.Reload(true))
 	require.True(t, fired, "the hook must have run for this test to be meaningful")
 
-	want, err := reloader.digest()
+	want, _, err := reloader.digest()
 	require.NoError(t, err)
 	require.Equal(t, want, reloader.fingerprint, "the recorded digest must be of the files that were actually loaded")
 }

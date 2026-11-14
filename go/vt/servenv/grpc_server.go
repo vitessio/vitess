@@ -143,8 +143,9 @@ var (
 	// clients are checked for changes, zero for never.
 	tlsReloadInterval time.Duration
 	// tlsReloadOnSIGHUP is whether SIGHUP reloads the TLS files of the
-	// gRPC server and of the clients. vtgate's MySQL server reloads its
-	// TLS files on SIGHUP regardless, as it did before this flag.
+	// gRPC and MySQL servers and of the clients. Without it, SIGHUP
+	// reloads only the CRL of vtgate's MySQL server, as it did before
+	// this flag.
 	tlsReloadOnSIGHUP bool
 )
 

@@ -57,7 +57,7 @@ func init() {
 
 func registerTLSReloadFlags(fs *pflag.FlagSet) {
 	utils.SetFlagDurationVar(fs, &tlsReloadInterval, "tls-reload-interval", tlsReloadInterval, "how often to check the TLS certificate, key, CA and CRL files of the process's gRPC and MySQL servers and clients for changes and reload them, 0 to disable")
-	utils.SetFlagBoolVar(fs, &tlsReloadOnSIGHUP, "tls-reload-on-sighup", tlsReloadOnSIGHUP, "reload the TLS certificate, key, CA and CRL files of the process's gRPC server and clients on SIGHUP; vtgate's MySQL server reloads its TLS files on SIGHUP regardless")
+	utils.SetFlagBoolVar(fs, &tlsReloadOnSIGHUP, "tls-reload-on-sighup", tlsReloadOnSIGHUP, "reload the TLS certificate, key, CA and CRL files of the process's gRPC and MySQL servers and clients on SIGHUP; without it, SIGHUP reloads only the CRL of vtgate's MySQL server")
 }
 
 // startClientTLSReload reloads the files of the process's TLS clients
