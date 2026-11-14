@@ -61,7 +61,7 @@ type TLSReloader struct {
 
 	mu sync.Mutex
 	// fingerprint digests the files the current config was built
-	// from.
+	// from, or is zero once ReloadCRL changed the config.
 	fingerprint [sha256.Size]byte
 	// config is the current config, and caPEM the contents of the CA
 	// file it was built from, which ReloadCRL validates the CRLs under.
@@ -238,6 +238,10 @@ func (r *TLSReloader) ReloadCRL() error {
 	}
 	r.sink(config)
 	r.config = config
+	// The fingerprint no longer describes the config, whose CRL may
+	// differ from the one the last full load read: have the next reload
+	// build it from the files again, whatever they hold.
+	r.fingerprint = [sha256.Size]byte{}
 	tlsReloadSuccessTimestamp.Set(r.name, time.Now().Unix())
 	log.Info("Reloaded a server's CRL", slog.String("server", r.name), slog.String("crl", r.files.CRL))
 	return nil

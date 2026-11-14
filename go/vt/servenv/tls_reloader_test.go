@@ -244,6 +244,37 @@ func TestTLSReloaderReloadsTheCRLAloneOnSignal(t *testing.T) {
 	require.ErrorContains(t, res.serverErr, "Certificate revoked", "the server must check clients against the reloaded CRL")
 }
 
+// TestTLSReloaderReloadsAfterACRLOnlyReload checks that once a signal
+// reloaded the CRL alone, the next reload on the interval builds the
+// config from the files again, even when they are back to what the last
+// full load read, rather than skipping them as unchanged and keeping the
+// CRL that the file no longer holds.
+func TestTLSReloaderReloadsAfterACRLOnlyReload(t *testing.T) {
+	certs := tlstest.CreateClientServerCertPairs(t.TempDir())
+	otherCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := liveTLSFiles(t)
+	installTLSFiles(t, files, certs)
+	// A CRL of another CA, which revokes none of the clients of certs.
+	copyFile(t, files.CRL, otherCerts.ClientCRL)
+
+	var sink configSink
+	reloader, err := NewTLSReloader(t.Name(), files, tls.VersionTLS12, sink.store)
+	require.NoError(t, err)
+	revokedClient, err := vttls.ClientConfig(vttls.VerifyIdentity, certs.RevokedClientCert, certs.RevokedClientKey, certs.ServerCA, "", certs.ServerName, tls.VersionTLS12)
+	require.NoError(t, err)
+
+	copyFile(t, files.CRL, certs.ClientCRL)
+	require.NoError(t, reloader.ReloadCRL())
+	res := tryTLSHandshake(t, sink.current(), revokedClient)
+	require.ErrorContains(t, res.serverErr, "Certificate revoked", "the CRL must have been reloaded for this test to be meaningful")
+
+	// The CRL file goes back to what the last full load read.
+	copyFile(t, files.CRL, otherCerts.ClientCRL)
+	require.NoError(t, reloader.Reload(false))
+	res = tryTLSHandshake(t, sink.current(), revokedClient)
+	require.NoError(t, res.serverErr, "the reload must apply the CRL that the file holds again")
+}
+
 func TestTLSReloaderReloadsPeriodically(t *testing.T) {
 	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
 	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
