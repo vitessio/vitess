@@ -1296,9 +1296,9 @@ func TestNullsafeCompareCollate(t *testing.T) {
 		{
 			v1: "abcd",
 			v2: "abcd",
-			// unsupported collation gb18030_bin
-			collation: 249,
-			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 249)"),
+			// unsupported collation tis620_thai_nopad_ci, which only MariaDB has
+			collation: 1042,
+			err:       vterrors.New(vtrpcpb.Code_UNKNOWN, "cannot compare strings, collation is unknown or unsupported (collation ID: 1042)"),
 		},
 	}
 	for _, tcase := range tcases {

@@ -30,9 +30,16 @@ type Collation_multibyte struct {
 	sort    *[256]byte
 	charset charset.Charset
 
-	// caseinfo has the characters of the character set that UPPER() and
-	// LOWER() change, for ToUpper and ToLower.
-	caseinfo *multibyteCase
+	// caseinfo is the MySQL case conversion of the character set, for
+	// ToUpper and ToLower.
+	caseinfo caseConverter
+}
+
+// caseConverter is the case conversion of a character set that MySQL
+// converts by the bytes of a character: multibyteCase for most of them and
+// gb18030Case for gb18030.
+type caseConverter interface {
+	changeCase(dst, src []byte, upper bool) []byte
 }
 
 func (c *Collation_multibyte) ID() collations.ID {
