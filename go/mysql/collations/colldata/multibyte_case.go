@@ -147,6 +147,22 @@ func charLenGBK(src []byte) int {
 	return 0
 }
 
+// charLenBig5 is for big5: a lead byte A1-F9, and a second byte 40-7E or
+// A1-FE.
+func charLenBig5(src []byte) int {
+	if len(src) < 2 {
+		return 0
+	}
+	lead, trail := src[0], src[1]
+	if lead < 0xA1 || lead > 0xF9 {
+		return 0
+	}
+	if (0x40 <= trail && trail <= 0x7E) || (0xA1 <= trail && trail <= 0xFE) {
+		return 2
+	}
+	return 0
+}
+
 // charLenGB2312 is for gb2312: a lead byte A1-F7, and a second byte A1-FE.
 func charLenGB2312(src []byte) int {
 	if len(src) < 2 {
@@ -185,4 +201,5 @@ var (
 	multibyteCase_euckr   = &multibyteCase{charLen: charLenEUCKR, chars: multibyteCaseChars_euckr}
 	multibyteCase_gb2312  = &multibyteCase{charLen: charLenGB2312, chars: multibyteCaseChars_gb2312}
 	multibyteCase_gbk     = &multibyteCase{charLen: charLenGBK, chars: multibyteCaseChars_gbk}
+	multibyteCase_big5    = &multibyteCase{charLen: charLenBig5, chars: multibyteCaseChars_big5}
 )

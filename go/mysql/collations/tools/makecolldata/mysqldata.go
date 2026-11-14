@@ -388,9 +388,9 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 	g.P("},")
 }
 
-// printCollationChineseCI prints gbk_chinese_ci. The dump has its sort table
-// for single bytes. The order of two-byte characters is in
-// colldata/gbk_order.go.
+// printCollationChineseCI prints gbk_chinese_ci and big5_chinese_ci. The dump
+// has their sort tables for single bytes. The order of two-byte characters
+// is in colldata/gbk_order.go and colldata/chinese_ci.go.
 func (g *Generator) printCollationChineseCI(meta *CollationMetadata) {
 	tableSortOrder := g.Tables.printSlice("sortorder", meta.Name, codegen.Array8(meta.SortOrder))
 
@@ -405,6 +405,10 @@ func (g *Generator) printCollationChineseCI(meta *CollationMetadata) {
 		g.P("charLen: charLenGBK,")
 		g.P("order: gbkSortOrder,")
 		g.P("weight: gbkSortOrder,")
+	case "big5":
+		g.P("charLen: charLenBig5,")
+		g.P("order: big5Code,")
+		g.P("weight: big5StrokeWeight,")
 	default:
 		g.Fail("no order for " + meta.Charset)
 	}
@@ -476,7 +480,7 @@ func makemysqldata(output string, supportedOutput string, metadata AllMetadata) 
 			g.printCollationUcaLegacy(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
-		case meta.Name == "gbk_chinese_ci":
+		case meta.Name == "gbk_chinese_ci", meta.Name == "big5_chinese_ci":
 			g.printCollationChineseCI(meta)
 			h.P(meta.Number, ": ", codegen.Quote(meta.Name), ",")
 
