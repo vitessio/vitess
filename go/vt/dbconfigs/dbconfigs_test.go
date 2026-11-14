@@ -438,8 +438,9 @@ func TestConnectorConnectNeutralizesSQLMode(t *testing.T) {
 	require.Equal(t, 1, db.GetQueryCalledNum(sqlmode.SessionSetupQuery("utf8mb4", "")))
 
 	// A safe collation that Vitess does not implement has no name to restore, so
-	// its character set is restored alone: here tis620_thai_ci.
-	params.Charset = 18 // tis620_thai_ci
+	// its character set is restored alone: here tis620_thai_nopad_ci, which only
+	// MariaDB has.
+	params.Charset = 1042 // tis620_thai_nopad_ci
 	tis620Connector := New(params)
 	conn, err = tis620Connector.Connect(t.Context())
 	require.NoError(t, err)
