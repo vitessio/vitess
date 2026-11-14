@@ -4563,6 +4563,12 @@ var collationsById = [...]Collation{
 			FromUnicode: fromunicode_koi8u_general_ci,
 		},
 	},
+	0x4c: &Collation_unicode_general_ci{
+		id:      0x4c,
+		name:    "utf8mb3_tolower_ci",
+		unicase: unicaseInfo_tolower,
+		charset: charset.Charset_utf8mb3{},
+	},
 	0x4d: &Collation_8bit_bin{
 		id:   0x4d,
 		name: "latin2_bin",
@@ -4994,6 +5000,12 @@ var collationsById = [...]Collation{
 		id:   0x97,
 		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_vietnamese_ci, nil, 0xffff),
 	},
+	0x9f: &Collation_unicode_general_ci{
+		id:      0x9f,
+		name:    "ucs2_general_mysql500_ci",
+		unicase: unicaseInfo_mysql500,
+		charset: charset.Charset_ucs2{},
+	},
 	0xa0: &Collation_uca_legacy{
 		name: "utf32_unicode_ci",
 		id:   0xa0,
@@ -5233,6 +5245,12 @@ var collationsById = [...]Collation{
 		name: "utf8mb3_vietnamese_ci",
 		id:   0xd7,
 		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_vietnamese_ci, nil, 0xffff),
+	},
+	0xdf: &Collation_unicode_general_ci{
+		id:      0xdf,
+		name:    "utf8mb3_general_mysql500_ci",
+		unicase: unicaseInfo_mysql500,
+		charset: charset.Charset_utf8mb3{},
 	},
 	0xe0: &Collation_uca_legacy{
 		name: "utf8mb4_unicode_ci",

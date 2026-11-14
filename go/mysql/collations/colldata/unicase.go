@@ -17,6 +17,8 @@ limitations under the License.
 package colldata
 
 import (
+	"slices"
+
 	"vitess.io/vitess/go/mysql/collations/charset"
 )
 
@@ -2931,4 +2933,36 @@ var unicasePages_default = []*[]UnicaseChar{
 var unicaseInfo_default = &UnicaseInfo{
 	MaxChar: 0xFFFF,
 	Page:    unicasePages_default,
+}
+
+// plane00_mysql500 is plane00 with "ß" as its own sort value. With the
+// default table "ß" sorts as "S", so 'ß' = 's' is true in utf8mb3_general_ci
+// and false in utf8mb3_general_mysql500_ci, as it was in MySQL 5.0.
+var plane00_mysql500 = func() []UnicaseChar {
+	plane := slices.Clone(plane00)
+	plane[0xDF] = UnicaseChar{0x00DF, 0x00DF, 0x00DF}
+	return plane
+}()
+
+// unicasePages_mysql500 is unicasePages_default with plane00_mysql500 as the
+// first page.
+var unicasePages_mysql500 = func() []*[]UnicaseChar {
+	pages := slices.Clone(unicasePages_default)
+	pages[0x00] = &plane00_mysql500
+	return pages
+}()
+
+var unicaseInfo_mysql500 = &UnicaseInfo{
+	MaxChar: 0xFFFF,
+	Page:    unicasePages_mysql500,
+}
+
+// unicaseInfo_tolower is the default table for utf8mb3_tolower_ci, which
+// sorts a character by its lower case and not by its sort value: 'é' = 'e'
+// is true in utf8mb3_general_ci and false in utf8mb3_tolower_ci, where only
+// 'É' = 'é' is.
+var unicaseInfo_tolower = &UnicaseInfo{
+	MaxChar:   0xFFFF,
+	Page:      unicasePages_default,
+	LowerSort: true,
 }
