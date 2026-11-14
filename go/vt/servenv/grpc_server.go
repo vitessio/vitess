@@ -140,9 +140,12 @@ var (
 	// gRPCServerCA if specified will combine server cert and server CA.
 	gRPCServerCA string
 	// tlsReloadInterval is how often the TLS files of the servers and
-	// clients are checked for changes, zero for never. SIGHUP reloads
-	// them regardless.
+	// clients are checked for changes, zero for never.
 	tlsReloadInterval time.Duration
+	// tlsReloadOnSIGHUP is whether SIGHUP reloads the TLS files of the
+	// gRPC server and of the clients. vtgate's MySQL server reloads its
+	// TLS files on SIGHUP regardless, as it did before this flag.
+	tlsReloadOnSIGHUP bool
 )
 
 // RegisterGRPCServerFlags registers flags required to run a gRPC server via Run
@@ -186,6 +189,11 @@ func GRPCCertificateAuthority() string {
 // TLSReloadInterval returns the value of the `--tls-reload-interval` flag.
 func TLSReloadInterval() time.Duration {
 	return tlsReloadInterval
+}
+
+// TLSReloadOnSIGHUP returns the value of the `--tls-reload-on-sighup` flag.
+func TLSReloadOnSIGHUP() bool {
+	return tlsReloadOnSIGHUP
 }
 
 // GRPCKey returns the value of the `--grpc-key` flag.
@@ -275,7 +283,7 @@ func createGRPCServer() {
 			log.Error("Failed to load gRPC cert/key/ca", slog.Any("error", err))
 			os.Exit(1)
 		}
-		reloader.StartOnSIGHUP(tlsReloadInterval)
+		reloader.StartOnProcessSignals(tlsReloadOnSIGHUP, tlsReloadInterval)
 		OnTermSync(reloader.Stop)
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}

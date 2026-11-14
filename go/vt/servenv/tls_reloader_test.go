@@ -24,6 +24,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/signal"
 	"path"
 	"sync"
 	"sync/atomic"
@@ -126,6 +127,50 @@ func TestTLSReloaderReloadsOnSignal(t *testing.T) {
 	require.Equal(t, newLeaf.Raw, sink.leaf())
 	require.Equal(t, newLeaf.NotAfter.Unix(), tlsCertNotAfter.Counts()[t.Name()])
 	require.NotZero(t, tlsReloadSuccessTimestamp.Counts()[t.Name()])
+}
+
+// TestTLSReloaderStartOnProcessSignals checks that a server's TLS files
+// are reloaded on the process's SIGHUPs only with
+// --tls-reload-on-sighup, so that a SIGHUP sent to reload the table
+// ACLs, for one, leaves them as they were loaded.
+func TestTLSReloaderStartOnProcessSignals(t *testing.T) {
+	// Stands for the process's other handlers of SIGHUP, which keep it
+	// from terminating the process.
+	sighups := make(chan os.Signal, 1)
+	signal.Notify(sighups, syscall.SIGHUP)
+	t.Cleanup(func() { signal.Stop(sighups) })
+	sighup := func() {
+		require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGHUP))
+		select {
+		case <-sighups:
+		case <-time.After(30 * time.Second):
+			require.FailNow(t, "the SIGHUP must have been delivered")
+		}
+	}
+
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := liveTLSFiles(t)
+	installTLSFiles(t, files, oldCerts)
+
+	var ignoring, reloading configSink
+	ignorer, err := NewTLSReloader(t.Name()+"-ignoring", files, tls.VersionTLS12, ignoring.store)
+	require.NoError(t, err)
+	ignorer.StartOnProcessSignals(false, 0)
+	t.Cleanup(ignorer.Stop)
+	reloader, err := NewTLSReloader(t.Name()+"-reloading", files, tls.VersionTLS12, reloading.store)
+	require.NoError(t, err)
+	reloader.StartOnProcessSignals(true, 0)
+	t.Cleanup(reloader.Stop)
+
+	installTLSFiles(t, files, newCerts)
+	sighup()
+	assert.Eventually(t, func() bool {
+		return reloading.count() == 2
+	}, 30*time.Second, 10*time.Millisecond, "a SIGHUP must reload the files with --tls-reload-on-sighup")
+	require.Equal(t, readCert(t, newCerts.ServerCert).Raw, reloading.leaf())
+	require.Equal(t, 1, ignoring.count(), "a SIGHUP must not reload the files without --tls-reload-on-sighup")
+	require.Equal(t, readCert(t, oldCerts.ServerCert).Raw, ignoring.leaf())
 }
 
 func TestTLSReloaderReloadsPeriodically(t *testing.T) {

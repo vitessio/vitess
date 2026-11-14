@@ -123,8 +123,16 @@ func (r *TLSReloader) Start(ctx context.Context, signals <-chan os.Signal, inter
 	}()
 }
 
-// StartOnSIGHUP is Start with the process's SIGHUPs as the signals.
-func (r *TLSReloader) StartOnSIGHUP(interval time.Duration) {
+// StartOnProcessSignals is Start with the process's SIGHUPs as the
+// signals when onSIGHUP is set, and none otherwise. It starts nothing
+// when there is neither a signal nor an interval to reload on.
+func (r *TLSReloader) StartOnProcessSignals(onSIGHUP bool, interval time.Duration) {
+	if !onSIGHUP {
+		if interval > 0 {
+			r.Start(context.Background(), nil, interval)
+		}
+		return
+	}
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGHUP)
 	r.Start(context.Background(), signals, interval)

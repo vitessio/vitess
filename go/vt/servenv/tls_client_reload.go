@@ -36,7 +36,7 @@ import (
 const clientTLSReloadName = "clients"
 
 // tlsReloadBinaries are the long-running binaries that reload their
-// TLS files, and so have --tls-reload-interval.
+// TLS files, and so have --tls-reload-interval and --tls-reload-on-sighup.
 var tlsReloadBinaries = []string{
 	"mysqlctld",
 	"vtbackup",
@@ -55,30 +55,31 @@ func init() {
 	}
 }
 
-// tlsReloadFlagsRegistered is set in the binaries that reload their TLS
-// files, see tlsReloadBinaries.
-var tlsReloadFlagsRegistered bool
-
 func registerTLSReloadFlags(fs *pflag.FlagSet) {
-	tlsReloadFlagsRegistered = true
-	utils.SetFlagDurationVar(fs, &tlsReloadInterval, "tls-reload-interval", tlsReloadInterval, "how often to check the TLS certificate, key, CA and CRL files of the process's gRPC and MySQL servers and clients for changes and reload them, 0 to disable; SIGHUP always reloads them")
+	utils.SetFlagDurationVar(fs, &tlsReloadInterval, "tls-reload-interval", tlsReloadInterval, "how often to check the TLS certificate, key, CA and CRL files of the process's gRPC and MySQL servers and clients for changes and reload them, 0 to disable")
+	utils.SetFlagBoolVar(fs, &tlsReloadOnSIGHUP, "tls-reload-on-sighup", tlsReloadOnSIGHUP, "reload the TLS certificate, key, CA and CRL files of the process's gRPC server and clients on SIGHUP; vtgate's MySQL server reloads its TLS files on SIGHUP regardless")
 }
 
 // startClientTLSReload reloads the files of the process's TLS clients
-// on every SIGHUP, and every interval if it is positive, until the
-// process terminates. It does nothing in a binary that does not reload
-// its TLS files, which keeps its own handling of SIGHUP.
-func startClientTLSReload(interval time.Duration) {
-	if !tlsReloadFlagsRegistered {
+// on every SIGHUP if onSIGHUP is set, and every interval if it is
+// positive, until the process terminates. Otherwise it leaves SIGHUP to
+// the rest of the process.
+func startClientTLSReload(onSIGHUP bool, interval time.Duration) {
+	if !onSIGHUP && interval <= 0 {
 		return
 	}
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGHUP)
+	var signals chan os.Signal
+	if onSIGHUP {
+		signals = make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGHUP)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		defer signal.Stop(signals)
+		if signals != nil {
+			defer signal.Stop(signals)
+		}
 		runClientTLSReload(ctx, signals, interval)
 	}()
 	OnTermSync(func() {

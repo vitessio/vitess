@@ -63,7 +63,7 @@ func Init() {
 	}
 	inited = true
 
-	startClientTLSReload(tlsReloadInterval)
+	startClientTLSReload(tlsReloadOnSIGHUP, tlsReloadInterval)
 
 	// Once you run as root, you pretty much destroy the chances of a
 	// non-privileged user starting the program correctly.

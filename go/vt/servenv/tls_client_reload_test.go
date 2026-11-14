@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/tls"
 	"os"
+	"os/signal"
 	"path"
 	"syscall"
 	"testing"
@@ -90,17 +91,19 @@ func TestRunClientTLSReload(t *testing.T) {
 	}
 }
 
-// TestStartClientTLSReload checks that a binary that reloads its TLS
-// files reloads its clients' files on the process's SIGHUPs from
+// TestStartClientTLSReload checks that with --tls-reload-on-sighup, a
+// binary reloads its clients' files on the process's SIGHUPs from
 // startup on, and reports each reload in the metrics of the clients.
 func TestStartClientTLSReload(t *testing.T) {
 	vttls.ResetCachedFilesForTest()
 	t.Cleanup(vttls.ResetCachedFilesForTest)
-	registered := tlsReloadFlagsRegistered
-	tlsReloadFlagsRegistered, onTermSyncHooks = true, event.Hooks{}
+	// Replacing the hooks while another test's timed-out Fire still holds
+	// their lock would leave it unlocking an unlocked mutex: wait for it.
+	require.True(t, fireOnTermSyncHooks(30*time.Second))
+	onTermSyncHooks = event.Hooks{}
 	t.Cleanup(func() {
 		require.True(t, fireOnTermSyncHooks(30*time.Second), "the reload must stop when the process terminates")
-		tlsReloadFlagsRegistered, onTermSyncHooks = registered, event.Hooks{}
+		onTermSyncHooks = event.Hooks{}
 	})
 
 	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
@@ -120,7 +123,7 @@ func TestStartClientTLSReload(t *testing.T) {
 	install(oldCerts)
 	require.Equal(t, readCert(t, oldCerts.ClientCert).Raw, clientCert())
 
-	startClientTLSReload(0)
+	startClientTLSReload(true, 0)
 
 	tlsReloadSuccessTimestamp.Set(clientTLSReloadName, 0)
 	install(newCerts)
@@ -139,4 +142,49 @@ func TestStartClientTLSReload(t *testing.T) {
 		return tlsReloadErrors.Counts()[clientTLSReloadName] > errorsBefore
 	}, 30*time.Second, 10*time.Millisecond, "a failed reload must be counted")
 	require.Equal(t, newCert, clientCert())
+}
+
+// TestStartClientTLSReloadLeavesSIGHUPAloneByDefault checks that
+// without --tls-reload-on-sighup, a SIGHUP, such as one sent to reload
+// the table ACLs, leaves the clients' files as they were loaded.
+func TestStartClientTLSReloadLeavesSIGHUPAloneByDefault(t *testing.T) {
+	vttls.ResetCachedFilesForTest()
+	t.Cleanup(vttls.ResetCachedFilesForTest)
+
+	// Stands for the process's other handlers of SIGHUP, which keep it
+	// from terminating the process.
+	sighups := make(chan os.Signal, 1)
+	signal.Notify(sighups, syscall.SIGHUP)
+	t.Cleanup(func() { signal.Stop(sighups) })
+
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	live := t.TempDir()
+	cert, key, ca := path.Join(live, "cert.pem"), path.Join(live, "key.pem"), path.Join(live, "ca.pem")
+	install := func(certs tlstest.ClientServerKeyPairs) {
+		for dst, src := range map[string]string{cert: certs.ClientCert, key: certs.ClientKey, ca: certs.ServerCA} {
+			copyFile(t, dst, src)
+		}
+	}
+	clientCert := func() []byte {
+		config, err := vttls.ClientConfig(vttls.VerifyIdentity, cert, key, ca, "", "", tls.VersionTLS12)
+		require.NoError(t, err)
+		return config.Certificates[0].Certificate[0]
+	}
+	install(oldCerts)
+	oldCert := readCert(t, oldCerts.ClientCert).Raw
+	require.Equal(t, oldCert, clientCert())
+
+	startClientTLSReload(false, 0)
+
+	install(newCerts)
+	require.NoError(t, syscall.Kill(os.Getpid(), syscall.SIGHUP))
+	select {
+	case <-sighups:
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "the SIGHUP must have been delivered for this test to be meaningful")
+	}
+	assert.Never(t, func() bool {
+		return !bytes.Equal(oldCert, clientCert())
+	}, time.Second, 10*time.Millisecond, "a SIGHUP must not reload the clients' files without --tls-reload-on-sighup")
 }

@@ -15,8 +15,9 @@ limitations under the License.
 */
 
 // Package reload checks that a running vtgate process reloads the TLS
-// files of its gRPC and MySQL servers from disk, on SIGHUP and with
-// --tls-reload-interval, without dropping established connections.
+// files of its gRPC and MySQL servers from disk, on SIGHUP with
+// --tls-reload-on-sighup and with --tls-reload-interval, without
+// dropping established connections.
 package reload
 
 import (
@@ -101,6 +102,7 @@ func TestMain(m *testing.M) {
 			"--mysql-server-ssl-key", liveFiles.key,
 			"--mysql-server-ssl-ca", liveFiles.ca,
 			"--mysql-server-ssl-crl", liveFiles.crl,
+			"--tls-reload-on-sighup",
 		)
 		if err := clusterInstance.StartVtgate(); err != nil {
 			fmt.Fprintf(os.Stderr, "cannot start vtgate: %v\n", err)

@@ -318,6 +318,9 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if interval := servenv.TLSReloadInterval(); interval > 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "--tls-reload-interval", interval.String())
 	}
+	if servenv.TLSReloadOnSIGHUP() {
+		vt.ExtraArgs = append(vt.ExtraArgs, "--tls-reload-on-sighup")
+	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema-ddl-authorized-users", args.VSchemaDDLAuthorizedUsers}...)
 	}

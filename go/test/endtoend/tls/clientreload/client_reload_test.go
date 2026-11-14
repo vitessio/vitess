@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package clientreload checks that a running vtgate reloads the TLS
 // files of its gRPC client to the tablets (the --tablet-grpc-* flags) on
-// SIGHUP: once the tablet restarts, and vtgate reconnects to it, vtgate
+// SIGHUP, with --tls-reload-on-sighup: once the tablet restarts, and vtgate reconnects to it, vtgate
 // presents the reloaded certificate, verifies the tablet against the
 // reloaded CRL, and keeps the files it loaded when a reload fails.
 package clientreload
@@ -98,6 +98,7 @@ func TestMain(m *testing.M) {
 			"--tablet-grpc-ca", vtgateFiles.ca,
 			"--tablet-grpc-crl", vtgateFiles.crl,
 			"--tablet-grpc-server-name", tabletServerName,
+			"--tls-reload-on-sighup",
 		)
 		if err := clusterInstance.StartVtgate(); err != nil {
 			fmt.Fprintf(os.Stderr, "cannot start vtgate: %v\n", err)
