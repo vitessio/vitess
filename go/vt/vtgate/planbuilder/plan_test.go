@@ -253,6 +253,26 @@ func (s *planTestSuite) TestReferenceUnionArmKeepsLocalLimit() {
 	}
 }
 
+// A sharded arm must keep its own merge ordering below its local LIMIT.
+func (s *planTestSuite) TestShardedUnionArmKeepsLocalLimit() {
+	vschema := loadSchema(s.T(), "vschemas/schema.json", true)
+	vw, err := vschemawrapper.NewVschemaWrapper(vtenv.NewTestEnv(), vschema, TestBuilder)
+	s.Require().NoError(err)
+	plan, err := TestBuilder("(select intcol from user order by intcol desc limit 2) union all (select col from user) order by intcol limit 3", vw, vw.CurrentDb())
+	s.Require().NoError(err)
+	inner := engine.Find(func(p engine.Primitive) bool {
+		limit, ok := p.(*engine.Limit)
+		return ok && sqlparser.String(limit.Count) == "2"
+	}, plan.Instructions)
+	s.Require().NotNil(inner, "test must exercise an arm-local VTGate LIMIT")
+	routes := routePrimitives(inner)
+	s.Require().Len(routes, 1)
+	s.Require().Len(routes[0].OrderBy, 1)
+	s.Require().True(routes[0].OrderBy[0].Desc, "outer ASC must not replace the arm's DESC merge ordering")
+	s.Require().Contains(routes[0].Query, "intcol desc")
+	s.Require().NotContains(routes[0].Query, "intcol asc")
+}
+
 // Generated DISTINCT derived tables must not leak an arm-only sort helper.
 func (s *planTestSuite) TestOrderedDistinctUnionArmWidths() {
 	env := vtenv.NewTestEnv()

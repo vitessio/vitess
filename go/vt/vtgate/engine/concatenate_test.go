@@ -26,8 +26,11 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -223,6 +226,92 @@ func (c *concatenateConcurrencyVCursor) ExecutePrimitive(ctx context.Context, p 
 func (c *concatenateConcurrencyVCursor) StreamExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool, callback func(*sqltypes.Result) error) error {
 	c.before(p)
 	return c.noopVCursor.StreamExecutePrimitive(ctx, p, vars, fields, callback)
+}
+
+// Serialized streams retain rows until all arm types are known. Their shared
+// buffer must respect the row budget, including concurrent source callbacks.
+func TestConcatenateSequentialStreamMemoryLimit(t *testing.T) {
+	for _, session := range []string{"reserved", "transaction"} {
+		for _, tc := range []struct {
+			name                                        string
+			limit                                       int
+			ignore, wrapErrors, async, empty, wantError bool
+		}{
+			{name: "boundary", limit: 4},
+			{name: "across-arms", limit: 3, wantError: true},
+			{name: "oversized-chunk", limit: 1, wantError: true},
+			{name: "aggregated-error", limit: 3, wrapErrors: true, wantError: true},
+			{name: "concurrent-callbacks", limit: 3, async: true, wantError: true},
+			{name: "empty", limit: 0, empty: true},
+			{name: "explicit-override", limit: 1, ignore: true},
+		} {
+			t.Run(session+"/"+tc.name, func(t *testing.T) {
+				first := r("id", "int32", "1", "2")
+				second := r("id", "int64", "3", "4")
+				if tc.empty {
+					first.Rows, second.Rows = nil, nil
+				}
+				left := &fakePrimitive{results: []*sqltypes.Result{first}, async: tc.async}
+				if tc.async {
+					left.results = append(left.results, first)
+				}
+				right := &fakePrimitive{results: []*sqltypes.Result{second}}
+				concatenate := NewConcatenate([]Primitive{left, right}, nil)
+				cursor := &concatenateMemoryVCursor{limit: tc.limit, ignore: tc.ignore, wrapErrors: tc.wrapErrors}
+				cursor.inTx = session == "transaction"
+				cursor.inReserved = session == "reserved"
+				var rows [][]sqltypes.Value
+				var fields []*querypb.Field
+				err := concatenate.TryStreamExecute(t.Context(), cursor, nil, true, func(qr *sqltypes.Result) error {
+					if qr.Fields != nil {
+						fields = qr.Fields
+					}
+					rows = append(rows, qr.Rows...)
+					return nil
+				})
+				if tc.wantError {
+					require.ErrorContains(t, err, "in-memory row count exceeded allowed limit")
+					require.Equal(t, vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.Code(err))
+					require.Equal(t, sqlerror.ERNetPacketTooLarge, sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError).Number())
+					require.Empty(t, rows, "a failed buffered union must not deliver partial results")
+					if tc.limit == 1 || tc.async {
+						require.Zero(t, right.curResult, "stop before starting another arm")
+					}
+					return
+				}
+				require.NoError(t, err)
+				require.Len(t, fields, 1)
+				require.Equal(t, sqltypes.Int64, fields[0].Type)
+				if tc.empty {
+					require.Empty(t, rows)
+				} else {
+					require.Len(t, rows, 4)
+					for _, row := range rows {
+						require.Equal(t, sqltypes.Int64, row[0].Type())
+					}
+				}
+			})
+		}
+	}
+}
+
+type concatenateMemoryVCursor struct {
+	noopVCursor
+	limit              int
+	ignore, wrapErrors bool
+}
+
+func (c *concatenateMemoryVCursor) MaxMemoryRows() int { return c.limit }
+func (c *concatenateMemoryVCursor) ExceedsMaxMemoryRows(rows int) bool {
+	return !c.ignore && rows > c.limit
+}
+
+func (c *concatenateMemoryVCursor) StreamExecutePrimitive(ctx context.Context, p Primitive, vars map[string]*querypb.BindVariable, fields bool, callback func(*sqltypes.Result) error) error {
+	err := c.noopVCursor.StreamExecutePrimitive(ctx, p, vars, fields, callback)
+	if err != nil && c.wrapErrors {
+		return fmt.Errorf("aggregated stream error: %v", err)
+	}
+	return err
 }
 
 func TestConcatenate_WithErrors(t *testing.T) {

@@ -377,6 +377,41 @@ func TestRecursiveUnionAllSeedReturnedOnceWithEmptyTerm(t *testing.T) {
 	}
 }
 
+// Each arm fits the configured 2000-row budget; buffering both in a serialized
+// OLAP session must fail before retaining their combined 2002 rows.
+func TestSerializedUnionStreamMemoryLimit(t *testing.T) {
+	mcmp, closer := start(t)
+	t.Cleanup(closer)
+	const count = 1001
+	refValues, userValues := make([]string, count), make([]string, count)
+	for i := range count {
+		refValues[i] = fmt.Sprintf("(%d)", i+1)
+		userValues[i] = fmt.Sprintf("(%d, %d)", i+1, i+1)
+	}
+	mcmp.Exec("insert into t1(id1, id2) values " + strings.Join(userValues, ","))
+	insert := "insert into ref(id) values " + strings.Join(refValues, ",")
+	utils.Exec(t, mcmp.MySQLConn, insert)
+	for _, shard := range clusterInstance.Keyspaces[0].Shards {
+		_, err := shard.PrimaryTablet().VttabletProcess.QueryTablet(insert, keyspaceName, true)
+		require.NoError(t, err)
+	}
+	utils.Exec(t, mcmp.VtConn, "set workload = olap")
+	mcmp.Exec("begin")
+	t.Cleanup(func() { mcmp.Exec("rollback") })
+	query := "select id from ref union all select id1 from t1"
+	_, err := mcmp.VtConn.ExecuteFetch(query, count*2, true)
+	require.ErrorContains(t, err, "in-memory row count exceeded allowed limit of 2000")
+	var mysqlErr *sqlerror.SQLError
+	require.ErrorAs(t, err, &mysqlErr)
+	require.Equal(t, sqlerror.ERNetPacketTooLarge, mysqlErr.Number())
+	mcmp.Exec("rollback")
+	mcmp.Exec("begin")
+	override := strings.Replace(query, "select id", "select /*vt+ IGNORE_MAX_MEMORY_ROWS=1 */ id", 1)
+	result, err := mcmp.VtConn.ExecuteFetch(override, count*2, true)
+	require.NoError(t, err)
+	require.Len(t, result.Rows, count*2)
+}
+
 // A reference seed routed through VTGate recursion must return all of its rows
 // even when its cardinality exceeds the recursion depth limit.
 func TestRecursiveReferenceSeedLargerThanDepthLimit(t *testing.T) {

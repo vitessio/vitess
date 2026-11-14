@@ -324,6 +324,8 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 	results := make([][]*sqltypes.Result, len(c.Sources))
 
 	var mu sync.Mutex
+	bufferedRows := 0
+	var bufferErr error
 	for idx, source := range c.Sources {
 		vars := copyBindVars(bindVars)
 		err := vcursor.StreamExecutePrimitive(ctx, source, vars, true, func(resultChunk *sqltypes.Result) error {
@@ -334,11 +336,27 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 
 			mu.Lock()
 			defer mu.Unlock()
-			// This visitor will just accumulate all the results into slices
+			if bufferErr != nil {
+				return bufferErr
+			}
+			if vcursor.ExceedsMaxMemoryRows(bufferedRows + len(resultChunk.Rows)) {
+				bufferErr = vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+				return bufferErr
+			}
+			// Field types are resolved after every arm finishes. Bound the rows
+			// retained across all arms before appending another chunk.
+			bufferedRows += len(resultChunk.Rows)
 			results[idx] = append(results[idx], resultChunk)
 
 			return nil
 		})
+		// Sources may aggregate callback errors and lose their SQL error state.
+		mu.Lock()
+		cachedErr := bufferErr
+		mu.Unlock()
+		if cachedErr != nil {
+			return cachedErr
+		}
 		if err != nil {
 			return err
 		}

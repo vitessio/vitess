@@ -44,3 +44,15 @@ func TestKnownOutputOffsetStopsAtExplicitProjection(t *testing.T) {
 	_, ok = knownOutputOffset(&plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}, projection, qualifiedAlias)
 	require.False(t, ok)
 }
+
+// Before an arm's shard-local limit is planned, its VTGate LIMIT alone must
+// stop an outer upper limit from changing the route beneath it.
+func TestUpperLimitStopsAtArmLimit(t *testing.T) {
+	source := &Table{}
+	route := &Route{unaryOperator: newUnaryOp(source)}
+	arm := newLimit(route, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("2")}, false)
+	outer := newLimit(arm, &sqlparser.Limit{Rowcount: sqlparser.NewIntLiteral("3")}, false)
+	ctx := &plancontext.PlanningContext{SemTable: semantics.EmptySemTable()}
+	setUpperLimit(ctx, outer)
+	require.Same(t, source, route.Source, "an outer LIMIT must not cross the arm's own LIMIT")
+}
