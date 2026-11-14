@@ -37,7 +37,7 @@ type clientFilesKey struct {
 }
 
 // clientFiles is what was loaded from the files of a clientFilesKey,
-// all from one read of them.
+// all from reads of them that agree.
 type clientFiles struct {
 	certificates []tls.Certificate
 	roots        *x509.CertPool
@@ -75,7 +75,16 @@ var (
 
 	reloadMu              sync.Mutex
 	cachedFilesGeneration atomic.Uint64
+
+	// readFile reads the certificate, key and CA files. Tests replace it
+	// to change the files between two reads.
+	readFile = os.ReadFile
 )
+
+// maxReadAttempts bounds how many times the files of a configuration
+// are read again, looking for two reads in a row that agree, before
+// the files are taken as still changing.
+const maxReadAttempts = 5
 
 // CachedFilesGeneration returns a number that changes whenever
 // ReloadCachedFiles finds that a file changed. A config built by
@@ -98,7 +107,7 @@ func loadClientFiles(k clientFilesKey) (*clientFiles, error) {
 		return f.(*clientFiles), nil
 	}
 
-	contents, err := k.read()
+	contents, err := k.readConsistently()
 	if err != nil {
 		return nil, err
 	}
@@ -110,21 +119,45 @@ func loadClientFiles(k clientFilesKey) (*clientFiles, error) {
 	return f, nil
 }
 
+// readConsistently reads the files of k until two reads in a row agree,
+// so that the contents it returns are of one set of files, rather than,
+// say, the old key pair and the new CA of a rotation that replaced the
+// files between the reads.
+func (k clientFilesKey) readConsistently() (clientFileContents, error) {
+	contents, err := k.read()
+	if err != nil {
+		return contents, err
+	}
+	for attempt := 1; ; attempt++ {
+		again, err := k.read()
+		if err != nil {
+			return again, err
+		}
+		if again.digest() == contents.digest() {
+			return contents, nil
+		}
+		if attempt == maxReadAttempts {
+			return again, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "the tls files cert %s, key %s, ca %s kept changing across %d attempts to read them consistently", k.cert, k.key, k.ca, maxReadAttempts)
+		}
+		contents = again
+	}
+}
+
 func (k clientFilesKey) read() (clientFileContents, error) {
 	var (
 		c   clientFileContents
 		err error
 	)
 	if k.cert != "" {
-		if c.cert, err = os.ReadFile(k.cert); err != nil {
+		if c.cert, err = readFile(k.cert); err != nil {
 			return c, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to load tls certificate, cert %s, key: %s: %v", k.cert, k.key, err)
 		}
-		if c.key, err = os.ReadFile(k.key); err != nil {
+		if c.key, err = readFile(k.key); err != nil {
 			return c, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to load tls certificate, cert %s, key: %s: %v", k.cert, k.key, err)
 		}
 	}
 	if k.ca != "" {
-		if c.ca, err = os.ReadFile(k.ca); err != nil {
+		if c.ca, err = readFile(k.ca); err != nil {
 			return c, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "failed to read ca file: %s", k.ca)
 		}
 	}
@@ -179,9 +212,9 @@ func watchCRL(w crlWatch, body []byte) {
 // ReloadCachedFiles reads again the certificate, key, CA and CRL files
 // of the configs that ClientConfig built, so that the configs it
 // builds from then on use what the files now hold. The files of a
-// config are loaded together, from one read: when any of them cannot
-// be loaded, the config keeps all that was loaded before, and the
-// error is returned. A CRL file that cannot be read or parsed, or that
+// config are loaded together, from two reads of them in a row that
+// agree: when any of them cannot be loaded, or they keep changing, the
+// config keeps all that was loaded before, and the error is returned. A CRL file that cannot be read or parsed, or that
 // the CA of its configuration does not validate, is reported, and does
 // not count as a change; ClientConfig fails while it stays that way.
 // ReloadCachedFiles reports whether any file changed.
@@ -192,7 +225,7 @@ func ReloadCachedFiles() (changed bool, err error) {
 	var errs []error
 	cachedClientFiles.Range(func(k, cached any) bool {
 		key := k.(clientFilesKey)
-		contents, err := key.read()
+		contents, err := key.readConsistently()
 		if err == nil && contents.digest() == cached.(*clientFiles).digest {
 			return true
 		}

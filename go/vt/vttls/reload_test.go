@@ -273,3 +273,75 @@ func TestReloadCachedFilesValidatesCRLsUnderTheirCA(t *testing.T) {
 	require.False(t, changed)
 	require.Equal(t, generation, CachedFilesGeneration(), "the gRPC credentials must not be rebuilt from a CRL that its CA does not validate")
 }
+
+// changeFilesOnRead has readFile call change each time it has read the
+// file at path.
+func changeFilesOnRead(t *testing.T, path string, change func()) {
+	t.Cleanup(func() { readFile = os.ReadFile })
+	readFile = func(name string) ([]byte, error) {
+		b, err := os.ReadFile(name)
+		if name == path {
+			change()
+		}
+		return b, err
+	}
+}
+
+// TestReloadCachedFilesReadsAConfigConsistently checks that a rotation
+// that replaces the files of a config while ReloadCachedFiles reads
+// them, as a Kubernetes secret update can, is loaded whole, rather than
+// as the old key pair with the new CA.
+func TestReloadCachedFilesReadsAConfigConsistently(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	newCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	files := newLiveClientFiles(t)
+	files.install(oldCerts)
+	_, err := files.clientConfig(oldCerts.ServerName)
+	require.NoError(t, err)
+
+	// The rotation lands between the reads of the key and the CA.
+	rotated := false
+	changeFilesOnRead(t, files.key, func() {
+		if !rotated {
+			rotated = true
+			files.install(newCerts)
+		}
+	})
+	changed, err := ReloadCachedFiles()
+	requireNoErrorFor(t, err, path.Dir(files.cert))
+	require.True(t, rotated, "the files must have changed during the reload for this test to be meaningful")
+	require.True(t, changed)
+
+	config, err := files.clientConfig(newCerts.ServerName)
+	require.NoError(t, err)
+	res := handshake(t, serverRequiringClientsOf(t, newCerts), config)
+	require.NoError(t, res.clientErr, "the client must trust the new CA")
+	require.NoError(t, res.serverErr, "the client must present the new certificate along with the new CA")
+}
+
+// TestReloadCachedFilesKeepsAConfigWhoseFilesKeepChanging checks that a
+// config whose files change on every read keeps what it loaded before,
+// and that ReloadCachedFiles reports it.
+func TestReloadCachedFilesKeepsAConfigWhoseFilesKeepChanging(t *testing.T) {
+	oldCerts := tlstest.CreateClientServerCertPairs(t.TempDir())
+	certSets := []tlstest.ClientServerKeyPairs{tlstest.CreateClientServerCertPairs(t.TempDir()), tlstest.CreateClientServerCertPairs(t.TempDir())}
+	files := newLiveClientFiles(t)
+	files.install(oldCerts)
+	_, err := files.clientConfig(oldCerts.ServerName)
+	require.NoError(t, err)
+
+	installs := 0
+	changeFilesOnRead(t, files.key, func() {
+		files.install(certSets[installs%2])
+		installs++
+	})
+	_, err = ReloadCachedFiles()
+	require.ErrorContains(t, err, "kept changing")
+	require.ErrorContains(t, err, files.ca)
+
+	config, err := files.clientConfig(oldCerts.ServerName)
+	require.NoError(t, err)
+	res := handshake(t, serverRequiringClientsOf(t, oldCerts), config)
+	require.NoError(t, res.clientErr, "the client must keep the CA it loaded")
+	require.NoError(t, res.serverErr, "the client must keep the certificate it loaded")
+}
