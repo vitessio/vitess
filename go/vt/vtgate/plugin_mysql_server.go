@@ -194,6 +194,10 @@ type tempTableConn struct {
 // handlers that implement the optional observer interface.
 var _ mysql.ConnActivityObserver = (*vtgateHandler)(nil)
 
+// With --convert-result-charset, vtgate refuses some clients at the handshake,
+// see CheckHandshake.
+var _ mysql.HandshakeChecker = (*vtgateHandler)(nil)
+
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
@@ -972,7 +976,7 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	newSession.TargetString = target
 	// MySQL 8.0 and 8.4 go back to their default character_set_results on a
 	// reset, not to the one of the handshake: a client that connected with
-	// latin1 gets utf8mb4 after COM_RESET_CONNECTION.
+	// utf8mb3 gets utf8mb4 after COM_RESET_CONNECTION.
 	newSession.CharacterSetResults = 0
 	c.StatusFlags = mysql.ServerStatusAutocommit
 }
@@ -1842,38 +1846,58 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 			session.Options.ClientFoundRows = true
 		}
 		if convertResultCharset {
-			session.CharacterSetResults = uint32(handshakeResultCharset(vh.vtg.executor.env.CollationEnv(), c.CharacterSet))
+			// CheckHandshake refused the other character sets.
+			if collation, err := handshakeResultCharset(vh.vtg.executor.env.CollationEnv(), c.CharacterSet); err == nil {
+				session.CharacterSetResults = uint32(collation)
+			}
 		}
 		c.ClientData = session
 	}
 	return session
 }
 
+// CheckHandshake implements mysql.HandshakeChecker. With
+// --convert-result-charset, it refuses a client whose handshake collation
+// belongs to a character set other than utf8mb4 and utf8mb3, see
+// handshakeResultCharset. Without the flag, it accepts every client.
+func (vh *vtgateHandler) CheckHandshake(c *mysql.Conn) error {
+	if !convertResultCharset {
+		return nil
+	}
+	_, err := handshakeResultCharset(vh.vtg.executor.env.CollationEnv(), c.CharacterSet)
+	return err
+}
+
 // handshakeResultCharset returns the character_set_results that a client
 // asks for with the collation of its handshake. MySQL 8.0 and 8.4 take the
-// collation itself: a client of utf8mb4_bin gets result fields with 46. They
-// take their default for 0 and for an ID they do not have, and so does vtgate
-// for those and for a collation that Vitess does not implement.
+// collation itself: a client of utf8mb4_bin gets result fields with 46, and
+// one of utf8mb3_general_ci gets 33. They take their default for 0 and for
+// an ID they do not have, and so does vtgate for those and for a collation
+// that Vitess does not implement: it returns collations.Unknown.
 //
-// MySQL refuses a connection with ucs2, utf16, utf16le or utf32, which it
-// does not accept as a client character set. vtgate accepts it, as it did
-// before, and uses its default.
-func handshakeResultCharset(env *collations.Environment, collation collations.ID) collations.ID {
-	if collation == collations.CollationBinaryID {
-		return collation
-	}
+// vtgate reads the text of every query as utf8mb4, so it returns an error
+// for a collation of any other character set than utf8mb4 and utf8mb3, such
+// as latin1, gbk, binary (63) or ucs2. A client gets results in another
+// character set with SET character_set_results. The error is the one that
+// MySQL 8.0.46 and 8.4.13 refuse a ucs2, utf16, utf16le or utf32 handshake
+// with, which they do not accept as a client character set: "Variable
+// 'character_set_client' can't be set to the value of 'ucs2'" (1231, SQL
+// state 42000), measured with a client of go/mysql, also with a wrong
+// password. MySQL accepts a latin1, gbk or binary handshake.
+func handshakeResultCharset(env *collations.Environment, collation collations.ID) (collations.ID, error) {
 	if env.LookupName(collation) == "" {
-		return collations.Unknown
+		return collations.Unknown, nil
 	}
-	coll := colldata.Lookup(collation)
-	if coll == nil {
-		return collations.Unknown
+	switch charset := env.LookupCharsetName(collation); charset {
+	case "utf8mb4", "utf8mb3", "utf8":
+	default:
+		return collations.Unknown, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar,
+			"Variable 'character_set_client' can't be set to the value of '%s': vtgate with --convert-result-charset accepts utf8mb4 and utf8mb3 clients, and SET character_set_results gives results in another character set", charset)
 	}
-	var buf [4]byte
-	if coll.Charset().EncodeRune(buf[:], 'A') != 1 {
-		return collations.Unknown
+	if colldata.Lookup(collation) == nil {
+		return collations.Unknown, nil
 	}
-	return collation
+	return collation, nil
 }
 
 type mysqlServer struct {

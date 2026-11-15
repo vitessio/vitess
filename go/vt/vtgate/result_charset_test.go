@@ -335,24 +335,69 @@ func TestHandshakeResultCharset(t *testing.T) {
 	tests := []struct {
 		handshake, want collations.ID
 	}{
-		{31, 31},   // latin1_german2_ci
 		{46, 46},   // utf8mb4_bin
-		{28, 28},   // gbk_chinese_ci
-		{63, 63},   // binary
 		{255, 255}, // utf8mb4_0900_ai_ci
+		{33, 33},   // utf8mb3_general_ci
+		{83, 83},   // utf8mb3_bin
 		{0, 0},
 		{100, 0}, // no collation has the ID 100
-		{35, 0},  // ucs2, which MySQL refuses as a client character set
 	}
 	for _, tc := range tests {
 		c := &mysql.Conn{CharacterSet: tc.handshake}
+		require.NoError(t, vh.CheckHandshake(c), "handshake %d", tc.handshake)
 		assert.Equal(t, uint32(tc.want), vh.session(c).CharacterSetResults, "handshake %d", tc.handshake)
 	}
 
-	c := &mysql.Conn{CharacterSet: 8}
-	require.Equal(t, uint32(8), vh.session(c).CharacterSetResults)
+	c := &mysql.Conn{CharacterSet: 33}
+	require.Equal(t, uint32(33), vh.session(c).CharacterSetResults)
 	vh.ComResetConnection(c)
 	assert.Zero(t, vh.session(c).CharacterSetResults)
+}
+
+// TestHandshakeRefused covers the clients that vtgate refuses with
+// --convert-result-charset: those of a character set other than utf8mb4
+// and utf8mb3, with the error that MySQL refuses a ucs2 client with. Without
+// the flag, vtgate accepts them all.
+func TestHandshakeRefused(t *testing.T) {
+	tests := []struct {
+		handshake collations.ID
+		charset   string
+	}{
+		{8, "latin1"},
+		{31, "latin1"}, // latin1_german2_ci
+		{28, "gbk"},
+		{63, "binary"},
+		{35, "ucs2"},
+		{54, "utf16"},
+		{56, "utf16le"},
+		{60, "utf32"},
+		{248, "gb18030"},
+	}
+
+	t.Run("on", func(t *testing.T) {
+		setConvertResultCharset(t, true)
+		vtg, _, _ := createVtgateEnv(t)
+		vh := newVtgateHandler(vtg)
+		for _, tc := range tests {
+			err := vh.CheckHandshake(&mysql.Conn{CharacterSet: tc.handshake})
+			require.Error(t, err, "handshake %d", tc.handshake)
+			sqlErr := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError)
+			assert.Equal(t, sqlerror.ERWrongValueForVar, sqlErr.Num, "handshake %d", tc.handshake)
+			assert.Equal(t, sqlerror.SSClientError, sqlErr.State, "handshake %d", tc.handshake)
+			assert.Equal(t, "Variable 'character_set_client' can't be set to the value of '"+tc.charset+"': vtgate with --convert-result-charset accepts utf8mb4 and utf8mb3 clients, and SET character_set_results gives results in another character set", sqlErr.Message, "handshake %d", tc.handshake)
+		}
+	})
+
+	t.Run("off", func(t *testing.T) {
+		setConvertResultCharset(t, false)
+		vtg, _, _ := createVtgateEnv(t)
+		vh := newVtgateHandler(vtg)
+		for _, tc := range tests {
+			c := &mysql.Conn{CharacterSet: tc.handshake}
+			assert.NoError(t, vh.CheckHandshake(c), "handshake %d", tc.handshake)
+			assert.Zero(t, vh.session(c).CharacterSetResults, "handshake %d", tc.handshake)
+		}
+	})
 }
 
 // TestErrorMessageResultCharset covers the error messages that a MySQL
