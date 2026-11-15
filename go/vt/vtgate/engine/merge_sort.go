@@ -19,7 +19,9 @@ package engine
 import (
 	"context"
 	"io"
+	"sync"
 
+	"vitess.io/vitess/go/mysql/collations/resultcharset"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -73,9 +75,15 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	ctx, cancel = context.WithCancel(ctx)
 	defer cancel()
 	gotFields := wantfields
+	// With --convert-result-charset every stream is asked for its fields,
+	// which say what character set its rows are in, see mergeSortText.
+	var text *mergeSortText
+	if vcursor.ConvertResultCharset() {
+		text = &mergeSortText{}
+	}
 	handles := make([]*streamHandle, len(ms.Primitives))
 	for i, input := range ms.Primitives {
-		handles[i] = runOneStream(ctx, vcursor, input, bindVars, gotFields, ms.FetchLastInsertID)
+		handles[i] = runOneStream(ctx, vcursor, input, bindVars, gotFields || text != nil, ms.FetchLastInsertID, text)
 		if !ms.ScatterErrorsAsWarnings {
 			// we only need the fields from the first input, unless we allow ScatterErrorsAsWarnings.
 			// in that case, we need to ask all the inputs for fields - we don't know which will return anything
@@ -214,6 +222,37 @@ type streamHandle struct {
 	err       error
 }
 
+// mergeSortText gives the rows of all the streams of a merge sort the
+// character sets of the fields of the stream that sent its fields first.
+//
+// With --convert-result-charset the text of a row is in the character set
+// that its fields say, and the merge sort sends the fields of one stream for
+// the rows of all of them. The tablets of two shards do not have to send the
+// same character set: one with --queryserver-config-raw-result-charset sends
+// a latin1_german2_ci column with 'Müller' as 4D FC 6C 6C 65 72 with the
+// collation 31, and one without it sends 4D C3 BC 6C 6C 65 72 with the
+// collation 255.
+type mergeSortText struct {
+	mu     sync.Mutex
+	fields []*querypb.Field
+}
+
+// first returns the first fields that any stream sent, and the conversion
+// of the rows of the stream with these fields to their character sets, which
+// is nil when the rows stay as they are.
+func (t *mergeSortText) first(fields []*querypb.Field) ([]*querypb.Field, *resultcharset.Conversion) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.fields == nil {
+		t.fields = fields
+	}
+	conv := resultcharset.ToFields(fields, t.fields)
+	if !conv.ConvertsValues() {
+		return t.fields, nil
+	}
+	return t.fields, conv
+}
+
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
 func runOneStream(
 	ctx context.Context,
@@ -221,6 +260,7 @@ func runOneStream(
 	input StreamExecutor,
 	bindVars map[string]*querypb.BindVariable,
 	wantfields, fetchLastInsertID bool,
+	text *mergeSortText,
 ) *streamHandle {
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
@@ -231,17 +271,26 @@ func runOneStream(
 		defer close(handle.fields)
 		defer close(handle.row)
 
+		var conv *resultcharset.Conversion
 		handle.err = input.StreamExecute(ctx, vcursor, bindVars, wantfields, fetchLastInsertID, func(qr *sqltypes.Result) error {
 			if !handle.fieldSeen && len(qr.Fields) != 0 {
 				handle.fieldSeen = true
+				fields := qr.Fields
+				if text != nil {
+					fields, conv = text.first(fields)
+				}
 				select {
-				case handle.fields <- qr.Fields:
+				case handle.fields <- fields:
 				case <-ctx.Done():
 					return io.EOF
 				}
 			}
 
-			for _, row := range qr.Rows {
+			rows := qr.Rows
+			if conv != nil {
+				rows = conv.Rows(rows)
+			}
+			for _, row := range rows {
 				select {
 				case handle.row <- row:
 				case <-ctx.Done():
