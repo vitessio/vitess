@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -224,5 +225,65 @@ func TestValuesJoinStatementValues(t *testing.T) {
 			require.Len(t, r.Rows, 1)
 			assert.Equal(t, "M\xFCller", r.Rows[0][0].ToString())
 		})
+	}
+}
+
+// TestUncorrelatedSubqueryStatementValues checks the bind variables that a
+// pulled-out subquery makes of the values of its rows for the outer query: a
+// value, the columns of a row, a list of values and a list of rows. With
+// --convert-result-charset 'Müller' of a latin1 column is utf8mb4 in each of
+// them. Without the flag the values are the bind variables as they are.
+func TestUncorrelatedSubqueryStatementValues(t *testing.T) {
+	// The subquery returns the latin1 column first, and the INT second.
+	subqueryResult := func() *sqltypes.Result {
+		r := latin1Result()
+		r.Fields[0], r.Fields[1] = r.Fields[1], r.Fields[0]
+		r.Rows[0][0], r.Rows[0][1] = r.Rows[0][1], r.Rows[0][0]
+		return r
+	}
+	for _, convert := range []bool{true, false} {
+		want := wantStatementValue(convert)
+		tuple := func(values ...*querypb.Value) *querypb.BindVariable {
+			return &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: values}
+		}
+		tests := []struct {
+			name string
+			ps   *UncorrelatedSubquery
+			want map[string]*querypb.BindVariable
+		}{{
+			name: "value",
+			ps:   &UncorrelatedSubquery{Opcode: opcode.PulloutValue, SubqueryResult: "sq"},
+			want: map[string]*querypb.BindVariable{"sq": sqltypes.StringBindVariable(want)},
+		}, {
+			name: "row",
+			ps:   &UncorrelatedSubquery{Opcode: opcode.PulloutValue, SubqueryResult: "sq", RowResults: []string{"sq_0", "sq_1"}},
+			want: map[string]*querypb.BindVariable{"sq_0": sqltypes.StringBindVariable(want), "sq_1": sqltypes.Int64BindVariable(1)},
+		}, {
+			name: "in",
+			ps:   &UncorrelatedSubquery{Opcode: opcode.PulloutIn, SubqueryResult: "sq", HasValues: "has_values"},
+			want: map[string]*querypb.BindVariable{
+				"has_values": sqltypes.Int64BindVariable(1),
+				"sq":         tuple(sqltypes.ValueToProto(sqltypes.NewVarChar(want))),
+			},
+		}, {
+			name: "in rows",
+			ps:   &UncorrelatedSubquery{Opcode: opcode.PulloutIn, SubqueryResult: "sq", HasValues: "has_values", RowColumns: 2},
+			want: map[string]*querypb.BindVariable{
+				"has_values": sqltypes.Int64BindVariable(1),
+				"sq":         tuple(sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewVarChar(want), sqltypes.NewInt64(1)})),
+			},
+		}}
+		for _, tc := range tests {
+			t.Run(fmt.Sprintf("convert %v, %s", convert, tc.name), func(t *testing.T) {
+				outer := &fakePrimitive{results: []*sqltypes.Result{sqltypes.MakeTestResult(sqltypes.MakeTestFields("x", "int64"), "1")}}
+				tc.ps.Subquery = &fakePrimitive{results: []*sqltypes.Result{subqueryResult()}}
+				tc.ps.Outer = outer
+				vcursor := &noopVCursor{convertResultCharset: convert}
+
+				_, err := tc.ps.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, false)
+				require.NoError(t, err)
+				outer.ExpectLog(t, []string{fmt.Sprintf("Execute %v false", deprecatedPrintBindVars(tc.want))})
+			})
+		}
 	}
 }
