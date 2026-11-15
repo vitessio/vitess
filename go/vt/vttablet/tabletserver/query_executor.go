@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations/resultcharset"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/mysql/sqlmode"
@@ -73,6 +74,9 @@ type QueryExecutor struct {
 	// transactionID is the open transaction the query runs in, or 0. Unlike connID, it is 0
 	// for a reserved connection without a transaction.
 	transactionID int64
+	// resultCharsetSet is set when the query runs on a connection whose client
+	// changed its character_set_results (see StatefulConnection.resultCharsetSet).
+	resultCharsetSet bool
 }
 
 const (
@@ -192,6 +196,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return nil, err
 		}
 		defer conn.Unlock()
+		qre.resultCharsetSet = conn.resultCharsetSet
 		if qre.setting != nil {
 			applied, err := conn.ApplySetting(qre.ctx, qre.setting)
 			if err != nil {
@@ -317,6 +322,9 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.txFetch(conn, true)
 	case p.PlanSet:
 		result, err := qre.execSet(conn)
+		if err == nil && qre.plan.SetsResultCharset {
+			conn.resultCharsetSet = true
+		}
 		if err == nil && setsWaitTimeout(qre.plan.FullStmt) {
 			// The SET changed the deadline mysqld enforces on this connection:
 			// re-capture it for the temp-table idle timeout.
@@ -406,6 +414,7 @@ func (qre *QueryExecutor) txConnStreamExec() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Unlock()
+	qre.resultCharsetSet = conn.resultCharsetSet
 	if qre.setting != nil {
 		applied, err := conn.ApplySetting(qre.ctx, qre.setting)
 		if err != nil {
@@ -569,7 +578,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		// Honor the caller's field-metadata setting the way Execute does in
 		// tabletserver.execute; the generic streaming path applies it through
 		// execStreamSQL's IncludeFields argument.
-		result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(qre.options))
+		result = result.StripMetadata(qre.streamIncludedFields())
 		return qre.streamSingleResult(result, countingCallback)
 	}
 
@@ -672,6 +681,7 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 			return err
 		}
 		defer txConn.Unlock()
+		qre.resultCharsetSet = txConn.resultCharsetSet
 		if qre.setting != nil {
 			applied, err := txConn.ApplySetting(qre.ctx, qre.setting)
 			if err != nil {
@@ -748,6 +758,34 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) (err error) {
 		return nil
 	}
 	return err
+}
+
+// readText returns the callback for a streamed result whose text the tablet
+// reads itself, from a connection of the stream pool: on a tablet that reads
+// with character_set_results = NULL it converts each packet to the connection
+// character set before callback reads it, whoever the caller is.
+func (qre *QueryExecutor) readText(callback func(*sqltypes.Result) error) func(*sqltypes.Result) error {
+	if !qre.tsv.config.RawResultCharset {
+		return callback
+	}
+	conn := qre.tsv.connectionCollation()
+	stream := resultcharset.NewStream(func(fields []*querypb.Field) *resultcharset.Conversion {
+		return resultcharset.ToConnection(fields, conn, true)
+	})
+	return func(result *sqltypes.Result) error {
+		return callback(stream.Result(result))
+	}
+}
+
+// streamIncludedFields returns the fields that a streamed query reads: those
+// the caller asked for, and all of them on a tablet that reads with
+// character_set_results = NULL, whose conversion of the result needs the
+// collations and then strips the fields (see TabletServer.convertStream).
+func (qre *QueryExecutor) streamIncludedFields() querypb.ExecuteOptions_IncludedFields {
+	if qre.tsv.config.RawResultCharset {
+		return querypb.ExecuteOptions_ALL
+	}
+	return sqltypes.IncludeFieldsOrDefault(qre.options)
 }
 
 // streamSingleResult delivers a fully-materialized result from a dedicated
@@ -2125,9 +2163,9 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isStateful, i
 		// its half-applied session state would survive on a connection the
 		// temp-table keepalive then pins alive.
 		if insideTxn || !qre.keepsConnOnTimeout() {
-			err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+			err = conn.Conn.StreamOnce(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), qre.streamIncludedFields())
 		} else {
-			err = conn.Conn.StreamOnceKeepConnOnTimeout(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+			err = conn.Conn.StreamOnceKeepConnOnTimeout(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), qre.streamIncludedFields())
 		}
 	} else {
 		err = qre.tsv.olapql.Add(qd)
@@ -2135,7 +2173,7 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.PooledConn, isStateful, i
 			return err
 		}
 		defer qre.tsv.olapql.Remove(qd)
-		err = conn.Conn.Stream(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		err = conn.Conn.Stream(ctx, sql, cb, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), qre.streamIncludedFields())
 	}
 
 	if err != nil || lastInsertIDSet || !qre.options.GetFetchLastInsertId() {
@@ -2221,7 +2259,7 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, qre.readText(func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
 			tableName := row[0].ToString()
@@ -2232,7 +2270,7 @@ func (qre *QueryExecutor) executeGetSchemaQuery(query string, callback func(sche
 			schemaDef[tableName] = row[1].ToString()
 		}
 		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
-	})
+	}))
 }
 
 func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResponse) error) error {
@@ -2247,7 +2285,7 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 	}
 	defer conn.Recycle()
 
-	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, func(result *sqltypes.Result) error {
+	return qre.execStreamSQL(conn, false /* isStateful */, false /* insideTxn */, query, qre.readText(func(result *sqltypes.Result) error {
 		var udfs []*querypb.UDFInfo
 		if len(result.Rows) > 0 {
 			udfs = make([]*querypb.UDFInfo, 0, len(result.Rows))
@@ -2264,5 +2302,5 @@ func (qre *QueryExecutor) getUDFs(callback func(schemaRes *querypb.GetSchemaResp
 		return callback(&querypb.GetSchemaResponse{
 			Udfs: udfs,
 		})
-	})
+	}))
 }

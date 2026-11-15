@@ -190,7 +190,15 @@ func (te *TxEngine) transition(state txEngineState) {
 		}
 		te.startTransactionWatcher()
 	}
-	te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
+	te.openTxPool()
+}
+
+// openTxPool opens the transaction pool, which serves the transactions and the
+// reserved connections of clients and so reads with character_set_results =
+// NULL when the tablet is configured so (see TabletServer.convertResult).
+func (te *TxEngine) openTxPool() {
+	config := te.env.Config()
+	te.txPool.Open(config.QueryServingConnector(config.DB.AppWithDB()), config.DB.DbaWithDB(), config.QueryServingConnector(config.DB.AppDebugWithDB()))
 }
 
 // RedoPreparedTransactions acquires the state lock and calls redoPreparedTransactionsLocked.
@@ -229,7 +237,7 @@ func (te *TxEngine) redoPreparedTransactionsLocked() {
 	te.preparedPool.Open()
 	// We have to defer opening the transaction pool because we call shutdown in the beginning that closes it.
 	// We want to open the transaction pool after the prepareFromRedo has run. Also, we want this to run even if that fails.
-	defer te.txPool.Open(te.env.Config().DB.AppWithDB(), te.env.Config().DB.DbaWithDB(), te.env.Config().DB.AppDebugWithDB())
+	defer te.openTxPool()
 
 	if err := te.prepareFromRedo(); err != nil {
 		te.env.Stats().InternalErrors.Add("TwopcResurrection", 1)

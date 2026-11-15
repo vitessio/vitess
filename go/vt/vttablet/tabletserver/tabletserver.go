@@ -140,6 +140,10 @@ type TabletServer struct {
 	env *vtenv.Environment
 
 	queryThrottler *querythrottler.QueryThrottler
+
+	// connCollation is the collation of the connections, see
+	// connectionCollation.
+	connCollation atomic.Uint32
 }
 
 var _ queryservice.QueryService = (*TabletServer)(nil)
@@ -319,6 +323,7 @@ func (tsv *TabletServer) InitDBConfig(target *querypb.Target, dbcfgs *dbconfigs.
 	tsv.sm.Init(tsv, target)
 	tsv.sm.target = target.CloneVT()
 	tsv.config.DB = dbcfgs
+	tsv.initConnectionCollation()
 
 	tsv.se.InitDBConfig(tsv.config.DB.DbaWithDB())
 	tsv.rt.InitDBConfig(target, mysqld)
@@ -1062,6 +1067,9 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				result.Fields = nil
 				result.Rows = nil
 			} else {
+				// before the fields are stripped of the collations that
+				// the conversion needs
+				result = tsv.convertResult(ctx, options, qre.resultCharsetSet, result)
 				result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
 			}
 
@@ -1159,6 +1167,7 @@ func (tsv *TabletServer) streamExecute(ctx context.Context, target *querypb.Targ
 				targetTabletType: target.GetTabletType(),
 				setting:          connSetting,
 			}
+			callback = tsv.convertStream(ctx, options, func() bool { return qre.resultCharsetSet }, callback)
 			return qre.Stream(callback)
 		},
 	)
@@ -1341,6 +1350,11 @@ func (tsv *TabletServer) MessageStream(ctx context.Context, target *querypb.Targ
 				logStats: logStats,
 				tsv:      tsv,
 			}
+			// The messages come from the messager, which reads them with
+			// connections of its own in the connection character set: the
+			// conversion leaves them as they are, and is here so that every
+			// method that returns rows goes through it.
+			callback = tsv.convertStream(ctx, nil, func() bool { return true }, callback)
 			return qre.MessageStream(callback)
 		},
 	)
