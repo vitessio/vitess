@@ -14,16 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package resultcharset tests vtgate with --convert-result-charset against
-// MySQL: MySQL protocol clients with different handshake collations and SET
-// statements get the bytes, field collations and lengths that MySQL sends.
-// The expected values were measured on MySQL 8.0.46 and 8.4.13 with the same
-// table, and the two agree on all of them.
+// Package resultcharset tests vtgate with --convert-result-charset and
+// tablets with --queryserver-config-raw-result-charset against MySQL: MySQL
+// protocol clients with different handshake collations and SET statements get
+// the bytes, field collations and lengths that MySQL sends. The expected
+// values were measured on MySQL 8.0.46 and 8.4.13 with the same table, and the
+// two agree on all of them.
 //
-// The tablets of vttest read results in utf8mb4, so vtgate does not know the
-// collation of a column, which character_set_results = NULL and binary need
-// to send a latin1 or gb2312 column in its own character set. Those two settings
-// are only checked for the utf8mb4 column and for the fields.
+// The tablets read results with character_set_results = NULL, so vtgate knows
+// the collation of each column, which character_set_results = NULL and binary
+// need to send a latin1 or gb2312 column in its own character set.
 package resultcharset
 
 import (
@@ -64,7 +64,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		vttest.QueryServerArgs = append(vttest.QueryServerArgs, "--convert-result-charset")
+		vttest.QueryServerArgs = append(vttest.QueryServerArgs, "--convert-result-charset", "--queryserver-config-raw-result-charset")
 
 		var cfg vttest.Config
 		cfg.Topology = &vttestpb.VTTestTopology{
@@ -135,7 +135,6 @@ const query = "select id, l, g, u4, j, vb, i from rc where id = 1"
 func TestResultCharset(t *testing.T) {
 	insertRow(t)
 
-	const anyValue = ""
 	tests := []struct {
 		name      string
 		handshake collations.ID
@@ -171,11 +170,11 @@ func TestResultCharset(t *testing.T) {
 		json:      "7b2261223a2022c3a9e282acf09f9880227d",
 		results:   "757466386d6234",
 	}, {
-		// MySQL sends l and g in their own character sets, which vtgate
-		// does not know with these tablets.
+		// MySQL sends each column in its own character set, with the
+		// binary collation and one byte for each character of its length.
 		name:      "binary handshake",
 		handshake: 63,
-		text:      [3]column{{63, 10, anyValue}, {63, 10, anyValue}, {63, 10, "c3a9e282acf09f9880"}},
+		text:      [3]column{{63, 10, "4dfc6c6c6572"}, {63, 10, "d6d0cec4"}, {63, 10, "c3a9e282acf09f9880"}},
 		json:      "7b2261223a2022c3a9e282acf09f9880227d",
 		results:   "62696e617279",
 	}, {
@@ -214,13 +213,20 @@ func TestResultCharset(t *testing.T) {
 		json:      "007b002200610022003a0020002200e920ac003f0022007d",
 		results:   "0075006300730032",
 	}, {
-		// MySQL sends l with latin1_swedish_ci and the length 10, and g
-		// with gb2312_chinese_ci and the length 20, which vtgate does not
-		// know with these tablets.
+		name:      "SET character_set_results = binary",
+		handshake: 255,
+		set:       "set character_set_results = binary",
+		text:      [3]column{{63, 10, "4dfc6c6c6572"}, {63, 10, "d6d0cec4"}, {63, 10, "c3a9e282acf09f9880"}},
+		json:      "7b2261223a2022c3a9e282acf09f9880227d",
+		results:   "62696e617279",
+	}, {
+		// MySQL sends each column in its own character set, with its
+		// own collation and length: l with latin1_swedish_ci and 10, g
+		// with gb2312_chinese_ci and 20.
 		name:      "SET character_set_results = NULL",
 		handshake: 255,
 		set:       "set character_set_results = null",
-		text:      [3]column{{0, 0, anyValue}, {0, 0, anyValue}, {255, 40, "c3a9e282acf09f9880"}},
+		text:      [3]column{{8, 10, "4dfc6c6c6572"}, {24, 20, "d6d0cec4"}, {255, 40, "c3a9e282acf09f9880"}},
 		json:      "7b2261223a2022c3a9e282acf09f9880227d",
 		results:   "NULL",
 	}}
@@ -241,13 +247,9 @@ func TestResultCharset(t *testing.T) {
 
 				for i, want := range tc.text {
 					f := qr.Fields[1+i]
-					if want.length != 0 {
-						assert.Equal(t, uint32(want.collation), f.Charset, "%s: field %s", workload, f.Name)
-						assert.Equal(t, want.length, f.ColumnLength, "%s: field %s", workload, f.Name)
-					}
-					if want.value != anyValue {
-						assert.Equal(t, want.value, hex.EncodeToString(row[1+i].Raw()), "%s: value of %s", workload, f.Name)
-					}
+					assert.Equal(t, uint32(want.collation), f.Charset, "%s: field %s", workload, f.Name)
+					assert.Equal(t, want.length, f.ColumnLength, "%s: field %s", workload, f.Name)
+					assert.Equal(t, want.value, hex.EncodeToString(row[1+i].Raw()), "%s: value of %s", workload, f.Name)
 				}
 				for _, i := range []int{0, 4, 5, 6} {
 					assert.Equal(t, uint32(collations.CollationBinaryID), qr.Fields[i].Charset, "%s: field %d", workload, i)
