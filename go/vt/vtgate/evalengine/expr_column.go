@@ -18,6 +18,8 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/colldata"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -57,7 +59,39 @@ func (c *Column) IsExpr() {}
 
 // eval implements the expression interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.Collation, c.Values)
+	return valueToEval(env.Row[c.Offset], c.rowCollation(env), c.Values)
+}
+
+// rowCollation returns the collation that the value of the column is
+// evaluated in. It is the one of the column when the planner knew its type.
+//
+// A column without a type has no collation, and its text is evaluated as
+// bytes. That gives the right answer for an exact match while the text is in
+// the connection character set, as the literals are. When the field of the
+// column says that the text is in another character set, as it is in a row
+// that MySQL sent with character_set_results = NULL, the bytes of 'Müller' in
+// a latin1 column, 4D FC 6C 6C 65 72, do not match the literal 'Müller', and
+// CONCAT() with a literal fails. The column is then evaluated in the
+// collation of its field. Only an evaluation that was given the fields of its
+// rows can do this.
+func (c *Column) rowCollation(env *ExpressionEnv) collations.TypedCollation {
+	if c.typed() || c.Offset >= len(env.Fields) {
+		return c.Collation
+	}
+	field := env.Fields[c.Offset]
+	id := collations.ID(field.Charset)
+	if id == collations.Unknown || id == collations.CollationBinaryID {
+		return c.Collation
+	}
+	coll := colldata.Lookup(id)
+	if coll == nil {
+		return c.Collation
+	}
+	switch coll.Charset().(type) {
+	case charset.Charset_utf8mb4, charset.Charset_utf8mb3:
+		return c.Collation
+	}
+	return typedColumnCollation(field.Type, id)
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (ctype, error) {
