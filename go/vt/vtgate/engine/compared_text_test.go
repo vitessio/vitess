@@ -300,3 +300,48 @@ func TestComparedTextFilter(t *testing.T) {
 		})
 	}
 }
+
+// TestGroupConcatSeparatorCharset concatenates the GROUP_CONCAT of two
+// shards. The separator is in the character set of the values: for the rows
+// 4 and 5 of the table MySQL 8.0.46 gives, read with
+// character_set_results = NULL,
+//
+//	HEX(GROUP_CONCAT(l ORDER BY id SEPARATOR 'ü'))   4DFC6C6C6572FC4D55454C4C4552
+//	HEX(GROUP_CONCAT(l ORDER BY id SEPARATOR '中'))  4DFC6C6C65723F4D55454C4C4552
+func TestGroupConcatSeparatorCharset(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       bool
+		convert   bool
+		separator string
+		value     string
+	}{
+		{"latin1 values", true, true, "ü", "M\xfcller\xfcMUELLER"},
+		{"latin1 values, a separator that latin1 does not have", true, true, "中", "M\xfcller?MUELLER"},
+		{"utf8mb4 values", false, true, "ü", "MüllerüMUELLER"},
+		{"utf8mb4 values, without the flag", false, false, "ü", "MüllerüMUELLER"},
+	}
+	for _, tc := range tests {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s, stream %v", tc.name, stream), func(t *testing.T) {
+				param := NewAggregateParam(opcode.AggregateGroupConcat, 1, nil, "", collations.MySQL8())
+				param.Func = &sqlparser.GroupConcatExpr{Separator: tc.separator}
+				aggregate := &ScalarAggregate{
+					Aggregates: []*AggregateParams{param},
+					Input:      &fakePrimitive{results: []*sqltypes.Result{comparedTextRows(tc.raw, 4, 5)}},
+				}
+				vcursor := &noopVCursor{convertResultCharset: tc.convert}
+				var qr *sqltypes.Result
+				var err error
+				if stream {
+					qr, err = wrapStreamExecute(aggregate, vcursor, map[string]*querypb.BindVariable{}, true)
+				} else {
+					qr, err = aggregate.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, true)
+				}
+				require.NoError(t, err)
+				require.Len(t, qr.Rows, 1)
+				assert.Equal(t, tc.value, qr.Rows[0][1].ToString())
+			})
+		}
+	}
+}
