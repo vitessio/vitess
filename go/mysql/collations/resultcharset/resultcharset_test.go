@@ -17,6 +17,7 @@ limitations under the License.
 package resultcharset
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -306,14 +307,15 @@ func connectionResult() *sqltypes.Result {
 	}
 }
 
-// TestToClient converts a result to the character_set_results of a client.
+// TestFromConnection converts a result with all text in the connection
+// character set to the character_set_results of a client.
 // The expected bytes are the ones MySQL 8.4.13 and 8.0.46 send: with latin1,
 // "é€" is E9 80, "中" is "?", and the JSON text is converted while its field
 // keeps the binary collation.
-func TestToClient(t *testing.T) {
+func TestFromConnection(t *testing.T) {
 	t.Run("latin1", func(t *testing.T) {
 		qr := connectionResult()
-		got := ToClient(qr.Fields, utf8mb40900AICI, latin1SwedishCI, false).Result(qr)
+		got := fromConnection(qr.Fields, utf8mb40900AICI, latin1SwedishCI, false).Result(qr)
 
 		assert.Equal(t, "M\xFCller", got.Rows[0][0].ToString())
 		assert.Equal(t, "\xE9\x80?", got.Rows[0][1].ToString())
@@ -336,7 +338,7 @@ func TestToClient(t *testing.T) {
 
 	t.Run("gb2312", func(t *testing.T) {
 		qr := connectionResult()
-		got := ToClient(qr.Fields, utf8mb40900AICI, gb2312ChineseCI, false).Result(qr)
+		got := fromConnection(qr.Fields, utf8mb40900AICI, gb2312ChineseCI, false).Result(qr)
 		// gb2312 has "ü" (A8 B9), "é" (A8 A6) and "中" (D6 D0), and no "€".
 		assert.Equal(t, "M\xA8\xB9ller", got.Rows[0][0].ToString())
 		assert.Equal(t, "\xA8\xA6?\xD6\xD0", got.Rows[0][1].ToString())
@@ -346,7 +348,7 @@ func TestToClient(t *testing.T) {
 
 	t.Run("ucs2", func(t *testing.T) {
 		qr := connectionResult()
-		got := ToClient(qr.Fields, utf8mb40900AICI, ucs2GeneralCI, false).Result(qr)
+		got := fromConnection(qr.Fields, utf8mb40900AICI, ucs2GeneralCI, false).Result(qr)
 		assert.Equal(t, "\x00M\x00\xFC\x00l\x00l\x00e\x00r", got.Rows[0][0].ToString())
 		// MySQL does not convert a number.
 		assert.Equal(t, "1", got.Rows[0][3].ToString())
@@ -357,7 +359,7 @@ func TestToClient(t *testing.T) {
 
 	t.Run("another collation of the connection character set", func(t *testing.T) {
 		qr := connectionResult()
-		conv := ToClient(qr.Fields, utf8mb40900AICI, utf8mb4Bin, false)
+		conv := fromConnection(qr.Fields, utf8mb40900AICI, utf8mb4Bin, false)
 		got := conv.Result(qr)
 		assert.Equal(t, uint32(utf8mb4Bin), got.Fields[0].Charset)
 		assert.Equal(t, uint32(utf8mb4Bin), got.Fields[1].Charset)
@@ -372,14 +374,14 @@ func TestToClient(t *testing.T) {
 			Fields: []*querypb.Field{field("u", sqltypes.VarChar, utf8mb40900AICI, 40)},
 			Rows:   []sqltypes.Row{row("é")},
 		}
-		conv := ToClient(qr.Fields, utf8mb40900AICI, utf8mb40900AICI, false)
+		conv := fromConnection(qr.Fields, utf8mb40900AICI, utf8mb40900AICI, false)
 		assert.True(t, conv.IsNoOp())
 		assert.Same(t, qr, conv.Result(qr))
 	})
 
 	t.Run("NULL", func(t *testing.T) {
 		qr := connectionResult()
-		got := ToClient(qr.Fields, utf8mb40900AICI, collations.Unknown, true).Result(qr)
+		got := fromConnection(qr.Fields, utf8mb40900AICI, collations.Unknown, true).Result(qr)
 		// Each column is in the character set of its own collation.
 		assert.Equal(t, "M\xFCller", got.Rows[0][0].ToString())
 		assert.Equal(t, "é€中", got.Rows[0][1].ToString())
@@ -404,11 +406,11 @@ func TestStream(t *testing.T) {
 	assert.Equal(t, "Müller", second.Rows[0][0].ToString())
 }
 
-// TestToClientColumns covers the columns whose conversion depends on more
-// than their type. The fields are what vtgate holds, with the text in utf8mb4
+// TestFromConnectionColumns covers the columns whose conversion depends on more
+// than their type. The fields have the text in utf8mb4
 // and the length that MySQL reports for utf8mb4, and the expected values are
 // what MySQL 8.4.13 and 8.0.46 send with character_set_results = latin1.
-func TestToClientColumns(t *testing.T) {
+func TestFromConnectionColumns(t *testing.T) {
 	const decimalFlags = uint32(querypb.MySqlFlag_NUM_FLAG | querypb.MySqlFlag_BINARY_FLAG)
 	qr := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -448,7 +450,7 @@ func TestToClientColumns(t *testing.T) {
 	}
 
 	t.Run("latin1", func(t *testing.T) {
-		got := ToClient(qr.Fields, utf8mb40900AICI, latin1SwedishCI, false).Result(qr)
+		got := fromConnection(qr.Fields, utf8mb40900AICI, latin1SwedishCI, false).Result(qr)
 		assert.Equal(t, []meta{
 			{latin1SwedishCI, 10},
 			{binaryCollation, 40},
@@ -465,7 +467,7 @@ func TestToClientColumns(t *testing.T) {
 	})
 
 	t.Run("ucs2", func(t *testing.T) {
-		got := ToClient(qr.Fields, utf8mb40900AICI, ucs2GeneralCI, false).Result(qr)
+		got := fromConnection(qr.Fields, utf8mb40900AICI, ucs2GeneralCI, false).Result(qr)
 		// MySQL converts the text of a DECIMAL expression.
 		assert.Equal(t, "\x001\x00.\x005", got.Rows[0][5].ToString())
 		assert.Equal(t, uint32(binaryCollation), got.Fields[5].Charset)
@@ -475,7 +477,7 @@ func TestToClientColumns(t *testing.T) {
 			Fields: []*querypb.Field{{Name: "dc", Type: sqltypes.Decimal, Charset: uint32(binaryCollation), ColumnLength: 8, Flags: uint32(querypb.MySqlFlag_NUM_FLAG)}},
 			Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.Decimal, []byte("1234.56"))}},
 		}
-		assert.Equal(t, "1234.56", ToClient(column.Fields, utf8mb40900AICI, ucs2GeneralCI, false).Result(column).Rows[0][0].ToString())
+		assert.Equal(t, "1234.56", fromConnection(column.Fields, utf8mb40900AICI, ucs2GeneralCI, false).Result(column).Rows[0][0].ToString())
 	})
 
 	t.Run("binary", func(t *testing.T) {
@@ -485,7 +487,7 @@ func TestToClientColumns(t *testing.T) {
 		raw := connectionResult()
 		raw.Fields = append(raw.Fields, qr.Fields[2], qr.Fields[3])
 		raw.Rows[0] = append(raw.Rows[0], qr.Rows[0][2], qr.Rows[0][3])
-		got := ToClient(raw.Fields, utf8mb40900AICI, binaryCollation, false).Result(raw)
+		got := fromConnection(raw.Fields, utf8mb40900AICI, binaryCollation, false).Result(raw)
 		assert.Equal(t, []meta{
 			{binaryCollation, 10},
 			{binaryCollation, 10},
@@ -508,7 +510,7 @@ func TestToClientColumns(t *testing.T) {
 		raw := connectionResult()
 		raw.Fields = append(raw.Fields, qr.Fields[2], qr.Fields[3])
 		raw.Rows[0] = append(raw.Rows[0], qr.Rows[0][2], qr.Rows[0][3])
-		got := ToClient(raw.Fields, utf8mb40900AICI, collations.Unknown, true).Result(raw)
+		got := fromConnection(raw.Fields, utf8mb40900AICI, collations.Unknown, true).Result(raw)
 		assert.Equal(t, []meta{
 			{latin1German1CI, 10},
 			{utf8mb40900AICI, 40},
@@ -545,6 +547,124 @@ func TestToClientMessage(t *testing.T) {
 	for _, tc := range tests {
 		assert.Equal(t, tc.want, ToClientMessage(tc.message, tc.results, tc.null), "%q in %d", tc.message, tc.results)
 	}
+}
+
+// TestToClient converts a result as a tablet returns it, with the text of
+// each column in the character set of the column, to the character_set_results
+// of a client. The row is the one of a table with a latin1_german1_ci, a gb2312
+// and a utf8mb4 VARCHAR(10) with 'Müller', '中文' and 'é€😀' and a JSON column,
+// and the expected fields and bytes are what MySQL 8.0.46 and 8.4.13 send for
+// it with each character_set_results.
+//
+// A value that is in the character set the client asked for is not touched:
+// with latin1 the latin1 column is the same bytes in the same memory, and with
+// NULL and binary the whole row is.
+func TestToClient(t *testing.T) {
+	raw := func() *sqltypes.Result {
+		return &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Name: "l", Type: sqltypes.VarChar, Charset: 5, ColumnLength: 10},
+				{Name: "g", Type: sqltypes.VarChar, Charset: 24, ColumnLength: 20},
+				{Name: "u4", Type: sqltypes.VarChar, Charset: 255, ColumnLength: 40},
+				{Name: "j", Type: sqltypes.TypeJSON, Charset: 63, ColumnLength: 4294967295},
+			},
+			Rows: []sqltypes.Row{{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\xD6\xD0\xCE\xC4")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("é€😀")),
+				sqltypes.MakeTrusted(sqltypes.TypeJSON, []byte(`{"a": "é€😀"}`)),
+			}},
+		}
+	}
+	type column struct {
+		collation collations.ID
+		length    uint32
+		value     string
+	}
+	tests := []struct {
+		name    string
+		results collations.ID
+		null    bool
+		text    [3]column
+		json    string
+		// same lists the columns whose value is the one of the tablet, in
+		// the same memory.
+		same []int
+	}{{
+		name:    "utf8mb4",
+		results: 255,
+		text:    [3]column{{255, 40, "4dc3bc6c6c6572"}, {255, 40, "e4b8ade69687"}, {255, 40, "c3a9e282acf09f9880"}},
+		json:    "7b2261223a2022c3a9e282acf09f9880227d",
+		same:    []int{2, 3},
+	}, {
+		name:    "latin1",
+		results: 8,
+		text:    [3]column{{8, 10, "4dfc6c6c6572"}, {8, 10, "3f3f"}, {8, 10, "e9803f"}},
+		json:    "7b2261223a2022e9803f227d",
+		same:    []int{0},
+	}, {
+		name:    "gb2312",
+		results: 24,
+		text:    [3]column{{24, 20, "4da8b96c6c6572"}, {24, 20, "d6d0cec4"}, {24, 20, "a8a63f3f"}},
+		json:    "7b2261223a2022a8a63f3f227d",
+		same:    []int{1},
+	}, {
+		name:    "sjis",
+		results: 13,
+		text:    [3]column{{13, 20, "4d3f6c6c6572"}, {13, 20, "928695b6"}, {13, 20, "3f3f3f"}},
+		json:    "7b2261223a20223f3f3f227d",
+	}, {
+		name:    "ucs2",
+		results: 35,
+		text:    [3]column{{35, 20, "004d00fc006c006c00650072"}, {35, 20, "4e2d6587"}, {35, 20, "00e920ac003f"}},
+		json:    "007b002200610022003a0020002200e920ac003f0022007d",
+	}, {
+		name:    "binary",
+		results: binaryCollation,
+		text:    [3]column{{63, 10, "4dfc6c6c6572"}, {63, 10, "d6d0cec4"}, {63, 10, "c3a9e282acf09f9880"}},
+		json:    "7b2261223a2022c3a9e282acf09f9880227d",
+		same:    []int{0, 1, 2, 3},
+	}, {
+		name: "NULL",
+		null: true,
+		text: [3]column{{5, 10, "4dfc6c6c6572"}, {24, 20, "d6d0cec4"}, {255, 40, "c3a9e282acf09f9880"}},
+		json: "7b2261223a2022c3a9e282acf09f9880227d",
+		same: []int{0, 1, 2, 3},
+	}}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			in := raw()
+			got := ToClient(in.Fields, utf8mb40900AICI, tc.results, tc.null).Result(in)
+			require.Len(t, got.Rows, 1)
+			for i, want := range tc.text {
+				f := got.Fields[i]
+				assert.Equal(t, uint32(want.collation), f.Charset, "collation of %s", f.Name)
+				assert.Equal(t, want.length, f.ColumnLength, "length of %s", f.Name)
+				assert.Equal(t, want.value, hex.EncodeToString(got.Rows[0][i].Raw()), "value of %s", f.Name)
+			}
+			assert.Equal(t, uint32(binaryCollation), got.Fields[3].Charset)
+			assert.Equal(t, uint32(4294967295), got.Fields[3].ColumnLength)
+			assert.Equal(t, tc.json, hex.EncodeToString(got.Rows[0][3].Raw()))
+			for _, i := range tc.same {
+				assert.Same(t, &in.Rows[0][i].Raw()[0], &got.Rows[0][i].Raw()[0], "column %d", i)
+			}
+
+			// The result of the tablet is not changed.
+			assert.Equal(t, raw(), in)
+		})
+	}
+
+	t.Run("a result that MySQL converted to the connection", func(t *testing.T) {
+		in := &sqltypes.Result{
+			Fields: []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: 255, ColumnLength: 40}},
+			Rows:   []sqltypes.Row{{sqltypes.NewVarChar("Müller")}},
+		}
+		got := ToClient(in.Fields, utf8mb40900AICI, gb2312ChineseCI, false).Result(in)
+		assert.Equal(t, uint32(24), got.Fields[0].Charset)
+		assert.Equal(t, uint32(20), got.Fields[0].ColumnLength)
+		assert.Equal(t, "4da8b96c6c6572", hex.EncodeToString(got.Rows[0][0].Raw()))
+		assert.True(t, ToClient(in.Fields, utf8mb40900AICI, utf8mb40900AICI, false).IsNoOp())
+	})
 }
 
 // TestToConnectionUnimplementedCollation converts the text of columns whose

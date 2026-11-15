@@ -120,11 +120,6 @@ type TabletGateway struct {
 
 	// balancerMode is the current tablet balancer mode.
 	balancerMode balancer.Mode
-
-	// connCollation is the connection collation of vtgate, to which the
-	// results of tablets are converted with --convert-result-charset (see
-	// withResultCharset).
-	connCollation atomic.Uint32
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
@@ -157,24 +152,10 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		localCell:     localCell,
 		retryCount:    retryCount,
 	}
-	gw.connCollation.Store(uint32(collations.MySQL8().DefaultConnectionCharset()))
 	gw.setupBuffering(ctx)
 	gw.setupBalancer()
-	gw.QueryService = withResultCharset(queryservice.Wrap(nil, markRawResultCharset(gw.withRetry)), gw.ConnectionCollation)
+	gw.QueryService = queryservice.Wrap(nil, markRawResultCharset(gw.withRetry))
 	return gw
-}
-
-// SetConnectionCollation sets the connection collation of vtgate, to which the
-// results of tablets are converted with --convert-result-charset:
-// env.CollationEnv().DefaultConnectionCharset().
-func (gw *TabletGateway) SetConnectionCollation(coll collations.ID) {
-	gw.connCollation.Store(uint32(coll))
-}
-
-// ConnectionCollation returns the connection collation of vtgate, to which the
-// results of tablets are converted.
-func (gw *TabletGateway) ConnectionCollation() collations.ID {
-	return collations.ID(gw.connCollation.Load())
 }
 
 func (gw *TabletGateway) setupBuffering(ctx context.Context) {
@@ -252,7 +233,7 @@ func (gw *TabletGateway) setupBalancer() {
 // QueryServiceByAlias satisfies the Gateway interface
 func (gw *TabletGateway) QueryServiceByAlias(ctx context.Context, alias *topodatapb.TabletAlias, target *querypb.Target) (queryservice.QueryService, error) {
 	qs, err := gw.hc.TabletConnection(ctx, alias, target)
-	return withResultCharset(queryservice.Wrap(qs, markRawResultCharset(gw.withShardError)), gw.ConnectionCollation), NewShardError(err, target)
+	return queryservice.Wrap(qs, markRawResultCharset(gw.withShardError)), NewShardError(err, target)
 }
 
 // TabletSeemsServing reports whether the healthcheck currently believes the

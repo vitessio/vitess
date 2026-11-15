@@ -359,9 +359,86 @@ func isASCIIIdentical(cs charset.Charset) bool {
 // asciiIdentical caches isASCIIIdentical by the name of the character set.
 var asciiIdentical sync.Map
 
-// ToClient returns the conversion of a result with all text in the character
-// set of the connection collation conn to the character_set_results of a
-// client.
+// ToClient returns the conversion of a result that a tablet returned to the
+// character_set_results of a client.
+//
+// The text of each column is in the character set of the collation in its
+// field, which is how a result has it that MySQL sent with
+// character_set_results = NULL, and how one has it that MySQL converted to the
+// connection collation conn already. A latin1_swedish_ci column with 'Müller'
+// is 4D FC 6C 6C 65 72 with the collation 8, or 4D C3 BC 6C 6C 65 72 with the
+// collation 255.
+//
+// results is the collation of character_set_results. The text of every
+// column, and the names in every field, are converted to the character set of
+// results, and every text field gets results as its collation and the length
+// that MySQL reports for it: the length in characters times the longest
+// character of the character set of results. For gb2312 the column is
+// 4D A8 B9 6C 6C 65 72 with the collation 24 and the length 20. Each value is
+// converted once, from the character set of its column.
+//
+// null is true for character_set_results = NULL, and results can be the
+// binary collation. MySQL then sends the text of every column as it is
+// stored, and so does this conversion: a value that is in the character set
+// of its column is not touched. With NULL the fields keep their collation and
+// get the length of the column in its own character set, and with binary they
+// get the binary collation and a length of one byte per character. The names
+// stay as they are for both.
+//
+// The fields and lengths are the ones of ToConnection followed by the
+// conversion from the connection character set, see fromConnection: both were
+// checked against MySQL 8.0.46 and 8.4.13.
+func ToClient(fields []*querypb.Field, conn, results collations.ID, null bool) *Conversion {
+	// first makes the result that MySQL sends for character_set_results =
+	// conn, with the collation of each column kept, and second converts
+	// that to the client. Their fields are the ones to send. Their column
+	// conversions are joined into one for each column, so that no value
+	// goes through the connection character set on its way.
+	first := ToConnection(fields, conn, false)
+	inner := first.Fields(fields)
+	second := fromConnection(inner, conn, results, null)
+
+	c := &Conversion{fields: second.fields}
+	if c.fields == nil {
+		c.fields = first.fields
+	}
+	for i := range fields {
+		var in, out *column
+		if first.columns != nil && first.columns[i].from != nil {
+			in = &first.columns[i]
+		}
+		if second.columns != nil && second.columns[i].from != nil {
+			out = &second.columns[i]
+		}
+		switch {
+		case in != nil && out != nil:
+			if out.to.IsSuperset(in.from) || sameCharset(in.from, out.to) {
+				// The column is in the character set the client asked
+				// for, as with NULL and binary.
+				continue
+			}
+			c.setColumn(len(fields), i, in.from, out.to)
+			joined := &c.columns[i]
+			joined.ascii = isASCIIIdentical(in.from) && isASCIIIdentical(out.to)
+			joined.ucs2 = in.ucs2 && out.to.IsSuperset(systemCharset)
+		case in != nil:
+			if c.columns == nil {
+				c.columns = make([]column, len(fields))
+			}
+			c.columns[i] = *in
+		case out != nil:
+			if c.columns == nil {
+				c.columns = make([]column, len(fields))
+			}
+			c.columns[i] = *out
+		}
+	}
+	return c
+}
+
+// fromConnection returns the conversion of a result with all text in the
+// character set of the connection collation conn to the character_set_results
+// of a client. It is the second half of ToClient.
 //
 // results is the collation of character_set_results. The text of every
 // column, and the names in every field, are converted to the character set of
@@ -395,7 +472,7 @@ var asciiIdentical sync.Map
 // 00 31 00 2E 00 35. Vitess tells the two apart by the binary flag, which
 // MySQL sets on the field of the expression only. Other numbers, dates and
 // binary columns are never converted.
-func ToClient(fields []*querypb.Field, conn, results collations.ID, null bool) *Conversion {
+func fromConnection(fields []*querypb.Field, conn, results collations.ID, null bool) *Conversion {
 	c := &Conversion{}
 	from := lookupCharset(conn)
 	if from == nil {
@@ -499,7 +576,7 @@ func ToClient(fields []*querypb.Field, conn, results collations.ID, null bool) *
 	return c
 }
 
-// The kinds of columns that ToClient tells apart.
+// The kinds of columns that fromConnection tells apart.
 const (
 	kindOther = iota
 	kindText
@@ -507,7 +584,7 @@ const (
 	kindDecimal
 )
 
-// clientKind returns how ToClient converts a column. A column of a string type
+// clientKind returns how fromConnection converts a column. A column of a string type
 // is text unless its field has the binary collation, so that a VARBINARY
 // column of utf8mb4_bin is text. A string column whose field has no collation
 // at all is text when its type is a text type, and binary otherwise.

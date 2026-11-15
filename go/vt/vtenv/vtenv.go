@@ -57,19 +57,6 @@ func New(cfg Options) (*Environment, error) {
 	}, nil
 }
 
-// WithRowCharset returns an environment whose collation environment is the
-// one of collations.Environment.WithRowCharset: for a process that holds the
-// text of rows in the character set of the collation rowCharset.
-func (e *Environment) WithRowCharset(rowCharset collations.ID) *Environment {
-	collationEnv := e.collationEnv.WithRowCharset(rowCharset)
-	if collationEnv == e.collationEnv {
-		return e
-	}
-	c := *e
-	c.collationEnv = collationEnv
-	return &c
-}
-
 func NewTestEnv() *Environment {
 	return &Environment{
 		collationEnv:   collations.NewEnvironment(config.DefaultMySQLVersion),

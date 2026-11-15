@@ -986,11 +986,10 @@ func JSONStoredNumbers(yield Query) {
 	}
 }
 
-// ColumnCharsets evaluates columns that are not utf8mb4, for an environment
-// that holds the text of rows in the character set of the connection, utf8mb4
-// (collations.Environment.WithRowCharset). The collation of a
-// column is in a character set of its own: the evaluation has to convert the
-// text before it compares it. In latin1_german1_ci, 'Müller' = 'MULLER'
+// ColumnCharsets evaluates columns that are not utf8mb4. The rows are written
+// in utf8mb4 here; the integration test evaluates them as MySQL returns them
+// with character_set_results = NULL, with the text of each column in the
+// character set of the column. In latin1_german1_ci, 'Müller' = 'MULLER'
 // is true and WEIGHT_STRING('Müller') is "MULLER".
 func ColumnCharsets(yield Query) {
 	rows := [][]sqltypes.Value{

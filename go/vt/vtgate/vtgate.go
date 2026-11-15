@@ -342,17 +342,6 @@ func Init(
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
 ) *VTGate {
-	if convertResultCharset {
-		// The gateway then converts every result of a tablet to the
-		// connection character set, so the text of every row that vtgate
-		// holds is utf8mb4, whatever the collation of its column is. The
-		// evaluation engine has to know: it converts the text of a
-		// latin1 column to latin1 before it compares it. Without the
-		// flag, vtgate takes rows as tablets send them and evaluates
-		// them as it always did.
-		env = env.WithRowCharset(env.CollationEnv().DefaultConnectionCharset())
-	}
-
 	ts, err := serv.GetTopoServer()
 	if err != nil {
 		log.Error("Unable to get Topo server", slog.Any("error", err))
@@ -382,7 +371,6 @@ func Init(
 	// we can't go on much further, so we exit the process.
 	// TabletGateway can create it's own healthcheck
 	gw := NewTabletGateway(ctx, hc, serv, cell)
-	gw.SetConnectionCollation(env.CollationEnv().DefaultConnectionCharset())
 	gw.RegisterStats()
 	if err := gw.WaitForTablets(ctx, tabletTypesToWait); err != nil {
 		log.Error("tabletGateway.WaitForTablets failed", slog.Any("error", err), slog.String("error_code", vterrors.Code(err).String()))
@@ -717,11 +705,11 @@ func allocateBatchIngressBytes(total uint64, sqlList []string, bindVariablesList
 // nothing else returns results to a client: ExecuteMulti, ExecuteBatch and
 // StreamExecuteMulti call Execute and StreamExecute. The executor runs the
 // statements that vtgate itself sends, such as those of a vindex, without
-// them, so that their results stay in the connection character set.
+// them, so that their results stay as the tablets returned them.
 //
-// The text in a result is in the connection collation of vtgate, and the
-// session's 0 stands for the default connection collation: utf8mb4_0900_ai_ci
-// with MySQL 8.
+// The text of each column of a result is in the character set of the
+// collation in its field, and is converted from there. The session's 0 stands
+// for the default connection collation: utf8mb4_0900_ai_ci with MySQL 8.
 //
 // The session is read when the fields arrive, after the statement ran.
 func (vtg *VTGate) toClient(session *econtext.SafeSession) func(fields []*querypb.Field) *resultcharset.Conversion {

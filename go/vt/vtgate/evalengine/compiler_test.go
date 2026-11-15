@@ -122,9 +122,7 @@ func TestCompilerReference(t *testing.T) {
 	defer func() { evalengine.SystemTime = time.Now }()
 
 	track := NewTracker()
-	// The rows of the test cases are in utf8mb4, as the rows of a vtgate with
-	// --convert-result-charset are.
-	venv := vtenv.NewTestEnv().WithRowCharset(collations.CollationUtf8mb4ID)
+	venv := vtenv.NewTestEnv()
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
@@ -1669,18 +1667,20 @@ func TestJSONColumnDecimals(t *testing.T) {
 // TestColumnCoercibility checks that a column has the coercibility that MySQL
 // gives it, 2, which is stronger than the 4 of a literal: a latin1_swedish_ci
 // column and a gb2312_chinese_ci column are compared with a literal that is not
-// ASCII, and concatenated with one, in their own collation. The expected
-// values are the ones of a table with these columns on MySQL 8.0.46 and
-// 8.4.13: 'Myller' = 'Müller' is true in latin1_swedish_ci and false in the
-// collation of the literal, utf8mb4_0900_ai_ci, and '中' < '波' is false in
-// gb2312_chinese_ci and true in utf8mb4_0900_ai_ci.
+// ASCII, and concatenated with one, in their own collation. The text of each
+// column is in the character set of the column, as in a row that MySQL sends
+// with character_set_results = NULL: 'Myller' in latin1 and '中' as D6 D0 in
+// gb2312. The expected values are the ones of a table with these columns on MySQL
+// 8.0.46 and 8.4.13: 'Myller' = 'Müller' is true in latin1_swedish_ci and
+// false in the collation of the literal, utf8mb4_0900_ai_ci, and '中' < '波' is
+// false in gb2312_chinese_ci and true in utf8mb4_0900_ai_ci.
 func TestColumnCoercibility(t *testing.T) {
-	venv := vtenv.NewTestEnv().WithRowCharset(collations.CollationUtf8mb4ID)
+	venv := vtenv.NewTestEnv()
 	fields := evalengine.FieldResolver([]*querypb.Field{
 		{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("latin1_swedish_ci"))},
 		{Name: "column1", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("gb2312_chinese_ci"))},
 	})
-	row := []sqltypes.Value{sqltypes.NewVarChar("Myller"), sqltypes.NewVarChar("中")}
+	row := []sqltypes.Value{sqltypes.NewVarChar("Myller"), sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xD6, 0xD0})}
 
 	testCases := []struct {
 		expression string

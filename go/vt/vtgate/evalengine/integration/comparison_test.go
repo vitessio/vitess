@@ -134,7 +134,14 @@ func compareRemoteExprEnv(t *testing.T, collationEnv *collations.Environment, en
 
 			// Evaluate the row as MySQL returns it, as vtgate would, rather than
 			// as written, which can be an expression. Its first column is autopk.
+			// The text of each column is in the character set of the column,
+			// as a tablet with --queryserver-config-raw-result-charset returns
+			// it: MySQL sends it so with character_set_results = NULL.
+			_, err := conn.ExecuteFetch(`SET character_set_results = NULL`, 1, false)
+			require.NoError(t, err)
 			stored, err := conn.ExecuteFetch(`SELECT * FROM vteval_test`, 1, false)
+			require.NoError(t, err)
+			_, err = conn.ExecuteFetch(`SET character_set_results = utf8mb4`, 1, false)
 			require.NoError(t, err)
 			env.Row = stored.Rows[0][1:]
 		}
@@ -276,9 +283,6 @@ func TestMySQL(t *testing.T) {
 		MySQLServerVersion: conn.ServerVersion,
 	})
 	require.NoError(t, err)
-	// The rows of the test cases are in utf8mb4, as the rows of a vtgate with
-	// --convert-result-charset are.
-	venv = venv.WithRowCharset(venv.CollationEnv().DefaultConnectionCharset())
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			ctx := callerid.NewContext(t.Context(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{

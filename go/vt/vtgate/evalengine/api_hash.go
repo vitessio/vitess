@@ -75,10 +75,7 @@ var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "
 // for two values that are considered equal by `NullsafeCompare`.
 // This can be used to avoid having to do comparison checks after a hash,
 // since we consider the 128 bits of entropy enough to guarantee uniqueness.
-//
-// For a collationEnv with a row character set, text is converted from that
-// character set to the one of collation first, as NullsafeCompare does.
-func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collationEnv *collations.Environment, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {
+func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type, sqlmode SQLMode, values *EnumSetValues) error {
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
 		hash.Write16(hashPrefixNil)
@@ -205,11 +202,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collationEnv *co
 			return UnsupportedCollationHashError
 		}
 		hash.Write16(hashPrefixBytes)
-		raw := v.Raw()
-		if rows := rowCharset(collationEnv); rows != nil {
-			raw = rowText(raw, rows, collation)
-		}
-		coll.Hash(hash, raw, 0)
+		coll.Hash(hash, v.Raw(), 0)
 
 	case sqltypes.IsDecimal(coerceTo):
 		var dec decimal.Decimal
