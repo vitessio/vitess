@@ -18,6 +18,7 @@ package engine
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,9 +26,12 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 // latin1Result is a result with an INT and a latin1_german2_ci VARCHAR(10)
@@ -375,5 +379,84 @@ func TestFkCascadeStatementValues(t *testing.T) {
 				"fkc_upd": sqltypes.ValueBindVariable(second),
 			}))})
 		})
+	}
+}
+
+// TestInsertSelectStatementValues checks the bind variables that an INSERT ...
+// SELECT makes of the values of the rows of its select for the insert, and the
+// values that it gives to an owned lookup vindex, which inserts them into its
+// table. With --convert-result-charset 'Müller' of a latin1 column is utf8mb4
+// in both. The select is asked for no fields, so that the insert has to ask
+// for them itself.
+func TestInsertSelectStatementValues(t *testing.T) {
+	invschema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {Type: "hash"},
+					"lkp": {
+						Type:   "lookup",
+						Params: map[string]string{"table": "lkp", "from": "l", "to": "keyspace_id"},
+						Owner:  "t1",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {ColumnVindexes: []*vschemapb.ColumnVindex{
+						{Name: "hash", Columns: []string{"id"}},
+						{Name: "lkp", Columns: []string{"l"}},
+					}},
+				},
+			},
+			"unsharded": {Tables: map[string]*vschemapb.Table{"t2": {}}},
+		},
+	}
+	vs := vindexes.BuildVSchema(invschema, sqlparser.NewTestParser())
+
+	for _, convert := range []bool{true, false} {
+		want := sqltypes.StringBindVariable(wantStatementValue(convert))
+		for _, stream := range []bool{false, true} {
+			for _, sharded := range []bool{true, false} {
+				t.Run(fmt.Sprintf("convert %v, stream %v, sharded %v", convert, stream, sharded), func(t *testing.T) {
+					input := &fakePrimitive{results: []*sqltypes.Result{latin1Result()}}
+					var ins *InsertSelect
+					if sharded {
+						ks := vs.Keyspaces["sharded"]
+						ins = newInsertSelect(false, ks.Keyspace, ks.Tables["t1"], "prefix ", nil, [][]int{{0}, {1}}, input)
+					} else {
+						ks := vs.Keyspaces["unsharded"]
+						ins = newInsertSelect(false, ks.Keyspace, ks.Tables["t2"], "prefix ", nil, nil, input)
+					}
+					vc := newTestVCursor("0")
+					if sharded {
+						vc = newTestVCursor("-20", "20-")
+						vc.shardForKsid = []string{"-20"}
+					}
+					vc.convertResultCharset = convert
+
+					var err error
+					if stream {
+						err = ins.TryStreamExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false, func(*sqltypes.Result) error { return nil })
+					} else {
+						_, err = ins.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+					}
+					require.NoError(t, err)
+
+					var lookupInsert, insert string
+					for _, line := range vc.log {
+						switch {
+						case strings.HasPrefix(line, "Execute insert into lkp"):
+							lookupInsert = line
+						case strings.HasPrefix(line, "ExecuteMultiShard"):
+							insert = line
+						}
+					}
+					if sharded {
+						assert.Contains(t, lookupInsert, fmt.Sprintf("l_0: %v ", want))
+					}
+					assert.Contains(t, insert, fmt.Sprintf("_c0_1: %v}", want))
+				})
+			}
+		}
 	}
 }

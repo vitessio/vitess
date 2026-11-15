@@ -378,18 +378,22 @@ func (ins *InsertSelect) execSelect(
 	vcursor VCursor,
 	bindVars map[string]*querypb.BindVariable,
 ) (insertRowsResult, error) {
-	res, err := vcursor.ExecutePrimitive(ctx, ins.Input, bindVars, false)
+	// The values of the rows of the select become bind variables of the
+	// insert and go to the vindexes, which takes the fields of the select to
+	// convert them.
+	res, err := vcursor.ExecutePrimitive(ctx, ins.Input, bindVars, vcursor.ConvertResultCharset())
 	if err != nil || len(res.Rows) == 0 {
 		return insertRowsResult{}, err
 	}
+	rows := newStatementValues(vcursor, res.Fields).rows(res.Rows)
 
-	insertID, err := ins.processGenerateFromSelect(ctx, vcursor, ins, res.Rows)
+	insertID, err := ins.processGenerateFromSelect(ctx, vcursor, ins, rows)
 	if err != nil {
 		return insertRowsResult{}, err
 	}
 
 	return insertRowsResult{
-		rows:     res.Rows,
+		rows:     rows,
 		insertID: uint64(insertID),
 	}, nil
 }
@@ -401,24 +405,29 @@ func (ins *InsertSelect) execSelectStreaming(
 	callback func(irr insertRowsResult) error,
 ) error {
 	var mu sync.Mutex
-	return vcursor.StreamExecutePrimitiveStandalone(ctx, ins.Input, bindVars, false, func(result *sqltypes.Result) error {
-		if len(result.Rows) == 0 {
-			return nil
-		}
-
+	// The values of the rows of the select become bind variables of the
+	// insert and go to the vindexes, which takes the fields of the select to
+	// convert them. They come with the first chunk.
+	var values streamStatementValues
+	return vcursor.StreamExecutePrimitiveStandalone(ctx, ins.Input, bindVars, vcursor.ConvertResultCharset(), func(result *sqltypes.Result) error {
 		// should process only one chunk at a time.
 		// as parallel chunk insert will try to use the same transaction in the vttablet
 		// this will cause transaction in use error out with "transaction in use" error.
 		mu.Lock()
 		defer mu.Unlock()
 
-		insertID, err := ins.processGenerateFromSelect(ctx, vcursor, ins, result.Rows)
+		rows := values.of(vcursor, result).rows(result.Rows)
+		if len(rows) == 0 {
+			return nil
+		}
+
+		insertID, err := ins.processGenerateFromSelect(ctx, vcursor, ins, rows)
 		if err != nil {
 			return err
 		}
 
 		return callback(insertRowsResult{
-			rows:     result.Rows,
+			rows:     rows,
 			insertID: uint64(insertID),
 		})
 	})
