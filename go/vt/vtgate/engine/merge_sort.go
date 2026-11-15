@@ -127,6 +127,11 @@ func (ms *MergeSort) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			return ctx.Err()
 		}
 	}
+	// Every stream that sent a row sent its fields before it, so the fields
+	// say which character set the rows are in, see comparedCollation.
+	if text != nil {
+		merge.Compare = comparedOrder(vcursor, text.get(), ms.OrderBy)
+	}
 	merge.Init()
 
 	// Iterate one row at a time:
@@ -251,6 +256,14 @@ func (t *mergeSortText) first(fields []*querypb.Field) ([]*querypb.Field, *resul
 		return t.fields, nil
 	}
 	return t.fields, conv
+}
+
+// get returns the fields of the stream whose fields came first, which are the
+// fields of the rows of every stream.
+func (t *mergeSortText) get() []*querypb.Field {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.fields
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.

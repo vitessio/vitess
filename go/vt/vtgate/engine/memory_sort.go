@@ -51,12 +51,14 @@ func (ms *MemorySort) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil, err
 	}
 
-	result, err := vcursor.ExecutePrimitive(ctx, ms.Input, bindVars, wantfields)
+	// With --convert-result-charset the fields say which character set the
+	// rows are in, see comparedCollation.
+	result, err := vcursor.ExecutePrimitive(ctx, ms.Input, bindVars, wantfields || vcursor.ConvertResultCharset())
 	if err != nil {
 		return nil, err
 	}
 
-	if err = ms.OrderBy.SortResult(result); err != nil {
+	if err = comparedOrder(vcursor, result.Fields, ms.OrderBy).SortResult(result); err != nil {
 		return nil, err
 	}
 	if len(result.Rows) > count {
@@ -84,9 +86,15 @@ func (ms *MemorySort) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	}
 
 	var mu sync.Mutex
-	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	// With --convert-result-charset the fields, which come before the rows,
+	// say which character set the rows are in, see comparedCollation.
+	var compared streamComparedFields
+	err = vcursor.StreamExecutePrimitive(ctx, ms.Input, bindVars, wantfields || vcursor.ConvertResultCharset(), func(qr *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
+		if compared.first(qr) {
+			sorter.Compare = comparedOrder(vcursor, qr.Fields, ms.OrderBy)
+		}
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err

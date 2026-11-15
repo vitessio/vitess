@@ -75,7 +75,11 @@ type (
 	hashJoinProbeTable struct {
 		innerMap map[vthash.Hash]*probeTableEntry
 
-		coll           collations.ID
+		// lcoll and rcoll are the collations that the key of a row of the
+		// left and of the right side is hashed in. Both are the collation of
+		// the join, for the character set that the rows of the side are in,
+		// see comparedCollation.
+		lcoll, rcoll   collations.ID
 		typ            querypb.Type
 		lhsKey, rhsKey int
 		cols           []int
@@ -93,12 +97,16 @@ type (
 
 // TryExecute implements the Primitive interface
 func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// With --convert-result-charset the fields say which character set the
+	// rows are in, see comparedCollation.
+	wantfields = wantfields || vcursor.ConvertResultCharset()
 	lresult, err := vcursor.ExecutePrimitive(ctx, hj.Left, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 
 	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols, hj.Values)
+	pt.lcoll = comparedCollation(vcursor, lresult.Fields, hj.LHSKey, hj.Collation)
 	// build the probe table from the LHS result
 	for _, row := range lresult.Rows {
 		err := pt.addLeftRow(row)
@@ -111,6 +119,8 @@ func (hj *HashJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 	if err != nil {
 		return nil, err
 	}
+
+	pt.rcoll = comparedCollation(vcursor, rresult.Fields, hj.RHSKey, hj.Collation)
 
 	result := &sqltypes.Result{
 		Fields: joinFields(lresult.Fields, rresult.Fields, hj.Cols),
@@ -137,11 +147,15 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	pt := newHashJoinProbeTable(hj.Collation, hj.ComparisonType, hj.LHSKey, hj.RHSKey, hj.Cols, hj.Values)
 	var lfields []*querypb.Field
 	var mu sync.Mutex
-	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields, func(result *sqltypes.Result) error {
+	// With --convert-result-charset the fields, which come before the rows,
+	// say which character set the rows are in, see comparedCollation.
+	textFields := vcursor.ConvertResultCharset()
+	err := vcursor.StreamExecutePrimitive(ctx, hj.Left, bindVars, wantfields || textFields, func(result *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
 		if len(lfields) == 0 && len(result.Fields) != 0 {
 			lfields = result.Fields
+			pt.lcoll = comparedCollation(vcursor, lfields, hj.LHSKey, hj.Collation)
 		}
 		for _, current := range result.Rows {
 			err := pt.addLeftRow(current)
@@ -158,9 +172,13 @@ func (hj *HashJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindV
 	var sendFields atomic.Bool
 	sendFields.Store(wantfields)
 
-	err = vcursor.StreamExecutePrimitive(ctx, hj.Right, bindVars, sendFields.Load(), func(result *sqltypes.Result) error {
+	var compared streamComparedFields
+	err = vcursor.StreamExecutePrimitive(ctx, hj.Right, bindVars, sendFields.Load() || textFields, func(result *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
+		if compared.first(result) {
+			pt.rcoll = comparedCollation(vcursor, result.Fields, hj.RHSKey, hj.Collation)
+		}
 		// compare the results coming from the RHS with the probe-table
 		res := &sqltypes.Result{}
 		if len(result.Fields) != 0 && sendFields.CompareAndSwap(true, false) {
@@ -248,7 +266,8 @@ func (hj *HashJoin) description() PrimitiveDescription {
 func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey int, cols []int, values *evalengine.EnumSetValues) *hashJoinProbeTable {
 	return &hashJoinProbeTable{
 		innerMap: map[vthash.Hash]*probeTableEntry{},
-		coll:     coll,
+		lcoll:    coll,
+		rcoll:    coll,
 		typ:      typ,
 		lhsKey:   lhsKey,
 		rhsKey:   rhsKey,
@@ -259,7 +278,7 @@ func newHashJoinProbeTable(coll collations.ID, typ querypb.Type, lhsKey, rhsKey 
 }
 
 func (pt *hashJoinProbeTable) addLeftRow(r sqltypes.Row) error {
-	hash, err := pt.hash(r[pt.lhsKey])
+	hash, err := pt.hash(r[pt.lhsKey], pt.lcoll)
 	if err != nil {
 		return err
 	}
@@ -271,8 +290,8 @@ func (pt *hashJoinProbeTable) addLeftRow(r sqltypes.Row) error {
 	return nil
 }
 
-func (pt *hashJoinProbeTable) hash(val sqltypes.Value) (vthash.Hash, error) {
-	err := evalengine.NullsafeHashcode128(&pt.hasher, val, pt.coll, pt.typ, pt.sqlmode, pt.values)
+func (pt *hashJoinProbeTable) hash(val sqltypes.Value, coll collations.ID) (vthash.Hash, error) {
+	err := evalengine.NullsafeHashcode128(&pt.hasher, val, coll, pt.typ, pt.sqlmode, pt.values)
 	if err != nil {
 		return vthash.Hash{}, err
 	}
@@ -288,7 +307,7 @@ func (pt *hashJoinProbeTable) get(rrow sqltypes.Row) (result []sqltypes.Row, err
 		return
 	}
 
-	hash, err := pt.hash(val)
+	hash, err := pt.hash(val, pt.rcoll)
 	if err != nil {
 		return nil, err
 	}

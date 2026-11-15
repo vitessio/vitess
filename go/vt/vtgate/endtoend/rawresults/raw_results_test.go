@@ -219,15 +219,27 @@ const sortedSchema = `create table sorted (
 `
 
 // TestVtgateEvaluatesColumnCollations checks that a vtgate with
-// --convert-result-charset, which holds the text of every row in utf8mb4,
-// sorts, groups and counts the distinct values of a latin1 and a gbk column
-// across two shards in the collation of the column, as MySQL does. The expected values are the
-// ones of the same table and rows on one MySQL 8.0.46 and 8.4.13 server: in
-// latin1_german2_ci 'é' sorts between 'd' and 'f' and 'Müller' equals
-// 'MUELLER', where the utf8mb4 bytes of 'é' taken as latin1 sort before 'd'
-// and those of 'Müller' differ from 'MUELLER'. The rows with 'Müller' and
-// with 'MUELLER' are on different shards.
+// --convert-result-charset sorts, groups, counts the distinct values of,
+// filters and joins on a latin1 and a gbk column across two shards in the
+// collation of the column, as MySQL does. It does so with tablets that have
+// --queryserver-config-raw-result-charset, which send the text of a column
+// in the character set of the column, and with tablets that do not, which
+// send it in utf8mb4. The expected values are the ones of the same table and
+// rows on one MySQL 8.0.46 and 8.4.13 server: in latin1_german2_ci 'é' sorts
+// between 'd' and 'f' and 'Müller' equals 'MUELLER', where the utf8mb4 bytes
+// of 'é' taken as latin1 sort before 'd' and those of 'Müller' differ from
+// 'MUELLER'. The rows with 'Müller' and with 'MUELLER' are on different
+// shards.
 func TestVtgateEvaluatesColumnCollations(t *testing.T) {
+	t.Run("tablets with the flag", func(t *testing.T) {
+		vtgateEvaluatesColumnCollations(t, "--queryserver-config-raw-result-charset")
+	})
+	t.Run("tablets without the flag", func(t *testing.T) {
+		vtgateEvaluatesColumnCollations(t)
+	})
+}
+
+func vtgateEvaluatesColumnCollations(t *testing.T, tabletArgs ...string) {
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{
 			Keyspaces: []*vttestpb.Keyspace{{
@@ -257,7 +269,7 @@ func TestVtgateEvaluatesColumnCollations(t *testing.T) {
 	t.Cleanup(func() { os.RemoveAll(cfg.SchemaDir) })
 
 	queryServerArgs := vttest.QueryServerArgs
-	vttest.QueryServerArgs = append(slices.Clone(queryServerArgs), "--convert-result-charset", "--queryserver-config-raw-result-charset")
+	vttest.QueryServerArgs = append(append(slices.Clone(queryServerArgs), "--convert-result-charset"), tabletArgs...)
 	cluster := &vttest.LocalCluster{Config: cfg}
 	err := cluster.Setup()
 	vttest.QueryServerArgs = queryServerArgs
@@ -294,5 +306,24 @@ func TestVtgateEvaluatesColumnCollations(t *testing.T) {
 
 		assert.Equal(t, []string{"1", "1", "1", "2", "1"}, column("select l, count(*) from sorted group by l order by l", 1), workload)
 		assert.Equal(t, []string{"2", "1", "1", "2"}, column("select g, count(*) from sorted group by g order by g", 1), workload)
+
+		assert.Len(t, column("select distinct l from sorted", 0), 5, workload)
+		assert.Len(t, column("select distinct g from sorted", 0), 4, workload)
+
+		// vtgate groups the rows of the shards, and evaluates what is done
+		// with the groups: a HAVING that needs the count, and the
+		// expressions of the query around the grouped one. 'é' is not less
+		// than 'e', and its utf8mb4 bytes taken as latin1 are.
+		assert.Equal(t, []string{"d"}, column("select l, count(*) from sorted group by l having l < 'e' or count(*) > 100", 0), workload)
+		assert.Equal(t, []string{"2"}, column("select l, count(*) from sorted group by l having l = 'mueller' or count(*) > 100", 1), workload)
+		assert.Equal(t, []string{"2"}, column("select g, count(*) from sorted group by g having g = 'abc' or count(*) > 100", 1), workload)
+		assert.ElementsMatch(t, []string{"1", "0", "0", "0", "0"}, column("select t.l < 'e' from (select l, count(*) from sorted group by l) as t", 0), workload)
+		assert.ElementsMatch(t, []string{"0", "0", "0", "1", "0"}, column("select t.l = 'mueller' from (select l, count(*) from sorted group by l) as t", 0), workload)
+
+		// Both sides have a LIMIT, which vtgate applies, so it joins them
+		// itself, with a hash of the column.
+		assert.ElementsMatch(t,
+			[]string{"1-1", "2-2", "3-3", "4-4", "4-5", "5-4", "5-5", "6-6"},
+			column("select concat(a.id, '-', b.id) from (select id, l from sorted order by id limit 10) as a join (select id, l from sorted order by id limit 10) as b on a.l = b.l", 0), workload)
 	}
 }

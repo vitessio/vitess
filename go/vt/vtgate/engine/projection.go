@@ -41,7 +41,7 @@ type Projection struct {
 
 // TryExecute implements the Primitive interface
 func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := vcursor.ExecutePrimitive(ctx, p.Input, bindVars, wantfields)
+	result, err := vcursor.ExecutePrimitive(ctx, p.Input, bindVars, wantfields || vcursor.ConvertResultCharset())
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +54,7 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		if err != nil && wantfields {
 			return nil, err
 		}
+		rowFields(vcursor, env, result.Fields)
 	}
 	var resultRows []sqltypes.Row
 	for _, row := range result.Rows {
@@ -68,7 +69,7 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		}
 		resultRows = append(resultRows, resultRow)
 	}
-	if wantfields {
+	if wantfields || vcursor.ConvertResultCharset() {
 		result.Fields = fields
 	}
 	result.Rows = resultRows
@@ -81,10 +82,21 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 	var once sync.Once
 	var fields []*querypb.Field
 	var mu sync.Mutex
-	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	// With --convert-result-charset the fields, which come before the rows,
+	// say which character set the rows are in, see rowFields.
+	textFields := vcursor.ConvertResultCharset()
+	var compared streamComparedFields
+	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields || textFields, func(qr *sqltypes.Result) error {
 		var err error
 		mu.Lock()
 		defer mu.Unlock()
+		if compared.first(qr) {
+			rowFields(vcursor, env, qr.Fields)
+		}
+		if textFields && !wantfields {
+			// The fields were asked for here, and are the ones of the input.
+			qr.Fields = nil
+		}
 		if wantfields {
 			once.Do(func() {
 				fields, err = p.evalFields(env, qr.Fields, p.textCollation(vcursor))

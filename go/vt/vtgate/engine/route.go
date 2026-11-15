@@ -202,7 +202,7 @@ func (route *Route) executeShards(
 
 	if len(route.OrderBy) > 0 && len(rss) > 1 {
 		var err error
-		result, err = route.sort(result)
+		result, err = route.sort(vcursor, result)
 		if err != nil {
 			return nil, err
 		}
@@ -371,13 +371,13 @@ func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
+func (route *Route) sort(vcursor VCursor, in *sqltypes.Result) (*sqltypes.Result, error) {
 	// Since Result is immutable, we make a copy.
 	// The copy can be shallow because we won't be changing
 	// the contents of any row.
 	out := in.ShallowCopy()
 
-	err := route.OrderBy.SortResult(out)
+	err := comparedOrder(vcursor, out.Fields, route.OrderBy).SortResult(out)
 	return out, err
 }
 

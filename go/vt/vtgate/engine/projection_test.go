@@ -278,11 +278,15 @@ func TestFieldConversion(t *testing.T) {
 // 4D C3 9C 4C 4C 45 52, with the connection collation, as before.
 func TestProjectionKeepsCharset(t *testing.T) {
 	latin1German2 := collations.MySQL8().LookupByName("latin1_german2_ci")
-	input := func() Primitive {
-		return &fakePrimitive{results: []*sqltypes.Result{{
-			Fields: []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: uint32(latin1German2), ColumnLength: 10}},
-			Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller"))}},
-		}}}
+	// raw is the row as a tablet with --queryserver-config-raw-result-charset
+	// sends it, and utf8 as one without the flag does.
+	raw := &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: uint32(latin1German2), ColumnLength: 10}},
+		Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller"))}},
+	}
+	utf8 := &sqltypes.Result{
+		Fields: []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: uint32(collations.MySQL8().DefaultConnectionCharset()), ColumnLength: 40}},
+		Rows:   []sqltypes.Row{{sqltypes.NewVarChar("Müller")}},
 	}
 	expr, err := sqlparser.NewTestParser().ParseExpr("upper(l)")
 	require.NoError(t, err)
@@ -311,19 +315,24 @@ func TestProjectionKeepsCharset(t *testing.T) {
 
 	tests := []struct {
 		name      string
+		input     *sqltypes.Result
 		expr      evalengine.Expr
 		convert   bool
 		collation collations.ID
 		value     string
 	}{
-		{"typed", upper, true, latin1German2, "M\xDCLLER"},
-		{"typed", upper, false, collations.MySQL8().DefaultConnectionCharset(), "MÜLLER"},
-		{"untyped", untypedUpper, true, latin1German2, "M\xDCLLER"},
+		{"typed", raw, upper, true, latin1German2, "M\xDCLLER"},
+		{"typed", raw, upper, false, collations.MySQL8().DefaultConnectionCharset(), "MÜLLER"},
+		{"untyped", raw, untypedUpper, true, latin1German2, "M\xDCLLER"},
+		// The column is evaluated in the collation that the planner typed it
+		// with, latin1_german2_ci, so its utf8mb4 text is converted first,
+		// and the value is the one of the row that is in latin1.
+		{"typed, utf8mb4 row", utf8, upper, true, latin1German2, "M\xDCLLER"},
 	}
 	for _, tc := range tests {
 		for _, stream := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s, convert %v, stream %v", tc.name, tc.convert, stream), func(t *testing.T) {
-				proj := &Projection{Cols: []string{"u"}, Exprs: []evalengine.Expr{tc.expr}, Input: input()}
+				proj := &Projection{Cols: []string{"u"}, Exprs: []evalengine.Expr{tc.expr}, Input: &fakePrimitive{results: []*sqltypes.Result{tc.input}}}
 				vcursor := &noopVCursor{convertResultCharset: tc.convert}
 				var qr *sqltypes.Result
 				var err error
