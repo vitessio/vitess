@@ -1044,30 +1044,9 @@ func (fake *TabletManagerClient) ReadReparentJournalInfo(ctx context.Context, ta
 	return 0, assert.AnError
 }
 
-// PrepareEmergencyReparent is part of the tmclient.TabletManagerClient interface.
-// Without PrepareEmergencyReparentResults it falls back to the WaitForPosition
-// and ReadReparentJournalInfo fakes, so legacy-RPC tests still apply.
 func (fake *TabletManagerClient) PrepareEmergencyReparent(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.PrepareEmergencyReparentRequest) (*tabletmanagerdatapb.PrepareEmergencyReparentResponse, error) {
 	if fake.PrepareEmergencyReparentResults == nil {
-		if request.WaitPosition != "" {
-			waitCtx := ctx
-			if timeout, ok, err := protoutil.DurationFromProto(request.WaitForPositionTimeout); err == nil && ok && timeout > 0 {
-				var cancel context.CancelFunc
-				waitCtx, cancel = context.WithTimeout(ctx, timeout)
-				defer cancel()
-			}
-			if err := fake.WaitForPosition(waitCtx, tablet, request.WaitPosition); err != nil {
-				return nil, err
-			}
-		}
-		response := &tabletmanagerdatapb.PrepareEmergencyReparentResponse{}
-		length, err := fake.ReadReparentJournalInfo(ctx, tablet)
-		if err != nil {
-			response.ReadReparentJournalError = vterrors.ToVTRPC(err)
-		} else {
-			response.ReparentJournalLength = length
-		}
-		return response, nil
+		return nil, assert.AnError
 	}
 
 	key := topoproto.TabletAliasString(tablet.Alias)

@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql/replication"
 	"vitess.io/vitess/go/mysql/sqlerror"
-	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -47,7 +46,6 @@ import (
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -90,8 +88,6 @@ type EmergencyReparentOptions struct {
 type relayLogResult struct {
 	alias string
 	err   error
-	// journalLength is set when both the wait and the journal read succeeded.
-	journalLength *int32
 }
 
 // relayLogWaitResult is the per-tablet outcome of waitForRelayLogsToApply.
@@ -104,9 +100,6 @@ type relayLogWaitResult struct {
 	// cancelled are the tablets we stopped waiting on, because a peer finished or failed
 	// first, or the reparent was aborted. We know nothing about their apply progress.
 	cancelled []string
-	// journalLengths are final counts read with a successful wait, so errant GTID
-	// detection reuses them.
-	journalLengths map[string]int32
 }
 
 // counters for Emergency Reparent Shard
@@ -400,8 +393,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 
 	// The wait budget also covers the possible second wait after errant GTID detection
 	// below, so ERS spends at most WaitReplicasTimeout in total waiting for relay logs
-	// to apply. Time spent in errant GTID detection doesn't count against it, but the
-	// journal read fused into a finished leader's wait does
+	// to apply. Time spent in errant GTID detection doesn't count against it
 	waitStart := time.Now()
 	var waitResult *relayLogWaitResult
 	validCandidates, waitResult, err = erp.applyRelayLogsAndReconcile(ctx, waitCandidates, validCandidates, tabletMap, stoppedReplicationSnapshot.statusMap, opts.WaitReplicasTimeout, requireAll, isGTIDBased)
@@ -443,7 +435,7 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 			}
 		}
 		var starved []string
-		validCandidates, starved, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized, waitResult.journalLengths)
+		validCandidates, starved, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized)
 		if err != nil {
 			return err
 		}
@@ -504,13 +496,12 @@ func (erp *EmergencyReparenter) reparentShardLocked(ctx context.Context, ev *eve
 				relayLogBudgetLeft = max(relayLogBudgetLeft-time.Since(rescueStart), 0)
 				nonAckers = append(nonAckers, rescueResult.failed...)
 				waitResult.applied = append(waitResult.applied, rescueResult.applied...)
-				maps.Copy(waitResult.journalLengths, rescueResult.journalLengths)
 
 				// If a candidate still has no evidence now that the counts are
 				// truthful, the other candidates genuinely lack journal entries and
 				// there is nothing more to compare against, same as before this
 				// optimization: accept it
-				validCandidates, _, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized, waitResult.journalLengths)
+				validCandidates, _, err = erp.findErrantGTIDs(ctx, validCandidates, stoppedReplicationSnapshot.statusMap, tabletMap, opts.WaitReplicasTimeout, failedEvidence, shardNeverInitialized)
 				if err != nil {
 					return err
 				}
@@ -757,9 +748,8 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 ) (*relayLogWaitResult, error) {
 	resultCh := make(chan relayLogResult, len(validCandidates))
 
-	// The tablet enforces each wait's budget, so the calls only share a cancellation
-	waitCtx, cancelWaits := context.WithCancel(ctx)
-	defer cancelWaits()
+	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+	defer groupCancel()
 
 	waiterCount := 0
 
@@ -788,13 +778,16 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 		}
 
 		go func(alias string, status *replicationdatapb.StopReplicationStatus) {
-			resultCh <- erp.prepareEmergencyReparent(waitCtx, alias, tabletMap[alias], status, waitReplicasTimeout)
+			resultCh <- relayLogResult{
+				alias: alias,
+				err:   WaitForRelayLogsToApply(groupCtx, erp.tmc, tabletMap[alias], status),
+			}
 		}(candidate, status)
 
 		waiterCount++
 	}
 
-	result := &relayLogWaitResult{journalLengths: make(map[string]int32)}
+	result := &relayLogWaitResult{}
 
 	// nothing to wait for. still fail if the reparent was aborted
 	if waiterCount == 0 {
@@ -811,14 +804,11 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 		switch {
 		case res.err == nil:
 			result.applied = append(result.applied, res.alias)
-			if res.journalLength != nil {
-				result.journalLengths[res.alias] = *res.journalLength
-			}
 			if !requireAll && !weCancelled {
 				// one of the candidates finished applying. the others received the same
 				// changes and can't do better, so stop waiting on them
 				weCancelled = true
-				cancelWaits()
+				groupCancel()
 			}
 		case (weCancelled || errors.Is(ctx.Err(), context.Canceled)) && isCancellationError(res.err):
 			// we stopped waiting on this tablet on purpose (or the reparent was
@@ -834,7 +824,7 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 					// a single failure already fails the wait, no point waiting for the
 					// others
 					weCancelled = true
-					cancelWaits()
+					groupCancel()
 				}
 			}
 		}
@@ -864,32 +854,6 @@ func (erp *EmergencyReparenter) waitForRelayLogsToApply(
 	}
 
 	return result, nil
-}
-
-// prepareEmergencyReparent waits for relay logs and reads the journal in one call.
-// The length is only kept after a successful wait, when it can no longer change.
-func (erp *EmergencyReparenter) prepareEmergencyReparent(ctx context.Context, alias string, tabletInfo *topo.TabletInfo, status *replicationdatapb.StopReplicationStatus, waitTimeout time.Duration) relayLogResult {
-	// Zero means the tablet's default, so an exhausted budget is sent as 1ms
-	waitTimeout = max(waitTimeout, time.Millisecond)
-	// Leave room for the journal read after a wait that ends near the budget
-	rpcCtx, cancel := context.WithTimeout(ctx, waitTimeout+topo.RemoteOperationTimeout)
-	defer cancel()
-	response, err := erp.tmc.PrepareEmergencyReparent(rpcCtx, tabletInfo.Tablet, &tabletmanagerdatapb.PrepareEmergencyReparentRequest{
-		WaitPosition:           appliedPositionAfterWait(status),
-		WaitForPositionTimeout: protoutil.DurationToProto(waitTimeout),
-	})
-	if err != nil {
-		return relayLogResult{alias: alias, err: err}
-	}
-	if waitErr := response.GetWaitForPositionError(); waitErr != nil {
-		return relayLogResult{alias: alias, err: vterrors.FromVTRPC(waitErr)}
-	}
-	result := relayLogResult{alias: alias}
-	if response != nil && response.ReadReparentJournalError == nil {
-		length := response.ReparentJournalLength
-		result.journalLength = &length
-	}
-	return result
 }
 
 // applyRelayLogsAndReconcile waits for the waitCandidates to apply their relay logs and
@@ -1502,7 +1466,6 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	waitReplicasTimeout time.Duration,
 	extraEvidence []replication.Position,
 	shardNeverInitialized bool,
-	knownJournalLengths map[string]int32,
 ) (map[string]*RelayLogPositions, []string, error) {
 	allPositionsZero := len(validCandidates) > 0
 	for _, positions := range validCandidates {
@@ -1520,7 +1483,7 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 	// A missing journal table is only tolerated when the topology says never initialized
 	// and no candidate has any GTIDs; a nonzero position anywhere proves history, so an
 	// unreadable journal depth must fail the gather
-	reparentJournalLen, err := erp.gatherReparentJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout, shardNeverInitialized && allPositionsZero, knownJournalLengths)
+	reparentJournalLen, err := erp.gatherReparentJournalInfo(ctx, validCandidates, tabletMap, waitReplicasTimeout, shardNeverInitialized && allPositionsZero)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1687,14 +1650,12 @@ func (erp *EmergencyReparenter) findErrantGTIDs(
 }
 
 // gatherReparentJournalInfo reads the reparent journal information from all the tablets in the valid candidates list.
-// Candidates in knownJournalLengths are not read again.
 func (erp *EmergencyReparenter) gatherReparentJournalInfo(
 	ctx context.Context,
 	validCandidates map[string]*RelayLogPositions,
 	tabletMap map[string]*topo.TabletInfo,
 	waitReplicasTimeout time.Duration,
 	tolerateMissingJournal bool,
-	knownJournalLengths map[string]int32,
 ) (map[string]int32, error) {
 	reparentJournalLen := make(map[string]int32)
 	var mu sync.Mutex
@@ -1707,12 +1668,6 @@ func (erp *EmergencyReparenter) gatherReparentJournalInfo(
 	waiterCount := 0
 
 	for candidate := range validCandidates {
-		if length, ok := knownJournalLengths[candidate]; ok {
-			mu.Lock()
-			reparentJournalLen[candidate] = length
-			mu.Unlock()
-			continue
-		}
 		go func(alias string) {
 			var err error
 			var length int32
