@@ -278,7 +278,7 @@ func TestMySQL(t *testing.T) {
 	require.NoError(t, err)
 	// The rows of the test cases are in utf8mb4, as the rows of a vtgate with
 	// --convert-result-charset are.
-	venv = venv.WithRowsInConnectionCharset()
+	venv = venv.WithRowCharset(venv.CollationEnv().DefaultConnectionCharset())
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			ctx := callerid.NewContext(t.Context(), &vtrpc.CallerID{Principal: "testuser"}, &querypb.VTGateCallerID{

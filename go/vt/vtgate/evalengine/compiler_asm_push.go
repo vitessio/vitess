@@ -462,8 +462,8 @@ func (asm *assembler) PushBVar_time(key string) {
 }
 
 func push_text(env *ExpressionEnv, raw []byte, col collations.TypedCollation) int {
-	if env.connText() {
-		raw = connectionText(raw, col.Collation)
+	if rows := env.rowCharset(); rows != nil {
+		raw = rowText(raw, rows, col.Collation)
 	}
 	env.vm.stack[env.vm.sp] = newEvalText(raw, col)
 	env.vm.sp++

@@ -502,6 +502,9 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 }
 
 func buildPlan(env *vtenv.Environment, ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
+	// The streamer reads rows from the binary log and with SET NAMES
+	// binary, so their text is in the character set of its column.
+	env = env.WithRowCharset(collations.CollationBinaryID)
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):

@@ -350,7 +350,7 @@ func Init(
 		// latin1 column to latin1 before it compares it. Without the
 		// flag, vtgate takes rows as tablets send them and evaluates
 		// them as it always did.
-		env = env.WithRowsInConnectionCharset()
+		env = env.WithRowCharset(env.CollationEnv().DefaultConnectionCharset())
 	}
 
 	ts, err := serv.GetTopoServer()

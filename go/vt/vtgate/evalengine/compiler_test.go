@@ -124,7 +124,7 @@ func TestCompilerReference(t *testing.T) {
 	track := NewTracker()
 	// The rows of the test cases are in utf8mb4, as the rows of a vtgate with
 	// --convert-result-charset are.
-	venv := vtenv.NewTestEnv().WithRowsInConnectionCharset()
+	venv := vtenv.NewTestEnv().WithRowCharset(collations.CollationUtf8mb4ID)
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
@@ -1640,7 +1640,7 @@ func TestJSONColumnDecimals(t *testing.T) {
 // collation of the literal, utf8mb4_0900_ai_ci, and '中' < '波' is false in
 // gbk_chinese_ci and true in utf8mb4_0900_ai_ci.
 func TestColumnCoercibility(t *testing.T) {
-	venv := vtenv.NewTestEnv().WithRowsInConnectionCharset()
+	venv := vtenv.NewTestEnv().WithRowCharset(collations.CollationUtf8mb4ID)
 	fields := evalengine.FieldResolver([]*querypb.Field{
 		{Name: "column0", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("latin1_german2_ci"))},
 		{Name: "column1", Type: sqltypes.VarChar, Charset: uint32(venv.CollationEnv().LookupByName("gbk_chinese_ci"))},
