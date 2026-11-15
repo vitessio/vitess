@@ -32,6 +32,14 @@ type contextVCursor struct {
 	ctx context.Context
 }
 
+// ConvertResultCharset implements the engine.VCursor interface. VDiff reads
+// rows with SET NAMES binary, so the text of every value is in the character
+// set of its column and of the collation that VDiff compares it in: nothing
+// has to be converted between the streams of the shards that it merges.
+func (vc *contextVCursor) ConvertResultCharset() bool {
+	return false
+}
+
 func (vc *contextVCursor) ConnCollation() collations.ID {
 	return collations.CollationBinaryID
 }
