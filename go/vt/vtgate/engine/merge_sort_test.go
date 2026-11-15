@@ -19,6 +19,7 @@ package engine
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -26,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -418,4 +420,56 @@ func (sr *shardResult) StreamExecute(_ context.Context, _ VCursor, _ map[string]
 		}
 	}
 	return sr.sendErr
+}
+
+// TestMergeSortText merges the streams of two shards of which one tablet
+// sends the text of a latin1_swedish_ci column in latin1, with the collation
+// 8, and the other in utf8mb4, with the collation 255. With
+// --convert-result-charset every row is in the character set of the fields
+// that the merge sort sends, whichever stream sent its fields first: 4D FC 6C
+// 6C 65 72 under the collation 8, or 4D C3 BC 6C 6C 65 72 under 255. Without
+// the flag the rows are as the tablets sent them, as before.
+func TestMergeSortText(t *testing.T) {
+	shards := func() []StreamExecutor {
+		return []StreamExecutor{
+			&shardResult{results: []*sqltypes.Result{
+				{Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Int32, Charset: 63}, {Name: "l", Type: sqltypes.VarChar, Charset: 8}}},
+				{Rows: []sqltypes.Row{{sqltypes.NewInt32(1), sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller"))}}},
+			}},
+			&shardResult{results: []*sqltypes.Result{
+				{Fields: []*querypb.Field{{Name: "id", Type: sqltypes.Int32, Charset: 63}, {Name: "l", Type: sqltypes.VarChar, Charset: 255}}},
+				{Rows: []sqltypes.Row{{sqltypes.NewInt32(2), sqltypes.NewVarChar("Müller")}}},
+			}},
+		}
+	}
+	for _, convert := range []bool{true, false} {
+		t.Run(fmt.Sprintf("convert %v", convert), func(t *testing.T) {
+			ms := MergeSort{
+				Primitives: shards(),
+				OrderBy:    []evalengine.OrderByParams{{WeightStringCol: -1, Col: 0}},
+			}
+			var fields []*querypb.Field
+			var values []string
+			err := ms.TryStreamExecute(t.Context(), &noopVCursor{convertResultCharset: convert}, nil, true, func(qr *sqltypes.Result) error {
+				if len(qr.Fields) != 0 {
+					fields = qr.Fields
+				}
+				for _, row := range qr.Rows {
+					values = append(values, row[1].ToString())
+				}
+				return nil
+			})
+			require.NoError(t, err)
+			require.Len(t, fields, 2)
+			switch {
+			case !convert:
+				assert.Equal(t, []string{"M\xFCller", "Müller"}, values)
+			case fields[1].Charset == 8:
+				assert.Equal(t, []string{"M\xFCller", "M\xFCller"}, values)
+			default:
+				assert.Equal(t, uint32(255), fields[1].Charset)
+				assert.Equal(t, []string{"Müller", "Müller"}, values)
+			}
+		})
+	}
 }
