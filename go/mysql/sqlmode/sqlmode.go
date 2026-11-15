@@ -140,20 +140,46 @@ var neutralizeSessionAssignment = "@@session.sql_mode = " + neutralizedExpr("@@s
 // well as its sql_mode, so the character set the connection negotiated is restored
 // along with the neutralization.
 func SessionSetupQuery(charset, collation string) string {
-	if charset == "" {
-		return NeutralizeSessionQuery
-	}
-	if collation == "" {
-		return fmt.Sprintf("set names '%s', %s", charset, neutralizeSessionAssignment)
-	}
-	return fmt.Sprintf("set names '%s' collate '%s', %s", charset, collation, neutralizeSessionAssignment)
+	return sessionSetupQuery(charset, collation, false)
 }
 
-// IsSessionSetupQuery reports whether query is a statement SessionSetupQuery returns,
-// so that a fake backend can answer it as connection setup.
+// SessionSetupQueryWithRawResults returns the statement of SessionSetupQuery that
+// also sets character_set_results to NULL, after SET NAMES, which sets it to the
+// connection character set. MySQL then sends the text of each column in the
+// character set of the column, with the collation and the length of the column in
+// its field: a latin1_german2_ci VARCHAR(10) with 'Müller' arrives as 4D FC 6C 6C 65
+// 72 with the collation 31 and the length 10, where it arrives as 4D C3 BC 6C 6C 65 72
+// with the collation 255 and the length 40 after SessionSetupQuery("utf8mb4",
+// "utf8mb4_0900_ai_ci"), measured on MySQL 8.0.46 and 8.4.13.
+func SessionSetupQueryWithRawResults(charset, collation string) string {
+	return sessionSetupQuery(charset, collation, true)
+}
+
+// rawResultsAssignment sets character_set_results to NULL. MySQL applies the
+// assignments of a SET statement in order, so it follows SET NAMES.
+const rawResultsAssignment = "@@session.character_set_results = NULL"
+
+func sessionSetupQuery(charset, collation string, rawResults bool) string {
+	rest := neutralizeSessionAssignment
+	if rawResults {
+		rest = rawResultsAssignment + ", " + rest
+	}
+	switch {
+	case charset == "":
+		return "set " + rest
+	case collation == "":
+		return fmt.Sprintf("set names '%s', %s", charset, rest)
+	default:
+		return fmt.Sprintf("set names '%s' collate '%s', %s", charset, collation, rest)
+	}
+}
+
+// IsSessionSetupQuery reports whether query is a statement SessionSetupQuery or
+// SessionSetupQueryWithRawResults returns, so that a fake backend can answer it as
+// connection setup.
 func IsSessionSetupQuery(query string) bool {
 	query = strings.ToLower(query)
-	if query == strings.ToLower(NeutralizeSessionQuery) {
+	if query == strings.ToLower(NeutralizeSessionQuery) || query == strings.ToLower(sessionSetupQuery("", "", true)) {
 		return true
 	}
 	return strings.HasPrefix(query, "set names ") && strings.HasSuffix(query, ", "+strings.ToLower(neutralizeSessionAssignment))

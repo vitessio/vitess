@@ -173,6 +173,31 @@ func registerPerUserFlags(fs *pflag.FlagSet, userKey string, uc *UserConfig, cp 
 // Connector contains Connection Parameters for mysql connection
 type Connector struct {
 	connParams *mysql.ConnParams
+	// rawResultCharset makes Connect set character_set_results to NULL on
+	// every connection (see WithRawResultCharset).
+	rawResultCharset bool
+}
+
+// WithRawResultCharset returns a copy of the connector whose connections read
+// with character_set_results = NULL: the session setup that Connect runs sets
+// it after restoring the character set, in the same statement (see
+// sqlmode.SessionSetupQueryWithRawResults). MySQL then sends the text of each
+// column in the character set of the column, with the column's collation and
+// length in the field: a latin1 VARCHAR(10) with 'Müller' arrives as 4D FC 6C
+// 6C 65 72 with the length 10, and not as 4D C3 BC 6C 6C 65 72 with the length
+// 40.
+//
+// A reconnect of a connection uses the connector the connection was made
+// with, so it reads with character_set_results = NULL again.
+func (c Connector) WithRawResultCharset() Connector {
+	c.rawResultCharset = true
+	return c
+}
+
+// RawResultCharset reports whether the connections of the connector read with
+// character_set_results = NULL.
+func (c Connector) RawResultCharset() bool {
+	return c.rawResultCharset
 }
 
 // New initializes a ConnParams from mysql connection parameters
@@ -229,14 +254,14 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 		}
 	}
 	stop := context.AfterFunc(ctx, conn.Close)
-	_, err = conn.ExecuteFetch(sessionSetupQuery(collation, true), 0, false)
+	_, err = conn.ExecuteFetch(sessionSetupQuery(collation, true, c.rawResultCharset), 0, false)
 	if sqlErr, ok := sqlerror.NewSQLErrorFromError(err).(*sqlerror.SQLError); ok && sqlErr.Number() == sqlerror.ERUnknownCollation {
 		// The collation comes from the MySQL 8 collation table, and the server may
 		// not have it: MySQL 5.7 and MariaDB lack utf8mb4_0900_ai_ci, for one. Such a
 		// server ignored the collation at the handshake and used its own default
 		// character set, so restore the character set alone, with its default
 		// collation on that server.
-		_, err = conn.ExecuteFetch(sessionSetupQuery(collation, false), 0, false)
+		_, err = conn.ExecuteFetch(sessionSetupQuery(collation, false, c.rawResultCharset), 0, false)
 	}
 	if !stop() {
 		// the context ended and the connection is closed, whatever the query
@@ -253,10 +278,14 @@ func (c *Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 // sessionSetupQuery returns the statement that sets up a new connection's session for
 // the collation it negotiated, naming the collation only when withCollation is set, or
 // only neutralizes its sql_mode when it negotiated none and so uses the server's
-// default.
-func sessionSetupQuery(collation collations.ID, withCollation bool) string {
+// default. With rawResults it also sets character_set_results to NULL.
+func sessionSetupQuery(collation collations.ID, withCollation, rawResults bool) string {
+	setup := sqlmode.SessionSetupQuery
+	if rawResults {
+		setup = sqlmode.SessionSetupQueryWithRawResults
+	}
 	if collation == collations.Unknown {
-		return sqlmode.NeutralizeSessionQuery
+		return setup("", "")
 	}
 	env := collations.MySQL8()
 	// Connect has refused a collation whose character set is not safe.
@@ -267,7 +296,7 @@ func sessionSetupQuery(collation collations.ID, withCollation bool) string {
 		// character set is restored alone, with its default collation.
 		name = env.LookupName(collation)
 	}
-	return sqlmode.SessionSetupQuery(charset, name)
+	return setup(charset, name)
 }
 
 // MysqlParams returns the connections params
