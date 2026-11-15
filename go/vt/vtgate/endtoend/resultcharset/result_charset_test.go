@@ -28,6 +28,7 @@ limitations under the License.
 package resultcharset
 
 import (
+	"database/sql"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -35,6 +36,7 @@ import (
 	"strings"
 	"testing"
 
+	gomysql "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -368,4 +370,63 @@ func TestResultCharsetErrors(t *testing.T) {
 	_, err = conn.ExecuteFetch(duplicate, 10, false)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.(*sqlerror.SQLError).Message, "Duplicate entry 'Müller'"), err.Error())
+}
+
+// TestPreparedStatement covers prepared statements over the binary protocol
+// (COM_STMT_PREPARE and COM_STMT_EXECUTE): with character_set_results = gb2312,
+// they return the gb2312 bytes that the text protocol returns. MySQL 8.0.46
+// and 8.4.13 send 4D A8 B9 6C 6C 65 72, D6 D0 CE C4 and A8 A6 3F 3F for l, g
+// and u4 with both. The driver prepares on the server: Prepare always sends
+// COM_STMT_PREPARE, and interpolateParams is off.
+func TestPreparedStatement(t *testing.T) {
+	insertRow(t)
+
+	cfg := gomysql.NewConfig()
+	cfg.User = vtParams.Uname
+	cfg.Net = "tcp"
+	cfg.Addr = fmt.Sprintf("%s:%d", vtParams.Host, vtParams.Port)
+	cfg.DBName = vtParams.DbName
+	cfg.InterpolateParams = false
+	db, err := sql.Open("mysql", cfg.FormatDSN())
+	require.NoError(t, err)
+	t.Cleanup(func() { db.Close() })
+
+	ctx := t.Context()
+	// SET character_set_results and the statements must share a session.
+	conn, err := db.Conn(ctx)
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+	_, err = conn.ExecContext(ctx, "set character_set_results = gb2312")
+	require.NoError(t, err)
+
+	want := []string{"4da8b96c6c6572", "d6d0cec4", "a8a63f3f"}
+	scan := func(t *testing.T, rows *sql.Rows) {
+		t.Helper()
+		defer rows.Close()
+		require.True(t, rows.Next(), "no row")
+		var l, g, u4 []byte
+		require.NoError(t, rows.Scan(&l, &g, &u4))
+		assert.Equal(t, want, []string{hex.EncodeToString(l), hex.EncodeToString(g), hex.EncodeToString(u4)})
+		assert.False(t, rows.Next())
+		require.NoError(t, rows.Err())
+	}
+
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			_, err := conn.ExecContext(ctx, "set workload = "+workload)
+			require.NoError(t, err)
+
+			// A query without arguments goes over the text protocol.
+			rows, err := conn.QueryContext(ctx, "select l, g, u4 from rc where id = 1")
+			require.NoError(t, err)
+			scan(t, rows)
+
+			stmt, err := conn.PrepareContext(ctx, "select l, g, u4 from rc where id = ?")
+			require.NoError(t, err)
+			defer stmt.Close()
+			rows, err = stmt.QueryContext(ctx, 1)
+			require.NoError(t, err)
+			scan(t, rows)
+		})
+	}
 }
