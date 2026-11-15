@@ -31,6 +31,7 @@ import (
 	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/resultcharset"
 	"vitess.io/vitess/go/mysql/config"
 	"vitess.io/vitess/go/mysql/sqlerror"
 	"vitess.io/vitess/go/protoutil"
@@ -880,7 +881,14 @@ func (vc *VCursorImpl) StreamExecutePrimitiveStandalone(ctx context.Context, pri
 	return vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
-// Execute is part of the engine.VCursor interface.
+// Execute is part of the engine.VCursor interface. The vindexes execute their
+// queries with it, and take the text of the rows in the connection character
+// set: a lookup vindex with batch_lookup matches the rows of its lookup table
+// to the values it looks up by their from column. With
+// --convert-result-charset the text of a row is in the character set of its
+// column, so the result is converted to the connection character set: 'Müller'
+// of a latin1 from column is 4D FC 6C 6C 65 72 in the row, and has to be
+// 4D C3 BC 6C 6C 65 72 to match 'Müller' of the query.
 func (vc *VCursorImpl) Execute(ctx context.Context, method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	session := vc.SafeSession
 	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
@@ -902,6 +910,9 @@ func (vc *VCursorImpl) Execute(ctx context.Context, method string, query string,
 	// meaning a rollback should be triggered if a failure occurs later.
 	vc.setRollbackOnPartialExecIfRequired(err == nil, rollbackOnError)
 
+	if err == nil && qr != nil && vc.ConvertResultCharset() {
+		qr = resultcharset.ToConnection(qr.Fields, vc.ConnCollation(), true).Result(qr)
+	}
 	return qr, err
 }
 
