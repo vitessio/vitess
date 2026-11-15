@@ -59,6 +59,7 @@ create table b (id int primary key, l varchar(10) LATIN1, g varchar(10) characte
 create table c (id int primary key, l varchar(10) LATIN1, g varchar(10) character set gb2312) Engine=InnoDB;
 create table lk (id int primary key, l varchar(10) LATIN1) Engine=InnoDB;
 create table p (l varchar(10) LATIN1 primary key, n int) Engine=InnoDB;
+create table d (id int primary key, u varchar(10) character set utf8mb4, l varchar(10) LATIN1) Engine=InnoDB;
 `)
 
 var unshardedSchema = strings.NewReplacer("LATIN1", latin1).Replace(`
@@ -90,6 +91,7 @@ var shardedVSchema = &vschemapb.Keyspace{
 		"a":  {ColumnVindexes: hashOnID},
 		"b":  {ColumnVindexes: hashOnID},
 		"c":  {ColumnVindexes: hashOnID},
+		"d":  {ColumnVindexes: hashOnID},
 		"lk": {ColumnVindexes: []*vschemapb.ColumnVindex{{Column: "id", Name: "hash"}, {Column: "l", Name: "lk_l"}}},
 		"p":  {ColumnVindexes: []*vschemapb.ColumnVindex{{Column: "l", Name: "xxhash"}}},
 	},
@@ -105,6 +107,7 @@ var unshardedVSchema = &vschemapb.Keyspace{
 var inserts = []string{
 	"insert into a (id, l, g) values (1, 'Müller', '中文'), (2, 'é', '汉字'), (3, 'abc', 'abc'), (4, 'MYLLER', '中文'), (5, 'ß', '字'), (6, 'z', 'ABC')",
 	"insert into b (id, l, g, n) values (1, 'é', '中文', 'ß'), (2, 'Müller', '汉字', 'é'), (4, 'zz', '中文', NULL), (5, 'SS', 'abc', NULL), (6, 'MYLLER', '字', NULL)",
+	"insert into d (id, u, l) values (1, 'é', 'x'), (2, 'ß', 'é')",
 	"insert into uks.u (id, l, g) values (1, 'é', '字'), (2, 'Müller', '中文')",
 	"insert into uks.fkp (id, l) values (1, 'Müller'), (2, 'é'), (3, 'ß')",
 	"insert into uks.fkc (id, l) values (1, 'Müller'), (2, 'é'), (3, 'ß')",
@@ -293,6 +296,35 @@ func TestStatementValues(t *testing.T) {
 		query:    cte + "select id, hex(l) from r",
 		operator: "RecurseCTE",
 		want:     []string{"1|4DFC6C6C6572", "1|DF", "2|E9", "5|NULL", "6|NULL"},
+		sorted:   true,
+	}, {
+		// The columns of a recursive CTE are the ones of its seed: the 'ß'
+		// that the recursion reads from the utf8mb4 column d.u is returned
+		// in latin1, the character set of a.l.
+		name:     "recursive CTE, a latin1 seed and a utf8mb4 recursion",
+		query:    "with recursive r (id, l) as (select id, l from a where id = 2 union all select d.id, d.u from r join d on d.l = r.l) select id, l from r",
+		operator: "RecurseCTE",
+		want:     []string{"2|ß", "2|é"},
+		sorted:   true,
+	}, {
+		name:     "recursive CTE, a latin1 seed and a utf8mb4 recursion, the bytes",
+		query:    "with recursive r (id, l) as (select id, l from a where id = 2 union all select d.id, d.u from r join d on d.l = r.l) select id, hex(l) from r",
+		operator: "RecurseCTE",
+		want:     []string{"2|DF", "2|E9"},
+		sorted:   true,
+	}, {
+		// The other way: the 'ß' of the latin1 column b.n is returned in
+		// utf8mb4, the character set of d.u.
+		name:     "recursive CTE, a utf8mb4 seed and a latin1 recursion",
+		query:    "with recursive r as (select id, u as l from d where id = 1 union all select b.id, b.n from r join b on b.l = r.l) select id, l from r",
+		operator: "RecurseCTE",
+		want:     []string{"1|ß", "1|é", "5|NULL"},
+		sorted:   true,
+	}, {
+		name:     "recursive CTE, a utf8mb4 seed and a latin1 recursion, the bytes",
+		query:    "with recursive r as (select id, u as l from d where id = 1 union all select b.id, b.n from r join b on b.l = r.l) select id, hex(l) from r",
+		operator: "RecurseCTE",
+		want:     []string{"1|C39F", "1|C3A9", "5|NULL"},
 		sorted:   true,
 	}}
 	for _, workload := range []string{"oltp", "olap"} {
