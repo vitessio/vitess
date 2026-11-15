@@ -103,10 +103,13 @@ var errSqRow = vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "subquery returned mo
 func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	subqueryBindVars := make(map[string]*querypb.BindVariable, len(bindVars))
 	maps.Copy(subqueryBindVars, bindVars)
-	result, err := vcursor.ExecutePrimitive(ctx, ps.Subquery, subqueryBindVars, false)
+	// The values of the rows of the subquery become bind variables of the
+	// outer query, which takes the fields of the subquery to convert them.
+	result, err := vcursor.ExecutePrimitive(ctx, ps.Subquery, subqueryBindVars, vcursor.ConvertResultCharset())
 	if err != nil {
 		return nil, err
 	}
+	values := newStatementValues(vcursor, result.Fields)
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
 	maps.Copy(combinedVars, bindVars)
 	width := max(ps.RowColumns, len(ps.RowResults))
@@ -122,11 +125,11 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 			ps.bindNullValue(combinedVars)
 		case 1:
 			if len(ps.RowResults) == 0 {
-				combinedVars[ps.SubqueryResult] = sqltypes.ValueBindVariable(result.Rows[0][0])
+				combinedVars[ps.SubqueryResult] = sqltypes.ValueBindVariable(values.value(0, result.Rows[0][0]))
 				break
 			}
 			for i, name := range ps.RowResults {
-				combinedVars[name] = sqltypes.ValueBindVariable(result.Rows[0][i])
+				combinedVars[name] = sqltypes.ValueBindVariable(values.value(i, result.Rows[0][i]))
 			}
 		default:
 			return nil, errSqRow
@@ -139,19 +142,19 @@ func (ps *UncorrelatedSubquery) execSubquery(ctx context.Context, vcursor VCurso
 			combinedVars[ps.SubqueryResult] = ps.placeholderList()
 		default:
 			combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(1)
-			values := &querypb.BindVariable{
+			list := &querypb.BindVariable{
 				Type:   querypb.Type_TUPLE,
 				Values: make([]*querypb.Value, len(result.Rows)),
 			}
 			for i, v := range result.Rows {
 				if ps.RowColumns > 1 {
 					// The subquery can return more columns than the row, such as a weight_string for its ordering.
-					values.Values[i] = sqltypes.TupleToProto(v[:ps.RowColumns])
+					list.Values[i] = sqltypes.TupleToProto(values.row(v[:ps.RowColumns]))
 				} else {
-					values.Values[i] = sqltypes.ValueToProto(v[0])
+					list.Values[i] = sqltypes.ValueToProto(values.value(0, v[0]))
 				}
 			}
-			combinedVars[ps.SubqueryResult] = values
+			combinedVars[ps.SubqueryResult] = list
 		}
 	case opcode.PulloutExists:
 		switch len(result.Rows) {
