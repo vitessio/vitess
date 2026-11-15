@@ -43,13 +43,18 @@ var _ Primitive = (*RecurseCTE)(nil)
 const maxRecurseDepth = 1000
 
 func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields)
+	// The values of the rows of the seed and of each recursion become bind
+	// variables of the next recursion, which takes the fields of the result
+	// that a row comes from to convert them.
+	convert := vcursor.ConvertResultCharset()
+	res, err := vcursor.ExecutePrimitive(ctx, r.Seed, bindVars, wantfields || convert)
 	if err != nil {
 		return nil, err
 	}
 
-	// recurseRows contains the rows used in the next recursion
-	recurseRows := res.Rows
+	// recurseRows contains the rows used in the next recursion, with their
+	// values in the connection character set. res keeps the rows as they are.
+	recurseRows := newStatementValues(vcursor, res.Fields).rows(res.Rows)
 	joinVars := make(map[string]*querypb.BindVariable)
 	loops := 0
 	for len(recurseRows) > 0 {
@@ -68,11 +73,11 @@ func (r *RecurseCTE) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 			if loops > maxRecurseDepth {
 				return nil, vterrors.VT09030("")
 			}
-			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false)
+			rresult, err := vcursor.ExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), convert)
 			if err != nil {
 				return nil, err
 			}
-			recurseRows = append(recurseRows, rresult.Rows...)
+			recurseRows = append(recurseRows, newStatementValues(vcursor, rresult.Fields).rows(rresult.Rows)...)
 			res.Rows = append(res.Rows, rresult.Rows...)
 		}
 	}
@@ -95,11 +100,17 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 
 	// Stream the seed, emitting its rows and collecting them to drive the first
 	// recursion level.
+	//
+	// The values of the rows become bind variables of the next recursion,
+	// which takes the fields of the stream that a row comes from to convert
+	// them. They come with its first chunk.
+	convert := vcursor.ConvertResultCharset()
 	var recurseRows []sqltypes.Row
-	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields, func(result *sqltypes.Result) error {
+	var seedValues streamStatementValues
+	err := vcursor.StreamExecutePrimitive(ctx, r.Seed, bindVars, wantfields || convert, func(result *sqltypes.Result) error {
 		mu.Lock()
 		defer mu.Unlock()
-		recurseRows = append(recurseRows, result.Rows...)
+		recurseRows = append(recurseRows, seedValues.of(vcursor, result).rows(result.Rows)...)
 		return callback(result)
 	})
 	if err != nil {
@@ -127,10 +138,11 @@ func (r *RecurseCTE) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 			if loops > maxRecurseDepth {
 				return vterrors.VT09030("")
 			}
-			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), false, func(result *sqltypes.Result) error {
+			var termValues streamStatementValues
+			err := vcursor.StreamExecutePrimitive(ctx, r.Term, combineVars(bindVars, joinVars), convert, func(result *sqltypes.Result) error {
 				mu.Lock()
 				defer mu.Unlock()
-				recurseRows = append(recurseRows, result.Rows...)
+				recurseRows = append(recurseRows, termValues.of(vcursor, result).rows(result.Rows)...)
 				return callback(result)
 			})
 			if err != nil {

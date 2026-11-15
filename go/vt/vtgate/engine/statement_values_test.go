@@ -142,3 +142,50 @@ func wantStatementValue(convert bool) string {
 	}
 	return "M\xFCller"
 }
+
+// TestRecurseCTEStatementValues checks the bind variables that a recursive CTE
+// makes of the values of the rows of its seed and of each recursion, for the
+// next recursion. With --convert-result-charset 'Müller' of the seed and 'é'
+// of the first recursion, both of a latin1 column, are utf8mb4 in the bind
+// variable, and the rows that the CTE returns keep them in latin1. The CTE is
+// asked for no fields, so that it has to ask for the fields itself.
+func TestRecurseCTEStatementValues(t *testing.T) {
+	for _, convert := range []bool{true, false} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("convert %v, stream %v", convert, stream), func(t *testing.T) {
+				seed := &fakePrimitive{results: []*sqltypes.Result{latin1Result()}}
+				recursion := latin1Result()
+				recursion.Rows = []sqltypes.Row{{sqltypes.NewInt64(2), sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\xE9"))}}
+				end := latin1Result()
+				end.Rows = nil
+				term := &fakePrimitive{results: []*sqltypes.Result{recursion, end}}
+				cte := &RecurseCTE{Seed: seed, Term: term, Vars: map[string]int{"bv": 1}}
+				vcursor := &noopVCursor{convertResultCharset: convert}
+
+				var r *sqltypes.Result
+				var err error
+				method := "Execute"
+				if stream {
+					method = "StreamExecute"
+					r, err = wrapStreamExecute(cte, vcursor, map[string]*querypb.BindVariable{}, false)
+				} else {
+					r, err = cte.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, false)
+				}
+				require.NoError(t, err)
+
+				first, second := "M\xFCller", "\xE9"
+				if convert {
+					first, second = "Müller", "é"
+				}
+				term.ExpectLog(t, []string{
+					fmt.Sprintf(`%s %v %v`, method, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable(first)}), convert),
+					fmt.Sprintf(`%s %v %v`, method, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable(second)}), convert),
+				})
+
+				require.Len(t, r.Rows, 2)
+				assert.Equal(t, "M\xFCller", r.Rows[0][1].ToString())
+				assert.Equal(t, "\xE9", r.Rows[1][1].ToString())
+			})
+		}
+	}
+}
