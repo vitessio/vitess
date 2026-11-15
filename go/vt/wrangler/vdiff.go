@@ -226,7 +226,9 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflowName, sou
 	}
 	// Initialize vdiff
 	df := &vdiff{
-		env:            wr.env,
+		// VDiff reads rows with SET NAMES binary, so their text is in the
+		// character set of its column.
+		env:            wr.env.WithRowCharset(collations.CollationBinaryID),
 		ts:             ts,
 		sourceCell:     sourceCell,
 		targetCell:     targetCell,

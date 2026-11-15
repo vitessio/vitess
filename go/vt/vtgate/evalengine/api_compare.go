@@ -61,8 +61,8 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 				return 0, UnsupportedCollationError{ID: collationID}
 			}
 			var result int
-			if collationEnv.RowsInConnectionCharset() {
-				result = collateConnectionText(coll, v1.Raw(), v2.Raw())
+			if rows := rowCharset(collationEnv); rows != nil {
+				result = collateRowText(coll, rows, v1.Raw(), v2.Raw())
 			} else {
 				result = coll.Collate(v1.Raw(), v2.Raw(), false)
 			}
@@ -121,7 +121,7 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 		Collation:    collationID,
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireUnicode,
-	}, values, collationEnv.RowsInConnectionCharset())
+	}, values, rowCharset(collationEnv))
 	if err != nil {
 		return 0, err
 	}
@@ -130,7 +130,7 @@ func compare(v1, v2 sqltypes.Value, collationEnv *collations.Environment, collat
 		Collation:    collationID,
 		Coercibility: collations.CoerceImplicit,
 		Repertoire:   collations.RepertoireUnicode,
-	}, values, collationEnv.RowsInConnectionCharset())
+	}, values, rowCharset(collationEnv))
 	if err != nil {
 		return 0, err
 	}

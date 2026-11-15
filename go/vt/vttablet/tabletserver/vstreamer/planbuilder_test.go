@@ -957,6 +957,34 @@ func TestPlanBuilderFilterComparison(t *testing.T) {
 	}
 }
 
+// TestPlanRowCharset checks that a plan evaluates with the row character set
+// binary, whatever the environment it is built with has: the streamer reads
+// rows from the binary log and with SET NAMES binary, so the latin1 byte E9
+// of a latin1_swedish_ci column is 'é', which is after 'd'. An evaluation
+// that took the byte for utf8mb4 would convert it to "?", which is before
+// 'd'.
+func TestPlanRowCharset(t *testing.T) {
+	latin1 := vtenv.NewTestEnv().CollationEnv().LookupByName("latin1_swedish_ci")
+	t1 := &Table{
+		Name: "t1",
+		Fields: []*querypb.Field{{
+			Name:    "val",
+			Type:    sqltypes.VarChar,
+			Charset: uint32(latin1),
+		}},
+	}
+	env := vtenv.NewTestEnv().WithRowCharset(collations.CollationUtf8mb4ID)
+	plan, err := buildPlan(env, t1, testLocalVSchema, &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{Match: "t1", Filter: "select * from t1 where val > 'd'"}},
+	})
+	require.NoError(t, err)
+	require.Equal(t, collations.ID(collations.CollationBinaryID), plan.env.CollationEnv().RowCharset())
+
+	ok, _, err := plan.shouldFilter([]sqltypes.Value{sqltypes.MakeTrusted(sqltypes.VarChar, []byte{0xE9})}, []collations.ID{latin1})
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
 func TestCompare(t *testing.T) {
 	type testcase struct {
 		opcode                   Opcode
