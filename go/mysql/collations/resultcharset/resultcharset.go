@@ -751,6 +751,33 @@ func (c *Conversion) Fields(fields []*querypb.Field) []*querypb.Field {
 	return c.fields
 }
 
+// ConvertsValues reports whether the conversion changes the bytes of the
+// values of any column. A conversion that only changes fields does not.
+func (c *Conversion) ConvertsValues() bool {
+	return c.columns != nil
+}
+
+// Value returns the value of the column col of a row as Rows converts it. A
+// value that does not change is the value it was.
+func (c *Conversion) Value(col int, value sqltypes.Value) sqltypes.Value {
+	if col < 0 || col >= len(c.columns) || value.IsNull() {
+		return value
+	}
+	column := &c.columns[col]
+	if column.from == nil {
+		return value
+	}
+	raw := value.Raw()
+	if column.ascii && isASCII(raw) {
+		return value
+	}
+	if column.ucs2 {
+		return sqltypes.MakeTrusted(value.Type(), appendUCS2AsUTF8(nil, raw))
+	}
+	converted, _ := charset.Convert(nil, column.to, raw, column.from)
+	return sqltypes.MakeTrusted(value.Type(), converted)
+}
+
 // Rows returns the converted rows. A row without a value that changes is the
 // row it was, and so is the slice when no row changes.
 func (c *Conversion) Rows(rows []sqltypes.Row) []sqltypes.Row {
