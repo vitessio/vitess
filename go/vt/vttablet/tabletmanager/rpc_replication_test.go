@@ -795,10 +795,19 @@ func TestFullStatusSharedCollectionLifetime(t *testing.T) {
 					_, rpcErr = tm.FullStatus(ctx)
 				}()
 				synctest.Wait()
+				// A caller with no deadline of its own joins the same collection.
+				waiterErr := make(chan error, 1)
+				go func() {
+					_, err := tm.FullStatus(t.Context())
+					waiterErr <- err
+				}()
+				synctest.Wait()
+				assert.EqualValues(t, 1, daemon.calls.Load())
 				cancel()
 				synctest.Wait()
 				require.ErrorIs(t, rpcErr, context.Canceled)
 				assert.Empty(t, finished, "shared collection outlives the caller")
+				assert.Empty(t, waiterErr, "the waiting caller outlives the cancelled one")
 
 				wantErr := context.DeadlineExceeded
 				start := time.Now()
@@ -810,6 +819,9 @@ func TestFullStatusSharedCollectionLifetime(t *testing.T) {
 				if stop == "timeout" {
 					assert.Equal(t, fullStatusConsolidationTimeout, time.Since(start))
 				}
+				// The waiting caller gets the collection's error, even though its own
+				// deadline is longer.
+				require.ErrorIs(t, <-waiterErr, wantErr)
 			})
 		})
 	}
