@@ -92,3 +92,53 @@ func TestJoinStatementValues(t *testing.T) {
 		}
 	}
 }
+
+// TestSemiJoinStatementValues checks the bind variable that a semi-join makes
+// of a value of a left row for its subquery. With --convert-result-charset the
+// value of a latin1 column is utf8mb4 in the bind variable, and the left row
+// that the semi-join returns keeps it in latin1. The semi-join is asked for no
+// fields, so that it has to ask for the fields of its left side itself.
+func TestSemiJoinStatementValues(t *testing.T) {
+	for _, convert := range []bool{true, false} {
+		for _, stream := range []bool{false, true} {
+			t.Run(fmt.Sprintf("convert %v, stream %v", convert, stream), func(t *testing.T) {
+				leftPrim := &fakePrimitive{results: []*sqltypes.Result{latin1Result()}}
+				rightPrim := &fakePrimitive{results: []*sqltypes.Result{
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields("col4", "int64"), "4"),
+				}}
+				jn := &SemiJoin{Left: leftPrim, Right: rightPrim, Vars: map[string]int{"bv": 1}}
+				vcursor := &noopVCursor{convertResultCharset: convert}
+
+				var r *sqltypes.Result
+				var err error
+				if stream {
+					r, err = wrapStreamExecute(jn, vcursor, map[string]*querypb.BindVariable{}, false)
+				} else {
+					r, err = jn.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, false)
+				}
+				require.NoError(t, err)
+
+				method := "Execute"
+				if stream {
+					method = "StreamExecute"
+				}
+				rightPrim.ExpectLog(t, []string{
+					fmt.Sprintf(`%s %v false`, method, printBindVars(map[string]*querypb.BindVariable{"bv": sqltypes.StringBindVariable(wantStatementValue(convert))})),
+				})
+
+				require.Len(t, r.Rows, 1)
+				assert.Equal(t, "M\xFCller", r.Rows[0][1].ToString())
+			})
+		}
+	}
+}
+
+// wantStatementValue is 'Müller' of latin1Result as it has to be in a bind
+// variable: utf8mb4 with --convert-result-charset, and the bytes of the row
+// without it.
+func wantStatementValue(convert bool) string {
+	if convert {
+		return "Müller"
+	}
+	return "M\xFCller"
+}
