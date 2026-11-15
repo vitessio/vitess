@@ -18,6 +18,7 @@ package engine
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -41,14 +42,17 @@ type SemiJoin struct {
 // TryExecute performs a non-streaming exec.
 func (jn *SemiJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
-	lresult, err := vcursor.ExecutePrimitive(ctx, jn.Left, bindVars, wantfields)
+	// The values of the left rows become bind variables of the subquery,
+	// which takes the fields of the left side to convert them.
+	lresult, err := vcursor.ExecutePrimitive(ctx, jn.Left, bindVars, wantfields || vcursor.ConvertResultCharset())
 	if err != nil {
 		return nil, err
 	}
 	result := &sqltypes.Result{Fields: lresult.Fields}
+	leftValues := newStatementValues(vcursor, lresult.Fields)
 	for _, lrow := range lresult.Rows {
 		for k, col := range jn.Vars {
-			joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
+			joinVars[k] = sqltypes.ValueBindVariable(leftValues.value(col, lrow[col]))
 		}
 		rresult, err := vcursor.ExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), false)
 		if err != nil {
@@ -63,12 +67,27 @@ func (jn *SemiJoin) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 
 // TryStreamExecute performs a streaming exec.
 func (jn *SemiJoin) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	err := vcursor.StreamExecutePrimitive(ctx, jn.Left, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+	// The values of the left rows become bind variables of the subquery,
+	// which takes the fields of the left side to convert them. They come
+	// with the first chunk, and chunks of a scatter come concurrently.
+	var mu sync.Mutex
+	var leftValues statementValues
+	var haveFields bool
+	convert := vcursor.ConvertResultCharset()
+	err := vcursor.StreamExecutePrimitive(ctx, jn.Left, bindVars, wantfields || convert, func(lresult *sqltypes.Result) error {
+		mu.Lock()
+		if convert && !haveFields && len(lresult.Fields) != 0 {
+			haveFields = true
+			leftValues = newStatementValues(vcursor, lresult.Fields)
+		}
+		values := leftValues
+		mu.Unlock()
+
 		joinVars := make(map[string]*querypb.BindVariable)
 		result := &sqltypes.Result{Fields: lresult.Fields}
 		for _, lrow := range lresult.Rows {
 			for k, col := range jn.Vars {
-				joinVars[k] = sqltypes.ValueBindVariable(lrow[col])
+				joinVars[k] = sqltypes.ValueBindVariable(values.value(col, lrow[col]))
 			}
 			var rowAdded atomic.Bool
 			err := vcursor.StreamExecutePrimitive(ctx, jn.Right, combineVars(bindVars, joinVars), false, func(rresult *sqltypes.Result) error {
