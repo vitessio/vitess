@@ -425,22 +425,22 @@ func mergeOffsetExpressions(e1, e2 sqlparser.Expr) (expr sqlparser.Expr, failed 
 	case e2 == nil:
 		return e1, false
 	default:
-		v1str, ok := e1.(*sqlparser.Literal)
+		// Decline the merge unless both offsets are valid LIMIT literals, so
+		// the original values are still validated at execution
+		v1, ok := limitLiteral(e1)
 		if !ok {
 			return nil, true
 		}
-		v2str, ok := e2.(*sqlparser.Literal)
+		v2, ok := limitLiteral(e2)
 		if !ok {
 			return nil, true
 		}
-		v1, _ := strconv.Atoi(v1str.Val)
-		v2, _ := strconv.Atoi(v2str.Val)
-		if v1 > math.MaxInt-v2 {
+		if v1 > math.MaxInt64-v2 {
 			// Saturate instead of overflowing: no result can hold this many rows,
 			// so both offsets skip every row
-			return sqlparser.NewIntLiteral(strconv.Itoa(math.MaxInt)), false
+			return sqlparser.NewIntLiteral(strconv.FormatInt(math.MaxInt64, 10)), false
 		}
-		return sqlparser.NewIntLiteral(strconv.Itoa(v1 + v2)), false
+		return sqlparser.NewIntLiteral(strconv.FormatInt(v1+v2, 10)), false
 	}
 }
 

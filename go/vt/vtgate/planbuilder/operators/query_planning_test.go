@@ -40,6 +40,20 @@ func TestMergeOffsetExpressions(t *testing.T) {
 			expectedFailed: false,
 		},
 		{
+			name:           "offsets beyond BIGINT saturate",
+			offset1:        sqlparser.NewIntLiteral("18446744073709551615"),
+			offset2:        sqlparser.NewIntLiteral("1"),
+			expectedExpr:   sqlparser.NewIntLiteral("9223372036854775807"),
+			expectedFailed: false,
+		},
+		{
+			name:           "offset beyond BIGINT UNSIGNED",
+			offset1:        sqlparser.NewIntLiteral("18446744073709551616"),
+			offset2:        sqlparser.NewIntLiteral("1"),
+			expectedExpr:   nil,
+			expectedFailed: true,
+		},
+		{
 			name:           "first offset is nil",
 			offset1:        nil,
 			offset2:        sqlparser.NewIntLiteral("3"),
