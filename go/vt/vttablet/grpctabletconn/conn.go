@@ -121,6 +121,7 @@ func (conn *gRPCQueryClient) Execute(ctx context.Context, _ queryservice.Session
 	}
 
 	req := &querypb.ExecuteRequest{
+		RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Target:            target,
@@ -169,6 +170,7 @@ func (conn *gRPCQueryClient) StreamExecute(ctx context.Context, _ queryservice.S
 		}
 
 		req := &querypb.StreamExecuteRequest{
+			RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -481,6 +483,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, _ queryservice.Se
 	}
 
 	req := &querypb.BeginExecuteRequest{
+		RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -525,6 +528,7 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, _ queryserv
 		}
 
 		req := &querypb.BeginStreamExecuteRequest{
+			RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -597,6 +601,7 @@ func (conn *gRPCQueryClient) MessageStream(ctx context.Context, target *querypb.
 		}
 
 		req := &querypb.MessageStreamRequest{
+			RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -1001,6 +1006,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, _ queryser
 	}
 
 	req := &querypb.ReserveBeginExecuteRequest{
+		RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 		Target:            target,
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -1046,6 +1052,7 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, _ qu
 		}
 
 		req := &querypb.ReserveBeginStreamExecuteRequest{
+			RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
@@ -1117,6 +1124,7 @@ func (conn *gRPCQueryClient) ReserveExecute(ctx context.Context, _ queryservice.
 	}
 
 	req := &querypb.ReserveExecuteRequest{
+		RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 		EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 		ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
 		Target:            target,
@@ -1160,6 +1168,7 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, _ queryse
 		}
 
 		req := &querypb.ReserveStreamExecuteRequest{
+			RawResultCharset:  queryservice.IsRawResultCharset(ctx),
 			Target:            target,
 			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
 			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),

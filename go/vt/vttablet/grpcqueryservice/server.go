@@ -48,6 +48,9 @@ func (q *query) Execute(ctx context.Context, request *querypb.ExecuteRequest) (r
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 	if request.ReservedConnKeepAlive {
 		ctx = queryservice.ContextWithReservedConnKeepAlive(ctx, request.ReservedConnKeepAliveIds)
 	}
@@ -70,6 +73,9 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 	err = q.server.StreamExecute(ctx, nil, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
@@ -258,6 +264,9 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 	state, result, err := q.server.BeginExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options)
 	if err != nil {
 		// if we have a valid transactionID, return the error in-band
@@ -285,6 +294,9 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 	state, err := q.server.BeginStreamExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.ReservedId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.BeginStreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
@@ -311,6 +323,9 @@ func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 	err = q.server.MessageStream(ctx, request.Target, request.Name, func(qr *sqltypes.Result) error {
 		return stream.Send(&querypb.MessageStreamResponse{
 			Result: sqltypes.ResultToProto3(qr),
@@ -409,6 +424,9 @@ func (q *query) ReserveExecute(ctx context.Context, request *querypb.ReserveExec
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 	state, result, err := q.server.ReserveExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options)
 	if err != nil {
 		// if we have a valid reservedID, return the error in-band
@@ -435,6 +453,9 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 
 	state, err := q.server.ReserveStreamExecute(ctx, nil, request.Target, request.PreQueries, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.ReserveStreamExecuteResponse{
@@ -460,6 +481,9 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 
 	state, result, err := q.server.ReserveBeginExecute(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options)
 	if err != nil {
@@ -491,6 +515,9 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
+	if request.RawResultCharset {
+		ctx = queryservice.ContextWithRawResultCharset(ctx)
+	}
 
 	state, err := q.server.ReserveBeginStreamExecute(ctx, nil, request.Target, request.PreQueries, request.PostBeginQueries, request.Query.Sql, request.Query.BindVariables, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.ReserveBeginStreamExecuteResponse{

@@ -52911,6 +52911,9 @@ export namespace query {
         /** ExecuteRequest reserved_conn_activity_refresh. */
         reserved_conn_activity_refresh: boolean;
 
+        /** ExecuteRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new ExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -53025,6 +53028,9 @@ export namespace query {
             /** ExecuteRequest reserved_conn_activity_refresh */
             reserved_conn_activity_refresh?: (boolean|null);
 
+            /** ExecuteRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -53041,6 +53047,7 @@ export namespace query {
           reserved_conn_keep_alive?: boolean|null;
           reserved_conn_keep_alive_ids?: (number|Long)[]|null;
           reserved_conn_activity_refresh?: boolean|null;
+          raw_result_charset?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
@@ -53325,6 +53332,9 @@ export namespace query {
         /** StreamExecuteRequest reserved_id. */
         reserved_id: (number|Long);
 
+        /** StreamExecuteRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new StreamExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -53430,6 +53440,9 @@ export namespace query {
             /** StreamExecuteRequest reserved_id */
             reserved_id?: (number|Long|null);
 
+            /** StreamExecuteRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -53443,6 +53456,7 @@ export namespace query {
           options?: query.ExecuteOptions.$Shape|null;
           transaction_id?: number|Long|null;
           reserved_id?: number|Long|null;
+          raw_result_charset?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
@@ -56653,6 +56667,9 @@ export namespace query {
         /** BeginExecuteRequest pre_queries. */
         pre_queries: string[];
 
+        /** BeginExecuteRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new BeginExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -56758,6 +56775,9 @@ export namespace query {
             /** BeginExecuteRequest pre_queries */
             pre_queries?: (string[]|null);
 
+            /** BeginExecuteRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -56771,6 +56791,7 @@ export namespace query {
           options?: query.ExecuteOptions.$Shape|null;
           reserved_id?: number|Long|null;
           pre_queries?: string[]|null;
+          raw_result_charset?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
@@ -56956,6 +56977,9 @@ export namespace query {
         /** BeginStreamExecuteRequest reserved_id. */
         reserved_id: (number|Long);
 
+        /** BeginStreamExecuteRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new BeginStreamExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -57061,6 +57085,9 @@ export namespace query {
             /** BeginStreamExecuteRequest reserved_id */
             reserved_id?: (number|Long|null);
 
+            /** BeginStreamExecuteRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -57074,6 +57101,7 @@ export namespace query {
           options?: query.ExecuteOptions.$Shape|null;
           pre_queries?: string[]|null;
           reserved_id?: number|Long|null;
+          raw_result_charset?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
@@ -57250,6 +57278,9 @@ export namespace query {
         /** MessageStreamRequest name. */
         name: string;
 
+        /** MessageStreamRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new MessageStreamRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -57345,6 +57376,9 @@ export namespace query {
 
             /** MessageStreamRequest name */
             name?: (string|null);
+
+            /** MessageStreamRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
 
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
@@ -57769,6 +57803,9 @@ export namespace query {
         /** ReserveExecuteRequest pre_queries. */
         pre_queries: string[];
 
+        /** ReserveExecuteRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new ReserveExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -57874,6 +57911,9 @@ export namespace query {
             /** ReserveExecuteRequest pre_queries */
             pre_queries?: (string[]|null);
 
+            /** ReserveExecuteRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -57887,6 +57927,7 @@ export namespace query {
           transaction_id?: number|Long|null;
           options?: query.ExecuteOptions.$Shape|null;
           pre_queries?: string[]|null;
+          raw_result_charset?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
@@ -58066,6 +58107,9 @@ export namespace query {
         /** ReserveStreamExecuteRequest pre_queries. */
         pre_queries: string[];
 
+        /** ReserveStreamExecuteRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new ReserveStreamExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -58171,6 +58215,9 @@ export namespace query {
             /** ReserveStreamExecuteRequest pre_queries */
             pre_queries?: (string[]|null);
 
+            /** ReserveStreamExecuteRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -58184,6 +58231,7 @@ export namespace query {
           options?: query.ExecuteOptions.$Shape|null;
           transaction_id?: number|Long|null;
           pre_queries?: string[]|null;
+          raw_result_charset?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
@@ -58363,6 +58411,9 @@ export namespace query {
         /** ReserveBeginExecuteRequest post_begin_queries. */
         post_begin_queries: string[];
 
+        /** ReserveBeginExecuteRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new ReserveBeginExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -58468,6 +58519,9 @@ export namespace query {
             /** ReserveBeginExecuteRequest post_begin_queries */
             post_begin_queries?: (string[]|null);
 
+            /** ReserveBeginExecuteRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -58481,6 +58535,7 @@ export namespace query {
           options?: query.ExecuteOptions.$Shape|null;
           pre_queries?: string[]|null;
           post_begin_queries?: string[]|null;
+          raw_result_charset?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }
@@ -58672,6 +58727,9 @@ export namespace query {
         /** ReserveBeginStreamExecuteRequest post_begin_queries. */
         post_begin_queries: string[];
 
+        /** ReserveBeginStreamExecuteRequest raw_result_charset. */
+        raw_result_charset: boolean;
+
         /**
          * Creates a new ReserveBeginStreamExecuteRequest instance using the specified properties.
          * @param [properties] Properties to set
@@ -58777,6 +58835,9 @@ export namespace query {
             /** ReserveBeginStreamExecuteRequest post_begin_queries */
             post_begin_queries?: (string[]|null);
 
+            /** ReserveBeginStreamExecuteRequest raw_result_charset */
+            raw_result_charset?: (boolean|null);
+
             /** Unknown fields preserved while decoding when enabled */
             $unknowns?: Uint8Array[];
         }
@@ -58790,6 +58851,7 @@ export namespace query {
           options?: query.ExecuteOptions.$Shape|null;
           pre_queries?: string[]|null;
           post_begin_queries?: string[]|null;
+          raw_result_charset?: boolean|null;
           $unknowns?: Uint8Array[];
         };
     }

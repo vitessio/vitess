@@ -138142,6 +138142,7 @@ export const query = $root.query = (() => {
          * @property {boolean|null} [reserved_conn_keep_alive] ExecuteRequest reserved_conn_keep_alive
          * @property {Array.<number|Long>|null} [reserved_conn_keep_alive_ids] ExecuteRequest reserved_conn_keep_alive_ids
          * @property {boolean|null} [reserved_conn_activity_refresh] ExecuteRequest reserved_conn_activity_refresh
+         * @property {boolean|null} [raw_result_charset] ExecuteRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -138166,6 +138167,7 @@ export const query = $root.query = (() => {
          *   reserved_conn_keep_alive?: boolean|null;
          *   reserved_conn_keep_alive_ids?: Array.<number|Long>|null;
          *   reserved_conn_activity_refresh?: boolean|null;
+         *   raw_result_charset?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.ExecuteRequest.$Shape
          */
@@ -138267,6 +138269,14 @@ export const query = $root.query = (() => {
         ExecuteRequest.prototype.reserved_conn_activity_refresh = false;
 
         /**
+         * ExecuteRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.ExecuteRequest
+         * @instance
+         */
+        ExecuteRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new ExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.ExecuteRequest
@@ -138318,6 +138328,8 @@ export const query = $root.query = (() => {
                 writer.uint32(/* id 9, wireType 2 =*/74).int64s(message.reserved_conn_keep_alive_ids);
             if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh") && message.reserved_conn_activity_refresh !== false)
                 writer.uint32(/* id 10, wireType 0 =*/80).bool(message.reserved_conn_activity_refresh);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 11, wireType 0 =*/88).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -138455,6 +138467,15 @@ export const query = $root.query = (() => {
                             delete message.reserved_conn_activity_refresh;
                         continue;
                     }
+                case 11: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -138547,6 +138568,9 @@ export const query = $root.query = (() => {
             if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh"))
                 if (typeof message.reserved_conn_activity_refresh !== "boolean")
                     return "reserved_conn_activity_refresh: boolean expected";
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -138633,6 +138657,9 @@ export const query = $root.query = (() => {
             if (object.reserved_conn_activity_refresh != null)
                 if (object.reserved_conn_activity_refresh)
                     message.reserved_conn_activity_refresh = $Boolean(object.reserved_conn_activity_refresh);
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -138673,6 +138700,7 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 object.reserved_conn_keep_alive = false;
                 object.reserved_conn_activity_refresh = false;
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -138712,6 +138740,8 @@ export const query = $root.query = (() => {
             }
             if (message.reserved_conn_activity_refresh != null && $Object.hasOwnProperty.call(message, "reserved_conn_activity_refresh"))
                 object.reserved_conn_activity_refresh = message.reserved_conn_activity_refresh;
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 
@@ -139338,6 +139368,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] StreamExecuteRequest options
          * @property {number|Long|null} [transaction_id] StreamExecuteRequest transaction_id
          * @property {number|Long|null} [reserved_id] StreamExecuteRequest reserved_id
+         * @property {boolean|null} [raw_result_charset] StreamExecuteRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -139359,6 +139390,7 @@ export const query = $root.query = (() => {
          *   options?: query.ExecuteOptions.$Shape|null;
          *   transaction_id?: number|Long|null;
          *   reserved_id?: number|Long|null;
+         *   raw_result_charset?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.StreamExecuteRequest.$Shape
          */
@@ -139435,6 +139467,14 @@ export const query = $root.query = (() => {
         StreamExecuteRequest.prototype.reserved_id = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
+         * StreamExecuteRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.StreamExecuteRequest
+         * @instance
+         */
+        StreamExecuteRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new StreamExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.StreamExecuteRequest
@@ -139480,6 +139520,8 @@ export const query = $root.query = (() => {
                 writer.uint32(/* id 6, wireType 0 =*/48).int64(message.transaction_id);
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.reserved_id);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -139585,6 +139627,15 @@ export const query = $root.query = (() => {
                             delete message.reserved_id;
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -139664,6 +139715,9 @@ export const query = $root.query = (() => {
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
                 if (!$util.isInteger(message.reserved_id) && !(message.reserved_id && $util.isInteger(message.reserved_id.low) && $util.isInteger(message.reserved_id.high)))
                     return "reserved_id: integer|Long expected";
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -139730,6 +139784,9 @@ export const query = $root.query = (() => {
                         message.reserved_id = object.reserved_id;
                     else if (typeof object.reserved_id === "object")
                         message.reserved_id = new $util.LongBits(object.reserved_id.low >>> 0, object.reserved_id.high >>> 0).toNumber();
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -139766,6 +139823,7 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.reserved_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -139791,6 +139849,8 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? $String(message.reserved_id) : message.reserved_id;
                 else
                     object.reserved_id = options.longs === $String ? $util.Long.prototype.toString.call(message.reserved_id) : options.longs === $Number ? new $util.LongBits(message.reserved_id.low >>> 0, message.reserved_id.high >>> 0).toNumber() : message.reserved_id;
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 
@@ -147995,6 +148055,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] BeginExecuteRequest options
          * @property {number|Long|null} [reserved_id] BeginExecuteRequest reserved_id
          * @property {Array.<string>|null} [pre_queries] BeginExecuteRequest pre_queries
+         * @property {boolean|null} [raw_result_charset] BeginExecuteRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -148016,6 +148077,7 @@ export const query = $root.query = (() => {
          *   options?: query.ExecuteOptions.$Shape|null;
          *   reserved_id?: number|Long|null;
          *   pre_queries?: Array.<string>|null;
+         *   raw_result_charset?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.BeginExecuteRequest.$Shape
          */
@@ -148093,6 +148155,14 @@ export const query = $root.query = (() => {
         BeginExecuteRequest.prototype.pre_queries = $util.emptyArray;
 
         /**
+         * BeginExecuteRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.BeginExecuteRequest
+         * @instance
+         */
+        BeginExecuteRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new BeginExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.BeginExecuteRequest
@@ -148139,6 +148209,8 @@ export const query = $root.query = (() => {
             if (message.pre_queries != null && message.pre_queries.length)
                 for (let i = 0; i < message.pre_queries.length; ++i)
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.pre_queries[i]);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -148243,6 +148315,15 @@ export const query = $root.query = (() => {
                         message.pre_queries.push(reader.stringVerify());
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -148326,6 +148407,9 @@ export const query = $root.query = (() => {
                     if (!$util.isString(message.pre_queries[i]))
                         return "pre_queries: string[] expected";
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -148389,6 +148473,9 @@ export const query = $root.query = (() => {
                 for (let i = 0; i < object.pre_queries.length; ++i)
                     message.pre_queries[i] = $String(object.pre_queries[i]);
             }
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -148422,6 +148509,7 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.reserved_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -148445,6 +148533,8 @@ export const query = $root.query = (() => {
                 for (let j = 0; j < message.pre_queries.length; ++j)
                     object.pre_queries[j] = message.pre_queries[j];
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 
@@ -148899,6 +148989,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] BeginStreamExecuteRequest options
          * @property {Array.<string>|null} [pre_queries] BeginStreamExecuteRequest pre_queries
          * @property {number|Long|null} [reserved_id] BeginStreamExecuteRequest reserved_id
+         * @property {boolean|null} [raw_result_charset] BeginStreamExecuteRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -148920,6 +149011,7 @@ export const query = $root.query = (() => {
          *   options?: query.ExecuteOptions.$Shape|null;
          *   pre_queries?: Array.<string>|null;
          *   reserved_id?: number|Long|null;
+         *   raw_result_charset?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.BeginStreamExecuteRequest.$Shape
          */
@@ -148997,6 +149089,14 @@ export const query = $root.query = (() => {
         BeginStreamExecuteRequest.prototype.reserved_id = $util.Long ? $util.Long.fromBits(0,0,false) : 0;
 
         /**
+         * BeginStreamExecuteRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.BeginStreamExecuteRequest
+         * @instance
+         */
+        BeginStreamExecuteRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new BeginStreamExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.BeginStreamExecuteRequest
@@ -149043,6 +149143,8 @@ export const query = $root.query = (() => {
                     writer.uint32(/* id 6, wireType 2 =*/50).string(message.pre_queries[i]);
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id") && (typeof message.reserved_id === "object" ? message.reserved_id.low || message.reserved_id.high : message.reserved_id !== 0))
                 writer.uint32(/* id 7, wireType 0 =*/56).int64(message.reserved_id);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -149147,6 +149249,15 @@ export const query = $root.query = (() => {
                             delete message.reserved_id;
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -149230,6 +149341,9 @@ export const query = $root.query = (() => {
             if (message.reserved_id != null && $Object.hasOwnProperty.call(message, "reserved_id"))
                 if (!$util.isInteger(message.reserved_id) && !(message.reserved_id && $util.isInteger(message.reserved_id.low) && $util.isInteger(message.reserved_id.high)))
                     return "reserved_id: integer|Long expected";
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -149293,6 +149407,9 @@ export const query = $root.query = (() => {
                         message.reserved_id = object.reserved_id;
                     else if (typeof object.reserved_id === "object")
                         message.reserved_id = new $util.LongBits(object.reserved_id.low >>> 0, object.reserved_id.high >>> 0).toNumber();
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -149326,6 +149443,7 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.reserved_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -149349,6 +149467,8 @@ export const query = $root.query = (() => {
                     object.reserved_id = options.longs === $String ? $String(message.reserved_id) : message.reserved_id;
                 else
                     object.reserved_id = options.longs === $String ? $util.Long.prototype.toString.call(message.reserved_id) : options.longs === $Number ? new $util.LongBits(message.reserved_id.low >>> 0, message.reserved_id.high >>> 0).toNumber() : message.reserved_id;
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 
@@ -149800,6 +149920,7 @@ export const query = $root.query = (() => {
          * @property {query.VTGateCallerID.$Properties|null} [immediate_caller_id] MessageStreamRequest immediate_caller_id
          * @property {query.Target.$Properties|null} [target] MessageStreamRequest target
          * @property {string|null} [name] MessageStreamRequest name
+         * @property {boolean|null} [raw_result_charset] MessageStreamRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -149864,6 +149985,14 @@ export const query = $root.query = (() => {
         MessageStreamRequest.prototype.name = "";
 
         /**
+         * MessageStreamRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.MessageStreamRequest
+         * @instance
+         */
+        MessageStreamRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new MessageStreamRequest instance using the specified properties.
          * @function create
          * @memberof query.MessageStreamRequest
@@ -149903,6 +150032,8 @@ export const query = $root.query = (() => {
                 $root.query.Target.encode(message.target, writer.uint32(/* id 3, wireType 2 =*/26).fork(), _depth + 1).ldelim();
             if (message.name != null && $Object.hasOwnProperty.call(message, "name") && message.name !== "")
                 writer.uint32(/* id 4, wireType 2 =*/34).string(message.name);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 5, wireType 0 =*/40).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -149987,6 +150118,15 @@ export const query = $root.query = (() => {
                             delete message.name;
                         continue;
                     }
+                case 5: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -150053,6 +150193,9 @@ export const query = $root.query = (() => {
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 if (!$util.isString(message.name))
                     return "name: string expected";
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -150092,6 +150235,9 @@ export const query = $root.query = (() => {
             if (object.name != null)
                 if (typeof object.name !== "string" || object.name.length)
                     message.name = $String(object.name);
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -150117,6 +150263,7 @@ export const query = $root.query = (() => {
                 object.immediate_caller_id = null;
                 object.target = null;
                 object.name = "";
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -150126,6 +150273,8 @@ export const query = $root.query = (() => {
                 object.target = $root.query.Target.toObject(message.target, options, _depth + 1);
             if (message.name != null && $Object.hasOwnProperty.call(message, "name"))
                 object.name = message.name;
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 
@@ -151134,6 +151283,7 @@ export const query = $root.query = (() => {
          * @property {number|Long|null} [transaction_id] ReserveExecuteRequest transaction_id
          * @property {query.ExecuteOptions.$Properties|null} [options] ReserveExecuteRequest options
          * @property {Array.<string>|null} [pre_queries] ReserveExecuteRequest pre_queries
+         * @property {boolean|null} [raw_result_charset] ReserveExecuteRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -151155,6 +151305,7 @@ export const query = $root.query = (() => {
          *   transaction_id?: number|Long|null;
          *   options?: query.ExecuteOptions.$Shape|null;
          *   pre_queries?: Array.<string>|null;
+         *   raw_result_charset?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.ReserveExecuteRequest.$Shape
          */
@@ -151232,6 +151383,14 @@ export const query = $root.query = (() => {
         ReserveExecuteRequest.prototype.pre_queries = $util.emptyArray;
 
         /**
+         * ReserveExecuteRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.ReserveExecuteRequest
+         * @instance
+         */
+        ReserveExecuteRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new ReserveExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.ReserveExecuteRequest
@@ -151278,6 +151437,8 @@ export const query = $root.query = (() => {
             if (message.pre_queries != null && message.pre_queries.length)
                 for (let i = 0; i < message.pre_queries.length; ++i)
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.pre_queries[i]);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -151382,6 +151543,15 @@ export const query = $root.query = (() => {
                         message.pre_queries.push(reader.stringVerify());
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -151465,6 +151635,9 @@ export const query = $root.query = (() => {
                     if (!$util.isString(message.pre_queries[i]))
                         return "pre_queries: string[] expected";
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -151528,6 +151701,9 @@ export const query = $root.query = (() => {
                 for (let i = 0; i < object.pre_queries.length; ++i)
                     message.pre_queries[i] = $String(object.pre_queries[i]);
             }
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -151561,6 +151737,7 @@ export const query = $root.query = (() => {
                 } else
                     object.transaction_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
                 object.options = null;
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -151584,6 +151761,8 @@ export const query = $root.query = (() => {
                 for (let j = 0; j < message.pre_queries.length; ++j)
                     object.pre_queries[j] = message.pre_queries[j];
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 
@@ -152009,6 +152188,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] ReserveStreamExecuteRequest options
          * @property {number|Long|null} [transaction_id] ReserveStreamExecuteRequest transaction_id
          * @property {Array.<string>|null} [pre_queries] ReserveStreamExecuteRequest pre_queries
+         * @property {boolean|null} [raw_result_charset] ReserveStreamExecuteRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -152030,6 +152210,7 @@ export const query = $root.query = (() => {
          *   options?: query.ExecuteOptions.$Shape|null;
          *   transaction_id?: number|Long|null;
          *   pre_queries?: Array.<string>|null;
+         *   raw_result_charset?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.ReserveStreamExecuteRequest.$Shape
          */
@@ -152107,6 +152288,14 @@ export const query = $root.query = (() => {
         ReserveStreamExecuteRequest.prototype.pre_queries = $util.emptyArray;
 
         /**
+         * ReserveStreamExecuteRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.ReserveStreamExecuteRequest
+         * @instance
+         */
+        ReserveStreamExecuteRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new ReserveStreamExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.ReserveStreamExecuteRequest
@@ -152153,6 +152342,8 @@ export const query = $root.query = (() => {
             if (message.pre_queries != null && message.pre_queries.length)
                 for (let i = 0; i < message.pre_queries.length; ++i)
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.pre_queries[i]);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -152257,6 +152448,15 @@ export const query = $root.query = (() => {
                         message.pre_queries.push(reader.stringVerify());
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -152340,6 +152540,9 @@ export const query = $root.query = (() => {
                     if (!$util.isString(message.pre_queries[i]))
                         return "pre_queries: string[] expected";
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -152403,6 +152606,9 @@ export const query = $root.query = (() => {
                 for (let i = 0; i < object.pre_queries.length; ++i)
                     message.pre_queries[i] = $String(object.pre_queries[i]);
             }
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -152436,6 +152642,7 @@ export const query = $root.query = (() => {
                     object.transaction_id = options.longs === $String ? long.toString() : options.longs === $Number ? long.toNumber() : typeof $BigInt !== "undefined" && options.longs === $BigInt ? long.toBigInt() : long;
                 } else
                     object.transaction_id = options.longs === $String ? "0" : typeof $BigInt !== "undefined" && options.longs === $BigInt ? $BigInt("0") : 0;
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -152459,6 +152666,8 @@ export const query = $root.query = (() => {
                 for (let j = 0; j < message.pre_queries.length; ++j)
                     object.pre_queries[j] = message.pre_queries[j];
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 
@@ -152884,6 +153093,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] ReserveBeginExecuteRequest options
          * @property {Array.<string>|null} [pre_queries] ReserveBeginExecuteRequest pre_queries
          * @property {Array.<string>|null} [post_begin_queries] ReserveBeginExecuteRequest post_begin_queries
+         * @property {boolean|null} [raw_result_charset] ReserveBeginExecuteRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -152905,6 +153115,7 @@ export const query = $root.query = (() => {
          *   options?: query.ExecuteOptions.$Shape|null;
          *   pre_queries?: Array.<string>|null;
          *   post_begin_queries?: Array.<string>|null;
+         *   raw_result_charset?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.ReserveBeginExecuteRequest.$Shape
          */
@@ -152983,6 +153194,14 @@ export const query = $root.query = (() => {
         ReserveBeginExecuteRequest.prototype.post_begin_queries = $util.emptyArray;
 
         /**
+         * ReserveBeginExecuteRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.ReserveBeginExecuteRequest
+         * @instance
+         */
+        ReserveBeginExecuteRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new ReserveBeginExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.ReserveBeginExecuteRequest
@@ -153030,6 +153249,8 @@ export const query = $root.query = (() => {
             if (message.post_begin_queries != null && message.post_begin_queries.length)
                 for (let i = 0; i < message.post_begin_queries.length; ++i)
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.post_begin_queries[i]);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -153133,6 +153354,15 @@ export const query = $root.query = (() => {
                         message.post_begin_queries.push(reader.stringVerify());
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -153220,6 +153450,9 @@ export const query = $root.query = (() => {
                     if (!$util.isString(message.post_begin_queries[i]))
                         return "post_begin_queries: string[] expected";
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -153280,6 +153513,9 @@ export const query = $root.query = (() => {
                 for (let i = 0; i < object.post_begin_queries.length; ++i)
                     message.post_begin_queries[i] = $String(object.post_begin_queries[i]);
             }
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -153310,6 +153546,7 @@ export const query = $root.query = (() => {
                 object.target = null;
                 object.query = null;
                 object.options = null;
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -153331,6 +153568,8 @@ export const query = $root.query = (() => {
                 for (let j = 0; j < message.post_begin_queries.length; ++j)
                     object.post_begin_queries[j] = message.post_begin_queries[j];
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 
@@ -153830,6 +154069,7 @@ export const query = $root.query = (() => {
          * @property {query.ExecuteOptions.$Properties|null} [options] ReserveBeginStreamExecuteRequest options
          * @property {Array.<string>|null} [pre_queries] ReserveBeginStreamExecuteRequest pre_queries
          * @property {Array.<string>|null} [post_begin_queries] ReserveBeginStreamExecuteRequest post_begin_queries
+         * @property {boolean|null} [raw_result_charset] ReserveBeginStreamExecuteRequest raw_result_charset
          * @property {Array.<Uint8Array>} [$unknowns] Unknown fields preserved while decoding when enabled
          */
 
@@ -153851,6 +154091,7 @@ export const query = $root.query = (() => {
          *   options?: query.ExecuteOptions.$Shape|null;
          *   pre_queries?: Array.<string>|null;
          *   post_begin_queries?: Array.<string>|null;
+         *   raw_result_charset?: boolean|null;
          *   $unknowns?: Array.<Uint8Array>;
          * }} query.ReserveBeginStreamExecuteRequest.$Shape
          */
@@ -153929,6 +154170,14 @@ export const query = $root.query = (() => {
         ReserveBeginStreamExecuteRequest.prototype.post_begin_queries = $util.emptyArray;
 
         /**
+         * ReserveBeginStreamExecuteRequest raw_result_charset.
+         * @member {boolean} raw_result_charset
+         * @memberof query.ReserveBeginStreamExecuteRequest
+         * @instance
+         */
+        ReserveBeginStreamExecuteRequest.prototype.raw_result_charset = false;
+
+        /**
          * Creates a new ReserveBeginStreamExecuteRequest instance using the specified properties.
          * @function create
          * @memberof query.ReserveBeginStreamExecuteRequest
@@ -153976,6 +154225,8 @@ export const query = $root.query = (() => {
             if (message.post_begin_queries != null && message.post_begin_queries.length)
                 for (let i = 0; i < message.post_begin_queries.length; ++i)
                     writer.uint32(/* id 7, wireType 2 =*/58).string(message.post_begin_queries[i]);
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset") && message.raw_result_charset !== false)
+                writer.uint32(/* id 8, wireType 0 =*/64).bool(message.raw_result_charset);
             if (message.$unknowns != null && $Object.hasOwnProperty.call(message, "$unknowns"))
                 for (let i = 0; i < message.$unknowns.length; ++i)
                     writer.raw(message.$unknowns[i]);
@@ -154079,6 +154330,15 @@ export const query = $root.query = (() => {
                         message.post_begin_queries.push(reader.stringVerify());
                         continue;
                     }
+                case 8: {
+                        if (wireType !== 0)
+                            break;
+                        if (value = reader.bool())
+                            message.raw_result_charset = value;
+                        else
+                            delete message.raw_result_charset;
+                        continue;
+                    }
                 }
                 reader.skipType(wireType, _depth, tag);
                 if (!reader.discardUnknown) {
@@ -154166,6 +154426,9 @@ export const query = $root.query = (() => {
                     if (!$util.isString(message.post_begin_queries[i]))
                         return "post_begin_queries: string[] expected";
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                if (typeof message.raw_result_charset !== "boolean")
+                    return "raw_result_charset: boolean expected";
             return null;
         };
 
@@ -154226,6 +154489,9 @@ export const query = $root.query = (() => {
                 for (let i = 0; i < object.post_begin_queries.length; ++i)
                     message.post_begin_queries[i] = $String(object.post_begin_queries[i]);
             }
+            if (object.raw_result_charset != null)
+                if (object.raw_result_charset)
+                    message.raw_result_charset = $Boolean(object.raw_result_charset);
             return message;
         };
 
@@ -154256,6 +154522,7 @@ export const query = $root.query = (() => {
                 object.target = null;
                 object.query = null;
                 object.options = null;
+                object.raw_result_charset = false;
             }
             if (message.effective_caller_id != null && $Object.hasOwnProperty.call(message, "effective_caller_id"))
                 object.effective_caller_id = $root.vtrpc.CallerID.toObject(message.effective_caller_id, options, _depth + 1);
@@ -154277,6 +154544,8 @@ export const query = $root.query = (() => {
                 for (let j = 0; j < message.post_begin_queries.length; ++j)
                     object.post_begin_queries[j] = message.post_begin_queries[j];
             }
+            if (message.raw_result_charset != null && $Object.hasOwnProperty.call(message, "raw_result_charset"))
+                object.raw_result_charset = message.raw_result_charset;
             return object;
         };
 

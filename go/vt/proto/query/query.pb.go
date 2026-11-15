@@ -2030,8 +2030,18 @@ type ExecuteRequest struct {
 	// this field runs the query without the special lock purpose, restoring the
 	// (benign) pre-field race.
 	ReservedConnActivityRefresh bool `protobuf:"varint,10,opt,name=reserved_conn_activity_refresh,json=reservedConnActivityRefresh,proto3" json:"reserved_conn_activity_refresh,omitempty"`
-	unknownFields               protoimpl.UnknownFields
-	sizeCache                   protoimpl.SizeCache
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. A tablet that reads from MySQL with
+	// character_set_results = NULL then returns every text column in the
+	// character set of the column, with the collation of the column in the
+	// field, where it otherwise converts the text to its connection character
+	// set as MySQL does. The fields of the result tell the caller which of the
+	// two it got, so a tablet that predates this field needs no other handling.
+	// Like reserved_conn_keep_alive, this is a request-level field that only
+	// vtgate itself populates, never relayed from client sessions.
+	RawResultCharset bool `protobuf:"varint,11,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ExecuteRequest) Reset() {
@@ -2130,6 +2140,13 @@ func (x *ExecuteRequest) GetReservedConnKeepAliveIds() []int64 {
 func (x *ExecuteRequest) GetReservedConnActivityRefresh() bool {
 	if x != nil {
 		return x.ReservedConnActivityRefresh
+	}
+	return false
+}
+
+func (x *ExecuteRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
 	}
 	return false
 }
@@ -2246,8 +2263,11 @@ type StreamExecuteRequest struct {
 	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	TransactionId     int64                  `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	ReservedId        int64                  `protobuf:"varint,7,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. See ExecuteRequest.raw_result_charset.
+	RawResultCharset bool `protobuf:"varint,8,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *StreamExecuteRequest) Reset() {
@@ -2327,6 +2347,13 @@ func (x *StreamExecuteRequest) GetReservedId() int64 {
 		return x.ReservedId
 	}
 	return 0
+}
+
+func (x *StreamExecuteRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
+	}
+	return false
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -3762,8 +3789,11 @@ type BeginExecuteRequest struct {
 	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	ReservedId        int64                  `protobuf:"varint,6,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
 	PreQueries        []string               `protobuf:"bytes,7,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. See ExecuteRequest.raw_result_charset.
+	RawResultCharset bool `protobuf:"varint,8,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *BeginExecuteRequest) Reset() {
@@ -3843,6 +3873,13 @@ func (x *BeginExecuteRequest) GetPreQueries() []string {
 		return x.PreQueries
 	}
 	return nil
+}
+
+func (x *BeginExecuteRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
+	}
+	return false
 }
 
 // BeginExecuteResponse is the returned value from BeginExecute
@@ -3938,8 +3975,11 @@ type BeginStreamExecuteRequest struct {
 	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	PreQueries        []string               `protobuf:"bytes,6,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
 	ReservedId        int64                  `protobuf:"varint,7,opt,name=reserved_id,json=reservedId,proto3" json:"reserved_id,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. See ExecuteRequest.raw_result_charset.
+	RawResultCharset bool `protobuf:"varint,8,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *BeginStreamExecuteRequest) Reset() {
@@ -4019,6 +4059,13 @@ func (x *BeginStreamExecuteRequest) GetReservedId() int64 {
 		return x.ReservedId
 	}
 	return 0
+}
+
+func (x *BeginStreamExecuteRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
+	}
+	return false
 }
 
 // BeginStreamExecuteResponse is the returned value from BeginStreamExecute
@@ -4111,9 +4158,12 @@ type MessageStreamRequest struct {
 	ImmediateCallerId *VTGateCallerID        `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
 	Target            *Target                `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
 	// name is the message table name.
-	Name          string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Name string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. See ExecuteRequest.raw_result_charset.
+	RawResultCharset bool `protobuf:"varint,5,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *MessageStreamRequest) Reset() {
@@ -4172,6 +4222,13 @@ func (x *MessageStreamRequest) GetName() string {
 		return x.Name
 	}
 	return ""
+}
+
+func (x *MessageStreamRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
+	}
+	return false
 }
 
 // MessageStreamResponse is a response for MessageStream.
@@ -4355,8 +4412,11 @@ type ReserveExecuteRequest struct {
 	TransactionId     int64                  `protobuf:"varint,5,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	Options           *ExecuteOptions        `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 	PreQueries        []string               `protobuf:"bytes,7,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. See ExecuteRequest.raw_result_charset.
+	RawResultCharset bool `protobuf:"varint,8,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ReserveExecuteRequest) Reset() {
@@ -4436,6 +4496,13 @@ func (x *ReserveExecuteRequest) GetPreQueries() []string {
 		return x.PreQueries
 	}
 	return nil
+}
+
+func (x *ReserveExecuteRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
+	}
+	return false
 }
 
 // ReserveExecuteResponse is the returned value from ReserveExecute
@@ -4518,8 +4585,11 @@ type ReserveStreamExecuteRequest struct {
 	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	TransactionId     int64                  `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 	PreQueries        []string               `protobuf:"bytes,7,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. See ExecuteRequest.raw_result_charset.
+	RawResultCharset bool `protobuf:"varint,8,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ReserveStreamExecuteRequest) Reset() {
@@ -4599,6 +4669,13 @@ func (x *ReserveStreamExecuteRequest) GetPreQueries() []string {
 		return x.PreQueries
 	}
 	return nil
+}
+
+func (x *ReserveStreamExecuteRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
+	}
+	return false
 }
 
 // ReserveStreamExecuteResponse is the returned value from ReserveStreamExecute
@@ -4681,8 +4758,11 @@ type ReserveBeginExecuteRequest struct {
 	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	PreQueries        []string               `protobuf:"bytes,6,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
 	PostBeginQueries  []string               `protobuf:"bytes,7,rep,name=post_begin_queries,json=postBeginQueries,proto3" json:"post_begin_queries,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. See ExecuteRequest.raw_result_charset.
+	RawResultCharset bool `protobuf:"varint,8,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ReserveBeginExecuteRequest) Reset() {
@@ -4762,6 +4842,13 @@ func (x *ReserveBeginExecuteRequest) GetPostBeginQueries() []string {
 		return x.PostBeginQueries
 	}
 	return nil
+}
+
+func (x *ReserveBeginExecuteRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
+	}
+	return false
 }
 
 // ReserveBeginExecuteResponse is the returned value from ReserveBeginExecute
@@ -4865,8 +4952,11 @@ type ReserveBeginStreamExecuteRequest struct {
 	Options           *ExecuteOptions        `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	PreQueries        []string               `protobuf:"bytes,6,rep,name=pre_queries,json=preQueries,proto3" json:"pre_queries,omitempty"`
 	PostBeginQueries  []string               `protobuf:"bytes,7,rep,name=post_begin_queries,json=postBeginQueries,proto3" json:"post_begin_queries,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// raw_result_charset tells the tablet that the caller converts the text of
+	// the result itself. See ExecuteRequest.raw_result_charset.
+	RawResultCharset bool `protobuf:"varint,8,opt,name=raw_result_charset,json=rawResultCharset,proto3" json:"raw_result_charset,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ReserveBeginStreamExecuteRequest) Reset() {
@@ -4946,6 +5036,13 @@ func (x *ReserveBeginStreamExecuteRequest) GetPostBeginQueries() []string {
 		return x.PostBeginQueries
 	}
 	return nil
+}
+
+func (x *ReserveBeginStreamExecuteRequest) GetRawResultCharset() bool {
+	if x != nil {
+		return x.RawResultCharset
+	}
+	return false
 }
 
 // ReserveBeginStreamExecuteResponse is the returned value from ReserveBeginStreamExecute
@@ -5993,7 +6090,7 @@ const file_query_proto_rawDesc = "" +
 	"\bCategory\x12\t\n" +
 	"\x05Error\x10\x00\x12\a\n" +
 	"\x03DML\x10\x01\x12\a\n" +
-	"\x03DDL\x10\x02\"\x9f\x04\n" +
+	"\x03DDL\x10\x02\"\xcd\x04\n" +
 	"\x0eExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6006,12 +6103,13 @@ const file_query_proto_rawDesc = "" +
 	"\x18reserved_conn_keep_alive\x18\b \x01(\bR\x15reservedConnKeepAlive\x12>\n" +
 	"\x1creserved_conn_keep_alive_ids\x18\t \x03(\x03R\x18reservedConnKeepAliveIds\x12C\n" +
 	"\x1ereserved_conn_activity_refresh\x18\n" +
-	" \x01(\bR\x1breservedConnActivityRefresh\"=\n" +
+	" \x01(\bR\x1breservedConnActivityRefresh\x12,\n" +
+	"\x12raw_result_charset\x18\v \x01(\bR\x10rawResultCharset\"=\n" +
 	"\x0fExecuteResponse\x12*\n" +
 	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"d\n" +
 	"\x0fResultWithError\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12*\n" +
-	"\x06result\x18\x02 \x01(\v2\x12.query.QueryResultR\x06result\"\xe7\x02\n" +
+	"\x06result\x18\x02 \x01(\v2\x12.query.QueryResultR\x06result\"\x95\x03\n" +
 	"\x14StreamExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6020,7 +6118,8 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
 	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\"C\n" +
+	"reservedId\x12,\n" +
+	"\x12raw_result_charset\x18\b \x01(\bR\x10rawResultCharset\"C\n" +
 	"\x15StreamExecuteResponse\x12*\n" +
 	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"\xee\x01\n" +
 	"\fBeginRequest\x12?\n" +
@@ -6110,7 +6209,7 @@ const file_query_proto_rawDesc = "" +
 	"\vabandon_age\x18\x04 \x01(\x03R\n" +
 	"abandonAge\"`\n" +
 	"\x1eUnresolvedTransactionsResponse\x12>\n" +
-	"\ftransactions\x18\x01 \x03(\v2\x1a.query.TransactionMetadataR\ftransactions\"\xe0\x02\n" +
+	"\ftransactions\x18\x01 \x03(\v2\x1a.query.TransactionMetadataR\ftransactions\"\x8e\x03\n" +
 	"\x13BeginExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6120,13 +6219,14 @@ const file_query_proto_rawDesc = "" +
 	"\vreserved_id\x18\x06 \x01(\x03R\n" +
 	"reservedId\x12\x1f\n" +
 	"\vpre_queries\x18\a \x03(\tR\n" +
-	"preQueries\"\xfe\x01\n" +
+	"preQueries\x12,\n" +
+	"\x12raw_result_charset\x18\b \x01(\bR\x10rawResultCharset\"\xfe\x01\n" +
 	"\x14BeginExecuteResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12*\n" +
 	"\x06result\x18\x02 \x01(\v2\x12.query.QueryResultR\x06result\x12%\n" +
 	"\x0etransaction_id\x18\x03 \x01(\x03R\rtransactionId\x128\n" +
 	"\ftablet_alias\x18\x04 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
-	"\x15session_state_changes\x18\x05 \x01(\tR\x13sessionStateChanges\"\xe6\x02\n" +
+	"\x15session_state_changes\x18\x05 \x01(\tR\x13sessionStateChanges\"\x94\x03\n" +
 	"\x19BeginStreamExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6136,18 +6236,20 @@ const file_query_proto_rawDesc = "" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12\x1f\n" +
 	"\vreserved_id\x18\a \x01(\x03R\n" +
-	"reservedId\"\x84\x02\n" +
+	"reservedId\x12,\n" +
+	"\x12raw_result_charset\x18\b \x01(\bR\x10rawResultCharset\"\x84\x02\n" +
 	"\x1aBeginStreamExecuteResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12*\n" +
 	"\x06result\x18\x02 \x01(\v2\x12.query.QueryResultR\x06result\x12%\n" +
 	"\x0etransaction_id\x18\x03 \x01(\x03R\rtransactionId\x128\n" +
 	"\ftablet_alias\x18\x04 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
-	"\x15session_state_changes\x18\x05 \x01(\tR\x13sessionStateChanges\"\xd9\x01\n" +
+	"\x15session_state_changes\x18\x05 \x01(\tR\x13sessionStateChanges\"\x87\x02\n" +
 	"\x14MessageStreamRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
 	"\x06target\x18\x03 \x01(\v2\r.query.TargetR\x06target\x12\x12\n" +
-	"\x04name\x18\x04 \x01(\tR\x04name\"C\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12,\n" +
+	"\x12raw_result_charset\x18\x05 \x01(\bR\x10rawResultCharset\"C\n" +
 	"\x15MessageStreamResponse\x12*\n" +
 	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"\xf6\x01\n" +
 	"\x11MessageAckRequest\x12?\n" +
@@ -6157,7 +6259,7 @@ const file_query_proto_rawDesc = "" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1e\n" +
 	"\x03ids\x18\x05 \x03(\v2\f.query.ValueR\x03ids\"@\n" +
 	"\x12MessageAckResponse\x12*\n" +
-	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"\xe8\x02\n" +
+	"\x06result\x18\x01 \x01(\v2\x12.query.QueryResultR\x06result\"\x96\x03\n" +
 	"\x15ReserveExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6166,13 +6268,14 @@ const file_query_proto_rawDesc = "" +
 	"\x0etransaction_id\x18\x05 \x01(\x03R\rtransactionId\x12/\n" +
 	"\aoptions\x18\x06 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
 	"\vpre_queries\x18\a \x03(\tR\n" +
-	"preQueries\"\xc6\x01\n" +
+	"preQueries\x12,\n" +
+	"\x12raw_result_charset\x18\b \x01(\bR\x10rawResultCharset\"\xc6\x01\n" +
 	"\x16ReserveExecuteResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12*\n" +
 	"\x06result\x18\x02 \x01(\v2\x12.query.QueryResultR\x06result\x12\x1f\n" +
 	"\vreserved_id\x18\x03 \x01(\x03R\n" +
 	"reservedId\x128\n" +
-	"\ftablet_alias\x18\x04 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\xee\x02\n" +
+	"\ftablet_alias\x18\x04 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\x9c\x03\n" +
 	"\x1bReserveStreamExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6181,13 +6284,14 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12%\n" +
 	"\x0etransaction_id\x18\x06 \x01(\x03R\rtransactionId\x12\x1f\n" +
 	"\vpre_queries\x18\a \x03(\tR\n" +
-	"preQueries\"\xcc\x01\n" +
+	"preQueries\x12,\n" +
+	"\x12raw_result_charset\x18\b \x01(\bR\x10rawResultCharset\"\xcc\x01\n" +
 	"\x1cReserveStreamExecuteResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12*\n" +
 	"\x06result\x18\x02 \x01(\v2\x12.query.QueryResultR\x06result\x12\x1f\n" +
 	"\vreserved_id\x18\x03 \x01(\x03R\n" +
 	"reservedId\x128\n" +
-	"\ftablet_alias\x18\x04 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\xf4\x02\n" +
+	"\ftablet_alias\x18\x04 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\"\xa2\x03\n" +
 	"\x1aReserveBeginExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6196,7 +6300,8 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12,\n" +
-	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\xa6\x02\n" +
+	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\x12,\n" +
+	"\x12raw_result_charset\x18\b \x01(\bR\x10rawResultCharset\"\xa6\x02\n" +
 	"\x1bReserveBeginExecuteResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12*\n" +
 	"\x06result\x18\x02 \x01(\v2\x12.query.QueryResultR\x06result\x12%\n" +
@@ -6204,7 +6309,7 @@ const file_query_proto_rawDesc = "" +
 	"\vreserved_id\x18\x04 \x01(\x03R\n" +
 	"reservedId\x128\n" +
 	"\ftablet_alias\x18\x05 \x01(\v2\x15.topodata.TabletAliasR\vtabletAlias\x122\n" +
-	"\x15session_state_changes\x18\x06 \x01(\tR\x13sessionStateChanges\"\xfa\x02\n" +
+	"\x15session_state_changes\x18\x06 \x01(\tR\x13sessionStateChanges\"\xa8\x03\n" +
 	" ReserveBeginStreamExecuteRequest\x12?\n" +
 	"\x13effective_caller_id\x18\x01 \x01(\v2\x0f.vtrpc.CallerIDR\x11effectiveCallerId\x12E\n" +
 	"\x13immediate_caller_id\x18\x02 \x01(\v2\x15.query.VTGateCallerIDR\x11immediateCallerId\x12%\n" +
@@ -6213,7 +6318,8 @@ const file_query_proto_rawDesc = "" +
 	"\aoptions\x18\x05 \x01(\v2\x15.query.ExecuteOptionsR\aoptions\x12\x1f\n" +
 	"\vpre_queries\x18\x06 \x03(\tR\n" +
 	"preQueries\x12,\n" +
-	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\"\xac\x02\n" +
+	"\x12post_begin_queries\x18\a \x03(\tR\x10postBeginQueries\x12,\n" +
+	"\x12raw_result_charset\x18\b \x01(\bR\x10rawResultCharset\"\xac\x02\n" +
 	"!ReserveBeginStreamExecuteResponse\x12%\n" +
 	"\x05error\x18\x01 \x01(\v2\x0f.vtrpc.RPCErrorR\x05error\x12*\n" +
 	"\x06result\x18\x02 \x01(\v2\x12.query.QueryResultR\x06result\x12%\n" +

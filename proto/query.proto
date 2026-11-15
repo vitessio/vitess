@@ -545,6 +545,17 @@ message ExecuteRequest {
   // this field runs the query without the special lock purpose, restoring the
   // (benign) pre-field race.
   bool reserved_conn_activity_refresh = 10;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. A tablet that reads from MySQL with
+  // character_set_results = NULL then returns every text column in the
+  // character set of the column, with the collation of the column in the
+  // field, where it otherwise converts the text to its connection character
+  // set as MySQL does. The fields of the result tell the caller which of the
+  // two it got, so a tablet that predates this field needs no other handling.
+  // Like reserved_conn_keep_alive, this is a request-level field that only
+  // vtgate itself populates, never relayed from client sessions.
+  bool raw_result_charset = 11;
 }
 
 // ExecuteResponse is the returned value from Execute
@@ -572,6 +583,10 @@ message StreamExecuteRequest {
   ExecuteOptions options = 5;
   int64 transaction_id = 6;
   int64 reserved_id = 7;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. See ExecuteRequest.raw_result_charset.
+  bool raw_result_charset = 8;
 }
 
 // StreamExecuteResponse is the returned value from StreamExecute
@@ -747,6 +762,10 @@ message BeginExecuteRequest {
   ExecuteOptions options = 5;
   int64 reserved_id = 6;
   repeated string pre_queries = 7;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. See ExecuteRequest.raw_result_charset.
+  bool raw_result_charset = 8;
 }
 
 // BeginExecuteResponse is the returned value from BeginExecute
@@ -775,6 +794,10 @@ message BeginStreamExecuteRequest {
   ExecuteOptions options = 5;
   repeated string pre_queries = 6;
   int64 reserved_id = 7;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. See ExecuteRequest.raw_result_charset.
+  bool raw_result_charset = 8;
 }
 
 // BeginStreamExecuteResponse is the returned value from BeginStreamExecute
@@ -801,6 +824,10 @@ message MessageStreamRequest {
   Target target = 3;
   // name is the message table name.
   string name = 4;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. See ExecuteRequest.raw_result_charset.
+  bool raw_result_charset = 5;
 }
 
 // MessageStreamResponse is a response for MessageStream.
@@ -835,6 +862,10 @@ message ReserveExecuteRequest {
   int64 transaction_id = 5;
   ExecuteOptions options = 6;
   repeated string pre_queries = 7;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. See ExecuteRequest.raw_result_charset.
+  bool raw_result_charset = 8;
 }
 
 // ReserveExecuteResponse is the returned value from ReserveExecute
@@ -856,6 +887,10 @@ message ReserveStreamExecuteRequest {
   ExecuteOptions options = 5;
   int64 transaction_id = 6;
   repeated string pre_queries = 7;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. See ExecuteRequest.raw_result_charset.
+  bool raw_result_charset = 8;
 }
 
 // ReserveStreamExecuteResponse is the returned value from ReserveStreamExecute
@@ -878,6 +913,10 @@ message ReserveBeginExecuteRequest {
   ExecuteOptions options = 5;
   repeated string pre_queries = 6;
   repeated string post_begin_queries = 7;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. See ExecuteRequest.raw_result_charset.
+  bool raw_result_charset = 8;
 }
 
 // ReserveBeginExecuteResponse is the returned value from ReserveBeginExecute
@@ -905,6 +944,10 @@ message ReserveBeginStreamExecuteRequest {
   ExecuteOptions options = 5;
   repeated string pre_queries = 6;
   repeated string post_begin_queries = 7;
+
+  // raw_result_charset tells the tablet that the caller converts the text of
+  // the result itself. See ExecuteRequest.raw_result_charset.
+  bool raw_result_charset = 8;
 }
 
 // ReserveBeginStreamExecuteResponse is the returned value from ReserveBeginStreamExecute

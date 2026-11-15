@@ -94,6 +94,29 @@ func IsReservedConnActivityRefresh(ctx context.Context) bool {
 	return is
 }
 
+// rawResultCharsetKey marks a call whose caller converts the text of the
+// result itself. Travels request-level on the wire
+// (ExecuteRequest.raw_result_charset and the same field of the other requests
+// that return rows) for the same reason as the keepalive: only vtgate itself
+// can populate it.
+type rawResultCharsetKey struct{}
+
+// ContextWithRawResultCharset marks ctx as a call whose caller converts the
+// text of the result itself. A tablet that reads from MySQL with
+// character_set_results = NULL returns such a caller the text of each column
+// in the character set of the column, and converts it to its connection
+// character set for every other caller.
+func ContextWithRawResultCharset(ctx context.Context) context.Context {
+	return context.WithValue(ctx, rawResultCharsetKey{}, true)
+}
+
+// IsRawResultCharset reports whether the caller of ctx converts the text of
+// the result itself.
+func IsRawResultCharset(ctx context.Context) bool {
+	is, _ := ctx.Value(rawResultCharsetKey{}).(bool)
+	return is
+}
+
 // Session represents the current session.
 type Session interface {
 	// GetSessionUUID returns the session's UUID.
