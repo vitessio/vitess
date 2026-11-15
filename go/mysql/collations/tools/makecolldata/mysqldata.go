@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -287,7 +288,22 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 	}
 	if meta.Charset != "latin1" {
 		if meta.TabToUni != nil {
-			tableToUnicode = g.Tables.printSlice("tounicode", meta.Name, codegen.Array16(meta.TabToUni))
+			toUni := meta.TabToUni
+			if meta.Name == "latin2_czech_cs" {
+				// The table of latin2_czech_cs has no character at 7F,
+				// but MySQL copies the bytes below 80 when it converts
+				// to an ASCII-compatible character set. Measured on
+				// MySQL 8.0.46 and 8.4.13: CONVERT((CONVERT(0x7F USING
+				// latin2) COLLATE latin2_czech_cs) USING utf8mb4) is 7F,
+				// and so is that column in a result with
+				// character_set_results=utf8mb4. Vitess converts results
+				// to utf8mb4, so 7F decodes to U+007F here. MySQL gives
+				// 003F for utf16, and U+007F stays without a byte in
+				// latin2_czech_cs: an INSERT of it stores "?".
+				toUni = slices.Clone(toUni)
+				toUni[0x7F] = 0x7F
+			}
+			tableToUnicode = g.Tables.printSlice("tounicode", meta.Name, codegen.Array16(toUni))
 		}
 		if meta.TabFromUni != nil {
 			tableFromUnicode = g.Tables.printUnicodeMappings("fromunicode", meta.Name, meta.TabFromUni)

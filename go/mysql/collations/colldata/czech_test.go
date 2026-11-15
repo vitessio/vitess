@@ -118,3 +118,30 @@ func TestCzechCollations(t *testing.T) {
 		})
 	}
 }
+
+// TestLatin2CzechConversion checks the conversion of latin2_czech_cs to and
+// from utf8mb4 against MySQL 8.4.13 and 8.0.46. Its table has no character
+// at 7F and 80..9F, but MySQL copies 7F to utf8mb4 as the ASCII byte it is:
+// a latin2_czech_cs column with 41 7F 80 C1 is 41 7F 3F C3 81 in a result
+// with character_set_results=utf8mb4. The same bytes in latin2_general_ci are
+// 41 7F C2 80 C3 81.
+func TestLatin2CzechConversion(t *testing.T) {
+	czech := testcollation(t, "latin2_czech_cs").Charset()
+	general := testcollation(t, "latin2_general_ci").Charset()
+
+	got, err := charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x7F, 0x80, 0xC1}, czech)
+	assert.Error(t, err)
+	assert.Equal(t, []byte{0x41, 0x7F, 0x3F, 0xC3, 0x81}, got)
+
+	got, err = charset.Convert(nil, charset.Charset_utf8mb4{}, []byte{0x41, 0x7F, 0x80, 0xC1}, general)
+	require.NoError(t, err)
+	assert.Equal(t, []byte{0x41, 0x7F, 0xC2, 0x80, 0xC3, 0x81}, got)
+
+	// An INSERT of U+007F or U+0080 into a latin2_czech_cs column stores
+	// "?", and one of U+00C1 stores C1.
+	var buf [4]byte
+	assert.Equal(t, -1, czech.EncodeRune(buf[:], 0x7F))
+	assert.Equal(t, -1, czech.EncodeRune(buf[:], 0x80))
+	require.Equal(t, 1, czech.EncodeRune(buf[:], 0xC1))
+	assert.Equal(t, byte(0xC1), buf[0])
+}
