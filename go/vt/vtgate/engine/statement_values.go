@@ -74,3 +74,30 @@ func (s statementValues) row(row sqltypes.Row) sqltypes.Row {
 	}
 	return s.conv.Rows([]sqltypes.Row{row})[0]
 }
+
+// rows returns the rows in the connection character set. A row without a
+// value that changes is the row it was.
+func (s statementValues) rows(rows []sqltypes.Row) []sqltypes.Row {
+	if s.conv == nil {
+		return rows
+	}
+	return s.conv.Rows(rows)
+}
+
+// streamStatementValues is statementValues for the chunks of one stream: its
+// fields come with the first chunk, and convert the rows of every chunk. It is
+// not safe for concurrent use.
+type streamStatementValues struct {
+	values     statementValues
+	haveFields bool
+}
+
+// of returns the conversion of the values of the rows of a chunk of the
+// stream, by the fields of the first chunk that has fields.
+func (s *streamStatementValues) of(vcursor VCursor, chunk *sqltypes.Result) statementValues {
+	if !s.haveFields && len(chunk.Fields) != 0 {
+		s.haveFields = true
+		s.values = newStatementValues(vcursor, chunk.Fields)
+	}
+	return s.values
+}
