@@ -23,6 +23,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"vitess.io/vitess/go/mysql/collations/resultcharset"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -77,7 +78,7 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		return nil
 	}
 	for _, r := range res {
-		if err = c.coerceAndVisitResultsForOneSource([]*sqltypes.Result{r}, fields, fieldTypes, callback, evalengine.ParseSQLMode(vcursor.SQLMode())); err != nil {
+		if err = c.coerceAndVisitResultsForOneSource(vcursor, []*sqltypes.Result{r}, fields, fieldTypes, callback, evalengine.ParseSQLMode(vcursor.SQLMode())); err != nil {
 			return nil, err
 		}
 	}
@@ -86,6 +87,26 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		Fields: fields,
 		Rows:   rows,
 	}, nil
+}
+
+// sourceText returns the conversion of the rows of a source of the UNION,
+// which have the fields from, to the character sets of the fields of the
+// UNION, and nil when there is nothing to convert.
+//
+// With --convert-result-charset the text of each source is in the character
+// set of its column, and the UNION has one collation for each of its columns:
+// a latin1_swedish_ci column with 'Müller' in a UNION with a utf8mb4 column is
+// 4D FC 6C 6C 65 72 in its source and 4D C3 BC 6C 6C 65 72 in the UNION.
+// Without the flag every source is in the connection character set.
+func (c *Concatenate) sourceText(vcursor VCursor, from, to []*querypb.Field) *resultcharset.Conversion {
+	if !vcursor.ConvertResultCharset() || len(from) == 0 {
+		return nil
+	}
+	conv := resultcharset.ToFields(from, to)
+	if !conv.ConvertsValues() {
+		return nil
+	}
+	return conv
 }
 
 func (c *Concatenate) coerceValuesTo(row sqltypes.Row, fieldTypes []evalengine.Type, sqlmode evalengine.SQLMode) error {
@@ -215,14 +236,15 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 
 	// Mutexes for dealing with concurrent access to shared state.
 	var (
-		muCallback    sync.Mutex                                 // Protects callback
-		muFields      sync.Mutex                                 // Protects field state
-		condFields    = sync.NewCond(&muFields)                  // Condition var for field arrival
-		wg            errgroup.Group                             // Wait group for all streaming goroutines
-		rest          = make([]*sqltypes.Result, len(c.Sources)) // Collects first result from each source to derive fields
-		fieldTypes    []evalengine.Type                          // Cached final field types
-		resultFields  []*querypb.Field                           // Final fields that need to be set for the first result.
-		needsCoercion = make([]bool, len(c.Sources))             // Tracks if coercion is needed for each individual source
+		muCallback    sync.Mutex                                          // Protects callback
+		muFields      sync.Mutex                                          // Protects field state
+		condFields    = sync.NewCond(&muFields)                           // Condition var for field arrival
+		wg            errgroup.Group                                      // Wait group for all streaming goroutines
+		rest          = make([]*sqltypes.Result, len(c.Sources))          // Collects first result from each source to derive fields
+		fieldTypes    []evalengine.Type                                   // Cached final field types
+		resultFields  []*querypb.Field                                    // Final fields that need to be set for the first result.
+		needsCoercion = make([]bool, len(c.Sources))                      // Tracks if coercion is needed for each individual source
+		sourceText    = make([]*resultcharset.Conversion, len(c.Sources)) // The conversion of the text of each source, see Concatenate.sourceText
 	)
 
 	// Process each result chunk, considering type coercion.
@@ -230,6 +252,9 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 		muCallback.Lock()
 		defer muCallback.Unlock()
 
+		if text := sourceText[srcIdx]; text != nil {
+			res.Rows = text.Rows(res.Rows)
+		}
 		// Apply type coercion if needed.
 		if needsCoercion[srcIdx] {
 			for _, row := range res.Rows {
@@ -276,6 +301,7 @@ func (c *Concatenate) parallelStreamExec(inCtx context.Context, vcursor VCursor,
 								}
 							}
 							needsCoercion[srcIdx] = srcNeedsCoercion
+							sourceText[srcIdx] = c.sourceText(vcursor, result.Fields, resultFields)
 						}
 
 						// We only need to send the fields in the first result.
@@ -355,7 +381,7 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 		return err
 	}
 	for _, res := range results {
-		if err = c.coerceAndVisitResultsForOneSource(res, fields, fieldTypes, callback, sqlmode); err != nil {
+		if err = c.coerceAndVisitResultsForOneSource(vcursor, res, fields, fieldTypes, callback, sqlmode); err != nil {
 			return err
 		}
 	}
@@ -364,6 +390,7 @@ func (c *Concatenate) sequentialStreamExec(ctx context.Context, vcursor VCursor,
 }
 
 func (c *Concatenate) coerceAndVisitResultsForOneSource(
+	vcursor VCursor,
 	res []*sqltypes.Result,
 	fields []*querypb.Field,
 	fieldTypes []evalengine.Type,
@@ -380,6 +407,7 @@ func (c *Concatenate) coerceAndVisitResultsForOneSource(
 			break
 		}
 	}
+	text := c.sourceText(vcursor, res[0].Fields, fields)
 	if res[0].Fields != nil {
 		res[0].Fields = fields
 	}
@@ -388,6 +416,9 @@ func (c *Concatenate) coerceAndVisitResultsForOneSource(
 		if len(r.Rows) > 0 &&
 			len(fieldTypes) != len(r.Rows[0]) {
 			return errWrongNumberOfColumnsInSelect
+		}
+		if text != nil {
+			r.Rows = text.Rows(r.Rows)
 		}
 
 		if needsCoercion {

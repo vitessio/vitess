@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/test/utils"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -241,5 +242,58 @@ func TestConcatenateTypes(t *testing.T) {
 
 			require.Equal(t, test.expected, res.Fields)
 		})
+	}
+}
+
+// TestConcatenateCharsets checks a UNION of two columns that are not in the
+// same character set, with the rows of tablets with
+// --queryserver-config-raw-result-charset: a latin1_swedish_ci column with
+// 'Müller' as 4D FC 6C 6C 65 72 and a utf8mb4 column with 'é€'.
+//
+// With --convert-result-charset the UNION has the collation of the utf8mb4
+// column and the latin1 text is converted to it, 4D C3 BC 6C 6C 65 72, which
+// is what MySQL 8.0.46 and 8.4.13 send for this UNION with
+// character_set_results = NULL. Without the flag the rows are taken to be in
+// the connection character set and stay as they are.
+func TestConcatenateCharsets(t *testing.T) {
+	sources := func() []Primitive {
+		return []Primitive{
+			&fakePrimitive{results: []*sqltypes.Result{{
+				Fields: []*querypb.Field{{Name: "l", Type: sqltypes.VarChar, Charset: 8, ColumnLength: 10}},
+				Rows:   []sqltypes.Row{{sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller"))}},
+			}}},
+			&fakePrimitive{results: []*sqltypes.Result{{
+				Fields: []*querypb.Field{{Name: "u4", Type: sqltypes.VarChar, Charset: 255, ColumnLength: 40}},
+				Rows:   []sqltypes.Row{{sqltypes.NewVarChar("é€")}},
+			}}},
+		}
+	}
+	for _, convert := range []bool{true, false} {
+		for _, mode := range []string{"execute", "parallel stream", "sequential stream"} {
+			t.Run(fmt.Sprintf("convert %v, %s", convert, mode), func(t *testing.T) {
+				concatenate := NewConcatenate(sources(), nil)
+				vcursor := &noopVCursor{convertResultCharset: convert, inTx: mode == "sequential stream"}
+				var qr *sqltypes.Result
+				var err error
+				if mode == "execute" {
+					qr, err = concatenate.TryExecute(t.Context(), vcursor, nil, true)
+				} else {
+					qr, err = wrapStreamExecute(concatenate, vcursor, nil, true)
+				}
+				require.NoError(t, err)
+				require.Len(t, qr.Fields, 1)
+				assert.Equal(t, uint32(255), qr.Fields[0].Charset)
+
+				var got []string
+				for _, row := range qr.Rows {
+					got = append(got, row[0].ToString())
+				}
+				want := []string{"M\xFCller", "é€"}
+				if convert {
+					want = []string{"Müller", "é€"}
+				}
+				assert.ElementsMatch(t, want, got)
+			})
+		}
 	}
 }

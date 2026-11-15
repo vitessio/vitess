@@ -359,6 +359,33 @@ func isASCIIIdentical(cs charset.Charset) bool {
 // asciiIdentical caches isASCIIIdentical by the name of the character set.
 var asciiIdentical sync.Map
 
+// ToFields returns the conversion of the values of rows that have the fields
+// from to the character sets of the fields to, for rows of two results that
+// become one: the rows of the sides of a UNION, or of two shards whose tablets
+// do not send the same character set. The text of a column is converted from
+// the character set of its collation in from to the one of its collation in
+// to; a latin1_swedish_ci column with 'Müller' that joins a utf8mb4 column
+// goes from 4D FC 6C 6C 65 72 to 4D C3 BC 6C 6C 65 72. A column that is binary
+// in either, or that is in the character set it needs already, stays.
+//
+// The conversion has no fields of its own: the caller has the fields to.
+func ToFields(from, to []*querypb.Field) *Conversion {
+	c := &Conversion{}
+	for i := range min(len(from), len(to)) {
+		source := lookupCharset(collations.ID(from[i].Charset))
+		target := lookupCharset(collations.ID(to[i].Charset))
+		if source == nil || target == nil || target.IsSuperset(source) {
+			continue
+		}
+		c.setColumn(len(from), i, source, target)
+		col := &c.columns[i]
+		col.ascii = isASCIIIdentical(source) && isASCIIIdentical(target)
+		_, fromUCS2 := source.(charset.Charset_ucs2)
+		col.ucs2 = fromUCS2 && target.IsSuperset(systemCharset)
+	}
+	return c
+}
+
 // ToClient returns the conversion of a result that a tablet returned to the
 // character_set_results of a client.
 //
