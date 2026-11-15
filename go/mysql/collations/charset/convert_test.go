@@ -469,3 +469,18 @@ func TestConvertFromBinary(t *testing.T) {
 		}
 	}
 }
+
+// TestConvertFailureDoesNotQuoteInput checks that a conversion that replaces
+// a character with "?" does not write its error message unless it is asked
+// for it. The message quotes the whole input, and the conversion of a result
+// ignores it: converting "中" to latin1 takes two allocations, the converted
+// text and the error, where writing the message took six.
+func TestConvertFailureDoesNotQuoteInput(t *testing.T) {
+	src := []byte("中")
+	var err error
+	allocs := testing.AllocsPerRun(100, func() {
+		_, err = Convert(nil, Charset_latin1{}, src, Charset_utf8mb4{})
+	})
+	require.ErrorContains(t, err, `Cannot convert string "中" from utf8mb4 to latin1`)
+	assert.LessOrEqual(t, allocs, 2.0)
+}

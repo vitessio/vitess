@@ -22,8 +22,22 @@ import (
 	"vitess.io/vitess/go/hack"
 )
 
+// conversionError is the error of a conversion that replaced a character with
+// "?". It writes its message, which quotes the whole input, only when it is
+// asked for it: the conversion of a result ignores the error, and a result
+// with one such character in each of its values would otherwise pay for a
+// quoted copy of every value.
+type conversionError struct {
+	from, to Charset
+	input    []byte
+}
+
+func (e *conversionError) Error() string {
+	return fmt.Sprintf("Cannot convert string %q from %s to %s", e.input, e.from.Name(), e.to.Name())
+}
+
 func failedConversionError(from, to Charset, input []byte) error {
-	return fmt.Errorf("Cannot convert string %q from %s to %s", input, from.Name(), to.Name())
+	return &conversionError{from: from, to: to, input: input}
 }
 
 func convertFastFromUTF8(dst []byte, dstCharset Charset, src []byte) ([]byte, error) {
