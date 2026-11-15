@@ -25,9 +25,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -458,5 +460,109 @@ func TestInsertSelectStatementValues(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// ownedVindexResult is the result of the query of the old values of a row of
+// t1 of buildTestVSchema for its owned vindexes, with c3, the column of the
+// lookup vindex onecol, a latin1 VARCHAR(10) with 'Müller', and the columns
+// that say whether twocol and onecol change.
+func ownedVindexResult() *sqltypes.Result {
+	return &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int64, Charset: 63},
+			{Name: "c1", Type: sqltypes.Int64, Charset: 63},
+			{Name: "c2", Type: sqltypes.Int64, Charset: 63},
+			{Name: "c3", Type: sqltypes.VarChar, Charset: 31, ColumnLength: 10},
+			{Name: "twocol", Type: sqltypes.Int64, Charset: 63},
+			{Name: "onecol", Type: sqltypes.Int64, Charset: 63},
+		},
+		Rows: []sqltypes.Row{{
+			sqltypes.NewInt64(1), sqltypes.NewInt64(4), sqltypes.NewInt64(5),
+			sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller")),
+			sqltypes.NewInt64(0), sqltypes.NewInt64(0),
+		}},
+	}
+}
+
+// TestDeleteStatementValues checks the values of a row that a DELETE gives to
+// an owned lookup vindex, which deletes them from its table. With
+// --convert-result-charset 'Müller' of a latin1 column is utf8mb4 in the
+// statement of the vindex.
+func TestDeleteStatementValues(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	for _, convert := range []bool{true, false} {
+		t.Run(fmt.Sprintf("convert %v", convert), func(t *testing.T) {
+			del := &Delete{DML: &DML{
+				RoutingParameters: &RoutingParameters{
+					Opcode:   Equal,
+					Keyspace: ks.Keyspace,
+					Vindex:   ks.Vindexes["hash"],
+					Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
+				},
+				Query:            "dummy_delete",
+				TableNames:       []string{ks.Tables["t1"].Name.String()},
+				Vindexes:         ks.Tables["t1"].Owned,
+				OwnedVindexQuery: "dummy_subquery",
+				KsidVindex:       ks.Vindexes["hash"],
+				KsidLength:       1,
+			}}
+			vc := newTestVCursor("-20", "20-")
+			vc.convertResultCharset = convert
+			vc.results = []*sqltypes.Result{ownedVindexResult()}
+
+			_, err := del.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			assert.Contains(t, vc.log, fmt.Sprintf(`Execute delete from lkp1 where from = :from and toc = :toc from: %v toc: %v true`,
+				sqltypes.StringBindVariable(wantStatementValue(convert)), &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}))
+		})
+	}
+}
+
+// TestUpdateStatementValues checks the old values of a row that an UPDATE
+// gives to an owned lookup vindex that changes, which deletes them from its
+// table and inserts the new ones. With --convert-result-charset 'Müller' of a
+// latin1 column is utf8mb4 in the statement of the vindex. The new value, 'é',
+// is a literal and utf8mb4 either way.
+func TestUpdateStatementValues(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	for _, convert := range []bool{true, false} {
+		t.Run(fmt.Sprintf("convert %v", convert), func(t *testing.T) {
+			upd := &Update{
+				DML: &DML{
+					RoutingParameters: &RoutingParameters{
+						Opcode:   Equal,
+						Keyspace: ks.Keyspace,
+						Vindex:   ks.Vindexes["hash"],
+						Values:   []evalengine.Expr{evalengine.NewLiteralInt(1)},
+					},
+					Query:            "dummy_update",
+					TableNames:       []string{ks.Tables["t1"].Name.String()},
+					Vindexes:         ks.Tables["t1"].Owned,
+					OwnedVindexQuery: "dummy_subquery",
+					KsidVindex:       ks.Vindexes["hash"],
+					KsidLength:       1,
+				},
+				ChangedVindexValues: map[string]*VindexValues{
+					"onecol": {
+						EvalExprMap: map[string]evalengine.Expr{
+							"c3": evalengine.NewLiteralString([]byte("é"), collations.SystemCollation),
+						},
+						Offset: 5,
+					},
+				},
+			}
+			vc := newTestVCursor("-20", "20-")
+			vc.convertResultCharset = convert
+			vc.results = []*sqltypes.Result{ownedVindexResult()}
+
+			_, err := upd.TryExecute(t.Context(), vc, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			ksid := &querypb.BindVariable{Type: querypb.Type_VARBINARY, Value: []byte("\x16k@\xb4J\xbaK\xd6")}
+			assert.Contains(t, vc.log, fmt.Sprintf(`Execute delete from lkp1 where from = :from and toc = :toc from: %v toc: %v true`,
+				sqltypes.StringBindVariable(wantStatementValue(convert)), ksid))
+			assert.Contains(t, vc.log, fmt.Sprintf(`Execute insert into lkp1(from, toc) values(:from_0, :toc_0) from_0: %v toc_0: %v true`,
+				sqltypes.StringBindVariable("é"), ksid))
+		})
 	}
 }

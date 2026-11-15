@@ -113,7 +113,10 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 	}
 	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 
-	for _, row := range subQueryResult.Rows {
+	// The old values of the rows go to the vindexes, and a lookup vindex puts
+	// them into its statements, so they are converted by the fields of the
+	// result. The vindex query always returns its fields.
+	for _, row := range newStatementValues(vcursor, subQueryResult.Fields).rows(subQueryResult.Rows) {
 		ksid, err := resolveKeyspaceID(ctx, vcursor, upd.KsidVindex, row[0:upd.KsidLength])
 		if err != nil {
 			return err

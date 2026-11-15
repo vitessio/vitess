@@ -94,7 +94,10 @@ func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bin
 		return nil
 	}
 
-	for _, row := range subQueryResults.Rows {
+	// The values of the rows go to the vindexes, and a lookup vindex puts them
+	// into its statements, so they are converted by the fields of the result.
+	// The vindex query always returns its fields.
+	for _, row := range newStatementValues(vcursor, subQueryResults.Fields).rows(subQueryResults.Rows) {
 		ksid, err := resolveKeyspaceID(ctx, vcursor, del.KsidVindex, row[0:del.KsidLength])
 		if err != nil {
 			return err
