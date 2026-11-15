@@ -34,6 +34,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	gomysql "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
@@ -426,6 +427,45 @@ func TestPreparedStatement(t *testing.T) {
 			rows, err = stmt.QueryContext(ctx, 1)
 			require.NoError(t, err)
 			scan(t, rows)
+		})
+	}
+}
+
+// TestVStreamStatement checks that the VSTREAM statement returns the text of
+// a row in the character_set_results of the session, as a SELECT of the row
+// does. The tablet reads the row for the stream in the character set of each
+// column and says so in the fields: without --convert-result-charset a
+// client gets 4D FC 6C 6C 65 72 for 'Müller' in a latin1 column, whatever it
+// asked for. The stream starts with the rows that the table has.
+func TestVStreamStatement(t *testing.T) {
+	insertRow(t)
+
+	for _, results := range []string{"utf8mb4", "latin1", "gbk", "binary", "NULL"} {
+		t.Run(results, func(t *testing.T) {
+			conn := connect(t, collations.CollationUtf8mb4ID)
+			exec(t, conn, "set character_set_results = "+results)
+			exec(t, conn, "set workload = olap")
+
+			selected, err := conn.ExecuteFetch("select l, g, u4 from rc where id = 1", 10, true)
+			require.NoError(t, err)
+			require.Len(t, selected.Rows, 1)
+
+			// A stream that does not get its row would wait for the next
+			// change of the table.
+			timer := time.AfterFunc(60*time.Second, conn.Close)
+			t.Cleanup(func() { timer.Stop() })
+			streamed, err := conn.ExecuteFetch("vstream * from rc limit 1", 10, true)
+			require.NoError(t, err)
+			require.Len(t, streamed.Rows, 1)
+			// The columns of the stream are op, id, l, g, u4, j, vb and i.
+			require.Len(t, streamed.Fields, 8)
+			assert.Equal(t, "+", streamed.Rows[0][0].ToString())
+
+			for i, name := range []string{"l", "g", "u4"} {
+				assert.Equal(t, selected.Fields[i].Charset, streamed.Fields[i+2].Charset, name)
+				assert.Equal(t, hex.EncodeToString(selected.Rows[0][i].Raw()), hex.EncodeToString(streamed.Rows[0][i+2].Raw()), name)
+			}
+			assert.Equal(t, "00ff", hex.EncodeToString(streamed.Rows[0][6].Raw()))
 		})
 	}
 }
