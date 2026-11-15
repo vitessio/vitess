@@ -49,13 +49,16 @@ func (dml *DMLWithInput) TryExecute(ctx context.Context, vcursor VCursor, bindVa
 	vcursor.Session().SetInDMLExecution(true)
 	defer vcursor.Session().SetInDMLExecution(false)
 
-	inputRes, err := vcursor.ExecutePrimitive(ctx, dml.Input, bindVars, false)
+	// The values of the rows of the input become bind variables of the DMLs,
+	// which takes the fields of the input to convert them.
+	inputRes, err := vcursor.ExecutePrimitive(ctx, dml.Input, bindVars, vcursor.ConvertResultCharset())
 	if err != nil {
 		return nil, err
 	}
 	if inputRes == nil || len(inputRes.Rows) == 0 {
 		return &sqltypes.Result{}, nil
 	}
+	inputRes = &sqltypes.Result{Rows: newStatementValues(vcursor, inputRes.Fields).rows(inputRes.Rows)}
 
 	var res *sqltypes.Result
 	for idx, prim := range dml.DMLs {

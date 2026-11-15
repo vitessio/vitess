@@ -66,7 +66,9 @@ type FkCascade struct {
 func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	// Execute the Selection primitive to find the rows that are going to modified.
 	// This will be used to find the rows that need modification on the children.
-	selectionRes, err := vcursor.ExecutePrimitive(ctx, fkc.Selection, bindVars, wantfields)
+	// The values of the rows of the selection become bind variables of the
+	// children, which takes the fields of the selection to convert them.
+	selectionRes, err := vcursor.ExecutePrimitive(ctx, fkc.Selection, bindVars, wantfields || vcursor.ConvertResultCharset())
 	if err != nil {
 		return nil, err
 	}
@@ -75,6 +77,7 @@ func (fkc *FkCascade) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 	if len(selectionRes.Rows) == 0 {
 		return &sqltypes.Result{}, nil
 	}
+	selectionRes = &sqltypes.Result{Rows: newStatementValues(vcursor, selectionRes.Fields).rows(selectionRes.Rows)}
 
 	for _, child := range fkc.Children {
 		// Having non-empty UpdateExprBvNames is an indication that we have an update query with non-literal expressions in it.
