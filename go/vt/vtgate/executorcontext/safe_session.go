@@ -909,8 +909,8 @@ func (session *SafeSession) GetDDLStrategy() string {
 // SetResultCharset sets the character_set_results of the session: the
 // collation that vtgate converts the text of results to with
 // --convert-result-charset. 0 stands for the default connection collation of
-// vtgate, and null is true for character_set_results = NULL. SET NAMES gbk
-// stores 28, the collation ID of gbk_chinese_ci.
+// vtgate, and null is true for character_set_results = NULL. SET
+// character_set_results = gbk stores 28, the collation ID of gbk_chinese_ci.
 func (session *SafeSession) SetResultCharset(collation collations.ID, null bool) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
