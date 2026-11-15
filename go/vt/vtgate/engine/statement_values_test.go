@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -187,5 +188,41 @@ func TestRecurseCTEStatementValues(t *testing.T) {
 				assert.Equal(t, "\xE9", r.Rows[1][1].ToString())
 			})
 		}
+	}
+}
+
+// TestValuesJoinStatementValues checks the rows of the VALUES that a values
+// join makes of its left rows for its right side. With --convert-result-charset
+// the value of a latin1 column is utf8mb4 in the row of the VALUES, and the
+// row that the join returns keeps it in latin1. The join is asked for no
+// fields, so that it has to ask for the fields of its left side itself.
+func TestValuesJoinStatementValues(t *testing.T) {
+	for _, convert := range []bool{true, false} {
+		t.Run(fmt.Sprintf("convert %v", convert), func(t *testing.T) {
+			leftPrim := &fakePrimitive{results: []*sqltypes.Result{latin1Result()}}
+			rightPrim := &fakePrimitive{results: []*sqltypes.Result{
+				sqltypes.MakeTestResult(sqltypes.MakeTestFields("x|id", "int64|int64"), "4|0"),
+			}}
+			jv := &ValuesJoin{
+				Left:              leftPrim,
+				Right:             rightPrim,
+				Vars:              []int{1},
+				RowConstructorArg: "v",
+				Cols:              []int{-2, 1},
+				ColNames:          []string{"l", "x"},
+			}
+			vcursor := &noopVCursor{convertResultCharset: convert}
+
+			bindVars := map[string]*querypb.BindVariable{}
+			r, err := jv.TryExecute(t.Context(), vcursor, bindVars, false)
+			require.NoError(t, err)
+
+			want := sqltypes.TupleToProto([]sqltypes.Value{sqltypes.NewInt64(0), sqltypes.NewVarChar(wantStatementValue(convert))})
+			require.Len(t, bindVars["v"].Values, 1)
+			assert.True(t, proto.Equal(want, bindVars["v"].Values[0]), "got %v", bindVars["v"].Values[0])
+
+			require.Len(t, r.Rows, 1)
+			assert.Equal(t, "M\xFCller", r.Rows[0][0].ToString())
+		})
 	}
 }
