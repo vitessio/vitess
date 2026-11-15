@@ -342,6 +342,17 @@ func Init(
 	tabletTypesToWait []topodatapb.TabletType,
 	pv plancontext.PlannerVersion,
 ) *VTGate {
+	if convertResultCharset {
+		// The gateway then converts every result of a tablet to the
+		// connection character set, so the text of every row that vtgate
+		// holds is utf8mb4, whatever the collation of its column is. The
+		// evaluation engine has to know: it converts the text of a
+		// latin1 column to latin1 before it compares it. Without the
+		// flag, vtgate takes rows as tablets send them and evaluates
+		// them as it always did.
+		env = env.WithRowsInConnectionCharset()
+	}
+
 	ts, err := serv.GetTopoServer()
 	if err != nil {
 		log.Error("Unable to get Topo server", slog.Any("error", err))

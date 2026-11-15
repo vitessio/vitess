@@ -57,6 +57,13 @@ type (
 	}
 )
 
+// connText reports whether the text of the rows and bind variables of env is
+// in the connection character set, see
+// collations.Environment.WithRowsInConnectionCharset.
+func (env *ExpressionEnv) connText() bool {
+	return env.collationEnv.RowsInConnectionCharset()
+}
+
 func (env *ExpressionEnv) time(utc bool) datetime.DateTime {
 	if utc {
 		return datetime.NewDateTimeFromStd(env.now.UTC())

@@ -37,13 +37,13 @@ func TestValueToEvalTupleMemberError(t *testing.T) {
 	coll := typedCoercionCollation(sqltypes.VarChar, collations.CollationUtf8mb4ID)
 
 	t.Run("well-formed members convert", func(t *testing.T) {
-		e, err := valueToEval(sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewHexNum([]byte("0x41")), sqltypes.NewInt64(3)), coll, nil)
+		e, err := valueToEval(sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.NewHexNum([]byte("0x41")), sqltypes.NewInt64(3)), coll, nil, false)
 		require.NoError(t, err)
 		require.Len(t, e.(*evalTuple).t, 3)
 	})
 
 	t.Run("undecodable scalar member", func(t *testing.T) {
-		e, err := valueToEval(sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.MakeTrusted(sqltypes.HexNum, []byte("zz")), sqltypes.NewInt64(3)), coll, nil)
+		e, err := valueToEval(sqltypes.TestTuple(sqltypes.NewInt64(1), sqltypes.MakeTrusted(sqltypes.HexNum, []byte("zz")), sqltypes.NewInt64(3)), coll, nil, false)
 		require.Error(t, err)
 		assert.Equal(t, vtrpc.Code_INVALID_ARGUMENT, vterrors.Code(err))
 		require.ErrorContains(t, err, "malformed hex literal")
@@ -60,7 +60,7 @@ func TestValueToEvalTupleMemberError(t *testing.T) {
 		raw[idx] = 0x7f
 		corrupt := sqltypes.MakeTrusted(sqltypes.Tuple, raw)
 
-		e, err := valueToEval(sqltypes.TestTuple(sqltypes.NewInt64(1), corrupt), coll, nil)
+		e, err := valueToEval(sqltypes.TestTuple(sqltypes.NewInt64(1), corrupt), coll, nil, false)
 		require.Error(t, err)
 		require.ErrorContains(t, err, "bad tuple encoding")
 		assert.Nil(t, e)
