@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"sync"
 
@@ -61,8 +62,8 @@ func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 	}
 	// When offset is present, we hijack the limit value so we can calculate
 	// the offset in memory from the result of the scatter query with count + offset.
-
-	bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(count + offset))
+	upper := upperLimit(count, offset)
+	bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(upper))
 
 	result, err := vcursor.ExecutePrimitive(ctx, l.Input, bindVars, wantfields)
 	if err != nil {
@@ -70,8 +71,8 @@ func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 	}
 
 	// There are more rows in the response than limit + offset
-	if count+offset <= len(result.Rows) {
-		result.Rows = result.Rows[offset : count+offset]
+	if upper <= len(result.Rows) {
+		result.Rows = result.Rows[offset:upper]
 		return result, nil
 	}
 	// Remove extra rows from response
@@ -99,7 +100,7 @@ func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars 
 
 	// Adjust the upper limit so that the initial fetch includes both the offset and count.
 	// We do this because we want to skip the first `offset` rows locally rather than on the server side.
-	bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(count + offset))
+	bindVars[UpperLimitStr] = sqltypes.Int64BindVariable(int64(upperLimit(count, offset)))
 
 	var mu sync.Mutex
 	err = vcursor.StreamExecutePrimitive(ctx, l.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
@@ -205,6 +206,17 @@ func (l *Limit) getCountAndOffset(ctx context.Context, vcursor VCursor, bindVars
 	return
 }
 
+// upperLimit returns count + offset, the number of rows the input has to
+// return so that the offset can be applied in memory. The sum saturates at
+// math.MaxInt instead of overflowing: no result can hold that many rows, so
+// the saturated value limits the input in the same way.
+func upperLimit(count, offset int) int {
+	if count > math.MaxInt-offset {
+		return math.MaxInt
+	}
+	return count + offset
+}
+
 func getIntFrom(env *evalengine.ExpressionEnv, vcursor VCursor, expr evalengine.Expr) (int, error) {
 	if expr == nil {
 		return 0, nil
@@ -222,11 +234,22 @@ func getIntFrom(env *evalengine.ExpressionEnv, vcursor VCursor, expr evalengine.
 		return 0, sqltypes.ErrIncompatibleTypeCast
 	}
 
+	return limitValue(value)
+}
+
+// limitValue converts an integral LIMIT or OFFSET value to an int. MySQL accepts
+// values up to 18446744073709551615, which is commonly used as LIMIT to return
+// all rows. Values above math.MaxInt saturate at math.MaxInt: no result can hold
+// that many rows, so the saturated value selects the same rows.
+func limitValue(value sqltypes.Value) (int, error) {
 	count, err := strconv.Atoi(value.RawStr())
-	if err != nil || count < 0 {
-		return 0, fmt.Errorf("requested limit is out of range: %v", value.RawStr())
+	if err == nil && count >= 0 {
+		return count, nil
 	}
-	return count, nil
+	if _, err := strconv.ParseUint(value.RawStr(), 10, 64); err == nil {
+		return math.MaxInt, nil
+	}
+	return 0, fmt.Errorf("requested limit is out of range: %v", value.RawStr())
 }
 
 func (l *Limit) description() PrimitiveDescription {
