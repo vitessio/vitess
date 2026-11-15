@@ -287,3 +287,93 @@ func TestUncorrelatedSubqueryStatementValues(t *testing.T) {
 		}
 	}
 }
+
+// TestDMLWithInputStatementValues checks the bind variables that a DML with
+// input makes of the values of the rows of its input for its DMLs: the list
+// of the values of the rows, and the bind variables of the values of one row.
+// With --convert-result-charset 'Müller' of a latin1 column is utf8mb4 in both.
+func TestDMLWithInputStatementValues(t *testing.T) {
+	for _, convert := range []bool{true, false} {
+		want := sqltypes.NewVarChar(wantStatementValue(convert))
+		t.Run(fmt.Sprintf("convert %v", convert), func(t *testing.T) {
+			literal := &fakePrimitive{results: []*sqltypes.Result{{RowsAffected: 1}}}
+			nonLiteral := &fakePrimitive{results: []*sqltypes.Result{{RowsAffected: 1}}}
+			dml := &DMLWithInput{
+				Input:      &fakePrimitive{results: []*sqltypes.Result{latin1Result()}},
+				DMLs:       []Primitive{literal, nonLiteral},
+				OutputCols: [][]int{{1}, {0}},
+				BVList:     []map[string]int{nil, {"bv": 1}},
+			}
+			vcursor := &loggingVCursor{convertResultCharset: convert}
+
+			_, err := dml.TryExecute(t.Context(), vcursor, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			literal.ExpectLog(t, []string{fmt.Sprintf("Execute %v false", deprecatedPrintBindVars(map[string]*querypb.BindVariable{
+				DmlVals: {Type: querypb.Type_TUPLE, Values: []*querypb.Value{sqltypes.ValueToProto(want)}},
+			}))})
+			nonLiteral.ExpectLog(t, []string{fmt.Sprintf("Execute %v false", deprecatedPrintBindVars(map[string]*querypb.BindVariable{
+				DmlVals: {Type: querypb.Type_TUPLE, Values: []*querypb.Value{sqltypes.ValueToProto(sqltypes.NewInt64(1))}},
+				"bv":    sqltypes.ValueBindVariable(want),
+			}))})
+		})
+	}
+}
+
+// TestFkCascadeStatementValues checks the bind variables that a foreign key
+// cascade makes of the values of the rows of its selection for its children:
+// the list of the values of the foreign key, and the new value of an update
+// that is not a literal. With --convert-result-charset 'Müller' and 'é' of
+// latin1 columns are utf8mb4 in them.
+func TestFkCascadeStatementValues(t *testing.T) {
+	selection := func() *sqltypes.Result {
+		return &sqltypes.Result{
+			Fields: []*querypb.Field{
+				{Name: "l", Type: sqltypes.VarChar, Charset: 8, ColumnLength: 10},
+				{Name: "unchanged", Type: sqltypes.Int64, Charset: 63},
+				{Name: "new_l", Type: sqltypes.VarChar, Charset: 8, ColumnLength: 10},
+			},
+			Rows: []sqltypes.Row{{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("M\xFCller")),
+				sqltypes.NewInt64(0),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("\xE9")),
+			}},
+		}
+	}
+	for _, convert := range []bool{true, false} {
+		first, second := sqltypes.NewVarChar("M\xFCller"), sqltypes.NewVarChar("\xE9")
+		if convert {
+			first, second = sqltypes.NewVarChar("Müller"), sqltypes.NewVarChar("é")
+		}
+		list := &querypb.BindVariable{Type: querypb.Type_TUPLE, Values: []*querypb.Value{sqltypes.TupleToProto([]sqltypes.Value{first})}}
+		t.Run(fmt.Sprintf("convert %v, literal", convert), func(t *testing.T) {
+			child := &fakePrimitive{results: []*sqltypes.Result{{}}}
+			fkc := &FkCascade{
+				Selection: &fakePrimitive{results: []*sqltypes.Result{selection()}},
+				Children:  []*FkChild{{BVName: "__vals", Cols: []int{0}, Exec: child}},
+				Parent:    &fakePrimitive{results: []*sqltypes.Result{{}}},
+			}
+			_, err := fkc.TryExecute(t.Context(), &noopVCursor{convertResultCharset: convert}, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			child.ExpectLog(t, []string{fmt.Sprintf("Execute %v false", deprecatedPrintBindVars(map[string]*querypb.BindVariable{"__vals": list}))})
+		})
+		t.Run(fmt.Sprintf("convert %v, non-literal", convert), func(t *testing.T) {
+			child := &fakePrimitive{results: []*sqltypes.Result{{}}}
+			fkc := &FkCascade{
+				Selection: &fakePrimitive{results: []*sqltypes.Result{selection()}},
+				Children: []*FkChild{{
+					BVName:         "__vals",
+					Cols:           []int{0},
+					NonLiteralInfo: []NonLiteralUpdateInfo{{CompExprCol: 1, UpdateExprCol: 2, UpdateExprBvName: "fkc_upd"}},
+					Exec:           child,
+				}},
+				Parent: &fakePrimitive{results: []*sqltypes.Result{{}}},
+			}
+			_, err := fkc.TryExecute(t.Context(), &noopVCursor{convertResultCharset: convert}, map[string]*querypb.BindVariable{}, false)
+			require.NoError(t, err)
+			child.ExpectLog(t, []string{fmt.Sprintf("Execute %v false", deprecatedPrintBindVars(map[string]*querypb.BindVariable{
+				"__vals":  list,
+				"fkc_upd": sqltypes.ValueBindVariable(second),
+			}))})
+		})
+	}
+}
